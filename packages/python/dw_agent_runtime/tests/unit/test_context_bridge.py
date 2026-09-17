@@ -28,7 +28,7 @@ def _run(**overrides: object) -> RunContext:
         "trace_id": "t",
     }
     base.update(overrides)
-    return RunContext(**base)  # type: ignore[arg-type]
+    return RunContext(**base)
 
 
 def test_restricted_roll_up_is_carried_into_the_access_context() -> None:

@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from langchain.agents.middleware import ModelRequest, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage
 
 from dw_agent_runtime.adapters.langchain_tools import (
@@ -119,9 +120,11 @@ async def test_the_middleware_hands_the_handler_the_cleaned_messages() -> None:
         def override(self, **changes: Any) -> _Request:
             return _Request(changes["messages"])
 
-    async def handler(request: Any) -> str:
+    answer = ModelResponse(result=[AIMessage(content="ok")])
+
+    async def handler(request: ModelRequest[None]) -> ModelResponse[Any]:
         seen["messages"] = request.messages
-        return "ok"
+        return answer
 
     dirty = HumanMessage(
         content=[{"type": "file", "mime_type": "application/octet-stream", "file_data": "d"}]
@@ -131,5 +134,5 @@ async def test_the_middleware_hands_the_handler_the_cleaned_messages() -> None:
         handler,
     )
 
-    assert result == "ok"
+    assert result is answer
     assert seen["messages"][0].content[0]["type"] == "text"

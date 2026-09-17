@@ -1,5 +1,7 @@
 import asyncio
 import uuid
+from collections.abc import Mapping
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
 import pytest
@@ -312,19 +314,15 @@ class RecordingTelemetry:
     exported, and nothing more."""
 
     def __init__(self) -> None:
-        self.spans: list[tuple[str, dict[str, Any]]] = []
+        self.spans: list[tuple[str, dict[str, object]]] = []
 
-    def span(self, name: str, attributes: dict[str, Any]) -> Any:
+    def span(self, name: str, attributes: Mapping[str, object]) -> AbstractContextManager[None]:
         self.spans.append((name, dict(attributes)))
+        return nullcontext()
 
-        class _Noop:
-            def __enter__(self) -> None: ...
-            def __exit__(self, *exc: object) -> bool:
-                return False
-
-        return _Noop()
-
-    def add_metric(self, name: str, value: float, attributes: dict[str, Any]) -> None: ...
+    def add_metric(
+        self, name: str, value: int | float, attributes: Mapping[str, object]
+    ) -> None: ...
 
 
 async def test_tool_call_emits_span_with_names_and_no_payload() -> None:

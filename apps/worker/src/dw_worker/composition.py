@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import (
 
 from dw_agent_runtime.model.profiles import ModelProfileRegistry, ModelRoute
 from dw_kernel.errors import InfrastructureError
-from dw_kernel.ports import SystemClock, Uuid4Generator
+from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_knowledge.adapters.api_parsers import (
     DeepgramTranscriptParser,
     GatewayFileParser,
@@ -162,7 +162,7 @@ def build_ingest_components(settings: WorkerSettings) -> IngestComponents | None
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     clock = SystemClock()
-    id_generator = Uuid4Generator()
+    id_generator = Uuid7Generator()
     storage = build_object_storage(settings)
 
     gateway = KnowledgeGateway(

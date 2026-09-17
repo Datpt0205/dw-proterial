@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+import httpx
 import pytest
 
-from dw_agent_runtime.adapters import openai_responses
 from dw_agent_runtime.adapters.openai_responses import (
     OpenAIResponsesAdapter,
     _build_request_body,
@@ -261,7 +261,7 @@ class _StubClient:
 
 
 async def _post_body(route: ModelRoute, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
-    monkeypatch.setattr(openai_responses.httpx, "AsyncClient", _StubClient)
+    monkeypatch.setattr(httpx, "AsyncClient", _StubClient)
     adapter = OpenAIResponsesAdapter(base_url="https://gw.invalid/v1", api_key="k")
     schema: dict[str, object] = {"type": "object", "properties": {"a": {"type": "string"}}}
     await adapter.complete_json(_prompt(), schema, route, max_output_tokens=None)

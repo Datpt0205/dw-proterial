@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass, field
+from typing import Any
 
+from dw_connectors.adapters.zalo_bot import ZaloBotClient
 from dw_connectors.adapters.zalo_link import (
     handle_update,
     make_connect_token,
@@ -28,16 +31,20 @@ class _FakeStore:
         self.unlinked.append(zalo_id)
 
 
-class _FakeBot:
-    def __init__(self) -> None:
-        self.sent: list[tuple[str, str]] = []
+@dataclass(frozen=True)
+class _FakeBot(ZaloBotClient):
+    """A real ``ZaloBotClient`` with the one call ``handle_update`` makes
+    replaced — ``handle_update`` takes the client itself, not a narrower port."""
+
+    bot_token: str = "fake-token"
+    sent: list[tuple[str, str]] = field(default_factory=list)
 
     async def send_message(self, chat_id: str, text: str) -> str:
         self.sent.append((chat_id, text))
         return "mid"
 
 
-def _start_update(token: str) -> dict:
+def _start_update(token: str) -> dict[str, Any]:
     # The exact poll-path shape observed from getUpdates (result-wrapped).
     return {
         "result": {

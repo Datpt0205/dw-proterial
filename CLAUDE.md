@@ -105,6 +105,20 @@ adapter. Constructor injection — no service locator, no mutable global client.
 - Constraint names come from `dw_kernel.naming.NAMING_CONVENTION`; a new
   `MetaData` passes it.
 - Migration `0001` is the immutable baseline. Corrections are new revisions.
+- **A revision id is alembic's random hex, never a hand-picked number.** Two
+  people working at once both guess the same "next number", git reports no
+  conflict because the filenames differ, and alembic then refuses the merged
+  tree with "revision is present more than once" — measured three times in one
+  day on the product this was extracted from. Generate migrations with
+  `alembic revision -m "..."` and keep the sequence in the _filename_ only,
+  where it is a reading aid and carries no meaning.
+- Privileges are part of the schema. A role that cannot read a table is an
+  application that fails on its first real query while every health check still
+  passes, so grants ship with the migration and are asserted by
+  `dw_platform/tests/integration/test_privileges.py`.
+- Partitioned tables need next month's partition before rows need it.
+  `scripts/roll_partitions.py` is idempotent and belongs on a schedule; the
+  DEFAULT partition is a safety net, not the plan.
 
 ## Environments
 

@@ -133,6 +133,26 @@ What the baseline guarantees:
 - **Timestamps are `timestamptz`**, without exception.
 - **Constraint names follow one convention** (`dw_kernel.naming`), so a later
   migration can name what it drops without querying the database first.
+- **Privileges ship with the schema.** `dw_app` gets DML on the tables it
+  serves, cannot UPDATE or DELETE `audit_events` (append-only is a grant, not a
+  convention), and cannot read the provisioning record. Default privileges carry
+  to tables added later, so a forgotten `GRANT` cannot ship a release that fails
+  on its first query. Asserted in `test_privileges.py`.
+- **Primary keys are time-ordered UUIDv7**, not random v4: a random key scatters
+  every insert across the whole B-tree, and the rows already written keep the
+  keys they were given.
+
+Two operational jobs belong on a schedule:
+
+```bash
+scripts/roll_partitions.py --months 3   # before rows need next month
+scripts/backup_postgres.sh              # pg_dump, rotated
+```
+
+Roles are a precondition, not something a migration creates — it would have to
+carry their passwords. Create `dw_app` (and `dw_provisioner` if the deployment
+provisions tenants) before the first migration; it warns, with the fix in the
+message, when one is missing.
 
 ---
 

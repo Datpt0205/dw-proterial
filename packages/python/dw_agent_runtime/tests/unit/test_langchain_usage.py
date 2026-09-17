@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableConfig
 
 from dw_agent_runtime.adapters.chat_model import MockChatModel
 from dw_agent_runtime.adapters.langchain_usage import (
@@ -111,7 +112,8 @@ async def test_usage_survives_the_block_raising() -> None:
     with pytest.raises(RuntimeError):
         async with meter.track(run_context, profile_id="gateway", task="t") as callbacks:
             await model.ainvoke(
-                [{"role": "user", "content": "hi"}], config={"callbacks": callbacks}
+                [{"role": "user", "content": "hi"}],
+                config=RunnableConfig(callbacks=list(callbacks)),
             )
             raise RuntimeError("the agent died after spending")
     # The spend still reached the ledger — a truncated run is the one whose
@@ -177,7 +179,8 @@ async def test_the_outer_still_bills_the_calls_no_inner_tracker_claimed() -> Non
                 [{"role": "user", "content": "y" * 400}], config={"callbacks": [*outer, *inner]}
             )
         await loose_model.ainvoke(
-            [{"role": "user", "content": "y" * 800}], config={"callbacks": outer}
+            [{"role": "user", "content": "y" * 800}],
+            config=RunnableConfig(callbacks=list(outer)),
         )
 
     by_task = {row[1].task: row[2] for row in recorder.rows}
@@ -202,7 +205,10 @@ async def test_a_lone_tracker_is_untouched() -> None:
     for _ in range(2):
         run_context = usage_run_context(_context(), worker_id="person_research")
         async with meter.track(run_context, profile_id="gateway", task="person_research") as cb:
-            await model.ainvoke([{"role": "user", "content": "y" * 400}], config={"callbacks": cb})
+            await model.ainvoke(
+                [{"role": "user", "content": "y" * 400}],
+                config=RunnableConfig(callbacks=list(cb)),
+            )
 
     assert [row[1].task for row in recorder.rows] == ["person_research", "person_research"]
     assert all(row[2].input_tokens == 100 for row in recorder.rows)

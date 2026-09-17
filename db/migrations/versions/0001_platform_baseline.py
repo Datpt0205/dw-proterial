@@ -1,6 +1,6 @@
 """Platform baseline: schemas, tables, constraints, indexes, RLS, partitions.
 
-Revision ID: 0001
+Revision ID: 5465c38d8b45
 Revises:
 Create Date: 2026-09-17
 
@@ -39,12 +39,14 @@ from pathlib import Path
 
 from alembic import op
 
-revision = "0001"
+revision = "5465c38d8b45"
 down_revision = None
 branch_labels = None
 depends_on = None
 
-_SQL = Path(__file__).resolve().parents[1] / "sql" / "0001_platform_baseline.sql"
+_SQL_DIR = Path(__file__).resolve().parents[1] / "sql"
+# Order matters: privileges are granted on objects that must already exist.
+_SQL_FILES = ("0001_platform_baseline.sql", "0001_platform_grants.sql")
 
 # Dropping the schemas drops everything in them, including the two functions and
 # every policy. Listed explicitly rather than looped so a schema added later has
@@ -80,8 +82,9 @@ def _statements(text: str) -> list[str]:
 
 def upgrade() -> None:
     bind = op.get_bind()
-    for statement in _statements(_SQL.read_text(encoding="utf-8")):
-        bind.exec_driver_sql(statement)
+    for name in _SQL_FILES:
+        for statement in _statements((_SQL_DIR / name).read_text(encoding="utf-8")):
+            bind.exec_driver_sql(statement)
 
 
 def downgrade() -> None:

@@ -109,14 +109,16 @@ python-quality:
     - uv run python scripts/run_evals.py --smoke
   coverage: '/^TOTAL.+?(\d+\%)$/'
 
-# mypy — strict, and it covers scripts + tests. There is a large pre-existing
-# backlog (~458 findings) that predates this migration and was never enforced
-# green, so it runs but does NOT block the pipeline/deploy. Tighten to blocking
-# once the backlog is worked down.
+# mypy — strict, and it covers scripts + tests. The tree is green: zero
+# findings, and this job BLOCKS the pipeline/deploy so it stays that way. A new
+# finding is fixed by fixing the type — annotate the fake with the port it
+# stands in for, import and construct the real type, or, only where neither
+# applies, a narrow `# type: ignore[<code>]` with a one-line reason. Do not
+# re-add `allow_failure`, and do not loosen the mypy config: that is how the
+# ~458-finding backlog this job used to carry came back.
 typecheck:
   extends: .uv
   stage: test
-  allow_failure: true
   script:
     - uv run mypy
 

@@ -50,7 +50,7 @@ from dw_api.bootstrap.storage import (
 from dw_api.bootstrap.telemetry import build_telemetry
 from dw_api.health import HealthService, database_probe
 from dw_api.settings import ApiSettings
-from dw_kernel.ports import SystemClock, Uuid4Generator
+from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_platform.adapters.cache import NullCache, ValkeyCache
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
@@ -89,7 +89,13 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     settings.validate_for_profile()
 
     clock = SystemClock()
-    ids = Uuid4Generator()
+    # Time-ordered ids (RFC 9562), not random v4. Every primary key in this
+    # schema is a UUID, and a random one scatters each insert across the whole
+    # B-tree; a v7 key appends to one edge of it. The difference is invisible at
+    # demo size and is the difference between a healthy index and a bloated one
+    # at real size — and it cannot be fixed later, because the rows already
+    # written keep the keys they were given.
+    ids = Uuid7Generator()
     authorization = ScopeAuthorizationService()
     entitlement = PlanEntitlementService(DEFAULT_PLANS)
     telemetry = build_telemetry(settings)
