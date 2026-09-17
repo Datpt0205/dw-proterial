@@ -55,6 +55,7 @@ def test_the_runner_puts_the_worker_ceiling_on_every_invocation() -> None:
         uow_factory=cast(Any, None),
         clock=cast(Any, None),
         id_generator=cast(Any, None),
+        allowance=cast(Any, None),
     )
     config = runner._config(make_run_context(), uuid.UUID(int=1), 7)
     assert config["recursion_limit"] == 7

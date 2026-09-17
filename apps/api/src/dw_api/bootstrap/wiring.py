@@ -207,6 +207,7 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
         session_factory=session_factory,
         uow_factory=uow_factory,
         run_store=run_store,
+        allowance=entitlement,
         object_storage=object_storage,
         telemetry=telemetry,
         clock=clock,

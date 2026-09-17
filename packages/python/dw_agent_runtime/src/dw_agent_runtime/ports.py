@@ -62,6 +62,23 @@ class TracedModelGateway(ModelGateway, Protocol):
     ) -> tuple[OutputT, str]: ...
 
 
+class RunAllowancePort(Protocol):
+    """How many runs a day a plan grants — the limit, not the count.
+
+    The split is deliberate and it is what keeps the two packages independent.
+    This package owns ``platform.worker_runs`` and can therefore count what a
+    tenant has started; it has no business knowing what a subscription includes.
+    The platform owns the plan catalogue and can answer the limit; it has no
+    business reading another context's table. So the consumer declares this,
+    the composition root satisfies it, and neither imports the other.
+
+    ``None`` means this plan sets no limit, which is a real answer — an
+    unmetered internal tenant — and not the same as a limit of zero.
+    """
+
+    def runs_per_day(self, plan_id: str) -> int | None: ...
+
+
 class StreamingWorkflowRunnerPort(Protocol):
     """Runs a workflow while emitting its progress, for chat-style channels."""
 

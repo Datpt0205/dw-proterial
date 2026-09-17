@@ -47,6 +47,23 @@ class PlanEntitlementService:
         plan = self.plans.get(context.plan_id)
         return plan is not None and feature in plan.features
 
+    def runs_per_day(self, plan_id: str) -> int | None:
+        """Satisfies ``dw_agent_runtime.ports.RunAllowancePort``.
+
+        An unknown plan is refused outright rather than treated as unlimited.
+        It should be unreachable — `entitlements.plan_id` is a foreign key into
+        `platform.plans`, so a tenant cannot hold a plan the database has never
+        heard of — and the one way to get here is a plan added to the database
+        without being added to `DEFAULT_PLANS`. Of the two ways that can end,
+        an operator seeing runs refused for a plan they just created is the
+        one that gets fixed; unlimited runs on an unpriced plan is the one
+        nobody notices until the invoice.
+        """
+        plan = self.plans.get(plan_id)
+        if plan is None:
+            return 0
+        return plan.quotas.get("runs_per_day")
+
     async def require_feature(self, context: AccessContext, feature: str) -> None:
         if self.has_feature(context, feature):
             return

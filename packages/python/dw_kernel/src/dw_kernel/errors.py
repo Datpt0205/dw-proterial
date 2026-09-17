@@ -62,6 +62,19 @@ class EntitlementDeniedError(DWError):
     code = ErrorCode.ENTITLEMENT_DENIED
 
 
+class QuotaExceededError(DWError):
+    """The tenant has spent an allowance its plan grants per period.
+
+    Distinct from :class:`EntitlementDeniedError`, and the difference is what
+    the caller should do: an entitlement denial means this plan will never allow
+    it, so the answer is to change plan; a quota denial means it will allow it
+    again, so the answer is to wait or buy more. Hence ``rate_limited`` and 429
+    rather than 403 — the platform's retriable refusal.
+    """
+
+    code = ErrorCode.RATE_LIMITED
+
+
 class ApprovalRequiredError(DWError):
     """The action is valid but requires human approval before execution."""
 

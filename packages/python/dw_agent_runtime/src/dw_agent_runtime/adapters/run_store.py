@@ -247,6 +247,28 @@ class SqlWorkerRunStore:
         row = result.first()
         return None if row is None else row.approval_request_id
 
+    async def started_since(self, tenant_id: uuid.UUID, since: datetime) -> int:
+        """How many runs this tenant has started since ``since``.
+
+        Every run, whatever its outcome: a run that failed still spent the
+        model calls the quota is there to bound, and counting only successes
+        would make a failing worker free to loop.
+
+        The boundary is passed in rather than computed here as
+        ``date_trunc('day', now())``: that function reads the session's
+        ``TimeZone``, so the same tenant's day would start at a different
+        instant on a connection whose timezone happened to differ. The caller
+        holds a ``UtcClock`` and states the instant.
+        """
+        result = await self._execute_for_tenant(
+            tenant_id,
+            sa.select(sa.func.count())
+            .select_from(worker_runs)
+            .where(worker_runs.c.created_at >= since),
+        )
+        count: int = result.scalar_one()
+        return count
+
     async def active_since(
         self,
         tenant_id: uuid.UUID,

@@ -1671,7 +1671,10 @@ export interface operations {
     grant_member_api_v1_admin_members_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1706,7 +1709,10 @@ export interface operations {
             query: {
                 workspace_id: string;
             };
-            header?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 user_id: string;
             };
@@ -2073,7 +2079,10 @@ export interface operations {
     decide_api_v1_approvals__approval_id__decisions_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 approval_id: string;
             };

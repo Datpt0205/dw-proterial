@@ -86,6 +86,13 @@ def build_unending_graph() -> StateGraph:  # type: ignore[type-arg]
     return graph
 
 
+class _UnmeteredPlan:
+    """Any plan, no daily limit — the run quota is not what these tests exercise."""
+
+    def runs_per_day(self, plan_id: str) -> int | None:
+        return None
+
+
 class RunnerStack:
     def __init__(self, app_url: str, worker_config: Path, factory: Any) -> None:
         self.engine = create_async_engine(app_url, poolclass=NullPool)
@@ -106,6 +113,7 @@ class RunnerStack:
             uow_factory=self.uow_factory,
             clock=SystemClock(),
             id_generator=Uuid4Generator(),
+            allowance=_UnmeteredPlan(),
         )
 
     async def dispose(self) -> None:

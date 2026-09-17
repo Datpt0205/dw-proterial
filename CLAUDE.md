@@ -116,6 +116,11 @@ kind of change nobody makes and everybody works around.
   approval policy, timeout and idempotency. The executor authorizes, validates,
   executes, validates the output and audits.
 - All side effects use idempotency keys.
+- A tenant's plan quota is enforced where a run begins — in the runner, not in
+  an API dependency. The API is not the only door: a worker reacting to an
+  inbound event starts runs no request ever touched. The limit comes from the
+  plan through `RunAllowancePort`, which the runtime declares and the platform
+  satisfies, so neither package reads the other's table.
 - Channels are reached through a port, never a provider's client. `ChatSenderPort`
   is the narrow intersection every channel can satisfy; code needing one
   provider's own features takes that provider's client and says so in its type.
@@ -128,7 +133,14 @@ kind of change nobody makes and everybody works around.
 - Timestamps are `timestamptz`.
 - Every foreign key declares `ON DELETE` explicitly and is indexed on its own
   side.
-- `updated_at` is maintained by a database trigger.
+- `updated_at` is maintained by a database trigger, and the trigger yields to a
+  value the statement states. Unconditional `NEW.updated_at := now()` also
+  discards a deliberate one, which makes a repair, a backfill that preserves
+  original times, and any test that has to age a row impossible from every role.
+- Every ORDER BY a list endpoint pages on has an index that carries it, leading
+  with the columns RLS supplies (`tenant_id`) — a query never names those, which
+  is exactly why the index must. Keyset pagination without such an index still
+  sorts the whole match set, so page 50 costs what page 1 costs.
 - Append-only, unbounded tables are range-partitioned, with a DEFAULT partition.
 - Constraint names come from `dw_kernel.naming.NAMING_CONVENTION`; a new
   `MetaData` passes it.

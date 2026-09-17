@@ -24,6 +24,7 @@ from dw_agent_runtime.model.copy import load_runtime_copy
 from dw_agent_runtime.model.gateway import RoutingModelGateway, UsageRecorderPort
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.model.prompts import PromptRegistry
+from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.tool_specs import ToolSpecRegistry
 from dw_agent_runtime.tools import ToolRegistry
@@ -73,6 +74,7 @@ def build_runtime(
     session_factory: async_sessionmaker[AsyncSession],
     uow_factory: PlatformUnitOfWorkFactory,
     run_store: SqlWorkerRunStore,
+    allowance: RunAllowancePort,
     object_storage: ObjectStoragePort,
     telemetry: TelemetryPort,
     clock: UtcClock,
@@ -165,6 +167,7 @@ def build_runtime(
         uow_factory=uow_factory,
         clock=clock,
         id_generator=ids,
+        allowance=allowance,
         release_manifest_ref=release_manifest_ref(),
         telemetry=telemetry,
         usage_meter=usage_meter,

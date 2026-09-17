@@ -39,6 +39,7 @@ def runner(tmp_path: Path) -> LangGraphWorkflowRunner:
         uow_factory=cast(Any, None),
         clock=cast(Any, None),
         id_generator=cast(Any, None),
+        allowance=cast(Any, None),
     )
 
 

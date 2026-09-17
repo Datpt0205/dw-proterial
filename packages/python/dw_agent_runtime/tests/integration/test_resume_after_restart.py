@@ -37,6 +37,13 @@ pytestmark = pytest.mark.integration
 STALE_AFTER_SECONDS_LOCAL = 3600
 
 
+class _UnmeteredPlan:
+    """Any plan, no daily limit — the run quota is not what these tests exercise."""
+
+    def runs_per_day(self, plan_id: str) -> int | None:
+        return None
+
+
 class RunnerStack:
     """One 'process' worth of runtime objects."""
 
@@ -61,6 +68,7 @@ class RunnerStack:
             uow_factory=self.uow_factory,
             clock=SystemClock(),
             id_generator=Uuid4Generator(),
+            allowance=_UnmeteredPlan(),
         )
 
     async def dispose(self) -> None:

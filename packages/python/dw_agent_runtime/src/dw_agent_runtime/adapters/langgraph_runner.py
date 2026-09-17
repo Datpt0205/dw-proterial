@@ -18,7 +18,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import UTC
+from datetime import UTC, timedelta
 from typing import Any, cast
 
 from langgraph.store.base import BaseStore
@@ -33,8 +33,14 @@ from dw_agent_runtime.adapters.run_store import (
 )
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
+from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
-from dw_kernel.errors import ConflictError, InfrastructureError, NotFoundError
+from dw_kernel.errors import (
+    ConflictError,
+    InfrastructureError,
+    NotFoundError,
+    QuotaExceededError,
+)
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_observability.metrics import DW_RUN_TOTAL
@@ -93,6 +99,10 @@ class LangGraphWorkflowRunner:
     uow_factory: PlatformUnitOfWorkFactory
     clock: UtcClock
     id_generator: IdGenerator
+    # Injected, never defaulted, for the same reason `stale_run_after_seconds`
+    # is: a default would be "unlimited", and a metering hole that ships quietly
+    # is the one bug in this file a customer finds before we do.
+    allowance: RunAllowancePort
     store: BaseStore | None = None
     release_manifest_ref: str | None = None
     telemetry: TelemetryPort = field(default_factory=NullTelemetry)
@@ -194,6 +204,47 @@ class LangGraphWorkflowRunner:
         ) as callbacks:
             yield list(callbacks)
 
+    async def _require_run_allowance(self, run_context: RunContext) -> None:
+        """Refuse a run the tenant's plan has no allowance left for today.
+
+        Here rather than at the API, because the API is not the only door: a
+        worker reacting to an inbound event starts runs nobody clicked, and a
+        quota enforced on one door only is a quota a connector can walk around.
+        This is the single place a run begins.
+
+        The plan comes from `run_context`, which carries what the requester was
+        entitled to when the turn started — the same stamp a resume replays. A
+        resume does not pass through here at all: the run was already counted
+        when it started, and charging it again would let an approval a manager
+        signs on Tuesday be refused by Tuesday's quota.
+
+        Not transactional, and deliberately so: counting is a read, and holding
+        a lock across the whole start path to make the count exact would
+        serialise every run a tenant makes. The slack is bounded by how many
+        runs one tenant starts in the same instant, which is the difference
+        between 200 and 203 a day, not between 200 and unlimited.
+        """
+        limit = self.allowance.runs_per_day(run_context.plan_id)
+        if limit is None:
+            return
+        day_start = (
+            self.clock.now().astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        )
+        used = await self.run_store.started_since(run_context.tenant_id, day_start)
+        if used < limit:
+            return
+        raise QuotaExceededError(
+            "hôm nay đã dùng hết số lượt chạy của gói; thử lại sau 00:00 UTC"
+            " hoặc nâng gói để có thêm lượt",
+            details={
+                "quota": "runs_per_day",
+                "limit": str(limit),
+                "used": str(used),
+                "plan_id": run_context.plan_id,
+                "resets_at": (day_start + timedelta(days=1)).isoformat(),
+            },
+        )
+
     async def start(
         self,
         *,
@@ -201,6 +252,7 @@ class LangGraphWorkflowRunner:
         input_payload: dict[str, Any],
     ) -> uuid.UUID:
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
+        await self._require_run_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)
 
         await self.run_store.create(
@@ -254,6 +306,7 @@ class LangGraphWorkflowRunner:
         Use ``drain`` to wait for runs whose reader left before shutting down.
         """
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
+        await self._require_run_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)
 
         await self.run_store.create(
