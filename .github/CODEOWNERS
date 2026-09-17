@@ -1,0 +1,32 @@
+# Quyền sở hữu các vùng DÙNG CHUNG — PR chạm vào đây cần review của owner
+# (bật "Require review from Code Owners" trong branch protection để cưỡng chế).
+# Đổi @Datpt0205 thành handle của người phụ trách shell khi team vào.
+#
+# Nguyên tắc: mỗi bounded context tự do trong thư mục của mình
+# (packages/python/dw_<context>/, apps/web/app/<context>/) — KHÔNG đặt owner
+# mặc định `*` để PR trong thư mục context không bị chặn review chéo; các file
+# dưới đây là shell/wiring dùng chung, sửa qua PR riêng có owner duyệt.
+
+# --- FE shell (layout, components chung, auth, nav registry) ---
+/apps/web/app/layout.tsx        @Datpt0205
+/apps/web/app/page.tsx          @Datpt0205
+/apps/web/components/           @Datpt0205
+/apps/web/lib/                  @Datpt0205
+/packages/typescript/ui/        @Datpt0205
+
+# --- API client chung (transport + cấu hình generate theo context) ---
+/packages/typescript/api-client/src/client.ts    @Datpt0205
+/packages/typescript/api-client/src/index.ts     @Datpt0205
+/packages/typescript/api-client/contexts.json    @Datpt0205
+/packages/typescript/api-client/scripts/         @Datpt0205
+
+# --- Backend plug-in points ---
+/apps/api/src/dw_api/bootstrap.py   @Datpt0205
+/apps/api/src/dw_api/main.py        @Datpt0205
+/pyproject.toml                     @Datpt0205
+/scripts/verify_architecture.py     @Datpt0205
+
+# --- Hạ tầng chung ---
+/infra/               @Datpt0205
+/.github/             @Datpt0205
+/Makefile             @Datpt0205

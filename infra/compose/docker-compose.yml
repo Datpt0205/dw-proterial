@@ -1,0 +1,651 @@
+# ===========================================================================
+# Digital Worker Platform — Docker Compose
+#
+# Profiles:
+#   infra          → data plane only (Postgres, Qdrant, Valkey, MinIO, Keycloak)
+#                    for local development where API/worker/web run on the host
+#   full           → everything: infra + migration job + API + worker + web
+#   observability  → optional Langfuse stack (web/worker/ClickHouse)
+#
+# Examples:
+#   docker compose --profile infra up -d --wait
+#   docker compose --profile full up --build -d --wait
+#   docker compose --profile full --profile observability up --build -d
+# ===========================================================================
+
+networks:
+  dw-internal:
+    internal: true
+  # The sandbox's own network, and the reason it is not simply on dw-internal:
+  # `internal: true` withholds a route OFF THE MACHINE. It does nothing about
+  # traffic between containers that share the bridge, and dw-internal carries
+  # Qdrant and Valkey, which the base stack runs unauthenticated. Model-written
+  # code reaching them raw would read every tenant's chunk text or flush the
+  # cache, under no AccessContext and past RLS. Membership here is docgen and
+  # the forwarder in front of it - nothing else.
+  dw-sandbox:
+    internal: true
+  dw-edge: {}
+
+volumes:
+
+  postgres-data:
+  qdrant-data:
+  valkey-data:
+  minio-data:
+  keycloak-data:
+  clickhouse-data:
+  tei-models:
+
+services:
+  # ------------------------------------------------------------------ data --
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["infra", "full", "observability", "migration"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      DW_DB_MIGRATOR_PASSWORD: ${DW_DB_MIGRATOR_PASSWORD:?}
+      DW_DB_APP_PASSWORD: ${DW_DB_APP_PASSWORD:?}
+      DW_DB_AGENT_RO_PASSWORD: ${DW_DB_AGENT_RO_PASSWORD:?}
+      DW_DB_PROVISIONER_PASSWORD: ${DW_DB_PROVISIONER_PASSWORD:?}
+    command: ["postgres", "-c", "wal_level=logical"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    ports:
+      # Host port is overridable because a machine may already run its own
+      # postgres on 5432 (the default keeps every other setup unchanged).
+      - "127.0.0.1:${DW_POSTGRES_HOST_PORT:-5432}:5432"
+    networks: [dw-internal, dw-edge]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d dw || pg_isready -U $${POSTGRES_USER}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.4
+    profiles: ["infra", "full"]
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    networks: [dw-internal, dw-edge]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    profiles: ["infra", "full", "observability"]
+    command:
+      ["valkey-server", "--maxmemory-policy", "noeviction", "--save", "60", "1"]
+    volumes:
+      - valkey-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks: [dw-internal, dw-edge]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    profiles: ["infra", "full", "observability"]
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    networks: [dw-internal, dw-edge]
+    healthcheck:
+      # UBI-micro image has no curl/grep; use bash /dev/tcp HTTP probe.
+      test:
+        - CMD-SHELL
+        - >
+          bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000;
+          printf "GET /minio/health/live HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+          read -r status <&3; [[ "$$status" == *"200"* ]]'
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+  minio-setup:
+    image: minio/mc:RELEASE.2024-01-13T08-44-48Z
+    profiles: ["infra", "full", "observability"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set dw http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing dw/$${S3_BUCKET_ARTIFACTS} &&
+      mc mb --ignore-existing dw/$${S3_BUCKET_EXPORTS} &&
+      mc mb --ignore-existing dw/langfuse
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      S3_BUCKET_ARTIFACTS: ${S3_BUCKET_ARTIFACTS:-dw-artifacts}
+      S3_BUCKET_EXPORTS: ${S3_BUCKET_EXPORTS:-dw-exports}
+    networks: [dw-internal]
+    restart: "no"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    profiles: ["infra", "full"]
+    # Production mode ("start", not "start-dev"): start-dev disables production
+    # hardening (relaxes hostname/HTTPS, uses dev caches) and Keycloak refuses to
+    # be treated as production. Both dev and prod sit behind nginx TLS with
+    # KC_HOSTNAME set and KC_HTTP_ENABLED + KC_PROXY_HEADERS=xforwarded, which is
+    # exactly what "start" needs to serve over http on the loopback behind the
+    # proxy. Non-optimized start auto-builds on boot (a slower startup, no build
+    # step to maintain). A local dev without a proxy relies on KC_HTTP_ENABLED.
+    command: ["start", "--import-realm", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:?}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      KC_HTTP_ENABLED: "true"
+      # Behind a reverse proxy (nginx on the servers), trust X-Forwarded-* so
+      # Keycloak emits https:// links (login/redirect/issuer) instead of the
+      # http:// it sees on the upstream. Harmless locally where no proxy sets it.
+      KC_PROXY_HEADERS: xforwarded
+      # Host 8686 -> container 8080 (avoids a clash with other local apps on 8080).
+      # The frontend URL must match the mapped host port so token `iss` = :8686.
+      # A server behind a domain sets KC_HOSTNAME in its .env to the public https
+      # URL (e.g. https://sales.dxrank.vn) so `iss` matches DW_*_OIDC_ISSUER_URL
+      # and Keycloak stops answering "HTTPS required". Hardcoding localhost here
+      # is what a `git reset --hard` on the server silently restored, wedging
+      # login until the value came from .env instead of a local compose edit.
+      KC_HOSTNAME: ${KC_HOSTNAME:-http://localhost:8686}
+    volumes:
+      - keycloak-data:/opt/keycloak/data/export
+      - ../keycloak:/opt/keycloak/data/import:ro
+      # Login theme. Activated per realm (loginTheme=sales), so a missing
+      # mount degrades to the default theme instead of breaking login.
+      - ../keycloak/themes/sales:/opt/keycloak/themes/sales:ro
+    ports:
+      - "127.0.0.1:8686:8080"
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '200' <&3
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # ------------------------------------------------- model inference (RAG) --
+  # BGE-M3 dense embeddings. TEI GPU images need compute cap >= 7.5 (Turing+),
+  # so the default is the CPU image, which runs everywhere (CI included — no
+  # nvidia device reservation here; it would fail on GPU-less hosts). On a
+  # Turing+ GPU (e.g. GTX 1650) set in .env:
+  #   DW_TEI_EMBED_IMAGE=ghcr.io/huggingface/text-embeddings-inference:turing-1.6
+  #   DW_TEI_EMBED_DTYPE=float16
+  # and run with the GPU override:
+  #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml ...
+  tei-embed:
+    image: ${DW_TEI_EMBED_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:cpu-1.6}
+    # Opt-in only (ADR / model-gateway-findings): embeddings default to the
+    # gateway now, so TEI is NOT part of `full`. Add `--profile models` to run it.
+    profiles: ["models"]
+    command:
+      [
+        "--model-id",
+        "BAAI/bge-m3",
+        "--dtype",
+        "${DW_TEI_EMBED_DTYPE:-float32}",
+        # TEI warms up by running one batch of this size and the allocator keeps
+        # the arena, so the default 16384 costs GBs of resident memory forever.
+        # Chunks are capped at 1200 chars (~600 tokens), so 4096 still fills a
+        # batch and TEI splits a 32-input client request across batches itself.
+        "--max-batch-tokens",
+        "${DW_TEI_MAX_BATCH_TOKENS:-4096}",
+        "--tokenization-workers",
+        "2",
+        "--port",
+        "80",
+      ]
+    environment:
+      HF_HOME: /data
+      # One compute thread per core on a 12-core laptop gives glibc up to 8
+      # 64MB malloc arenas per thread; two of these servers then outweigh the
+      # model weights. Neither number changes results, only footprint.
+      OMP_NUM_THREADS: "4"
+      RAYON_NUM_THREADS: "4"
+      MALLOC_ARENA_MAX: "2"
+    # Hard ceiling: without it a regression here is a dead `docker-up` (the web
+    # build OOMs), instead of a dead embedding server that says so.
+    mem_limit: ${DW_TEI_EMBED_MEM_LIMIT:-3g}
+    volumes:
+      - tei-models:/data
+    ports:
+      - "127.0.0.1:8085:80"
+    networks: [dw-internal, dw-edge]
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/127.0.0.1/80"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+
+  # BGE-reranker-v2-m3 cross-encoder on CPU (leaves the 4GB GPU for embeddings).
+  tei-rerank:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.6
+    # Opt-in only (ADR / model-gateway-findings): embeddings default to the
+    # gateway now, so TEI is NOT part of `full`. Add `--profile models` to run it.
+    profiles: ["models"]
+    command:
+      [
+        "--model-id",
+        "BAAI/bge-reranker-v2-m3",
+        # See tei-embed: same warmup arena, and a cross-encoder pays it per
+        # query/document pair, which is why this one was the larger of the two.
+        "--max-batch-tokens",
+        "${DW_TEI_MAX_BATCH_TOKENS:-4096}",
+        "--tokenization-workers",
+        "2",
+        "--port",
+        "80",
+      ]
+    environment:
+      HF_HOME: /data
+      OMP_NUM_THREADS: "4"
+      RAYON_NUM_THREADS: "4"
+      MALLOC_ARENA_MAX: "2"
+    mem_limit: ${DW_TEI_RERANK_MEM_LIMIT:-3g}
+    volumes:
+      - tei-models:/data
+    ports:
+      - "127.0.0.1:8086:80"
+    networks: [dw-internal, dw-edge]
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/127.0.0.1/80"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+
+  # ------------------------------------------------------------ migrations --
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    image: dw-api:local
+    # In `migration` as well as `full`: the sync waits on this, and a profile
+    # named for the migration that did not run the migration would start the
+    # sync against a database without the tables it writes to.
+    profiles: ["full", "migration"]
+    command: ["alembic", "-c", "/app/db/alembic.ini", "upgrade", "head"]
+    environment:
+      DW_DATABASE_URL: postgresql+asyncpg://dw_migrator:${DW_DB_MIGRATOR_PASSWORD:?}@postgres:5432/dw
+    networks: [dw-internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ------------------------------------------------------------------ apps --
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    image: dw-api:local
+    profiles: ["full"]
+    environment:
+      DW_API_PROFILE: ${DW_API_PROFILE:-local}
+      DW_API_DATABASE_URL: postgresql+asyncpg://dw_app:${DW_DB_APP_PASSWORD:?}@postgres:5432/dw
+      DW_AGENT_RO_DATABASE_URL: postgresql+asyncpg://dw_agent_ro:${DW_DB_AGENT_RO_PASSWORD:?}@postgres:5432/dw
+      DW_PROVISIONER_DATABASE_URL: postgresql+asyncpg://dw_provisioner:${DW_DB_PROVISIONER_PASSWORD:?}@postgres:5432/dw
+      DW_API_DEV_SECRET: ${DW_API_DEV_SECRET:-}
+      DW_MODEL_PROVIDER: ${DW_MODEL_PROVIDER:-mock}
+      DW_API_MODEL_PROFILE: ${DW_API_MODEL_PROFILE:-balanced}
+      DW_API_OPENAI_STRUCTURED_MODE: ${DW_API_OPENAI_STRUCTURED_MODE:-json_schema}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      DW_TASK_CONNECTOR: ${DW_TASK_CONNECTOR:-mock}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_DEFAULT_CHANNEL: ${SLACK_DEFAULT_CHANNEL:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      SLACK_USER_AN_ID: ${SLACK_USER_AN_ID:-}
+      SLACK_USER_BINH_ID: ${SLACK_USER_BINH_ID:-}
+      SLACK_USER_CHI_ID: ${SLACK_USER_CHI_ID:-}
+      SLACK_USER_MAP_JSON: ${SLACK_USER_MAP_JSON:-}
+      DW_PUBLIC_WEB_URL: ${DW_PUBLIC_WEB_URL:-http://localhost:3000}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Search providers for the sales_intel research lane (empty = fixed corpus).
+      SEARCH_PROVIDER_ORDER: ${SEARCH_PROVIDER_ORDER:-}
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
+      ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:-}
+      ZALO_LINK_SECRET: ${ZALO_LINK_SECRET:-}
+      ZALO_BOT_LINK: ${ZALO_BOT_LINK:-}
+      EXA_API_KEY: ${EXA_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-dw_knowledge}
+      REDIS_URL: redis://valkey:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      # OIDC: the token issuer is the browser-facing Keycloak URL, but the API
+      # (inside the network) fetches JWKS via the internal service name.
+      DW_API_AUTH_MODE: ${DW_API_AUTH_MODE:-oidc}
+      DW_API_OIDC_ISSUER_URL: ${DW_API_OIDC_ISSUER_URL:-http://localhost:8686/realms/dw}
+      DW_API_OIDC_JWKS_URL: ${DW_API_OIDC_JWKS_URL:-http://keycloak:8080/realms/dw/protocol/openid-connect/certs}
+      # RAG embeddings. Default `hash` (offline, no extra service). Set
+      # `openai_compatible` to embed via the gateway (the `embedding` route of
+      # DW_API_MODEL_PROFILE), or `tei` + `--profile models` for self-hosted TEI.
+      DW_API_EMBEDDING_PROVIDER: ${DW_API_EMBEDDING_PROVIDER:-hash}
+      DW_API_EMBED_URL: ${DW_API_EMBED_URL:-http://tei-embed:80}
+      DW_API_RERANK_URL: ${DW_API_RERANK_URL:-http://tei-rerank:80}
+      DW_API_EMBED_DIMENSION: ${DW_API_EMBED_DIMENSION:-1024}
+      DW_APPROVAL_REMINDER_SECONDS: ${DW_APPROVAL_REMINDER_SECONDS:-5}
+      # Observability → Langfuse (OTLP). Empty = NullTelemetry (no export).
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+
+  # ------------------------------------------------------------- sandbox --
+  # Runs code the model wrote. Every line of the hardening below answers the
+  # same question - "what does a hostile script get?" - and the answer is meant
+  # to stay "a scratch directory and a document toolchain".
+  #
+  # In `infra` as well as `full`: a developer running an app on the host still
+  # needs somewhere for a document to be generated, and there is nothing to
+  # generate one on a laptop.
+  docgen:
+    build:
+      context: ../..
+      dockerfile: infra/docker/docgen.Dockerfile
+    image: dw-docgen:local
+    profiles: ["infra", "full"]
+    environment:
+      # Empty is defensible on a network nobody outside can reach, but setting it
+      # means a compromised sibling container does not also get a free shell.
+      DW_DOCGEN_TOKEN: ${DW_DOCGEN_TOKEN:-}
+    # `dw-sandbox` only. Two separate controls, and an earlier version of this
+    # comment claimed the first was both:
+    #
+    # `internal: true` denies a route off the machine, so a prompt injected
+    # through an attachment cannot exfiltrate what it cannot send. It says
+    # nothing about the containers on the same bridge - which is why this is a
+    # network of its own rather than `dw-internal`, where Qdrant and Valkey sit
+    # unauthenticated in this file.
+    #
+    # No published port, because there cannot be one: Docker sets up no DNAT for
+    # a container that lives only on an internal network, so `ports:` here would
+    # be silently inert. Everything reaches it through `docgen-gateway` below.
+    networks: [dw-sandbox]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    # The only writable path, and it is RAM that dies with the container.
+    # `noexec` costs nothing: scripts here are read by an interpreter that lives
+    # in the image, never executed in place.
+    tmpfs:
+      - /work:mode=1777,size=512m,nosuid,nodev,noexec
+      # LibreOffice opens its UNO pipe under /tmp and finds no other path, so a
+      # read-only root means no PDF at all. Small, and it dies with the container.
+      - /tmp:mode=1777,size=128m,nosuid,nodev,noexec
+    mem_limit: 3g
+    pids_limit: 512
+    restart: unless-stopped
+
+  # The one way in, for the host AND for the app containers. The sandbox cannot
+  # publish a port and must not be given a routable network to fix that, so this
+  # sits on both and copies bytes. It runs no submitted code and holds no state,
+  # which is why giving it a route costs nothing the sandbox was protecting.
+  # Bound to loopback on the host side.
+  #
+  # It forwards to one fixed address read from its own environment, never from
+  # the request, so reaching it buys no onward hop. That is what lets it be the
+  # single member of dw-sandbox that also sits on dw-internal: the sandbox can
+  # open a socket to it and get the sandbox's own API back.
+  docgen-gateway:
+    # The sandbox image, reused: it is already on the machine and carries a
+    # Python interpreter. Nothing else of it is used.
+    image: dw-docgen:local
+    profiles: ["infra", "full"]
+    depends_on: [docgen]
+    volumes:
+      - ./docgen-gateway.py:/opt/docgen-gateway.py:ro
+    command: ["python", "/opt/docgen-gateway.py"]
+    ports:
+      - "127.0.0.1:${DW_DOCGEN_HOST_PORT:-8110}:8110"
+    networks: [dw-sandbox, dw-internal, dw-edge]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+    image: dw-worker:local
+    profiles: ["full"]
+    environment:
+      DW_API_PROFILE: ${DW_API_PROFILE:-local}
+      DW_WORKER_DATABASE_URL: postgresql+asyncpg://dw_app:${DW_DB_APP_PASSWORD:?}@postgres:5432/dw
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-dw_knowledge}
+      REDIS_URL: redis://valkey:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      # Knowledge ingest consumer: embed with the same self-hosted BGE-M3 as the
+      # API so uploaded docs land in the same 1024-dim Qdrant collection.
+      DW_WORKER_EMBEDDING_PROVIDER: ${DW_API_EMBEDDING_PROVIDER:-hash}
+      DW_WORKER_MODEL_PROFILE: ${DW_API_MODEL_PROFILE:-balanced}
+      # Observability -> Langfuse (OTLP). Empty = no export.
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      DW_WORKER_EMBED_URL: ${DW_API_EMBED_URL:-http://tei-embed:80}
+      DW_WORKER_EMBED_DIMENSION: ${DW_API_EMBED_DIMENSION:-1024}
+      DW_SLACK_APPROVALS_ENABLED: ${DW_SLACK_APPROVALS_ENABLED:-false}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_USER_AN_ID: ${SLACK_USER_AN_ID:-}
+      SLACK_USER_BINH_ID: ${SLACK_USER_BINH_ID:-}
+      SLACK_USER_CHI_ID: ${SLACK_USER_CHI_ID:-}
+      SLACK_USER_MAP_JSON: ${SLACK_USER_MAP_JSON:-}
+      DW_PUBLIC_WEB_URL: ${DW_PUBLIC_WEB_URL:-http://localhost:3000}
+      # How many research runs this worker drives at once. 1 is the old
+      # one-at-a-time behaviour, where a second person pressing Research waited
+      # out the first run; 3 is what the lane now defaults to.
+      DW_WORKER_RESEARCH_CONCURRENCY: ${DW_WORKER_RESEARCH_CONCURRENCY:-3}
+      DW_WORKER_PERSON_RESEARCH_CONCURRENCY: ${DW_WORKER_PERSON_RESEARCH_CONCURRENCY:-3}
+      # Search providers for the sales_intel research lane (empty = fixed corpus).
+      SEARCH_PROVIDER_ORDER: ${SEARCH_PROVIDER_ORDER:-}
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
+      ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:-}
+      ZALO_LINK_SECRET: ${ZALO_LINK_SECRET:-}
+      ZALO_BOT_LINK: ${ZALO_BOT_LINK:-}
+      EXA_API_KEY: ${EXA_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_AUTH_MODE: ${NEXT_PUBLIC_AUTH_MODE:-oidc}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:-http://localhost:8686}
+        NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:-dw}
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-dw-web}
+        NEXT_PUBLIC_CHAT_BASE_URL: ${NEXT_PUBLIC_CHAT_BASE_URL:-http://localhost:8100}
+    image: dw-web:local
+    profiles: ["full"]
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_CHAT_BASE_URL: ${NEXT_PUBLIC_CHAT_BASE_URL:-http://localhost:8100}
+      API_INTERNAL_BASE_URL: http://api:8000
+    ports:
+      # Overridable for the same reason as postgres: a `next dev` from `make dev`
+      # (or a second checkout, or another session running e2e) already owns 3000,
+      # and the container then dies on bind instead of picking another port.
+      - "127.0.0.1:${DW_WEB_HOST_PORT:-3000}:3000"
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ------------------------------------------------- optional observability --
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    profiles: ["observability"]
+    environment:
+      CLICKHOUSE_DB: langfuse
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    networks: [dw-internal]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "clickhouse-client --user langfuse --password $${CLICKHOUSE_PASSWORD} -q 'SELECT 1'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    profiles: ["observability"]
+    environment: &langfuse-env
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
+      REDIS_CONNECTION_STRING: redis://valkey:6379/1
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?}
+      SALT: ${LANGFUSE_SALT:?}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?}
+      TELEMETRY_ENABLED: "false"
+    networks: [dw-internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    profiles: ["observability"]
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_URL: http://localhost:3001
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      langfuse-worker:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1:3000/api/public/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped

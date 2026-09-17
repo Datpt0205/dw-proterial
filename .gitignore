@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.import_linter_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+
+# Environment and secrets.
+#
+# `.env.*` does NOT match a file whose name has no leading dot, which is how a
+# file of live infrastructure credentials once reached a remote. Both shapes are
+# named here, and anything ending in `.server` is refused outright.
+.env
+.env.*
+env.server
+env.*.server
+*.env.server
+!.env.example
+!.env.dev.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts
+*.log
+evals/reports/*.json
+!evals/reports/.gitkeep
+release-manifest.local.json
+
+# Browser-test artefacts: tens of MB of traces and screenshots that say nothing
+# a reader needs. They are for the machine that just ran the suite.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Agent worktrees — throwaway checkouts, never part of the repo.
+.claude/worktrees/

@@ -1,0 +1,28 @@
+schema_version: "1.0"
+name: document.show
+version: "1.0.0"
+summary: >-
+  Đưa lại thẻ của một tệp đã lưu vào khung chat, để người dùng mở hoặc tải về
+  ngay tại đó.
+when_to_use: >-
+  Khi người dùng hỏi lại về một tệp đã dựng ở lượt trước - "file đâu rồi", "gửi
+  lại tệp", "cho xem lại bản báo cáo". Lấy artifact_id từ thẻ tài liệu đã hiện
+  trước đó trong chính cuộc trò chuyện này.
+  Đây là cách DUY NHẤT để đưa một tệp trở lại màn hình. Không có đường link nào
+  tới tệp cả: đừng viết ra URL, đừng mô tả nội dung tệp thay cho việc hiện nó.
+when_not_to_use: >-
+  Khi vừa gọi document.save trong cùng lượt - thẻ đã hiện rồi, gọi thêm là hiện
+  hai thẻ giống nhau. Khi cần SỬA tệp thì dùng document.open, công cụ đó nạp
+  tệp nguồn về thư mục làm việc; công cụ này chỉ hiện thẻ.
+returns: >-
+  Đúng thẻ tài liệu như lúc lưu: artifact_id, phiên bản, tên tệp, kích thước và
+  mẫu đã dựng nó.
+required_scopes: [sales_chat.read]
+# Đọc một dòng artifact và hết. Không sandbox, không object storage: chính vì
+# vậy nó vẫn chạy ở lượt mà container đã khởi động lại, khác document.open.
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 10
+max_retries: 1
+idempotent: true
+data_classification: [internal, customer]

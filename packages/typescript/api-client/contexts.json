@@ -1,0 +1,11 @@
+{
+  "comment": [
+    "Per-context API type generation (see scripts/generate.mjs).",
+    "Each business context claims its OpenAPI path prefixes; every path left",
+    "unclaimed is generated into src/generated/platform.d.ts. A context adds",
+    "exactly one entry here in its wiring PR and never touches another",
+    "context's generated file. Example entry:",
+    "  { \"name\": \"sales-crm\", \"pathPrefixes\": [\"/api/v1/sales-crm\"] }"
+  ],
+  "contexts": []
+}

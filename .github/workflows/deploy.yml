@@ -1,0 +1,61 @@
+name: Deploy
+
+# CD through self-hosted runners installed ON the target hosts, so a deploy is
+# an in-place `git reset` + `docker compose up` rather than an SSH session with
+# credentials to manage.
+#
+#   push to `dev`   -> deploy dev
+#   run manually    -> deploy dev, uat or production
+#
+# Every job is three lines because the deploy itself lives in scripts/deploy.sh,
+# which the GitLab pipeline and a human on the box both run too. The overlay the
+# script picks is what pins the profile the app validates itself against.
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Environment to deploy"
+        type: choice
+        options: [dev, uat, production]
+        default: uat
+
+jobs:
+  dev:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'dev')
+    runs-on: [self-hosted, dev]
+    timeout-minutes: 30
+    environment: development
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    steps:
+      - name: Deploy dev
+        run: bash /home/ubuntu/base_agent/scripts/deploy.sh dev dev
+
+  uat:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'uat'
+    runs-on: [self-hosted, uat]
+    timeout-minutes: 30
+    environment: uat
+    concurrency:
+      group: deploy-uat
+      cancel-in-progress: false
+    steps:
+      - name: Deploy UAT
+        run: bash /home/ubuntu/base_agent/scripts/deploy.sh main uat
+
+  production:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production'
+    runs-on: [self-hosted, prod]
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy production
+        run: bash /home/ubuntu/base_agent/scripts/deploy.sh main production

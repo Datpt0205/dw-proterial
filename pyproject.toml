@@ -1,0 +1,325 @@
+[project]
+name = "digital-worker-platform"
+version = "0.1.0"
+description = "Digital Worker platform: multi-tenant agent runtime, knowledge, memory and approvals. Business bounded contexts plug in as packages."
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api", "apps/docgen", "apps/worker", "packages/python/*"]
+
+[tool.uv.sources]
+dw-kernel = { workspace = true }
+dw-platform = { workspace = true }
+dw-agent-runtime = { workspace = true }
+dw-knowledge = { workspace = true }
+dw-memory = { workspace = true }
+dw-connectors = { workspace = true }
+dw-observability = { workspace = true }
+dw-evals = { workspace = true }
+dw-api = { workspace = true }
+dw-docgen = { workspace = true }
+dw-worker = { workspace = true }
+# Docling (the worker's optional `parsers` extra) pulls torch, whose default
+# wheels bundle a multi-GB CUDA runtime. Document parsing runs fine on CPU, so
+# pin the CPU-only build: far smaller and faster to install, and the only
+# sensible default for a host with no GPU.
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9,<1",
+    "mypy>=1.14,<2",
+    "pytest>=9.0.3,<10",
+    "pytest-asyncio>=0.25,<2",
+    "httpx>=0.28,<1",
+    "import-linter>=2.1,<3",
+    "pre-commit>=4.0,<5",
+    "asgi-lifespan>=2.1,<3",
+    "types-pyyaml>=6.0,<7",
+    "pytest-cov>=6.0,<8",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff — lint + format for the whole Python workspace
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = [
+    "packages/python/*/src",
+    "apps/api/src",
+    "apps/docgen/src",
+    "apps/worker/src",
+    "scripts",
+]
+extend-exclude = ["db/migrations/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "C4",  # comprehensions
+    "SIM", # simplify
+    "RUF", # ruff-specific
+    "TID", # tidy imports
+]
+ignore = [
+    "SIM117", # nested with is sometimes clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["B011"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency-injection markers are immutable sentinels used in defaults.
+extend-immutable-calls = ["fastapi.File", "fastapi.Form"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "dw_kernel",
+    "dw_platform",
+    "dw_agent_runtime",
+    "dw_knowledge",
+    "dw_memory",
+    "dw_connectors",
+    "dw_observability",
+    "dw_evals",
+    "dw_api",
+    "dw_docgen",
+    "dw_worker",
+]
+
+# ---------------------------------------------------------------------------
+# mypy — strict for src, relaxed-def for tests
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+plugins = ["pydantic.mypy"]
+files = [
+    "packages/python",
+    "apps/api/src",
+    "apps/docgen/src",
+    "apps/worker/src",
+    "scripts",
+]
+exclude = ['db/migrations/versions', 'tests/(unit|integration)/conftest\.py$']
+mypy_path = [
+    "packages/python/dw_kernel/src",
+    "packages/python/dw_platform/src",
+    "packages/python/dw_agent_runtime/src",
+    "packages/python/dw_knowledge/src",
+    "packages/python/dw_memory/src",
+    "packages/python/dw_connectors/src",
+    "packages/python/dw_observability/src",
+    "packages/python/dw_evals/src",
+    "apps/api/src",
+    "apps/docgen/src",
+    "apps/worker/src",
+    "tests/support",
+    "packages/python/dw_platform/tests/integration",
+    "packages/python/dw_agent_runtime/tests/integration",
+    "packages/python/dw_agent_runtime/tests/unit",
+]
+explicit_package_bases = true
+namespace_packages = true
+
+[[tool.mypy.overrides]]
+module = ["*.tests.*", "tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# asyncpg ships no py.typed marker. Used directly in exactly one place — the
+# LISTEN connection, which cannot come from the SQLAlchemy pool.
+[[tool.mypy.overrides]]
+module = ["asyncpg", "asyncpg.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q --strict-markers"
+testpaths = [
+    "packages/python",
+    "apps/api/tests",
+    "apps/docgen/tests",
+    "apps/worker/tests",
+]
+pythonpath = [".", "tests/support", "packages/python/dw_agent_runtime/tests/integration"]
+markers = [
+    "unit: fast tests without external services",
+    "integration: tests requiring Postgres/Qdrant/Redis/MinIO",
+    "contract: API/event/tool schema contract tests",
+    "e2e: end-to-end vertical slice tests",
+    "eval: evaluation smoke/regression tests",
+    "architecture: import-boundary and dependency-rule tests",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+# ---------------------------------------------------------------------------
+# coverage — measured on src, tests and migrations excluded. `fail_under` is a
+# ratchet: it may only be raised, never lowered (target 85%).
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+# Each src dir is listed separately: pointing at "packages/python" would drop
+# never-imported modules under the <pkg>/src/ layout from the denominator.
+source = [
+    "packages/python/dw_agent_runtime/src",
+    "packages/python/dw_connectors/src",
+    "packages/python/dw_evals/src",
+    "packages/python/dw_kernel/src",
+    "packages/python/dw_knowledge/src",
+    "packages/python/dw_memory/src",
+    "packages/python/dw_observability/src",
+    "packages/python/dw_platform/src",
+    "apps/api/src",
+    "apps/docgen/src",
+    "apps/worker/src",
+]
+omit = ["*/tests/*", "*/conftest.py", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = false
+skip_covered = true
+precision = 1
+fail_under = 70
+
+# ---------------------------------------------------------------------------
+# import-linter — the architecture rules, enforced rather than documented.
+#
+# A business context added to this repo extends these lists in the same change
+# that creates it: import-linter fails on a module that does not exist, so a
+# contract can never be written ahead of the code it governs.
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+include_external_packages = true
+root_packages = [
+    "dw_kernel",
+    "dw_platform",
+    "dw_agent_runtime",
+    "dw_knowledge",
+    "dw_memory",
+    "dw_connectors",
+    "dw_observability",
+    "dw_evals",
+]
+
+[[tool.importlinter.contracts]]
+name = "Kernel is pure (stdlib only)"
+type = "forbidden"
+source_modules = ["dw_kernel"]
+forbidden_modules = [
+    "pydantic",
+    "fastapi",
+    "sqlalchemy",
+    "alembic",
+    "langgraph",
+    "langchain",
+    "qdrant_client",
+    "redis",
+    "httpx",
+    "boto3",
+    "minio",
+    "openai",
+    "anthropic",
+    "slack_sdk",
+    "dw_platform",
+    "dw_agent_runtime",
+    "dw_knowledge",
+    "dw_memory",
+    "dw_connectors",
+    "dw_observability",
+    "dw_evals",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain layers never import frameworks or providers"
+type = "forbidden"
+source_modules = ["dw_platform.domain"]
+forbidden_modules = [
+    "fastapi",
+    "sqlalchemy",
+    "alembic",
+    "langgraph",
+    "langchain",
+    "qdrant_client",
+    "redis",
+    "httpx",
+    "boto3",
+    "minio",
+    "openai",
+    "anthropic",
+    "slack_sdk",
+    "opentelemetry",
+]
+
+[[tool.importlinter.contracts]]
+# A workflow node that imports a concrete adapter has a database session or a
+# provider client in the middle of a graph — the shape that makes a node
+# untestable without infrastructure and makes the tenant filter a node's
+# business. Nodes take what they need by injection from the composition root.
+#
+# dw_agent_runtime.adapters is deliberately NOT forbidden: that is the runtime
+# seam (chat model factory, checkpointer), and reaching it is how a node stays
+# provider-agnostic rather than how it stops being one.
+name = "LangGraph only inside runtime adapters"
+type = "forbidden"
+source_modules = [
+    "dw_agent_runtime.contracts",
+    "dw_agent_runtime.ports",
+    "dw_agent_runtime.registry",
+    "dw_agent_runtime.tools",
+    "dw_agent_runtime.executor",
+    "dw_agent_runtime.context",
+    "dw_agent_runtime.model",
+]
+forbidden_modules = ["langgraph", "langchain_core", "langchain"]
+
+[[tool.importlinter.contracts]]
+name = "Vector/object-storage SDKs only inside knowledge adapters"
+type = "forbidden"
+source_modules = [
+    "dw_knowledge.contracts",
+    "dw_knowledge.ports",
+    "dw_knowledge.gateway",
+    "dw_knowledge.chunking",
+    "dw_knowledge.tables",
+    "dw_memory",
+    "dw_platform",
+    "dw_agent_runtime",
+]
+forbidden_modules = ["qdrant_client", "minio", "boto3"]
+
+[[tool.importlinter.contracts]]
+name = "Platform packages do not import app composition roots"
+type = "forbidden"
+source_modules = [
+    "dw_kernel",
+    "dw_platform",
+    "dw_agent_runtime",
+    "dw_knowledge",
+    "dw_memory",
+    "dw_connectors",
+    "dw_observability",
+]
+forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]

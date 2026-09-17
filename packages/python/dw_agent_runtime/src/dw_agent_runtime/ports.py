@@ -1,0 +1,112 @@
+"""Runtime ports: workflow runner and model gateway.
+
+LangGraph and provider SDK adapters implement these in phase 2; workflow nodes
+and application handlers depend only on the protocols.
+"""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from typing import Literal, Protocol, TypeVar
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+from dw_agent_runtime.contracts import RunContext
+
+OutputT = TypeVar("OutputT", bound=BaseModel)
+
+RouteKind = Literal["auto", "structured_extraction", "reasoning", "deep_reasoning"]
+
+
+class ModelRequest(BaseModel):
+    """Provider-neutral request for a structured model call."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task: str
+    prompt_id: str
+    prompt_version: str
+    variables: dict[str, str] = {}
+    model_profile: str = "balanced"
+    max_output_tokens: int | None = None
+    # "auto" preserves legacy routing (task=="reasoning" -> reasoning route).
+    route_kind: RouteKind = "auto"
+
+
+class ModelGateway(Protocol):
+    """Single entry point for LLM calls; output is always schema-validated."""
+
+    async def generate_structured(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+    ) -> OutputT: ...
+
+
+class TracedModelGateway(ModelGateway, Protocol):
+    """Gateway that can also surface the model's visible reasoning text.
+
+    ``generate_structured_traced`` returns ``(output, reasoning)`` where
+    reasoning is "" when the routed model does not emit reasoning_content.
+    """
+
+    async def generate_structured_traced(
+        self,
+        request: ModelRequest,
+        output_type: type[OutputT],
+        *,
+        run_context: RunContext,
+    ) -> tuple[OutputT, str]: ...
+
+
+class StreamingWorkflowRunnerPort(Protocol):
+    """Runs a workflow while emitting its progress, for chat-style channels."""
+
+    async def stream(
+        self,
+        *,
+        run_context: RunContext,
+        input_payload: dict[str, object],
+    ) -> AsyncIterator[dict[str, object]]:
+        """Claim the thread and start the run; the iterator observes it.
+
+        Awaited rather than iterated, so a thread already carrying an unfinished
+        run is refused with `ConflictError` before the caller has committed to a
+        response. One thread is one checkpoint: a second run on it would invoke
+        the same thread with new input and overwrite whatever the first was
+        waiting on.
+        """
+        ...
+
+
+class WorkflowRunnerPort(Protocol):
+    """Starts and resumes durable, checkpointed workflow runs."""
+
+    def hosts(self, *, worker_id: str, worker_version: str, graph_version: str) -> bool:
+        """Whether this process can resume that exact run.
+
+        Keyed on the versions recorded when the run started, not on whatever the
+        worker config names today: resuming replays the graph the run began on
+        and the worker settings it began under. Both have to still be registered
+        here, and callers must ask this before spending an approval decision --
+        asking about only one of them let a deploy strand a run for ever.
+        """
+        ...
+
+    async def start(
+        self,
+        *,
+        run_context: RunContext,
+        input_payload: dict[str, object],
+    ) -> UUID: ...
+
+    async def resume(
+        self,
+        *,
+        run_context: RunContext,
+        run_id: UUID,
+        resume_payload: dict[str, object],
+    ) -> None: ...

@@ -1,0 +1,46 @@
+[project]
+name = "dw-worker"
+version = "0.1.0"
+description = "Async worker process: outbox processing, workflow consumers, schedulers, knowledge ingestion"
+requires-python = ">=3.12"
+dependencies = [
+    "dw-kernel",
+    "dw-platform",
+    "dw-agent-runtime",
+    "dw-knowledge",
+    "dw-connectors",
+    # For the model profile: the embedding model and its vector width are
+    # configuration, and the worker must read the same route the API does.
+    "dw-agent-runtime",
+    # Tracing for the graphs this process hosts. Imported directly by the
+    # composition root, so it is declared here rather than borrowed from the
+    # context packages that also depend on it.
+    "dw-observability",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+    "sqlalchemy[asyncio]>=2.0.36,<2.1",
+    "asyncpg>=0.30,<1",
+    "qdrant-client>=1.12,<1.15",
+    "minio>=7.2,<8",
+]
+
+
+[project.optional-dependencies]
+# Heavy multi-format parsing + OCR (torch, layout + OCR models). Installed in the
+# worker image only; the knowledge ingest consumer degrades to plaintext when
+# absent, so a lean deployment can skip several gigabytes of wheels.
+parsers = [
+    "docling>=2.15,<3",
+    # Declared explicitly so the CPU-only index override in the root
+    # [tool.uv.sources] applies (docling pulls torch transitively otherwise,
+    # which would resolve the multi-GB CUDA wheels from PyPI).
+    "torch>=2.2,<3",
+    "torchvision>=0.17,<1",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dw_worker"]

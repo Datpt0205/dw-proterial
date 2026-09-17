@@ -1,0 +1,71 @@
+# Production overlay.
+#
+# Apply with a second `-f`:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d
+#
+# Two jobs, and the first one is the important one.
+#
+# 1. It PINS THE PROFILE. `DW_API_PROFILE` in the base file defaults to `local`,
+#    so a host whose .env forgot the variable runs a production deployment with
+#    mocks allowed, /api/docs exposed and dev-token auth available - and nothing
+#    says so. The environment is a property of the file you deploy with, not of
+#    a variable somebody remembered to set, so it is written here and the
+#    application's `validate_for_profile` refuses to start if the rest of the
+#    configuration does not match.
+#
+# 2. It caps memory per container, so one leak or one heavy agent run OOM-kills
+#    its own container instead of dragging Postgres - and every tenant - down
+#    with it. CPU is capped only on background services, so they can never
+#    starve the user-facing api/web; latency-critical services stay uncapped to
+#    burst into spare CPU. Limits are ceilings, not reservations: their sum may
+#    exceed RAM, and the point is only that no single container can take the
+#    host.
+#
+# Sized for a 2 vCPU / ~8 GB box. Deliberately NOT here: port remaps, which
+# would black out a deployment whose reverse proxy targets the base ports.
+services:
+  api:
+    environment:
+      DW_API_PROFILE: production
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+  worker:
+    environment:
+      DW_API_PROFILE: production
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+  web:
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+  keycloak:
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+  postgres:
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+  qdrant:
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+  minio:
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+  valkey:
+    deploy:
+      resources:
+        limits:
+          memory: 256m

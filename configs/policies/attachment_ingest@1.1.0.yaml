@@ -1,0 +1,59 @@
+schema_version: "1.0"
+policy_id: attachment_ingest
+policy_version: "1.1.0"
+
+# What a user may attach to a CRM record, and how each kind becomes text.
+#
+# The route is chosen by file EXTENSION, never by the browser's declared content
+# type: that value is unverified and it decides which paid API the bytes are
+# sent to. Labelling a 20MB PDF as audio would otherwise buy a transcription.
+#
+# .amr is absent because Deepgram does not list it; .tif/.tiff/.bmp are absent
+# because OpenAI vision does not accept them.
+
+# Read as text directly - no API call, no cost.
+plaintext_extensions: [".txt", ".md", ".csv", ".json", ".log"]
+# Sent to the model as input_file.
+document_extensions: [".pdf", ".docx", ".xlsx", ".pptx"]
+# Sent to the model as input_image.
+image_extensions: [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+# Sent to Deepgram.
+audio_extensions:
+  [".mp3", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".flac", ".webm", ".mp4"]
+
+# Both prompts ask for a verbatim transcription rather than a summary: what is
+# indexed has to be what the document says, or a citation points at words nobody
+# wrote.
+# 1.1.0 gave the document prompt the same "nothing to read" escape the image
+# prompt already had. Without it a file the model could not open came back as a
+# polite Vietnamese sentence explaining that it could not be read - which is
+# text, so the job succeeded, the sentence was indexed as the document, and the
+# scorer quoted it as evidence about the company.
+document_instruction: >-
+  Trích xuất toàn bộ nội dung của tài liệu này thành Markdown. Giữ nguyên văn
+  từng câu chữ, giữ nguyên số liệu, giữ nguyên thứ tự các mục và cấu trúc tiêu
+  đề của tài liệu gốc. Bảng biểu xuất ra dạng bảng Markdown. TUYỆT ĐỐI không
+  tóm tắt, không diễn giải, không thêm nhận xét. Chỉ trả về nội dung tài liệu.
+  Nếu không mở được tài liệu, hoặc tài liệu không chứa chữ nào đọc được, hãy
+  trả về DUY NHẤT dòng sau và không viết gì thêm: [không đọc được nội dung]
+  Tuyệt đối không viết câu giải thích vì sao không đọc được - dòng trên là cách
+  duy nhất để báo việc đó.
+# The "nothing to read" escape is not politeness, it is the whole safeguard.
+# Asked to describe a flat single-colour image, gpt-4.1-mini invented a jar of
+# roasted peanuts and a slogan that was never there. Invented text indexed as
+# evidence is worse than an image nobody can search.
+image_instruction: >-
+  Chép lại nguyên văn toàn bộ chữ NHÌN THẤY ĐƯỢC trong ảnh, đúng thứ tự đọc.
+  Sau đó xuống dòng và mô tả ngắn gọn những gì ảnh thực sự thể hiện.
+  Nếu ảnh không chứa chữ nào và không có vật thể nào nhận ra được (ví dụ ảnh
+  trống, một màu trơn, hoặc quá mờ), hãy trả về DUY NHẤT dòng sau và không viết
+  gì thêm: [không đọc được nội dung]
+  Tuyệt đối không suy đoán, không bịa chữ, không mô tả thứ không có trong ảnh.
+  Thà trả về [không đọc được nội dung] còn hơn đoán.
+# What the model returns when it has nothing to read, for BOTH routes. The
+# worker treats it as an empty parse, so the job fails loudly instead of
+# indexing an invention or a refusal.
+empty_marker: "[không đọc được nội dung]"
+
+transcription_model: nova-3
+transcription_language: vi

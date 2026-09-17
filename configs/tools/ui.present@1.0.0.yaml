@@ -1,0 +1,31 @@
+schema_version: "1.0"
+name: ui.present
+version: "1.0.0"
+summary: >-
+  Vẽ câu trả lời thành giao diện (bảng, biểu đồ, thẻ) bằng OpenUI Lang, thay vì
+  viết bằng chữ.
+when_to_use: >-
+  Khi câu trả lời là dữ liệu có hình dạng: so sánh nhiều bản ghi, chia theo năm
+  hoặc theo trạng thái, một xu hướng, một bảng nhiều cột. Số liệu phải lấy từ
+  các tool đọc dữ liệu trước đó; tool này chỉ vẽ.
+  ĐỌC SKILL `generative-ui` TRƯỚC KHI GỌI. Tham số `ui` là OpenUI Lang, một cú
+  pháp riêng - đoán sẽ sai. Đo được: lượt đầu tiên chưa đọc skill đã viết
+  `root = bar_chart(title: ...)`, và người dùng nhận một ô báo lỗi thay vì
+  biểu đồ.
+when_not_to_use: >-
+  Khi câu trả lời là một câu. Một biểu đồ cho một con số là khó đọc hơn con số.
+  Cũng không dùng để hỏi lại người dùng - các tool nghiệp vụ đã có đường riêng
+  cho việc thiếu dữ liệu.
+returns: >-
+  Chính đoạn OpenUI Lang đã gửi, để bản ghi hội thoại vẽ lại được sau khi tải
+  lại trang.
+# Không có side effect và không đọc gì. Nó không nhận id và không được nhận id:
+# mọi số trên màn hình phải đã đi qua một tool đọc có kiểm quyền, nếu không thì
+# đây là một đường vòng quanh RLS.
+required_scopes: []
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 5
+max_retries: 1
+idempotent: true
+data_classification: [internal]

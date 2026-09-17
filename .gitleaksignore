@@ -1,0 +1,8 @@
+# Verified false positives, by fingerprint `<commit>:<file>:<rule>:<line>`.
+#
+# Add a line only after checking by hand that it is not a real credential. A
+# real one is rotated, never ignored — an entry here says "this string was never
+# a secret", not "this secret is acceptable".
+#
+# Prefer an inline `# gitleaks:allow` comment where the language permits one:
+# it survives a rebase, and this file's fingerprints do not.

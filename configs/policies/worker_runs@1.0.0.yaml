@@ -1,0 +1,28 @@
+schema_version: "1.0"
+policy_id: worker_runs
+policy_version: "1.0.0"
+
+# Bao lâu một run còn `running` thì coi như tiến trình chạy nó đã chết.
+#
+# `uq_worker_runs_active_thread` chỉ cho phép ĐÚNG MỘT run chưa kết thúc trên
+# mỗi thread. Một tiến trình bị giết cứng (SIGKILL, OOM, node bị evict) không
+# chạy handler nào, nên dòng đó nằm lại ở `running` vĩnh viễn — và mọi lượt sau
+# trên hội thoại đó nhận 409 "already has a turn in flight", cũng vĩnh viễn.
+# Không có đường tự phục hồi nào khác.
+#
+# ĐÂY LÀ MỘT NGƯỠNG, KHÔNG PHẢI MỘT LEASE. `updated_at` chỉ được ghi khi trạng
+# thái đổi, không có heartbeat — nên nó KHÔNG nhích trong lúc một lượt đang
+# chạy. Vì vậy con số phải lớn hơn lượt dài nhất có thể xảy ra thật, chứ không
+# phải "lượt chạy tối đa bao lâu". Reap nhầm một lượt còn sống sẽ giải phóng
+# thread cho một lượt thứ hai, và hai lượt cùng ghi vào một checkpoint thread là
+# đúng thứ mà chỉ mục kia sinh ra để chặn.
+#
+# 1 giờ. Trần lý thuyết của một run là 20 lượt model × 180s (profile chậm nhất)
+# cộng 32 lượt tool × 300s (tool chậm nhất, `lead_scoring.rescore`) ≈ 3,7 giờ —
+# nhưng phần lớn tool của chat để 25s và một lượt thật tính bằng giây tới vài
+# phút. 1 giờ nằm xa trên mọi lượt thật mà vẫn xa dưới "mãi mãi".
+#
+# Cách sửa đúng hẳn vẫn là lease + heartbeat do một tiến trình ngoài giữ, như
+# `docs/PLAN.md` đã ghi. Cái này không thay thế điều đó; nó bỏ đi tình trạng
+# hội thoại hỏng vĩnh viễn trong lúc chờ.
+stale_run_after_seconds: 3600

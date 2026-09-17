@@ -1,0 +1,144 @@
+{
+  "api_version": "0.1.0",
+  "copy_bundles": [
+    {
+      "checksum": "2866325cda2ce8ea08d86d4869fdd677572499e0d17f36344a255e6516979410",
+      "copy_id": "platform.runtime",
+      "version": "1.3.0"
+    }
+  ],
+  "eval_datasets": [
+    {
+      "checksum": "ce36d6b3e5531666e296c86cd5b907f91734079ddfe99d3924b72a601d9c00e6",
+      "dataset_id": "platform_smoke",
+      "version": "1.0.0"
+    }
+  ],
+  "git_sha": "unknown",
+  "knowledge_index_version": "2026-07-25.structure-1",
+  "memory_policy_version": "1.0.0",
+  "platform_version": "0.1.0",
+  "policies": [
+    {
+      "checksum": "bbebba26b5708933b6f8ab5c43a08f57d4c6ef595e09afb1a9422df0b7d6b49c",
+      "policy_id": "attachment_ingest",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",
+      "policy_id": "worker_runs",
+      "version": "1.0.0"
+    }
+  ],
+  "prompt_bundles": [
+    {
+      "checksum": "d09bde4799b114aa013b9af9c82681cf225b4055bf2e2935870d45b78285bf63",
+      "prompt_id": "platform.untrusted_demo",
+      "version": "1.0.0"
+    }
+  ],
+  "rubrics": [],
+  "schema_version": "1.0",
+  "tool_specs": [
+    {
+      "approval_policy": "always",
+      "checksum": "dd7763defeccfb102d1b3a43bdb8bdc0f32429756f16a5774b5c769991e48d5a",
+      "name": "document.export_to_record",
+      "side_effect_level": "critical",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "1fec6b0e5e945166362051dc35ba9d382f0dc2b3d832679bcded67fcb3b99d40",
+      "name": "document.open",
+      "side_effect_level": "internal",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "b3dcab2a12939216deda12b943639a3c45bd92a9728c88c1199ec36354b75903",
+      "name": "document.save",
+      "side_effect_level": "internal",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "74bae697de811efce75fc0841e58e88aa3de1e73c835cea62c1c64834ce2411e",
+      "name": "document.show",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "5f992bf636f42e20263576d3ca7db60ebf54ca23a55627defd4e86ee9cb4847f",
+      "name": "email.draft",
+      "side_effect_level": "internal",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "dd60ea87761ec25ee7d7219e383fe3f12e693d859301994701aaae3e0b053cf1",
+      "name": "email.draft",
+      "side_effect_level": "internal",
+      "version": "1.1.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "f6d75e2816745e5ab4855059a485bef06046c1d14b4bf85544e222c3f948a7d5",
+      "name": "email.revise",
+      "side_effect_level": "internal",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "always",
+      "checksum": "5c2647c83c9534e9ef1571a9e3bf376c971c81a6ecce65d0000223858854ee0f",
+      "name": "email.save_to_record",
+      "side_effect_level": "critical",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "357deca71388c6cb690a6e9c925dd53fcfcc5dc4aded31656e41b77d15a45eaf",
+      "name": "meeting.compose_brief",
+      "side_effect_level": "internal",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "30604dc352bfce2b8d22af8f0d81e31779543f4d010b24f65eab13d9c36e7538",
+      "name": "meeting.draft_minutes",
+      "side_effect_level": "internal",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "1b0ca4ed9fce1007787f8c450641d8cb531b135c5dd12231dffd26f300bc8066",
+      "name": "meeting.revise",
+      "side_effect_level": "internal",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "always",
+      "checksum": "08726c61c6300992af393dc72a54025778eed4ab2b4a815cb9d41d3228d2b41b",
+      "name": "meeting.save_to_record",
+      "side_effect_level": "critical",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "c8d71bac538f48d2cd626fae2f2fe37ad842f92f8993f533a03a50a69c485bab",
+      "name": "ui.present",
+      "side_effect_level": "none",
+      "version": "1.0.0"
+    },
+    {
+      "approval_policy": "never",
+      "checksum": "aa31a05bcd424a4bcdb8b7873db946afc98c336fa8390096a9604868f01ac246",
+      "name": "ui.present",
+      "side_effect_level": "none",
+      "version": "1.1.0"
+    }
+  ],
+  "toolsets": [],
+  "workers": []
+}

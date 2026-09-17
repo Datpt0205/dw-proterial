@@ -1,0 +1,99 @@
+import re
+from pathlib import Path
+
+import pytest
+
+from dw_agent_runtime.model.copy import load_runtime_copy
+from dw_agent_runtime.registry import ConfigError
+from dw_agent_runtime.tool_specs import ToolSpecRegistry
+from dw_kernel.errors import NotFoundError
+
+pytestmark = pytest.mark.unit
+
+COPY = load_runtime_copy(
+    Path(__file__).resolve().parents[5] / "configs" / "copy" / "runtime@1.3.0.yaml"
+)
+
+SPEC = """\
+schema_version: "1.0"
+name: crm.read_account
+version: "1.0.0"
+summary: Đọc hồ sơ account trong CRM theo account_id.
+when_to_use: Khi cần thông tin công ty, ngành, quy mô để trả lời hoặc chấm điểm.
+when_not_to_use: Khi chưa có account_id — hãy hỏi lại người dùng, không được đoán.
+returns: Hồ sơ account gồm tên, ngành, quy mô, owner, trạng thái.
+required_scopes: [sales_chat.read]
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 15
+max_retries: 2
+idempotent: true
+data_classification: [internal]
+"""
+
+
+def write_spec(directory: Path, body: str, filename: str = "crm.read_account@1.0.0.yaml") -> Path:
+    path = directory / filename
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_spec_becomes_a_tool_definition(tmp_path: Path) -> None:
+    registry = ToolSpecRegistry(copy=COPY)
+    registry.load_file(write_spec(tmp_path, SPEC))
+
+    definition = registry.definition("crm.read_account", "1.0.0")
+    assert definition.required_scopes == frozenset({"sales_chat.read"})
+    assert definition.side_effect_level == "none"
+    assert not definition.requires_approval()
+    assert definition.input_schema_ref == "contracts/tools/crm.read_account@1.0.0/input.json"
+
+
+def test_description_tells_the_model_when_to_avoid_the_tool(tmp_path: Path) -> None:
+    registry = ToolSpecRegistry(copy=COPY)
+    registry.load_file(write_spec(tmp_path, SPEC))
+
+    description = registry.resolve("crm.read_account", "1.0.0").description(COPY)
+    assert description.splitlines() == [
+        "Đọc hồ sơ account trong CRM theo account_id.",
+        "Dùng khi: Khi cần thông tin công ty, ngành, quy mô để trả lời hoặc chấm điểm.",
+        "Không dùng khi: Khi chưa có account_id — hãy hỏi lại người dùng, không được đoán.",
+        "Trả về: Hồ sơ account gồm tên, ngành, quy mô, owner, trạng thái.",
+    ]
+
+
+def test_load_directory_reads_nested_context_folders(tmp_path: Path) -> None:
+    nested = tmp_path / "sales_chat"
+    nested.mkdir()
+    write_spec(nested, SPEC)
+
+    loaded = ToolSpecRegistry(copy=COPY).load_directory(tmp_path)
+    assert [entry.spec.name for entry in loaded] == ["crm.read_account"]
+    assert len(loaded[0].checksum) == 64
+
+
+def test_incomplete_spec_is_refused(tmp_path: Path) -> None:
+    body = SPEC.replace(
+        "when_not_to_use: Khi chưa có account_id — hãy hỏi lại người dùng, không được đoán.\n", ""
+    )
+    with pytest.raises(ConfigError, match="invalid"):
+        ToolSpecRegistry(copy=COPY).load_file(write_spec(tmp_path, body))
+
+
+def test_malformed_yaml_names_the_file_it_came_from(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=re.escape("crm.read_account@1.0.0.yaml")):
+        ToolSpecRegistry(copy=COPY).load_file(write_spec(tmp_path, "name: [unbalanced\n"))
+
+
+def test_duplicate_version_is_refused(tmp_path: Path) -> None:
+    registry = ToolSpecRegistry(copy=COPY)
+    registry.load_file(write_spec(tmp_path, SPEC))
+    with pytest.raises(ConfigError, match="already registered"):
+        registry.load_file(write_spec(tmp_path, SPEC, filename="copy.yaml"))
+
+
+def test_unknown_version_is_not_found(tmp_path: Path) -> None:
+    registry = ToolSpecRegistry(copy=COPY)
+    registry.load_file(write_spec(tmp_path, SPEC))
+    with pytest.raises(NotFoundError):
+        registry.resolve("crm.read_account", "2.1.0")

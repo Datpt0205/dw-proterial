@@ -1,0 +1,241 @@
+import { z } from "zod";
+
+export const knowledgeDocumentSchema = z.object({
+  document_id: z.string().uuid(),
+  title: z.string(),
+  domain: z.string(),
+  classification: z.string(),
+  source_version: z.string(),
+  index_version: z.string().nullable(),
+  chunk_count: z.number().int(),
+  created_at: z.string(),
+  scope: z.string(),
+});
+export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
+
+export const ingestJobSchema = z.object({
+  job_id: z.string().uuid(),
+  status: z.string(),
+  title: z.string(),
+  filename: z.string(),
+  scope: z.string(),
+  attempts: z.number().int(),
+  error: z.string().nullable(),
+  // Non-empty when the file was indexed but not read whole. `error` means the
+  // job failed; a partial read is the third state, and the uploader is the only
+  // person who can do anything about it.
+  warnings: z.array(z.string()),
+  document_id: z.string().uuid().nullable(),
+  chunk_count: z.number().int().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type IngestJob = z.infer<typeof ingestJobSchema>;
+
+export const memoryItemSchema = z.object({
+  memory_id: z.string().uuid(),
+  worker_id: z.string(),
+  memory_type: z.string(),
+  content: z.string(),
+  confidence: z.number(),
+  classification: z.string(),
+  provenance_count: z.number().int(),
+  valid_from: z.string(),
+  created_by_run_id: z.string().uuid(),
+});
+export type MemoryItem = z.infer<typeof memoryItemSchema>;
+
+export const integrationSchema = z.object({
+  tool: z.string(),
+  version: z.string(),
+  description: z.string(),
+  side_effect_level: z.string(),
+  approval_policy: z.string(),
+  requires_approval: z.boolean(),
+  idempotent: z.boolean(),
+  timeout_seconds: z.number().int(),
+  required_scopes: z.array(z.string()),
+});
+export type Integration = z.infer<typeof integrationSchema>;
+
+/**
+ * The workspace roster. Every CRM record stores an owner as a bare user id;
+ * this is what turns one into a person the UI can show or pick.
+ */
+export const workspaceMemberSchema = z.object({
+  user_id: z.string().uuid(),
+  display_name: z.string(),
+  email: z.string().nullable(),
+  role_keys: z.array(z.string()),
+  department: z.string(),
+  // Extra permission sets granted to this member on top of their role scopes.
+  permission_set_keys: z.array(z.string()),
+});
+export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
+
+/**
+ * SugarCRM sync status, as the admin page reports it.
+ *
+ * The importer runs in its own container and shares only the database, so
+ * everything here is read from the two tables it keeps for itself. `runs`
+ * answers "is it alive": a pass that finds nothing changed writes no record at
+ * all, so the data's own timestamps cannot tell a quiet sync from a dead one.
+ * `held` is the list of fields this system claimed because somebody edited
+ * them — the one place a person can see where the two systems disagree.
+ */
+export const syncModuleCountSchema = z.object({
+  table: z.string(),
+  from_sugar: z.number(),
+  total: z.number(),
+});
+
+export const syncHeldFieldSchema = z.object({
+  table: z.string(),
+  record_id: z.string(),
+  record_name: z.string(),
+  url: z.string(),
+  field: z.string(),
+  local_value: z.string().nullable(),
+  sugar_value: z.string().nullable(),
+  locked_at: z.string().nullable(),
+});
+
+export const syncRunSchema = z.object({
+  started_at: z.string(),
+  finished_at: z.string().nullable(),
+  status: z.enum(["running", "ok", "failed"]),
+  seconds: z.number().nullable(),
+  created: z.number(),
+  updated: z.number(),
+  unchanged: z.number(),
+  failed: z.number(),
+  error: z.string().nullable(),
+});
+
+export const syncStatusSchema = z.object({
+  last_sync_at: z.string().nullable(),
+  seconds_since: z.number().nullable(),
+  state: z.enum(["ok", "failing", "stale", "never_run"]),
+  tracked_records: z.number(),
+  tracked_fields: z.number(),
+  modules: z.array(syncModuleCountSchema),
+  held_fields: z.array(syncHeldFieldSchema),
+  held_total: z.number(),
+  held_shown: z.number(),
+  runs: z.array(syncRunSchema),
+});
+
+export type SyncStatus = z.infer<typeof syncStatusSchema>;
+export type SyncModuleCount = z.infer<typeof syncModuleCountSchema>;
+export type SyncHeldField = z.infer<typeof syncHeldFieldSchema>;
+export type SyncRun = z.infer<typeof syncRunSchema>;
+
+/**
+ * Admin console read models. Unlike the operator-only /platform provisioning
+ * views, these are tenant-scoped: an org admin manages the workspaces, tenant
+ * settings and role catalog of their own tenant.
+ */
+
+// A department/workspace of the caller's tenant. `archived` hides it from
+// day-to-day use without deleting the records that reference it.
+export const adminWorkspaceSchema = z.object({
+  workspace_id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  member_count: z.number().int(),
+  archived: z.boolean(),
+});
+export type AdminWorkspace = z.infer<typeof adminWorkspaceSchema>;
+
+// The caller's tenant, as the settings form reads and writes it. `slug` and
+// `status` are read-only here; only name/timezone/locale are editable.
+export const adminTenantSchema = z.object({
+  tenant_id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  timezone: z.string().nullable(),
+  locale: z.string().nullable(),
+  status: z.string(),
+  // How much of the tenant's CRM data a member can see: "open" (everyone in the
+  // workspace sees everything) or "restricted" (a manager sees only their own
+  // team's records, following the reporting hierarchy).
+  record_visibility: z.string(),
+});
+export type AdminTenant = z.infer<typeof adminTenantSchema>;
+
+// One role in the tenant's catalog and the scopes it grants. Read-only: roles
+// are versioned config changed by deploy, not from the UI.
+export const adminRoleSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  scopes: z.array(z.string()),
+});
+export type AdminRole = z.infer<typeof adminRoleSchema>;
+
+// A named bundle of scopes an admin can grant to individual members on top of
+// their role. Read-only catalog; granting happens per-member on the Members
+// page. Same shape as a role, but granted individually rather than by role.
+export const adminPermissionSetSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  scopes: z.array(z.string()),
+});
+export type AdminPermissionSet = z.infer<typeof adminPermissionSetSchema>;
+
+/**
+ * F6 — per-usecase AI usage and cost, read from the model-usage ledger.
+ * Tenant-scoped like the rest of the admin console. Numbers exist from the
+ * day metering was deployed; earlier history was never recorded.
+ */
+
+// One usecase's totals inside the window. `worker_id` is the usecase key
+// ("sales_chat", "person_research", "sales_crm.stakeholder_digest", ...);
+// the screen maps it to a Vietnamese label. `cost_usd` is null when every
+// call in the window ran on an unpriced route ("chưa định giá").
+export const usageUsecaseSchema = z.object({
+  worker_id: z.string(),
+  runs: z.number().int(),
+  model_calls: z.number().int(),
+  input_tokens: z.number().int(),
+  output_tokens: z.number().int(),
+  cost_usd: z.number().nullable(),
+  unpriced_calls: z.number().int(),
+  last_used_at: z.string().nullable(),
+});
+export type UsageUsecase = z.infer<typeof usageUsecaseSchema>;
+
+export const usageDailySchema = z.object({
+  day: z.string(),
+  worker_id: z.string(),
+  runs: z.number().int(),
+  cost_usd: z.number(),
+});
+export type UsageDaily = z.infer<typeof usageDailySchema>;
+
+export const usageToolSchema = z.object({
+  tool_name: z.string(),
+  calls: z.number().int(),
+  failed: z.number().int(),
+});
+export type UsageTool = z.infer<typeof usageToolSchema>;
+
+export const usageOverviewSchema = z.object({
+  days: z.number().int(),
+  since: z.string(),
+  usecases: z.array(usageUsecaseSchema),
+  daily: z.array(usageDailySchema),
+  tools: z.array(usageToolSchema),
+});
+export type UsageOverview = z.infer<typeof usageOverviewSchema>;
+
+// A workspace member as the reporting-hierarchy editor reads it: who they are,
+// the roles they hold, and who they report to. `manager_user_id` is null for a
+// root of the tree; the API rejects an edit that would create a cycle.
+export const hierarchyMemberSchema = z.object({
+  user_id: z.string().uuid(),
+  display_name: z.string(),
+  email: z.string().nullable(),
+  role_keys: z.array(z.string()),
+  manager_user_id: z.string().nullable(),
+});
+export type HierarchyMember = z.infer<typeof hierarchyMemberSchema>;

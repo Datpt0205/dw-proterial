@@ -1,0 +1,18 @@
+# Generated artifacts — formatting is owned by their generators
+contracts/openapi/openapi.json
+contracts/release/
+packages/typescript/api-client/src/generated/
+evals/reports/
+# Sinh bởi scripts/generate_openui_skill.mjs từ thư viện OpenUI đang cài. Prettier
+# gói lại các dòng là làm nó lệch với bộ sinh, và vì không cổng nào chạy
+# `--check` nên lệch đó trôi im lặng cho tới khi model đọc phải bộ từ vựng cũ.
+configs/skills/sales_chat/generative-ui/SKILL.md
+
+# Vendored upstream source — reformatting it would conflict with the next re-vendor
+vendor/
+
+# Local-only reference material (git-excluded via .git/info/exclude; CI never sees it)
+my_reference_docs/
+evals/datasets/
+evals/expected/
+evals/fixtures/

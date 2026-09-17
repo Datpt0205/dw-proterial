@@ -1,0 +1,44 @@
+schema_version: "1.0"
+name: ui.present
+version: "1.1.0"
+summary: >-
+  Vẽ dữ liệu của câu trả lời thành giao diện - biểu đồ, bảng, thẻ - bằng OpenUI
+  Lang. Bổ sung cho câu trả lời bằng chữ chứ không thay thế nó: người dùng vẫn
+  đọc được đầy đủ khi bản vẽ không dựng được.
+when_to_use: >-
+  Khi câu trả lời chứa dữ liệu có hình dạng, và gần như mọi câu hỏi về tổng hợp
+  đều thuộc loại này: xếp hạng người bán, chia lead theo trạng thái, pipeline
+  theo giai đoạn, doanh số theo quý, so sánh nhiều bản ghi, một bảng nhiều cột.
+  Cứ vẽ ngay trong cùng lượt, sau khi đã có số từ tool đọc dữ liệu - đừng chờ
+  người dùng nói "vẽ giúp anh".
+  Số phải lấy từ tool đọc dữ liệu đã gọi trước đó, và số phần tử trên hình phải
+  bằng đúng số bản ghi tool trả về.
+  Cú pháp OpenUI Lang nằm trong skill `generative-ui`; đọc nó bằng read_file với
+  limit=1000 trước lần vẽ đầu tiên của phiên.
+when_not_to_use: >-
+  Khi câu trả lời là một con số hoặc một câu - một biểu đồ cho một con số khó
+  đọc hơn chính con số đó. Khi chưa gọi tool đọc dữ liệu nào, vì tool này không
+  tra cứu và không nhận id. Và không dùng để hỏi lại người dùng: các tool nghiệp
+  vụ đã có đường riêng cho việc thiếu dữ liệu.
+returns: >-
+  Chính đoạn OpenUI Lang đã gửi, để bản ghi hội thoại vẽ lại được sau khi tải
+  lại trang.
+# Không có side effect và không đọc gì. Nó không nhận id và không được nhận id:
+# mọi số trên màn hình phải đã đi qua một tool đọc có kiểm quyền, nếu không thì
+# đây là một đường vòng quanh RLS.
+#
+# 1.1.0 đổi lời mời, không đổi hành vi. Bản 1.0.0 mở đầu bằng "thay vì viết bằng
+# chữ" - sai với thứ hệ thống thật sự làm, vì transcript giữ cả part text lẫn
+# part openui trong cùng một lượt. Và `when_to_use` của nó dành nửa số chữ cho
+# cảnh báo ("đoán sẽ sai", "ĐỌC SKILL TRƯỚC KHI GỌI") thay vì cho lời mời, nên
+# đọc như một cái cổng chứ không như một công cụ. Đo được trên sáu lượt chạy
+# thật (evals/reports/ask_ops_steps.csv): model chỉ gọi tool này khi câu hỏi có
+# sẵn chữ "vẽ"; những câu đáng vẽ nhất - "ai bán tốt nhất", "đếm lead theo
+# trạng thái" - đều trả lời bằng chữ suông.
+required_scopes: []
+side_effect_level: none
+approval_policy: never
+timeout_seconds: 5
+max_retries: 1
+idempotent: true
+data_classification: [internal]

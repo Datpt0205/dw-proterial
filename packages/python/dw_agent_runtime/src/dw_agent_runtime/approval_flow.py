@@ -1,0 +1,190 @@
+"""Approve/reject a pending approval and resume its paused run.
+
+Bridges platform approvals and the workflow runner: the human decision is
+persisted first (aggregate invariant: decided exactly once), then the durable
+run resumes with the decision payload.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import UTC
+from typing import Any
+
+from dw_agent_runtime.adapters.run_store import RunRecord, RunStatus, SqlWorkerRunStore
+from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.ports import WorkflowRunnerPort
+from dw_kernel.errors import ConflictError, NotFoundError
+from dw_kernel.ids import UserId
+from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.access_context import AccessContext
+from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.ports import PlatformUnitOfWorkFactory
+from dw_platform.domain.approval import ApprovalRequest, DecisionOutcome
+
+
+@dataclass
+class ApproveAndResumeService:
+    uow_factory: PlatformUnitOfWorkFactory
+    runner: WorkflowRunnerPort
+    run_store: SqlWorkerRunStore
+    clock: UtcClock
+    id_generator: IdGenerator
+    strict_approval_prefixes: frozenset[str] = frozenset()
+
+    def is_strict(self, approval_type: str) -> bool:
+        """Whether this type demands a second person and a written reason.
+
+        Public because the UI has to know before it offers a decision: a form
+        that hardcoded the prefixes would be a second copy of this policy, and
+        the one it had let approvers submit decisions the server always refused.
+        """
+        return approval_type.startswith(tuple(self.strict_approval_prefixes))
+
+    def _enforce_strict_rules(
+        self, request: ApprovalRequest, comment: str, context: AccessContext
+    ) -> None:
+        if request.requested_by.value == context.principal_id:
+            raise ConflictError(
+                "separation of duties: requester cannot approve their own request",
+                details={
+                    "approval_id": str(request.id),
+                    "approval_type": request.approval_type,
+                },
+            )
+        if not comment.strip():
+            raise ConflictError(
+                "this approval type requires a review comment",
+                details={"approval_type": request.approval_type},
+            )
+
+    async def _resumable_run(
+        self, context: AccessContext, request: ApprovalRequest
+    ) -> RunRecord | None:
+        if request.run_id is None:
+            return None
+        record = await self.run_store.get(
+            self._run_context_for(context, request.run_id), request.run_id
+        )
+        if record.status is not RunStatus.WAITING_APPROVAL:
+            raise ConflictError(
+                "run is not waiting for approval",
+                details={
+                    "approval_id": str(request.id),
+                    "run_id": str(request.run_id),
+                    "status": record.status.value,
+                },
+            )
+        if not self.runner.hosts(
+            worker_id=record.worker_id,
+            worker_version=record.worker_version,
+            graph_version=record.graph_version,
+        ):
+            raise ConflictError(
+                "this service does not run the graph that owns the approval",
+                details={
+                    "approval_id": str(request.id),
+                    "worker_id": record.worker_id,
+                    "worker_version": record.worker_version,
+                    "graph_version": record.graph_version,
+                },
+            )
+        return record
+
+    async def decide(
+        self,
+        *,
+        approval_id: uuid.UUID,
+        approve: bool,
+        comment: str,
+        context: AccessContext,
+        authorization: ScopeAuthorizationService,
+        approved_action_ids: list[str] | None = None,
+    ) -> ApprovalRequest:
+        async with self.uow_factory(context) as uow:
+            request = await uow.approvals.get(approval_id)
+            if request is None:
+                raise NotFoundError(
+                    "approval request not found", details={"approval_id": str(approval_id)}
+                )
+            # Approving is the decision that needs the right; WITHDRAWING your
+            # own request is not. A seller who asks the assistant to do
+            # something and then changes their mind must not have to find a
+            # manager to take it back — without this the request sits pending
+            # forever and its run stays parked (measured 2026-09-08: a sales
+            # role got `permission_denied` on Reject as well as Approve).
+            # The read moves above the gate so we know whose request it is;
+            # it is already tenant/workspace-scoped by RLS.
+            if approve or request.requested_by.value != context.principal_id:
+                await authorization.require(
+                    context=context,
+                    action="approvals.decide",
+                    resource_type="approval_request",
+                    resource_id=str(approval_id),
+                )
+            if self.is_strict(request.approval_type):
+                self._enforce_strict_rules(request, comment, context)
+            record = await self._resumable_run(context, request)
+
+            decision = request.decide(
+                decision_id=self.id_generator.new_uuid(),
+                decided_by=UserId(context.principal_id),
+                outcome=DecisionOutcome.APPROVED if approve else DecisionOutcome.REJECTED,
+                decided_at=self.clock.now().astimezone(UTC),
+                comment=comment,
+            )
+            await uow.approvals.save(request)
+            await uow.approvals.add_decision(decision)
+            await uow.commit()
+
+        if record is not None and request.run_id is not None:
+            resume_payload: dict[str, Any] = {"approved": approve, "comment": comment}
+            if approved_action_ids is not None:
+                resume_payload["approved_action_ids"] = approved_action_ids
+            await self.runner.resume(
+                run_context=RunContext(
+                    run_id=request.run_id,
+                    thread_id=record.thread_id,
+                    tenant_id=context.tenant_id,
+                    workspace_id=context.workspace_id,
+                    actor_id=record.requested_by,
+                    worker_id=record.worker_id,
+                    worker_version=record.worker_version,
+                    channel="web",
+                    # Authority comes from the run, not from whoever is
+                    # approving it. Separation of duties guarantees they are
+                    # different people, so reading it from the approver's
+                    # context handed their scopes to the requester's agent.
+                    plan_id=record.actor_plan_id,
+                    roles=record.actor_roles,
+                    scopes=record.actor_scopes,
+                    clearance=record.actor_clearance,
+                    # Same reason as the roles and scopes above: the run
+                    # resumes with the reach it started with, not with the
+                    # approver's. Omitting these resumed with no owner limit
+                    # at all, which widens rather than narrows.
+                    record_visibility=record.actor_record_visibility,
+                    visible_owners=record.actor_visible_owners,
+                    trace_id=f"resume-{request.run_id.hex[:12]}",
+                ),
+                run_id=request.run_id,
+                resume_payload=resume_payload,
+            )
+        return request
+
+    def _run_context_for(self, context: AccessContext, run_id: uuid.UUID) -> RunContext:
+        return RunContext(
+            run_id=run_id,
+            tenant_id=context.tenant_id,
+            workspace_id=context.workspace_id,
+            actor_id=context.principal_id,
+            worker_id="unknown",
+            worker_version="0.0.0",
+            channel="web",
+            plan_id=context.plan_id,
+            roles=context.roles,
+            scopes=context.scopes,
+            clearance=context.clearance,
+            trace_id=f"lookup-{run_id.hex[:12]}",
+        )

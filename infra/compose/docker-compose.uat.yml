@@ -1,0 +1,62 @@
+# UAT overlay.
+#
+# Apply with a second `-f`:
+#   docker compose -f docker-compose.yml -f docker-compose.uat.yml --profile full up -d
+#
+# UAT is a real deployment: real people sign in and real data is entered, and
+# the only difference from production is how far a mistake reaches. So it is
+# held to the same rules - `validate_for_profile` refuses a mock model, dev-mode
+# auth, the meaningless hash embeddings, a missing vector store or unlisted CORS
+# origins here exactly as it does in production, and the OpenAPI schema and its
+# UIs are hidden the same way.
+#
+# What differs is only size. A UAT box is usually smaller than production and
+# carries a fraction of the load, so the ceilings are lower. They are still
+# ceilings: the point is that one container cannot take the host, not that the
+# numbers match production.
+services:
+  api:
+    environment:
+      DW_API_PROFILE: uat
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+  worker:
+    environment:
+      DW_API_PROFILE: uat
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 768m
+  web:
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+  keycloak:
+    deploy:
+      resources:
+        limits:
+          memory: 640m
+  postgres:
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+  qdrant:
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+  minio:
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+  valkey:
+    deploy:
+      resources:
+        limits:
+          memory: 192m

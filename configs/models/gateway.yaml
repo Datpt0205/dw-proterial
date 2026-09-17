@@ -1,0 +1,71 @@
+schema_version: "1.0"
+profile_id: gateway
+routing_policy_version: "2.0.0"
+# Every route goes through one OpenAI-compatible gateway (OPENAI_BASE_URL): a
+# LiteLLM proxy, a vendor gateway, or OpenAI itself. Provider keys and fallbacks
+# are the gateway's configuration, not the application's.
+# NO `temperature` HERE: the gateway answers 400 "Only the default (1) value is
+# supported" for the gpt-5.6 family, measured by `make check-model`.
+structured_extraction:
+  provider: openai_responses
+  model: gpt-5.6-luna
+  timeout_seconds: 60
+  reasoning_effort: low
+  # Public list price (F6). Without one the ledger stores NULL and the usage
+  # screen says "chưa định giá" — adjust here when the gateway's real rate
+  # card differs.
+  price_per_million_input: 0.20
+  price_per_million_output: 1.20
+reasoning:
+  provider: openai_compatible
+  model: gpt-4.1
+  timeout_seconds: 90
+  price_per_million_input: 2.00
+  price_per_million_output: 8.00
+# Front-office chat, and the route the lead scorer runs on too. A reasoning
+# model, so no temperature: it accepts only its own default, and the gateway
+# answers 400 for the parameter rather than ignoring it.
+#
+# Spec 001 section 7 asks for a low temperature on the scoring step. It cannot be set
+# HERE, and there is no longer a weaker route to move the scorer to: since
+# `structured_extraction` also became gpt-5.6-luna, the only routes that would
+# accept a temperature are `reasoning` and `fallback`, which nothing calls for
+# scoring. The property that request was
+# after — the same lead scoring the same way twice — is bought a stronger way
+# instead: every number is computed by `domain.scoring` from the levels the
+# model picked, so sampling cannot move a total, a deduction or a group. What
+# sampling can still move is the wording of the summary and the odd borderline
+# level, and that is what the eval datasets grade.
+#
+# `reasoning_summary` is set only here. This is the one route a human watches
+# being written, so a readable summary of reasoning already paid for is worth
+# the extra output tokens; the batch routes have no reader and stay unset.
+chat:
+  provider: openai_responses
+  model: gpt-5.6-luna
+  timeout_seconds: 180
+  reasoning_effort: medium
+  reasoning_summary: auto
+  # Same rate the sales_luna profile bills this model at.
+  price_per_million_input: 0.20
+  price_per_million_output: 1.20
+fallback:
+  provider: openai_compatible
+  model: gpt-4o-mini
+  timeout_seconds: 60
+  price_per_million_input: 0.15
+  price_per_million_output: 0.60
+# Retrieval. 3072 is this model's native width, measured on the gateway
+# (docs/architecture/model-gateway-findings.md) along with the fact that the
+# `dimensions` parameter is honoured if a narrower index is ever wanted.
+# Changing either value means a new collection and a reindex, never a restart.
+embedding:
+  provider: openai_compatible
+  model: text-embedding-3-large
+  # Public list price for text-embedding-3-large; adjust to the gateway's rate card.
+  price_per_million_input: 0.13
+  dimensions: 3072
+  timeout_seconds: 120
+budgets:
+  max_input_tokens_per_run: 200000
+  max_cost_usd_per_run: 2.00
