@@ -44,10 +44,12 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware, ModelRequest
+from langchain.agents.middleware.summarization import ContextSize
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 
+from dw_agent_runtime.adapters.context_compaction import PlatformSummarizationMiddleware
 from dw_agent_runtime.adapters.langchain_tools import (
     OfferedToolsOnlyMiddleware,
     OneApprovalPerStepMiddleware,
@@ -64,8 +66,33 @@ from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.model.copy import RuntimeCopy
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.tools import ToolRegistry
+from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.ports import PlatformUnitOfWorkFactory
 
-__all__ = ["AgentSpec", "build_agent", "platform_middleware"]
+__all__ = ["AgentSpec", "CompactionSpec", "build_agent", "platform_middleware"]
+
+
+@dataclass(frozen=True)
+class CompactionSpec:
+    """How a worker that runs long enough to need it compacts its history.
+
+    Optional, unlike the spend ceiling. A ceiling is a safety control every agent
+    carries; compaction is a capability that costs a model call and only earns it
+    for a run that outgrows its context window. A worker answering one question
+    at a time would pay for summaries of conversations that fit.
+    """
+
+    # Usually a cheaper model than the worker's own: summarising is not the work.
+    model: BaseChatModel
+    # Whose price a summary is charged at. The ceiling it counts against is the
+    # worker's, from `AgentSpec.profile_id`.
+    summary_profile_id: str
+    uow_factory: PlatformUnitOfWorkFactory
+    clock: UtcClock
+    ids: IdGenerator
+    # When to compact, and how much recent history to keep verbatim.
+    trigger: ContextSize
+    keep: ContextSize
 
 
 @dataclass(frozen=True)
@@ -95,6 +122,7 @@ class AgentSpec:
     budget: RunBudgetLedger
     profiles: ModelProfileRegistry
     profile_id: str
+    compaction: CompactionSpec | None = None
 
 
 def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
@@ -112,7 +140,7 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
     `try/except` is not.
     """
     offered = list(spec.offered)
-    return [
+    stack: list[AgentMiddleware[Any, Any]] = [
         WorkerSystemPrompt(spec.render_prompt),
         UnreadableFilesMiddleware(),
         OfferedToolsOnlyMiddleware(offered),
@@ -130,6 +158,25 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
         # bounded by `recursion_limit`, which counts steps and not money.
         RunBudgetMiddleware(spec.budget, spec.profiles, spec.profile_id),
     ]
+    if spec.compaction is not None:
+        stack.append(
+            PlatformSummarizationMiddleware(
+                spec.compaction.model,
+                copy=spec.copy,
+                uow_factory=spec.compaction.uow_factory,
+                clock=spec.compaction.clock,
+                ids=spec.compaction.ids,
+                # The SAME ledger the budget middleware above holds, so a summary
+                # and an agent step spend against one ceiling.
+                budget=spec.budget,
+                profiles=spec.profiles,
+                profile_id=spec.profile_id,
+                summary_profile_id=spec.compaction.summary_profile_id,
+                trigger=spec.compaction.trigger,
+                keep=spec.compaction.keep,
+            )
+        )
+    return stack
 
 
 def build_agent(

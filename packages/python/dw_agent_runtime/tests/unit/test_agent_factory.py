@@ -15,13 +15,15 @@ one hazard presence does not cover: a seventh middleware that swallows it.
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from typing import Any
 
 import pytest
-from fakes import NOW, FakeExecutionStore, FakeUoWFactory
+from fakes import NOW, FakeAuditRepo, FakeExecutionStore, FakeUoWFactory
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel
@@ -33,6 +35,7 @@ from dw_agent_runtime.adapters.langchain_tools import platform_tools
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
 from dw_agent_runtime.model.budget import BudgetExceededError, RunBudgetLedger
+from dw_agent_runtime.model.copy import load_runtime_copy
 from dw_agent_runtime.model.profiles import ModelProfile, ModelProfileRegistry
 from dw_agent_runtime.tools import RegisteredTool, ToolRegistry
 from dw_kernel.ports import FixedClock, SequentialIdGenerator
@@ -40,7 +43,11 @@ from dw_kernel.ports import FixedClock, SequentialIdGenerator
 pytestmark = pytest.mark.unit
 
 WORKER_PROMPT = "Bạn là trợ lý bán hàng của FDX."
-THREAD = {"configurable": {"thread_id": "t-1"}}
+# Compaction needs the 1.4.0 text; everything else here still runs on 1.3.0.
+COMPACTING_COPY = load_runtime_copy(
+    Path(__file__).resolve().parents[5] / "configs" / "copy" / "runtime@1.4.0.yaml"
+)
+THREAD: RunnableConfig = {"configurable": {"thread_id": "t-1"}}
 
 
 async def _ok(payload: BaseModel, run_context: RunContext) -> LeadOutput:
@@ -105,7 +112,7 @@ PROFILE_ID = "agent_test"
 LOOP_CEILING_TOKENS = 60
 
 
-def _profiles() -> ModelProfileRegistry:
+def _profiles(ceiling_tokens: int = LOOP_CEILING_TOKENS) -> ModelProfileRegistry:
     profiles = ModelProfileRegistry()
     route = {"provider": "mock", "model": "mock-1"}
     profiles.register(
@@ -118,7 +125,7 @@ def _profiles() -> ModelProfileRegistry:
                 "reasoning": route,
                 "chat": route,
                 "budgets": {
-                    "max_input_tokens_per_run": LOOP_CEILING_TOKENS,
+                    "max_input_tokens_per_run": ceiling_tokens,
                     "max_cost_usd_per_run": 100.0,
                 },
             }
@@ -420,3 +427,58 @@ async def test_a_middleware_that_swallows_everything_loses_the_approval() -> Non
     measured = await _properties([*platform_middleware(spec), SwallowEverything()])
 
     assert measured["approval paused"] is False
+
+
+# --------------------------------------------------------------- compaction --
+
+
+async def test_compaction_is_off_unless_a_worker_asks_for_it() -> None:
+    spec = _spec(MockChatModel(responses=[AIMessage(content="xong")], mock_reply="[mock]"))
+
+    names = [type(m).__name__ for m in platform_middleware(spec)]
+
+    assert "PlatformSummarizationMiddleware" not in names
+
+
+async def test_a_worker_that_asks_for_compaction_actually_compacts() -> None:
+    """The wiring must do the thing, not merely accept the setting. A spec field
+    `build_agent` read and dropped would pass every test that only builds."""
+    from dataclasses import replace
+
+    from langchain_core.messages import BaseMessage
+
+    from dw_agent_runtime.adapters.agent_factory import CompactionSpec
+
+    audit = FakeAuditRepo()
+    base = _spec(MockChatModel(responses=[AIMessage(content="xong")], mock_reply="[mock]"))
+    spec = replace(
+        base,
+        copy=COMPACTING_COPY,
+        # A ceiling this test is not about. The default one is sized to stop a
+        # runaway in a handful of steps, and a 16-message history plus its
+        # summary crosses it — which proves the summary is counted, and is not
+        # what this test measures.
+        profiles=_profiles(ceiling_tokens=1_000_000),
+        compaction=CompactionSpec(
+            model=MockChatModel(responses=[AIMessage(content="TÓM TẮT")], mock_reply="TÓM TẮT"),
+            summary_profile_id=PROFILE_ID,
+            uow_factory=FakeUoWFactory(audit_repo=audit),
+            clock=FixedClock(NOW),
+            ids=SequentialIdGenerator(),
+            trigger=("messages", 10),
+            keep=("messages", 4),
+        ),
+    )
+    history: list[BaseMessage] = []
+    for i in range(8):
+        history += [
+            HumanMessage(content=f"câu {i}", id=f"h{i}"),
+            AIMessage(content=f"đáp {i}", id=f"a{i}"),
+        ]
+    agent = build_agent(spec, checkpointer=InMemorySaver())
+
+    await agent.ainvoke({"messages": history}, THREAD, context=_own_run())
+    state = await agent.aget_state(THREAD)
+
+    assert "h0" not in [m.id for m in state.values["messages"]]
+    assert [e.action for e in audit.events] == ["run.context_compacted"]

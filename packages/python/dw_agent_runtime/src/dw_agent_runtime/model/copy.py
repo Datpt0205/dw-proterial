@@ -30,6 +30,13 @@ class RuntimeCopy(BaseModel):
     # middleware refuses to start otherwise - because the only other sentence
     # available tells the model not to call the tool again.
     approval_deferred_template: str | None = None
+    # 1.4.0. Optional for the same reason as the one above: a host that wires
+    # context compaction must load a copy that has both, and the middleware
+    # refuses to start otherwise — the library's fallback is an English prompt
+    # that knows nothing of pending approvals and re-inserts its summary as if
+    # the user had written it.
+    context_summary_prompt: str | None = None
+    context_summary_frame: str | None = None
     mock_reply: str
 
     def tool_description(
@@ -41,6 +48,15 @@ class RuntimeCopy(BaseModel):
             when_not_to_use=when_not_to_use,
             returns=returns,
         )
+
+    def context_summary(self, summary: str) -> str:
+        """The summary framed as system-made reference data, not a user request."""
+        if self.context_summary_frame is None:
+            raise ConfigError(
+                f"runtime copy {self.version} has no context_summary_frame; "
+                "load runtime@1.4.0 or later"
+            )
+        return self.context_summary_frame.format(summary=summary)
 
     def approval_reason(self, tool: str) -> str:
         return self.approval_reason_template.format(tool=tool)
