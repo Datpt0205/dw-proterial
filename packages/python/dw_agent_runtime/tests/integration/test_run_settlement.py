@@ -25,6 +25,7 @@ from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_store import RunStatus, SqlWorkerRunStore
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.testing.demo_graph import (
     DEMO_WORKER,
@@ -119,6 +120,7 @@ class RunnerStack:
             clock=SystemClock(),
             id_generator=Uuid4Generator(),
             allowance=_UnmeteredPlan(),
+            budget=RunBudgetLedger(),
         )
 
     async def dispose(self) -> None:
@@ -416,4 +418,59 @@ async def test_a_finished_run_frees_the_thread(urls: RuntimeUrls, worker_config:
     second = make_run_context(thread_id=thread)
     with pytest.raises(RuntimeError, match=BOOM):
         await stack.runner.start(run_context=second, input_payload={"subject": "hai"})
+    await stack.dispose()
+
+
+# ------------------------------------------------------------ spend ledger --
+#
+# The ledger keeps per-run spend in the process, keyed by run id, and nothing ever
+# removed an entry: a worker that ran for a month held one for every run of that
+# month. Each test seeds the entry BEFORE the run, because the demo graph calls no
+# model and so records no spend of its own — without the seed, "freed" and "never
+# added" look identical and a runner that forgot nothing would still pass.
+
+
+def _seed_spend(stack: RunnerStack, context: RunContext) -> None:
+    stack.runner.budget.record(context.run_id, input_tokens=10, output_tokens=5, cost_usd=0.01)
+
+
+async def test_a_failed_run_frees_its_spend_entry(urls: RuntimeUrls, worker_config: Path) -> None:
+    context = make_run_context()
+    stack = RunnerStack(urls.app, worker_config, build_exploding_graph)
+    _seed_spend(stack, context)
+
+    with pytest.raises(RuntimeError, match=BOOM):
+        await stack.runner.start(run_context=context, input_payload={"subject": "x"})
+
+    assert context.run_id not in stack.runner.budget.spend
+    await stack.dispose()
+
+
+async def test_a_completed_run_frees_its_spend_entry(
+    urls: RuntimeUrls, worker_config: Path
+) -> None:
+    context = make_run_context()
+    stack = RunnerStack(urls.app, worker_config, build_demo_graph)
+    run_id = await stack.runner.start(run_context=context, input_payload={"subject": "x"})
+    _seed_spend(stack, context)
+
+    await stack.runner.resume(run_context=context, run_id=run_id, resume_payload={"approved": True})
+
+    assert (await stack.run_store.get(context, run_id)).status is RunStatus.COMPLETED
+    assert run_id not in stack.runner.budget.spend
+    await stack.dispose()
+
+
+async def test_a_paused_run_keeps_its_spend_entry(urls: RuntimeUrls, worker_config: Path) -> None:
+    """A pause is not an end. Freeing the entry here would let a run reset its own
+    ceiling by pausing and being resumed — spend that reaches the limit, a pause,
+    and the next step starts again from zero."""
+    context = make_run_context()
+    stack = RunnerStack(urls.app, worker_config, build_demo_graph)
+    _seed_spend(stack, context)
+
+    run_id = await stack.runner.start(run_context=context, input_payload={"subject": "x"})
+
+    assert (await stack.run_store.get(context, run_id)).status is RunStatus.WAITING_APPROVAL
+    assert stack.runner.budget.spend[run_id].input_tokens == 10
     await stack.dispose()

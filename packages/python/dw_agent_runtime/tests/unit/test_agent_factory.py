@@ -14,6 +14,7 @@ one hazard presence does not cover: a seventh middleware that swallows it.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import pytest
@@ -31,6 +32,8 @@ from dw_agent_runtime.adapters.chat_model import MockChatModel
 from dw_agent_runtime.adapters.langchain_tools import platform_tools
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
+from dw_agent_runtime.model.budget import BudgetExceededError, RunBudgetLedger
+from dw_agent_runtime.model.profiles import ModelProfile, ModelProfileRegistry
 from dw_agent_runtime.tools import RegisteredTool, ToolRegistry
 from dw_kernel.ports import FixedClock, SequentialIdGenerator
 
@@ -96,8 +99,35 @@ def _registry() -> tuple[ToolRegistry, ToolExecutor]:
 # The worker's toolset: FOREIGN is deliberately absent.
 OFFERED: tuple[ToolDefinition, ...] = (READ, BOOM, GATED, ADMIN_ONLY)
 
+PROFILE_ID = "agent_test"
+# Small enough that a looping agent reaches it in a handful of steps, so a test
+# can tell "the budget stopped it" from "recursion_limit stopped it".
+LOOP_CEILING_TOKENS = 60
 
-def _spec(model: MockChatModel) -> AgentSpec:
+
+def _profiles() -> ModelProfileRegistry:
+    profiles = ModelProfileRegistry()
+    route = {"provider": "mock", "model": "mock-1"}
+    profiles.register(
+        ModelProfile.model_validate(
+            {
+                "schema_version": "1.0",
+                "profile_id": PROFILE_ID,
+                "routing_policy_version": "1.0.0",
+                "structured_extraction": route,
+                "reasoning": route,
+                "chat": route,
+                "budgets": {
+                    "max_input_tokens_per_run": LOOP_CEILING_TOKENS,
+                    "max_cost_usd_per_run": 100.0,
+                },
+            }
+        )
+    )
+    return profiles
+
+
+def _spec(model: MockChatModel, budget: RunBudgetLedger | None = None) -> AgentSpec:
     registry, executor = _registry()
     return AgentSpec(
         model=model,
@@ -107,6 +137,9 @@ def _spec(model: MockChatModel) -> AgentSpec:
         copy=COPY,
         approval_type_prefix="sales_chat.",
         render_prompt=lambda request: WORKER_PROMPT,
+        budget=budget or RunBudgetLedger(),
+        profiles=_profiles(),
+        profile_id=PROFILE_ID,
     )
 
 
@@ -134,6 +167,17 @@ def _unreadable_file_message() -> HumanMessage:
             },
         ]
     )
+
+
+def _own_run() -> RunContext:
+    """A context with a run id of its own.
+
+    Spend is keyed by run id, so scenarios that share one are one run as far as
+    the ceiling is concerned: they add up, and the later ones are refused for
+    what the earlier ones spent. `make_run_context` fixes the id for tests that
+    need it stable; every scenario here is a separate run and must say so.
+    """
+    return make_run_context().model_copy(update={"run_id": uuid.uuid4()})
 
 
 # --------------------------------------------------------------- properties --
@@ -210,7 +254,7 @@ async def test_a_gated_tool_pauses_the_run_for_a_person() -> None:
 
 
 async def _properties(middleware: list[AgentMiddleware[Any, Any]]) -> dict[str, bool]:
-    """The seven properties, measured against an arbitrary middleware list.
+    """Every property the stack protects, measured against an arbitrary middleware list.
 
     Rebuilds the agent directly rather than through `build_agent`, because the
     point is to remove one middleware at a time and watch what breaks.
@@ -233,16 +277,12 @@ async def _properties(middleware: list[AgentMiddleware[Any, Any]]) -> dict[str, 
         )
 
     view = MockChatModel(responses=[AIMessage(content="xong")], mock_reply="[mock]")
-    await agent(view).ainvoke(
-        {"messages": [_unreadable_file_message()]}, context=make_run_context()
-    )
+    await agent(view).ainvoke({"messages": [_unreadable_file_message()]}, context=_own_run())
     blocks = [b for m in view.calls[0] if isinstance(m.content, list) for b in m.content]
 
     failing = _calling("crm__boom")
     try:
-        turn = await agent(failing).ainvoke(
-            {"messages": [HumanMessage("x")]}, context=make_run_context()
-        )
+        turn = await agent(failing).ainvoke({"messages": [HumanMessage("x")]}, context=_own_run())
         survived = turn["messages"][-1].content == "xong"
     except Exception:
         survived = False
@@ -250,7 +290,7 @@ async def _properties(middleware: list[AgentMiddleware[Any, Any]]) -> dict[str, 
     gated = _calling("crm__send_quote")
     try:
         paused = "__interrupt__" in await agent(gated, checkpointer=InMemorySaver()).ainvoke(
-            {"messages": [HumanMessage("x")]}, THREAD, context=make_run_context()
+            {"messages": [HumanMessage("x")]}, THREAD, context=_own_run()
         )
     except Exception:
         paused = False
@@ -274,13 +314,38 @@ async def _properties(middleware: list[AgentMiddleware[Any, Any]]) -> dict[str, 
     )
     try:
         pending = await agent(siblings, checkpointer=InMemorySaver()).ainvoke(
-            {"messages": [HumanMessage("x")]}, THREAD, context=make_run_context()
+            {"messages": [HumanMessage("x")]}, THREAD, context=_own_run()
         )
         cards = len(pending.get("__interrupt__", ()))
     except Exception:
         cards = 0
 
+    # A model that calls a tool on every turn and never answers: the loop a
+    # ceiling exists for. Capped by recursion_limit too, so without the budget
+    # middleware the run still ends — and the test can tell which one ended it.
+    looping = MockChatModel(
+        responses=[
+            AIMessage(
+                content="",
+                tool_calls=[{"name": "crm__read_lead", "args": {"company": "a"}, "id": "loop"}],
+            )
+        ],
+        mock_reply="[mock]",
+    )
+    try:
+        await agent(looping).ainvoke(
+            {"messages": [HumanMessage("x")]},
+            {"recursion_limit": RUNAWAY_STEP_CAP},
+            context=_own_run(),
+        )
+        stopped_by = "nothing"
+    except BudgetExceededError:
+        stopped_by = "budget"
+    except Exception as exc:
+        stopped_by = type(exc).__name__
+
     return {
+        "runaway stopped by budget": stopped_by == "budget",
         "builtin hidden": "write_file" not in view.bound_tool_names,
         "out-of-scope hidden": "crm__purge" not in view.bound_tool_names,
         "prompt first": view.system_prompts[0].startswith(WORKER_PROMPT),
@@ -293,7 +358,7 @@ async def _properties(middleware: list[AgentMiddleware[Any, Any]]) -> dict[str, 
     }
 
 
-# Which property each of the six owns. Order matches `platform_middleware`.
+# Which property each of the seven owns. Order matches `platform_middleware`.
 OWNS = (
     "prompt first",
     "unreadable file stripped",
@@ -301,7 +366,12 @@ OWNS = (
     "out-of-scope hidden",
     "one approval card per step",
     "failure survived",
+    "runaway stopped by budget",
 )
+
+# Well above the handful of steps the budget needs to stop a loop at
+# LOOP_CEILING_TOKENS, so reaching it means the ceiling did not.
+RUNAWAY_STEP_CAP = 60
 
 
 async def test_the_full_stack_holds_every_property() -> None:
@@ -312,7 +382,7 @@ async def test_the_full_stack_holds_every_property() -> None:
     assert measured == dict.fromkeys(measured, True), measured
 
 
-@pytest.mark.parametrize("dropped", range(6))
+@pytest.mark.parametrize("dropped", range(len(OWNS)))
 async def test_every_middleware_is_load_bearing(dropped: int) -> None:
     """Drop any one of the six: the property it owns must go red.
 

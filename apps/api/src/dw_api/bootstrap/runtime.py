@@ -20,6 +20,7 @@ from dw_agent_runtime.adapters.telemetry_usage import TelemetryUsageRecorder
 from dw_agent_runtime.adapters.tool_execution_store import SqlToolExecutionStore
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.executor import ToolExecutor
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.model.copy import load_runtime_copy
 from dw_agent_runtime.model.gateway import RoutingModelGateway, UsageRecorderPort
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
@@ -98,11 +99,18 @@ def build_runtime(
     if not isinstance(telemetry, NullTelemetry):
         recorders.append(TelemetryUsageRecorder(telemetry))
     usage_recorder: UsageRecorderPort = CompositeUsageRecorder(recorders)
+    # ONE per-run spend ledger for the whole process, shared by the structured
+    # gateway, every agent's budget middleware (on the seam, below) and the
+    # runner that frees a run's entry when it ends. Two ledgers would split a
+    # run's spend so neither half reaches the ceiling, and the gateway's own
+    # default was never freed at all.
+    budget = RunBudgetLedger()
     gateway = RoutingModelGateway(
         profiles=profiles,
         prompts=prompts,
         adapters=build_model_adapters(settings),
         usage_recorder=usage_recorder,
+        budget=budget,
     )
     # The LangChain path (agent loops, structured output) bills into the same
     # ledger through this meter rather than going unmetered.
@@ -168,6 +176,7 @@ def build_runtime(
         clock=clock,
         id_generator=ids,
         allowance=allowance,
+        budget=budget,
         release_manifest_ref=release_manifest_ref(),
         telemetry=telemetry,
         usage_meter=usage_meter,
@@ -191,6 +200,7 @@ def build_runtime(
         gateway=gateway,
         chat_models=chat_models,
         usage_meter=usage_meter,
+        budget=budget,
         tools=tool_registry,
         tool_executor=tool_executor,
         tool_specs=tool_specs,

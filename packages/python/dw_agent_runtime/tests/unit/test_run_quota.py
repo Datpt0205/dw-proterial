@@ -22,6 +22,7 @@ import pytest
 
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML, build_demo_graph
 from dw_kernel.errors import QuotaExceededError
@@ -82,6 +83,7 @@ def _runner(tmp_path: Path, *, limit: int | None, started_today: int) -> LangGra
         clock=cast(Any, _FrozenClock()),
         id_generator=cast(Any, None),
         allowance=_FakePlan(limit),
+        budget=RunBudgetLedger(),
     )
 
 

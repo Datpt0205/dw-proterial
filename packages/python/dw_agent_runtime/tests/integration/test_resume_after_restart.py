@@ -22,6 +22,7 @@ from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_store import RunStatus, SqlWorkerRunStore
 from dw_agent_runtime.adapters.runtime_tables import run_checkpoints
 from dw_agent_runtime.context import access_context_from_run
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML, build_demo_graph
 from dw_kernel.errors import ConflictError
@@ -69,6 +70,7 @@ class RunnerStack:
             clock=SystemClock(),
             id_generator=Uuid4Generator(),
             allowance=_UnmeteredPlan(),
+            budget=RunBudgetLedger(),
         )
 
     async def dispose(self) -> None:

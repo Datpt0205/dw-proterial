@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+from uuid import UUID
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -35,8 +36,17 @@ class ChatModelFactory(Protocol):
 CHAT_PROVIDERS = (Provider.OPENAI_COMPATIBLE, Provider.OPENAI_RESPONSES)
 
 
-def _chat_route(profiles: ModelProfileRegistry, profile_id: str) -> ModelRoute:
-    route = profiles.resolve(profile_id).chat
+def chat_route(
+    profiles: ModelProfileRegistry, profile_id: str, *, tenant_id: UUID | None = None
+) -> ModelRoute:
+    """The route an agent loop talks through, or a refusal if the profile has none.
+
+    Public because two things must agree on it: the factory that builds the chat
+    model and the budget that prices what it spent. A profile without a chat
+    route cannot run an agent loop at all, and the budget must not quietly price
+    such a call at zero where the factory would have refused to make it.
+    """
+    route = profiles.resolve(profile_id, tenant_id=tenant_id).chat
     if route is None:
         raise ConfigError(
             "model profile has no chat route",
@@ -58,7 +68,7 @@ class OpenAICompatibleChatModelFactory:
     api_key: str
 
     def resolve(self, profile_id: str) -> BaseChatModel:
-        route = _chat_route(self.profiles, profile_id)
+        route = chat_route(self.profiles, profile_id)
         if route.provider not in CHAT_PROVIDERS:
             raise ConfigError(
                 "chat route provider is not OpenAI-compatible",

@@ -33,6 +33,7 @@ from dw_agent_runtime.adapters.run_store import (
 )
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_kernel.errors import (
@@ -103,6 +104,10 @@ class LangGraphWorkflowRunner:
     # is: a default would be "unlimited", and a metering hole that ships quietly
     # is the one bug in this file a customer finds before we do.
     allowance: RunAllowancePort
+    # The SAME ledger the gateway and every agent's budget middleware hold.
+    # Required rather than defaulted: a default would be a second ledger, and the
+    # runner would free entries in one while spend accumulated in the other.
+    budget: RunBudgetLedger
     store: BaseStore | None = None
     release_manifest_ref: str | None = None
     telemetry: TelemetryPort = field(default_factory=NullTelemetry)
@@ -560,6 +565,7 @@ class LangGraphWorkflowRunner:
         self.telemetry.add_metric(
             DW_RUN_TOTAL, 1, {"worker": run_context.worker_id, "status": status.value}
         )
+        self.budget.forget(run_id)
 
     async def _handle_outcome(
         self, run_context: RunContext, run_id: uuid.UUID, state: dict[str, Any]
@@ -615,6 +621,12 @@ class LangGraphWorkflowRunner:
         self.telemetry.add_metric(
             DW_RUN_TOTAL, 1, {"worker": run_context.worker_id, "status": "completed"}
         )
+        # Freed only at a terminal state, never at a pause. The ledger keyed every
+        # run and nothing ever removed one, so a long-lived process grew by one
+        # entry per run for as long as it lived. A paused run keeps its entry on
+        # purpose: freeing it there would let a loop reset its own ceiling by
+        # pausing and being resumed.
+        self.budget.forget(run_id)
 
     async def _create_approval(
         self, run_context: RunContext, run_id: uuid.UUID, payload: dict[str, Any]

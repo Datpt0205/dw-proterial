@@ -7,6 +7,7 @@ from langgraph.graph import START, StateGraph
 
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 
 pytestmark = pytest.mark.unit
@@ -56,6 +57,7 @@ def test_the_runner_puts_the_worker_ceiling_on_every_invocation() -> None:
         clock=cast(Any, None),
         id_generator=cast(Any, None),
         allowance=cast(Any, None),
+        budget=RunBudgetLedger(),
     )
     config = runner._config(make_run_context(), uuid.UUID(int=1), 7)
     assert config["recursion_limit"] == 7

@@ -1,8 +1,8 @@
 """The one place a platform agent is assembled.
 
 Every bounded context used to build its own: `create_agent(...)` with whichever
-middleware its author remembered. The six middlewares in this package each close
-a hole that was found in production — a builtin tool that bypassed the executor,
+middleware its author remembered. The middlewares in this package each close a
+hole that was found in production — a builtin tool that bypassed the executor,
 a tool nobody declared passing a scope check by not being declared, a worker
 prompt that silently deleted the skills catalogue, a sibling approval nobody was
 shown, a tool failure that killed the turn and lost the transcript, a binary
@@ -12,14 +12,18 @@ its own agent and forgets one reopens that hole, and nothing tells it so.
 So assembly is a platform artifact, not a per-context habit.
 
 What is and is not a contract here, measured rather than assumed. All 720
-orderings of the six were run against the six properties they protect, and not
+orderings of the first six were run against the properties they protect, and not
 one ordering broke any of them: none of these middlewares reads what another one
-writes, so their order is free. What is NOT free is their PRESENCE — removing any
-single one breaks exactly the property it owns. That is what this factory
-guarantees and what `test_agent_factory.py` pins. An order will become a contract
-the day a middleware reads another's output (a summariser that must see files
-already stripped is the first coming), and it should be asserted then, by a test
-that fails, rather than declared now by one that cannot.
+writes, so their order is free. The seventh, the spend ceiling, was added after
+that measurement and was not put through it — it reads only the model's own
+response, which none of the others write to. What is NOT free is PRESENCE:
+removing any single one of the seven breaks exactly the property it owns. That is
+what this factory guarantees and what `test_agent_factory.py` pins.
+
+The obvious candidate for a first real ordering contract was a summariser that
+had to see files already stripped. Measured: it is not one — the summariser
+serialises history to text before sending it, so no file block reaches it. An
+order becomes a contract the day a test shows one breaking, and not before.
 
 Built on `create_agent`, not `create_deep_agent`. Measured on the pinned
 deepagents: the deep variant installs eight builtin tools on its own —
@@ -52,10 +56,13 @@ from dw_agent_runtime.adapters.langchain_tools import (
     UnreadableFilesMiddleware,
     platform_tools,
 )
+from dw_agent_runtime.adapters.run_budget import RunBudgetMiddleware
 from dw_agent_runtime.adapters.system_prompt import WorkerSystemPrompt
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.model.copy import RuntimeCopy
+from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.tools import ToolRegistry
 
 __all__ = ["AgentSpec", "build_agent", "platform_middleware"]
@@ -83,10 +90,15 @@ class AgentSpec:
     # Rendered per model call, not once at build: the prompt names today's date
     # and the screen in view, and the agent is compiled once per process.
     render_prompt: Callable[[ModelRequest[Any]], str]
+    # The process's one spend ledger — `RuntimeSeam.budget`, never a fresh one —
+    # and the profile whose ceiling and price this worker's calls are held to.
+    budget: RunBudgetLedger
+    profiles: ModelProfileRegistry
+    profile_id: str
 
 
 def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
-    """The six middlewares every platform agent carries.
+    """The seven middlewares every platform agent carries.
 
     Exposed on its own so a context that must add middleware of its own extends
     this list rather than rebuilding it — rebuilding is exactly how one gets
@@ -114,6 +126,9 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
         # a per-call decision read from the run context.
         OneApprovalPerStepMiddleware(offered, copy=spec.copy),
         PlatformToolErrorsMiddleware(offered, copy=spec.copy),
+        # The only ceiling on the path that can loop. Without it an agent run is
+        # bounded by `recursion_limit`, which counts steps and not money.
+        RunBudgetMiddleware(spec.budget, spec.profiles, spec.profile_id),
     ]
 
 

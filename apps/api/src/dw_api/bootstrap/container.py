@@ -29,6 +29,7 @@ from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.executor import ToolExecutor
+from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.model.copy import RuntimeCopy
 from dw_agent_runtime.model.gateway import RoutingModelGateway
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
@@ -91,6 +92,11 @@ class RuntimeSeam:
     # one registers nothing rather than registering a graph that cannot run.
     chat_models: ChatModelFactory | None
     usage_meter: LangchainUsageMeter
+    # The process's one per-run spend ledger. A context building an `AgentSpec`
+    # passes THIS one, never a new `RunBudgetLedger()`: the runner frees entries
+    # in this instance, so spend recorded anywhere else is never bounded against
+    # the gateway's and never freed.
+    budget: RunBudgetLedger
     tools: ToolRegistry
     tool_executor: ToolExecutor
     tool_specs: ToolSpecRegistry
