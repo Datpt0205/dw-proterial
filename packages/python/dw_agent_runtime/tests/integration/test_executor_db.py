@@ -14,6 +14,7 @@ from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
 from dw_agent_runtime.tools import RegisteredTool, ToolRegistry
 from dw_kernel.errors import IdempotencyConflictError, PermissionDeniedError
+from dw_kernel.pagination import PageQuery, PageRequest
 from dw_kernel.ports import SystemClock, Uuid4Generator
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 
@@ -117,7 +118,11 @@ async def test_denied_tool_call_is_audited(urls: RuntimeUrls) -> None:
         )
 
     async with uow_factory(access_context_from_run(context)) as uow:
-        events = await uow.audit.list_recent(limit=10)
+        events = (
+            await uow.audit.list_page(
+                PageRequest(limit=10, after=None, query=PageQuery(key="test.audit"))
+            )
+        ).items
     denied = [e for e in events if e.action == "tool.denied"]
     assert denied, "denied tool call must leave an audit event"
     assert denied[0].policy_decision == "deny_missing_scope"

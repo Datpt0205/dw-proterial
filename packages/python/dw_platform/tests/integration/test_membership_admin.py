@@ -140,12 +140,12 @@ async def test_org_admin_grants_a_business_role_and_it_is_audited(app_engine: As
     ref = await grant.handle(
         _admin_context(),
         GrantMembership(
-            email="newhire@fpt.com", workspace_id=ALPHA_WS, role_keys=frozenset({"sales"})
+            email="newhire@fpt.com", workspace_id=ALPHA_WS, role_keys=frozenset({"member"})
         ),
     )
 
     assert ref.user_id == user_id
-    assert await _memberships_of(app_engine, user_id) == [(ALPHA, ["sales"])]
+    assert await _memberships_of(app_engine, user_id) == [(ALPHA, ["member"])]
     assert await _audit_actions(app_engine, user_id) == ["platform.membership.grant"]
 
 
@@ -156,7 +156,7 @@ async def test_a_plain_member_cannot_grant(app_engine: AsyncEngine) -> None:
         tenant_id=ALPHA,
         workspace_id=ALPHA_WS,
         principal_id=uuid.uuid4(),
-        roles=frozenset({"sales"}),
+        roles=frozenset({"member"}),
         scopes=frozenset({"crm.account.read"}),
         plan_id="professional",
     )
@@ -165,7 +165,7 @@ async def test_a_plain_member_cannot_grant(app_engine: AsyncEngine) -> None:
         await grant.handle(
             not_admin,
             GrantMembership(
-                email="target@fpt.com", workspace_id=ALPHA_WS, role_keys=frozenset({"sales"})
+                email="target@fpt.com", workspace_id=ALPHA_WS, role_keys=frozenset({"member"})
             ),
         )
 
@@ -208,7 +208,7 @@ async def test_grant_into_another_tenants_workspace_is_refused(
         await grant.handle(
             _admin_context(),  # admin of alpha
             GrantMembership(
-                email="outsider@fpt.com", workspace_id=beta_ws, role_keys=frozenset({"sales"})
+                email="outsider@fpt.com", workspace_id=beta_ws, role_keys=frozenset({"member"})
             ),
         )
     assert await _memberships_of(app_engine, user_id) == []
@@ -220,7 +220,7 @@ async def test_revoke_removes_access(app_engine: AsyncEngine) -> None:
     await grant.handle(
         _admin_context(),
         GrantMembership(
-            email="leaver@fpt.com", workspace_id=ALPHA_WS, role_keys=frozenset({"sales"})
+            email="leaver@fpt.com", workspace_id=ALPHA_WS, role_keys=frozenset({"member"})
         ),
     )
 

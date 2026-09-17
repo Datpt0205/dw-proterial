@@ -1245,6 +1245,76 @@ export interface components {
              */
             user_id: string;
         };
+        /**
+         * Page
+         * @description A page of results and the cursor that continues it.
+         *
+         *     ``next_cursor`` is ``None`` on the last page, and that — not an empty
+         *     ``items`` — is the client's stop condition: a filtered listing can return an
+         *     empty page in the middle of a run and still have more rows behind it.
+         */
+        Page_ApprovalView_: {
+            /** Items */
+            items: components["schemas"]["ApprovalView"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * Page
+         * @description A page of results and the cursor that continues it.
+         *
+         *     ``next_cursor`` is ``None`` on the last page, and that — not an empty
+         *     ``items`` — is the client's stop condition: a filtered listing can return an
+         *     empty page in the middle of a run and still have more rows behind it.
+         */
+        Page_AuditEventView_: {
+            /** Items */
+            items: components["schemas"]["AuditEventView"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * Page
+         * @description A page of results and the cursor that continues it.
+         *
+         *     ``next_cursor`` is ``None`` on the last page, and that — not an empty
+         *     ``items`` — is the client's stop condition: a filtered listing can return an
+         *     empty page in the middle of a run and still have more rows behind it.
+         */
+        Page_FeedbackView_: {
+            /** Items */
+            items: components["schemas"]["FeedbackView"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * Page
+         * @description A page of results and the cursor that continues it.
+         *
+         *     ``next_cursor`` is ``None`` on the last page, and that — not an empty
+         *     ``items`` — is the client's stop condition: a filtered listing can return an
+         *     empty page in the middle of a run and still have more rows behind it.
+         */
+        Page_KnowledgeDocumentView_: {
+            /** Items */
+            items: components["schemas"]["KnowledgeDocumentView"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * Page
+         * @description A page of results and the cursor that continues it.
+         *
+         *     ``next_cursor`` is ``None`` on the last page, and that — not an empty
+         *     ``items`` — is the client's stop condition: a filtered listing can return an
+         *     empty page in the middle of a run and still have more rows behind it.
+         */
+        Page_MemoryItemView_: {
+            /** Items */
+            items: components["schemas"]["MemoryItemView"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** PermissionSetView */
         PermissionSetView: {
             /** Key */
@@ -1938,7 +2008,11 @@ export interface operations {
     };
     list_pending_api_v1_approvals_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                /** @description Opaque cursor from a previous page. */
+                cursor?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1951,7 +2025,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApprovalView"][];
+                    "application/json": components["schemas"]["Page_ApprovalView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2026,6 +2109,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /** @description Opaque cursor from a previous page. */
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -2039,7 +2124,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuditEventView"][];
+                    "application/json": components["schemas"]["Page_AuditEventView_"];
                 };
             };
             /** @description Validation Error */
@@ -2170,6 +2255,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /** @description Opaque cursor from a previous page. */
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -2183,7 +2270,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FeedbackView"][];
+                    "application/json": components["schemas"]["Page_FeedbackView_"];
                 };
             };
             /** @description Validation Error */
@@ -2306,6 +2393,10 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /** @description Opaque cursor from a previous page. */
+                cursor?: string | null;
+                /** @description Narrow the listing to one domain. */
+                domain?: string | null;
             };
             header?: never;
             path?: never;
@@ -2319,7 +2410,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeDocumentView"][];
+                    "application/json": components["schemas"]["Page_KnowledgeDocumentView_"];
                 };
             };
             /** @description Validation Error */
@@ -2450,6 +2541,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /** @description Opaque cursor from a previous page. */
+                cursor?: string | null;
             };
             header?: never;
             path?: never;
@@ -2463,7 +2556,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemoryItemView"][];
+                    "application/json": components["schemas"]["Page_MemoryItemView_"];
                 };
             };
             /** @description Validation Error */

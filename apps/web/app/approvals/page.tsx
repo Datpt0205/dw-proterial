@@ -54,7 +54,7 @@ export default function ApprovalsPage() {
 
   const refresh = useCallback(async () => {
     try {
-      setApprovals(await apiClient().listApprovals());
+      setApprovals((await apiClient().listApprovals()).items);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "unknown error");

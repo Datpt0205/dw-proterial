@@ -66,7 +66,7 @@ export default function KnowledgePage() {
 
   const refresh = useCallback(async () => {
     try {
-      setDocuments(await apiClient().listKnowledgeDocuments());
+      setDocuments((await apiClient().listKnowledgeDocuments()).items);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "unknown error");

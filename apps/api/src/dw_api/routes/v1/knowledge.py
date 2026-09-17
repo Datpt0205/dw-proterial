@@ -21,6 +21,7 @@ from dw_kernel.errors import (
     NotFoundError,
     PermissionDeniedError,
 )
+from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
 from dw_knowledge.ingest_jobs import EnqueueIngestCommand
 
 # Documents up to this size are accepted for ingestion (raw bytes staged to
@@ -61,20 +62,33 @@ class IngestJobView(BaseModel):
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 
-@router.get("/documents", response_model=list[KnowledgeDocumentView])
+@router.get("/documents", response_model=Page[KnowledgeDocumentView])
 async def list_documents(
     context: RequireAccessContext,
     container: RequireContainer,
-    limit: int = Query(default=100, ge=1, le=500),
-) -> list[KnowledgeDocumentView]:
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
+    domain: str | None = Query(default=None, description="Narrow the listing to one domain."),
+) -> Page[KnowledgeDocumentView]:
     if container.knowledge_gateway is None:
         raise InfrastructureError("knowledge gateway is not configured")
     await container.authorization.require(
         context=context, action="knowledge.read", resource_type="knowledge_document"
     )
-    documents = await container.knowledge_gateway.list_documents(context, limit=limit)
-    return [
-        KnowledgeDocumentView(
+    # ``domain`` changes which rows come back, so it belongs in the fingerprint:
+    # a cursor taken from the unfiltered listing must not be resumed against a
+    # narrowed one, where the same position describes a different window.
+    request = page_request(
+        limit=limit,
+        cursor=cursor,
+        query=PageQuery(
+            key="knowledge.documents",
+            filters={"tenant": context.tenant_id, "domain": domain},
+        ),
+    )
+    page = await container.knowledge_gateway.list_documents(context, request, domain=domain)
+    return page.map_items(
+        lambda doc: KnowledgeDocumentView(
             document_id=doc.document_id,
             title=doc.title,
             domain=doc.domain,
@@ -85,8 +99,7 @@ async def list_documents(
             created_at=doc.created_at,
             scope=doc.scope,
         )
-        for doc in documents
-    ]
+    )
 
 
 @router.post("/documents", response_model=IngestJobView, status_code=202)

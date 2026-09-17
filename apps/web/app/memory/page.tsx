@@ -23,7 +23,7 @@ export default function MemoryPage() {
   useEffect(() => {
     apiClient()
       .listMemoryItems()
-      .then(setItems)
+      .then((page) => setItems(page.items))
       .catch((e: unknown) =>
         setError(e instanceof Error ? e.message : "unknown error"),
       );

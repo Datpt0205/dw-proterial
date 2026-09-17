@@ -51,6 +51,7 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.cache import CachePort
 from dw_platform.application.entitlement import PlanEntitlementService
 from dw_platform.application.hierarchy import HierarchyService
+from dw_platform.application.idempotency import HttpIdempotency
 from dw_platform.application.identity_bootstrap import IdentityBootstrapPort
 from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
@@ -136,6 +137,11 @@ class ApiContainer:
     hierarchy: HierarchyService | None = None
     cache: CachePort | None = None
     feedback_storage: FeedbackAttachmentStoragePort | None = None
+    # Replay protection for mutating routes that carry an `Idempotency-Key`.
+    # ``None`` without a database, where the routes that use it are not mounted
+    # either — and where the dependency degrades to a pass-through rather than
+    # refusing a header the API advertises.
+    idempotency: HttpIdempotency | None = None
 
     # Platform provisioning: absent unless a provisioner connection is set —
     # then /api/v1/platform/* is mounted. Its engine is a second role with no

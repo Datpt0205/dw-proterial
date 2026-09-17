@@ -42,6 +42,10 @@ import {
   type UsageOverview,
   syncStatusSchema,
   usageOverviewSchema,
+  pageSchema,
+  pageQueryString,
+  type Page,
+  type PageParams,
 } from "@dw/contracts";
 
 /**
@@ -568,11 +572,11 @@ export class ApiClient {
   }
 
   /** The feedback inbox — admins only (the API enforces the scope). */
-  listFeedback(limit = 100): Promise<FeedbackItem[]> {
+  listFeedback(params: PageParams = {}): Promise<Page<FeedbackItem>> {
     return this.request(
       "GET",
-      `/api/v1/feedback?limit=${limit}`,
-      z.array(feedbackItemSchema),
+      `/api/v1/feedback${pageQueryString(params)}`,
+      pageSchema(feedbackItemSchema),
     );
   }
 
@@ -596,8 +600,12 @@ export class ApiClient {
 
   // ---- approvals / runs ---------------------------------------------------
 
-  listApprovals(): Promise<Approval[]> {
-    return this.request("GET", "/api/v1/approvals", z.array(approvalSchema));
+  listApprovals(params: PageParams = {}): Promise<Page<Approval>> {
+    return this.request(
+      "GET",
+      `/api/v1/approvals${pageQueryString(params)}`,
+      pageSchema(approvalSchema),
+    );
   }
 
   decideApproval(
@@ -642,11 +650,18 @@ export class ApiClient {
 
   // ---- platform inventories ----------------------------------------------
 
-  listKnowledgeDocuments(limit = 100): Promise<KnowledgeDocument[]> {
+  listKnowledgeDocuments(
+    params: PageParams & { domain?: string } = {},
+  ): Promise<Page<KnowledgeDocument>> {
+    const { domain, ...page } = params;
+    const query = pageQueryString(page);
+    const suffix = domain
+      ? `${query ? `${query}&` : "?"}domain=${encodeURIComponent(domain)}`
+      : query;
     return this.request(
       "GET",
-      `/api/v1/knowledge/documents?limit=${limit}`,
-      z.array(knowledgeDocumentSchema),
+      `/api/v1/knowledge/documents${suffix}`,
+      pageSchema(knowledgeDocumentSchema),
     );
   }
 
@@ -714,11 +729,11 @@ export class ApiClient {
     );
   }
 
-  listMemoryItems(limit = 100): Promise<MemoryItem[]> {
+  listMemoryItems(params: PageParams = {}): Promise<Page<MemoryItem>> {
     return this.request(
       "GET",
-      `/api/v1/memory/items?limit=${limit}`,
-      z.array(memoryItemSchema),
+      `/api/v1/memory/items${pageQueryString(params)}`,
+      pageSchema(memoryItemSchema),
     );
   }
 
@@ -732,11 +747,11 @@ export class ApiClient {
 
   // ---- audit --------------------------------------------------------------
 
-  listAuditEvents(limit = 100): Promise<AuditEvent[]> {
+  listAuditEvents(params: PageParams = {}): Promise<Page<AuditEvent>> {
     return this.request(
       "GET",
-      `/api/v1/audit/events?limit=${limit}`,
-      z.array(auditEventSchema),
+      `/api/v1/audit/events${pageQueryString(params)}`,
+      pageSchema(auditEventSchema),
     );
   }
 
@@ -759,6 +774,8 @@ export class ApiClient {
 export type {
   Approval,
   AuditEvent,
+  Page,
+  PageParams,
   Run,
   SyncStatus,
   TimelineEvent,

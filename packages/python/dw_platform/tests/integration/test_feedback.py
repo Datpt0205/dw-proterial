@@ -17,6 +17,7 @@ from pg_harness import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_kernel.pagination import PageQuery, PageRequest
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.identity_provisioning import SqlIdentityBootstrap
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
@@ -71,7 +72,7 @@ def _member(principal: uuid.UUID, tenant: uuid.UUID = ALPHA) -> AccessContext:
         tenant_id=tenant,
         workspace_id=ALPHA_WS,
         principal_id=principal,
-        roles=frozenset({"sales"}),
+        roles=frozenset({"member"}),
         scopes=frozenset({"crm.account.read"}),
         plan_id="professional",
     )
@@ -97,7 +98,11 @@ async def test_member_submits_and_admin_reads_it_back(app_engine: AsyncEngine) -
         await uow.commit()
 
     async with factory(_member(author)) as uow:
-        items = await uow.feedback.list_recent()
+        items = (
+            await uow.feedback.list_page(
+                PageRequest(limit=50, after=None, query=PageQuery(key="test.feedback"))
+            )
+        ).items
 
     assert len(items) == 1
     assert items[0].category == "idea"
@@ -139,7 +144,11 @@ async def test_feedback_does_not_cross_tenants(
         await session.commit()
 
     async with factory(_member(author)) as uow:
-        items = await uow.feedback.list_recent()
+        items = (
+            await uow.feedback.list_page(
+                PageRequest(limit=50, after=None, query=PageQuery(key="test.feedback"))
+            )
+        ).items
 
     messages = [i.message for i in items]
     # What this test is about is the tenant boundary, not the row count: the

@@ -136,13 +136,19 @@ class RoutingModelGateway:
         *,
         run_context: RunContext,
     ) -> tuple[OutputT, str]:
+        # The tenant comes from the run, never from the request: a caller that
+        # could name the tenant whose prompt to render could read another
+        # customer's wording.
         prompt = self.prompts.render(
-            request.prompt_id, request.prompt_version, dict(request.variables)
+            request.prompt_id,
+            request.prompt_version,
+            dict(request.variables),
+            tenant_id=run_context.tenant_id,
         )
         # Transient provider errors and schema-invalid outputs get one retry
         # on the primary route, then the profile fallback (if any). Non-model
         # errors (unknown provider, missing mock fixture) fail fast.
-        profile = self.profiles.resolve(request.model_profile)
+        profile = self.profiles.resolve(request.model_profile, tenant_id=run_context.tenant_id)
         # Checked before the call, not after: the point is to not make it.
         self.budget.check(run_context.run_id, profile.budgets, task=request.task)
 

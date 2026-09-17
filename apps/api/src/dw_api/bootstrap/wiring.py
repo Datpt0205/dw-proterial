@@ -56,6 +56,7 @@ from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleR
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.hierarchy_repo import SqlHierarchyRepository
+from dw_platform.adapters.persistence.idempotency_store import SqlIdempotencyStore
 from dw_platform.adapters.persistence.identity_provisioning import SqlIdentityBootstrap
 from dw_platform.adapters.persistence.membership_admin import SqlMembershipAdminRepository
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
@@ -66,6 +67,7 @@ from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.hierarchy import HierarchyService
+from dw_platform.application.idempotency import HttpIdempotency
 from dw_platform.application.identity import DbAccessContextFactory
 from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
@@ -146,6 +148,7 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     )
     uow_factory = SqlPlatformUnitOfWorkFactory(session_factory)
     container.uow_factory = uow_factory
+    container.idempotency = HttpIdempotency(SqlIdempotencyStore(session_factory), clock)
     container.workspace_directory = SqlWorkspaceDirectory(session_factory)
 
     membership_repo = SqlMembershipAdminRepository(session_factory)

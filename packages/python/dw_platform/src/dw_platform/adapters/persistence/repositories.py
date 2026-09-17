@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
+from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_platform.adapters.persistence import tables
+from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.domain.approval import (
     ApprovalDecision,
     ApprovalRequest,
@@ -42,6 +44,13 @@ def _approval_from_row(row: Row[tuple]) -> ApprovalRequest:  # type: ignore[type
         decided_at=row.decided_at,
         version=row.version,
     )
+
+
+def _approval_position(request: ApprovalRequest) -> CursorPosition:
+    # ``created_at`` is None only on an aggregate that has not been inserted yet
+    # — the column default fills it — and this only ever sees rows read back.
+    assert request.created_at is not None
+    return CursorPosition(sort_value=request.created_at, tiebreaker=request.id)
 
 
 def outbox_from_row(row: Row[tuple]) -> OutboxEvent:  # type: ignore[type-arg]
@@ -113,14 +122,27 @@ class SqlApprovalRepository:
                 details={"request_id": str(request.id)},
             )
 
-    async def list_pending(self, limit: int = 50) -> list[ApprovalRequest]:
+    async def list_pending(self, request: PageRequest) -> Page[ApprovalRequest]:
         result = await self.session.execute(
             sa.select(tables.approval_requests)
-            .where(tables.approval_requests.c.status == "pending")
-            .order_by(tables.approval_requests.c.created_at.desc())
-            .limit(limit)
+            .where(
+                tables.approval_requests.c.status == "pending",
+                after_position(
+                    tables.approval_requests.c.created_at,
+                    tables.approval_requests.c.id,
+                    request.after,
+                ),
+            )
+            .order_by(
+                *newest_first(tables.approval_requests.c.created_at, tables.approval_requests.c.id)
+            )
+            .limit(request.fetch_limit)
         )
-        return [_approval_from_row(row) for row in result]
+        return build_page(
+            [_approval_from_row(row) for row in result],
+            request=request,
+            position_of=_approval_position,
+        )
 
     async def add_decision(self, decision: ApprovalDecision) -> None:
         await self.session.execute(
@@ -170,13 +192,24 @@ class SqlAuditRepository:
         )
         return self._map_rows(result)
 
-    async def list_recent(self, limit: int = 50) -> list[AuditEvent]:
+    async def list_page(self, request: PageRequest) -> Page[AuditEvent]:
         result = await self.session.execute(
             sa.select(tables.audit_events)
-            .order_by(tables.audit_events.c.occurred_at.desc())
-            .limit(limit)
+            .where(
+                after_position(
+                    tables.audit_events.c.occurred_at, tables.audit_events.c.id, request.after
+                )
+            )
+            .order_by(*newest_first(tables.audit_events.c.occurred_at, tables.audit_events.c.id))
+            .limit(request.fetch_limit)
         )
-        return self._map_rows(result)
+        return build_page(
+            self._map_rows(result),
+            request=request,
+            position_of=lambda event: CursorPosition(
+                sort_value=event.occurred_at, tiebreaker=event.id
+            ),
+        )
 
     @staticmethod
     def _map_rows(result: sa.engine.Result[tuple]) -> list[AuditEvent]:  # type: ignore[type-arg]
@@ -274,7 +307,7 @@ class SqlFeedbackRepository:
         ).one_or_none()
         return _to_attachment(row) if row is not None else None
 
-    async def list_recent(self, limit: int = 100) -> list[Feedback]:
+    async def list_page(self, request: PageRequest) -> Page[Feedback]:
         result = await self.session.execute(
             sa.select(
                 tables.feedback,
@@ -283,10 +316,20 @@ class SqlFeedbackRepository:
             .select_from(
                 tables.feedback.join(tables.users, tables.feedback.c.author_id == tables.users.c.id)
             )
-            .order_by(tables.feedback.c.created_at.desc())
-            .limit(limit)
+            .where(
+                after_position(tables.feedback.c.created_at, tables.feedback.c.id, request.after)
+            )
+            .order_by(*newest_first(tables.feedback.c.created_at, tables.feedback.c.id))
+            .limit(request.fetch_limit)
         )
-        rows = result.all()
+        # Trimmed before the attachment query so the over-fetched probe row does
+        # not drag its screenshots back with it.
+        page = build_page(
+            result.all(),
+            request=request,
+            position_of=lambda row: CursorPosition(sort_value=row.created_at, tiebreaker=row.id),
+        )
+        rows = page.items
         # One more statement for every screenshot of the page, grouped here,
         # rather than one per feedback (no N+1 on the inbox).
         by_feedback: dict[uuid.UUID, list[FeedbackAttachment]] = {row.id: [] for row in rows}
@@ -298,8 +341,8 @@ class SqlFeedbackRepository:
             )
             for attachment in attachments:
                 by_feedback[attachment.feedback_id].append(_to_attachment(attachment))
-        return [
-            Feedback(
+        return page.map_items(
+            lambda row: Feedback(
                 id=row.id,
                 tenant_id=TenantId(row.tenant_id),
                 workspace_id=WorkspaceId(row.workspace_id),
@@ -313,8 +356,7 @@ class SqlFeedbackRepository:
                 suggestion=row.suggestion,
                 attachments=tuple(by_feedback[row.id]),
             )
-            for row in rows
-        ]
+        )
 
 
 def _to_attachment(row: sa.Row[Any]) -> FeedbackAttachment:

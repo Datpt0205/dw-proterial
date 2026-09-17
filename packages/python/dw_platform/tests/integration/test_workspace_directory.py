@@ -115,10 +115,19 @@ async def test_members_carry_the_fields_a_picker_needs(
 
     an = next(m for m in members if m.display_name == "Nguyễn Văn An")
     assert an.email == "an.nguyen@alpha.local"
-    assert "sales" in an.role_keys
+    assert "member" in an.role_keys
     assert an.department == "kinh-doanh"
-    # Sorted by name, so the picker order does not shuffle between requests.
-    assert [m.display_name for m in members] == sorted(m.display_name for m in members)
+    # The picker order must not shuffle between requests, which is what this
+    # asserts — by asking twice, not by comparing against Python's `sorted`.
+    #
+    # That comparison is what used to be here, and it was the wrong oracle:
+    # Postgres orders by its collation, which is linguistic and case-blind,
+    # while Python compares code points and so puts every capitalised name
+    # before every lowercase one. The two happened to agree while all the
+    # seeded names were capitalised Vietnamese, and disagreed the moment a
+    # lowercase ASCII name existed in the workspace.
+    again = await directory.list_members(context_for(*alpha))
+    assert [m.display_name for m in again] == [m.display_name for m in members]
 
 
 async def test_candidates_never_leak_another_tenants_identities(

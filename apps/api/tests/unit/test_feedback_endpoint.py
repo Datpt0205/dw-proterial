@@ -20,6 +20,7 @@ from dw_api.main import create_app
 from dw_api.settings import ApiSettings
 from dw_kernel.errors import ErrorCode, InfrastructureError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
+from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_platform.adapters.identity.dev_token import DevTokenVerifier
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
@@ -71,8 +72,12 @@ class FakeFeedbackRepo:
     async def add_attachment(self, **kw: object) -> None:
         self.attachments.append(kw)
 
-    async def list_recent(self, limit: int = 100) -> list[Feedback]:
-        return self.items
+    async def list_page(self, request: PageRequest) -> Page[Feedback]:
+        return build_page(
+            self.items,
+            request=request,
+            position_of=lambda item: CursorPosition(sort_value=item.created_at, tiebreaker=item.id),
+        )
 
     async def get_attachment(
         self, feedback_id: uuid.UUID, attachment_id: uuid.UUID
@@ -313,7 +318,7 @@ async def test_admin_reads_the_inbox_with_screenshots_listed() -> None:
         make_container(repo, frozenset({INBOX_SCOPE})), "GET", "/api/v1/feedback"
     )
     assert response.status_code == 200
-    body = response.json()
+    body = response.json()["items"]
     assert body[0]["module"] == "Leads"
     assert body[0]["suggestion"] == "Giữ nút lại."
     assert body[0]["attachments"] == [

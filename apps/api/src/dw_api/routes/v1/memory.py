@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
 from dw_kernel.errors import InfrastructureError
+from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
 
 
 class MemoryItemView(BaseModel):
@@ -28,20 +29,29 @@ class MemoryItemView(BaseModel):
 router = APIRouter(prefix="/memory", tags=["memory"])
 
 
-@router.get("/items", response_model=list[MemoryItemView])
+@router.get("/items", response_model=Page[MemoryItemView])
 async def list_items(
     context: RequireAccessContext,
     container: RequireContainer,
-    limit: int = Query(default=100, ge=1, le=500),
-) -> list[MemoryItemView]:
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
+) -> Page[MemoryItemView]:
     if container.memory_service is None:
         raise InfrastructureError("memory service is not configured")
     await container.authorization.require(
         context=context, action="memory.read", resource_type="memory_item"
     )
-    items = await container.memory_service.list_items(context, limit=limit)
-    return [
-        MemoryItemView(
+    request = page_request(
+        limit=limit,
+        cursor=cursor,
+        query=PageQuery(
+            key="memory.items",
+            filters={"tenant": context.tenant_id, "workspace": context.workspace_id},
+        ),
+    )
+    page = await container.memory_service.list_items(context, request)
+    return page.map_items(
+        lambda item: MemoryItemView(
             memory_id=item.memory_id,
             worker_id=item.worker_id,
             memory_type=item.memory_type.value,
@@ -52,5 +62,4 @@ async def list_items(
             valid_from=item.valid_from,
             created_by_run_id=item.created_by_run_id,
         )
-        for item in items
-    ]
+    )

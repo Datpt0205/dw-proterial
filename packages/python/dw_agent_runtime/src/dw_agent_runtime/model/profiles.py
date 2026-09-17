@@ -6,12 +6,14 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
+from uuid import UUID
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from dw_agent_runtime.registry import ConfigError
 from dw_kernel.errors import NotFoundError
+from dw_kernel.overlay import TenantOverlay
 
 
 class Provider(StrEnum):
@@ -81,27 +83,30 @@ class ModelProfile(BaseModel):
 
 @dataclass
 class ModelProfileRegistry:
-    _profiles: dict[str, ModelProfile] = field(default_factory=dict)
+    # Platform profiles plus per-tenant overrides. A customer on their own
+    # model contract, or one whose data may not leave a region, routes through
+    # its own profile rather than through a second deployment.
+    _profiles: TenantOverlay[str, ModelProfile] = field(default_factory=TenantOverlay)
 
-    def load_directory(self, directory: Path) -> None:
+    def load_directory(self, directory: Path, *, tenant_id: UUID | None = None) -> None:
         for path in sorted(directory.glob("*.yaml")):
-            self.load_file(path)
+            self.load_file(path, tenant_id=tenant_id)
 
-    def load_file(self, path: Path) -> ModelProfile:
+    def load_file(self, path: Path, *, tenant_id: UUID | None = None) -> ModelProfile:
         try:
             profile = ModelProfile.model_validate(yaml.safe_load(path.read_bytes()))
         except (yaml.YAMLError, ValidationError) as exc:
             raise ConfigError(f"model profile {path.name} invalid: {exc}") from exc
-        self.register(profile)
+        self.register(profile, tenant_id=tenant_id)
         return profile
 
-    def register(self, profile: ModelProfile) -> None:
-        if profile.profile_id in self._profiles:
+    def register(self, profile: ModelProfile, *, tenant_id: UUID | None = None) -> None:
+        if self._profiles.existing(profile.profile_id, tenant_id=tenant_id) is not None:
             raise ConfigError(f"model profile already registered: {profile.profile_id}")
-        self._profiles[profile.profile_id] = profile
+        self._profiles.put(profile.profile_id, profile, tenant_id=tenant_id)
 
-    def resolve(self, profile_id: str) -> ModelProfile:
-        profile = self._profiles.get(profile_id)
+    def resolve(self, profile_id: str, *, tenant_id: UUID | None = None) -> ModelProfile:
+        profile = self._profiles.get(profile_id, tenant_id=tenant_id)
         if profile is None:
             raise NotFoundError("model profile not registered", details={"profile_id": profile_id})
         return profile

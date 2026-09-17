@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
 from dw_kernel.errors import DomainError, InfrastructureError, NotFoundError
+from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.feedback_dto import (
     FEEDBACK_IMAGE_MIMES,
@@ -185,21 +186,27 @@ async def submit_feedback(
         await uow.commit()
 
 
-@router.get("", response_model=list[FeedbackView])
+@router.get("", response_model=Page[FeedbackView])
 async def list_feedback(
     context: RequireAccessContext,
     container: RequireContainer,
-    limit: int = Query(default=100, ge=1, le=500),
-) -> list[FeedbackView]:
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
+) -> Page[FeedbackView]:
     if container.uow_factory is None:
         raise InfrastructureError("database is not configured")
     await container.authorization.require(
         context=context, action=_INBOX_SCOPE, resource_type="feedback"
     )
+    request = page_request(
+        limit=limit,
+        cursor=cursor,
+        query=PageQuery(key="feedback.inbox", filters={"tenant": context.tenant_id}),
+    )
     async with container.uow_factory(context) as uow:
-        items = await uow.feedback.list_recent(limit=limit)
-    return [
-        FeedbackView(
+        page = await uow.feedback.list_page(request)
+    return page.map_items(
+        lambda item: FeedbackView(
             id=str(item.id),
             author_name=item.author_name,
             category=item.category,
@@ -217,8 +224,7 @@ async def list_feedback(
                 for attachment in item.attachments
             ],
         )
-        for item in items
-    ]
+    )
 
 
 @router.get("/{feedback_id}/attachments/{attachment_id}")

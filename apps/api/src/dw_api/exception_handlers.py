@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from dw_api.dependencies.idempotency import IDEMPOTENCY_HEADER, ReplayedResponse
 from dw_api.errors import ErrorResponse, status_for
 from dw_kernel.errors import DWError, ErrorCode
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ReplayedResponse)
+    async def handle_replay(request: Request, exc: ReplayedResponse) -> Response:
+        """Return what the first request returned, byte for byte.
+
+        The handler never ran, so there is nothing to serialise: the stored body
+        is sent back as it was stored. The header is echoed so a client (or a
+        proxy log) can tell a replay from a first attempt.
+        """
+        stored = exc.response
+        headers = {IDEMPOTENCY_HEADER: request.headers.get(IDEMPOTENCY_HEADER, "")}
+        if stored.body is None:
+            return Response(status_code=stored.status_code, headers=headers)
+        return JSONResponse(status_code=stored.status_code, content=stored.body, headers=headers)
+
     @app.exception_handler(DWError)
     async def handle_dw_error(request: Request, exc: DWError) -> JSONResponse:
         body = ErrorResponse(

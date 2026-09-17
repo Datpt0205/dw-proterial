@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from dw_api.dependencies.auth import RequireAccessContext
+from dw_api.dependencies.idempotency import RequireIdempotency
 from dw_api.dependencies.services import RequireContainer
 from dw_kernel.errors import InfrastructureError
 from dw_platform.application.cache import membership_cache_pattern
@@ -34,11 +35,18 @@ class MemberRefView(BaseModel):
     display_name: str
 
 
+# Both routes below honour `Idempotency-Key` (optional; see README). Granting
+# and revoking access are the mutations on this API whose duplicate is a
+# security event rather than a nuisance: each one writes an audit record and
+# invalidates every cached AccessContext in the workspace, so a client that
+# retried a timed-out call used to leave a second "who granted what" entry
+# behind with nothing to tie the two together.
 @router.post("", response_model=MemberRefView, status_code=201)
 async def grant_member(
     body: GrantMemberRequest,
     context: RequireAccessContext,
     container: RequireContainer,
+    idempotency: RequireIdempotency,
 ) -> MemberRefView:
     if container.grant_membership is None:
         raise InfrastructureError("database is not configured")
@@ -57,7 +65,10 @@ async def grant_member(
         await container.cache.delete_pattern(
             membership_cache_pattern(context.tenant_id, body.workspace_id)
         )
-    return MemberRefView(user_id=ref.user_id, email=ref.email, display_name=ref.display_name)
+    return await idempotency.record(
+        MemberRefView(user_id=ref.user_id, email=ref.email, display_name=ref.display_name),
+        status_code=201,
+    )
 
 
 @router.delete("/{user_id}", status_code=204)
@@ -66,6 +77,7 @@ async def revoke_member(
     workspace_id: UUID,
     context: RequireAccessContext,
     container: RequireContainer,
+    idempotency: RequireIdempotency,
 ) -> None:
     if container.revoke_membership is None:
         raise InfrastructureError("database is not configured")
@@ -76,3 +88,4 @@ async def revoke_member(
         await container.cache.delete_pattern(
             membership_cache_pattern(context.tenant_id, workspace_id)
         )
+    await idempotency.record_no_content()

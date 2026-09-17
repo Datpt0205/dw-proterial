@@ -64,7 +64,7 @@ USERS = [
         "an.nguyen@alpha.local",
         "Nguyễn Văn An",
         "tenant-alpha",
-        ["sales"],
+        ["member"],
         "kinh-doanh",
     ),
     (
@@ -82,7 +82,7 @@ USERS = [
         "chi.le@alpha.local",
         "Lê Thị Chi",
         "tenant-alpha",
-        ["platform_admin", "sales"],
+        ["platform_admin", "member"],
         "dieu-hanh",
     ),
     (
@@ -90,7 +90,7 @@ USERS = [
         "dieu.hoang@alpha.local",
         "Hoàng Thị Diệu",
         "tenant-alpha",
-        ["am"],
+        ["member"],
         "kinh-doanh",
     ),
     (
@@ -114,7 +114,7 @@ USERS = [
         "bao.pham@beta.local",
         "Phạm Quốc Bảo",
         "tenant-beta",
-        ["sales"],
+        ["member"],
         "kinh-doanh",
     ),
     (

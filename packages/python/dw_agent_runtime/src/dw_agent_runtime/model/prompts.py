@@ -10,12 +10,14 @@ import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from uuid import UUID
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from dw_agent_runtime.registry import ConfigError
 from dw_kernel.errors import DomainError, NotFoundError
+from dw_kernel.overlay import TenantOverlay
 
 _VARIABLE_PATTERN = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
 
@@ -46,13 +48,17 @@ class RenderedPrompt:
 
 @dataclass
 class PromptRegistry:
-    _prompts: dict[tuple[str, str], tuple[PromptArtifact, str]] = field(default_factory=dict)
+    # Platform prompts plus per-tenant overrides: a customer whose wording,
+    # rules or examples differ gets its own artifact, not a branch.
+    _prompts: TenantOverlay[tuple[str, str], tuple[PromptArtifact, str]] = field(
+        default_factory=TenantOverlay
+    )
 
-    def load_directory(self, directory: Path) -> None:
+    def load_directory(self, directory: Path, *, tenant_id: UUID | None = None) -> None:
         for path in sorted(directory.rglob("*.yaml")):
-            self.load_file(path)
+            self.load_file(path, tenant_id=tenant_id)
 
-    def load_file(self, path: Path) -> PromptArtifact:
+    def load_file(self, path: Path, *, tenant_id: UUID | None = None) -> PromptArtifact:
         raw = path.read_bytes()
         try:
             artifact = PromptArtifact.model_validate(yaml.safe_load(raw))
@@ -65,18 +71,33 @@ class PromptRegistry:
                 f"prompt {artifact.prompt_id}@{artifact.version}: declared variables "
                 f"{sorted(artifact.variables)} != template placeholders {sorted(placeholders)}"
             )
-        self.register(artifact, checksum=hashlib.sha256(raw).hexdigest())
+        self.register(artifact, checksum=hashlib.sha256(raw).hexdigest(), tenant_id=tenant_id)
         return artifact
 
-    def register(self, artifact: PromptArtifact, *, checksum: str | None = None) -> None:
+    def register(
+        self,
+        artifact: PromptArtifact,
+        *,
+        checksum: str | None = None,
+        tenant_id: UUID | None = None,
+    ) -> None:
         key = (artifact.prompt_id, artifact.version)
-        if key in self._prompts:
+        # Within one layer only: a tenant overriding a platform prompt is the
+        # feature; two files claiming one version inside a layer is the mistake.
+        if self._prompts.existing(key, tenant_id=tenant_id) is not None:
             raise ConfigError(f"prompt already registered: {key[0]}@{key[1]}")
         digest = checksum or hashlib.sha256(artifact.model_dump_json().encode()).hexdigest()
-        self._prompts[key] = (artifact, digest)
+        self._prompts.put(key, (artifact, digest), tenant_id=tenant_id)
 
-    def render(self, prompt_id: str, version: str, variables: dict[str, str]) -> RenderedPrompt:
-        entry = self._prompts.get((prompt_id, version))
+    def render(
+        self,
+        prompt_id: str,
+        version: str,
+        variables: dict[str, str],
+        *,
+        tenant_id: UUID | None = None,
+    ) -> RenderedPrompt:
+        entry = self._prompts.get((prompt_id, version), tenant_id=tenant_id)
         if entry is None:
             raise NotFoundError(
                 "prompt version not registered",

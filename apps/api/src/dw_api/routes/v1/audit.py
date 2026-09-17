@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
 from dw_kernel.errors import InfrastructureError
+from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
 
 
 class AuditEventView(BaseModel):
@@ -35,21 +36,30 @@ class AuditEventView(BaseModel):
 router = APIRouter(prefix="/audit", tags=["audit"])
 
 
-@router.get("/events", response_model=list[AuditEventView])
+@router.get("/events", response_model=Page[AuditEventView])
 async def list_events(
     context: RequireAccessContext,
     container: RequireContainer,
-    limit: int = Query(default=50, ge=1, le=200),
-) -> list[AuditEventView]:
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
+) -> Page[AuditEventView]:
     if container.uow_factory is None:
         raise InfrastructureError("database is not configured")
     await container.authorization.require(
         context=context, action="approvals.read", resource_type="audit_event"
     )
+    # The tenant is in the fingerprint even though it never comes from the
+    # client: a cursor that somehow crossed accounts is then refused outright
+    # instead of being answered from the other tenant's window.
+    request = page_request(
+        limit=limit,
+        cursor=cursor,
+        query=PageQuery(key="audit.events", filters={"tenant": context.tenant_id}),
+    )
     async with container.uow_factory(context) as uow:
-        events = await uow.audit.list_recent(limit=limit)
-    return [
-        AuditEventView(
+        page = await uow.audit.list_page(request)
+    return page.map_items(
+        lambda e: AuditEventView(
             actor_id=str(e.actor_id),
             action=e.action,
             resource_type=e.resource_type,
@@ -59,5 +69,4 @@ async def list_events(
             occurred_at=e.occurred_at,
             details=dict(e.details),
         )
-        for e in events
-    ]
+    )

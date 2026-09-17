@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import PermissionDeniedError
+from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_knowledge import tables
 from dw_knowledge.chunking import structure_aware_chunks
@@ -32,6 +33,7 @@ from dw_knowledge.ports import (
     TrustedSearchFilter,
     VectorIndexPort,
 )
+from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.application.access_context import AccessContext
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
@@ -387,15 +389,21 @@ class KnowledgeGateway:
 
     # -------------------------------------------------------------- listing --
     async def list_documents(
-        self, context: AccessContext, *, limit: int = 100, domain: str | None = None
-    ) -> list[DocumentInfo]:
+        self, context: AccessContext, request: PageRequest, *, domain: str | None = None
+    ) -> Page[DocumentInfo]:
         """Tenant-scoped document inventory (RLS + explicit workspace filter).
+
+        Newest first and resumable: ``request.after`` is the position the caller's
+        previous page ended on, so an upload landing mid-run cannot push an older
+        document past a boundary the caller has already read.
 
         ``domain`` narrows the listing in SQL. Without it a caller that
         wanted one domain took the newest ``limit`` rows of every domain and
         filtered afterwards - and once the research lanes had indexed a few
         thousand pages, the handful of uploaded attachments fell outside the
-        window and read as "no files" (found 2026-08-27 on Gemadept).
+        window and read as "no files" (found 2026-08-27 on Gemadept). It must
+        also be named in ``request.query`` so a cursor cannot be replayed across
+        a change of domain.
         """
         # Same visibility constraints the full read applies (see read_document):
         # a global document may cross tenants, so listing it must still respect
@@ -430,28 +438,37 @@ class KnowledgeGateway:
                             for principal in principals
                         ]
                     ),
+                    after_position(
+                        tables.documents.c.created_at, tables.documents.c.id, request.after
+                    ),
                 )
-                .order_by(tables.documents.c.created_at.desc())
-                .limit(limit)
+                .order_by(*newest_first(tables.documents.c.created_at, tables.documents.c.id))
+                .limit(request.fetch_limit)
             )
             if domain is not None:
                 query = query.where(tables.documents.c.domain == domain)
             rows = await session.execute(query)
-            return [
-                DocumentInfo(
-                    document_id=row.id,
-                    title=row.title,
-                    domain=row.domain,
-                    classification=row.classification,
-                    source_version=row.source_version,
-                    index_version=row.index_version,
-                    chunk_count=row.chunk_count,
-                    created_at=row.created_at,
-                    scope=row.scope,
-                    extra={key: str(value) for key, value in (row.extra or {}).items()},
-                )
-                for row in rows
-            ]
+            return build_page(
+                [
+                    DocumentInfo(
+                        document_id=row.id,
+                        title=row.title,
+                        domain=row.domain,
+                        classification=row.classification,
+                        source_version=row.source_version,
+                        index_version=row.index_version,
+                        chunk_count=row.chunk_count,
+                        created_at=row.created_at,
+                        scope=row.scope,
+                        extra={key: str(value) for key, value in (row.extra or {}).items()},
+                    )
+                    for row in rows
+                ],
+                request=request,
+                position_of=lambda document: CursorPosition(
+                    sort_value=document.created_at, tiebreaker=document.document_id
+                ),
+            )
 
     # ------------------------------------------------------------ full read --
     async def read_document(

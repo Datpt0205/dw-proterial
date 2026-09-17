@@ -16,12 +16,14 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from uuid import UUID
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from dw_agent_runtime.registry import ConfigError
 from dw_kernel.errors import NotFoundError
+from dw_kernel.overlay import TenantOverlay
 
 _SEMVER_PATTERN = r"^\d+\.\d+\.\d+$"
 
@@ -75,12 +77,18 @@ class LoadedToolset:
 class ToolsetRegistry:
     """Fail-fast registry keyed by (toolset_id, version)."""
 
-    _toolsets: dict[tuple[str, str], LoadedToolset] = field(default_factory=dict)
+    # Platform toolsets plus per-tenant overrides: which tools a worker offers
+    # is exactly the knob a customer's process turns.
+    _toolsets: TenantOverlay[tuple[str, str], LoadedToolset] = field(default_factory=TenantOverlay)
 
-    def load_directory(self, directory: Path) -> list[LoadedToolset]:
-        return [self.load_file(path) for path in sorted(directory.rglob("*.yaml"))]
+    def load_directory(
+        self, directory: Path, *, tenant_id: UUID | None = None
+    ) -> list[LoadedToolset]:
+        return [
+            self.load_file(path, tenant_id=tenant_id) for path in sorted(directory.rglob("*.yaml"))
+        ]
 
-    def load_file(self, path: Path) -> LoadedToolset:
+    def load_file(self, path: Path, *, tenant_id: UUID | None = None) -> LoadedToolset:
         raw = path.read_bytes()
         try:
             toolset = Toolset.model_validate(yaml.safe_load(raw))
@@ -89,20 +97,21 @@ class ToolsetRegistry:
         loaded = LoadedToolset(
             toolset=toolset, checksum=hashlib.sha256(raw).hexdigest(), source_path=path
         )
-        self.register(loaded)
+        self.register(loaded, tenant_id=tenant_id)
         return loaded
 
-    def register(self, loaded: LoadedToolset) -> None:
+    def register(self, loaded: LoadedToolset, *, tenant_id: UUID | None = None) -> None:
         key = (loaded.toolset.toolset_id, loaded.toolset.version)
-        if key in self._toolsets:
+        existing = self._toolsets.existing(key, tenant_id=tenant_id)
+        if existing is not None:
             raise ConfigError(
                 f"toolset already registered: {key[0]}@{key[1]} "
-                f"({self._toolsets[key].source_path.name} and {loaded.source_path.name})"
+                f"({existing.source_path.name} and {loaded.source_path.name})"
             )
-        self._toolsets[key] = loaded
+        self._toolsets.put(key, loaded, tenant_id=tenant_id)
 
-    def resolve(self, toolset_id: str, version: str) -> Toolset:
-        loaded = self._toolsets.get((toolset_id, version))
+    def resolve(self, toolset_id: str, version: str, *, tenant_id: UUID | None = None) -> Toolset:
+        loaded = self._toolsets.get((toolset_id, version), tenant_id=tenant_id)
         if loaded is None:
             raise NotFoundError(
                 "toolset not registered",

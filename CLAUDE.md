@@ -83,6 +83,29 @@ adapter. Constructor injection — no service locator, no mutable global client.
 - Negative tests for cross-tenant reads and writes are mandatory.
 - Hiding a control is not authorization. Enforce where the mutation happens.
 
+## Per-tenant artifacts
+
+One deployment serves many customers whose processes differ, and it does that
+without a branch per customer. Every versioned artifact — prompt, tool spec,
+toolset, model profile — resolves through `dw_kernel.overlay.TenantOverlay`:
+the tenant's own version if it has one, the platform's otherwise.
+
+- `tenant_id=None` is the platform layer: what ships in `configs/`.
+- A concrete tenant id is an override, loaded at runtime from storage, never
+  from the checkout — an override that needs a deploy is a fork with extra steps.
+- **The tenant comes from the run or the access context, never from the
+  request.** A caller who could name the tenant whose prompt to render could
+  read another customer's wording.
+- Resolution falls back to the platform, never sideways to another tenant.
+  `test_tenant_overlay.py` asserts this; it is the breach this mechanism must
+  not become.
+- Inventory answers — the release manifest, `/v1/integrations` — read the
+  platform layer only. What a deployment can do must not depend on who asked.
+
+New registries take `tenant_id` from the start. Adding the argument later means
+editing every call site in every product built on this platform, which is the
+kind of change nobody makes and everybody works around.
+
 ## Agent and tool rules
 
 - Graph state is typed and versioned; LLM output is always validated into a
@@ -93,6 +116,11 @@ adapter. Constructor injection — no service locator, no mutable global client.
   approval policy, timeout and idempotency. The executor authorizes, validates,
   executes, validates the output and audits.
 - All side effects use idempotency keys.
+- Channels are reached through a port, never a provider's client. `ChatSenderPort`
+  is the narrow intersection every channel can satisfy; code needing one
+  provider's own features takes that provider's client and says so in its type.
+  A provider adapter that does not fit gets an anti-corruption layer
+  (`SlackChatSender`), not a widened port.
 - Approval pauses and resumes a durable, checkpointed run.
 
 ## Data model rules

@@ -28,6 +28,7 @@ from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML, DemoState, build_demo_graph
 from dw_kernel.errors import ConflictError
+from dw_kernel.pagination import PageQuery, PageRequest
 from dw_kernel.ports import SystemClock, Uuid4Generator
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 
@@ -39,6 +40,14 @@ pytestmark = pytest.mark.integration
 STALE_AFTER_SECONDS_LOCAL = 3600
 
 BOOM = "nhà cung cấp mô hình từ chối"
+
+
+async def _recorded_actions(uow: Any) -> list[str]:
+    """Every action on the audit trail, newest first."""
+    page = await uow.audit.list_page(
+        PageRequest(limit=50, after=None, query=PageQuery(key="test.audit"))
+    )
+    return [event.action for event in page.items]
 
 
 def build_exploding_graph() -> StateGraph:  # type: ignore[type-arg]
@@ -126,7 +135,7 @@ async def test_a_graph_that_raises_leaves_the_run_failed(
     assert BOOM in record.error["message"]
 
     async with stack.uow_factory(access_context_from_run(context)) as uow:
-        actions = [e.action for e in await uow.audit.list_recent(limit=50)]
+        actions = await _recorded_actions(uow)
     assert "run.failed" in actions
     await stack.dispose()
 
@@ -204,7 +213,7 @@ async def test_cancelling_a_run_settles_it_instead_of_reporting_success(
     assert record.error["type"] == "CancelledError"
 
     async with stack.uow_factory(access_context_from_run(context)) as uow:
-        actions = [e.action for e in await uow.audit.list_recent(limit=50)]
+        actions = await _recorded_actions(uow)
     assert "run.cancelled" in actions
     await stack.dispose()
 

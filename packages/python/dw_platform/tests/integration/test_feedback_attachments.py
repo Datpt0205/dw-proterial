@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 from sqlalchemy.pool import NullPool
 from test_feedback import ALPHA, ALPHA_WS, _member, _sign_in
 
+from dw_kernel.pagination import PageQuery, PageRequest
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.application.feedback_dto import attachment_key
@@ -90,7 +91,11 @@ async def test_the_inbox_lists_a_feedback_with_its_screenshots(app_engine: Async
     factory = SqlPlatformUnitOfWorkFactory(async_sessionmaker(app_engine, expire_on_commit=False))
 
     async with factory(_member(author)) as uow:
-        items = await uow.feedback.list_recent()
+        items = (
+            await uow.feedback.list_page(
+                PageRequest(limit=50, after=None, query=PageQuery(key="test.feedback"))
+            )
+        ).items
         found = next(item for item in items if item.id == written.feedback_id)
         one = await uow.feedback.get_attachment(written.feedback_id, written.attachment_ids[0])
 
@@ -136,7 +141,11 @@ async def test_a_screenshot_of_another_tenant_is_invisible_by_id(
     factory = SqlPlatformUnitOfWorkFactory(async_sessionmaker(app_engine, expire_on_commit=False))
     async with factory(_member(author)) as uow:
         hidden = await uow.feedback.get_attachment(theirs_feedback, theirs_attachment)
-        listed = await uow.feedback.list_recent()
+        listed = (
+            await uow.feedback.list_page(
+                PageRequest(limit=50, after=None, query=PageQuery(key="test.feedback"))
+            )
+        ).items
 
     assert hidden is None
     assert all(item.id != theirs_feedback for item in listed)

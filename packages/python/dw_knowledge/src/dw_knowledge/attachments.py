@@ -18,6 +18,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from dw_kernel.pagination import PageQuery, PageRequest
 from dw_knowledge.chunking import MAX_CHUNK_CHARS
 from dw_knowledge.contracts import SearchQuery
 from dw_knowledge.gateway import DocumentText, KnowledgeGateway
@@ -139,12 +140,22 @@ class AttachmentSearchService:
         wanted = attachment_scope_of(scope_type, scope_ref)
         # Narrowed to attachments in SQL: the listing window is shared with
         # the research lanes' pages, which outnumber uploads a thousand to one.
-        documents = await self.gateway.list_documents(
-            context, limit=_DOCUMENT_LISTING_LIMIT, domain=ATTACHMENT_DOMAIN
+        #
+        # One page, deliberately: this is the bounded set of files on a single
+        # record, not a listing a caller walks. The cursor is unused, so the
+        # query identity is only a label.
+        page = await self.gateway.list_documents(
+            context,
+            PageRequest(
+                limit=_DOCUMENT_LISTING_LIMIT,
+                after=None,
+                query=PageQuery(key="knowledge.attachments"),
+            ),
+            domain=ATTACHMENT_DOMAIN,
         )
         return {
             document.document_id: document.title
-            for document in documents
+            for document in page.items
             if document.domain == ATTACHMENT_DOMAIN
             and document.extra.get("attachment_scope") == wanted
         }

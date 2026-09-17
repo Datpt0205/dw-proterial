@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_knowledge.attachments import (
     ATTACHMENT_DOMAIN,
     AttachmentSearchService,
@@ -93,9 +94,15 @@ class FakeGateway:
         return self.hits
 
     async def list_documents(
-        self, context: AccessContext, *, limit: int = 100, domain: str | None = None
-    ) -> list[DocumentInfo]:
-        return [doc for doc in self.documents if domain is None or doc.domain == domain]
+        self, context: AccessContext, request: PageRequest, *, domain: str | None = None
+    ) -> Page[DocumentInfo]:
+        return build_page(
+            [doc for doc in self.documents if domain is None or doc.domain == domain],
+            request=request,
+            position_of=lambda doc: CursorPosition(
+                sort_value=doc.created_at, tiebreaker=doc.document_id
+            ),
+        )
 
     async def read_document(
         self, document_id: uuid.UUID, context: AccessContext, *, max_chars: int = 60_000

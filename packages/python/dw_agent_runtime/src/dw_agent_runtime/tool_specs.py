@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from uuid import UUID
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -22,6 +23,7 @@ from dw_agent_runtime.contracts import ApprovalPolicy, SideEffectLevel, ToolDefi
 from dw_agent_runtime.model.copy import RuntimeCopy
 from dw_agent_runtime.registry import ConfigError
 from dw_kernel.errors import NotFoundError
+from dw_kernel.overlay import TenantOverlay
 
 _SEMVER_PATTERN = r"^\d+\.\d+\.\d+$"
 
@@ -82,12 +84,19 @@ class LoadedToolSpec:
 @dataclass
 class ToolSpecRegistry:
     copy: RuntimeCopy
-    _specs: dict[tuple[str, str], LoadedToolSpec] = field(default_factory=dict)
+    # Platform specs plus per-tenant overrides. A tenant that needs a tool to
+    # ask for a different field, or to require approval where the default does
+    # not, gets its own spec rather than a fork of the deployment.
+    _specs: TenantOverlay[tuple[str, str], LoadedToolSpec] = field(default_factory=TenantOverlay)
 
-    def load_directory(self, directory: Path) -> list[LoadedToolSpec]:
-        return [self.load_file(path) for path in sorted(directory.rglob("*.yaml"))]
+    def load_directory(
+        self, directory: Path, *, tenant_id: UUID | None = None
+    ) -> list[LoadedToolSpec]:
+        return [
+            self.load_file(path, tenant_id=tenant_id) for path in sorted(directory.rglob("*.yaml"))
+        ]
 
-    def load_file(self, path: Path) -> LoadedToolSpec:
+    def load_file(self, path: Path, *, tenant_id: UUID | None = None) -> LoadedToolSpec:
         raw = path.read_bytes()
         try:
             spec = ToolSpec.model_validate(yaml.safe_load(raw))
@@ -96,25 +105,31 @@ class ToolSpecRegistry:
         loaded = LoadedToolSpec(
             spec=spec, checksum=hashlib.sha256(raw).hexdigest(), source_path=path
         )
-        self.register(loaded)
+        self.register(loaded, tenant_id=tenant_id)
         return loaded
 
-    def register(self, loaded: LoadedToolSpec) -> None:
+    def register(self, loaded: LoadedToolSpec, *, tenant_id: UUID | None = None) -> None:
         key = (loaded.spec.name, loaded.spec.version)
-        if key in self._specs:
+        # Clashes are checked within a layer: a tenant overriding a platform
+        # spec is the feature, two files claiming the same version inside one
+        # layer is the mistake.
+        existing = self._specs.existing(key, tenant_id=tenant_id)
+        if existing is not None:
             raise ConfigError(
                 f"tool spec already registered: {key[0]}@{key[1]} "
-                f"({self._specs[key].source_path.name} and {loaded.source_path.name})"
+                f"({existing.source_path.name} and {loaded.source_path.name})"
             )
-        self._specs[key] = loaded
+        self._specs.put(key, loaded, tenant_id=tenant_id)
 
-    def resolve(self, name: str, version: str) -> ToolSpec:
-        loaded = self._specs.get((name, version))
+    def resolve(self, name: str, version: str, *, tenant_id: UUID | None = None) -> ToolSpec:
+        loaded = self._specs.get((name, version), tenant_id=tenant_id)
         if loaded is None:
             raise NotFoundError(
                 "tool spec not registered", details={"tool": name, "version": version}
             )
         return loaded.spec
 
-    def definition(self, name: str, version: str) -> ToolDefinition:
-        return self.resolve(name, version).to_definition(self.copy)
+    def definition(
+        self, name: str, version: str, *, tenant_id: UUID | None = None
+    ) -> ToolDefinition:
+        return self.resolve(name, version, tenant_id=tenant_id).to_definition(self.copy)

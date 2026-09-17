@@ -158,7 +158,7 @@ async def test_a_plain_member_cannot_manage_workspaces(app_engine: AsyncEngine) 
         tenant_id=ALPHA,
         workspace_id=ALPHA_WS,
         principal_id=uuid.uuid4(),
-        roles=frozenset({"sales"}),
+        roles=frozenset({"member"}),
         scopes=frozenset({"crm.account.read"}),
         plan_id="professional",
     )
@@ -171,7 +171,7 @@ async def test_roles_read_lists_the_catalog(app_engine: AsyncEngine) -> None:
     roles = {r.key: r for r in await svc.list_roles(_admin())}
     assert "org_admin" in roles
     assert "platform.members.write" in roles["org_admin"].scopes
-    assert "sales" in roles and "crm.account.write" in roles["sales"].scopes
+    assert "member" in roles and "knowledge.write" in roles["member"].scopes
 
 
 async def test_tenant_settings_get_and_update(app_engine: AsyncEngine) -> None:

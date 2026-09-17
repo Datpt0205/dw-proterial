@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, cast
 
+from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.ports import PlatformUnitOfWork
 from dw_platform.domain.audit import AuditEvent
@@ -41,8 +42,15 @@ class FakeAuditRepo:
     async def append(self, event: AuditEvent) -> None:
         self.events.append(event)
 
-    async def list_recent(self, limit: int = 50) -> list[AuditEvent]:
-        return self.events[-limit:]
+    async def list_page(self, request: PageRequest) -> Page[AuditEvent]:
+        # Newest first, like the SQL repository this stands in for.
+        return build_page(
+            list(reversed(self.events)),
+            request=request,
+            position_of=lambda event: CursorPosition(
+                sort_value=event.occurred_at, tiebreaker=event.id
+            ),
+        )
 
 
 @dataclass

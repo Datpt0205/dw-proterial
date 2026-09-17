@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
 from typing import Any
 
-from dw_connectors.adapters.zalo_bot import ZaloBotClient
 from dw_connectors.adapters.zalo_link import (
     handle_update,
     make_connect_token,
@@ -31,17 +29,19 @@ class _FakeStore:
         self.unlinked.append(zalo_id)
 
 
-@dataclass(frozen=True)
-class _FakeBot(ZaloBotClient):
-    """A real ``ZaloBotClient`` with the one call ``handle_update`` makes
-    replaced — ``handle_update`` takes the client itself, not a narrower port."""
+class _FakeSender:
+    """Satisfies ``ChatSenderPort`` structurally — no base class, no network.
 
-    bot_token: str = "fake-token"
-    sent: list[tuple[str, str]] = field(default_factory=list)
+    This is what a port buys: the fake is four lines, and the same test would
+    hold for a Slack or Teams sender without knowing either exists.
+    """
 
-    async def send_message(self, chat_id: str, text: str) -> str:
-        self.sent.append((chat_id, text))
-        return "mid"
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str]] = []
+
+    async def send_message(self, conversation_id: str, text: str) -> str:
+        self.sent.append((conversation_id, text))
+        return "msg-1"
 
 
 def _start_update(token: str) -> dict[str, Any]:
@@ -92,44 +92,46 @@ def test_parse_falls_back_to_from_when_no_chat() -> None:
 
 # ---- handle_update ----
 async def test_start_with_valid_token_links_and_confirms() -> None:
-    store, bot = _FakeStore(), _FakeBot()
+    store, sender = _FakeStore(), _FakeSender()
     token = make_connect_token(_USER, _SECRET)
-    await handle_update(_start_update(token), link_secret=_SECRET, store=store, bot=bot)
+    await handle_update(_start_update(token), link_secret=_SECRET, store=store, sender=sender)
     assert store.linked == [(_USER, _ZALO_ID)]
-    assert bot.sent and "kết nối" in bot.sent[0][1].lower()
+    assert sender.sent and "kết nối" in sender.sent[0][1].lower()
 
 
 async def test_start_with_bad_token_does_not_link() -> None:
-    store, bot = _FakeStore(), _FakeBot()
-    await handle_update(_start_update("bogus"), link_secret=_SECRET, store=store, bot=bot)
+    store, sender = _FakeStore(), _FakeSender()
+    await handle_update(_start_update("bogus"), link_secret=_SECRET, store=store, sender=sender)
     assert store.linked == []
-    assert bot.sent and "hợp lệ" in bot.sent[0][1].lower()
+    assert sender.sent and "hợp lệ" in sender.sent[0][1].lower()
 
 
 async def test_stop_unlinks() -> None:
-    store, bot = _FakeStore(), _FakeBot()
+    store, sender = _FakeStore(), _FakeSender()
     update = {"result": {"message": {"chat": {"id": _ZALO_ID}, "text": "/stop"}}}
-    await handle_update(update, link_secret=_SECRET, store=store, bot=bot)
+    await handle_update(update, link_secret=_SECRET, store=store, sender=sender)
     assert store.unlinked == [_ZALO_ID]
     assert store.linked == []
 
 
 async def test_empty_message_is_noop() -> None:
-    store, bot = _FakeStore(), _FakeBot()
-    await handle_update({"result": {"message": {}}}, link_secret=_SECRET, store=store, bot=bot)
-    assert store.linked == [] and store.unlinked == [] and bot.sent == []
+    store, sender = _FakeStore(), _FakeSender()
+    await handle_update(
+        {"result": {"message": {}}}, link_secret=_SECRET, store=store, sender=sender
+    )
+    assert store.linked == [] and store.unlinked == [] and sender.sent == []
 
 
 async def test_unknown_text_does_nothing() -> None:
-    store, bot = _FakeStore(), _FakeBot()
+    store, sender = _FakeStore(), _FakeSender()
     update = {"result": {"message": {"chat": {"id": _ZALO_ID}, "text": "xin chào"}}}
-    await handle_update(update, link_secret=_SECRET, store=store, bot=bot)
-    assert store.linked == [] and store.unlinked == [] and bot.sent == []
+    await handle_update(update, link_secret=_SECRET, store=store, sender=sender)
+    assert store.linked == [] and store.unlinked == [] and sender.sent == []
 
 
 async def test_link_works_without_a_bot() -> None:
     # A reply channel is optional; the link must still be written.
     store = _FakeStore()
     token = make_connect_token(_USER, _SECRET)
-    await handle_update(_start_update(token), link_secret=_SECRET, store=store, bot=None)
+    await handle_update(_start_update(token), link_secret=_SECRET, store=store, sender=None)
     assert store.linked == [(_USER, _ZALO_ID)]

@@ -26,7 +26,7 @@ export default function FeedbackInboxPage() {
   const load = useCallback(() => {
     apiClient()
       .listFeedback()
-      .then(setItems)
+      .then((page) => setItems(page.items))
       .catch(() => setItems([]));
   }, []);
 

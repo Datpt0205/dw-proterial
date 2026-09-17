@@ -45,8 +45,13 @@ branch_labels = None
 depends_on = None
 
 _SQL_DIR = Path(__file__).resolve().parents[1] / "sql"
-# Order matters: privileges are granted on objects that must already exist.
-_SQL_FILES = ("0001_platform_baseline.sql", "0001_platform_grants.sql")
+# Order matters: reference rows need their tables, and privileges are granted on
+# objects that must already exist.
+_SQL_FILES = (
+    "0001_platform_baseline.sql",
+    "0001_platform_reference.sql",
+    "0001_platform_grants.sql",
+)
 
 # Dropping the schemas drops everything in them, including the two functions and
 # every policy. Listed explicitly rather than looped so a schema added later has

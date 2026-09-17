@@ -92,14 +92,14 @@ async def test_a_seeded_permission_set_adds_a_scope_the_role_lacks(
 async def test_admin_assigns_a_set_and_it_takes_effect(app_engine: AsyncEngine) -> None:
     an = await _uid(app_engine, "dev|an.nguyen")
     before = await _lookup(app_engine).find_access("dev|an.nguyen", ISSUER, ALPHA, ALPHA_WS)
-    assert before is not None and "crm.broadcast.write" not in before.scopes
+    assert before is not None and "approvals.decide" not in before.scopes
 
     await _service(app_engine).set_permission_sets(
-        _admin(), SetPermissionSets(user_id=an, permission_set_keys=frozenset({"broadcaster"}))
+        _admin(), SetPermissionSets(user_id=an, permission_set_keys=frozenset({"approver_boost"}))
     )
 
     after = await _lookup(app_engine).find_access("dev|an.nguyen", ISSUER, ALPHA, ALPHA_WS)
-    assert after is not None and "crm.broadcast.write" in after.scopes
+    assert after is not None and "approvals.decide" in after.scopes
 
 
 async def test_unknown_set_is_refused(app_engine: AsyncEngine) -> None:

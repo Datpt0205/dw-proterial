@@ -25,6 +25,7 @@ from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML, build_demo_graph
 from dw_kernel.errors import ConflictError
+from dw_kernel.pagination import PageQuery, PageRequest
 from dw_kernel.ports import SystemClock, Uuid4Generator
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 
@@ -108,7 +109,14 @@ async def test_pause_restart_resume_approved(urls: RuntimeUrls, worker_config: P
 
     # Audit trail covers the full lifecycle.
     async with stack2.uow_factory(access_context_from_run(context)) as uow:
-        actions = [e.action for e in await uow.audit.list_recent(limit=50)]
+        actions = [
+            e.action
+            for e in (
+                await uow.audit.list_page(
+                    PageRequest(limit=50, after=None, query=PageQuery(key="test.audit"))
+                )
+            ).items
+        ]
     for expected in ("run.started", "run.waiting_approval", "run.resumed", "run.completed"):
         assert expected in actions
     await stack2.dispose()

@@ -53,7 +53,7 @@ export default function AuditPage() {
 
   const refresh = useCallback(async () => {
     try {
-      setEvents(await apiClient().listAuditEvents(200));
+      setEvents((await apiClient().listAuditEvents({ limit: 200 })).items);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "unknown error");

@@ -12,6 +12,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
+from dw_kernel.pagination import Page, PageRequest
 from dw_platform.application.access_context import AccessContext
 
 if TYPE_CHECKING:
@@ -111,7 +112,10 @@ class ApprovalRepositoryPort(Protocol):
 
     async def add_decision(self, decision: ApprovalDecision) -> None: ...
 
-    async def list_pending(self, limit: int = 50) -> list[ApprovalRequest]: ...
+    async def list_pending(self, request: PageRequest) -> Page[ApprovalRequest]:
+        """The inbox, newest first and resumable. Pending work is bounded by how
+        fast humans clear it, which on a stalled tenant is not bounded at all."""
+        ...
 
 
 class AuditRepositoryPort(Protocol):
@@ -119,9 +123,16 @@ class AuditRepositoryPort(Protocol):
 
     async def append(self, event: AuditEvent) -> None: ...
 
-    async def list_recent(self, limit: int = 50) -> list[AuditEvent]: ...
+    async def list_page(self, request: PageRequest) -> Page[AuditEvent]:
+        """Newest first, resumable. The audit trail is the table that grows
+        without bound, so it is the one a bare ``limit`` truncates soonest."""
+        ...
 
-    async def list_for_run(self, run_id: UUID, limit: int = 100) -> list[AuditEvent]: ...
+    async def list_for_run(self, run_id: UUID, limit: int = 100) -> list[AuditEvent]:
+        """One run's events, oldest first. Not paged: this is the timeline of a
+        single aggregate, bounded by that run's own length rather than by how
+        long the tenant has been a customer."""
+        ...
 
 
 class FeedbackRepositoryPort(Protocol):
@@ -153,8 +164,8 @@ class FeedbackRepositoryPort(Protocol):
         size_bytes: int,
     ) -> None: ...
 
-    async def list_recent(self, limit: int = 100) -> list[Feedback]:
-        """Newest first, each with its attachments."""
+    async def list_page(self, request: PageRequest) -> Page[Feedback]:
+        """Newest first and resumable, each with its attachments."""
         ...
 
     async def get_attachment(

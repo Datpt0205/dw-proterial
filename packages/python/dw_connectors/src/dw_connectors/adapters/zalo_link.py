@@ -20,7 +20,7 @@ import uuid
 from hashlib import sha256
 from typing import Any, Protocol
 
-from dw_connectors.adapters.zalo_bot import ZaloBotClient
+from dw_connectors.ports import ChatSenderPort
 
 _TOKEN_TTL_SECONDS = 900  # a connect token is good for 15 minutes
 _STOP_WORDS = frozenset({"/stop", "/huy", "/hủy", "stop", "huỷ", "hủy"})
@@ -75,7 +75,7 @@ async def handle_update(
     *,
     link_secret: str,
     store: ZaloLinkStore,
-    bot: ZaloBotClient | None,
+    sender: ChatSenderPort | None,
 ) -> None:
     """Act on one update: ``/start <token>`` links, ``/stop`` unlinks."""
     zalo_id, text = parse_update(update)
@@ -83,9 +83,9 @@ async def handle_update(
         return
 
     async def reply(msg: str) -> None:
-        if bot is not None:
+        if sender is not None:
             with contextlib.suppress(RuntimeError):
-                await bot.send_message(zalo_id, msg)
+                await sender.send_message(zalo_id, msg)
 
     if text.startswith("/start "):
         user_id = verify_connect_token(text.split(maxsplit=1)[1].strip(), link_secret)

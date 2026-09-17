@@ -248,6 +248,32 @@ outbox_events = sa.Table(
     sa.Column("last_error", sa.Text, nullable=True),
 )
 
+# Replay cache for mutating HTTP requests that carry an `Idempotency-Key`
+# header. The primary key is (tenant_id, idempotency_key), so the key string is
+# the client's to choose within its own tenant and two tenants never collide —
+# and inserting the row is itself the mutual exclusion between two concurrent
+# requests presenting the same key.
+idempotency_keys = sa.Table(
+    "idempotency_keys",
+    metadata,
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), primary_key=True),
+    sa.Column("idempotency_key", sa.Text, primary_key=True),
+    sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("request_method", sa.Text, nullable=False),
+    sa.Column("request_path", sa.Text, nullable=False),
+    sa.Column("body_hash", sa.Text, nullable=False),
+    # Both NULL while the first request is in flight; both set when it returned.
+    sa.Column("response_status", sa.Integer, nullable=True),
+    sa.Column("response_body", JSONB, nullable=True),
+    sa.Column(
+        "created_at",
+        sa.TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=sa.text("now()"),
+    ),
+    sa.Column("completed_at", sa.TIMESTAMP(timezone=True), nullable=True),
+)
+
 # Platform Operator allowlist: who may provision tenants (ADR-002). Global —
 # no tenant_id, no RLS. Deliberately outside the tenant plane.
 platform_operators = sa.Table(
@@ -292,4 +318,5 @@ TENANT_SCOPED_TABLES = (
     "approval_decisions",
     "audit_events",
     "outbox_events",
+    "idempotency_keys",
 )
