@@ -111,6 +111,13 @@ known-first-party = [
 # ---------------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"
+# Pinned, not inferred. mypy narrows `sys.platform` to whatever machine it runs
+# on, so a platform-guarded branch is live for one developer and unreachable for
+# another — and with `warn_unreachable` that is not a difference of opinion, it
+# is a typecheck that passes locally and fails in CI. Measured: every push was
+# red on `runner.py` while mypy was green on Windows. Everything deployed runs
+# in a Linux container, so that is the answer both should give.
+platform = "linux"
 strict = true
 warn_unreachable = true
 show_error_codes = true

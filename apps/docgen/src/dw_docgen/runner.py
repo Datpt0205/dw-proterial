@@ -162,13 +162,14 @@ def _process_group(process: subprocess.Popen[bytes]) -> int | None:
     Read up front because after `wait()` reaps the leader its id is free to be
     reused, and killing a recycled group would kill something else.
     """
-    if sys.platform != "win32":
-        try:
-            return os.getpgid(process.pid)
-        except OSError:
-            # Already gone. Nothing to signal, and nothing it could have started.
-            return None
-    return None
+    if sys.platform == "win32":
+        # No process groups to read; `_kill_group` falls back to the leader.
+        return None
+    try:
+        return os.getpgid(process.pid)
+    except OSError:
+        # Already gone. Nothing to signal, and nothing it could have started.
+        return None
 
 
 def _kill_group(group: int | None, process: subprocess.Popen[bytes]) -> None:

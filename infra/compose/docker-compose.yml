@@ -107,7 +107,12 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    # quay.io, not Docker Hub: MinIO withdrew BOTH `minio/minio` and `minio/mc`
+    # from Docker Hub, and a withdrawn image does not degrade politely — the
+    # daemon reports "repository does not exist or may require docker login",
+    # which reads as a credentials problem and is not one. The tag is unchanged
+    # and the digest matches; only the registry moved.
+    image: quay.io/minio/minio:RELEASE.2024-01-16T16-07-38Z
     profiles: ["infra", "full", "observability"]
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -134,7 +139,8 @@ services:
     restart: unless-stopped
 
   minio-setup:
-    image: minio/mc:RELEASE.2024-01-13T08-44-48Z
+    # Same withdrawal as the server above.
+    image: quay.io/minio/mc:RELEASE.2024-01-13T08-44-48Z
     profiles: ["infra", "full", "observability"]
     depends_on:
       minio:
@@ -463,6 +469,16 @@ services:
   docgen-gateway:
     # The sandbox image, reused: it is already on the machine and carries a
     # Python interpreter. Nothing else of it is used.
+    #
+    # It repeats `build:` rather than relying on `docgen` having built the tag.
+    # `depends_on` orders STARTUP, not image resolution: compose resolves every
+    # service's image up front and in parallel, so a service carrying only an
+    # `image:` is pulled — and `dw-docgen:local` exists in no registry. That is
+    # what failed CI on every push ("pull access denied for dw-docgen"). Same
+    # context, same dockerfile, same tag, so this costs no second build.
+    build:
+      context: ../..
+      dockerfile: infra/docker/docgen.Dockerfile
     image: dw-docgen:local
     profiles: ["infra", "full"]
     depends_on: [docgen]
