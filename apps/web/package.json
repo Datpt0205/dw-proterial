@@ -14,7 +14,6 @@
   "dependencies": {
     "@assistant-ui/react": "^0.15.18",
     "@assistant-ui/react-markdown": "^0.14.14",
-    "@dw/agent-ui": "workspace:*",
     "@dw/api-client": "workspace:*",
     "@dw/contracts": "workspace:*",
     "@dw/ui": "workspace:*",

@@ -11,12 +11,7 @@ const nextConfig: NextConfig = {
   experimental: {
     cpus: 1,
   },
-  transpilePackages: [
-    "@dw/ui",
-    "@dw/contracts",
-    "@dw/api-client",
-    "@dw/agent-ui",
-  ],
+  transpilePackages: ["@dw/ui", "@dw/contracts", "@dw/api-client"],
 };
 
 export default nextConfig;

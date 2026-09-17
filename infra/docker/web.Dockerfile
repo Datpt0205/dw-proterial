@@ -13,7 +13,6 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/typescript/ui/package.json packages/typescript/ui/package.json
 COPY packages/typescript/contracts/package.json packages/typescript/contracts/package.json
 COPY packages/typescript/api-client/package.json packages/typescript/api-client/package.json
-COPY packages/typescript/agent-ui/package.json packages/typescript/agent-ui/package.json
 
 # Docker Desktop's VM network can be ~10× slower to the npm CDN than the host;
 # 300s absorbs a large binary tarball (sharp libvips) that busts the 60s default.
