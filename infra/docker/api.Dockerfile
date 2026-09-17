@@ -29,9 +29,6 @@ COPY packages/python/dw_memory/pyproject.toml packages/python/dw_memory/pyprojec
 COPY packages/python/dw_connectors/pyproject.toml packages/python/dw_connectors/pyproject.toml
 COPY packages/python/dw_observability/pyproject.toml packages/python/dw_observability/pyproject.toml
 COPY packages/python/dw_evals/pyproject.toml packages/python/dw_evals/pyproject.toml
-COPY packages/python/dw_sales_crm/pyproject.toml packages/python/dw_sales_crm/pyproject.toml
-COPY packages/python/dw_sales_intel/pyproject.toml packages/python/dw_sales_intel/pyproject.toml
-COPY packages/python/dw_lead_scoring/pyproject.toml packages/python/dw_lead_scoring/pyproject.toml
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-workspace --no-dev --package dw-api
@@ -58,18 +55,8 @@ COPY --chown=dw:dw db/migrations /app/db/migrations
 COPY --chown=dw:dw configs /app/configs
 COPY --chown=dw:dw evals/fixtures /app/evals/fixtures
 COPY --chown=dw:dw contracts/release /app/contracts/release
-# Demo fixtures for the dev-only sample-data endpoints
-COPY --chown=dw:dw db/fixtures /app/db/fixtures
-# The SugarCRM importer runs from this image as a one-off command; it needs
-# the package, and `scripts` importable as one, not just the entrypoint file.
+# `scripts` has to be importable as a package, not just as loose files.
 COPY --chown=dw:dw scripts/__init__.py /app/scripts/__init__.py
-COPY --chown=dw:dw scripts/sugar_migration /app/scripts/sugar_migration
-# The importer's cache and watermark live on a named volume mounted here.
-# Docker seeds a fresh volume from whatever the image has at that path, so the
-# directory has to exist and belong to `dw` before the mount: otherwise the
-# volume arrives owned by root and the non-root process cannot write its own
-# state, which surfaces only at runtime as a permission error.
-RUN mkdir -p /app/var/sugar/cache /app/var/sugar/state && chown -R dw:dw /app/var
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

@@ -13,7 +13,7 @@ seed and tests; production never turns it on.
 
 Email-based linking: a verified identity is matched to an existing user first by
 ``(issuer, subject)``, then by ``subject``, then by **email**. The email step is
-what lets a person the SugarCRM importer created (subject ``sugar:<name>``) sign
+what lets a person an importer created (subject ``<source>:<name>``) sign
 in through Keycloak — a different subject, same email — and land on their own
 records rather than a fresh, empty account (or an email-unique crash). It relies
 on the IdP verifying the email, which the corporate SSO (Entra/Google) does.
@@ -135,7 +135,7 @@ class SqlIdentityBootstrap:
         else:
             # Email-based account linking. A verified identity whose email
             # matches an existing user is the SAME person — most importantly the
-            # people the SugarCRM importer created as `sugar:<name>`: when they
+            # people an importer created as `<source>:<name>`: when they
             # later sign in through Keycloak they carry a different subject, so
             # resolving by subject alone would try to mint a *second* user on the
             # same email. That collides on the unique email (a crash), and even

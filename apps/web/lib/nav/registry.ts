@@ -120,11 +120,11 @@ const platformNav: NavItem[] = [
  * Sidebar nav registry — the ONLY place nav manifests are aggregated.
  *
  * PLUG-IN POINT: a bounded context ships its own manifest inside its route
- * folder (e.g. `app/sales-crm/_meta/nav.ts` exporting `NavItem[]`) and adds
+ * folder (e.g. `app/<context>/_meta/nav.ts` exporting `NavItem[]`) and adds
  * exactly one import + one spread here, in the context's wiring PR:
  *
- *   import { salesCrmNav } from "../../app/sales-crm/_meta/nav";
- *   ...salesCrmNav, ...platformNav,
+ *   import { contextNav } from "../../app/<context>/_meta/nav";
+ *   ...contextNav, ...platformNav,
  *
  * Day-to-day nav changes (labels, icons, scopes, new pages) then live in the
  * context-owned manifest — this file is edited once per context and frozen.

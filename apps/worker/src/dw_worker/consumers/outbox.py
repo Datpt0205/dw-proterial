@@ -8,7 +8,7 @@ handler wired here has to be idempotent.
 **No effect is wired today, deliberately.** Research-on-account-created and
 re-score-on-lead-evidence both used to live here, and both were removed rather
 than switched off: an event says what happened, never who caused it, so a
-SugarCRM import announced 1,666 created accounts exactly as loudly as a
+A bulk import announced 1,666 created records exactly as loudly as a
 salesperson typing one name, and each announcement bought a paid search call.
 Both effects remain available on demand through their own endpoints, and lead
 scoring now starts when someone opens the lead. A setting would have left the
