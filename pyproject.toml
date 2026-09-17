@@ -62,7 +62,9 @@ src = [
     "apps/worker/src",
     "scripts",
 ]
-extend-exclude = ["db/migrations/versions"]
+# `vendor/` is third-party code pinned at a tag. Formatting it would make every
+# re-vendor a conflict and every diff unreadable.
+extend-exclude = ["db/migrations/versions", "vendor"]
 
 [tool.ruff.lint]
 select = [

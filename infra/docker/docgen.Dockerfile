@@ -19,7 +19,6 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
-COPY apps/chat/pyproject.toml apps/chat/pyproject.toml
 COPY apps/docgen/pyproject.toml apps/docgen/pyproject.toml
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY packages/python/dw_kernel/pyproject.toml packages/python/dw_kernel/pyproject.toml
