@@ -34,6 +34,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
@@ -47,6 +48,16 @@ SIGKILL_EXIT_CODE = 137
 # Distinct from anything a document script would plausibly return, so "the
 # sandbox refused to run unprotected" is never read as "the script failed".
 LIMITS_UNAVAILABLE_EXIT_CODE = 97
+
+# How many SIGKILL rounds a process group gets before the request gives up on
+# it. Ten covers a fork bomb with room to spare - each round strictly shrinks
+# the group once `ulimit -u` is saturated - while capping the worst case at
+# half a second, which a caller does not notice and a wedged process cannot
+# extend.
+_KILL_ROUNDS = 10
+# Long enough for the kernel to reap what the last round killed, short enough
+# that ten of them are not a pause.
+_KILL_ROUND_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -172,25 +183,51 @@ def _process_group(process: subprocess.Popen[bytes]) -> int | None:
         return None
 
 
+def _killpg_until_empty(group: int) -> bool:
+    """SIGKILL the group until nothing is left in it. True if it emptied.
+
+    One `killpg` is not enough and the reason is a race, not a missing flag. The
+    kernel walks the group delivering the signal; a member that forks while the
+    walk is still ahead of it produces a child the walk never reaches. Against a
+    fork bomb that walk never wins in a single pass, and the survivors then sit
+    on the container's process budget for good — which is how
+    `test_a_fork_bomb_leaves_the_container_usable` passed its own assertion
+    while every test after it failed with "Resource temporarily unavailable".
+
+    Repeating converges because of the very limit that makes the symptom:
+    `ulimit -u` is already saturated by then, so the survivors cannot fork
+    either. Each round strictly shrinks the group.
+
+    Bounded, because a request must answer even against something unkillable —
+    a process wedged in uninterruptible sleep does not die for SIGKILL, and
+    looping on it forever would trade one stuck session for a stuck service.
+    """
+    for _ in range(_KILL_ROUNDS):
+        try:
+            os.killpg(group, signal.SIGKILL)
+        except ProcessLookupError:
+            # The group is empty. The ordinary case on the first round: the
+            # command finished and started nothing that outlived it.
+            return True
+        except OSError:
+            logger.warning("could not kill sandbox process group %s", group, exc_info=True)
+            return False
+        time.sleep(_KILL_ROUND_SECONDS)
+    return False
+
+
 def _kill_group(group: int | None, process: subprocess.Popen[bytes]) -> None:
     """Kill the command and everything it started.
 
     `soffice` daemonises and a backgrounded job outlives the shell that started
     it, so signalling only the leader leaves the next session a busy container.
     """
-    try:
-        if sys.platform == "win32":
-            # No process groups to signal; the shell dies and its children are
-            # the developer's problem, because this path is tests only.
-            process.kill()
-        elif group is not None:
-            os.killpg(group, signal.SIGKILL)
-    except ProcessLookupError:
-        # The ordinary case: the command finished and started nothing that
-        # outlived it.
-        return
-    except OSError:
-        logger.warning("could not kill sandbox process group %s", group, exc_info=True)
+    if sys.platform == "win32":
+        # No process groups to signal; the shell dies and its children are
+        # the developer's problem, because this path is tests only.
+        process.kill()
+    elif group is not None and not _killpg_until_empty(group):
+        logger.error("sandbox process group %s outlived %d SIGKILL rounds", group, _KILL_ROUNDS)
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:

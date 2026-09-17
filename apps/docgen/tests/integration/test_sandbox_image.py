@@ -31,6 +31,12 @@ SLOW_COMMAND_SECONDS = 180
 
 DIACRITICS = "ế ộ ỹ ằ Đ đ"
 
+# How many commands must succeed after a fork bomb before the budget counts as
+# recovered. One proves nothing - there is headroom for one straight after the
+# bomb, which is exactly how this went unnoticed. Five spans the window in which
+# the survivors used to consume what was left.
+FORK_RECOVERY_PROBES = 5
+
 GENERATE_DOCX = f"""
 from docx import Document
 
@@ -149,14 +155,28 @@ def test_a_fork_bomb_leaves_the_container_usable(client: httpx.Client, session: 
     """Answering `/health` is not the property that matters. A fork bomb exits 0
     while its descendants keep running, and those survivors hold the container's
     process budget - the service still replies and every later command fails
-    with "Resource temporarily unavailable". So the assertion is that the NEXT
-    command works."""
+    with "Resource temporarily unavailable".
+
+    "The next command works" is not the property either, and asserting only that
+    is what let this pass while it was broken: right after the bomb there is
+    still headroom for one `python3`, and the budget is only fully gone by the
+    time the following TEST runs. The suite then failed at
+    `test_a_backgrounded_command_does_not_outlive_its_session` and at every test
+    after it, none of which had done anything wrong - seven reds, one cause,
+    and the test that named the property green in the middle of them.
+
+    So the assertion is that the survivors are gone: the container must be able
+    to fork a burst afterwards, which a saturated `ulimit -u` cannot.
+    """
     run(client, session, ":(){ :|:& };:", timeout=8)
 
-    after = run(client, session, "python3 -c \"print('STILL WORKS')\"")
-
     assert client.get("/health").json()["status"] == "ok"
-    assert "STILL WORKS" in str(after["output"]), after["output"]
+
+    # Sequential, not a burst in one shell: this asks whether the budget came
+    # back at all, not how much of it a single command may use.
+    for attempt in range(FORK_RECOVERY_PROBES):
+        probe = run(client, session, "bash -c 'echo PROBE'")
+        assert "PROBE" in str(probe["output"]), f"probe {attempt}: {probe['output']}"
 
 
 def test_a_backgrounded_command_does_not_outlive_its_session(
