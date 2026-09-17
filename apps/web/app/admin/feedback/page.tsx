@@ -9,11 +9,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@dw/ui";
-import type { FeedbackItem } from "@dw/api-client";
 import { apiClient } from "../../../lib/session";
 import { PageHeading } from "../../../components/page-heading";
 import { EmptyState } from "../../../components/empty-state";
+import { LoadMore } from "../../../components/load-more";
 import { formatDateTime } from "../../../lib/dates";
+import { useCachedPages } from "../../../lib/use-cached-pages";
 
 /**
  * The feedback inbox (spec 003 US5), moved under Admin: what members sent,
@@ -21,18 +22,13 @@ import { formatDateTime } from "../../../lib/dates";
  * API gates it on the members-read scope; the nav item carries the same scope.
  */
 export default function FeedbackInboxPage() {
-  const [items, setItems] = useState<FeedbackItem[] | null>(null);
-
-  const load = useCallback(() => {
-    apiClient()
-      .listFeedback()
-      .then((page) => setItems(page.items))
-      .catch(() => setItems([]));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { items, loading, loadingMore, hasMore, loadMore } = useCachedPages(
+    "admin:feedback",
+    useCallback(
+      (cursor: string | null) => apiClient().listFeedback({ cursor }),
+      [],
+    ),
+  );
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -46,7 +42,7 @@ export default function FeedbackInboxPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {items === null ? (
+          {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Đang tải…
             </div>
@@ -103,6 +99,17 @@ export default function FeedbackInboxPage() {
                 </li>
               ))}
             </ul>
+          )}
+          {!loading && items.length > 0 && (
+            <div className="mt-4">
+              <LoadMore
+                hasMore={hasMore}
+                loading={loadingMore}
+                onLoadMore={loadMore}
+                shown={items.length}
+                noun="phản hồi"
+              />
+            </div>
           )}
         </CardContent>
       </Card>

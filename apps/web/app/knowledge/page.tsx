@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Library, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
 import type { IngestJob, KnowledgeDocument } from "@dw/contracts";
 import {
@@ -22,11 +22,13 @@ import {
   TableRow,
 } from "@dw/ui";
 import { EmptyState } from "../../components/empty-state";
+import { LoadMore } from "../../components/load-more";
 import { Modal } from "../../components/modal";
 import { PageHeading } from "../../components/page-heading";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
 import { apiClient } from "../../lib/session";
+import { useCachedPages } from "../../lib/use-cached-pages";
 
 // The ingest job is polled rather than pushed: the worker picks it off a queue
 // and a parse takes seconds, not milliseconds. Five minutes at this interval is
@@ -46,7 +48,6 @@ const JOB_BADGE: Record<
 
 export default function KnowledgePage() {
   const { hasScope, hasRole } = useAuth();
-  const [documents, setDocuments] = useState<KnowledgeDocument[] | null>(null);
   // Jobs this browser started. The API exposes a job by id, not a list, so the
   // page follows the ones it queued rather than inventing a history it cannot
   // read back after a reload.
@@ -64,18 +65,21 @@ export default function KnowledgePage() {
   // anyone else, so the option is offered to exactly the same set.
   const canPublishGlobal = hasRole("platform_admin");
 
-  const refresh = useCallback(async () => {
-    try {
-      setDocuments((await apiClient().listKnowledgeDocuments()).items);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "unknown error");
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const {
+    items: documents,
+    loading,
+    loadingMore,
+    error: loadError,
+    hasMore,
+    loadMore,
+    reload,
+  } = useCachedPages(
+    "knowledge:documents",
+    useCallback(
+      (cursor: string | null) => apiClient().listKnowledgeDocuments({ cursor }),
+      [],
+    ),
+  );
 
   function trackJob(job: IngestJob) {
     setJobs((current) => [
@@ -91,7 +95,7 @@ export default function KnowledgePage() {
       const job = await apiClient().getIngestJob(jobId);
       trackJob(job);
       if (job.status === "done" || job.status === "failed") {
-        await refresh();
+        reload();
         return;
       }
     }
@@ -126,7 +130,7 @@ export default function KnowledgePage() {
     try {
       await apiClient().deleteKnowledgeDocument(document.document_id);
       setError(null);
-      await refresh();
+      reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
@@ -147,19 +151,20 @@ export default function KnowledgePage() {
                 <Upload /> Add document
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => void refresh()}
-            >
+            <Button variant="outline" size="icon" onClick={reload}>
               <RefreshCw />
             </Button>
           </>
         }
       />
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {documents === null && !error && <Skeleton className="h-64 w-full" />}
-      {documents?.length === 0 && (
+      {(error ?? loadError) != null && (
+        <p className="text-sm text-destructive">
+          {error ??
+            (loadError instanceof Error ? loadError.message : "unknown error")}
+        </p>
+      )}
+      {loading && loadError == null && <Skeleton className="h-64 w-full" />}
+      {!loading && documents.length === 0 && (
         <EmptyState
           icon={Library}
           title="No documents yet"
@@ -167,7 +172,7 @@ export default function KnowledgePage() {
         />
       )}
 
-      {documents && documents.length > 0 && (
+      {documents.length > 0 && (
         <Card className="overflow-hidden">
           <CardContent className="pt-5">
             <Table>
@@ -240,6 +245,16 @@ export default function KnowledgePage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+
+      {!loading && documents.length > 0 && (
+        <LoadMore
+          hasMore={hasMore}
+          loading={loadingMore}
+          onLoadMore={loadMore}
+          shown={documents.length}
+          noun="documents"
+        />
       )}
 
       {jobs.length > 0 && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { BadgeCheck, CircleX, ClipboardCheck, RefreshCw } from "lucide-react";
 import type { Approval } from "@dw/contracts";
 import {
@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@dw/ui";
 import { EmptyState } from "../../components/empty-state";
+import { LoadMore } from "../../components/load-more";
 import { PageHeading } from "../../components/page-heading";
 import {
   ToolApprovalPayload,
@@ -30,6 +31,7 @@ import { approvalClient } from "../../lib/approvals/registry";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
 import { apiClient } from "../../lib/session";
+import { useCachedPages } from "../../lib/use-cached-pages";
 
 const STATUS_BADGE: Record<
   Approval["status"],
@@ -46,24 +48,26 @@ const STATUS_BADGE: Record<
 
 export default function ApprovalsPage() {
   const { hasScope } = useAuth();
-  const [approvals, setApprovals] = useState<Approval[] | null>(null);
   const [comments, setComments] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canDecide = hasScope("approvals.decide");
 
-  const refresh = useCallback(async () => {
-    try {
-      setApprovals((await apiClient().listApprovals()).items);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "unknown error");
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const {
+    items: approvals,
+    loading,
+    loadingMore,
+    error: loadError,
+    hasMore,
+    loadMore,
+    reload,
+  } = useCachedPages(
+    "approvals:pending",
+    useCallback(
+      (cursor: string | null) => apiClient().listApprovals({ cursor }),
+      [],
+    ),
+  );
 
   /** A strict approval type refuses a blank comment server-side; say so here. */
   function missingComment(approval: Approval): boolean {
@@ -82,7 +86,7 @@ export default function ApprovalsPage() {
       });
       setComments((current) => ({ ...current, [approval.id]: "" }));
       setError(null);
-      await refresh();
+      reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "unknown error");
     } finally {
@@ -90,8 +94,8 @@ export default function ApprovalsPage() {
     }
   }
 
-  const pending = approvals?.filter((item) => item.status === "pending") ?? [];
-  const decided = approvals?.filter((item) => item.status !== "pending") ?? [];
+  const pending = approvals.filter((item) => item.status === "pending");
+  const decided = approvals.filter((item) => item.status !== "pending");
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -100,14 +104,19 @@ export default function ApprovalsPage() {
         title="Approvals"
         description="A run that asks to change something outside this system pauses here until a person decides. Nothing on this page has happened yet."
         actions={
-          <Button variant="outline" size="icon" onClick={() => void refresh()}>
+          <Button variant="outline" size="icon" onClick={reload}>
             <RefreshCw />
           </Button>
         }
       />
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {approvals === null && !error && <Skeleton className="h-64 w-full" />}
-      {approvals !== null && pending.length === 0 && (
+      {(error ?? loadError) != null && (
+        <p className="text-sm text-destructive">
+          {error ??
+            (loadError instanceof Error ? loadError.message : "unknown error")}
+        </p>
+      )}
+      {loading && loadError == null && <Skeleton className="h-64 w-full" />}
+      {!loading && pending.length === 0 && (
         <EmptyState
           icon={ClipboardCheck}
           title="Nothing waiting for a decision"
@@ -233,6 +242,16 @@ export default function ApprovalsPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+
+      {!loading && pending.length > 0 && (
+        <LoadMore
+          hasMore={hasMore}
+          loading={loadingMore}
+          onLoadMore={loadMore}
+          shown={approvals.length}
+          noun="requests"
+        />
       )}
     </div>
   );

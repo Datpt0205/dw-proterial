@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import { BrainCircuit } from "lucide-react";
-import type { MemoryItem } from "@dw/contracts";
 import { Badge, Card, Skeleton } from "@dw/ui";
 import { EmptyState } from "../../components/empty-state";
+import { LoadMore } from "../../components/load-more";
 import { PageHeading } from "../../components/page-heading";
 import { apiClient } from "../../lib/session";
+import { useCachedPages } from "../../lib/use-cached-pages";
 
 const TYPE_LABELS: Record<string, string> = {
   episodic: "Episode",
@@ -17,17 +18,14 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function MemoryPage() {
-  const [items, setItems] = useState<MemoryItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiClient()
-      .listMemoryItems()
-      .then((page) => setItems(page.items))
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : "unknown error"),
-      );
-  }, []);
+  const { items, loading, loadingMore, error, hasMore, loadMore } =
+    useCachedPages(
+      "memory:items",
+      useCallback(
+        (cursor: string | null) => apiClient().listMemoryItems({ cursor }),
+        [],
+      ),
+    );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -36,9 +34,13 @@ export default function MemoryPage() {
         title="Long-term memory"
         description="Only information with clear evidence that meets policy is stored long-term."
       />
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {items === null && !error && <Skeleton className="h-56 rounded-2xl" />}
-      {items?.length === 0 && (
+      {error != null && (
+        <p className="text-sm text-red-600">
+          {error instanceof Error ? error.message : "unknown error"}
+        </p>
+      )}
+      {loading && error == null && <Skeleton className="h-56 rounded-2xl" />}
+      {!loading && items.length === 0 && (
         <EmptyState
           icon={BrainCircuit}
           title="No long-term memories yet"
@@ -46,7 +48,7 @@ export default function MemoryPage() {
         />
       )}
       <div className="space-y-2">
-        {items?.map((item) => (
+        {items.map((item) => (
           <Card key={item.memory_id} className="p-4 text-sm">
             <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
               <Badge variant="secondary">
@@ -64,6 +66,16 @@ export default function MemoryPage() {
           </Card>
         ))}
       </div>
+
+      {!loading && items.length > 0 && (
+        <LoadMore
+          hasMore={hasMore}
+          loading={loadingMore}
+          onLoadMore={loadMore}
+          shown={items.length}
+          noun="memories"
+        />
+      )}
     </div>
   );
 }

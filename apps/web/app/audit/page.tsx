@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { RefreshCw, ScrollText } from "lucide-react";
-import type { AuditEvent } from "@dw/contracts";
 import {
   Badge,
   Button,
@@ -17,10 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from "@dw/ui";
+import { LoadMore } from "../../components/load-more";
 import { PageHeading } from "../../components/page-heading";
 import { formatDateTime } from "../../lib/dates";
 import { memberName, useWorkspaceMembers } from "../../lib/directory";
 import { apiClient } from "../../lib/session";
+import { useCachedPages } from "../../lib/use-cached-pages";
 
 const ACTION_VARIANTS: Record<
   string,
@@ -47,24 +48,18 @@ const ACTION_LABELS: Record<string, string> = {
 
 export default function AuditPage() {
   const members = useWorkspaceMembers();
-  const [events, setEvents] = useState<AuditEvent[] | null>(null);
   const [filter, setFilter] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      setEvents((await apiClient().listAuditEvents({ limit: 200 })).items);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "unknown error");
-    }
-  }, []);
+  const { items, loading, loadingMore, error, hasMore, loadMore, reload } =
+    useCachedPages(
+      "audit:events",
+      useCallback(
+        (cursor: string | null) => apiClient().listAuditEvents({ cursor }),
+        [],
+      ),
+    );
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  const visible = events?.filter(
+  const visible = items.filter(
     (event) =>
       !filter ||
       event.action.includes(filter) ||
@@ -89,23 +84,23 @@ export default function AuditPage() {
               onChange={(event) => setFilter(event.target.value)}
               placeholder="Search actions or records…"
             />
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => void refresh()}
-            >
+            <Button variant="outline" size="icon" onClick={reload}>
               <RefreshCw />
             </Button>
           </>
         }
       />
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {events === null && !error && <Skeleton className="h-64 w-full" />}
-      {visible?.length === 0 && (
+      {error != null && (
+        <p className="text-sm text-destructive">
+          {error instanceof Error ? error.message : "unknown error"}
+        </p>
+      )}
+      {loading && error == null && <Skeleton className="h-64 w-full" />}
+      {!loading && visible.length === 0 && (
         <p className="text-sm text-muted-foreground">No matching events.</p>
       )}
 
-      {visible && visible.length > 0 && (
+      {visible.length > 0 && (
         <Card className="overflow-hidden">
           <CardContent className="pt-5">
             <Table>
@@ -162,6 +157,17 @@ export default function AuditPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+
+      {!loading && (
+        <LoadMore
+          hasMore={hasMore}
+          loading={loadingMore}
+          onLoadMore={loadMore}
+          shown={items.length}
+          noun="events"
+          filtered={filter.length > 0}
+        />
       )}
     </div>
   );
