@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_agent_runtime.adapters.runtime_tables import worker_runs
-from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.contracts import RunContext, WorkerDefinition
 from dw_kernel.errors import ConflictError, NotFoundError
 
 # Migration 0015. Matched by name so an unrelated constraint violation stays a
@@ -73,6 +73,12 @@ class RunRecord:
     worker_id: str
     worker_version: str
     graph_version: str
+    # None only for a run started before migration 0005, which recorded no
+    # artifact versions beyond the graph's. Every run since carries all four.
+    prompt_bundle_version: str | None
+    toolset_version: str | None
+    policy_version: str | None
+    memory_policy_version: str | None
     input: dict[str, Any]
     result: dict[str, Any] | None
     error: dict[str, Any] | None
@@ -133,7 +139,7 @@ class SqlWorkerRunStore:
         self,
         run_context: RunContext,
         *,
-        graph_version: str,
+        worker: WorkerDefinition,
         input_payload: dict[str, Any],
         release_manifest_ref: str | None = None,
     ) -> None:
@@ -142,11 +148,17 @@ class SqlWorkerRunStore:
         The claim is the insert: `uq_worker_runs_active_thread` lets exactly one
         unfinished run exist per thread, so two concurrent turns cannot both
         believe they won.
+
+        Takes the whole worker definition rather than a graph version and four
+        more strings beside it. The row has to carry every artifact version the
+        run was pinned to, and passing them one by one is how the row comes to
+        disagree with the worker: five arguments are five chances to pass last
+        week's value, and an argument nobody passes is a NULL nobody notices.
         """
         try:
             await self._insert(
                 run_context,
-                graph_version=graph_version,
+                worker=worker,
                 input_payload=input_payload,
                 release_manifest_ref=release_manifest_ref,
             )
@@ -173,7 +185,7 @@ class SqlWorkerRunStore:
             if await self._reap_stale_thread(run_context.tenant_id, thread_id):
                 await self._insert(
                     run_context,
-                    graph_version=graph_version,
+                    worker=worker,
                     input_payload=input_payload,
                     release_manifest_ref=release_manifest_ref,
                 )
@@ -304,7 +316,7 @@ class SqlWorkerRunStore:
         self,
         run_context: RunContext,
         *,
-        graph_version: str,
+        worker: WorkerDefinition,
         input_payload: dict[str, Any],
         release_manifest_ref: str | None,
     ) -> None:
@@ -317,7 +329,14 @@ class SqlWorkerRunStore:
                 workspace_id=run_context.workspace_id,
                 worker_id=run_context.worker_id,
                 worker_version=run_context.worker_version,
-                graph_version=graph_version,
+                graph_version=worker.graph_version,
+                # Every artifact version the run is pinned to, on the row that
+                # produced the result. The trace carries them too, but a trace is
+                # sampled and expires; this is the system of record.
+                prompt_bundle_version=worker.prompt_bundle_version,
+                toolset_version=worker.toolset_version,
+                policy_version=worker.policy_version,
+                memory_policy_version=worker.memory_policy_version,
                 status=RunStatus.RUNNING.value,
                 input=input_payload,
                 requested_by=run_context.actor_id,
@@ -377,6 +396,10 @@ class SqlWorkerRunStore:
             worker_id=row.worker_id,
             worker_version=row.worker_version,
             graph_version=row.graph_version,
+            prompt_bundle_version=row.prompt_bundle_version,
+            toolset_version=row.toolset_version,
+            policy_version=row.policy_version,
+            memory_policy_version=row.memory_policy_version,
             input=dict(row.input),
             result=dict(row.result) if row.result is not None else None,
             error=dict(row.error) if row.error is not None else None,

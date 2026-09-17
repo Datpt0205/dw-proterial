@@ -26,7 +26,12 @@ from dw_agent_runtime.adapters.run_store import RunStatus, SqlWorkerRunStore
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
-from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML, DemoState, build_demo_graph
+from dw_agent_runtime.testing.demo_graph import (
+    DEMO_WORKER,
+    DEMO_WORKER_YAML,
+    DemoState,
+    build_demo_graph,
+)
 from dw_kernel.errors import ConflictError
 from dw_kernel.pagination import PageQuery, PageRequest
 from dw_kernel.ports import SystemClock, Uuid4Generator
@@ -307,12 +312,12 @@ async def test_a_thread_stranded_by_a_hard_kill_is_freed_by_the_next_turn(
     stack = RunnerStack(urls.app, worker_config, build_demo_graph)
     thread = uuid.uuid4()
     killed = make_run_context(thread_id=thread)
-    await stack.run_store.create(killed, graph_version="1.0.0", input_payload={"subject": "x"})
+    await stack.run_store.create(killed, worker=DEMO_WORKER, input_payload={"subject": "x"})
     await _age_run(stack, killed, STALE_AFTER_SECONDS_LOCAL + 60)
 
     # Same thread, a person trying again.
     nxt = make_run_context(thread_id=thread)
-    await stack.run_store.create(nxt, graph_version="1.0.0", input_payload={"subject": "y"})
+    await stack.run_store.create(nxt, worker=DEMO_WORKER, input_payload={"subject": "y"})
 
     assert (await stack.run_store.get(nxt, nxt.run_id)).status is RunStatus.RUNNING
     reaped = await stack.run_store.get(killed, killed.run_id)
@@ -334,12 +339,12 @@ async def test_a_run_that_is_merely_slow_is_not_reaped(
     stack = RunnerStack(urls.app, worker_config, build_demo_graph)
     thread = uuid.uuid4()
     busy = make_run_context(thread_id=thread)
-    await stack.run_store.create(busy, graph_version="1.0.0", input_payload={"subject": "x"})
+    await stack.run_store.create(busy, worker=DEMO_WORKER, input_payload={"subject": "x"})
     await _age_run(stack, busy, STALE_AFTER_SECONDS_LOCAL - 60)
 
     nxt = make_run_context(thread_id=thread)
     with pytest.raises(ConflictError, match="already has a turn in flight"):
-        await stack.run_store.create(nxt, graph_version="1.0.0", input_payload={"subject": "y"})
+        await stack.run_store.create(nxt, worker=DEMO_WORKER, input_payload={"subject": "y"})
 
     assert (await stack.run_store.get(busy, busy.run_id)).status is RunStatus.RUNNING
     await stack.dispose()
@@ -358,13 +363,13 @@ async def test_a_thread_waiting_for_approval_is_never_reaped(
     stack = RunnerStack(urls.app, worker_config, build_demo_graph)
     thread = uuid.uuid4()
     parked = make_run_context(thread_id=thread)
-    await stack.run_store.create(parked, graph_version="1.0.0", input_payload={"subject": "x"})
+    await stack.run_store.create(parked, worker=DEMO_WORKER, input_payload={"subject": "x"})
     await stack.run_store.set_status(parked, parked.run_id, RunStatus.WAITING_APPROVAL)
     await _age_run(stack, parked, STALE_AFTER_SECONDS_LOCAL * 10)
 
     nxt = make_run_context(thread_id=thread)
     with pytest.raises(ConflictError):
-        await stack.run_store.create(nxt, graph_version="1.0.0", input_payload={"subject": "y"})
+        await stack.run_store.create(nxt, worker=DEMO_WORKER, input_payload={"subject": "y"})
 
     assert (await stack.run_store.get(parked, parked.run_id)).status is RunStatus.WAITING_APPROVAL
     await stack.dispose()

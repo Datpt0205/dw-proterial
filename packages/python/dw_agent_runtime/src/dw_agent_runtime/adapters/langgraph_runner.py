@@ -257,7 +257,7 @@ class LangGraphWorkflowRunner:
 
         await self.run_store.create(
             run_context,
-            graph_version=worker.definition.graph_version,
+            worker=worker.definition,
             input_payload=input_payload,
             release_manifest_ref=self.release_manifest_ref,
         )
@@ -311,7 +311,7 @@ class LangGraphWorkflowRunner:
 
         await self.run_store.create(
             run_context,
-            graph_version=worker.definition.graph_version,
+            worker=worker.definition,
             input_payload=input_payload,
             release_manifest_ref=self.release_manifest_ref,
         )

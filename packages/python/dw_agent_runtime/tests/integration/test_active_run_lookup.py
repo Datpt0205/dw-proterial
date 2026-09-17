@@ -22,6 +22,7 @@ from sqlalchemy.pool import NullPool
 
 from dw_agent_runtime.adapters.run_store import RunStatus, SqlWorkerRunStore
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.testing.demo_graph import DEMO_WORKER
 
 # The shipped threshold (`configs/policies/worker_runs@1.0.0.yaml`). Stated
 # rather than loaded: these tests never age a row, so the number only has
@@ -70,7 +71,7 @@ async def test_a_run_still_going_reports_the_moment_it_started(
 ) -> None:
     lead = str(uuid.uuid4())
     context = make_run_context()
-    await store.create(_about(context, lead), graph_version="1.0.0", input_payload={})
+    await store.create(_about(context, lead), worker=DEMO_WORKER, input_payload={})
 
     since = await _ask(store, context.tenant_id, lead)
 
@@ -83,7 +84,7 @@ async def test_a_settled_run_stops_being_reported(store: SqlWorkerRunStore) -> N
     """The whole contract: the spinner has to end when the work does."""
     lead = str(uuid.uuid4())
     context = make_run_context()
-    await store.create(_about(context, lead), graph_version="1.0.0", input_payload={})
+    await store.create(_about(context, lead), worker=DEMO_WORKER, input_payload={})
     assert await _ask(store, context.tenant_id, lead) is not None
 
     await store.set_status(context, context.run_id, status=RunStatus.COMPLETED)
@@ -96,7 +97,7 @@ async def test_a_failed_run_also_stops_being_reported(store: SqlWorkerRunStore) 
     spinning for ever over a run that died a minute ago."""
     lead = str(uuid.uuid4())
     context = make_run_context()
-    await store.create(_about(context, lead), graph_version="1.0.0", input_payload={})
+    await store.create(_about(context, lead), worker=DEMO_WORKER, input_payload={})
 
     await store.set_status(context, context.run_id, status=RunStatus.FAILED)
 
@@ -106,7 +107,7 @@ async def test_a_failed_run_also_stops_being_reported(store: SqlWorkerRunStore) 
 async def test_a_run_on_another_lead_is_not_this_lead(store: SqlWorkerRunStore) -> None:
     mine, theirs = str(uuid.uuid4()), str(uuid.uuid4())
     context = make_run_context()
-    await store.create(_about(context, theirs), graph_version="1.0.0", input_payload={})
+    await store.create(_about(context, theirs), worker=DEMO_WORKER, input_payload={})
 
     assert await _ask(store, context.tenant_id, mine) is None
 
@@ -115,7 +116,7 @@ async def test_another_tenants_run_is_invisible(store: SqlWorkerRunStore) -> Non
     """RLS, not a WHERE clause the caller could forget."""
     lead = str(uuid.uuid4())
     context = make_run_context(tenant=TENANT_B, workspace=WORKSPACE_B)
-    await store.create(_about(context, lead), graph_version="1.0.0", input_payload={})
+    await store.create(_about(context, lead), worker=DEMO_WORKER, input_payload={})
 
     mine = make_run_context()
     assert await _ask(store, mine.tenant_id, lead) is None
@@ -129,9 +130,9 @@ async def test_the_oldest_of_several_runs_is_the_one_reported(
     first one is when the work on screen actually began."""
     lead = str(uuid.uuid4())
     first = make_run_context()
-    await store.create(_about(first, lead), graph_version="1.0.0", input_payload={})
+    await store.create(_about(first, lead), worker=DEMO_WORKER, input_payload={})
     second = make_run_context()
-    await store.create(_about(second, lead), graph_version="1.0.0", input_payload={})
+    await store.create(_about(second, lead), worker=DEMO_WORKER, input_payload={})
 
     since = await _ask(store, first.tenant_id, lead)
 
@@ -146,6 +147,6 @@ async def test_a_run_of_a_different_worker_does_not_count(
     """Two workers can hold the same id in their input and mean different work."""
     lead = str(uuid.uuid4())
     context = make_run_context()
-    await store.create(_about(context, lead), graph_version="1.0.0", input_payload={})
+    await store.create(_about(context, lead), worker=DEMO_WORKER, input_payload={})
 
     assert await _ask(store, context.tenant_id, lead, worker=OTHER_WORKER) is None

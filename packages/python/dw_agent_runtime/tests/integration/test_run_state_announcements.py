@@ -30,6 +30,7 @@ from dw_agent_runtime.adapters.run_store import (
     SqlWorkerRunStore,
 )
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.testing.demo_graph import DEMO_WORKER
 
 # The shipped threshold (`configs/policies/worker_runs@1.0.0.yaml`). Stated
 # rather than loaded: these tests never age a row, so the number only has
@@ -93,7 +94,7 @@ async def test_starting_a_run_is_announced_to_another_connection(
     subject = str(uuid.uuid4())
     context = _about(make_run_context(), subject)
 
-    await store.create(context, graph_version="1.0.0", input_payload={})
+    await store.create(context, worker=DEMO_WORKER, input_payload={})
 
     assert await _next(heard) == {
         "tenant": str(context.tenant_id),
@@ -110,7 +111,7 @@ async def test_settling_a_run_is_announced_with_its_new_status(
     """The event the waiting page is actually waiting for."""
     subject = str(uuid.uuid4())
     context = _about(make_run_context(), subject)
-    await store.create(context, graph_version="1.0.0", input_payload={})
+    await store.create(context, worker=DEMO_WORKER, input_payload={})
     await _next(heard)
 
     await store.set_status(context, context.run_id, status=RunStatus.COMPLETED)
@@ -125,7 +126,7 @@ async def test_a_failed_run_is_announced_too(
 ) -> None:
     """A page told only about success spins for ever over a run that died."""
     context = _about(make_run_context(), str(uuid.uuid4()))
-    await store.create(context, graph_version="1.0.0", input_payload={})
+    await store.create(context, worker=DEMO_WORKER, input_payload={})
     await _next(heard)
 
     await store.set_status(context, context.run_id, status=RunStatus.FAILED)

@@ -25,6 +25,12 @@ worker_runs = sa.Table(
     sa.Column("error", JSONB, nullable=True),
     sa.Column("approval_request_id", UUID(as_uuid=True), nullable=True),
     sa.Column("release_manifest_ref", sa.Text, nullable=True),
+    # Migration 0005. Nullable only because runs started before it have no
+    # record of these; every run since carries all four.
+    sa.Column("prompt_bundle_version", sa.String(16), nullable=True),
+    sa.Column("toolset_version", sa.String(16), nullable=True),
+    sa.Column("policy_version", sa.String(16), nullable=True),
+    sa.Column("memory_policy_version", sa.String(16), nullable=True),
     sa.Column("requested_by", UUID(as_uuid=True), nullable=False),
     sa.Column("actor_roles", sa.ARRAY(sa.Text), nullable=False, server_default=sa.text("'{}'")),
     sa.Column("actor_scopes", sa.ARRAY(sa.Text), nullable=False, server_default=sa.text("'{}'")),

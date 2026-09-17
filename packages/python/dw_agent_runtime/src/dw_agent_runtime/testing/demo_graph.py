@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+import yaml
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
+
+from dw_agent_runtime.contracts import WorkerDefinition
 
 
 class DemoState(TypedDict, total=False):
@@ -73,3 +76,15 @@ default_model_profile: balanced
 supported_channels: [web]
 autonomy_level: A2
 """
+
+
+# The same definition the YAML above parses to, for tests that need a worker
+# without writing a file first. Parsed rather than retyped: two declarations of
+# one worker is two workers the moment somebody edits one of them.
+DEMO_WORKER: WorkerDefinition = WorkerDefinition.model_validate(
+    {
+        key: value
+        for key, value in yaml.safe_load(DEMO_WORKER_YAML).items()
+        if key != "schema_version"
+    }
+)
