@@ -8,6 +8,7 @@ their own tenant. Reads and writes are scoped by RLS underneath.
 from __future__ import annotations
 
 import logging
+from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Response
@@ -15,6 +16,7 @@ from pydantic import BaseModel
 
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
+from dw_kernel.autonomy import AutonomyLevel
 from dw_kernel.errors import InfrastructureError
 from dw_platform.application.admin_console import (
     AdminConsoleService,
@@ -78,6 +80,7 @@ class TenantSettingsView(BaseModel):
     record_visibility: str
     timezone: str | None
     locale: str | None
+    max_autonomy_level: AutonomyLevel
 
 
 class UpdateTenantBody(BaseModel):
@@ -85,6 +88,10 @@ class UpdateTenantBody(BaseModel):
     timezone: str | None = None
     locale: str | None = None
     record_visibility: str | None = None
+    # The most autonomy any of this tenant's workers may run at. It lowers a
+    # worker's declared level and never raises it. Typed as the kernel's level
+    # set, so an unknown value is a 422 here and never reaches the service.
+    max_autonomy_level: AutonomyLevel | None = None
 
 
 class HierarchyMemberView(BaseModel):
@@ -249,10 +256,11 @@ async def update_tenant(
             timezone=payload.timezone,
             locale=payload.locale,
             record_visibility=payload.record_visibility,
+            max_autonomy_level=payload.max_autonomy_level,
         ),
     )
-    # record_visibility change flips enforcement for the whole tenant → drop its
-    # cached AccessContexts so it takes effect at once.
+    # record_visibility and max_autonomy_level both change what every request in
+    # the tenant may do → drop its cached AccessContexts so it takes effect at once.
     if container.cache is not None:
         await container.cache.delete_pattern(tenant_cache_pattern(context.tenant_id))
     return _tenant_view(settings)
@@ -304,4 +312,5 @@ def _tenant_view(s: TenantSettings) -> TenantSettingsView:
         record_visibility=s.record_visibility,
         timezone=s.timezone,
         locale=s.locale,
+        max_autonomy_level=cast(AutonomyLevel, s.max_autonomy_level),
     )

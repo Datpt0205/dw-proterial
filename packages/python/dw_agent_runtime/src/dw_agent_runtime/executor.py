@@ -18,6 +18,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, ValidationError
 
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.tools import ToolRegistry
@@ -79,6 +80,10 @@ class ToolExecutor:
     uow_factory: PlatformUnitOfWorkFactory
     clock: UtcClock
     id_generator: IdGenerator
+    # The one policy this process decides approvals with. Read by the agent's
+    # tool wrapper and its approval middleware through this executor rather than
+    # held separately, so the three gates cannot disagree about one call.
+    approval_policy: AutonomyApprovalPolicy
     sleep: SleepFn = field(default=asyncio.sleep)
     base_backoff_seconds: float = 0.2
     # One span per tool call, so "how many tools did this run use, and how long
@@ -167,13 +172,19 @@ class ToolExecutor:
                 "run context lacks required tool scopes",
                 details={"tool": name, "missing_scopes": sorted(missing)},
             )
-        if definition.requires_approval() and not approved:
+        if self.approval_policy.decide(definition, run_context) and not approved:
             await self._audit(
                 run_context,
                 "tool.approval_required",
                 definition,
                 input_hash,
                 policy_decision="require_approval",
+                # What made it ask. "Why did this pause" is otherwise a question
+                # only the code can answer, and the code changes.
+                details={
+                    "autonomy_level": run_context.autonomy_level,
+                    "approval_policy_version": run_context.approval_policy_version,
+                },
             )
             raise ApprovalRequiredError(
                 "tool requires human approval before execution",

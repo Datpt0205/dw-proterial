@@ -45,7 +45,7 @@ def test_spec_becomes_a_tool_definition(tmp_path: Path) -> None:
     definition = registry.definition("crm.read_account", "1.0.0")
     assert definition.required_scopes == frozenset({"sales_chat.read"})
     assert definition.side_effect_level == "none"
-    assert not definition.requires_approval()
+    assert not definition.always_requires_approval()
     assert definition.input_schema_ref == "contracts/tools/crm.read_account@1.0.0/input.json"
 
 

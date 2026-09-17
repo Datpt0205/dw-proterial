@@ -19,6 +19,7 @@ import json
 from dataclasses import dataclass
 from uuid import UUID
 
+from dw_kernel.autonomy import FAIL_CLOSED_LEVEL
 from dw_platform.application.cache import CachePort, membership_cache_key
 from dw_platform.application.identity import MembershipAccess, MembershipLookupPort
 
@@ -41,6 +42,7 @@ def _serialize(access: MembershipAccess) -> str:
             "plan_id": access.plan_id,
             "feature_flags": sorted(access.feature_flags),
             "record_visibility": access.record_visibility,
+            "max_autonomy_level": access.max_autonomy_level,
             "visible_owners": (
                 None
                 if access.visible_owners is None
@@ -63,6 +65,11 @@ def _deserialize(raw: str) -> MembershipAccess:
         plan_id=data["plan_id"],
         feature_flags=frozenset(data["feature_flags"]),
         record_visibility=data.get("record_visibility", "open"),
+        # An entry cached before this field existed has no ceiling in it. The
+        # cache outlives a deploy by up to its TTL, so such entries are read for
+        # real after one. The tenant's real ceiling is unknown, not absent: read
+        # it as the most restrictive level, for seconds, rather than as none.
+        max_autonomy_level=data.get("max_autonomy_level", FAIL_CLOSED_LEVEL),
         visible_owners=(
             None
             if data.get("visible_owners") is None

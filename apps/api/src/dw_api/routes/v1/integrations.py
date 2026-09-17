@@ -7,7 +7,7 @@ enforces, so the page can never drift from reality.
 from __future__ import annotations
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
@@ -20,7 +20,17 @@ class IntegrationView(BaseModel):
     description: str
     side_effect_level: str
     approval_policy: str
-    requires_approval: bool
+    # Whether the tool asks for a person at EVERY autonomy level — its two
+    # floors, declared `always` or a `critical` side effect. False does not mean
+    # a call never pauses: that depends on the run's autonomy, which an
+    # inventory has no run to read. Name kept to avoid breaking the contract.
+    requires_approval: bool = Field(
+        description=(
+            "True if this tool always requires approval, at every autonomy level. "
+            "False does not mean it never pauses: whether a given call does "
+            "depends on the run."
+        ),
+    )
     idempotent: bool
     timeout_seconds: int
     required_scopes: list[str]
@@ -46,7 +56,7 @@ async def list_integrations(
             description=definition.description,
             side_effect_level=str(definition.side_effect_level),
             approval_policy=str(definition.approval_policy),
-            requires_approval=definition.requires_approval(),
+            requires_approval=definition.always_requires_approval(),
             idempotent=definition.idempotent,
             timeout_seconds=definition.timeout_seconds,
             required_scopes=sorted(definition.required_scopes),

@@ -22,6 +22,9 @@ tenants = sa.Table(
     sa.Column("name", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False, server_default="active"),
     sa.Column("record_visibility", sa.Text, nullable=False, server_default="open"),
+    # Migration 0006. The ceiling this tenant holds its workers under; see
+    # `dw_kernel.autonomy`. A CHECK constraint in the database rejects any other value.
+    sa.Column("max_autonomy_level", sa.Text, nullable=False, server_default="A4"),
     sa.Column("timezone", sa.Text, nullable=True),
     sa.Column("locale", sa.Text, nullable=True),
     sa.Column(

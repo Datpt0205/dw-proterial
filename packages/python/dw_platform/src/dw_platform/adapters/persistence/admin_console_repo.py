@@ -238,6 +238,7 @@ class SqlAdminConsoleRepository:
                         tables.tenants.c.name,
                         tables.tenants.c.status,
                         tables.tenants.c.record_visibility,
+                        tables.tenants.c.max_autonomy_level,
                         tables.tenants.c.timezone,
                         tables.tenants.c.locale,
                     ).where(tables.tenants.c.id == context.tenant_id)
@@ -259,6 +260,8 @@ class SqlAdminConsoleRepository:
             values["locale"] = command.locale
         if command.record_visibility is not None:
             values["record_visibility"] = command.record_visibility
+        if command.max_autonomy_level is not None:
+            values["max_autonomy_level"] = command.max_autonomy_level
         scope = TenantScope.from_access_context(context)
         async with tenant_session(self.session_factory, scope) as session:
             if values:
@@ -273,6 +276,7 @@ class SqlAdminConsoleRepository:
                             tables.tenants.c.name,
                             tables.tenants.c.status,
                             tables.tenants.c.record_visibility,
+                            tables.tenants.c.max_autonomy_level,
                             tables.tenants.c.timezone,
                             tables.tenants.c.locale,
                         )
@@ -287,6 +291,7 @@ class SqlAdminConsoleRepository:
                             tables.tenants.c.name,
                             tables.tenants.c.status,
                             tables.tenants.c.record_visibility,
+                            tables.tenants.c.max_autonomy_level,
                             tables.tenants.c.timezone,
                             tables.tenants.c.locale,
                         ).where(tables.tenants.c.id == context.tenant_id)
@@ -308,4 +313,5 @@ def _to_settings(row: sa.Row) -> TenantSettings:  # type: ignore[type-arg]
         record_visibility=row.record_visibility,
         timezone=row.timezone,
         locale=row.locale,
+        max_autonomy_level=row.max_autonomy_level,
     )

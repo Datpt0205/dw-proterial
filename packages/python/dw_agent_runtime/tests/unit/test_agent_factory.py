@@ -32,6 +32,7 @@ from test_langchain_tools import COPY, LeadInput, LeadOutput, make_definition, m
 from dw_agent_runtime.adapters.agent_factory import AgentSpec, build_agent, platform_middleware
 from dw_agent_runtime.adapters.chat_model import MockChatModel
 from dw_agent_runtime.adapters.langchain_tools import platform_tools
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
 from dw_agent_runtime.model.budget import BudgetExceededError, RunBudgetLedger
@@ -99,6 +100,7 @@ def _registry() -> tuple[ToolRegistry, ToolExecutor]:
         uow_factory=FakeUoWFactory(),
         clock=FixedClock(NOW),
         id_generator=SequentialIdGenerator(),
+        approval_policy=AutonomyApprovalPolicy(),
     )
     return registry, executor
 

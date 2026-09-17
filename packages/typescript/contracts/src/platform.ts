@@ -149,6 +149,12 @@ export type AdminWorkspace = z.infer<typeof adminWorkspaceSchema>;
 
 // The caller's tenant, as the settings form reads and writes it. `slug` and
 // `status` are read-only here; only name/timezone/locale are editable.
+// The autonomy levels a Digital Worker runs at, lowest to highest. Mirrors
+// `dw_kernel.autonomy.AUTONOMY_LEVELS` across the API boundary; the order is the
+// meaning, and a later level may do everything an earlier one may.
+export const autonomyLevelSchema = z.enum(["A0", "A1", "A2", "A3", "A4"]);
+export type AutonomyLevel = z.infer<typeof autonomyLevelSchema>;
+
 export const adminTenantSchema = z.object({
   tenant_id: z.string(),
   slug: z.string(),
@@ -160,6 +166,9 @@ export const adminTenantSchema = z.object({
   // workspace sees everything) or "restricted" (a manager sees only their own
   // team's records, following the reporting hierarchy).
   record_visibility: z.string(),
+  // The most autonomy any of this tenant's workers may run at. It lowers a
+  // worker's own level and never raises it.
+  max_autonomy_level: autonomyLevelSchema,
 });
 export type AdminTenant = z.infer<typeof adminTenantSchema>;
 

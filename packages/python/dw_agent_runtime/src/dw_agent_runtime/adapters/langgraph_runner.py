@@ -31,6 +31,7 @@ from dw_agent_runtime.adapters.run_store import (
     RunStatus,
     SqlWorkerRunStore,
 )
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy, lower_autonomy
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
 from dw_agent_runtime.model.budget import RunBudgetLedger
@@ -108,6 +109,10 @@ class LangGraphWorkflowRunner:
     # Required rather than defaulted: a default would be a second ledger, and the
     # runner would free entries in one while spend accumulated in the other.
     budget: RunBudgetLedger
+    # Whose version is stamped on every run. The SAME instance the executor and
+    # the agent's middleware decide with, so the stamp names the rules that
+    # were actually applied.
+    approval_policy: AutonomyApprovalPolicy
     store: BaseStore | None = None
     release_manifest_ref: str | None = None
     telemetry: TelemetryPort = field(default_factory=NullTelemetry)
@@ -209,6 +214,25 @@ class LangGraphWorkflowRunner:
         ) as callbacks:
             yield list(callbacks)
 
+    def _with_autonomy(self, run_context: RunContext, worker: WorkerDefinition) -> RunContext:
+        """Resolve the level this run runs at — once, here, where the run begins.
+
+        The lower of what the worker was built for and what its tenant allows. A
+        tenant can hold a worker below its design and never lift it above.
+
+        Only at start. `resume` does not come through here: a paused run carries
+        the level it started with, replayed from its row by the approval flow, so
+        a ceiling lowered while it waited does not rewrite what it was allowed.
+        """
+        return run_context.model_copy(
+            update={
+                "autonomy_level": lower_autonomy(
+                    worker.autonomy_level, run_context.autonomy_ceiling
+                ),
+                "approval_policy_version": self.approval_policy.policy_version,
+            }
+        )
+
     async def _require_run_allowance(self, run_context: RunContext) -> None:
         """Refuse a run the tenant's plan has no allowance left for today.
 
@@ -257,6 +281,7 @@ class LangGraphWorkflowRunner:
         input_payload: dict[str, Any],
     ) -> uuid.UUID:
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
+        run_context = self._with_autonomy(run_context, worker.definition)
         await self._require_run_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)
 
@@ -311,6 +336,7 @@ class LangGraphWorkflowRunner:
         Use ``drain`` to wait for runs whose reader left before shutting down.
         """
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
+        run_context = self._with_autonomy(run_context, worker.definition)
         await self._require_run_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)
 

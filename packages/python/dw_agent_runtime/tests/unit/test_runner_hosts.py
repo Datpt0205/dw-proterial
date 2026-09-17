@@ -11,6 +11,7 @@ from typing import Any, cast
 import pytest
 
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML
@@ -42,6 +43,7 @@ def runner(tmp_path: Path) -> LangGraphWorkflowRunner:
         id_generator=cast(Any, None),
         allowance=cast(Any, None),
         budget=RunBudgetLedger(),
+        approval_policy=AutonomyApprovalPolicy(),
     )
 
 

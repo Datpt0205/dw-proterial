@@ -19,6 +19,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
+from dw_kernel.autonomy import is_autonomy_level
 from dw_kernel.errors import DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -93,6 +94,7 @@ class TenantSettings:
     record_visibility: str
     timezone: str | None
     locale: str | None
+    max_autonomy_level: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +122,7 @@ class UpdateTenantSettings:
     timezone: str | None = None
     locale: str | None = None
     record_visibility: str | None = None
+    max_autonomy_level: str | None = None
 
 
 class AdminConsoleRepositoryPort(Protocol):
@@ -344,11 +347,22 @@ class AdminConsoleService:
                 "record_visibility must be 'open' or 'restricted'",
                 details={"record_visibility": command.record_visibility},
             )
+        # The HTTP boundary already refuses anything else, and the database has a
+        # CHECK constraint behind this. Checked here too because this service has
+        # callers that are not that route.
+        if command.max_autonomy_level is not None and not is_autonomy_level(
+            command.max_autonomy_level
+        ):
+            raise DomainError(
+                "max_autonomy_level must be one of A0, A1, A2, A3, A4",
+                details={"max_autonomy_level": command.max_autonomy_level},
+            )
         normalised = UpdateTenantSettings(
             name=name,
             timezone=command.timezone,
             locale=command.locale,
             record_visibility=command.record_visibility,
+            max_autonomy_level=command.max_autonomy_level,
         )
         settings = await self.repo.update_tenant_settings(
             context,
@@ -365,6 +379,9 @@ class AdminConsoleService:
                         "name": name,
                         "timezone": command.timezone,
                         "locale": command.locale,
+                        # How much a tenant lets its workers do unasked is exactly
+                        # the kind of change an audit trail exists to answer for.
+                        "max_autonomy_level": command.max_autonomy_level,
                     }.items()
                     if v is not None
                 },

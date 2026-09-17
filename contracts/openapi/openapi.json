@@ -916,6 +916,7 @@
             "type": "array"
           },
           "requires_approval": {
+            "description": "True if this tool always requires approval, at every autonomy level. False does not mean it never pauses: whether a given call does depends on the run.",
             "title": "Requires Approval",
             "type": "boolean"
           },
@@ -1616,6 +1617,17 @@
             ],
             "title": "Locale"
           },
+          "max_autonomy_level": {
+            "enum": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ],
+            "title": "Max Autonomy Level",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1656,7 +1668,8 @@
           "status",
           "record_visibility",
           "timezone",
-          "locale"
+          "locale",
+          "max_autonomy_level"
         ],
         "title": "TenantSettingsView",
         "type": "object"
@@ -1800,6 +1813,24 @@
               }
             ],
             "title": "Locale"
+          },
+          "max_autonomy_level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A0",
+                  "A1",
+                  "A2",
+                  "A3",
+                  "A4"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Autonomy Level"
           },
           "name": {
             "anyOf": [

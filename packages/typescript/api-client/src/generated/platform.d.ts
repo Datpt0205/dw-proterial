@@ -1101,7 +1101,10 @@ export interface components {
             idempotent: boolean;
             /** Required Scopes */
             required_scopes: string[];
-            /** Requires Approval */
+            /**
+             * Requires Approval
+             * @description True if this tool always requires approval, at every autonomy level. False does not mean it never pauses: whether a given call does depends on the run.
+             */
             requires_approval: boolean;
             /** Side Effect Level */
             side_effect_level: string;
@@ -1394,6 +1397,11 @@ export interface components {
         TenantSettingsView: {
             /** Locale */
             locale: string | null;
+            /**
+             * Max Autonomy Level
+             * @enum {string}
+             */
+            max_autonomy_level: "A0" | "A1" | "A2" | "A3" | "A4";
             /** Name */
             name: string;
             /** Record Visibility */
@@ -1468,6 +1476,8 @@ export interface components {
         UpdateTenantBody: {
             /** Locale */
             locale?: string | null;
+            /** Max Autonomy Level */
+            max_autonomy_level?: ("A0" | "A1" | "A2" | "A3" | "A4") | null;
             /** Name */
             name?: string | null;
             /** Record Visibility */

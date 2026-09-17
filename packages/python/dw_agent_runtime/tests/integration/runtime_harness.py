@@ -81,4 +81,10 @@ def make_run_context(
         roles=frozenset({"member"}),
         scopes=scopes,
         trace_id=f"trace-{uuid.uuid4().hex[:8]}",
+        # No tenant ceiling, and A4 for a context used without the runner — the
+        # old tool-only approval rule these tests were written against. A run
+        # started through the runner has its level re-resolved there, from the
+        # worker, so this does not decide what those runs are allowed.
+        autonomy_ceiling="A4",
+        autonomy_level="A4",
     )

@@ -39,6 +39,7 @@ from langgraph.runtime import get_runtime
 from langgraph.types import Command, interrupt
 from pydantic import BaseModel
 
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor, canonical_hash
 from dw_agent_runtime.model.copy import RuntimeCopy
@@ -214,18 +215,25 @@ class OneApprovalPerStepMiddleware(AgentMiddleware):
     what the model must do.
     """
 
-    def __init__(self, definitions: Sequence[ToolDefinition], *, copy: RuntimeCopy) -> None:
+    def __init__(
+        self,
+        definitions: Sequence[ToolDefinition],
+        *,
+        copy: RuntimeCopy,
+        policy: AutonomyApprovalPolicy,
+    ) -> None:
         super().__init__()
         if copy.approval_deferred_template is None:
             raise ConfigError(
                 f"runtime copy {copy.version} has no approval_deferred_template; "
                 "load runtime@1.3.0 or later"
             )
-        self._gated = {
-            model_facing_name(definition.name): definition.name
-            for definition in definitions
-            if definition.requires_approval()
-        }
+        # Every offered tool, not only the gated ones: which are gated is no longer
+        # a property of the tool. This middleware used to compute that set here,
+        # once, when the agent was built — and an agent is compiled once per
+        # process, so one frozen set was served to every tenant at every level.
+        self._offered = {model_facing_name(d.name): d for d in definitions}
+        self._policy = policy
         self._copy = copy
 
     async def awrap_tool_call(
@@ -233,15 +241,23 @@ class OneApprovalPerStepMiddleware(AgentMiddleware):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
     ) -> ToolMessage | Command[Any]:
+        # Decided for THIS run, every call. The same tool is gated for an A1 run and
+        # free for an A3 one in the same process.
+        run_context = get_runtime(RunContext).context
+        gated = {
+            exposed_name: definition.name
+            for exposed_name, definition in self._offered.items()
+            if self._policy.decide(definition, run_context)
+        }
         exposed = request.tool_call["name"]
-        if exposed not in self._gated:
+        if exposed not in gated:
             return await handler(request)
         call_id = request.tool_call["id"]
-        first = _first_gated_call(request.state, call_id, self._gated)
+        first = _first_gated_call(request.state, call_id, gated)
         if first is None or first["id"] == call_id:
             return await handler(request)
         return ToolMessage(
-            content=self._copy.approval_deferred(self._gated[exposed], self._gated[first["name"]]),
+            content=self._copy.approval_deferred(gated[exposed], gated[first["name"]]),
             tool_call_id=call_id,
             name=exposed,
         )
@@ -454,7 +470,7 @@ def _build_tool(
     async def call(**kwargs: object) -> str:
         run_context = get_runtime(RunContext).context
         approved = False
-        if definition.requires_approval():
+        if executor.approval_policy.decide(definition, run_context):
             decision = await _ask_human(
                 definition, registered, kwargs, run_context, approval_type_prefix, copy
             )

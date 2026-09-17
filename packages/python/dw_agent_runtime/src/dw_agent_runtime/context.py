@@ -27,4 +27,8 @@ def access_context_from_run(run_context: RunContext) -> AccessContext:
         # ignore the owner subtree and see the whole workspace.
         record_visibility=run_context.record_visibility,
         visible_owners=run_context.visible_owners,
+        # And the ceiling, for the same reason as the two above: a projection
+        # that dropped it would read as the most restrictive level by default,
+        # which is safe, but would not be what the run was granted.
+        max_autonomy_level=run_context.autonomy_ceiling,
     )

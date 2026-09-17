@@ -17,7 +17,7 @@ from pg_harness import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ports import SystemClock, Uuid4Generator
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
@@ -189,3 +189,102 @@ async def test_tenant_settings_get_and_update(app_engine: AsyncEngine) -> None:
 
     again = await svc.get_tenant_settings(_admin())
     assert again.name == "FDX Corp" and again.locale == "vi-VN"
+
+
+@pytest.fixture
+async def ceiling_reset(migrator_engine: AsyncEngine) -> AsyncIterator[None]:
+    """Put tenant ALPHA's ceiling back to its default around a test.
+
+    The test database lives for the whole session and ALPHA is shared by every
+    module. A test that set the ceiling and left it leaked into the next module
+    that read the default — measured: `test_permission_sets` saw A1 because
+    `test_admin_console` ran first and set it, green alone and red together.
+    """
+
+    async def _reset() -> None:
+        async with migrator_engine.begin() as conn:
+            await conn.execute(
+                sa.update(tables.tenants)
+                .where(tables.tenants.c.id == ALPHA)
+                .values(max_autonomy_level="A4")
+            )
+
+    await _reset()
+    yield
+    await _reset()
+
+
+# ---------------------------------------------------------- autonomy ceiling --
+#
+# The one control a tenant has over how much its workers do unasked. It can only
+# lower a worker's declared level (the runtime takes the more restrictive of the
+# two); what is checked here is that an admin can set it, that nobody else can,
+# that a value nobody can read never gets in, and that setting it is on the record.
+
+
+async def test_a_tenant_admin_can_lower_the_autonomy_ceiling(
+    app_engine: AsyncEngine, ceiling_reset: None
+) -> None:
+    svc = _service(app_engine)
+    assert (await svc.get_tenant_settings(_admin())).max_autonomy_level == "A4"
+
+    updated = await svc.update_tenant_settings(
+        _admin(), UpdateTenantSettings(max_autonomy_level="A1")
+    )
+
+    assert updated.max_autonomy_level == "A1"
+    assert (await svc.get_tenant_settings(_admin())).max_autonomy_level == "A1"
+
+
+async def test_changing_the_ceiling_is_on_the_audit_trail(
+    app_engine: AsyncEngine, ceiling_reset: None
+) -> None:
+    """How much a tenant lets its workers do without asking is exactly what an audit
+    trail is for. The setting this is modelled on, `record_visibility`, is left out
+    of its own audit event; this one is not."""
+    await _service(app_engine).update_tenant_settings(
+        _admin(), UpdateTenantSettings(max_autonomy_level="A1")
+    )
+
+    async with app_engine.begin() as conn:
+        await conn.execute(
+            sa.text("SELECT set_config('app.tenant_id', :tenant, true)"), {"tenant": str(ALPHA)}
+        )
+        details = (
+            await conn.execute(
+                sa.text(
+                    "SELECT details FROM platform.audit_events"
+                    " WHERE action = 'platform.tenant.settings.update'"
+                    " ORDER BY occurred_at DESC LIMIT 1"
+                )
+            )
+        ).scalar_one()
+    assert details["max_autonomy_level"] == "A1"
+
+
+async def test_an_unknown_level_is_refused_before_it_reaches_the_database(
+    app_engine: AsyncEngine, ceiling_reset: None
+) -> None:
+    with pytest.raises(DomainError, match="max_autonomy_level"):
+        await _service(app_engine).update_tenant_settings(
+            _admin(), UpdateTenantSettings(max_autonomy_level="A9")
+        )
+
+
+async def test_a_plain_member_cannot_change_the_ceiling(
+    app_engine: AsyncEngine, ceiling_reset: None
+) -> None:
+    """Otherwise the control is worthless: whoever the ceiling holds back could lift it."""
+    member = AccessContext(
+        tenant_id=ALPHA,
+        workspace_id=ALPHA_WS,
+        principal_id=uuid.uuid4(),
+        roles=frozenset({"member"}),
+        scopes=frozenset({"crm.account.read"}),
+        plan_id="professional",
+    )
+
+    with pytest.raises(PermissionDeniedError):
+        await _service(app_engine).update_tenant_settings(
+            member, UpdateTenantSettings(max_autonomy_level="A4")
+        )

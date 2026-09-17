@@ -21,6 +21,7 @@ from dw_agent_runtime.adapters.checkpoint import SqlAlchemyCheckpointSaver
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_store import RunStatus, SqlWorkerRunStore
 from dw_agent_runtime.adapters.runtime_tables import run_checkpoints
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
@@ -71,6 +72,7 @@ class RunnerStack:
             id_generator=Uuid4Generator(),
             allowance=_UnmeteredPlan(),
             budget=RunBudgetLedger(),
+            approval_policy=AutonomyApprovalPolicy(),
         )
 
     async def dispose(self) -> None:

@@ -114,10 +114,10 @@ def grade_side_effect_approval(
         )
 
     external = _definition("external", "always")
-    if not external.requires_approval():
+    if not external.always_requires_approval():
         return GradeResult.fail("external tool with policy=always does not require approval")
     critical = _definition("critical", "never")
-    if not critical.requires_approval():
+    if not critical.always_requires_approval():
         return GradeResult.fail("critical side effect bypassed approval via policy=never")
     if expected.get("requires_approval") is not True:
         return GradeResult.fail("expected fixture must demand requires_approval=true")

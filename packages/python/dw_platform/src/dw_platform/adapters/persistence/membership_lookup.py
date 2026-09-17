@@ -71,6 +71,7 @@ class SqlMembershipLookup:
                         tables.memberships.c.clearance,
                         tables.tenants.c.status.label("tenant_status"),
                         tables.tenants.c.record_visibility,
+                        tables.tenants.c.max_autonomy_level,
                     )
                     .select_from(
                         tables.memberships.join(
@@ -168,4 +169,5 @@ class SqlMembershipLookup:
                 feature_flags=feature_flags,
                 record_visibility=membership_row.record_visibility,
                 visible_owners=visible_owners,
+                max_autonomy_level=membership_row.max_autonomy_level,
             )

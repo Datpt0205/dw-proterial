@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_agent_runtime.adapters.runtime_tables import worker_runs
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
+from dw_kernel.autonomy import AutonomyLevel
 from dw_kernel.errors import ConflictError, NotFoundError
 
 # Migration 0015. Matched by name so an unrelated constraint violation stays a
@@ -79,6 +80,10 @@ class RunRecord:
     toolset_version: str | None
     policy_version: str | None
     memory_policy_version: str | None
+    # None for a run started before migration 0006; the policy asks about
+    # everything for such a run rather than guess what it was allowed.
+    autonomy_level: AutonomyLevel | None
+    approval_policy_version: str | None
     input: dict[str, Any]
     result: dict[str, Any] | None
     error: dict[str, Any] | None
@@ -337,6 +342,8 @@ class SqlWorkerRunStore:
                 toolset_version=worker.toolset_version,
                 policy_version=worker.policy_version,
                 memory_policy_version=worker.memory_policy_version,
+                autonomy_level=run_context.autonomy_level,
+                approval_policy_version=run_context.approval_policy_version,
                 status=RunStatus.RUNNING.value,
                 input=input_payload,
                 requested_by=run_context.actor_id,
@@ -400,6 +407,8 @@ class SqlWorkerRunStore:
             toolset_version=row.toolset_version,
             policy_version=row.policy_version,
             memory_policy_version=row.memory_policy_version,
+            autonomy_level=row.autonomy_level,
+            approval_policy_version=row.approval_policy_version,
             input=dict(row.input),
             result=dict(row.result) if row.result is not None else None,
             error=dict(row.error) if row.error is not None else None,

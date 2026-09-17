@@ -15,6 +15,7 @@ from typing import Any
 from dw_agent_runtime.adapters.run_store import RunRecord, RunStatus, SqlWorkerRunStore
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.ports import WorkflowRunnerPort
+from dw_kernel.autonomy import FAIL_CLOSED_LEVEL
 from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.ids import UserId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -166,6 +167,13 @@ class ApproveAndResumeService:
                     # at all, which widens rather than narrows.
                     record_visibility=record.actor_record_visibility,
                     visible_owners=record.actor_visible_owners,
+                    # The autonomy the run started with, from its row — never
+                    # re-resolved from the tenant's ceiling today, and never the
+                    # approver's. A run started before 0006 has no stamp; it
+                    # resumes at None, which the policy reads as ask-everything.
+                    autonomy_level=record.autonomy_level,
+                    autonomy_ceiling=record.autonomy_level or FAIL_CLOSED_LEVEL,
+                    approval_policy_version=record.approval_policy_version,
                     trace_id=f"resume-{request.run_id.hex[:12]}",
                 ),
                 run_id=request.run_id,

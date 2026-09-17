@@ -145,14 +145,12 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
         UnreadableFilesMiddleware(),
         OfferedToolsOnlyMiddleware(offered),
         ScopedToolsMiddleware(offered),
-        # NOTE for Mốc 2: this computes which tools are gated ONCE, here, from
-        # `ToolDefinition.requires_approval()` — which takes no arguments and so
-        # cannot know the worker, tenant or autonomy level of the run. That is
-        # correct today and wrong the moment approval depends on the run: the
-        # agent is compiled once per process, so a set frozen at build time
-        # cannot serve two tenants at two autonomy levels. The gate must move to
-        # a per-call decision read from the run context.
-        OneApprovalPerStepMiddleware(offered, copy=spec.copy),
+        # Decides which tools are gated per call from the run's autonomy, not once
+        # here from the tool. It used to freeze that set at build time, and an
+        # agent is compiled once per process, so one set served every tenant at
+        # every level. Handed the executor's own policy so this gate, the tool
+        # wrapper and the executor cannot disagree about a call.
+        OneApprovalPerStepMiddleware(offered, copy=spec.copy, policy=spec.executor.approval_policy),
         PlatformToolErrorsMiddleware(offered, copy=spec.copy),
         # The only ceiling on the path that can loop. Without it an agent run is
         # bounded by `recursion_limit`, which counts steps and not money.

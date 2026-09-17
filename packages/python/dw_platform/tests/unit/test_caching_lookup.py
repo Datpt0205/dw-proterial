@@ -8,8 +8,11 @@ membership" answer is cached too, and a pattern delete forces a fresh lookup.
 from __future__ import annotations
 
 import fnmatch
+import json
 import uuid
+from dataclasses import replace
 
+from dw_kernel.autonomy import FAIL_CLOSED_LEVEL
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
 from dw_platform.application.cache import membership_cache_pattern
 from dw_platform.application.identity import MembershipAccess
@@ -107,6 +110,44 @@ async def test_restricted_visible_owners_survive_the_round_trip() -> None:
     # workspace - and it is not the answer under test here.
     assert served.visible_owners is not None
     assert all(isinstance(u, uuid.UUID) for u in served.visible_owners)
+
+
+async def test_the_tenants_autonomy_ceiling_survives_the_round_trip() -> None:
+    """The serializer lists every field by hand. One added to the access and not to
+    the serializer comes back as its default — here, silently, a different ceiling
+    from the one the tenant set."""
+    access = replace(_access(), max_autonomy_level="A1")
+    inner = _CountingLookup(access)
+    lookup = CachingMembershipLookup(inner, _FakeCache())
+
+    await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
+    served = await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
+
+    assert inner.calls == 1
+    assert served is not None
+    assert served.max_autonomy_level == "A1"
+
+
+async def test_an_entry_cached_before_the_ceiling_existed_reads_as_most_restrictive() -> None:
+    """The cache outlives a deploy by up to its TTL, so an entry written by the code
+    before the ceiling existed is read for real after it. The tenant's ceiling is
+    unknown there, not absent — reading it as "no ceiling" would let a tenant that
+    set A1 run at its workers' full level until the entry expired."""
+    cache = _FakeCache()
+    inner = _CountingLookup(replace(_access(), max_autonomy_level="A1"))
+    lookup = CachingMembershipLookup(inner, cache)
+    await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
+    # Rewrite the stored entry as the previous release wrote it: without the field.
+    [key] = cache.store
+    legacy = json.loads(cache.store[key])
+    del legacy["max_autonomy_level"]
+    cache.store[key] = json.dumps(legacy)
+
+    served = await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
+
+    assert inner.calls == 1, "must be served from the legacy entry, not re-looked-up"
+    assert served is not None
+    assert served.max_autonomy_level == FAIL_CLOSED_LEVEL
 
 
 async def test_a_no_membership_answer_is_cached_too() -> None:

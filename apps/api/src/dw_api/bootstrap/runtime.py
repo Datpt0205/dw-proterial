@@ -19,6 +19,7 @@ from dw_agent_runtime.adapters.sql_usage import CompositeUsageRecorder, SqlUsage
 from dw_agent_runtime.adapters.telemetry_usage import TelemetryUsageRecorder
 from dw_agent_runtime.adapters.tool_execution_store import SqlToolExecutionStore
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.executor import ToolExecutor
 from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.model.copy import load_runtime_copy
@@ -138,12 +139,18 @@ def build_runtime(
     # runs under (scopes, side-effect level, approval, idempotency, timeout)
     # comes from its spec in configs/tools, never from the factory.
     tool_registry = ToolRegistry()
+    # ONE approval policy for the process: the executor decides with it, the
+    # runner stamps its version on every run, and every agent's middleware reads
+    # it through the executor. Two instances could carry two versions, and a run
+    # stamped under one would be decided under the other.
+    approval_policy = AutonomyApprovalPolicy()
     tool_executor = ToolExecutor(
         registry=tool_registry,
         execution_store=SqlToolExecutionStore(session_factory),
         uow_factory=uow_factory,
         clock=clock,
         id_generator=ids,
+        approval_policy=approval_policy,
         telemetry=telemetry,
     )
     tool_specs = ToolSpecRegistry(copy=copy)
@@ -177,6 +184,7 @@ def build_runtime(
         id_generator=ids,
         allowance=allowance,
         budget=budget,
+        approval_policy=approval_policy,
         release_manifest_ref=release_manifest_ref(),
         telemetry=telemetry,
         usage_meter=usage_meter,

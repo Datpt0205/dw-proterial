@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from dw_kernel.autonomy import FAIL_CLOSED_LEVEL, AutonomyLevel
+
 
 class AccessContext(BaseModel):
     """Immutable, verified identity + tenancy + entitlement snapshot."""
@@ -34,6 +36,13 @@ class AccessContext(BaseModel):
     # (an open tenant, or a caller who holds the sees-everything scope). Resolved
     # once by the lookup; read paths filter on it instead of re-deriving the tree.
     visible_owners: frozenset[UUID] | None = None
+    # The most autonomy this tenant lets any of its workers run at. Defaults to
+    # the most restrictive level, not the most permissive: the factory always
+    # sets it from the tenant, so the default is only ever reached by a context
+    # built some other way — and one that cannot say what the tenant allows must
+    # not be treated as allowing everything. `record_visibility` above defaults
+    # the other way; this deliberately does not follow it.
+    max_autonomy_level: AutonomyLevel = FAIL_CLOSED_LEVEL
 
     @field_validator("plan_id", "clearance")
     @classmethod

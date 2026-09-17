@@ -31,6 +31,10 @@ worker_runs = sa.Table(
     sa.Column("toolset_version", sa.String(16), nullable=True),
     sa.Column("policy_version", sa.String(16), nullable=True),
     sa.Column("memory_policy_version", sa.String(16), nullable=True),
+    # Migration 0006. The level the run ran at and the policy that decided with
+    # it. Nullable only for runs started before it.
+    sa.Column("autonomy_level", sa.Text, nullable=True),
+    sa.Column("approval_policy_version", sa.String(16), nullable=True),
     sa.Column("requested_by", UUID(as_uuid=True), nullable=False),
     sa.Column("actor_roles", sa.ARRAY(sa.Text), nullable=False, server_default=sa.text("'{}'")),
     sa.Column("actor_scopes", sa.ARRAY(sa.Text), nullable=False, server_default=sa.text("'{}'")),

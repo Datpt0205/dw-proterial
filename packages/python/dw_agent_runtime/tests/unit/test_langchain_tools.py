@@ -24,6 +24,7 @@ from dw_agent_runtime.adapters.langchain_tools import (
     model_facing_name,
     platform_tools,
 )
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
 from dw_agent_runtime.model.copy import load_runtime_copy
@@ -88,6 +89,12 @@ def make_run_context(scopes: frozenset[str] = frozenset({"sales_chat.write"})) -
         roles=frozenset({"member"}),
         scopes=scopes,
         trace_id="trace-1",
+        # A4, stated. The approval gate used to be a function of the tool alone —
+        # `always` or `critical` — and that is precisely what A4 decides. These
+        # tests were written against that behaviour, so they run at the level that
+        # reproduces it. Unset, the policy fails closed and every tool would ask.
+        autonomy_level="A4",
+        autonomy_ceiling="A4",
     )
 
 
@@ -111,6 +118,7 @@ def make_stack(
         uow_factory=FakeUoWFactory(),
         clock=FixedClock(NOW),
         id_generator=SequentialIdGenerator(),
+        approval_policy=AutonomyApprovalPolicy(),
     )
     return registry, executor, store
 
@@ -237,6 +245,7 @@ async def test_an_approval_payload_is_json_all_the_way_down() -> None:
         uow_factory=FakeUoWFactory(),
         clock=FixedClock(NOW),
         id_generator=SequentialIdGenerator(),
+        approval_policy=AutonomyApprovalPolicy(),
     )
     lead_id = uuid.UUID(int=11)
 
@@ -279,6 +288,7 @@ async def test_a_tool_whose_argument_is_a_reference_can_show_what_it_will_write(
         uow_factory=FakeUoWFactory(),
         clock=FixedClock(NOW),
         id_generator=SequentialIdGenerator(),
+        approval_policy=AutonomyApprovalPolicy(),
     )
 
     state = await call_tool(build_tools(registry, executor)[0])
@@ -342,6 +352,7 @@ def make_failing_stack(
         uow_factory=uow_factory,
         clock=FixedClock(NOW),
         id_generator=SequentialIdGenerator(),
+        approval_policy=AutonomyApprovalPolicy(),
     )
     return build_tools(registry, executor), store, uow_factory.audit_repo
 

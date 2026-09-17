@@ -21,6 +21,7 @@ import {
   hierarchyMemberSchema,
   type AdminWorkspace,
   type AdminTenant,
+  type AutonomyLevel,
   type AdminRole,
   type AdminPermissionSet,
   type HierarchyMember,
@@ -390,6 +391,7 @@ export class ApiClient {
     timezone?: string;
     locale?: string;
     record_visibility?: "open" | "restricted";
+    max_autonomy_level?: AutonomyLevel;
   }): Promise<AdminTenant> {
     return this.request("PATCH", "/api/v1/admin/tenant", adminTenantSchema, {
       body: input,

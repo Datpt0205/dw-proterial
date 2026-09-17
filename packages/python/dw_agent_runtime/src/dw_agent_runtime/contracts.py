@@ -11,10 +11,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from dw_kernel.autonomy import FAIL_CLOSED_LEVEL, AutonomyLevel
+
 _SEMVER_PATTERN = r"^\d+\.\d+\.\d+$"
 _SLUG_PATTERN = r"^[a-z][a-z0-9_]*$"
 
-AutonomyLevel = Literal["A0", "A1", "A2", "A3", "A4"]
 SideEffectLevel = Literal["none", "internal", "external", "critical"]
 ApprovalPolicy = Literal["never", "conditional", "always"]
 
@@ -85,6 +86,19 @@ class RunContext(BaseModel):
     # unset by runs that are not about a single record - a conversation turn is
     # its own subject and needs no second name.
     subject_ref: str | None = None
+    # The most autonomy the tenant allows, carried in from AccessContext by the
+    # boundary that builds this context. Narrowest by default, same reasoning as
+    # `clearance`: a construction site that forgets it gets a run that asks about
+    # everything — loud in the first test — instead of one that quietly ignores
+    # the ceiling a customer set.
+    autonomy_ceiling: AutonomyLevel = FAIL_CLOSED_LEVEL
+    # The level this run actually runs at, and the policy version that turns it
+    # into decisions. Set by the runner when the run starts — the lower of the
+    # worker's declared level and the ceiling above — stamped on the run row,
+    # and replayed from that row on resume. None means the run never went
+    # through the runner, and the policy treats that as ask-everything.
+    autonomy_level: AutonomyLevel | None = None
+    approval_policy_version: str | None = None
 
 
 class ToolDefinition(BaseModel):
@@ -112,6 +126,14 @@ class ToolDefinition(BaseModel):
             raise ValueError("tool name must be namespaced like 'task.prepare'")
         return value
 
-    def requires_approval(self) -> bool:
-        """Critical side effects always require approval regardless of policy."""
+    def always_requires_approval(self) -> bool:
+        """Whether this tool asks for a person at EVERY autonomy level.
+
+        The two floors, and only them: declared `always`, or a `critical` side
+        effect. It used to be named `requires_approval` and to be the whole
+        decision, which is how a worker's autonomy level came to be read by
+        nothing. Whether a given call asks depends on the run — use
+        `AutonomyApprovalPolicy.decide`. This answers only what is true of the tool
+        regardless of who runs it, which is what an inventory screen can know.
+        """
         return self.approval_policy == "always" or self.side_effect_level == "critical"

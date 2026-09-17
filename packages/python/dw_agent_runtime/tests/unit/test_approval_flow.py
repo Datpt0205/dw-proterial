@@ -8,6 +8,7 @@ import pytest
 from dw_agent_runtime.adapters.run_store import RunRecord, RunStatus
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.contracts import RunContext
+from dw_kernel.autonomy import AutonomyLevel
 from dw_kernel.errors import ConflictError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import FixedClock, SequentialIdGenerator
@@ -59,6 +60,9 @@ REQUESTER_SCOPES = frozenset({"crm.read"})
 # The ADR-003 roll-up the requester started the run with: themselves plus one
 # report. The approver's own subtree is deliberately a different set.
 REQUESTER_OWNERS = frozenset({REQUESTER, uuid.UUID(int=41)})
+# Deliberately not the A4 a fresh context would get, so a resume that re-resolved
+# it instead of replaying the stamp would be caught.
+REQUESTER_AUTONOMY: AutonomyLevel = "A3"
 
 
 @dataclass
@@ -82,6 +86,8 @@ class FakeRunStore:
             toolset_version="1.0.0",
             policy_version="1.0.0",
             memory_policy_version="1.0.0",
+            autonomy_level=REQUESTER_AUTONOMY,
+            approval_policy_version="1.0.0",
             input={},
             result=None,
             error=None,
@@ -284,6 +290,12 @@ async def test_the_resumed_run_carries_the_requesters_authority() -> None:
     # the whole workspace while the first half stayed inside the subtree.
     assert resumed.record_visibility == "restricted"
     assert resumed.visible_owners == REQUESTER_OWNERS
+    # And autonomy, from the run's own stamp. Not re-resolved from the tenant's
+    # ceiling today, and not the approver's: resumed at None it would ask about
+    # everything; resumed at a level read fresh it would be allowed whatever the
+    # ceiling happens to be now rather than what the run was started under.
+    assert resumed.autonomy_level == REQUESTER_AUTONOMY
+    assert resumed.approval_policy_version == "1.0.0"
 
     approver = make_context(APPROVER)
     assert not (resumed.scopes & approver.scopes)

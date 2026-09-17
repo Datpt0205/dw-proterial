@@ -23,6 +23,7 @@ from sqlalchemy.pool import NullPool
 from dw_agent_runtime.adapters.checkpoint import SqlAlchemyCheckpointSaver
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_store import RunStatus, SqlWorkerRunStore
+from dw_agent_runtime.autonomy import AUTONOMY_POLICY_VERSION, AutonomyApprovalPolicy
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import RunBudgetLedger
@@ -121,6 +122,7 @@ class RunnerStack:
             id_generator=Uuid4Generator(),
             allowance=_UnmeteredPlan(),
             budget=RunBudgetLedger(),
+            approval_policy=AutonomyApprovalPolicy(),
         )
 
     async def dispose(self) -> None:
@@ -473,4 +475,53 @@ async def test_a_paused_run_keeps_its_spend_entry(urls: RuntimeUrls, worker_conf
 
     assert (await stack.run_store.get(context, run_id)).status is RunStatus.WAITING_APPROVAL
     assert stack.runner.budget.spend[run_id].input_tokens == 10
+    await stack.dispose()
+
+
+# --------------------------------------------------------------- autonomy --
+#
+# The level is resolved by the runner — the lower of the worker's declared level
+# and the tenant's ceiling — and stamped on the row, where a resume replays it
+# from. Asserted against real SQL: the columns and their CHECK constraints are
+# migration 0006, and a stamp that never reached the row would replay as None.
+
+
+@pytest.mark.parametrize(("ceiling", "expected"), [("A4", "A2"), ("A1", "A1")])
+async def test_a_run_row_carries_the_level_the_runner_resolved(
+    urls: RuntimeUrls, worker_config: Path, ceiling: str, expected: str
+) -> None:
+    """The demo worker is declared A2. No tenant ceiling leaves it at A2; a tenant
+    ceiling of A1 holds it there — and the row records which one it ran at."""
+    context = make_run_context().model_copy(
+        update={"autonomy_ceiling": ceiling, "autonomy_level": None}
+    )
+    stack = RunnerStack(urls.app, worker_config, build_demo_graph)
+
+    run_id = await stack.runner.start(run_context=context, input_payload={"subject": "x"})
+
+    record = await stack.run_store.get(context, run_id)
+    assert record.autonomy_level == expected
+    assert record.approval_policy_version == AUTONOMY_POLICY_VERSION
+    await stack.dispose()
+
+
+async def test_the_database_refuses_a_run_level_nobody_can_read(
+    urls: RuntimeUrls, worker_config: Path
+) -> None:
+    """A CHECK constraint, not only application validation: a level the runtime does
+    not recognise is one nobody can say what it permits."""
+    context = make_run_context()
+    stack = RunnerStack(urls.app, worker_config, build_demo_graph)
+    run_id = await stack.runner.start(run_context=context, input_payload={"subject": "x"})
+
+    with pytest.raises(sa.exc.IntegrityError, match="ck_worker_runs_autonomy_level"):
+        async with stack.engine.begin() as connection:
+            await connection.execute(
+                sa.text("SELECT set_config('app.tenant_id', :tenant, true)"),
+                {"tenant": str(context.tenant_id)},
+            )
+            await connection.execute(
+                sa.text("UPDATE platform.worker_runs SET autonomy_level = 'A9' WHERE id = :run"),
+                {"run": run_id},
+            )
     await stack.dispose()

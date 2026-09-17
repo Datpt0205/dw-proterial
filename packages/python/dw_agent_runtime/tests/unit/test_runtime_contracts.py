@@ -72,9 +72,9 @@ def test_tool_name_must_be_namespaced() -> None:
 
 def test_critical_side_effect_always_requires_approval() -> None:
     tool = make_tool(side_effect_level="critical", approval_policy="never")
-    assert tool.requires_approval()
-    assert make_tool(approval_policy="always").requires_approval()
-    assert not make_tool().requires_approval()
+    assert tool.always_requires_approval()
+    assert make_tool(approval_policy="always").always_requires_approval()
+    assert not make_tool().always_requires_approval()
 
 
 def test_tool_timeout_and_retry_bounds() -> None:

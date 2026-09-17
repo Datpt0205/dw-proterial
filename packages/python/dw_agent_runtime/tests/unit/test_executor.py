@@ -8,6 +8,7 @@ import pytest
 from fakes import NOW, FakeAuditRepo, FakeExecutionStore, FakeUoWFactory
 from pydantic import BaseModel
 
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
 from dw_agent_runtime.tools import RegisteredTool, ToolRegistry
@@ -63,6 +64,12 @@ def make_run_context(scopes: frozenset[str] = frozenset({"demo.write"})) -> RunC
         roles=frozenset({"member"}),
         scopes=scopes,
         trace_id="trace-1",
+        # A4, stated: it is exactly the old approval rule (`always` or `critical`)
+        # these tests were written against. Left unset, the policy fails closed and
+        # every call here would stop for approval — which is what it did, and is
+        # the proof that the closed default is real.
+        autonomy_level="A4",
+        autonomy_ceiling="A4",
     )
 
 
@@ -89,6 +96,7 @@ def make_executor(
         uow_factory=uow_factory,
         clock=FixedClock(NOW),
         id_generator=SequentialIdGenerator(),
+        approval_policy=AutonomyApprovalPolicy(),
         sleep=no_sleep,
     )
     return executor, store, uow_factory.audit_repo
@@ -148,6 +156,55 @@ async def test_critical_tool_requires_approval() -> None:
         approved=True,
     )
     assert isinstance(output, EchoOutput)
+
+
+# The executor is the last gate: the place the tool actually runs. On the agent
+# path the tool wrapper asks first, so a test through the agent cannot tell
+# whether this gate still holds — measured: reverting it to decide from the tool
+# alone left every agent-level test green. These call it directly, the way any
+# caller that does not come through the wrapper would.
+
+
+async def test_the_executor_refuses_a_call_its_run_is_not_autonomous_enough_for() -> None:
+    """External and idempotent: asks at A1, runs at A3. The same rule as the wrapper,
+    enforced again where the write happens rather than trusted to upstream."""
+    definition = make_definition(side_effect_level="external", idempotent=True)
+    executor, _, audit = make_executor(echo_handler, definition)
+
+    with pytest.raises(ApprovalRequiredError):
+        await executor.execute(
+            name="test.echo",
+            version="1.0.0",
+            raw_input={"message": "x"},
+            run_context=make_run_context().model_copy(update={"autonomy_level": "A1"}),
+            idempotency_key="k1",
+        )
+    # Says what decided it, so "why did this pause" does not need the code.
+    [refused] = [e for e in audit.events if e.action == "tool.approval_required"]
+    assert refused.details["autonomy_level"] == "A1"
+
+    output = await executor.execute(
+        name="test.echo",
+        version="1.0.0",
+        raw_input={"message": "x"},
+        run_context=make_run_context().model_copy(update={"autonomy_level": "A3"}),
+        idempotency_key="k2",
+    )
+    assert isinstance(output, EchoOutput)
+
+
+async def test_the_executor_fails_closed_for_a_run_with_no_resolved_level() -> None:
+    definition = make_definition(side_effect_level="none")
+    executor, _, _audit = make_executor(echo_handler, definition)
+
+    with pytest.raises(ApprovalRequiredError):
+        await executor.execute(
+            name="test.echo",
+            version="1.0.0",
+            raw_input={"message": "x"},
+            run_context=make_run_context().model_copy(update={"autonomy_level": None}),
+            idempotency_key="k1",
+        )
 
 
 async def test_side_effect_requires_idempotency_key() -> None:

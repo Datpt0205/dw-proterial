@@ -164,3 +164,74 @@ async def test_org_admin_cannot_assign_an_administrative_set(
             _admin(),
             SetPermissionSets(user_id=an, permission_set_keys=frozenset({"superpowers"})),
         )
+
+
+@pytest.fixture
+async def ceiling_reset(migrator_engine: AsyncEngine) -> AsyncIterator[None]:
+    """Put tenant ALPHA's ceiling back to its default around a test.
+
+    The test database lives for the whole session and ALPHA is shared by every
+    module. A test that set the ceiling and left it leaked into the next module
+    that read the default — measured: `test_permission_sets` saw A1 because
+    `test_admin_console` ran first and set it, green alone and red together.
+    """
+
+    async def _reset() -> None:
+        async with migrator_engine.begin() as conn:
+            await conn.execute(
+                sa.update(tables.tenants)
+                .where(tables.tenants.c.id == ALPHA)
+                .values(max_autonomy_level="A4")
+            )
+
+    await _reset()
+    yield
+    await _reset()
+
+
+# --------------------------------------------------------- autonomy ceiling --
+#
+# The tenant's ceiling travels the same road as `record_visibility`: read in the
+# same tenants join, carried on the access, stamped on the run. Asserted against
+# real SQL because the column, its default and its CHECK constraint are 0006.
+
+
+async def _set_ceiling(engine: AsyncEngine, level: str) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            sa.update(tables.tenants)
+            .where(tables.tenants.c.id == ALPHA)
+            .values(max_autonomy_level=level)
+        )
+
+
+async def test_a_tenant_with_no_ceiling_holds_its_workers_to_nothing_extra(
+    app_engine: AsyncEngine, ceiling_reset: None
+) -> None:
+    """A4 is the absence of a tenant restriction, not a grant: every run is still
+    capped by the level its worker was built for."""
+    an = await _lookup(app_engine).find_access("dev|an.nguyen", ISSUER, ALPHA, ALPHA_WS)
+
+    assert an is not None
+    assert an.max_autonomy_level == "A4"
+
+
+async def test_the_lookup_carries_the_ceiling_the_tenant_set(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine, ceiling_reset: None
+) -> None:
+    await _set_ceiling(migrator_engine, "A1")
+
+    an = await _lookup(app_engine).find_access("dev|an.nguyen", ISSUER, ALPHA, ALPHA_WS)
+
+    assert an is not None
+    assert an.max_autonomy_level == "A1"
+
+
+async def test_the_database_refuses_a_ceiling_nobody_can_read(
+    migrator_engine: AsyncEngine, ceiling_reset: None
+) -> None:
+    """`record_visibility`, the setting this is modelled on, has no such constraint —
+    only the service that writes it validates. A second writer, or a direct UPDATE,
+    would leave a value no code knows how to read. This one the database refuses."""
+    with pytest.raises(sa.exc.IntegrityError, match="ck_tenants_max_autonomy_level"):
+        await _set_ceiling(migrator_engine, "A9")

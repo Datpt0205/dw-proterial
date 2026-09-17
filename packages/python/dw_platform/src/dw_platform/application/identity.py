@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from dw_kernel.autonomy import FAIL_CLOSED_LEVEL, AutonomyLevel
 from dw_kernel.errors import PermissionDeniedError, TenantContextMissingError
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.ports import VerifiedIdentity
@@ -41,6 +42,8 @@ class MembershipAccess:
     feature_flags: frozenset[str]
     record_visibility: str = "open"
     visible_owners: frozenset[UUID] | None = None
+    # Most restrictive by default, for the reason given on AccessContext.
+    max_autonomy_level: AutonomyLevel = FAIL_CLOSED_LEVEL
 
 
 class MembershipLookupPort(Protocol):
@@ -94,4 +97,5 @@ class DbAccessContextFactory:
             feature_flags=access.feature_flags,
             record_visibility=access.record_visibility,
             visible_owners=access.visible_owners,
+            max_autonomy_level=access.max_autonomy_level,
         )
