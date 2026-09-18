@@ -11,6 +11,23 @@ checklist as sufficient would miss exactly the dangerous half.
 
 ---
 
+## 0. A check that cannot see the thing it checks (found 1×)
+
+`verify_invariants.py` reads migration TEXT and confirmed for months that every
+tenant table had RLS. It was right about every table the text names. Postgres
+creates a PARTITION from the partitioning DDL, so `platform.audit_events_default`
+and `platform.model_usage_ledger_default` were never named — and neither had RLS,
+while `dw_app` held SELECT on both. Every tenant's audit trail and every tenant's
+spend were one table name away from any connection, with no `app.tenant_id` set.
+
+Enabling RLS on a partitioned parent applies its policies to rows reached THROUGH
+the parent. A partition addressed by its own name is an ordinary table using its
+own settings.
+
+**Ask:** what can this check NOT see? A check over source text cannot see what the
+database creates on its own. Where the truth lives in a running system, ask the
+running system — `test_rls_coverage.py` walks `pg_class`, partitions included.
+
 ## 1. Declared, and nobody reads it (found 10×)
 
 `autonomy_level` was declared, validated and read by **nothing** — a worker at A4
