@@ -8,6 +8,10 @@ dependencies = [
     "dw-platform",
     "dw-agent-runtime",
     "dw-knowledge",
+    # The outbox handler that stores what a run learned. Imported by the
+    # composition root, so it is declared rather than reached through
+    # another package that happens to pull it in.
+    "dw-memory",
     "dw-connectors",
     # For the model profile: the embedding model and its vector width are
     # configuration, and the worker must read the same route the API does.

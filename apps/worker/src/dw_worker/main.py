@@ -25,13 +25,17 @@ import signal
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from dw_kernel.ports import SystemClock
+from dw_kernel.ports import SystemClock, Uuid7Generator
+from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
+from dw_memory.policy import MemoryWritePolicy
+from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_worker.composition import build_ingest_components
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.ingest import build_ingest_consumer
+from dw_worker.consumers.memory import memory_handlers
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
@@ -58,6 +62,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     """Wire the lanes this process hosts, skipping any whose infra is absent."""
     registry = ConsumerRegistry()
     clock = SystemClock()
+    # Uuid7: a memory id that sorts by when it was learned makes the
+    # keyset page over `created_at` stable without a second column.
+    ids = Uuid7Generator()
     _ = _build_worker_telemetry(settings)
 
     # Every queue this process wired, with the window its jobs deserve. A queue
@@ -78,7 +85,21 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # adding the handler later drains the backlog.
         engine = create_async_engine(settings.database_url, pool_pre_ping=True)
         sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        handlers: dict[str, EventHandler] = {}
+        # Remembering runs here rather than on the request that produced the
+        # fact: a run that stops to decide what is worth keeping is a run someone
+        # is waiting on. The handler is idempotent because the outbox delivers at
+        # least once — see `dw_worker.consumers.memory`.
+        handlers: dict[str, EventHandler] = dict(
+            memory_handlers(
+                MemoryService(
+                    session_factory=sessions,
+                    policy=MemoryWritePolicy(),
+                    clock=clock,
+                    id_generator=ids,
+                    evidence_store=SqlEvidenceStore(clock=clock),
+                )
+            )
+        )
         registry.register(
             "outbox",
             build_outbox_consumer(

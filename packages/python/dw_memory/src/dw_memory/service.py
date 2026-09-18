@@ -78,9 +78,20 @@ class MemoryService:
         context: AccessContext,
         *,
         created_by_run_id: uuid.UUID,
+        idempotency_key: uuid.UUID | None = None,
     ) -> ProposalResult:
+        """Decide on a candidate and, if it passes, store it with its evidence.
+
+        `idempotency_key` is for callers that may be asked twice — the outbox
+        delivers at least once, so its handler will be. Passing the event's id
+        makes the candidate row's primary key deterministic, and the second
+        delivery finds it already there and returns what was decided the first
+        time instead of writing a second memory. Without a key the behaviour is
+        unchanged: a fresh id every call, which is right for a caller that means
+        each proposal to be its own.
+        """
         outcome = self.policy.evaluate(candidate)
-        candidate_id = self.id_generator.new_uuid()
+        candidate_id = idempotency_key or self.id_generator.new_uuid()
         now = self.clock.now()
 
         item: MemoryItem | None = None
@@ -109,6 +120,10 @@ class MemoryService:
         superseded: tuple[uuid.UUID, ...] = ()
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
+            if idempotency_key is not None:
+                seen = await self._already_decided(session, idempotency_key)
+                if seen is not None:
+                    return seen
             await session.execute(
                 sa.insert(tables.write_candidates).values(
                     id=candidate_id,
@@ -188,6 +203,53 @@ class MemoryService:
                 )
             )
         return ProposalResult(candidate_id=candidate_id, outcome=outcome, item=item)
+
+    async def _already_decided(
+        self, session: AsyncSession, candidate_id: uuid.UUID
+    ) -> ProposalResult | None:
+        """What was decided for this candidate id, if it has been seen before.
+
+        A read inside the caller's transaction, deliberately: checking on one
+        connection and writing on another leaves the window where two deliveries
+        both find nothing. The candidate table's primary key is the backstop if
+        two workers race past this check at the same instant — one of them gets a
+        unique violation and the delivery is retried, which is the correct
+        outcome for at-least-once.
+        """
+        row = (
+            await session.execute(
+                sa.select(
+                    tables.write_candidates.c.decision,
+                    tables.write_candidates.c.memory_id,
+                ).where(tables.write_candidates.c.id == candidate_id)
+            )
+        ).first()
+        if row is None:
+            return None
+        item: MemoryItem | None = None
+        if row.memory_id is not None:
+            stored = (
+                await session.execute(
+                    sa.select(tables.items).where(tables.items.c.memory_id == row.memory_id)
+                )
+            ).first()
+            if stored is not None:
+                item = MemoryItem.model_validate(
+                    {
+                        **dict(stored._mapping),
+                        "subject_refs": tuple(stored.subject_refs),
+                        "provenance_refs": tuple(stored.provenance_refs),
+                    }
+                )
+        decision = WriteDecision(row.decision)
+        return ProposalResult(
+            candidate_id=candidate_id,
+            # The reason is not stored on the candidate row, and inventing one
+            # here would put words in the first decision's mouth. The decision
+            # itself is what a caller acts on.
+            outcome=PolicyOutcome(decision=decision, reason="already decided"),
+            item=item,
+        )
 
     async def _close_superseded(
         self, session: AsyncSession, item: MemoryItem, *, now: datetime

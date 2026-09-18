@@ -736,3 +736,91 @@ async def test_supersession_names_what_it_closed_on_the_audit_trail(
         closed=str(first.item.memory_id),
     )
     assert recorded == 1
+
+
+# ------------------------------------------------------------ idempotency --
+#
+# The outbox delivers at least once: the attempt is counted at claim time and
+# the row marked afterwards, so a process that dies between them delivers again.
+# Without a key that is a second identical memory, and with two retries a third.
+
+
+async def test_the_same_delivery_twice_stores_one_memory(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    svc, session_factory = service
+    context = make_context()
+    subject = a_subject()
+    event_id = uuid.uuid4()
+
+    first = await svc.propose(
+        candidate(seeded, subject_refs=(subject,)),
+        context,
+        created_by_run_id=seeded.run_id,
+        idempotency_key=event_id,
+    )
+    second = await svc.propose(
+        candidate(seeded, subject_refs=(subject,)),
+        context,
+        created_by_run_id=seeded.run_id,
+        idempotency_key=event_id,
+    )
+
+    assert first.item is not None
+    assert second.item is not None
+    assert second.item.memory_id == first.item.memory_id, "the redelivery returns the first answer"
+    stored = await _scalar(
+        session_factory,
+        "SELECT count(*) FROM memory.items WHERE subject_refs ? :s",
+        s=subject,
+    )
+    assert stored == 1, "one delivery, one memory, however many times it arrives"
+
+
+async def test_a_redelivery_does_not_write_a_second_audit_entry(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """An audit trail that records the same fact being learned three times
+    because a worker restarted is a trail that has to be explained away."""
+    svc, session_factory = service
+    context = make_context()
+    subject = a_subject()
+    event_id = uuid.uuid4()
+    for _ in range(3):
+        await svc.propose(
+            candidate(seeded, subject_refs=(subject,)),
+            context,
+            created_by_run_id=seeded.run_id,
+            idempotency_key=event_id,
+        )
+
+    written = await _scalar(
+        session_factory,
+        """
+        SELECT count(*) FROM platform.audit_events a
+        JOIN memory.items i ON i.memory_id::text = a.resource_id
+        WHERE a.action = 'memory.item_written' AND i.subject_refs ? :s
+        """,
+        s=subject,
+    )
+    assert written == 1
+
+
+async def test_without_a_key_each_call_is_its_own_proposal(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """The unchanged behaviour, pinned: a caller that means each proposal
+    separately must not start collapsing them."""
+    svc, session_factory = service
+    context = make_context()
+    subject = a_subject()
+
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+
+    stored = await _scalar(
+        session_factory,
+        "SELECT count(*) FROM memory.items WHERE subject_refs ? :s",
+        s=subject,
+    )
+    assert stored == 2

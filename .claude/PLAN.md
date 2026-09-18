@@ -38,11 +38,22 @@ quality. Not taken, deliberately: vector/graph recall (needs embedding
 infrastructure; subject-keyed matching is explainable and enough while a run is
 about one record), and LLM-decided merging (the model proposes, code decides).
 
+**Also done: the async write path.** `propose` has a production caller — the
+worker's outbox handler for `memory.candidate_proposed`, wired in
+`dw_worker.main`. Remembering runs after the answer, not during it. The outbox
+delivers at least once, so `propose` took an `idempotency_key`: the event's own
+id becomes the candidate row's primary key, and a redelivery returns the first
+decision instead of writing a second memory. Tenancy comes off the event
+envelope, never the payload — what produces the payload is a model's output one
+layer up. The context supplies a plan the catalog does not contain, so anything
+that starts reading the plan on this path refuses rather than grants.
+
+What a bounded context still owns: EMITTING the event. The platform ships the
+schema, the handler, the idempotency and the audit; deciding what is worth
+remembering is a workflow's judgement, not the platform's.
+
 **Still open, and the heavy half:**
 
-- `MemoryService.propose` still has **no production caller**. Recall reads what
-  nothing yet writes in production, so the loop is closed in code and not in
-  traffic. The write side is the next slice.
 - `deepagents.MemoryMiddleware` reads `AGENTS.md` from a backend and teaches the
   model to `edit_file` to update it. `DocgenSandbox` already implements that
   backend — but `/work` is tmpfs, so a `MEMORY.md` there is amnesia on restart.
