@@ -11,7 +11,7 @@ checklist as sufficient would miss exactly the dangerous half.
 
 ---
 
-## 1. Declared, and nobody reads it (found 9×)
+## 1. Declared, and nobody reads it (found 10×)
 
 `autonomy_level` was declared, validated and read by **nothing** — a worker at A4
 paused exactly as often as one at A0. `approval_policy: conditional` was accepted
@@ -26,6 +26,13 @@ either wire it in the same change or do not add it.
 
 A control that is configured and unenforced is worse than no control: it reads
 like a safeguard in review, and the first incident discovers it was decoration.
+
+The tenth was not in the code: the trivy step in CI pinned a release tag that
+does not exist, and `curl` without `--fail` piped the 404 page into `tar`, so the
+step failed as a corrupt archive while scanning nothing. It had been reported as
+"trivy is wired into CI" on the strength of reading the workflow file. The same
+question applies to a pipeline step as to a field — who runs this, and did you
+watch it run?
 
 ## 2. One fact, two copies, and they drift (found 4×)
 

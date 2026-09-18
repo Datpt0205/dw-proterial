@@ -10,7 +10,7 @@ detect. The counts are from `.claude/rules/failure-modes.md`.
    cross-tenant read waiting to happen. Nothing enforced this before migration
    0007 went in with RLS only because it was remembered.
 
-2. A field declared on a contract and read by nothing (found 9 times). `autonomy_level`
+2. A field declared on a contract and read by nothing (found 10 times). `autonomy_level`
    was declared, validated and read nowhere, so a worker at A4 paused as often as
    one at A0. A control that is configured and unenforced reads like a safeguard
    in review and is discovered to be decoration by the first incident.
