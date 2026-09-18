@@ -50,6 +50,25 @@ into the agent loop, and it is the largest remaining piece:
 | 1b  | `b3b556f` | Context compaction that is recorded, bounded and fails open                |
 | 2   | `eb25931` | Autonomy A0–A4 decides approval; tenant ceiling; policy stamped on the run |
 | 4   | `80d849f` | Provenance as a chain the database enforces                                |
+| —   | `643236f` | Invariant checker + commit gate + the security-review skill                |
 
 Mốc 3 is deliberately out of order: Mốc 4 was cheaper and is what an audited
 buyer asks for first.
+
+## How a feature is checked here
+
+Three layers, in decreasing order of how much they can be skipped:
+
+1. `scripts/verify_invariants.py` — mechanical, runs in CI and in the commit
+   hook. Exemptions live in `RLS_EXEMPT` / `UNREAD_EXEMPT` and each needs a
+   written reason.
+2. `.claude/hooks/pre-commit-gate.sh` — blocks `git commit`, runs layer 1, then
+   asks only the questions this diff's file paths earn. Once per diff, not once
+   per attempt. Disable with `touch .claude/no-commit-gate`.
+3. `.claude/skills/reviewing-feature-security/` — six trust boundaries, a
+   negative test at each, and a mutation check. Run before calling a feature
+   done, without being asked.
+
+`.claude/rules/failure-modes.md` holds the counts these are derived from. The
+honest limit: layer 2 guarantees the questions are raised, not that they were
+answered truthfully, and no layer replaces running the thing.
