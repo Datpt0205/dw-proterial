@@ -105,6 +105,7 @@ test-integration: ## Integration tests (requires `make infra-up` first)
 test-architecture: ## Import-boundary + declared-dependency checks
 	uv run lint-imports
 	uv run python scripts/verify_architecture.py
+	uv run python scripts/verify_invariants.py
 
 test-contract: ## API/event/tool contract tests
 	uv run pytest -m contract || test $$? -eq 5  # exit 5 = no tests collected yet

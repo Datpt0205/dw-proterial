@@ -54,6 +54,17 @@ RUN --mount=type=cache,target=/build/apps/web/.next/cache \
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS runtime
 
+# Security updates, and then the npm CLI is deleted.
+#
+# Measured on 2026-09-18 with trivy: eleven HIGH/CRITICAL findings in this image,
+# and every one of them was inside `/usr/local/lib/node_modules/npm` — the CLI
+# the base image ships, not anything this application depends on. A Next.js
+# standalone server runs `node apps/web/server.js`; nothing here invokes npm, so
+# the whole set is attack surface carried for no reason. Removing it is a better
+# answer than upgrading it, and it makes the image smaller.
+RUN apk upgrade --no-cache \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 RUN addgroup -g 1001 dw && adduser -u 1001 -G dw -D dw
 
 WORKDIR /app

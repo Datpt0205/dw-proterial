@@ -40,6 +40,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime
 
+# Security updates from the base image's distribution, applied at build time.
+# The runtime stage installs no packages of its own, so everything trivy reports
+# here comes from the base — and a base image is rebuilt on its own schedule,
+# which is slower than a CVE with a released fix deserves. Measured on
+# 2026-09-18: three HIGH `libpcre2` issues (out-of-bounds write, arbitrary code
+# execution via a crafted regular expression), all already fixed upstream.
+# Deliberately `upgrade`, not a pinned package list: the next one will be in a
+# different library, and a list would have to be edited to find it.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
 # Shared libs Docling/OCR (opencv, image codecs) load at runtime.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \

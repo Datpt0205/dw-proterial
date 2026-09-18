@@ -69,6 +69,8 @@ jobs:
         run: uv run python scripts/check_hygiene.py --base origin/${{ github.base_ref || 'main' }}
       - name: "Unit tests (coverage gate: fail_under in pyproject)"
         run: uv run pytest -m unit --cov --cov-report=term --cov-report=xml
+      - name: Repository invariants (RLS, unread fields, unhandled literals)
+        run: uv run python scripts/verify_invariants.py
       - name: Architecture tests
         run: |
           uv run lint-imports
@@ -242,6 +244,17 @@ jobs:
         # --retry-all-errors: docker-proxy answers "connection reset" (exit 56)
         # before the container listens, which --retry-connrefused does not cover.
         run: curl --fail --retry 40 --retry-delay 5 --retry-connrefused --retry-all-errors -o /dev/null http://localhost:3000
+      - name: trivy (image vulnerabilities, HIGH+ with a fix available)
+        # Here rather than in the security job because this is where the images
+        # already exist; building them twice to scan them costs four minutes.
+        # `--ignore-unfixed`: a CVE with no released fix is not an action, and a
+        # scanner that reports what cannot be done gets muted.
+        run: |
+          curl -sSL https://github.com/aquasecurity/trivy/releases/download/v0.58.1/trivy_0.58.1_Linux-64bit.tar.gz | tar -xz trivy
+          for image in dw-api:local dw-worker:local dw-docgen:local dw-web:local; do
+            echo "== $image"
+            ./trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --exit-code 1 --quiet "$image"
+          done
       - name: Container logs
         # Only the `ps` table was captured before, which says a container is
         # unhealthy and never why. Three runs were spent guessing at a startup

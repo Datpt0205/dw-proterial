@@ -61,3 +61,6 @@ blob-report/
 
 # Agent worktrees — throwaway checkouts, never part of the repo.
 .claude/worktrees/
+
+# Marker written by .claude/hooks/pre-commit-gate.sh; per-checkout state.
+.claude/.commit-gate-seen

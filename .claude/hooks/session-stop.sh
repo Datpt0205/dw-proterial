@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Stop hook. Runs when the model finishes a turn. Exit 2 sends stderr back as
+# feedback and asks it to keep working; exit 0 lets the turn end.
+#
+# What it is for: a session that ends with the work committed but `.claude/PLAN.md`
+# describing the previous state has lost what it learned, however good the code is.
+# The next session reads that file and believes it.
+#
+# To disable without editing settings: touch .claude/no-stop-gate
+set -uo pipefail
+
+root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+cd "$root" || exit 0
+
+[ -f "$root/.claude/no-stop-gate" ] && exit 0
+
+input=$(cat)
+
+# Guard against a loop: if this hook already fired for this turn, let it end.
+# jq is preferred; the grep fallback keeps the guard working without it — a hook
+# that fails open into an infinite loop is worse than one that does not run.
+if command -v jq >/dev/null 2>&1; then
+  active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false')
+else
+  active=$(printf '%s' "$input" | grep -o '"stop_hook_active"[[:space:]]*:[[:space:]]*true' >/dev/null && echo true || echo false)
+fi
+[ "$active" = "true" ] && exit 0
+
+git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+changed=$(git status --porcelain | wc -l | tr -d ' ')
+[ "$changed" -eq 0 ] && exit 0
+
+{
+  echo "There are $changed uncommitted file(s)."
+  echo "Before ending the turn: commit them with a Conventional Commits message,"
+  echo "and update .claude/PLAN.md so it describes where the work now stands —"
+  echo "what was done, what is open, and any decision the user still owes."
+  echo "If the work is deliberately incomplete, say so explicitly rather than"
+  echo "committing it as if it were finished."
+} >&2
+exit 2
