@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
@@ -196,6 +197,9 @@ class _CapturingRunStore:
 
 class _UnmeteredPlan:
     def runs_per_day(self, plan_id: str) -> int | None:
+        return None
+
+    def spend_usd_per_day(self, plan_id: str) -> Decimal | None:
         return None
 
 

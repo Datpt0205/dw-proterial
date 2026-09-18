@@ -7,6 +7,7 @@ and application handlers depend only on the protocols.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from decimal import Decimal
 from typing import Literal, Protocol, TypeVar
 from uuid import UUID
 
@@ -77,6 +78,17 @@ class RunAllowancePort(Protocol):
     """
 
     def runs_per_day(self, plan_id: str) -> int | None: ...
+
+    def spend_usd_per_day(self, plan_id: str) -> Decimal | None:
+        """What this plan may spend in a day, or ``None`` for unmetered.
+
+        Counting runs bounds how often a tenant asks; it does not bound what
+        the asking costs. A plan of twenty runs a day is twenty chances to spend
+        without limit, because the per-run ceiling caps one loop and nothing
+        caps the day. Same split as above: the platform owns the plan and
+        answers the limit, this package owns `worker_runs` and answers the spend.
+        """
+        ...
 
 
 class StreamingWorkflowRunnerPort(Protocol):

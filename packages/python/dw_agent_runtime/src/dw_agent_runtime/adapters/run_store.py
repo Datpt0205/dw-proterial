@@ -6,6 +6,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
@@ -14,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from dw_agent_runtime.adapters.runtime_tables import worker_runs
+from dw_agent_runtime.adapters.runtime_tables import model_usage_ledger, worker_runs
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
 from dw_kernel.autonomy import AutonomyLevel
 from dw_kernel.errors import ConflictError, NotFoundError
@@ -285,6 +286,39 @@ class SqlWorkerRunStore:
         )
         count: int = result.scalar_one()
         return count
+
+    async def spend_since(self, tenant_id: uuid.UUID, since: datetime) -> Decimal:
+        """What this tenant has spent since ``since``, in USD.
+
+        The other half of a quota. `started_since` bounds how MANY runs a tenant
+        makes; this bounds what they cost, and without it a plan of twenty runs
+        a day is twenty chances to spend without limit — the per-run ceiling
+        caps one loop, never a day.
+
+        `COALESCE`: a tenant with no runs, or runs that recorded no cost yet,
+        has spent nothing. `SUM` over no rows is NULL, and a NULL compared
+        against a limit is neither above nor below it — which would read as
+        "under quota" and make the cap silently absent exactly when the table
+        is empty.
+
+        Summed from `model_usage_ledger`, not from `worker_runs`: the run table
+        carries no cost column at all. Cost is recorded per model CALL, which is
+        also the right grain — a run that is still going has already spent what
+        its finished calls cost, and a cap that only counted settled runs would
+        let a single long run outspend the day.
+
+        Written against the wrong table first, and neither mypy nor ruff said a
+        word: SQLAlchemy resolves `table.c.<name>` at runtime, so a column that
+        does not exist is an AttributeError in production and nothing at all in
+        a type check. The integration test below is what says it.
+        """
+        result = await self._execute_for_tenant(
+            tenant_id,
+            sa.select(sa.func.coalesce(sa.func.sum(model_usage_ledger.c.cost_usd), 0)).where(
+                model_usage_ledger.c.created_at >= since
+            ),
+        )
+        return Decimal(result.scalar_one())
 
     async def active_since(
         self,

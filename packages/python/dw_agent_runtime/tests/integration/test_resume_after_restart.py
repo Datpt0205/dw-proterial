@@ -8,6 +8,7 @@ PostgreSQL, which is exactly the durability claim being verified.
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,9 @@ class _UnmeteredPlan:
     """Any plan, no daily limit — the run quota is not what these tests exercise."""
 
     def runs_per_day(self, plan_id: str) -> int | None:
+        return None
+
+    def spend_usd_per_day(self, plan_id: str) -> Decimal | None:
         return None
 
 

@@ -83,9 +83,16 @@ remembering is a workflow's judgement, not the platform's.
   `platform_tools`, never passed in ready-made, and a child may not offer a tool
   its caller lacks. The `task` tool exists only when a context names something to
   delegate to.
-- **Mốc 6 running many customers** — model fallback/retry on the agent path (it
-  has none), a per-tenant spend cap that reads the ledger (today's quota counts
-  runs, not money), `cancel_thread` wired to an endpoint, provider fixtures.
+- **Mốc 6 running many customers** — half done.
+    - Retry on the agent path: **done** (`adapters/model_retry.py`). Provider
+      FALLBACK is deliberately not built: the chat factory points at a LiteLLM
+      proxy where failover is configuration the application never sees.
+    - Per-tenant daily spend cap: **done**. `RunAllowancePort.spend_usd_per_day`
+      plus `run_store.spend_since`, checked in the runner beside the run count and
+      before it. Summed from `model_usage_ledger` — `worker_runs` has no cost
+      column, which the first version got wrong and only a real database said so.
+    - Still open: `cancel_thread` has no HTTP endpoint (the runner method exists),
+      and provider fixtures.
 
 ## Decisions still open (asked, not yet answered)
 
