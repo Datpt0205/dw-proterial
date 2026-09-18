@@ -54,14 +54,21 @@ remembering is a workflow's judgement, not the platform's.
 
 **Still open, and the heavy half:**
 
-- `deepagents.MemoryMiddleware` reads `AGENTS.md` from a backend and teaches the
-  model to `edit_file` to update it. `DocgenSandbox` already implements that
-  backend — but `/work` is tmpfs, so a `MEMORY.md` there is amnesia on restart.
-- The builtin file tools bypass `ToolExecutor` (authorization, idempotency,
-  audit), which is why `OfferedToolsOnlyMiddleware` strips them. Routing them
-  through the executor is the heaviest piece left.
-- `AGENTS.md` is customer data: per tenant, versioned, and not writable by a
-  prompt-injected instruction inside a document the agent read.
+- ~~Route the builtin file tools through `ToolExecutor`~~ — **checked, and not a
+  task.** It was inherited from the blueprint, which assumed memory would be a
+  `MEMORY.md` the model edits with `edit_file`. `build_agent` is built on
+  `create_agent`, which installs no tools at all; `create_deep_agent` is what
+  ships the eight file/shell tools and it is deliberately not used. The only
+  always-allowed name is `write_todos`, which writes to graph state and reaches
+  nothing outside the run. `OfferedToolsOnlyMiddleware` remains as the guard for
+  a context that reaches for the deep variant anyway.
+- So the `AGENTS.md` route is not needed either: structured items in Postgres
+  carry provenance, supersession, audit and RLS, and a file in tmpfs carries
+  none of those. Reopen this only if a context has a real need for a
+  model-editable file, and then it is new capability, not a hole to close.
+- Left for the write side: vector-ranked recall (Qdrant and `EmbeddingPort` are
+  already wired for knowledge), and a context that actually emits
+  `memory.candidate_proposed`.
 
 ## Next after that
 
