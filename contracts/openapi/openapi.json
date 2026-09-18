@@ -325,6 +325,20 @@
         "title": "BootstrapResponse",
         "type": "object"
       },
+      "CancelResult": {
+        "description": "Whether a run was actually stopped, not whether the request was understood.\n\n`False` is an ordinary answer: the turn had already finished, or another\nprocess holds it. A caller pressing Stop twice should get 200 both times —\nthe second one describes a thread that is already not running, which is what\nthey asked for.",
+        "properties": {
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cancelled"
+        ],
+        "title": "CancelResult",
+        "type": "object"
+      },
       "CreateTenantRequest": {
         "properties": {
           "name": {
@@ -4016,6 +4030,50 @@
         "summary": "Ready",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/runs/threads/{thread_id}/cancel": {
+      "post": {
+        "description": "Stop the run in flight on this thread.\n\nThe runner's own `cancel_thread` takes a thread id and nothing else: it\nlooks the task up in an in-process dict, which is safe while the only caller\nis a run that started it. Over HTTP the id is whatever the caller typed, so\nownership is established HERE, against the database under the caller's\ntenant, before the runner is asked to do anything.\n\nA thread this tenant has never run on is a 404 rather than a 403. \"Not\nyours\" and \"never existed\" are the same answer to someone probing ids, and\nthe difference between them is exactly what a prober is trying to learn.",
+        "operationId": "cancel_thread_api_v1_runs_threads__thread_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Thread",
+        "tags": [
+          "runs"
         ]
       }
     },

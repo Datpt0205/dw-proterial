@@ -91,8 +91,13 @@ remembering is a workflow's judgement, not the platform's.
       plus `run_store.spend_since`, checked in the runner beside the run count and
       before it. Summed from `model_usage_ledger` — `worker_runs` has no cost
       column, which the first version got wrong and only a real database said so.
-    - Still open: `cancel_thread` has no HTTP endpoint (the runner method exists),
-      and provider fixtures.
+    - `cancel_thread` over HTTP: **done**. The runner's method takes a thread id
+      and nothing else — it reads an in-process dict, safe while the only caller
+      is a run that started it, a cross-tenant cancel the moment it is a route.
+      Ownership is established in the endpoint via `run_store.thread_belongs_to`,
+      under the caller's own tenant and therefore under RLS; a thread that is not
+      yours is a 404, the same answer as one that never existed.
+    - Still open: provider fixtures.
 
 ## Decisions still open (asked, not yet answered)
 

@@ -62,11 +62,13 @@ if printf '%s' "$staged" | grep -qE 'executor\.py|autonomy\.py|langchain_tools\.
     gate and confirm a test goes red."
 fi
 
-if printf '%s' "$staged" | grep -qE 'membership_lookup|caching_lookup|access_context|identity\.py|auth'; then
+if printf '%s' "$staged" | grep -qE 'membership_lookup|caching_lookup|access_context|identity\.py|auth|^apps/api/src/dw_api/routes/'; then
   add "An authorization path changed. Is the new field carried through the cache
     serialiser, and does a cache entry written before it existed read as the
     RESTRICTIVE value? Is there a negative test for the caller who should be
-    refused?"
+    refused? For a ROUTE: does every id in the path get checked against the
+    caller's OWN tenant before anything acts on it, and does 'not yours' answer
+    the same as 'never existed'?"
 fi
 
 if printf '%s' "$staged" | grep -qE 'memory|knowledge|evidence'; then

@@ -687,6 +687,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/threads/{thread_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Thread
+         * @description Stop the run in flight on this thread.
+         *
+         *     The runner's own `cancel_thread` takes a thread id and nothing else: it
+         *     looks the task up in an in-process dict, which is safe while the only caller
+         *     is a run that started it. Over HTTP the id is whatever the caller typed, so
+         *     ownership is established HERE, against the database under the caller's
+         *     tenant, before the runner is asked to do anything.
+         *
+         *     A thread this tenant has never run on is a 404 rather than a 403. "Not
+         *     yours" and "never existed" are the same answer to someone probing ids, and
+         *     the difference between them is exactly what a prober is trying to learn.
+         */
+        post: operations["cancel_thread_api_v1_runs_threads__thread_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -858,6 +888,19 @@ export interface components {
             principal_id: string;
             /** Subject */
             subject: string;
+        };
+        /**
+         * CancelResult
+         * @description Whether a run was actually stopped, not whether the request was understood.
+         *
+         *     `False` is an ordinary answer: the turn had already finished, or another
+         *     process holds it. A caller pressing Stop twice should get 200 both times —
+         *     the second one describes a thread that is already not running, which is what
+         *     they asked for.
+         */
+        CancelResult: {
+            /** Cancelled */
+            cancelled: boolean;
         };
         /** CreateTenantRequest */
         CreateTenantRequest: {
@@ -2888,6 +2931,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessResponse"];
+                };
+            };
+        };
+    };
+    cancel_thread_api_v1_runs_threads__thread_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

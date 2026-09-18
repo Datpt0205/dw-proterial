@@ -265,6 +265,26 @@ class SqlWorkerRunStore:
         row = result.first()
         return None if row is None else row.approval_request_id
 
+    async def thread_belongs_to(self, tenant_id: uuid.UUID, thread_id: uuid.UUID) -> bool:
+        """Whether this tenant has ever run anything on this thread.
+
+        `LangGraphWorkflowRunner.cancel_thread` looks a thread up in a dict keyed
+        by thread id and nothing else — it has no tenant to check against,
+        because in-process it is only ever reached from a run it started itself.
+        The moment that becomes an HTTP route, the id is whatever the caller
+        typed, and cancelling by guessed id would reach across tenants.
+
+        So the check lives here, where RLS makes it real: the GUC is set from
+        the caller's verified context, the row is invisible if it belongs to
+        anybody else, and "not yours" and "never existed" are the same answer —
+        which is what a caller should be told either way.
+        """
+        result = await self._execute_for_tenant(
+            tenant_id,
+            sa.select(worker_runs.c.id).where(worker_runs.c.thread_id == thread_id).limit(1),
+        )
+        return result.first() is not None
+
     async def started_since(self, tenant_id: uuid.UUID, since: datetime) -> int:
         """How many runs this tenant has started since ``since``.
 
