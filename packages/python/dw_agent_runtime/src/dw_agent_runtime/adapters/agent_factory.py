@@ -59,6 +59,7 @@ from dw_agent_runtime.adapters.langchain_tools import (
     UnreadableFilesMiddleware,
     platform_tools,
 )
+from dw_agent_runtime.adapters.model_retry import ModelRetryMiddleware
 from dw_agent_runtime.adapters.recalled_memory import MemoryRecallPort, RecalledMemoryMiddleware
 from dw_agent_runtime.adapters.run_budget import RunBudgetMiddleware
 from dw_agent_runtime.adapters.sub_agents import SubAgentSpec, sub_agent_middleware
@@ -197,6 +198,10 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
         # The only ceiling on the path that can loop. Without it an agent run is
         # bounded by `recursion_limit`, which counts steps and not money.
         RunBudgetMiddleware(spec.budget, spec.profiles, spec.profile_id),
+        # Last, so it sits closest to the model: a retry re-runs only the call
+        # that failed. A failed attempt produces no response and therefore no
+        # usage, so the ceiling above is not charged for one.
+        ModelRetryMiddleware(),
     ]
     if spec.sub_agents:
         # Last, and only when asked. It adds the `task` tool, so it changes what
