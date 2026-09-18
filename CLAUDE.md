@@ -52,6 +52,48 @@ record a decision instead.
   is versioned, and a release manifest pins the set a run used.
 - Human-in-command.
 
+## A second language, and where its boundary has to be
+
+This repository is an **AI platform**, not a general application framework. What
+belongs here is the agent runtime, memory, knowledge, the trust boundary around
+them, and the seams a business context plugs into. A CRUD-heavy application
+layer does not have to be Python, and saying so is cheaper than pretending
+Python is the right tool for every tier.
+
+**A service in another language (Go was the case discussed) is allowed, under
+one condition that is not negotiable: it must not re-implement tenant
+isolation.** That fact has exactly one owner, and it is not an application —
+it is PostgreSQL.
+
+Concretely, a non-Python service may connect to the database when all of the
+following hold, and a reviewer can check every one:
+
+1. It connects as a role that does **not** bypass RLS. `dw_app` and
+   `dw_agent_ro` qualify; `dw_migrator`, `dw_provisioner` and `dw_admin` do not
+   and must never be handed to an application.
+2. It sets `app.tenant_id` **per transaction**, from a credential it verified
+   itself, using `set_config(..., true)` so a pooled connection carries no
+   residue into the next caller.
+3. It owns no migrations. The schema has one owner and it is `db/migrations`.
+4. It re-derives no authorization. Scopes, roles and plan entitlements are
+   resolved by the platform and reach it as a verified context or through the
+   platform's API — never by reading `platform.roles` and deciding for itself.
+   Two implementations of who-may-do-what is the drift that ends as a
+   disclosure.
+
+What makes this safe is not the list; it is that the list is TESTED.
+`test_rls_coverage.py` asks the catalog, not the source: every tenant table has
+RLS enabled and FORCEd including partitions, every policy narrows by a setting
+the backend controls, and a connection that never scopes itself reads nothing.
+Those properties hold for any language, which is the whole point — they are
+what allows a second one at all.
+
+**What a second language must NOT take over:** anything that decides. Approval,
+autonomy, the spend ceiling, evidence verification, memory writes, retrieval
+filters. Those are the platform's reason to exist, they are where the tests are,
+and a second implementation of any of them is a second answer to a question that
+must have one.
+
 ## Required stack
 
 Python 3.12 with a uv workspace. FastAPI, Pydantic v2, SQLAlchemy 2 async,

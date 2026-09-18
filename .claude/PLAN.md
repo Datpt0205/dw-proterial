@@ -27,7 +27,19 @@ real data, what a day of runs actually costs.
 
 **Done and pinned by tests:** Mốc 0, 1a, 1b, 2, 3, 4, 5, 6. Details below.
 
-**Open decisions:** none. The three that stood here were answered.
+**Open decisions:** none. A second language (Go) for the application tier was
+asked about and answered in `CLAUDE.md` — allowed, provided it never
+re-implements tenant isolation, and the four conditions there are tested by
+`test_rls_coverage.py` rather than trusted.
+
+**Next, in the order they would be asked for in an enterprise review:**
+
+1. `retention_policy` has no reader — memory and knowledge accumulate customer
+   data with no lifecycle. This is both a failure-mode-1 entry and a compliance
+   answer nobody can give today.
+2. Backup and restore: no procedure, never rehearsed.
+3. Tenant offboarding and data export.
+4. SLO, alerting, on-call.
 
 ## Mốc 3 — nhớ được giữa các lượt (chi tiết)
 

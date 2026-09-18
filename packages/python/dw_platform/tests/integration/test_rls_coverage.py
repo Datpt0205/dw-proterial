@@ -49,8 +49,32 @@ _TENANT_TABLES = sa.text(
 )
 
 _POLICIES = sa.text(
-    "SELECT schemaname, tablename FROM pg_policies WHERE schemaname = ANY(:schemas)"
+    "SELECT schemaname, tablename, policyname, qual, with_check"
+    " FROM pg_policies WHERE schemaname = ANY(:schemas)"
 )
+
+# The trusted per-transaction settings a policy may narrow by. All three are set
+# by the backend from a verified context and none can be supplied by a caller.
+#
+# `app.tenant_id` is the ordinary one. `app.principal_id` exists because identity
+# bootstrap has to read your own membership BEFORE a tenant is resolved — there
+# is no tenant to filter by yet. `app.worker_drain` is the background drain's
+# deliberate escape hatch, set only by a process draining queues across tenants.
+_TRUSTED_SETTINGS = (
+    "current_setting('app.tenant_id'",
+    "current_setting('app.principal_id'",
+    "current_setting('app.worker_drain'",
+)
+
+# Policies that narrow by no setting at all. Each needs a reason, and the reason
+# is what a reviewer checks — not the entry's existence. A new policy that
+# isolates nothing fails this suite until somebody writes down why it should not.
+_UNSCOPED_ON_PURPOSE: dict[tuple[str, str], str] = {
+    ("documents", "knowledge_global_read_documents"): (
+        "scope='global' is a shared corpus every tenant may read by design; "
+        "publishing into it takes the knowledge.publish_global scope"
+    ),
+}
 
 
 @pytest.fixture
@@ -131,3 +155,87 @@ async def test_a_partition_cannot_be_read_around_its_parent(
 
     assert through_parent == 0
     assert direct == 0, "the partition returned rows the parent refused"
+
+
+async def test_every_policy_actually_consults_the_tenant_setting(
+    session: AsyncSession,
+) -> None:
+    """Existence is not isolation.
+
+    `USING (true)` is a policy. So is one filtering on a column nobody sets. What
+    isolates is a predicate reading a setting the backend controls — asserted on
+    the read side AND the write side, because a policy that reads correctly and
+    writes freely lets one tenant insert rows into another's table.
+
+    Three settings count, not one: identity bootstrap narrows by principal
+    because no tenant is resolved yet, and the background drain narrows by its
+    own flag. Anything narrowing by none of them needs a written reason.
+    """
+    rows = (await session.execute(_POLICIES, {"schemas": list(_TENANT_SCHEMAS)})).all()
+    assert rows, "no policies at all — the query is wrong, not the schema"
+
+    def narrows(predicate: str | None) -> bool:
+        return predicate is not None and any(s in predicate for s in _TRUSTED_SETTINGS)
+
+    blind_reads = [
+        f"{r.schemaname}.{r.tablename}.{r.policyname}"
+        for r in rows
+        if not narrows(r.qual) and (r.tablename, r.policyname) not in _UNSCOPED_ON_PURPOSE
+    ]
+    blind_writes = [
+        f"{r.schemaname}.{r.tablename}.{r.policyname}"
+        for r in rows
+        if r.with_check is not None and not narrows(r.with_check)
+    ]
+
+    assert blind_reads == [], (
+        f"policies narrowing by no trusted setting and with no written reason: {blind_reads}"
+    )
+    assert blind_writes == [], f"policies that do not filter writes: {blind_writes}"
+
+
+async def test_a_connection_that_never_scopes_itself_reads_nothing(
+    db_urls: DatabaseUrls, session: AsyncSession
+) -> None:
+    """The contract any language has to honour to be allowed near this database.
+
+    `dw_app` does not bypass RLS, so a connection that never sets
+    `app.tenant_id` should see zero rows — whatever wrote them, and whatever
+    language is asking. This is what makes the database, rather than one
+    application, the place tenant isolation lives.
+    """
+    tenant = uuid.uuid4()
+    await session.execute(
+        sa.text(
+            "INSERT INTO platform.audit_events"
+            " (id, tenant_id, workspace_id, actor_id, action, resource_type,"
+            "  resource_id, occurred_at)"
+            " VALUES (gen_random_uuid(), :t, gen_random_uuid(), gen_random_uuid(),"
+            "         'rls.unscoped', 'probe', 'x', now())"
+        ),
+        {"t": tenant},
+    )
+    await session.commit()
+
+    engine = create_async_engine(db_urls.app, poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            seen = (
+                await conn.execute(
+                    sa.text("SELECT count(*) FROM platform.audit_events WHERE action = :a"),
+                    {"a": "rls.unscoped"},
+                )
+            ).scalar_one()
+            # And the row IS there — asserted through a role that may bypass, so
+            # the zero above is isolation rather than an empty table.
+            assert seen == 0, "an unscoped connection read a tenant's rows"
+    finally:
+        await engine.dispose()
+
+    still_there = (
+        await session.execute(
+            sa.text("SELECT count(*) FROM platform.audit_events WHERE action = :a"),
+            {"a": "rls.unscoped"},
+        )
+    ).scalar_one()
+    assert still_there == 1, "the probe row vanished, so the zero above proved nothing"
