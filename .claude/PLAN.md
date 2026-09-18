@@ -97,7 +97,11 @@ remembering is a workflow's judgement, not the platform's.
       Ownership is established in the endpoint via `run_store.thread_belongs_to`,
       under the caller's own tenant and therefore under RLS; a thread that is not
       yours is a 404, the same answer as one that never existed.
-    - Still open: provider fixtures.
+    - Provider fixtures: **done**. The mechanism existed and was wired at
+      `bootstrap/models.py`, the directory was empty, and nothing had ever read a
+      fixture back — configured and unexercised. Now tested: found by prompt id
+      AND version, a missing recording is refused loudly rather than invented, a
+      non-object file is refused, and a registered builder still wins.
 
 ## Decisions still open (asked, not yet answered)
 
