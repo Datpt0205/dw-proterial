@@ -28,6 +28,7 @@ items = sa.Table(
     sa.Column("retention_policy", sa.Text, nullable=False),
     sa.Column("memory_schema_version", sa.Text, nullable=False),
     sa.Column("created_by_run_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("fact_key", sa.Text, nullable=True),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
 )
 

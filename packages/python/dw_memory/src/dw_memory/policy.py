@@ -28,6 +28,8 @@ class MemoryCandidate(BaseModel):
     provenance_refs: tuple[EvidenceRef, ...] = ()
     confidence: float = Field(ge=0.0, le=1.0)
     classification: str = "internal"
+    # Proposed by the workflow, never by raw model output: see MemoryService.
+    fact_key: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 @dataclass(frozen=True)

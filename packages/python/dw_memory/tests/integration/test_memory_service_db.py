@@ -585,3 +585,154 @@ async def test_recall_does_not_cross_between_two_teams_of_one_tenant(
     )
 
     assert found == (), "a sibling workspace must not read this team's memory"
+
+
+# ----------------------------------------------------------- supersession --
+#
+# Memory used to be append-only: nothing ever wrote `valid_until`, so two facts
+# that disagreed both stayed live and recall returned both, ordered by
+# confidence. A customer who moved their signing date twice left three live
+# answers and the agent believed whichever it had been surest of.
+
+
+async def test_a_newer_answer_closes_the_older_one_and_recall_returns_one(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(
+        svc,
+        seeded,
+        context=context,
+        subject_refs=(subject,),
+        fact_key="contract_date",
+        content="Ký ngày 10/10.",
+        confidence=0.99,
+    )
+    await _remember(
+        svc,
+        seeded,
+        context=context,
+        subject_refs=(subject,),
+        fact_key="contract_date",
+        content="Ký ngày 20/10.",
+        confidence=0.80,
+    )
+
+    live = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+
+    # The LATER one, not the more confident one — which is the whole point.
+    assert [item.content for item in live] == ["Ký ngày 20/10."]
+
+
+async def test_the_superseded_memory_is_closed_not_deleted(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """ "What did we believe last Tuesday" has to stay answerable, or the system
+    cannot explain a decision it already made."""
+    svc, session_factory = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,), fact_key="contract_date")
+    await _remember(
+        svc,
+        seeded,
+        context=context,
+        subject_refs=(subject,),
+        fact_key="contract_date",
+        content="Ký ngày 20/10.",
+    )
+
+    rows = await _scalar(
+        session_factory,
+        "SELECT count(*) FROM memory.items WHERE subject_refs ? :s",
+        s=subject,
+    )
+    closed = await _scalar(
+        session_factory,
+        "SELECT count(*) FROM memory.items WHERE subject_refs ? :s AND valid_until IS NOT NULL",
+        s=subject,
+    )
+    assert rows == 2, "both rows are still there"
+    assert closed == 1, "exactly the older one is closed"
+
+
+async def test_a_memory_with_no_fact_key_supersedes_nothing(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """An episode does not replace an episode: a meeting happened, and so did
+    another. Only a fact that names the question it answers may close one."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,), content="Họp lần 1.")
+    await _remember(svc, seeded, context=context, subject_refs=(subject,), content="Họp lần 2.")
+
+    live = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+
+    assert len(live) == 2
+
+
+async def test_the_same_question_about_another_customer_is_untouched(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """`fact_key` alone is not identity — every account has a contract date."""
+    svc, _ = service
+    context = make_context()
+    theirs, ours = a_subject(), a_subject()
+    await _remember(
+        svc,
+        seeded,
+        context=context,
+        subject_refs=(theirs,),
+        fact_key="contract_date",
+        content="Của khách kia.",
+    )
+    await _remember(svc, seeded, context=context, subject_refs=(ours,), fact_key="contract_date")
+
+    live = await svc.recall(
+        context, worker_id="demo", subject_refs=(theirs,), now=datetime.now(UTC)
+    )
+
+    assert [item.content for item in live] == ["Của khách kia."]
+
+
+async def test_supersession_names_what_it_closed_on_the_audit_trail(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """A fact that silently replaces another leaves a trail that records two
+    writes and nothing connecting them."""
+    svc, session_factory = service
+    context = make_context()
+    subject = a_subject()
+    first = await svc.propose(
+        candidate(seeded, subject_refs=(subject,), fact_key="contract_date"),
+        context,
+        created_by_run_id=seeded.run_id,
+    )
+    assert first.item is not None
+    await _remember(
+        svc,
+        seeded,
+        context=context,
+        subject_refs=(subject,),
+        fact_key="contract_date",
+        content="Ký ngày 20/10.",
+    )
+
+    recorded = await _scalar(
+        session_factory,
+        """
+        SELECT count(*) FROM platform.audit_events
+        WHERE action = 'memory.item_written'
+          AND details -> 'superseded' ? :closed
+          AND details ->> 'fact_key' = 'contract_date'
+        """,
+        closed=str(first.item.memory_id),
+    )
+    assert recorded == 1

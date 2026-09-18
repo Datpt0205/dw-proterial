@@ -42,6 +42,12 @@ class MemoryItem(BaseModel):
     retention_policy: str = "default"
     memory_schema_version: str = MEMORY_SCHEMA_VERSION
     created_by_run_id: UUID
+    # What question this memory answers — "contract_date", not its value.
+    # Two live memories sharing a key and a subject are two answers to one
+    # question, which is what lets the newer close the older without asking a
+    # model whether two sentences disagree. None means the memory accumulates:
+    # correct for an episode (a meeting happened, and so did another).
+    fact_key: str | None = Field(default=None, min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def _validity_window_ordered(self) -> MemoryItem:

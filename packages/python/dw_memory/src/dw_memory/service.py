@@ -101,8 +101,12 @@ class MemoryService:
                 retention_policy="default",
                 memory_schema_version=MEMORY_SCHEMA_VERSION,
                 created_by_run_id=created_by_run_id,
+                fact_key=candidate.fact_key,
             )
 
+        # Bound before the branch: a REVIEW or REJECT stores no item and closes
+        # nothing, but the audit event is written either way and reads this.
+        superseded: tuple[uuid.UUID, ...] = ()
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
             await session.execute(
@@ -155,9 +159,11 @@ class MemoryService:
                         retention_policy=item.retention_policy,
                         memory_schema_version=item.memory_schema_version,
                         created_by_run_id=item.created_by_run_id,
+                        fact_key=item.fact_key,
                         created_at=now,
                     )
                 )
+                superseded = await self._close_superseded(session, item, now=now)
                 await session.execute(
                     sa.insert(tables.item_evidence),
                     [
@@ -171,10 +177,54 @@ class MemoryService:
                 )
             await SqlAuditRepository(session).append(
                 self._audit_event(
-                    context, candidate, outcome, item, candidate_id, created_by_run_id, now
+                    context,
+                    candidate,
+                    outcome,
+                    item,
+                    candidate_id,
+                    created_by_run_id,
+                    now,
+                    superseded=superseded,
                 )
             )
         return ProposalResult(candidate_id=candidate_id, outcome=outcome, item=item)
+
+    async def _close_superseded(
+        self, session: AsyncSession, item: MemoryItem, *, now: datetime
+    ) -> tuple[uuid.UUID, ...]:
+        """Close the live memories this one answers over, and say which.
+
+        Two memories sharing a `fact_key` AND a subject are two answers to one
+        question; the later one is the answer now. Closing is `valid_until = now`
+        — the row, its provenance and its audit entry all stay, so "what did we
+        believe last Tuesday" is still answerable. Deleting would make the system
+        unable to explain a decision it had already made.
+
+        In the caller's transaction, deliberately: a memory superseded by one
+        whose evidence then failed verification would leave the customer with no
+        live answer at all.
+
+        A memory with no key supersedes nothing. That is the compatibility story
+        and also the correct default — an episode does not replace an episode.
+        """
+        if item.fact_key is None or not item.subject_refs:
+            return ()
+        closed = await session.execute(
+            sa.update(tables.items)
+            .where(
+                tables.items.c.workspace_id == item.workspace_id,
+                tables.items.c.worker_id == item.worker_id,
+                tables.items.c.fact_key == item.fact_key,
+                tables.items.c.memory_id != item.memory_id,
+                tables.items.c.valid_until.is_(None),
+                tables.items.c.subject_refs.op("?|")(
+                    sa.literal(list(item.subject_refs), sa.ARRAY(sa.Text))
+                ),
+            )
+            .values(valid_until=now)
+            .returning(tables.items.c.memory_id)
+        )
+        return tuple(row.memory_id for row in closed.all())
 
     def _audit_event(
         self,
@@ -185,6 +235,8 @@ class MemoryService:
         candidate_id: uuid.UUID,
         created_by_run_id: uuid.UUID,
         now: datetime,
+        *,
+        superseded: tuple[uuid.UUID, ...] = (),
     ) -> AuditEvent:
         """What was learned, on whose evidence, and under which policy.
 
@@ -212,6 +264,12 @@ class MemoryService:
                 "reason": outcome.reason,
                 "policy_version": self.policy.policy_version,
                 "evidence_count": len(candidate.provenance_refs),
+                # Which memories this one closed, and under what name. A fact
+                # that silently replaces another is the same trail problem as a
+                # setting that changes without saying what changed: the row is
+                # still there, but nothing connects it to what replaced it.
+                "fact_key": candidate.fact_key,
+                "superseded": [str(memory_id) for memory_id in superseded],
             },
             occurred_at=now.astimezone(UTC),
         )

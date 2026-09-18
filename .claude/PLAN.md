@@ -24,6 +24,20 @@ Two honest limits to keep in view:
   run is about one record; it is not retrieval, and a run about no record
   recalls nothing by design.
 
+**Also done: supersession (migration `62a9aaba6b16`).** Memory was append-only —
+nothing ever wrote `valid_until`, so two facts that disagreed both stayed live
+and recall returned both by confidence. A `fact_key` names WHAT a memory asserts,
+so two live memories sharing a key and a subject are two answers to one question
+and the later one closes the earlier. Closed, never deleted: the row, its
+provenance and its audit entry stay, and the audit says which memories were
+closed and under what key. A memory with no key still accumulates, which is
+correct for episodes.
+
+This is the one SOTA idea taken so far that changes correctness rather than
+quality. Not taken, deliberately: vector/graph recall (needs embedding
+infrastructure; subject-keyed matching is explainable and enough while a run is
+about one record), and LLM-decided merging (the model proposes, code decides).
+
 **Still open, and the heavy half:**
 
 - `MemoryService.propose` still has **no production caller**. Recall reads what
