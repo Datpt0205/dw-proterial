@@ -81,6 +81,14 @@ if printf '%s' "$staged" | grep -qE 'Dockerfile|docker-compose'; then
     pids limit, read-only root and init?"
 fi
 
+if printf '%s' "$staged" | grep -qE '^\.github/workflows/|^Makefile$'; then
+  add "A CI step changed. Did you watch a real run of it, or only read the YAML?
+    A step can read as configured and never execute — the trivy gate downloaded a
+    release tag that did not exist, curl without --fail piped the 404 page into
+    tar, and the step reported a corrupt archive while scanning nothing. Confirm
+    the step both RAN and can still go red."
+fi
+
 if printf '%s' "$staged" | grep -qE 'pyproject\.toml|package\.json|uv\.lock|pnpm-lock'; then
   add "A dependency changed. Did you RUN the new version rather than trust its
     docs — the list of what a library installs, and the behaviour you are

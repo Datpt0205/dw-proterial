@@ -249,11 +249,23 @@ jobs:
         # already exist; building them twice to scan them costs four minutes.
         # `--ignore-unfixed`: a CVE with no released fix is not an action, and a
         # scanner that reports what cannot be done gets muted.
+        env:
+          # Pinned: a scanner that changes version on its own turns a red build
+          # into a question about the scanner. Bump deliberately.
+          TRIVY_VERSION: "0.74.0"
         run: |
-          curl -sSL https://github.com/aquasecurity/trivy/releases/download/v0.58.1/trivy_0.58.1_Linux-64bit.tar.gz | tar -xz trivy
+          # --fail matters more than it looks. Without it curl pipes GitHub's
+          # 404 page into tar, which reports "not in gzip format" — and the
+          # first version pinned here did not exist, so this step never ran a
+          # scan at all while reading as configured in the workflow file.
+          curl --fail -sSL \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz trivy
+          ./trivy --version
           for image in dw-api:local dw-worker:local dw-docgen:local dw-web:local; do
             echo "== $image"
-            ./trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --exit-code 1 --quiet "$image"
+            ./trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+              --exit-code 1 --quiet "$image"
           done
       - name: Container logs
         # Only the `ps` table was captured before, which says a container is
