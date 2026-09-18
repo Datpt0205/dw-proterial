@@ -7,6 +7,11 @@ dependencies = [
     "dw-kernel",
     "dw-knowledge",
     "dw-platform",
+    # The memory ranker talks to Qdrant directly. Declared here rather than
+    # borrowed through dw-knowledge: memory owns its own index, and a
+    # dependency reached through another package is one nobody sees when they
+    # ask what this one needs.
+    "qdrant-client>=1.12,<1.15",
     "pydantic>=2.10,<3",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
 ]

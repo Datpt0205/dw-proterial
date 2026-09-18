@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from dw_kernel.ids import TenantId, WorkspaceId
-from dw_memory.contracts import MemoryType, WriteDecision
+from dw_memory.contracts import MemoryItem, MemoryType, WriteDecision
 from dw_memory.policy import MemoryCandidate, PolicyOutcome
 from dw_memory.service import ProposalResult
 from dw_platform.application.access_context import AccessContext
@@ -162,3 +162,65 @@ def test_the_worker_wires_this_event_and_only_this_one() -> None:
     paid model call per row of a bulk import; this one reacts to an event a run
     emits deliberately when it has something to remember."""
     assert sorted(memory_handlers(_Recorder())) == [MEMORY_CANDIDATE_PROPOSED]
+
+
+# ------------------------------------------------------------- ranking ----
+
+
+class _Index:
+    def __init__(self, raises: Exception | None = None) -> None:
+        self.raises = raises
+        self.indexed: list[dict[str, Any]] = []
+
+    async def index(self, **kwargs: Any) -> None:
+        self.indexed.append(kwargs)
+        if self.raises is not None:
+            raise self.raises
+
+
+class _Stores(_Recorder):
+    """Returns a stored item, so the indexing branch is reachable."""
+
+    async def propose(self, candidate: Any, context: Any, **kwargs: Any) -> ProposalResult:
+        await super().propose(candidate, context, **kwargs)
+        return ProposalResult(
+            candidate_id=uuid.uuid4(),
+            outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="ok"),
+            item=MemoryItem(
+                memory_id=uuid.uuid4(),
+                tenant_id=TENANT,
+                workspace_id=WORKSPACE,
+                worker_id="demo",
+                memory_type=MemoryType.COMMITMENT,
+                content="Anh An cam kết gửi hợp đồng.",
+                confidence=0.9,
+                valid_from=datetime(2026, 9, 18, tzinfo=UTC),
+                created_by_run_id=RUN,
+            ),
+        )
+
+
+async def test_a_stored_memory_is_handed_to_the_index() -> None:
+    index = _Index()
+
+    await build_memory_handler(_Stores(), index)(_event())
+
+    assert index.indexed[0]["tenant_id"] == TENANT
+    assert index.indexed[0]["worker_id"] == "demo"
+
+
+async def test_nothing_is_indexed_when_nothing_was_stored() -> None:
+    """A REVIEW or a REJECT has no item; indexing one would put a fact in the
+    ranker that the policy declined to keep."""
+    index = _Index()
+
+    await build_memory_handler(_Recorder(), index)(_event())
+
+    assert index.indexed == []
+
+
+async def test_the_index_is_optional() -> None:
+    """A deployment with no vector store still remembers."""
+    result = await build_memory_handler(_Stores())(_event())
+
+    assert "auto_write" in result

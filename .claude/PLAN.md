@@ -20,6 +20,16 @@ Two honest limits to keep in view:
 - `build_agent` still has **no production caller** — this is a skeleton, and a
   bounded context is what builds an agent. "Wired" here means wired into
   `platform_middleware`, the same sense in which the other middlewares are.
+- The ranker has a real implementation now: `dw_memory/adapters/qdrant_ranker.py`,
+  its own Qdrant collection, tested against a running Qdrant (tenant and worker
+  filters discriminate; a width mismatch refuses rather than dropping everyone's
+  vectors). Indexing runs on the worker after the memory is committed and never
+  raises; both composition roots build it only when `QDRANT_URL` is set, measured.
+- Measured, and NOT tuned on: the GIN index on `subject_refs` does serve `?|`
+  (Bitmap Index Scan), but in the full recall query the planner prefers
+  `ix_items_page` and applies `?|` as a filter. That is a reasonable choice on an
+  empty table and says nothing about production. Left alone deliberately — index
+  tuning against no data is guessing.
 - Recall matches on `subject_refs` overlap. Similarity now decides the ORDER of
   that set when a ranker is wired (`dw_memory/ranking.py`) — it never decides the
   SET. An index that is empty, stale or poisoned can only produce a worse order,

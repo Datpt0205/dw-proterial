@@ -32,10 +32,10 @@ from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
-from dw_worker.composition import build_ingest_components
+from dw_worker.composition import build_embeddings, build_ingest_components
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.ingest import build_ingest_consumer
-from dw_worker.consumers.memory import memory_handlers
+from dw_worker.consumers.memory import MemoryIndexPort, memory_handlers
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
@@ -55,6 +55,21 @@ def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
         langfuse_public_key=settings.langfuse_public_key,
         langfuse_secret_key=settings.langfuse_secret_key,
         otel_endpoint=settings.otel_endpoint,
+    )
+
+
+def _build_memory_index(settings: WorkerSettings) -> MemoryIndexPort | None:
+    """Imported inside the function so a deployment without Qdrant need not have
+    the client installed to boot — the same rule the knowledge index follows."""
+    if not settings.qdrant_url:
+        return None
+    from qdrant_client import AsyncQdrantClient
+
+    from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker
+
+    return QdrantMemoryRanker(
+        client=AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key),
+        embedder=build_embeddings(settings),
     )
 
 
@@ -97,7 +112,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     clock=clock,
                     id_generator=ids,
                     evidence_store=SqlEvidenceStore(clock=clock),
-                )
+                ),
+                # Writes the vector that lets a later recall order a long list.
+                # Absent without Qdrant, and absent is survivable: the memory is
+                # stored and recalled either way, it simply sorts with the ones
+                # nothing has an opinion about.
+                _build_memory_index(settings),
             )
         )
         registry.register(

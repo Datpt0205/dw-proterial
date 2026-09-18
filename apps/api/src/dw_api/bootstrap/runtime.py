@@ -51,6 +51,7 @@ from dw_knowledge.attachment_policy import load_attachment_policy
 from dw_knowledge.gateway import KnowledgeGateway
 from dw_knowledge.ingest_jobs import IngestJobStore
 from dw_knowledge.ports import ObjectStoragePort
+from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker
 from dw_memory.policy import MemoryWritePolicy
 from dw_memory.service import MemoryService
 from dw_observability.telemetry import NullTelemetry, TelemetryPort
@@ -69,6 +70,31 @@ class RuntimeWiring:
     document_indexing: KnowledgeDocumentIndexingAdapter
     memory_service: MemoryService
     tool_registry: ToolRegistry
+
+
+def _build_memory_ranker(
+    settings: ApiSettings, profiles: ModelProfileRegistry
+) -> QdrantMemoryRanker | None:
+    """The memory ranker, when this deployment has a vector store to rank with.
+
+    `None` rather than a stub: a stub that returned an empty order would look
+    like "the ranker has no opinion about any of these", which is a real answer
+    and not the same as "there is no ranker". `MemoryService` branches on the
+    absence and never asks.
+
+    Imported inside the function, like the knowledge index is: a deployment
+    without Qdrant should not need the client installed to boot.
+    """
+    if not settings.qdrant_url:
+        return None
+    from qdrant_client import AsyncQdrantClient
+
+    from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker as _Ranker
+
+    return _Ranker(
+        client=AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key),
+        embedder=build_embeddings(settings, profiles),
+    )
 
 
 def build_runtime(
@@ -169,6 +195,10 @@ def build_runtime(
         # whether a fact is kept. Neither imports the other's tables — the port is
         # declared by memory and satisfied here.
         evidence_store=SqlEvidenceStore(clock=clock),
+        # Orders a long list of recalled facts by what the turn is about. Absent
+        # without Qdrant, and absence costs only the ordering: recall still
+        # answers, confidence-first, exactly as it did before ranking existed.
+        ranker=_build_memory_ranker(settings, profiles),
     )
 
     # ---- graphs, workers, runner ----------------------------------------

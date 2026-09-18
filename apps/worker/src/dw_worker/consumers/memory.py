@@ -36,6 +36,7 @@ from dw_worker.consumers.outbox import EventHandler, UndeliverableEventError
 __all__ = [
     "MEMORY_CANDIDATE_PROPOSED",
     "MemoryCandidatePayload",
+    "MemoryIndexPort",
     "build_memory_handler",
     "memory_handlers",
 ]
@@ -49,6 +50,25 @@ MEMORY_CANDIDATE_PROPOSED = "memory.candidate_proposed"
 # False for it and `runs_per_day` answers 0, so anything that starts reading
 # the plan here refuses rather than grants.
 _NO_PLAN = "background"
+
+
+class MemoryIndexPort(Protocol):
+    """What makes a stored memory rankable later.
+
+    Optional on purpose: a deployment with no vector store still remembers, it
+    just cannot order a long list by what a question is about. See
+    `dw_memory.adapters.qdrant_ranker` for why this never raises.
+    """
+
+    async def index(
+        self,
+        *,
+        memory_id: uuid.UUID,
+        content: str,
+        tenant_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        worker_id: str,
+    ) -> None: ...
 
 
 class MemoryProposePort(Protocol):
@@ -106,8 +126,15 @@ def _access_for(event: OutboxEvent, payload: MemoryCandidatePayload) -> AccessCo
     )
 
 
-def build_memory_handler(service: MemoryProposePort) -> EventHandler:
-    """The handler to wire under `MEMORY_CANDIDATE_PROPOSED`."""
+def build_memory_handler(
+    service: MemoryProposePort, index: MemoryIndexPort | None = None
+) -> EventHandler:
+    """The handler to wire under `MEMORY_CANDIDATE_PROPOSED`.
+
+    Indexing happens AFTER the memory is committed and cannot fail the delivery:
+    a vector store that is down must not send a fact that is already stored back
+    round the retry loop, which would then store it again under a new event id.
+    """
 
     async def handle(event: OutboxEvent) -> str:
         try:
@@ -121,11 +148,21 @@ def build_memory_handler(service: MemoryProposePort) -> EventHandler:
             # The event id, so a redelivery decides once. See the module docstring.
             idempotency_key=event.id,
         )
+        if index is not None and result.item is not None:
+            await index.index(
+                memory_id=result.item.memory_id,
+                content=result.item.content,
+                tenant_id=result.item.tenant_id,
+                workspace_id=result.item.workspace_id,
+                worker_id=result.item.worker_id,
+            )
         return f"memory candidate {result.outcome.decision.value}"
 
     return handle
 
 
-def memory_handlers(service: MemoryProposePort) -> dict[str, EventHandler]:
+def memory_handlers(
+    service: MemoryProposePort, index: MemoryIndexPort | None = None
+) -> dict[str, EventHandler]:
     """Ready to merge into the outbox consumer's handler map."""
-    return {MEMORY_CANDIDATE_PROPOSED: build_memory_handler(service)}
+    return {MEMORY_CANDIDATE_PROPOSED: build_memory_handler(service, index)}

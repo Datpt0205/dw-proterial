@@ -65,7 +65,10 @@ def build_object_storage(settings: WorkerSettings) -> ObjectStoragePort:
     return MinioObjectStorageAdapter(client=client, bucket=settings.s3_bucket)
 
 
-def _build_embeddings(settings: WorkerSettings) -> EmbeddingPort:
+def build_embeddings(settings: WorkerSettings) -> EmbeddingPort:
+    """Public because two lanes need it: knowledge ingestion, and the memory
+    index. A second builder would be a second answer to "which model embeds
+    this deployment's text", and the copy nobody edits keeps the old model."""
     """The index's shape comes from config, never from a runtime default.
 
     The model id and the vector width are one decision, so they live together on
@@ -168,7 +171,7 @@ def build_ingest_components(settings: WorkerSettings) -> IngestComponents | None
     gateway = KnowledgeGateway(
         session_factory=session_factory,
         vector_index=_build_vector_index(settings),
-        embeddings=_build_embeddings(settings),
+        embeddings=build_embeddings(settings),
         object_storage=storage,
         clock=clock,
         id_generator=id_generator,
