@@ -379,6 +379,12 @@ class AdminConsoleService:
                         "name": name,
                         "timezone": command.timezone,
                         "locale": command.locale,
+                        # Who may see which records, for the whole tenant. Going
+                        # from `restricted` to `open` widens every list screen at
+                        # once, and the event was being written without saying so
+                        # — an audit row that records that something changed but
+                        # not what is not an answer to the question it is kept for.
+                        "record_visibility": command.record_visibility,
                         # How much a tenant lets its workers do unasked is exactly
                         # the kind of change an audit trail exists to answer for.
                         "max_autonomy_level": command.max_autonomy_level,

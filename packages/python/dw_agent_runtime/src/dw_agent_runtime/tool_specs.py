@@ -17,9 +17,14 @@ from pathlib import Path
 from uuid import UUID
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from dw_agent_runtime.contracts import ApprovalPolicy, SideEffectLevel, ToolDefinition
+from dw_agent_runtime.contracts import (
+    ApprovalPolicy,
+    SideEffectLevel,
+    ToolDefinition,
+    approval_policy_disagrees_with_side_effect,
+)
 from dw_agent_runtime.model.copy import RuntimeCopy
 from dw_agent_runtime.registry import ConfigError
 from dw_kernel.errors import NotFoundError
@@ -47,6 +52,26 @@ class ToolSpec(BaseModel):
     max_retries: int = Field(ge=0, le=10)
     idempotent: bool
     data_classification: frozenset[str]
+
+    @model_validator(mode="after")
+    def _never_only_where_it_is_true(self) -> ToolSpec:
+        """Refused at load, not at first use.
+
+        `to_definition` enforces the same rule, but that runs when a worker is
+        assembled — a mislabelled spec would sit in the catalogue until then.
+        The author finds out when the file is read.
+        """
+        if approval_policy_disagrees_with_side_effect(
+            approval_policy=self.approval_policy,
+            side_effect_level=self.side_effect_level,
+        ):
+            raise ValueError(
+                f"approval_policy 'never' claims this tool needs no person, but "
+                f"side_effect_level is '{self.side_effect_level}'. Use "
+                f"'conditional' to let the autonomy level decide, or 'always' to "
+                f"ask every time."
+            )
+        return self
 
     def description(self, copy: RuntimeCopy) -> str:
         return copy.tool_description(

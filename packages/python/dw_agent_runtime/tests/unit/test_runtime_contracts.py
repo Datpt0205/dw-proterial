@@ -71,7 +71,11 @@ def test_tool_name_must_be_namespaced() -> None:
 
 
 def test_critical_side_effect_always_requires_approval() -> None:
-    tool = make_tool(side_effect_level="critical", approval_policy="never")
+    # `conditional`, not `never`: a critical tool may no longer claim it needs no
+    # person, so the weakest policy a critical tool can carry is what proves the
+    # floor holds on its own. The old spelling stated the same thing with a
+    # combination the contract now refuses outright.
+    tool = make_tool(side_effect_level="critical", approval_policy="conditional")
     assert tool.always_requires_approval()
     assert make_tool(approval_policy="always").always_requires_approval()
     assert not make_tool().always_requires_approval()
@@ -82,6 +86,32 @@ def test_tool_timeout_and_retry_bounds() -> None:
         make_tool(timeout_seconds=0)
     with pytest.raises(ValidationError):
         make_tool(max_retries=99)
+
+
+def test_never_is_refused_on_a_tool_that_reaches_outside() -> None:
+    """`never` is a claim, not an instruction, and a false claim is refused.
+
+    A tool's author cannot lower the tenant's ceiling, so a `never` on an external
+    tool could only ever be read as `conditional` — which is exactly how the two
+    values came to be indistinguishable. Refusing the contradiction is what gives
+    `never` a reader.
+    """
+    with pytest.raises(ValidationError):
+        make_tool(approval_policy="never", side_effect_level="external")
+    with pytest.raises(ValidationError):
+        make_tool(approval_policy="never", side_effect_level="critical")
+
+
+def test_never_stays_legal_where_the_claim_is_true() -> None:
+    for level in ("none", "internal"):
+        tool = make_tool(approval_policy="never", side_effect_level=level)
+        assert tool.approval_policy == "never"
+
+
+def test_conditional_carries_no_such_restriction() -> None:
+    """The value to reach for when a tool does reach outside."""
+    tool = make_tool(approval_policy="conditional", side_effect_level="external")
+    assert tool.side_effect_level == "external"
 
 
 def test_run_context_defaults_to_vietnamese_locale() -> None:

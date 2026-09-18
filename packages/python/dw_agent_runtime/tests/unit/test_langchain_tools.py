@@ -66,7 +66,7 @@ def make_definition(**overrides: object) -> ToolDefinition:
         "output_schema_ref": "contracts/tools/crm.upsert_lead@1.0.0/output.json",
         "required_scopes": frozenset({"sales_chat.write"}),
         "side_effect_level": "external",
-        "approval_policy": "never",
+        "approval_policy": "conditional",
         "timeout_seconds": 10,
         "max_retries": 0,
         "idempotent": True,
@@ -151,7 +151,7 @@ def build_graph(tool: BaseTool) -> Any:
     return graph.compile(checkpointer=InMemorySaver())
 
 
-CRITICAL = {"name": "email.send", "side_effect_level": "critical", "approval_policy": "never"}
+CRITICAL = {"name": "email.send", "side_effect_level": "critical", "approval_policy": "conditional"}
 CONFIG: RunnableConfig = {"configurable": {"thread_id": "t-1"}}
 
 

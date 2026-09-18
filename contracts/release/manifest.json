@@ -1,5 +1,6 @@
 {
   "api_version": "0.1.0",
+  "approval_policy_version": "1.0.0",
   "copy_bundles": [
     {
       "checksum": "2866325cda2ce8ea08d86d4869fdd677572499e0d17f36344a255e6516979410",
@@ -19,7 +20,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "1cda0194b783099aa6b5fe9bb78a51631bb61304",
+  "git_sha": "43bf7f6523b2fcba6a1437dcef35f0b0e35afa26",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "1.0.0",
   "platform_version": "0.1.0",

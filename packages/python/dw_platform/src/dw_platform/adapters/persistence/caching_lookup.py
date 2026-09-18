@@ -19,7 +19,6 @@ import json
 from dataclasses import dataclass
 from uuid import UUID
 
-from dw_kernel.autonomy import FAIL_CLOSED_LEVEL
 from dw_platform.application.cache import CachePort, membership_cache_key
 from dw_platform.application.identity import MembershipAccess, MembershipLookupPort
 
@@ -52,30 +51,49 @@ def _serialize(access: MembershipAccess) -> str:
     )
 
 
-def _deserialize(raw: str) -> MembershipAccess:
+def _deserialize(raw: str) -> MembershipAccess | None:
+    """The cached access, or `None` for an entry this code cannot read whole.
+
+    The cache outlives a deploy by up to its TTL, so entries written by the
+    previous version are read for real after every release. Such an entry is
+    missing whatever fields that version did not have — and there is no safe
+    value to invent for an authorization fact. `record_visibility` defaulted to
+    `open` here, which is the widest setting a tenant has: every restricted
+    tenant read as unrestricted for the first thirty seconds after a deploy.
+
+    So nothing is defaulted. Every field is read with `[]`, a missing one raises
+    `KeyError`, and the caller treats that as a miss and asks the database. The
+    cost is one extra query per user for a few seconds after a release; the
+    alternative was answering an authorization question with a guess.
+
+    Reading them all this way is also what keeps the rule from rotting: a field
+    added to `_serialize` later becomes required here automatically, with no
+    second list to remember to update.
+    """
     data = json.loads(raw)
-    return MembershipAccess(
-        tenant_id=UUID(data["tenant_id"]),
-        workspace_id=UUID(data["workspace_id"]),
-        principal_id=UUID(data["principal_id"]),
-        roles=frozenset(data["roles"]),
-        scopes=frozenset(data["scopes"]),
-        groups=frozenset(data["groups"]),
-        clearance=data["clearance"],
-        plan_id=data["plan_id"],
-        feature_flags=frozenset(data["feature_flags"]),
-        record_visibility=data.get("record_visibility", "open"),
-        # An entry cached before this field existed has no ceiling in it. The
-        # cache outlives a deploy by up to its TTL, so such entries are read for
-        # real after one. The tenant's real ceiling is unknown, not absent: read
-        # it as the most restrictive level, for seconds, rather than as none.
-        max_autonomy_level=data.get("max_autonomy_level", FAIL_CLOSED_LEVEL),
-        visible_owners=(
-            None
-            if data.get("visible_owners") is None
-            else frozenset(UUID(u) for u in data["visible_owners"])
-        ),
-    )
+    try:
+        return MembershipAccess(
+            tenant_id=UUID(data["tenant_id"]),
+            workspace_id=UUID(data["workspace_id"]),
+            principal_id=UUID(data["principal_id"]),
+            roles=frozenset(data["roles"]),
+            scopes=frozenset(data["scopes"]),
+            groups=frozenset(data["groups"]),
+            clearance=data["clearance"],
+            plan_id=data["plan_id"],
+            feature_flags=frozenset(data["feature_flags"]),
+            record_visibility=data["record_visibility"],
+            max_autonomy_level=data["max_autonomy_level"],
+            visible_owners=(
+                None
+                if data["visible_owners"] is None
+                else frozenset(UUID(u) for u in data["visible_owners"])
+            ),
+        )
+    except KeyError:
+        # Only the subscripts above raise this; `MembershipAccess` and `UUID` do
+        # not. Narrow on purpose — a malformed value is still a real error.
+        return None
 
 
 @dataclass(frozen=True)
@@ -91,8 +109,14 @@ class CachingMembershipLookup:
     ) -> MembershipAccess | None:
         key = membership_cache_key(tenant_id, workspace_id, issuer, subject)
         cached = await self.cache.get(key)
+        if cached == _NEGATIVE:
+            return None
         if cached is not None:
-            return None if cached == _NEGATIVE else _deserialize(cached)
+            hit = _deserialize(cached)
+            if hit is not None:
+                return hit
+            # Written by an older deploy. Fall through and rewrite it rather than
+            # read an authorization fact that is not there.
 
         access = await self.inner.find_access(subject, issuer, tenant_id, workspace_id)
         await self.cache.set(

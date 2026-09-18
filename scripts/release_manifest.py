@@ -195,6 +195,7 @@ def _eval_datasets() -> list[dict[str, str]]:
 
 
 def build_manifest() -> dict[str, Any]:
+    from dw_agent_runtime.autonomy import AUTONOMY_POLICY_VERSION
     from dw_knowledge.gateway import INDEX_VERSION
     from dw_memory.policy import MemoryWritePolicy
 
@@ -212,6 +213,13 @@ def build_manifest() -> dict[str, Any]:
         "policies": _policies(),
         "knowledge_index_version": INDEX_VERSION,
         "memory_policy_version": MemoryWritePolicy().policy_version,
+        # What turns a run's autonomy level into approve/do-not-approve. A run
+        # stamps this on its own row and the policy refuses to decide for a run
+        # stamped under a version it does not have — so the version is already
+        # load-bearing at runtime, and a release that changes it has to be
+        # identifiable afterwards. Same reason as the two lines above: a constant
+        # in code is still a versioned artifact if a run's behaviour depends on it.
+        "approval_policy_version": AUTONOMY_POLICY_VERSION,
         "eval_datasets": _eval_datasets(),
     }
 

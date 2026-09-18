@@ -15,7 +15,12 @@ from typing import get_args
 import pytest
 
 from dw_agent_runtime.autonomy import AutonomyApprovalPolicy, lower_autonomy
-from dw_agent_runtime.contracts import ApprovalPolicy, SideEffectLevel, ToolDefinition
+from dw_agent_runtime.contracts import (
+    ApprovalPolicy,
+    SideEffectLevel,
+    ToolDefinition,
+    approval_policy_disagrees_with_side_effect,
+)
 from dw_kernel.autonomy import AutonomyLevel
 
 pytestmark = pytest.mark.unit
@@ -71,11 +76,19 @@ def test_the_side_effect_levels_are_the_ones_the_decision_covers() -> None:
 
 @pytest.mark.parametrize(
     ("side_effect", "level", "idempotent", "policy"),
-    list(
-        itertools.product(
+    # Every combination the CONTRACT allows — `never` on a tool that reaches
+    # outside is refused there, so it is not a case this decision has to cover.
+    # Filtered through the contract's own predicate rather than a second list, so
+    # widening the rule widens this sweep in the same commit.
+    [
+        case
+        for case in itertools.product(
             get_args(SideEffectLevel), LEVELS, (True, False), get_args(ApprovalPolicy)
         )
-    ),
+        if not approval_policy_disagrees_with_side_effect(
+            approval_policy=case[3], side_effect_level=case[0]
+        )
+    ],
 )
 def test_every_combination_matches_the_decision(
     side_effect: SideEffectLevel, level: AutonomyLevel, idempotent: bool, policy: ApprovalPolicy
@@ -93,7 +106,11 @@ def test_every_combination_matches_the_decision(
 @pytest.mark.parametrize("level", LEVELS)
 @pytest.mark.parametrize("idempotent", (True, False))
 def test_critical_asks_at_every_level_including_a4(level: AutonomyLevel, idempotent: bool) -> None:
-    tool = _tool("critical", idempotent=idempotent, policy="never")
+    # `conditional` is the weakest policy a critical tool may now carry — the
+    # contract refuses `never` there, because a tool that can do something
+    # irreversible cannot claim it needs no person. This still proves what it was
+    # written to prove: the floor holds without the policy's help.
+    tool = _tool("critical", idempotent=idempotent, policy="conditional")
 
     assert POLICY.requires_approval(tool, autonomy=level) is True
 

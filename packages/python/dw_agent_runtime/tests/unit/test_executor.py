@@ -41,7 +41,7 @@ def make_definition(**overrides: object) -> ToolDefinition:
         "output_schema_ref": "contracts/tools/test.echo/output.json",
         "required_scopes": frozenset({"demo.write"}),
         "side_effect_level": "external",
-        "approval_policy": "never",
+        "approval_policy": "conditional",
         "timeout_seconds": 2,
         "max_retries": 2,
         "idempotent": True,

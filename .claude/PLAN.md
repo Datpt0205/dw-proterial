@@ -35,11 +35,18 @@ into the agent loop, and it is the largest remaining piece:
 
 ## Decisions still open (asked, not yet answered)
 
-- `approval_policy: never` and `conditional` now behave identically. Collapsing
-  them is a breaking change to every tool spec.
-- `record_visibility` has two known faults left alone as out of scope: its cache
-  default fails open for up to 30s after a deploy, and changing it is not audited.
-- `AUTONOMY_POLICY_VERSION` is a code constant and is not in the release manifest.
+None. The three that stood here were answered and closed — see the last row of
+Done. What they turned into:
+
+- `never` was not collapsed into `conditional`; it was given the only meaning a
+  tool's author may safely carry — a claim, checked where a tool is declared,
+  that the tool does nothing needing a person. A `never` on anything reaching
+  outside is now refused instead of silently read as `conditional`.
+- The `record_visibility` cache no longer invents a value. An entry written by an
+  older release is a miss and is re-read. That also retired the fail-closed guess
+  for `max_autonomy_level`, which was safe but still wrong for seconds per deploy.
+- `approval_policy_version` is in the release manifest, read from the constant a
+  run is actually stamped with rather than copied.
 
 ## Done
 
@@ -51,6 +58,7 @@ into the agent loop, and it is the largest remaining piece:
 | 2   | `eb25931` | Autonomy A0–A4 decides approval; tenant ceiling; policy stamped on the run |
 | 4   | `80d849f` | Provenance as a chain the database enforces                                |
 | —   | `643236f` | Invariant checker + commit gate + the security-review skill                |
+| —   | (below)   | The three open decisions, answered: `never`, the cache, the manifest       |
 
 Mốc 3 is deliberately out of order: Mốc 4 was cheaper and is what an audited
 buyer asks for first.

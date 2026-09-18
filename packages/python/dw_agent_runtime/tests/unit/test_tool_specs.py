@@ -80,6 +80,27 @@ def test_incomplete_spec_is_refused(tmp_path: Path) -> None:
         ToolSpecRegistry(copy=COPY).load_file(write_spec(tmp_path, body))
 
 
+def test_a_never_that_reaches_outside_is_refused_at_load(tmp_path: Path) -> None:
+    """The author finds out when the file is read, not when a worker is assembled.
+
+    `never` says this tool does nothing a person would need to approve. On an
+    external tool that is false, and a false claim used to be accepted and then
+    read as `conditional` — the tool spec said one thing and the runtime did
+    another.
+    """
+    body = SPEC.replace("side_effect_level: none", "side_effect_level: external")
+    with pytest.raises(ConfigError, match="never"):
+        ToolSpecRegistry(copy=COPY).load_file(write_spec(tmp_path, body))
+
+
+def test_the_same_tool_loads_once_it_says_conditional(tmp_path: Path) -> None:
+    body = SPEC.replace("side_effect_level: none", "side_effect_level: external").replace(
+        "approval_policy: never", "approval_policy: conditional"
+    )
+    loaded = ToolSpecRegistry(copy=COPY).load_file(write_spec(tmp_path, body))
+    assert loaded.spec.side_effect_level == "external"
+
+
 def test_malformed_yaml_names_the_file_it_came_from(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match=re.escape("crm.read_account@1.0.0.yaml")):
         ToolSpecRegistry(copy=COPY).load_file(write_spec(tmp_path, "name: [unbalanced\n"))

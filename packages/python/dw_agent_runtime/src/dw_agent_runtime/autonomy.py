@@ -32,9 +32,15 @@ Two floors hold at every level, A4 included, and no configuration lowers them:
 - `approval_policy: always` always asks. A worker's configuration does not get
   to overrule what the tool's author declared about their own tool.
 
-`never` and `conditional` both defer to the table. That makes them indistinguishable
-today — noted, not silently resolved, because collapsing them is a breaking change
-to every tool spec a context has written.
+`never` and `conditional` both defer to the table here, and for a while that made
+them indistinguishable. They are not collapsed — that would break every tool spec
+a context writes — so `never` was given the only meaning it can safely carry. A
+tool's author cannot lower the tenant's ceiling, so `never` is not an instruction
+but a claim: this tool does nothing a person would need to approve. The claim is
+checked where a tool is declared (`contracts.approval_policy_disagrees_with_side_effect`),
+and a `never` on anything reaching outside is refused rather than quietly read as
+`conditional`. Past that gate both values do defer to the table, which is correct:
+only the ceiling decides how far a run reaches.
 """
 
 from __future__ import annotations

@@ -6,10 +6,10 @@ frozen and carry explicit version fields that feed the release manifest.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Final, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dw_kernel.autonomy import FAIL_CLOSED_LEVEL, AutonomyLevel
 
@@ -18,6 +18,33 @@ _SLUG_PATTERN = r"^[a-z][a-z0-9_]*$"
 
 SideEffectLevel = Literal["none", "internal", "external", "critical"]
 ApprovalPolicy = Literal["never", "conditional", "always"]
+
+# The side effects a tool may have and still claim it never needs a person.
+_NEVER_IS_HONEST_FOR: Final = frozenset({"none", "internal"})
+
+
+def approval_policy_disagrees_with_side_effect(
+    *, approval_policy: str, side_effect_level: str
+) -> bool:
+    """Whether a tool's declared policy contradicts what it says it does.
+
+    `always` and `conditional` are both decisions: ask every time, or let the
+    autonomy ladder decide. `never` is not a decision — a tool's author does not
+    get to lower the tenant's ceiling, so a `never` on a tool that reaches
+    outside would be read as `conditional` and silently mean nothing. That is how
+    `conditional` and `never` came to be indistinguishable: one of them was being
+    accepted and never read.
+
+    So `never` keeps a meaning that IS read: a claim that this tool cannot do
+    anything a person would need to approve. The claim has to be true, and that
+    is checkable — `none` or `internal` and nothing further out. A `never` on an
+    external tool is a mislabelled tool, refused here rather than quietly
+    downgraded to the ladder.
+
+    One function because two models enforce it: the spec a context writes, and
+    the definition the executor runs.
+    """
+    return approval_policy == "never" and side_effect_level not in _NEVER_IS_HONEST_FOR
 
 
 class WorkerDefinition(BaseModel):
@@ -125,6 +152,20 @@ class ToolDefinition(BaseModel):
         if "." not in value or value.startswith(".") or value.endswith("."):
             raise ValueError("tool name must be namespaced like 'task.prepare'")
         return value
+
+    @model_validator(mode="after")
+    def _never_only_where_it_is_true(self) -> ToolDefinition:
+        if approval_policy_disagrees_with_side_effect(
+            approval_policy=self.approval_policy,
+            side_effect_level=self.side_effect_level,
+        ):
+            raise ValueError(
+                f"approval_policy 'never' claims this tool needs no person, but "
+                f"side_effect_level is '{self.side_effect_level}'. Use "
+                f"'conditional' to let the autonomy level decide, or 'always' to "
+                f"ask every time."
+            )
+        return self
 
     def always_requires_approval(self) -> bool:
         """Whether this tool asks for a person at EVERY autonomy level.

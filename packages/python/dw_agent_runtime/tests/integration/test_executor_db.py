@@ -51,7 +51,7 @@ def build_executor(app_url: str) -> tuple[ToolExecutor, SqlPlatformUnitOfWorkFac
                 output_schema_ref="contracts/tools/task.dispatch/output.json",
                 required_scopes=frozenset({"demo.write"}),
                 side_effect_level="external",
-                approval_policy="never",
+                approval_policy="conditional",
                 timeout_seconds=10,
                 max_retries=1,
                 idempotent=True,

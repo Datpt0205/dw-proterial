@@ -38,9 +38,18 @@ def test_manifest_contains_every_required_section() -> None:
         "policies",
         "knowledge_index_version",
         "memory_policy_version",
+        # A run stamps this on its own row and the policy refuses to decide for a
+        # run stamped under a version this process does not have. That makes it a
+        # versioned artifact whether or not it lives in a YAML file, so a release
+        # that changes it has to be identifiable afterwards.
+        "approval_policy_version",
         "eval_datasets",
     ):
         assert key in manifest, f"manifest missing {key}"
+    # The version a run is actually stamped with, not a second copy of the string.
+    from dw_agent_runtime.autonomy import AUTONOMY_POLICY_VERSION
+
+    assert manifest["approval_policy_version"] == AUTONOMY_POLICY_VERSION
     # Platform artifacts, which exist with no bounded context installed. A
     # context adds its own worker/prompt/policy assertions beside these; naming
     # one here would make this test fail on a checkout that does not host it.

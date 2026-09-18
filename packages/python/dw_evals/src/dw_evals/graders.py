@@ -116,9 +116,19 @@ def grade_side_effect_approval(
     external = _definition("external", "always")
     if not external.always_requires_approval():
         return GradeResult.fail("external tool with policy=always does not require approval")
-    critical = _definition("critical", "never")
+    # A critical tool may no longer even CLAIM it needs no person: the contract
+    # refuses the combination rather than accepting it and overriding it later.
+    # Stronger than the old check, which built the contradiction and then proved
+    # the floor caught it.
+    try:
+        _definition("critical", "never")
+    except ValidationError:
+        pass
+    else:
+        return GradeResult.fail("critical side effect was allowed to declare policy=never")
+    critical = _definition("critical", "conditional")
     if not critical.always_requires_approval():
-        return GradeResult.fail("critical side effect bypassed approval via policy=never")
+        return GradeResult.fail("critical side effect bypassed approval via the autonomy ladder")
     if expected.get("requires_approval") is not True:
         return GradeResult.fail("expected fixture must demand requires_approval=true")
     return GradeResult.ok(tool=f"{external.name}@{external.version}")

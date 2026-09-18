@@ -12,7 +12,6 @@ import json
 import uuid
 from dataclasses import replace
 
-from dw_kernel.autonomy import FAIL_CLOSED_LEVEL
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
 from dw_platform.application.cache import membership_cache_pattern
 from dw_platform.application.identity import MembershipAccess
@@ -128,26 +127,56 @@ async def test_the_tenants_autonomy_ceiling_survives_the_round_trip() -> None:
     assert served.max_autonomy_level == "A1"
 
 
-async def test_an_entry_cached_before_the_ceiling_existed_reads_as_most_restrictive() -> None:
-    """The cache outlives a deploy by up to its TTL, so an entry written by the code
-    before the ceiling existed is read for real after it. The tenant's ceiling is
-    unknown there, not absent — reading it as "no ceiling" would let a tenant that
-    set A1 run at its workers' full level until the entry expired."""
+def _drop_field(cache: _FakeCache, field_name: str) -> None:
+    """Rewrite the one stored entry as a previous release wrote it: without the field."""
+    [key] = cache.store
+    legacy = json.loads(cache.store[key])
+    del legacy[field_name]
+    cache.store[key] = json.dumps(legacy)
+
+
+async def test_an_entry_cached_before_the_ceiling_existed_is_re_read_not_guessed() -> None:
+    """The cache outlives a deploy by up to its TTL, so an entry written by the
+    previous release is read for real after every one. The tenant's ceiling is
+    unknown in such an entry, not absent.
+
+    This used to answer with the most restrictive level — safe, but still a guess,
+    and it throttled an A4 tenant to A0 for the length of the TTL after every
+    deploy. There is no need to guess: the database knows.
+    """
     cache = _FakeCache()
     inner = _CountingLookup(replace(_access(), max_autonomy_level="A1"))
     lookup = CachingMembershipLookup(inner, cache)
     await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
-    # Rewrite the stored entry as the previous release wrote it: without the field.
-    [key] = cache.store
-    legacy = json.loads(cache.store[key])
-    del legacy["max_autonomy_level"]
-    cache.store[key] = json.dumps(legacy)
+    _drop_field(cache, "max_autonomy_level")
 
     served = await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
 
-    assert inner.calls == 1, "must be served from the legacy entry, not re-looked-up"
+    assert inner.calls == 2, "a legacy entry must be re-read, not read half"
     assert served is not None
-    assert served.max_autonomy_level == FAIL_CLOSED_LEVEL
+    assert served.max_autonomy_level == "A1", "the real ceiling, not a guess"
+
+
+async def test_a_legacy_entry_cannot_widen_a_restricted_tenant() -> None:
+    """The fail-open this rule exists for.
+
+    `record_visibility` was read as `open` when a cached entry did not carry it —
+    the widest setting a tenant has. Every restricted tenant therefore read as
+    unrestricted for the first TTL after a deploy: a rep saw the whole workspace's
+    records rather than their own. Refusing to invent the value is the fix, and
+    asserting the resolved value (not the call count) is what makes this a test of
+    the leak rather than of the cache.
+    """
+    cache = _FakeCache()
+    inner = _CountingLookup(replace(_access(), record_visibility="restricted"))
+    lookup = CachingMembershipLookup(inner, cache)
+    await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
+    _drop_field(cache, "record_visibility")
+
+    served = await lookup.find_access(SUBJECT, ISSUER, TENANT, WS)
+
+    assert served is not None
+    assert served.record_visibility == "restricted", "a stale entry must not widen the tenant"
 
 
 async def test_a_no_membership_answer_is_cached_too() -> None:
