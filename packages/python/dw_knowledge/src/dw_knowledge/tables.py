@@ -119,3 +119,28 @@ ingest_jobs = sa.Table(
         server_default=sa.text("'{tenant:*}'::text[]"),
     ),
 )
+
+
+# Migration 0007. The evidence a stored memory actually rests on — not a log of
+# everything ever retrieved, which is a different table with a different lifetime.
+# A row is written when a memory cites it, and `memory.item_evidence` ties the two
+# together with real foreign keys, so `EvidenceRef.evidence_id` resolves to
+# something rather than naming a UUID that was never stored anywhere.
+evidence = sa.Table(
+    "evidence",
+    metadata,
+    sa.Column("evidence_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("source_document_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("chunk_id", UUID(as_uuid=True), nullable=True),
+    sa.Column("source_version", sa.Text, nullable=False),
+    sa.Column("page", sa.Integer, nullable=True),
+    sa.Column("start_offset", sa.Integer, nullable=True),
+    sa.Column("end_offset", sa.Integer, nullable=True),
+    sa.Column("quote", sa.Text, nullable=True),
+    sa.Column("relevance_score", sa.Float, nullable=False),
+    sa.Column("classification", sa.Text, nullable=False),
+    sa.Column("provenance_hash", sa.Text, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+)

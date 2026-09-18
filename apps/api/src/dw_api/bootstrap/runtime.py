@@ -46,6 +46,7 @@ from dw_api.bootstrap.paths import (
 )
 from dw_api.settings import ApiSettings
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_knowledge.attachment_policy import load_attachment_policy
 from dw_knowledge.gateway import KnowledgeGateway
 from dw_knowledge.ingest_jobs import IngestJobStore
@@ -164,6 +165,10 @@ def build_runtime(
         policy=MemoryWritePolicy(),
         clock=clock,
         id_generator=ids,
+        # Knowledge owns the chunks a citation is checked against; memory owns
+        # whether a fact is kept. Neither imports the other's tables — the port is
+        # declared by memory and satisfied here.
+        evidence_store=SqlEvidenceStore(clock=clock),
     )
 
     # ---- graphs, workers, runner ----------------------------------------

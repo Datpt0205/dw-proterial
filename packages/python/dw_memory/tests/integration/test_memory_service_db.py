@@ -1,10 +1,24 @@
-"""Integration: memory write flow against real Postgres (RLS applied)."""
+"""Integration: a stored memory, and the chain that proves where it came from.
+
+Against real Postgres, because every link added in migration 0007 is a database
+constraint and none of them can be checked in memory: the CHECK that refuses
+empty provenance, the foreign key from a memory to the run that made it, and the
+two that tie a memory through `memory.item_evidence` to `knowledge.evidence` and
+on to the chunk it quotes.
+
+The fixtures seed a real document, a real chunk and a real run. That is the
+change of substance: the previous version of this file invented a document id and
+hashed an arbitrary string, which the system now refuses — the citation looked
+perfect and referred to nothing.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import uuid
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 import pytest
 import sqlalchemy as sa
@@ -19,7 +33,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_kernel.errors import DomainError
 from dw_kernel.ports import SystemClock, Uuid4Generator
+from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_knowledge.contracts import EvidenceRef
 from dw_memory import tables
 from dw_memory.contracts import MemoryType, WriteDecision
@@ -31,6 +47,7 @@ pytestmark = pytest.mark.integration
 
 TENANT = uuid.UUID(int=0xCC00)
 WORKSPACE = uuid.UUID(int=0xCC01)
+SOURCE_TEXT = b"Anh An noi se gui hop dong truoc thu Sau."
 
 
 @pytest.fixture(scope="session")
@@ -46,8 +63,68 @@ def urls() -> RuntimeUrls:
     return resolved
 
 
+@dataclass(frozen=True)
+class Seeded:
+    """Real source material and a real run, so a citation can be checked."""
+
+    run_id: uuid.UUID
+    document_id: uuid.UUID
+    chunk_id: uuid.UUID
+    provenance_hash: str
+
+
 @pytest.fixture
-async def service(urls: RuntimeUrls):
+async def seeded(urls: RuntimeUrls) -> AsyncIterator[Seeded]:
+    """Written as the migrator: RLS is what the service is tested through, not what
+    the fixture should have to satisfy to lay down a document."""
+    engine = create_async_engine(urls.migrator, poolclass=NullPool)
+    run_id, document_id, chunk_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    digest = hashlib.sha256(SOURCE_TEXT).hexdigest()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO platform.worker_runs"
+                " (id, thread_id, tenant_id, workspace_id, worker_id, worker_version,"
+                "  graph_version, requested_by)"
+                " VALUES (:id, :id, :t, :w, 'demo', '1.0.0', '1.0.0', :actor)"
+            ),
+            {"id": run_id, "t": TENANT, "w": WORKSPACE, "actor": uuid.uuid4()},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO knowledge.documents"
+                " (id, tenant_id, workspace_id, title, source_uri, created_by)"
+                " VALUES (:id, :t, :w, 'Bien ban hop', 'file://bien-ban', :actor)"
+            ),
+            {"id": document_id, "t": TENANT, "w": WORKSPACE, "actor": uuid.uuid4()},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO knowledge.chunks"
+                " (id, tenant_id, workspace_id, document_id, seq, content,"
+                "  start_offset, end_offset, provenance_hash)"
+                " VALUES (:id, :t, :w, :doc, 0, :content, 0, :end, :hash)"
+            ),
+            {
+                "id": chunk_id,
+                "t": TENANT,
+                "w": WORKSPACE,
+                "doc": document_id,
+                "content": SOURCE_TEXT.decode(),
+                "end": len(SOURCE_TEXT),
+                "hash": digest,
+            },
+        )
+    try:
+        yield Seeded(run_id, document_id, chunk_id, digest)
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture
+async def service(
+    urls: RuntimeUrls,
+) -> AsyncIterator[tuple[MemoryService, async_sessionmaker[AsyncSession]]]:
     engine = create_async_engine(urls.app, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     yield (
@@ -56,6 +133,7 @@ async def service(urls: RuntimeUrls):
             policy=MemoryWritePolicy(),
             clock=SystemClock(),
             id_generator=Uuid4Generator(),
+            evidence_store=SqlEvidenceStore(clock=SystemClock()),
         ),
         session_factory,
     )
@@ -73,76 +151,269 @@ def make_context() -> AccessContext:
     )
 
 
-def make_evidence() -> EvidenceRef:
-    return EvidenceRef(
-        evidence_id=uuid.uuid4(),
-        source_document_id=uuid.uuid4(),
-        source_version="1",
-        relevance_score=0.95,
-        classification="internal",
-        provenance_hash=hashlib.sha256(b"meeting-transcript").hexdigest(),
-    )
+def evidence_for(seeded: Seeded, **overrides: object) -> EvidenceRef:
+    fields: dict[str, object] = {
+        "evidence_id": uuid.uuid4(),
+        "source_document_id": seeded.document_id,
+        "chunk_id": seeded.chunk_id,
+        "source_version": "1",
+        "relevance_score": 0.95,
+        "classification": "internal",
+        "provenance_hash": seeded.provenance_hash,
+    }
+    fields.update(overrides)
+    return EvidenceRef(**fields)
 
 
-async def _count(session_factory, table) -> int:
+def candidate(seeded: Seeded, *, confidence: float = 0.92, **overrides: object) -> MemoryCandidate:
+    fields: dict[str, object] = {
+        "worker_id": "demo",
+        "memory_type": MemoryType.COMMITMENT,
+        "content": "Anh An cam kết gửi hợp đồng trước thứ Sáu.",
+        "provenance_refs": (evidence_for(seeded),),
+        "confidence": confidence,
+    }
+    fields.update(overrides)
+    return MemoryCandidate(**fields)
+
+
+async def _scalar(
+    session_factory: async_sessionmaker[AsyncSession], sql: str, **params: object
+) -> object:
     async with session_factory() as session, session.begin():
         await session.execute(
             text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(TENANT)}
         )
-        result = await session.execute(sa.select(sa.func.count()).select_from(table))
-        return int(result.scalar_one())
+        return (await session.execute(text(sql), params)).scalar_one()
 
 
-async def test_auto_write_persists_item_with_provenance(service) -> None:
+# ------------------------------------------------------------- the chain --
+
+
+async def test_a_stored_memory_traces_back_to_the_document_it_quotes(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """The question Mốc 4 exists for, answered in SQL rather than by inference."""
     memory_service, session_factory = service
+
     result = await memory_service.propose(
-        MemoryCandidate(
-            worker_id="demo",
-            memory_type=MemoryType.COMMITMENT,
-            content="Anh An cam kết gửi hợp đồng trước thứ Sáu.",
-            provenance_refs=(make_evidence(),),
-            confidence=0.92,
-        ),
-        make_context(),
-        created_by_run_id=uuid.uuid4(),
+        candidate(seeded), make_context(), created_by_run_id=seeded.run_id
     )
+
     assert result.outcome.decision is WriteDecision.AUTO_WRITE
     assert result.item is not None
-    assert await _count(session_factory, tables.items) >= 1
-    assert await _count(session_factory, tables.write_candidates) >= 1
-
-
-async def test_low_confidence_goes_to_review_without_item(service) -> None:
-    memory_service, session_factory = service
-    items_before = await _count(session_factory, tables.items)
-    result = await memory_service.propose(
-        MemoryCandidate(
-            worker_id="demo",
-            memory_type=MemoryType.PREFERENCE,
-            content="Có thể chị Bình thích nhận báo cáo qua Slack.",
-            provenance_refs=(make_evidence(),),
-            confidence=0.6,
-        ),
-        make_context(),
-        created_by_run_id=uuid.uuid4(),
+    title = await _scalar(
+        session_factory,
+        """
+        SELECT d.title
+        FROM memory.items i
+        JOIN memory.item_evidence ie ON ie.memory_id = i.memory_id
+        JOIN knowledge.evidence e ON e.evidence_id = ie.evidence_id
+        JOIN knowledge.chunks c ON c.id = e.chunk_id
+        JOIN knowledge.documents d ON d.id = c.document_id
+        WHERE i.memory_id = :memory_id
+        """,
+        memory_id=result.item.memory_id,
     )
+    assert title == "Bien ban hop"
+
+
+async def test_the_run_that_wrote_a_memory_can_be_confirmed(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    memory_service, session_factory = service
+
+    result = await memory_service.propose(
+        candidate(seeded), make_context(), created_by_run_id=seeded.run_id
+    )
+
+    assert result.item is not None
+    worker = await _scalar(
+        session_factory,
+        "SELECT r.worker_id FROM memory.items i"
+        " JOIN platform.worker_runs r ON r.id = i.created_by_run_id"
+        " WHERE i.memory_id = :memory_id",
+        memory_id=result.item.memory_id,
+    )
+    assert worker == "demo"
+
+
+async def test_a_memory_cannot_name_a_run_that_never_existed(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """`created_by_run_id` was NOT NULL with no foreign key: any UUID passed."""
+    memory_service, _ = service
+
+    with pytest.raises(sa.exc.IntegrityError, match="fk_items_created_by_run_id_worker_runs"):
+        await memory_service.propose(
+            candidate(seeded), make_context(), created_by_run_id=uuid.uuid4()
+        )
+
+
+# -------------------------------------------------- evidence must be real --
+
+
+async def test_a_fabricated_hash_is_refused_and_nothing_is_written(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """A syntactically perfect citation to material that was never read. It used to
+    be stored as the justification for a fact; now it is refused, and the candidate
+    row rolls back with it — a refused write leaves no half-record behind."""
+    memory_service, session_factory = service
+    before = await _scalar(session_factory, "SELECT count(*) FROM memory.write_candidates")
+
+    with pytest.raises(DomainError, match="hash does not match"):
+        await memory_service.propose(
+            candidate(seeded, provenance_refs=(evidence_for(seeded, provenance_hash="b" * 64),)),
+            make_context(),
+            created_by_run_id=seeded.run_id,
+        )
+
+    assert await _scalar(session_factory, "SELECT count(*) FROM memory.write_candidates") == before
+
+
+async def test_evidence_citing_a_chunk_nobody_stored_is_refused(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    memory_service, _ = service
+
+    with pytest.raises(DomainError, match="does not have"):
+        await memory_service.propose(
+            candidate(seeded, provenance_refs=(evidence_for(seeded, chunk_id=uuid.uuid4()),)),
+            make_context(),
+            created_by_run_id=seeded.run_id,
+        )
+
+
+async def test_evidence_that_cites_one_document_and_quotes_another_is_refused(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """The hash and the chunk agree; the document named does not own that chunk."""
+    memory_service, _ = service
+
+    with pytest.raises(DomainError, match="quotes another"):
+        await memory_service.propose(
+            candidate(
+                seeded,
+                provenance_refs=(evidence_for(seeded, source_document_id=uuid.uuid4()),),
+            ),
+            make_context(),
+            created_by_run_id=seeded.run_id,
+        )
+
+
+async def test_evidence_with_no_chunk_is_refused_rather_than_stored_unverified(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """`EvidenceRef` allows it. Accepting it would be the loophole: name a real
+    document, invent the hash, and nothing could check either."""
+    memory_service, _ = service
+
+    with pytest.raises(DomainError, match="must name the chunk"):
+        await memory_service.propose(
+            candidate(seeded, provenance_refs=(evidence_for(seeded, chunk_id=None),)),
+            make_context(),
+            created_by_run_id=seeded.run_id,
+        )
+
+
+# ------------------------------------------------------- policy, and audit --
+
+
+async def test_low_confidence_goes_to_review_without_item(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    memory_service, session_factory = service
+    before = await _scalar(session_factory, "SELECT count(*) FROM memory.items")
+
+    result = await memory_service.propose(
+        candidate(seeded, confidence=0.6, memory_type=MemoryType.PREFERENCE),
+        make_context(),
+        created_by_run_id=seeded.run_id,
+    )
+
     assert result.outcome.decision is WriteDecision.REVIEW
     assert result.item is None
-    assert await _count(session_factory, tables.items) == items_before
+    assert await _scalar(session_factory, "SELECT count(*) FROM memory.items") == before
 
 
-async def test_no_provenance_rejected(service) -> None:
+async def test_no_provenance_rejected(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
     memory_service, _ = service
+
     result = await memory_service.propose(
-        MemoryCandidate(
-            worker_id="demo",
-            memory_type=MemoryType.SEMANTIC,
-            content="Thông tin không có nguồn.",
-            provenance_refs=(),
-            confidence=0.99,
-        ),
+        candidate(seeded, provenance_refs=(), confidence=0.99),
         make_context(),
-        created_by_run_id=uuid.uuid4(),
+        created_by_run_id=seeded.run_id,
     )
+
     assert result.outcome.decision is WriteDecision.REJECT
     assert result.item is None
+
+
+@pytest.mark.parametrize(
+    ("confidence", "action"),
+    [
+        (0.92, "memory.item_written"),
+        (0.6, "memory.write_held_for_review"),
+        (0.1, "memory.write_rejected"),
+    ],
+)
+async def test_every_outcome_reaches_the_audit_trail(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]],
+    seeded: Seeded,
+    confidence: float,
+    action: str,
+) -> None:
+    """A fact appearing in a customer's system with nobody able to say when it was
+    learned is what an audit trail is for — and so is one that was refused."""
+    memory_service, session_factory = service
+
+    result = await memory_service.propose(
+        candidate(seeded, confidence=confidence), make_context(), created_by_run_id=seeded.run_id
+    )
+
+    resource = str(result.item.memory_id) if result.item else str(result.candidate_id)
+    recorded = await _scalar(
+        session_factory,
+        "SELECT details->>'policy_version' FROM platform.audit_events"
+        " WHERE action = :action AND resource_id = :resource",
+        action=action,
+        resource=resource,
+    )
+    assert recorded == "1.0.0"
+
+
+async def test_the_database_refuses_a_memory_with_empty_provenance(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """The service refuses it first. This is the constraint behind the service, for
+    the second writer, the repair script and the bug that does not go through it."""
+    _, session_factory = service
+
+    with pytest.raises(sa.exc.IntegrityError, match="ck_items_provenance_refs"):
+        async with session_factory() as session, session.begin():
+            await session.execute(
+                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(TENANT)}
+            )
+            await session.execute(
+                sa.insert(tables.items).values(
+                    memory_id=uuid.uuid4(),
+                    tenant_id=TENANT,
+                    workspace_id=WORKSPACE,
+                    worker_id="demo",
+                    memory_type="semantic",
+                    subject_refs=[],
+                    content="Không nguồn.",
+                    structured_facts={},
+                    provenance_refs=[],
+                    confidence=0.99,
+                    classification="internal",
+                    valid_from=sa.func.now(),
+                    retention_policy="default",
+                    memory_schema_version="1.0.0",
+                    created_by_run_id=seeded.run_id,
+                    created_at=sa.func.now(),
+                )
+            )

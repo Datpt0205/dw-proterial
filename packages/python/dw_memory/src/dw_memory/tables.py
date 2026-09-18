@@ -49,3 +49,15 @@ write_candidates = sa.Table(
     sa.Column("created_by_run_id", UUID(as_uuid=True), nullable=False),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
 )
+
+# Migration 0007. Which memory rests on which evidence, with real foreign keys in
+# both directions. `items.provenance_refs` keeps the full JSONB copy of what the
+# model was shown; this is what makes those references resolvable, and both are
+# written in the same transaction.
+item_evidence = sa.Table(
+    "item_evidence",
+    metadata,
+    sa.Column("memory_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("evidence_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
+)
