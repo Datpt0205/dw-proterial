@@ -11,6 +11,11 @@
       "checksum": "d15eb453fc6e6c8a12f13bce4776ad5ea54c92d45725cb4bf08c2c8b8c05f5f5",
       "copy_id": "platform.runtime",
       "version": "1.4.0"
+    },
+    {
+      "checksum": "dcfeed6e919c29bac34362aea015040597fcec5657dbc8fe82a86866fc9ec1db",
+      "copy_id": "platform.runtime",
+      "version": "1.5.0"
     }
   ],
   "eval_datasets": [
@@ -20,7 +25,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "43bf7f6523b2fcba6a1437dcef35f0b0e35afa26",
+  "git_sha": "e619000c0ca1cc102eefc40ae28850d96f6c64b8",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "1.0.0",
   "platform_version": "0.1.0",

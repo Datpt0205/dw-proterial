@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain.agents import create_agent
@@ -58,6 +59,7 @@ from dw_agent_runtime.adapters.langchain_tools import (
     UnreadableFilesMiddleware,
     platform_tools,
 )
+from dw_agent_runtime.adapters.recalled_memory import MemoryRecallPort, RecalledMemoryMiddleware
 from dw_agent_runtime.adapters.run_budget import RunBudgetMiddleware
 from dw_agent_runtime.adapters.system_prompt import WorkerSystemPrompt
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
@@ -70,6 +72,12 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 
 __all__ = ["AgentSpec", "CompactionSpec", "build_agent", "platform_middleware"]
+
+
+def _utc_now() -> datetime:
+    """The default clock for recall. A named function, not a lambda, so the
+    default a host gets is greppable."""
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -123,10 +131,24 @@ class AgentSpec:
     profiles: ModelProfileRegistry
     profile_id: str
     compaction: CompactionSpec | None = None
+    # What this worker already learned about the record in view. Optional the
+    # same way compaction is: a context that stores no memory wires none, and a
+    # run with no `subject_ref` recalls nothing even when it is wired.
+    recall: MemoryRecallPort | None = None
+    # Only read when `recall` is set. Passed rather than taken from a module
+    # global so a test can pin the moment a validity window is judged against.
+    clock: Callable[[], datetime] | None = None
 
 
 def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
-    """The seven middlewares every platform agent carries.
+    """The middleware stack every platform agent carries.
+
+    Seven are unconditional — the safety controls, each closing a hole found in
+    production. Two more are wired only when the spec asks: context compaction,
+    and recall of what this worker already learned about the record in view. The
+    count in this docstring used to be the contract; it is not, and saying
+    "seven" while building eight is how a reader stops trusting the comment.
+    What IS the contract is that none of the unconditional ones may be dropped.
 
     Exposed on its own so a context that must add middleware of its own extends
     this list rather than rebuilding it — rebuilding is exactly how one gets
@@ -142,6 +164,21 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
     offered = list(spec.offered)
     stack: list[AgentMiddleware[Any, Any]] = [
         WorkerSystemPrompt(spec.render_prompt),
+        # Directly after the worker prompt: the prompt says what this worker is,
+        # and recall appends what it happens to know about the record in view.
+        # Both are system-message work, so keeping them adjacent means one place
+        # to look when asking what the model was told.
+        *(
+            [
+                RecalledMemoryMiddleware(
+                    spec.recall,
+                    copy=spec.copy,
+                    clock=spec.clock if spec.clock is not None else _utc_now,
+                )
+            ]
+            if spec.recall is not None
+            else []
+        ),
         UnreadableFilesMiddleware(),
         OfferedToolsOnlyMiddleware(offered),
         ScopedToolsMiddleware(offered),

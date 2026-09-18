@@ -19,6 +19,8 @@ import hashlib
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
@@ -417,3 +419,169 @@ async def test_the_database_refuses_a_memory_with_empty_provenance(
                     created_at=sa.func.now(),
                 )
             )
+
+
+# ------------------------------------------------------------------ recall --
+#
+# The read side. `propose` could write since the provenance work and nothing read
+# it back, so every stored fact was write-only. These cover the four conditions
+# recall narrows by, each with the negative case, because a recall that returns
+# too much is a disclosure and looks exactly like one that works.
+
+
+def a_subject() -> str:
+    """A subject nobody else in this file uses.
+
+    The database is created once for the whole module and every test writes into
+    it as the same tenant, so a fixed subject string would make each test read
+    its neighbours' memories — green alone, wrong together, and wrong in the
+    direction that hides a leak. Isolating on the filter under test keeps each
+    assertion about its own data.
+    """
+    return f"account:{uuid.uuid4()}"
+
+
+async def _remember(
+    # `Any`, not `object`: these are forwarded straight into `candidate`, whose
+    # own signature types each one. `object` makes mypy reject the `confidence`
+    # float it declares, and narrowing here would mean restating that signature.
+    service: MemoryService,
+    seeded: Seeded,
+    *,
+    context: AccessContext,
+    **overrides: Any,
+) -> None:
+    result = await service.propose(
+        candidate(seeded, **overrides), context, created_by_run_id=seeded.run_id
+    )
+    assert result.outcome.decision is WriteDecision.AUTO_WRITE, result.outcome.reason
+
+
+async def test_recall_returns_what_this_worker_learned_about_the_subject(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+
+    found = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+
+    assert [item.content for item in found] == ["Anh An cam kết gửi hợp đồng trước thứ Sáu."]
+
+
+async def test_recall_without_a_subject_returns_nothing_rather_than_everything(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """ "No subject" must not read as "every subject" — that is the shape of an
+    empty filter that widens instead of narrowing."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+
+    assert await svc.recall(context, worker_id="demo", subject_refs=(), now=datetime.now(UTC)) == ()
+
+
+async def test_recall_does_not_reach_another_tenants_memory(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    svc, _ = service
+    subject = a_subject()
+    await _remember(svc, seeded, context=make_context(), subject_refs=(subject,))
+
+    intruder = make_context().model_copy(update={"tenant_id": uuid.UUID(int=0xDEAD)})
+    found = await svc.recall(
+        intruder, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+
+    assert found == (), "another tenant's subject must return nothing at all"
+
+
+async def test_recall_does_not_carry_one_workers_memory_into_another(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """A fact learned under a different prompt and toolset is not this worker's
+    premise."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+
+    found = await svc.recall(
+        context, worker_id="other", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+
+    assert found == ()
+
+
+async def test_recall_will_not_hand_a_run_material_above_its_clearance(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """A memory carries the classification of what it was learned from, so a run
+    may only recall what it could have read directly."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(
+        svc,
+        seeded,
+        context=context,
+        subject_refs=(subject,),
+        classification="confidential",
+    )
+
+    at_internal = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+    assert at_internal == (), "internal clearance must not recall a confidential fact"
+
+    cleared = context.model_copy(update={"clearance": "confidential"})
+    assert (
+        len(
+            await svc.recall(
+                cleared, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+            )
+        )
+        == 1
+    )
+
+
+async def test_recall_skips_a_fact_whose_validity_window_has_not_opened(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """`valid_from` is set to now at write, so asking about a moment before the
+    write is how a closed window is exercised without waiting for one to close."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+
+    earlier = datetime.now(UTC) - timedelta(days=1)
+    assert await svc.recall(context, worker_id="demo", subject_refs=(subject,), now=earlier) == ()
+
+
+async def test_recall_does_not_cross_between_two_teams_of_one_tenant(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """Tenant isolation is not the whole boundary: one company's two sales teams
+    share a tenant and must not share what they learned.
+
+    Added because a mutation found it missing — deleting the workspace condition
+    from `recall` left every test in this file green, since they all wrote and
+    read as the same workspace. A passing cross-tenant test says nothing about
+    workspace separation.
+    """
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+
+    other_team = context.model_copy(update={"workspace_id": uuid.UUID(int=0xCC02)})
+    found = await svc.recall(
+        other_team, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+
+    assert found == (), "a sibling workspace must not read this team's memory"

@@ -22,7 +22,13 @@ from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_knowledge import tables
 from dw_knowledge.chunking import structure_aware_chunks
-from dw_knowledge.contracts import SEARCH_FILTER_KEYS, EvidenceChunk, EvidenceRef, SearchQuery
+from dw_knowledge.contracts import (
+    SEARCH_FILTER_KEYS,
+    EvidenceChunk,
+    EvidenceRef,
+    SearchQuery,
+    classifications_for_clearance,
+)
 from dw_knowledge.identity import chunk_id_for, doc_key_for, document_id_for
 from dw_knowledge.ports import (
     EmbeddingPort,
@@ -38,12 +44,6 @@ from dw_platform.application.access_context import AccessContext
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
 
-# Clearance → classifications the caller may read (§15.6, fail closed).
-_CLEARANCE_ALLOWS: dict[str, tuple[str, ...]] = {
-    "internal": ("internal",),
-    "confidential": ("internal", "confidential"),
-    "restricted": ("internal", "confidential", "restricted"),
-}
 
 # Bumped for structure-aware chunking + contextual embedding (Phase A).
 INDEX_VERSION = "2026-07-25.structure-1"
@@ -147,7 +147,7 @@ class DocumentText:
 
 def build_trusted_filter(context: AccessContext, domain: str) -> TrustedSearchFilter:
     """Derive mandatory constraints from the verified context ONLY."""
-    allowed = _CLEARANCE_ALLOWS.get(context.clearance, ("internal",))
+    allowed = classifications_for_clearance(context.clearance)
     principals = [f"user:{context.principal_id}", "tenant:*"]
     principals.extend(f"role:{role}" for role in sorted(context.roles))
     return TrustedSearchFilter(
@@ -410,7 +410,7 @@ class KnowledgeGateway:
         # the caller's clearance and the document's ACL — otherwise a restricted
         # global doc's title and business metadata leak to a tenant that could
         # never open it. Applied to the whole query so list and read agree.
-        allowed = _CLEARANCE_ALLOWS.get(context.clearance, ("internal",))
+        allowed = classifications_for_clearance(context.clearance)
         principals = [f"user:{context.principal_id}", "tenant:*"]
         principals.extend(f"role:{role}" for role in sorted(context.roles))
         async with self.session_factory() as session, session.begin():
@@ -491,7 +491,7 @@ class KnowledgeGateway:
         holds. `None` covers both "no such document" and "not yours" - a caller
         learns nothing about a document it may not read.
         """
-        allowed = _CLEARANCE_ALLOWS.get(context.clearance, ("internal",))
+        allowed = classifications_for_clearance(context.clearance)
         principals = [f"user:{context.principal_id}", "tenant:*"]
         principals.extend(f"role:{role}" for role in sorted(context.roles))
         async with self.session_factory() as session, session.begin():

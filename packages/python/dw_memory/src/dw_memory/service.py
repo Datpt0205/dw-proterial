@@ -17,6 +17,7 @@ evidence rolled back would be precisely the dangling citation this prevents.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -27,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_knowledge.contracts import classifications_for_clearance
 from dw_memory import tables
 from dw_memory.contracts import MEMORY_SCHEMA_VERSION, MemoryItem, WriteDecision
 from dw_memory.policy import MemoryCandidate, MemoryWritePolicy, PolicyOutcome
@@ -37,6 +39,11 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
+
+# How many recalled facts may reach one model call. A ceiling, not a tuning
+# knob: recall runs on every step, and an unbounded list would grow the prompt
+# with the agent's own output until compaction fought it.
+DEFAULT_RECALL_LIMIT = 12
 
 # One action per outcome, so "what did this worker learn, and what did it decline
 # to learn" are both answerable from the trail rather than only the first.
@@ -247,4 +254,92 @@ class MemoryService:
                         "provenance_refs": tuple(row.provenance_refs),
                     }
                 )
+            )
+
+    async def recall(
+        self,
+        context: AccessContext,
+        *,
+        worker_id: str,
+        subject_refs: Sequence[str],
+        now: datetime,
+        limit: int = DEFAULT_RECALL_LIMIT,
+    ) -> tuple[MemoryItem, ...]:
+        """What this worker already knows about these subjects, for this caller.
+
+        The read side of memory. `propose` has been able to write since the
+        provenance work; nothing read it back, which made every stored fact
+        write-only — the shape this repository keeps producing, and the reason
+        `list_items` (an inventory screen) is not the same thing as recall.
+
+        Four conditions, and each one is a boundary rather than a preference:
+
+        - **tenant**: the GUC is set from the verified context and RLS enforces
+          it, the same as every other read here;
+        - **workspace**: a tenant's two teams do not share what they learned;
+        - **worker**: a fact another worker wrote was learned under a different
+          prompt and toolset, and carrying it over is how one worker's mistake
+          becomes another's premise;
+        - **clearance**: a memory carries the classification of the material it
+          was learned from, so a run may only recall what it could have read
+          directly — resolved through `classifications_for_clearance`, the same
+          ladder retrieval uses, never a second table.
+
+        Plus validity: a fact whose window has closed is history, not memory.
+
+        Ordered by confidence then recency, because what reaches the model is
+        capped and the cap should drop the least-supported claim rather than an
+        arbitrary one. An empty `subject_refs` recalls nothing: a run that is
+        about no particular record has no basis to pull one record's facts in,
+        and "no subject" must not read as "every subject".
+        """
+        # A shortcut, not the enforcement: `?|` against an empty array matches
+        # no row either, so the behaviour holds without this line. It is here to
+        # skip a round trip that can only return nothing.
+        if not subject_refs:
+            return ()
+        allowed = classifications_for_clearance(context.clearance)
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
+            rows = await session.execute(
+                sa.select(tables.items)
+                .where(
+                    tables.items.c.workspace_id == context.workspace_id,
+                    tables.items.c.worker_id == worker_id,
+                    tables.items.c.classification.in_(allowed),
+                    # JSONB `?|`: the stored subject list overlaps the asked-for
+                    # one. Done in SQL rather than by filtering in Python, so the
+                    # limit below applies to matching rows and not to whatever
+                    # the first page happened to hold.
+                    #
+                    # The right operand is typed `text[]` explicitly. Left to
+                    # infer, SQLAlchemy binds a Python list as JSONB and Postgres
+                    # answers `operator does not exist: jsonb ?| jsonb` — which
+                    # only a real database says, and is the reason this is tested
+                    # against one.
+                    tables.items.c.subject_refs.op("?|")(
+                        sa.literal(list(subject_refs), sa.ARRAY(sa.Text))
+                    ),
+                    tables.items.c.valid_from <= now,
+                    sa.or_(
+                        tables.items.c.valid_until.is_(None),
+                        tables.items.c.valid_until > now,
+                    ),
+                )
+                .order_by(
+                    tables.items.c.confidence.desc(),
+                    tables.items.c.created_at.desc(),
+                    tables.items.c.memory_id.desc(),
+                )
+                .limit(limit)
+            )
+            return tuple(
+                MemoryItem.model_validate(
+                    {
+                        **dict(row._mapping),
+                        "subject_refs": tuple(row.subject_refs),
+                        "provenance_refs": tuple(row.provenance_refs),
+                    }
+                )
+                for row in rows.all()
             )

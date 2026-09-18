@@ -7,20 +7,34 @@ true — a stale plan is worse than none, because it is believed.
 Here rather than `docs/`: this repository deliberately ships no documentation
 directory, and this is tooling state, not a product document.
 
-## Now — Mốc 3: nhớ được giữa các lượt
+## Now — Mốc 3: nhớ được giữa các lượt (đường ĐỌC xong, đường GHI còn lại)
 
-`MemoryService.propose` still has **no production caller**. Mốc 4 made the
-provenance chain enforceable; nothing walks it yet. Mốc 3 is what wires memory
-into the agent loop, and it is the largest remaining piece:
+**Done in this slice.** `MemoryService.recall` + `RecalledMemoryMiddleware`, in
+`platform_middleware` behind `AgentSpec.recall`. A run carrying a `subject_ref`
+now gets what this worker already learned about that record, framed as data by
+`runtime@1.5.0`. Four conditions narrow it and each has a negative test that a
+mutation proved: tenant, workspace, worker, clearance.
 
-- Nothing injects memory into a run. `MemoryService` has `propose` and
-  `list_items` — no `recall`, no retrieval by relevance, no call site.
+Two honest limits to keep in view:
+
+- `build_agent` still has **no production caller** — this is a skeleton, and a
+  bounded context is what builds an agent. "Wired" here means wired into
+  `platform_middleware`, the same sense in which the other middlewares are.
+- Recall matches on `subject_refs` overlap, not relevance. Good enough while a
+  run is about one record; it is not retrieval, and a run about no record
+  recalls nothing by design.
+
+**Still open, and the heavy half:**
+
+- `MemoryService.propose` still has **no production caller**. Recall reads what
+  nothing yet writes in production, so the loop is closed in code and not in
+  traffic. The write side is the next slice.
 - `deepagents.MemoryMiddleware` reads `AGENTS.md` from a backend and teaches the
   model to `edit_file` to update it. `DocgenSandbox` already implements that
   backend — but `/work` is tmpfs, so a `MEMORY.md` there is amnesia on restart.
 - The builtin file tools bypass `ToolExecutor` (authorization, idempotency,
   audit), which is why `OfferedToolsOnlyMiddleware` strips them. Routing them
-  through the executor is the heavy part of this milestone.
+  through the executor is the heaviest piece left.
 - `AGENTS.md` is customer data: per tenant, versioned, and not writable by a
   prompt-injected instruction inside a document the agent read.
 

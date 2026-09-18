@@ -37,6 +37,12 @@ class RuntimeCopy(BaseModel):
     # the user had written it.
     context_summary_prompt: str | None = None
     context_summary_frame: str | None = None
+    # 1.5.0, same rule again: recalled memory is material the agent wrote from
+    # documents a customer supplied, so it reaches the model framed as data. A
+    # host that wires recall must load a copy that carries this frame — pasting
+    # remembered sentences in unframed is how a line inside a contract PDF
+    # becomes an instruction two turns later.
+    recalled_memory_frame: str | None = None
     mock_reply: str
 
     def tool_description(
@@ -48,6 +54,15 @@ class RuntimeCopy(BaseModel):
             when_not_to_use=when_not_to_use,
             returns=returns,
         )
+
+    def recalled_memory(self, facts: str) -> str:
+        """Remembered facts framed as reference data, not as a user request."""
+        if self.recalled_memory_frame is None:
+            raise ConfigError(
+                f"runtime copy {self.version} has no recalled_memory_frame; "
+                "load runtime@1.5.0 or later"
+            )
+        return self.recalled_memory_frame.format(facts=facts)
 
     def context_summary(self, summary: str) -> str:
         """The summary framed as system-made reference data, not a user request."""

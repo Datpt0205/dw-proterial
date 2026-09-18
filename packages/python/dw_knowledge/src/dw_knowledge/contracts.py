@@ -13,6 +13,30 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Classification = str  # "internal" | "confidential" | "restricted" (validated by policy)
 
+# Clearance → the classifications a caller holding it may read (§15.6).
+#
+# Here rather than inside the retrieval gateway, because retrieval is no longer
+# the only reader: recalled memory is also material a run reads, written from
+# documents that carried a classification, and a second copy of this ladder is a
+# second answer to "may this run see it". Whichever copy nobody edits keeps
+# answering the old way, and in a clearance table that is a disclosure.
+_CLEARANCE_ALLOWS: dict[str, tuple[str, ...]] = {
+    "internal": ("internal",),
+    "confidential": ("internal", "confidential"),
+    "restricted": ("internal", "confidential", "restricted"),
+}
+
+
+def classifications_for_clearance(clearance: str) -> tuple[str, ...]:
+    """What a run at this clearance may read. Unknown clearance reads the least.
+
+    Fail closed on purpose: a clearance string this build does not know is more
+    likely a newer deployment's value or a typo than a licence to read further,
+    and under-reading is visible to the user while over-reading is not.
+    """
+    return _CLEARANCE_ALLOWS.get(clearance, ("internal",))
+
+
 # The domain a document carries when it belongs to no particular corpus, and the
 # domain a search names when it wants that common pool. It is NOT a wildcard:
 # searching "shared" reads shared documents, not every domain. The adapters used
