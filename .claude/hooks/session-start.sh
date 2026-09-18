@@ -26,6 +26,12 @@ fi
 # differ. Knowing the head up front makes the next revision derivable.
 head_rev=$(ls db/migrations/versions/*.py 2>/dev/null | tail -1 | xargs -r basename)
 
+# Where this session started. The Stop hook compares HEAD against it to tell
+# whether anything was committed, and therefore whether there is something this
+# session learned that `.claude/PLAN.md` should now say. Written here because
+# this is the only moment that knows "before".
+git rev-parse HEAD > "$root/.claude/.session-head" 2>/dev/null || true
+
 cat <<EOF
 Branch: $branch
 Uncommitted files: $dirty

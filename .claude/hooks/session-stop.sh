@@ -29,7 +29,33 @@ fi
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
 changed=$(git status --porcelain | wc -l | tr -d ' ')
-[ "$changed" -eq 0 ] && exit 0
+
+# Nothing uncommitted, but did this session COMMIT something without saying what
+# it learned? That is the quieter half of the same loss: the code is safe, the
+# reasoning behind it is not, and the next session reads a plan describing the
+# state before any of it happened.
+if [ "$changed" -eq 0 ]; then
+  started=$(cat "$root/.claude/.session-head" 2>/dev/null || true)
+  [ -z "$started" ] && exit 0
+  git cat-file -e "$started^{commit}" 2>/dev/null || exit 0
+  [ "$started" = "$(git rev-parse HEAD)" ] && exit 0
+  if git diff --name-only "$started"..HEAD | grep -q '^\.claude/PLAN\.md$'; then
+    exit 0
+  fi
+  {
+    echo "This session committed $(git rev-list --count "$started"..HEAD) change(s)"
+    echo "and did not touch .claude/PLAN.md."
+    echo
+    echo "The code is safe; what was learned making it is not. Update the plan so"
+    echo "the next session reads where the work actually stands — what is done,"
+    echo "what is open, what was measured and found NOT to be true, and any"
+    echo "decision the user still owes. Then commit that too."
+    echo
+    echo "If this session genuinely learned nothing worth recording, say so and"
+    echo "end the turn; this fires once."
+  } >&2
+  exit 2
+fi
 
 {
   echo "There are $changed uncommitted file(s)."

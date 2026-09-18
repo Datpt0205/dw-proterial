@@ -7,7 +7,29 @@ true — a stale plan is worse than none, because it is believed.
 Here rather than `docs/`: this repository deliberately ships no documentation
 directory, and this is tooling state, not a product document.
 
-## Now — Mốc 3: nhớ được giữa các lượt (đường ĐỌC xong, đường GHI còn lại)
+## Now — the platform is waiting for a bounded context
+
+Every platform milestone that can be finished without one is finished. What is
+left is not a gap in the platform: `build_agent` and `MemoryService.propose` have
+no production caller because a bounded context is what calls them, and this repo
+deliberately ships none. Adding one here to make the wiring look complete would
+break the boundary the whole repo is built on.
+
+So the next real step is a decision, not a task: **pick one business context**
+(sales chat, research, lead scoring) and plug it in at the seams — a package
+under `packages/python/`, its graphs registered on the runtime seam, its worker
+YAML, its tool specs, its eval dataset. `CLAUDE.md` lists the seven plug-in
+points.
+
+Only then do the numbers this plan leaves blank become measurable: how many live
+memories one account really accumulates, whether the GIN index gets chosen with
+real data, what a day of runs actually costs.
+
+**Done and pinned by tests:** Mốc 0, 1a, 1b, 2, 3, 4, 5, 6. Details below.
+
+**Open decisions:** none. The three that stood here were answered.
+
+## Mốc 3 — nhớ được giữa các lượt (chi tiết)
 
 **Done in this slice.** `MemoryService.recall` + `RecalledMemoryMiddleware`, in
 `platform_middleware` behind `AgentSpec.recall`. A run carrying a `subject_ref`
