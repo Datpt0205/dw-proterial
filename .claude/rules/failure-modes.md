@@ -5,13 +5,16 @@ with the count of distinct times it was found. They are written as questions to
 ask **while writing the line**, because each one was cheap to prevent and
 expensive to find.
 
-Two of the seven cannot be thought through — they are facts about the outside
+Two of the eight cannot be thought through — they are facts about the outside
 world, and only measurement finds them. They are marked as such. Treating the
 checklist as sufficient would miss exactly the dangerous half.
 
 ---
 
 ## 0. A check that cannot see the thing it checks (found 1×)
+
+Numbered zero because it comes before the rest: a check you trust that is blind
+to part of what it covers makes every finding below it unreliable.
 
 `verify_invariants.py` reads migration TEXT and confirmed for months that every
 tenant table had RLS. It was right about every table the text names. Postgres
