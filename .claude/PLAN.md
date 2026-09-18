@@ -20,9 +20,12 @@ Two honest limits to keep in view:
 - `build_agent` still has **no production caller** — this is a skeleton, and a
   bounded context is what builds an agent. "Wired" here means wired into
   `platform_middleware`, the same sense in which the other middlewares are.
-- Recall matches on `subject_refs` overlap, not relevance. Good enough while a
-  run is about one record; it is not retrieval, and a run about no record
-  recalls nothing by design.
+- Recall matches on `subject_refs` overlap. Similarity now decides the ORDER of
+  that set when a ranker is wired (`dw_memory/ranking.py`) — it never decides the
+  SET. An index that is empty, stale or poisoned can only produce a worse order,
+  never a wrong answer, and a memory written before the index existed still
+  surfaces. A ranker that is down degrades to confidence order, which is what
+  every run did before. Still true: a run about no record recalls nothing.
 
 **Also done: supersession (migration `62a9aaba6b16`).** Memory was append-only —
 nothing ever wrote `valid_until`, so two facts that disagreed both stayed live

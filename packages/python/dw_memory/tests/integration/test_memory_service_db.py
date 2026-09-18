@@ -18,7 +18,7 @@ import asyncio
 import hashlib
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -824,3 +824,169 @@ async def test_without_a_key_each_call_is_its_own_proposal(
         s=subject,
     )
     assert stored == 2
+
+
+# ---------------------------------------------------------------- ranking --
+#
+# Similarity RANKS and never FILTERS. The rows are the rows the SQL already
+# returned; the ranker only says what order to read them in. So an index that is
+# empty, stale or poisoned cannot produce a wrong answer — only a worse order.
+
+
+@dataclass
+class _Ranker:
+    """Returns whatever order it is told to, and records how it was asked."""
+
+    order: tuple[uuid.UUID, ...] = ()
+    raises: Exception | None = None
+    asked: list[dict[str, Any]] = field(default_factory=list)
+
+    async def nearest(
+        self,
+        query: str,
+        *,
+        tenant_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        worker_id: str,
+        limit: int,
+    ) -> tuple[uuid.UUID, ...]:
+        self.asked.append(
+            {"query": query, "tenant_id": tenant_id, "worker_id": worker_id, "limit": limit}
+        )
+        if self.raises is not None:
+            raise self.raises
+        return self.order
+
+
+async def _three(svc: MemoryService, seeded: Seeded, context: AccessContext, subject: str) -> None:
+    for text_, confidence in (("Nhất.", 0.99), ("Nhì.", 0.95), ("Ba.", 0.91)):
+        await _remember(
+            svc,
+            seeded,
+            context=context,
+            subject_refs=(subject,),
+            content=text_,
+            confidence=confidence,
+        )
+
+
+async def test_similarity_decides_the_order_when_a_ranker_is_wired(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _three(svc, seeded, context, subject)
+    by_confidence = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+    assert [i.content for i in by_confidence] == ["Nhất.", "Nhì.", "Ba."]
+
+    reversed_order = tuple(item.memory_id for item in reversed(by_confidence))
+    ranked = replace(svc, ranker=_Ranker(order=reversed_order))
+    found = await ranked.recall(
+        context,
+        worker_id="demo",
+        subject_refs=(subject,),
+        now=datetime.now(UTC),
+        query="khi nào ký hợp đồng",
+    )
+
+    assert [i.content for i in found] == ["Ba.", "Nhì.", "Nhất."]
+
+
+async def test_a_memory_the_ranker_never_saw_still_surfaces(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """The reason this ranks instead of filtering. Memories written before the
+    index existed would vanish silently if ids from the store chose the rows."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _three(svc, seeded, context, subject)
+    everything = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+    only_last = (everything[-1].memory_id,)
+
+    found = await replace(svc, ranker=_Ranker(order=only_last)).recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC), query="x"
+    )
+
+    assert len(found) == 3, "the two it had no opinion about must not disappear"
+    assert found[0].content == "Ba.", "the one it ranked leads"
+    assert [i.content for i in found[1:]] == ["Nhất.", "Nhì."], "the rest keep their own order"
+
+
+async def test_an_id_the_ranker_invents_cannot_add_a_row(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """A poisoned or stale index proposing a memory id — even a real one from
+    another subject — changes nothing: the rows came from the query."""
+    svc, _ = service
+    context = make_context()
+    mine, theirs = a_subject(), a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(mine,), content="Của tôi.")
+    await _remember(svc, seeded, context=context, subject_refs=(theirs,), content="Của khách kia.")
+    stolen = await svc.recall(
+        context, worker_id="demo", subject_refs=(theirs,), now=datetime.now(UTC)
+    )
+
+    found = await replace(svc, ranker=_Ranker(order=(stolen[0].memory_id,))).recall(
+        context, worker_id="demo", subject_refs=(mine,), now=datetime.now(UTC), query="x"
+    )
+
+    assert [i.content for i in found] == ["Của tôi."]
+
+
+async def test_a_ranker_that_fails_leaves_the_order_it_found(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """Degrades to what every run did before this existed — not to no memory,
+    and certainly not to a failed run."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _three(svc, seeded, context, subject)
+
+    broken = replace(svc, ranker=_Ranker(raises=RuntimeError("qdrant xuống")))
+    found = await broken.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC), query="x"
+    )
+
+    assert [i.content for i in found] == ["Nhất.", "Nhì.", "Ba."]
+
+
+async def test_the_ranker_is_asked_under_the_runs_own_tenant_and_worker(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+    ranker = _Ranker()
+
+    await replace(svc, ranker=ranker).recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC), query="câu hỏi"
+    )
+
+    assert ranker.asked[0]["tenant_id"] == TENANT
+    assert ranker.asked[0]["worker_id"] == "demo"
+    assert ranker.asked[0]["query"] == "câu hỏi"
+
+
+async def test_no_query_means_the_ranker_is_not_even_asked(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """A run with nothing to compare against should not pay for a vector search."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,))
+    ranker = _Ranker()
+
+    await replace(svc, ranker=ranker).recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+
+    assert ranker.asked == []

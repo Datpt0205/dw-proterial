@@ -16,6 +16,7 @@ evidence rolled back would be precisely the dangling citation this prevents.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -33,10 +34,13 @@ from dw_memory import tables
 from dw_memory.contracts import MEMORY_SCHEMA_VERSION, MemoryItem, WriteDecision
 from dw_memory.policy import MemoryCandidate, MemoryWritePolicy, PolicyOutcome
 from dw_memory.ports import EvidenceStorePort
+from dw_memory.ranking import MemoryRankerPort, rank_by
 from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
+
+logger = logging.getLogger("dw_memory.service")
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
 
@@ -44,6 +48,11 @@ _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
 # knob: recall runs on every step, and an unbounded list would grow the prompt
 # with the agent's own output until compaction fought it.
 DEFAULT_RECALL_LIMIT = 12
+
+# How many live memories a ranker may reorder. Wider than the cap so the
+# ranker has something to choose from, bounded so one account with years of
+# history does not load its whole past to pick twelve rows.
+RANKING_POOL = 100
 
 # One action per outcome, so "what did this worker learn, and what did it decline
 # to learn" are both answerable from the trail rather than only the first.
@@ -71,6 +80,9 @@ class MemoryService:
     # policy above decides whether a fact is worth keeping; this decides whether
     # its stated reason is real, which no amount of confidence can substitute for.
     evidence_store: EvidenceStorePort
+    # Orders what recall found when there is more of it than fits. Optional, and
+    # it can only ever change the ORDER — see `dw_memory.ranking`.
+    ranker: MemoryRankerPort | None = None
 
     async def propose(
         self,
@@ -384,6 +396,7 @@ class MemoryService:
         subject_refs: Sequence[str],
         now: datetime,
         limit: int = DEFAULT_RECALL_LIMIT,
+        query: str | None = None,
     ) -> tuple[MemoryItem, ...]:
         """What this worker already knows about these subjects, for this caller.
 
@@ -451,9 +464,12 @@ class MemoryService:
                     tables.items.c.created_at.desc(),
                     tables.items.c.memory_id.desc(),
                 )
-                .limit(limit)
+                # Read wider than the cap only when something will reorder them;
+                # otherwise the first `limit` by confidence IS the answer and
+                # fetching more is work nobody reads.
+                .limit(RANKING_POOL if self._ranks(query) else limit)
             )
-            return tuple(
+            found = [
                 MemoryItem.model_validate(
                     {
                         **dict(row._mapping),
@@ -462,4 +478,45 @@ class MemoryService:
                     }
                 )
                 for row in rows.all()
+            ]
+        return tuple(await self._ordered(found, query, context, worker_id))[:limit]
+
+    def _ranks(self, query: str | None) -> bool:
+        return self.ranker is not None and bool(query)
+
+    async def _ordered(
+        self,
+        found: list[MemoryItem],
+        query: str | None,
+        context: AccessContext,
+        worker_id: str,
+    ) -> list[MemoryItem]:
+        """Similarity order when a ranker can give one, the query's order otherwise.
+
+        Outside the transaction: the rows are already in hand, and holding a
+        database connection open across a call to another service is how a slow
+        dependency becomes a connection-pool outage.
+
+        Fails open to the existing order, deliberately. A ranker that is down
+        leaves an agent reading its memories confidence-first, which is what
+        every run did before this existed — not an agent with no memory, and
+        certainly not a failed run.
+        """
+        if self.ranker is None or not query or not found:
+            return found
+        try:
+            order = await self.ranker.nearest(
+                query,
+                tenant_id=context.tenant_id,
+                workspace_id=context.workspace_id,
+                worker_id=worker_id,
+                limit=len(found),
             )
+        except Exception:
+            logger.warning(
+                "memory ranker failed; falling back to confidence order",
+                extra={"worker_id": worker_id},
+                exc_info=True,
+            )
+            return found
+        return rank_by(order, [(item.memory_id, item) for item in found])
