@@ -12,6 +12,8 @@ dependencies = [
     # dependency reached through another package is one nobody sees when they
     # ask what this one needs.
     "qdrant-client>=1.12,<1.15",
+    # The retention policy is a YAML artifact this package loads itself.
+    "pyyaml>=6,<7",
     "pydantic>=2.10,<3",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
 ]

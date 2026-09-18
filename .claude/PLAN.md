@@ -34,9 +34,15 @@ re-implements tenant isolation, and the four conditions there are tested by
 
 **Next, in the order they would be asked for in an enterprise review:**
 
-1. `retention_policy` has no reader — memory and knowledge accumulate customer
-   data with no lifecycle. This is both a failure-mode-1 entry and a compliance
-   answer nobody can give today.
+1. ~~`retention_policy` has no reader~~ — **done**. `configs/policies/retention@1.0.0.yaml`
+   is the versioned answer to "how long do you keep our data", it is in the
+   release manifest with a checksum so the question can be asked about the past,
+   and `SqlMemoryRetention` enforces it on the worker's hourly sweep. Deletes,
+   never closes a window: `valid_until` says a fact stopped being true, retention
+   says we may no longer hold it. `legal_hold` has no term and is never swept; a
+   class this build does not know is kept, not guessed. Knowledge documents and
+   the partitioned audit/usage tables still have no lifecycle — audit retention
+   is DROP PARTITION and is its own piece of work.
 2. Backup and restore: no procedure, never rehearsed.
 3. Tenant offboarding and data export.
 4. SLO, alerting, on-call.

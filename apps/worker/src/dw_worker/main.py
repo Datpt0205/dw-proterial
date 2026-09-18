@@ -28,11 +28,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_memory.policy import MemoryWritePolicy
+from dw_memory.retention import SqlMemoryRetention, load_retention_policy
 from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
-from dw_worker.composition import build_embeddings, build_ingest_components
+from dw_worker.composition import REPO_ROOT, build_embeddings, build_ingest_components
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import MemoryIndexPort, memory_handlers
@@ -91,6 +92,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # What this deployment considers expired. ``None`` means nothing is pruned,
     # which is the correct default: deleting rows on a schedule nobody asked for
     # is not a safe guess.
+    # What this deployment considers expired. No longer `None`: memory carries a
+    # `retention_policy` per row and, until now, nothing read it — a lifecycle
+    # commitment that a compliance review reads as a promise and that expired
+    # nothing. The rules are a versioned artifact, not a constant, because the
+    # question it answers ("how long do you keep our data") gets asked about the
+    # past as well as the present.
     retention: RetentionPrunePort | None = None
 
     if settings.database_url:
@@ -119,6 +126,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # nothing has an opinion about.
                 _build_memory_index(settings),
             )
+        )
+        retention = SqlMemoryRetention(
+            session_factory=sessions,
+            # Pinned by filename, like every other versioned artifact here: the
+            # answer to a retention question has to name the version that gave it.
+            policy=load_retention_policy(
+                REPO_ROOT / "configs" / "policies" / "retention@1.0.0.yaml"
+            ),
+            clock=clock,
         )
         registry.register(
             "outbox",

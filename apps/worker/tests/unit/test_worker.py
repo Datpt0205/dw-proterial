@@ -99,12 +99,16 @@ def test_a_host_with_no_infrastructure_wires_no_lane() -> None:
 
 
 def test_only_the_platform_lanes_are_wired() -> None:
-    """The outbox is the one lane a database alone is enough for.
+    """Two lanes a database alone is enough for, and no more.
 
-    Ingest also needs object storage, and the two repair sweeps are registered
-    only when something above them gave them work — no bounded context is wired
-    here, so no queue is reaped and nothing is pruned. Naming the whole set is
-    what makes a context's lane arriving in this process a visible change.
+    The outbox, and retention. Retention joined the platform set the day memory
+    got a lifecycle: `memory.items` is a platform table, so the platform is what
+    expires it — a context adds its own rules on top rather than owning the only
+    ones. Ingest still needs object storage, and the reaper is registered only
+    when something above it gave it a queue.
+
+    Naming the whole set is the point: a context's lane arriving in this process
+    becomes a visible change rather than a silent one.
     """
     settings = bare_settings(database_url="postgresql+asyncpg://dw:dw@localhost/dw")
-    assert set(build_registry(settings).all()) == {"outbox"}
+    assert set(build_registry(settings).all()) == {"outbox", "retention"}

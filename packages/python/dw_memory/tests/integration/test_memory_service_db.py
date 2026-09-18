@@ -14,7 +14,6 @@ perfect and referred to nothing.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import uuid
 from collections.abc import AsyncIterator
@@ -25,11 +24,7 @@ from typing import Any
 import pytest
 import sqlalchemy as sa
 from runtime_harness import (
-    TEST_DB,
     RuntimeUrls,
-    recreate_database,
-    run_migrations,
-    runtime_urls,
 )
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -50,19 +45,6 @@ pytestmark = pytest.mark.integration
 TENANT = uuid.UUID(int=0xCC00)
 WORKSPACE = uuid.UUID(int=0xCC01)
 SOURCE_TEXT = b"Anh An noi se gui hop dong truoc thu Sau."
-
-
-@pytest.fixture(scope="session")
-def urls() -> RuntimeUrls:
-    resolved = runtime_urls()
-    try:
-        asyncio.run(recreate_database(resolved.admin, TEST_DB))
-    except Exception as exc:
-        pytest.fail(f"Postgres unreachable — run `make infra-up`. Error: {exc}")
-    result = run_migrations(resolved.migrator)
-    if result.returncode != 0:
-        pytest.fail(f"alembic upgrade failed:\n{result.stderr}")
-    return resolved
 
 
 @dataclass(frozen=True)
