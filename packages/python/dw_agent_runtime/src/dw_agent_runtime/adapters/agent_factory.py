@@ -61,6 +61,7 @@ from dw_agent_runtime.adapters.langchain_tools import (
 )
 from dw_agent_runtime.adapters.recalled_memory import MemoryRecallPort, RecalledMemoryMiddleware
 from dw_agent_runtime.adapters.run_budget import RunBudgetMiddleware
+from dw_agent_runtime.adapters.sub_agents import SubAgentSpec, sub_agent_middleware
 from dw_agent_runtime.adapters.system_prompt import WorkerSystemPrompt
 from dw_agent_runtime.contracts import RunContext, ToolDefinition
 from dw_agent_runtime.executor import ToolExecutor
@@ -135,6 +136,10 @@ class AgentSpec:
     # same way compaction is: a context that stores no memory wires none, and a
     # run with no `subject_ref` recalls nothing even when it is wired.
     recall: MemoryRecallPort | None = None
+    # Narrower agents this worker may delegate to. Empty by default: the `task`
+    # tool only exists when a context names something to delegate TO, and an
+    # agent that can spawn is a larger surface than one that cannot.
+    sub_agents: Sequence[SubAgentSpec] = ()
     # Only read when `recall` is set. Passed rather than taken from a module
     # global so a test can pin the moment a validity window is judged against.
     clock: Callable[[], datetime] | None = None
@@ -193,6 +198,11 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
         # bounded by `recursion_limit`, which counts steps and not money.
         RunBudgetMiddleware(spec.budget, spec.profiles, spec.profile_id),
     ]
+    if spec.sub_agents:
+        # Last, and only when asked. It adds the `task` tool, so it changes what
+        # the model may do — see `sub_agents` for what the platform re-applies
+        # inside a delegated turn, and why none of it is inherited.
+        stack.append(sub_agent_middleware(spec, spec.sub_agents))
     if spec.compaction is not None:
         stack.append(
             PlatformSummarizationMiddleware(

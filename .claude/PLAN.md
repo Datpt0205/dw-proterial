@@ -72,9 +72,17 @@ remembering is a workflow's judgement, not the platform's.
 
 ## Next after that
 
-- **Mốc 5 sub-agents** — `SubAgentMiddleware` exists; the platform part is that a
-  sub-agent inherits the caller's tenant and scopes and never more, its tools
-  still pass `ToolExecutor`, and its cost counts against the parent's ceiling.
+- ~~**Mốc 5 sub-agents**~~ — **done**, `adapters/sub_agents.py`. Two things were
+  measured on the pinned deepagents rather than assumed. Inheriting tenancy is
+  already safe: the context is graph level, so a child sees the caller's tenant,
+  workspace, scopes and autonomy, and a `SubAgent` spec has no field that could
+  replace them. What is NOT safe by default is spend — with a probe middleware on
+  both, the order is parent, child, parent, so the parent's ceiling never sees a
+  token the child burns. `sub_agent_spec` rebuilds the gates inside the child and
+  hands it the SAME ledger object. Its tools are built from DEFINITIONS through
+  `platform_tools`, never passed in ready-made, and a child may not offer a tool
+  its caller lacks. The `task` tool exists only when a context names something to
+  delegate to.
 - **Mốc 6 running many customers** — model fallback/retry on the agent path (it
   has none), a per-tenant spend cap that reads the ledger (today's quota counts
   runs, not money), `cancel_thread` wired to an endpoint, provider fixtures.

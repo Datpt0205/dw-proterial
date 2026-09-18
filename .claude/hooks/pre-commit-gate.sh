@@ -55,7 +55,7 @@ if printf '%s' "$staged" | grep -q '^db/migrations/'; then
     its own side, and is its ON DELETE deliberate?"
 fi
 
-if printf '%s' "$staged" | grep -qE 'executor\.py|autonomy\.py|langchain_tools\.py|approval'; then
+if printf '%s' "$staged" | grep -qE 'executor\.py|autonomy\.py|langchain_tools\.py|sub_agents\.py|agent_factory\.py|approval'; then
   add "An approval or autonomy path changed. Does this widen what an agent does
     unasked? Is the gate tested where the effect happens, not only through the
     layer above it that would have caught it anyway? Mutation-check it: revert the
