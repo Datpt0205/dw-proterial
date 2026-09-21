@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from dw_memory.retention import RetentionClass, RetentionPolicy
+from dw_platform.retention_policy import KnowledgeRetention, RetentionClass, RetentionPolicy
 
 pytestmark = pytest.mark.unit
 
@@ -32,6 +32,7 @@ def _policy() -> RetentionPolicy:
             "ephemeral": RetentionClass(days=30, description="ngắn"),
             "legal_hold": RetentionClass(days=None, description="giữ vô hạn"),
         },
+        knowledge=KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
         batch_limit=100,
     )
 

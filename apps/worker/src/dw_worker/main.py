@@ -27,13 +27,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
+from dw_knowledge.retention import SqlKnowledgeRetention
 from dw_memory.policy import MemoryWritePolicy
-from dw_memory.retention import SqlMemoryRetention, load_retention_policy
+from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
-from dw_worker.composition import REPO_ROOT, build_embeddings, build_ingest_components
+from dw_platform.retention_policy import load_retention_policy
+from dw_worker.composition import (
+    REPO_ROOT,
+    build_embeddings,
+    build_ingest_components,
+    build_vector_index,
+)
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import MemoryIndexPort, memory_handlers
@@ -98,7 +105,11 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # nothing. The rules are a versioned artifact, not a constant, because the
     # question it answers ("how long do you keep our data") gets asked about the
     # past as well as the present.
+    # Two lanes, not one: memory expires items on a per-class schedule and
+    # knowledge expires documents somebody deleted, and a pass that failed would
+    # otherwise take the other's work down with it.
     retention: RetentionPrunePort | None = None
+    knowledge_retention: RetentionPrunePort | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -127,14 +138,24 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 _build_memory_index(settings),
             )
         )
+        # Pinned by filename, like every other versioned artifact here: the
+        # answer to a retention question has to name the version that gave it.
+        # One file read once — the two sweeps are two halves of one commitment,
+        # and a build where they disagreed would be a build that answers the
+        # compliance question two ways.
+        retention_policy = load_retention_policy(
+            REPO_ROOT / "configs" / "policies" / "retention@1.1.0.yaml"
+        )
         retention = SqlMemoryRetention(
+            session_factory=sessions, policy=retention_policy, clock=clock
+        )
+        knowledge_retention = SqlKnowledgeRetention(
             session_factory=sessions,
-            # Pinned by filename, like every other versioned artifact here: the
-            # answer to a retention question has to name the version that gave it.
-            policy=load_retention_policy(
-                REPO_ROOT / "configs" / "policies" / "retention@1.0.0.yaml"
-            ),
+            policy=retention_policy,
             clock=clock,
+            # Deleting the rows without the points would leave the text of a
+            # deleted document in the only store that can still return it.
+            vector_index=build_vector_index(settings),
         )
         registry.register(
             "outbox",
@@ -173,6 +194,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "retention",
             build_retention_consumer(retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if knowledge_retention is not None:
+        registry.register(
+            "retention_knowledge",
+            build_retention_consumer(knowledge_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     return registry

@@ -112,7 +112,7 @@ def _embedding_route(settings: WorkerSettings) -> ModelRoute:
     return profile.embedding
 
 
-def _build_vector_index(settings: WorkerSettings) -> VectorIndexPort:
+def build_vector_index(settings: WorkerSettings) -> VectorIndexPort:
     if settings.qdrant_url:
         from qdrant_client import AsyncQdrantClient
 
@@ -170,7 +170,7 @@ def build_ingest_components(settings: WorkerSettings) -> IngestComponents | None
 
     gateway = KnowledgeGateway(
         session_factory=session_factory,
-        vector_index=_build_vector_index(settings),
+        vector_index=build_vector_index(settings),
         embeddings=build_embeddings(settings),
         object_storage=storage,
         clock=clock,

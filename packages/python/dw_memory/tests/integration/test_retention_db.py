@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from dw_memory import tables
-from dw_memory.retention import RetentionClass, RetentionPolicy, SqlMemoryRetention
+from dw_memory.retention import SqlMemoryRetention
+from dw_platform.retention_policy import KnowledgeRetention, RetentionClass, RetentionPolicy
 
 pytestmark = pytest.mark.integration
 
@@ -48,6 +49,7 @@ def _policy(**overrides: object) -> RetentionPolicy:
             "ephemeral": RetentionClass(days=30, description="ngắn"),
             "legal_hold": RetentionClass(days=None, description="giữ vô hạn"),
         },
+        "knowledge": KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
         "batch_limit": 1000,
     }
     fields.update(overrides)
@@ -217,3 +219,123 @@ async def test_the_batch_ceiling_bounds_one_pass(
 
     survivors = [i for i in ids if await _alive(sessions, i)]
     assert len(survivors) == 1, "the ceiling must bound one pass, not be ignored"
+
+
+async def _evidence(
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    age_days: int,
+    cited_by: uuid.UUID | None,
+    tenant: uuid.UUID = TENANT,
+) -> uuid.UUID:
+    """One evidence row on its own document, optionally linked to a memory.
+
+    A real document because `evidence -> documents` is a foreign key; the sweep
+    never walks it, but the fixture cannot pretend it away.
+    """
+    evidence_id, document_id = uuid.uuid4(), uuid.uuid4()
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenant)}
+        )
+        await session.execute(
+            sa.text(
+                "INSERT INTO knowledge.documents"
+                " (id, tenant_id, workspace_id, title, source_uri, created_by, created_at)"
+                " VALUES (:d, :t, :w, 'tài liệu', 's3://dw/x', gen_random_uuid(), :c)"
+            ),
+            {"d": document_id, "t": tenant, "w": WORKSPACE, "c": NOW - timedelta(days=400)},
+        )
+        await session.execute(
+            sa.text(
+                "INSERT INTO knowledge.evidence"
+                " (evidence_id, tenant_id, workspace_id, source_document_id, source_version,"
+                "  relevance_score, classification, provenance_hash, created_at)"
+                " VALUES (:e, :t, :w, :d, '1', 0.9, 'internal', :h, :c)"
+            ),
+            {
+                "e": evidence_id,
+                "t": tenant,
+                "w": WORKSPACE,
+                "d": document_id,
+                "h": "0" * 64,
+                "c": NOW - timedelta(days=age_days),
+            },
+        )
+        if cited_by is not None:
+            await session.execute(
+                sa.insert(tables.item_evidence).values(
+                    memory_id=cited_by, evidence_id=evidence_id, tenant_id=tenant
+                )
+            )
+    return evidence_id
+
+
+async def _evidence_alive(
+    sessions: async_sessionmaker[AsyncSession], evidence_id: uuid.UUID
+) -> bool:
+    async with sessions() as session, session.begin():
+        await session.execute(sa.text("SELECT set_config('app.worker_drain', 'on', true)"))
+        found = await session.scalar(
+            sa.text("SELECT 1 FROM knowledge.evidence WHERE evidence_id = :e"),
+            {"e": evidence_id},
+        )
+        return found is not None
+
+
+async def test_evidence_no_memory_cites_any_more_is_deleted(
+    sweep: tuple[SqlMemoryRetention, async_sessionmaker[AsyncSession]],
+) -> None:
+    """Not tidiness: `evidence -> documents` is RESTRICT, so every surviving row
+    pins its document for good and the document grace period in the policy would
+    be a promise the schema cannot keep."""
+    pruner, sessions = sweep
+    orphan = await _evidence(sessions, age_days=40, cited_by=None)
+
+    await pruner.prune()
+
+    assert not await _evidence_alive(sessions, orphan)
+
+
+async def test_evidence_a_live_memory_cites_is_kept(
+    sweep: tuple[SqlMemoryRetention, async_sessionmaker[AsyncSession]],
+) -> None:
+    """The proof a memory rests on outlives nothing while the memory is there.
+    Deleting it would turn a citation into an assertion."""
+    pruner, sessions = sweep
+    keeper = await _memory(sessions, retention="legal_hold", age_days=10_000)
+    cited = await _evidence(sessions, age_days=10_000, cited_by=keeper)
+
+    await pruner.prune()
+
+    assert await _evidence_alive(sessions, cited)
+
+
+async def test_evidence_inside_its_grace_is_kept_even_uncited(
+    sweep: tuple[SqlMemoryRetention, async_sessionmaker[AsyncSession]],
+) -> None:
+    """Evidence and its `item_evidence` link are written in one transaction today,
+    so an unlinked row is genuinely unlinked. The window is what keeps that from
+    being load-bearing for a writer that later splits the two."""
+    pruner, sessions = sweep
+    fresh = await _evidence(sessions, age_days=2, cited_by=None)
+
+    await pruner.prune()
+
+    assert await _evidence_alive(sessions, fresh)
+
+
+async def test_expiring_a_memory_frees_the_evidence_it_cited(
+    sweep: tuple[SqlMemoryRetention, async_sessionmaker[AsyncSession]],
+) -> None:
+    """The whole chain in one pass: the memory expires, `item_evidence` follows
+    through its cascade, and the evidence that is now uncited goes with it. This
+    is what makes a document that was cited once eventually deletable."""
+    pruner, sessions = sweep
+    expiring = await _memory(sessions, retention="ephemeral", age_days=40)
+    freed = await _evidence(sessions, age_days=40, cited_by=expiring)
+
+    await pruner.prune()
+
+    assert not await _alive(sessions, expiring)
+    assert not await _evidence_alive(sessions, freed)

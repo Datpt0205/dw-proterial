@@ -34,15 +34,40 @@ re-implements tenant isolation, and the four conditions there are tested by
 
 **Next, in the order they would be asked for in an enterprise review:**
 
-1. ~~`retention_policy` has no reader~~ — **done**. `configs/policies/retention@1.0.0.yaml`
-   is the versioned answer to "how long do you keep our data", it is in the
-   release manifest with a checksum so the question can be asked about the past,
-   and `SqlMemoryRetention` enforces it on the worker's hourly sweep. Deletes,
-   never closes a window: `valid_until` says a fact stopped being true, retention
-   says we may no longer hold it. `legal_hold` has no term and is never swept; a
-   class this build does not know is kept, not guessed. Knowledge documents and
-   the partitioned audit/usage tables still have no lifecycle — audit retention
-   is DROP PARTITION and is its own piece of work.
+1. ~~Data lifecycle~~ — **done for memory and knowledge.**
+   `configs/policies/retention@1.1.0.yaml` is the versioned answer to "how long
+   do you keep our data", it is in the release manifest with a checksum so the
+   question can be asked about the past, and ONE file feeds both sweeps on the
+   worker's hourly lanes. Deletes, never closes a window: `valid_until` says a
+   fact stopped being true, retention says we may no longer hold it.
+   `legal_hold` has no term and is never swept; a class this build does not know
+   is kept, not guessed.
+
+   What closing knowledge actually took, beyond the obvious sweep:
+   - **Evidence had no lifecycle at all.** `evidence -> documents` is RESTRICT,
+     and deleting a memory only cascades `memory.item_evidence` — the evidence
+     row survived for ever, pinning its document for ever. So a document cited
+     once could never be hard deleted and the grace period was a promise the
+     schema could not keep. `SqlMemoryRetention` now removes evidence nothing
+     cites, which is what makes the chain drain. It lives in memory, not
+     knowledge, because `item_evidence` is a memory table.
+   - **A cited document is held back, not crashed on.** The citation test is in
+     the SELECT, and again inside the deleting transaction — the vector deletes
+     sit between the two, so a memory proposed in that gap would otherwise fail
+     the whole batch and stall every document behind it.
+   - **Both stores, points first.** Rows without points is a pass the next hour
+     finishes; points without rows is the text of a deleted document in the only
+     store that can still return it.
+   - `KnowledgeGateway.purge_soft_deleted` was deleted. It was this feature,
+     written earlier, never called from anywhere, crash-prone on any cited
+     document — the duplicate is what would have drifted.
+
+   Still open, and named rather than silently included: **superseded documents**
+   (how many versions back to keep is a different question from how long a
+   deletion takes to become final), and the partitioned audit/usage tables.
+   Audit retention is DROP PARTITION and cannot run at all today — only
+   `_default` partitions exist. That is the next piece of work.
+
 2. Backup and restore: no procedure, never rehearsed.
 3. Tenant offboarding and data export.
 4. SLO, alerting, on-call.

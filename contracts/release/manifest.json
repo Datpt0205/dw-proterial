@@ -25,7 +25,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "450c3888970a834476b2e91b6af2a341cf6675f1",
+  "git_sha": "1a561411649825f053f2aa990db499539ac10954",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "1.0.0",
   "platform_version": "0.1.0",
@@ -36,9 +36,9 @@
       "version": "1.1.0"
     },
     {
-      "checksum": "fe77d54575d9bdb17511e6d17f4a4b592032fbbdac8a395ce608c22702d5bc90",
+      "checksum": "de19b32c985c75077bf234a055432f94f1bccbebf272cc588ff377cadc26c898",
       "policy_id": "retention",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",

@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "dw-kernel",
     "pydantic>=2.10,<3",
+    "pyyaml>=6,<7",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
     "pyjwt[crypto]>=2.10,<3",
     "redis>=5,<6",

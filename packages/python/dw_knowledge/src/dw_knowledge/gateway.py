@@ -540,7 +540,8 @@ class KnowledgeGateway:
     async def soft_delete_document(self, document_id: uuid.UUID, context: AccessContext) -> None:
         """Tombstone a document (kept for traceability; excluded from retrieval).
 
-        A retention purge (``purge_soft_deleted``) hard-removes it later.
+        ``dw_knowledge.retention.SqlKnowledgeRetention`` hard-removes it once the
+        grace period in the retention policy is over and nothing cites it.
         """
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
@@ -560,36 +561,6 @@ class KnowledgeGateway:
                 .values(status="deleted", deleted_at=self.clock.now())
             )
         await self.vector_index.tombstone_document(document_id)
-
-    async def purge_soft_deleted(self, context: AccessContext, *, before: datetime) -> int:
-        """Hard-delete tombstoned rows/points older than ``before`` (worker job).
-
-        Removes from BOTH stores so nothing is orphaned. Returns purge count.
-        """
-        async with self.session_factory() as session, session.begin():
-            await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
-            rows = (
-                await session.execute(
-                    sa.select(tables.documents.c.id).where(
-                        tables.documents.c.status.in_(("deleted", "superseded")),
-                        sa.or_(
-                            tables.documents.c.deleted_at < before,
-                            tables.documents.c.effective_to < before,
-                        ),
-                    )
-                )
-            ).all()
-            doc_ids = [row.id for row in rows]
-            if doc_ids:
-                await session.execute(
-                    sa.delete(tables.chunks).where(tables.chunks.c.document_id.in_(doc_ids))
-                )
-                await session.execute(
-                    sa.delete(tables.documents).where(tables.documents.c.id.in_(doc_ids))
-                )
-        for doc_id in doc_ids:
-            await self.vector_index.delete_document(doc_id)
-        return len(doc_ids)
 
     # ------------------------------------------------------------ retrieval --
     async def search(self, query: SearchQuery, context: AccessContext) -> list[EvidenceChunk]:

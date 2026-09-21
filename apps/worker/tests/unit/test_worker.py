@@ -99,16 +99,22 @@ def test_a_host_with_no_infrastructure_wires_no_lane() -> None:
 
 
 def test_only_the_platform_lanes_are_wired() -> None:
-    """Two lanes a database alone is enough for, and no more.
+    """Three lanes a database alone is enough for, and no more.
 
-    The outbox, and retention. Retention joined the platform set the day memory
-    got a lifecycle: `memory.items` is a platform table, so the platform is what
-    expires it — a context adds its own rules on top rather than owning the only
-    ones. Ingest still needs object storage, and the reaper is registered only
-    when something above it gave it a queue.
+    The outbox, and retention twice. Retention joined the platform set the day
+    memory got a lifecycle: `memory.items` is a platform table, so the platform
+    is what expires it — a context adds its own rules on top rather than owning
+    the only ones. Ingest still needs object storage, and the reaper is
+    registered only when something above it gave it a queue.
+
+    Two retention lanes and not one because memory and knowledge expire on
+    different terms and a pass that failed would otherwise take the other's work
+    down with it. They read ONE policy file, which is the part that matters: a
+    build where the two halves of a compliance commitment disagreed is the
+    failure this split would otherwise invite.
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
     """
     settings = bare_settings(database_url="postgresql+asyncpg://dw:dw@localhost/dw")
-    assert set(build_registry(settings).all()) == {"outbox", "retention"}
+    assert set(build_registry(settings).all()) == {"outbox", "retention", "retention_knowledge"}

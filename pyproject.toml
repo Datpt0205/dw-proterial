@@ -318,6 +318,14 @@ source_modules = [
     "dw_agent_runtime",
 ]
 forbidden_modules = ["qdrant_client", "minio", "boto3"]
+# The whole of `dw_memory` is the source, with the one legitimate import named
+# here rather than by listing the modules that are NOT adapters — the way the
+# knowledge half above does it. Listing is what let this contract go BROKEN on
+# main for five CI runs: `dw_memory` was named as a package, the ranker adapter
+# was added under it, and the choice was between deleting the rule and weakening
+# it. Named this way, a new module under `dw_memory` is covered the day it is
+# written, and a second provider import has to be argued for on this line.
+ignore_imports = ["dw_memory.adapters.qdrant_ranker -> qdrant_client"]
 
 [[tool.importlinter.contracts]]
 name = "Platform packages do not import app composition roots"

@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: retention
-policy_version: "1.0.0"
+policy_version: "1.1.0"
 
 # Dữ liệu sống bao lâu trước khi bị xoá hẳn.
 #
@@ -45,6 +45,29 @@ classes:
   legal_hold:
     days: null
     description: Giữ vô thời hạn do nghĩa vụ pháp lý
+
+# Vòng đời phía knowledge: tài liệu đã xoá, và trích dẫn đã mồ côi.
+#
+# Đánh dấu xoá là thao tác của người dùng và người dùng đổi ý. `deleted_grace_days`
+# là thời gian để đổi ý; hết hạn thì tài liệu đi hẳn và các chunk theo sau
+# (FK chunks -> documents là CASCADE).
+#
+# NHƯNG `evidence -> documents` là RESTRICT, và ràng buộc đó do trigger của
+# Postgres kiểm, không đi qua RLS. Một tài liệu còn bất kỳ dòng evidence nào trỏ
+# tới thì database từ chối xoá — đúng, vì xoá nó biến một trích dẫn thành lời nói
+# suông. Nên lượt quét BỎ QUA những tài liệu đó và đếm lại, chứ không đâm vào lỗi
+# rồi hỏng cả lô.
+#
+# Và đây là chỗ bản trước nói sai: evidence KHÔNG tự hết hạn. Xoá một ký ức chỉ
+# cascade `memory.item_evidence`, dòng evidence ở lại vĩnh viễn — nên một tài liệu
+# từng được trích dẫn một lần sẽ không bao giờ xoá được. `orphan_evidence_grace_days`
+# là thứ làm chuỗi đó chảy: evidence không còn `item_evidence` nào trỏ tới thì
+# không còn chứng minh cho cái gì nữa. Hôm nay evidence và item_evidence ghi trong
+# cùng một transaction nên "không có link" là mồ côi thật; cửa sổ này để tính chất
+# đó không phải thứ gánh cả cơ chế, phòng khi có người tách hai lệnh ghi ra.
+knowledge:
+  deleted_grace_days: 30
+  orphan_evidence_grace_days: 7
 
 # Trần mỗi lượt quét. Retention là kiểm soát dung lượng chứ không phải kiểm soát
 # tính đúng: một dòng sống quá hạn thêm một giờ không hại ai, còn một lệnh DELETE
