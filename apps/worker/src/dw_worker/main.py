@@ -34,6 +34,7 @@ from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
+from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
 from dw_platform.retention_policy import load_retention_policy
 from dw_worker.composition import (
     REPO_ROOT,
@@ -110,6 +111,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # otherwise take the other's work down with it.
     retention: RetentionPrunePort | None = None
     knowledge_retention: RetentionPrunePort | None = None
+    partitions: RetentionPrunePort | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -144,9 +146,16 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # and a build where they disagreed would be a build that answers the
         # compliance question two ways.
         retention_policy = load_retention_policy(
-            REPO_ROOT / "configs" / "policies" / "retention@1.1.0.yaml"
+            REPO_ROOT / "configs" / "policies" / "retention@1.2.0.yaml"
         )
         retention = SqlMemoryRetention(
+            session_factory=sessions, policy=retention_policy, clock=clock
+        )
+        # Not retention in the sense of deleting: mostly it CREATES next
+        # month's partitions, which is what keeps rows out of the DEFAULT one.
+        # It shares the lane's port and cadence because it is the same kind of
+        # slow housekeeping and answers the same policy file.
+        partitions = SqlPartitionMaintenance(
             session_factory=sessions, policy=retention_policy, clock=clock
         )
         knowledge_retention = SqlKnowledgeRetention(
@@ -200,6 +209,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "retention_knowledge",
             build_retention_consumer(knowledge_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if partitions is not None:
+        registry.register(
+            "partitions",
+            build_retention_consumer(partitions),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     return registry

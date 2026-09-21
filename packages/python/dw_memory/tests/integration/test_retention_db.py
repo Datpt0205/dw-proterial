@@ -23,7 +23,12 @@ from sqlalchemy.pool import NullPool
 
 from dw_memory import tables
 from dw_memory.retention import SqlMemoryRetention
-from dw_platform.retention_policy import KnowledgeRetention, RetentionClass, RetentionPolicy
+from dw_platform.retention_policy import (
+    AuditRetention,
+    KnowledgeRetention,
+    RetentionClass,
+    RetentionPolicy,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -50,6 +55,7 @@ def _policy(**overrides: object) -> RetentionPolicy:
             "legal_hold": RetentionClass(days=None, description="giữ vô hạn"),
         },
         "knowledge": KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
+        "audit": AuditRetention(months_ahead=1, tables={}),
         "batch_limit": 1000,
     }
     fields.update(overrides)

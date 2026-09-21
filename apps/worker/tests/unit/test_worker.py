@@ -99,7 +99,7 @@ def test_a_host_with_no_infrastructure_wires_no_lane() -> None:
 
 
 def test_only_the_platform_lanes_are_wired() -> None:
-    """Three lanes a database alone is enough for, and no more.
+    """Four lanes a database alone is enough for, and no more.
 
     The outbox, and retention twice. Retention joined the platform set the day
     memory got a lifecycle: `memory.items` is a platform table, so the platform
@@ -117,4 +117,9 @@ def test_only_the_platform_lanes_are_wired() -> None:
     becomes a visible change rather than a silent one.
     """
     settings = bare_settings(database_url="postgresql+asyncpg://dw:dw@localhost/dw")
-    assert set(build_registry(settings).all()) == {"outbox", "retention", "retention_knowledge"}
+    assert set(build_registry(settings).all()) == {
+        "outbox",
+        "retention",
+        "retention_knowledge",
+        "partitions",
+    }

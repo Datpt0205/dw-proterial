@@ -12,7 +12,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from dw_platform.retention_policy import KnowledgeRetention, RetentionClass, RetentionPolicy
+from dw_platform.retention_policy import (
+    AuditRetention,
+    KnowledgeRetention,
+    RetentionClass,
+    RetentionPolicy,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -33,6 +38,10 @@ def _policy() -> RetentionPolicy:
             "legal_hold": RetentionClass(days=None, description="giữ vô hạn"),
         },
         knowledge=KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
+        audit=AuditRetention(
+            months_ahead=3,
+            tables={"audit_events": RetentionClass(days=None, description="giữ")},
+        ),
         batch_limit=100,
     )
 

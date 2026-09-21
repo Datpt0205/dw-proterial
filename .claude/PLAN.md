@@ -62,11 +62,41 @@ re-implements tenant isolation, and the four conditions there are tested by
      written earlier, never called from anywhere, crash-prone on any cited
      document — the duplicate is what would have drifted.
 
+   **And done for audit and usage too.** The baseline said in a comment that "an
+   operational job creates real monthly partitions ahead of time"; it never
+   existed, every row was in the `_default` partition, and a default partition
+   cannot be dropped — so "audit retention is DROP PARTITION" could not execute
+   at all. The job exists now as a worker lane, and building it turned up two
+   holes of the family migration 0009 found:
+
+   - **The audit log was not append-only.** `0001_platform_grants.sql` revoked
+     UPDATE and DELETE on `platform.audit_events` and says in prose that this is
+     "enforced by the grant rather than by convention". It never revoked them on
+     `audit_events_default`, which had taken them from the blanket grant one
+     statement earlier. As `dw_app`, both `DELETE FROM audit_events_default` and
+     `UPDATE ... SET action = 'rewritten'` succeeded. `ALTER DEFAULT PRIVILEGES`
+     means every future partition would have arrived the same way, so the revoke
+     is now part of creating one.
+   - **A partition created later inherits no RLS**, which is 0009 again — a
+     monthly job would have re-opened that leak every month. Creating, policing
+     and revoking are one function, and `test_partition_maintenance.py` asks the
+     catalog rather than reading the DDL.
+
+   Two more things the work itself taught:
+   - Creation is **self-healing**. A row for a month with no partition lands in
+     the default, and Postgres then refuses to create that month's partition.
+     Without relocation that state is terminal — one missed window and the month
+     can never be partitioned, so never dropped. Found by running the whole
+     integration suite, not this one file.
+   - **Nothing is dropped by default.** Both tables ship `days: null`. The pass
+     creates partitions ahead, which is pure gain, and drops only what somebody
+     wrote a number for — DROP PARTITION destroys a month instantly with no soft
+     delete in between, and the term is a legal obligation per deployment, not a
+     technical default. **Đạt still has to choose those two numbers.**
+
    Still open, and named rather than silently included: **superseded documents**
-   (how many versions back to keep is a different question from how long a
-   deletion takes to become final), and the partitioned audit/usage tables.
-   Audit retention is DROP PARTITION and cannot run at all today — only
-   `_default` partitions exist. That is the next piece of work.
+   — how many versions back to keep is a different question from how long a
+   deletion takes to become final.
 
 2. Backup and restore: no procedure, never rehearsed.
 3. Tenant offboarding and data export.

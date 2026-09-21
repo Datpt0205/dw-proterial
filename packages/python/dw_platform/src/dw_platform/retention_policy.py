@@ -36,6 +36,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "AuditRetention",
     "KnowledgeRetention",
     "RetentionClass",
     "RetentionPolicy",
@@ -73,6 +74,33 @@ class KnowledgeRetention(BaseModel):
     orphan_evidence_grace_days: int = Field(ge=1)
 
 
+class AuditRetention(BaseModel):
+    """The two range-partitioned tables, where retention is DROP PARTITION.
+
+    A term here destroys a whole month at once and nothing stands between the
+    sweep and the data — no soft delete, no grace. So `days` defaults to nothing
+    for both tables: the maintenance pass still creates partitions ahead, which
+    is pure gain, and drops only what somebody wrote a number for. Same shape as
+    `legal_hold` above, for the same reason.
+
+    `months_ahead` has to exceed the gap between two maintenance passes with room
+    to spare. A month with no partition sends its rows to the DEFAULT one, and a
+    default holding a month's rows blocks that month's partition from ever being
+    created — so falling behind is not self-correcting.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    months_ahead: int = Field(ge=1, le=24)
+    tables: dict[str, RetentionClass]
+
+    def cutoff_for(self, table: str, *, now: datetime) -> datetime | None:
+        found = self.tables.get(table)
+        if found is None or found.days is None:
+            return None
+        return now - timedelta(days=found.days)
+
+
 class RetentionPolicy(BaseModel):
     """The versioned answer to "how long do you keep our data"."""
 
@@ -83,6 +111,7 @@ class RetentionPolicy(BaseModel):
     policy_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     classes: dict[str, RetentionClass]
     knowledge: KnowledgeRetention
+    audit: AuditRetention
     batch_limit: int = Field(gt=0, le=10_000)
 
     def cutoff_for(self, name: str, *, now: datetime) -> datetime | None:

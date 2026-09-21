@@ -29,7 +29,12 @@ from sqlalchemy.pool import NullPool
 from dw_knowledge import tables
 from dw_knowledge.ports import IndexableChunk, TrustedSearchFilter, VectorHit
 from dw_knowledge.retention import SqlKnowledgeRetention
-from dw_platform.retention_policy import KnowledgeRetention, RetentionClass, RetentionPolicy
+from dw_platform.retention_policy import (
+    AuditRetention,
+    KnowledgeRetention,
+    RetentionClass,
+    RetentionPolicy,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -53,6 +58,7 @@ def _policy() -> RetentionPolicy:
         policy_version="1.1.0",
         classes={"default": RetentionClass(days=730, description="thường")},
         knowledge=KnowledgeRetention(deleted_grace_days=GRACE_DAYS, orphan_evidence_grace_days=7),
+        audit=AuditRetention(months_ahead=1, tables={}),
         batch_limit=1000,
     )
 
