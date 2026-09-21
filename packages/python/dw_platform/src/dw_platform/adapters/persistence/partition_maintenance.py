@@ -1,10 +1,14 @@
-"""Keeping the time-partitioned tables in partitions, on the worker's schedule.
+"""Keeping the audit log in monthly partitions, on the worker's schedule.
 
-`platform.audit_events` and `platform.model_usage_ledger` are partitioned by
-month. The baseline said an operational job would create those partitions ahead
-of time; it never existed, every row landed in the DEFAULT partition, and a
-default partition cannot be dropped — so the retention answer for audit ("DROP
-PARTITION, instant, nothing to vacuum") could not run at all.
+`platform.audit_events` is partitioned by month. The baseline said an
+operational job would create those partitions ahead of time; it never existed,
+every row landed in the DEFAULT partition, and a default partition cannot be
+dropped — so the retention answer for audit ("DROP PARTITION, instant, nothing
+to vacuum") could not run at all.
+
+`platform.model_usage_ledger` was the second table here until it was removed
+entirely (migration `aefe7c1f5d9b`); one parent left is why the function takes
+one cutoff.
 
 This is that job, and it runs in the worker rather than in a cron entry someone
 has to remember to install. Falling behind is not self-correcting: a month with
@@ -40,12 +44,11 @@ logger = logging.getLogger("dw_platform.partitions")
 __all__ = ["SqlPartitionMaintenance"]
 
 _ENSURE = sa.text("SELECT platform.ensure_time_partitions(:months_ahead)")
-_DROP = sa.text("SELECT platform.drop_expired_partitions(:audit_cutoff, :usage_cutoff)")
+_DROP = sa.text("SELECT platform.drop_expired_partitions(:audit_cutoff)")
 
-# The names the policy file may carry. A table this build does not partition is
-# not a table this build may be told to drop months from.
+# The one table this build partitions. A name the policy file carries that is
+# not this one is not a table this build may be told to drop months from.
 _AUDIT = "audit_events"
-_USAGE = "model_usage_ledger"
 
 
 @dataclass(frozen=True)
@@ -78,19 +81,16 @@ class SqlPartitionMaintenance:
     async def _drop_expired(self) -> list[str]:
         """Both cutoffs in one call, and `None` for a table with no term.
 
-        `None` reaches the function as SQL NULL, which is how that table is told
-        it is never dropped — the same meaning `legal_hold` carries for memory.
-        Passing a very old timestamp instead would be a term nobody wrote.
+        `None` reaches the function as SQL NULL, which is how the table is told
+        it is never dropped — the same meaning `legal_hold` carries for memory,
+        and what a decided-but-not-yet-enforced term resolves to. Passing a very
+        old timestamp instead would be a term nobody wrote.
 
-        No early return when both are NULL: the call is what makes the function
-        the one place that decides, and short-circuiting here would put half the
+        No early return on NULL: the call is what makes the function the one
+        place that decides, and short-circuiting here would put half the
         decision on this side of the connection where nothing tests it.
         """
-        now = self.clock.now()
-        audit_cutoff = self.policy.audit.cutoff_for(_AUDIT, now=now)
-        usage_cutoff = self.policy.audit.cutoff_for(_USAGE, now=now)
+        cutoff = self.policy.audit.cutoff_for(_AUDIT, now=self.clock.now())
         async with self.session_factory() as session, session.begin():
-            gone = await session.scalars(
-                _DROP, {"audit_cutoff": audit_cutoff, "usage_cutoff": usage_cutoff}
-            )
+            gone = await session.scalars(_DROP, {"audit_cutoff": cutoff})
             return list(gone.all())

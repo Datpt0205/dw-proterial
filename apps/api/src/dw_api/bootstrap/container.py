@@ -66,7 +66,6 @@ from dw_platform.application.ports import (
     WorkspaceDirectoryPort,
 )
 from dw_platform.application.provisioning import ProvisioningService
-from dw_platform.application.usage_stats import UsageStatsService
 
 
 @dataclass(frozen=True)
@@ -139,7 +138,6 @@ class ApiContainer:
     grant_membership: GrantMembershipHandler | None = None
     revoke_membership: RevokeMembershipHandler | None = None
     admin_console: AdminConsoleService | None = None
-    usage_stats: UsageStatsService | None = None
     hierarchy: HierarchyService | None = None
     cache: CachePort | None = None
     feedback_storage: FeedbackAttachmentStoragePort | None = None

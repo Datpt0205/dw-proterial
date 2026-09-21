@@ -3,7 +3,7 @@
 ``RoutingModelGateway`` records every ``generate_structured`` call, but an
 agent harness talks to its model through ``ChatModelFactory`` — a bare
 LangChain chat model with no recorder — so until 2026-08-26 every agent-loop
-token was invisible to ``platform.model_usage_ledger`` (F6). This adapter
+token was invisible to every usage recorder. This adapter
 closes that seam: wrap the harness invocation in :meth:`LangchainUsageMeter.track`,
 pass the yielded callbacks into the LangChain ``config``, and on exit each
 model's ``usage_metadata`` becomes one ledger row priced from the profile's

@@ -96,28 +96,6 @@ agent_store = sa.Table(
     sa.PrimaryKeyConstraint("tenant_id", "namespace", "key"),
 )
 
-# Migration 0024. Partitioned by month on `created_at`, which is why that column
-# is in the primary key; inserts name it explicitly so the row lands in the
-# partition for the clock the run used, not the database server's.
-model_usage_ledger = sa.Table(
-    "model_usage_ledger",
-    metadata,
-    sa.Column("id", UUID(as_uuid=True), nullable=False),
-    sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
-    sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
-    sa.Column("run_id", UUID(as_uuid=True), nullable=False),
-    sa.Column("worker_id", sa.String(64), nullable=True),
-    sa.Column("task", sa.String(128), nullable=True),
-    sa.Column("prompt_id", sa.String(128), nullable=True),
-    sa.Column("prompt_version", sa.String(16), nullable=True),
-    sa.Column("provider", sa.String(32), nullable=True),
-    sa.Column("model", sa.String(64), nullable=True),
-    sa.Column("input_tokens", sa.BigInteger, nullable=True),
-    sa.Column("output_tokens", sa.BigInteger, nullable=True),
-    sa.Column("cost_usd", sa.Numeric(12, 6), nullable=True),
-    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
-    sa.PrimaryKeyConstraint("id", "created_at"),
-)
 
 tool_executions = sa.Table(
     "tool_executions",

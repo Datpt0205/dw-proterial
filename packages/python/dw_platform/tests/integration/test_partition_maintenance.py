@@ -49,7 +49,7 @@ from dw_platform.retention_policy import (
 pytestmark = pytest.mark.integration
 
 MONTHS_AHEAD = 2
-PARENTS = ("audit_events", "model_usage_ledger")
+PARENTS = ("audit_events",)
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,7 @@ class _Clock:
 def _policy(**audit: object) -> RetentionPolicy:
     fields: dict[str, object] = {
         "months_ahead": MONTHS_AHEAD,
+        "enforced": True,
         "tables": {name: RetentionClass(days=None, description="giữ") for name in PARENTS},
     }
     fields.update(audit)
@@ -215,24 +216,6 @@ async def test_a_partition_made_at_runtime_keeps_the_audit_log_append_only(
         await engine.dispose()
 
 
-async def test_the_usage_ledger_stays_writable(
-    app_sessions: async_sessionmaker[AsyncSession], db_urls: DatabaseUrls
-) -> None:
-    """The append-only revoke is for the audit log only. A ledger partition the
-    application cannot correct is a different bug wearing the same fix."""
-    now = datetime.now(UTC)
-    await SqlPartitionMaintenance(app_sessions, _policy(), _Clock(now)).prune()
-    part = _month_name("model_usage_ledger", _add_months(now, MONTHS_AHEAD))
-
-    engine = create_async_engine(db_urls.app, poolclass=NullPool)
-    try:
-        async with engine.connect() as conn:
-            # No rows match, so nothing changes; being allowed to ask is the point.
-            await conn.execute(sa.text(f"UPDATE platform.{part} SET cost_usd = 0 WHERE false"))
-    finally:
-        await engine.dispose()
-
-
 async def test_nothing_is_dropped_while_no_term_is_written(
     app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine
 ) -> None:
@@ -264,22 +247,6 @@ async def test_a_term_drops_only_the_months_entirely_behind_it(
     remaining = await _partitions(migrator, "audit_events")
     assert old not in remaining
     assert straddling in remaining
-
-
-async def test_a_term_on_one_table_never_reaches_the_other(
-    app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine
-) -> None:
-    """Two tables, two obligations. Billing evidence and the audit log do not
-    expire together just because one sweep visits both."""
-    now = datetime.now(UTC)
-    audit_old = await _make_month(migrator, "audit_events", _add_months(now, -48))
-    usage_old = await _make_month(migrator, "model_usage_ledger", _add_months(now, -48))
-    term = _policy(tables={"audit_events": RetentionClass(days=400, description="một năm")})
-
-    await SqlPartitionMaintenance(app_sessions, term, _Clock(now)).prune()
-
-    assert audit_old not in await _partitions(migrator, "audit_events")
-    assert usage_old in await _partitions(migrator, "model_usage_ledger")
 
 
 async def test_the_default_partition_is_never_dropped(
@@ -392,9 +359,8 @@ async def test_a_row_written_now_lands_in_a_real_partition_not_the_default(
     assert in_month == 1
 
 
-@pytest.mark.parametrize("parent", PARENTS)
-async def test_every_partition_of_the_audit_tables_is_policed(
-    app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine, parent: str
+async def test_every_partition_of_the_audit_table_is_policed(
+    app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine
 ) -> None:
     """Catalog-driven, so a partition somebody adds later is covered the day it
     exists rather than the day somebody remembers to extend this file.
@@ -417,16 +383,15 @@ async def test_every_partition_of_the_audit_tables_is_policed(
                 " JOIN pg_namespace n ON n.oid = parent.relnamespace"
                 " WHERE n.nspname = 'platform' AND parent.relname = :parent"
             ),
-            {"parent": parent},
+            {"parent": "audit_events"},
         )
         partitions = rows.all()
 
-    assert partitions, f"{parent} has no partitions at all"
+    assert partitions, "audit_events has no partitions at all"
     for name, enabled, forced, can_update, can_delete in partitions:
         assert enabled and forced, f"{name} is reachable across tenants by name"
-        if parent == "audit_events":
-            assert not can_update, f"{name} lets the application rewrite audit history"
-            assert not can_delete, f"{name} lets the application delete audit history"
+        assert not can_update, f"{name} lets the application rewrite audit history"
+        assert not can_delete, f"{name} lets the application delete audit history"
 
 
 async def test_a_month_already_stranded_in_the_default_is_recovered(
@@ -515,3 +480,31 @@ async def _writes_land(engine: AsyncEngine, at: datetime) -> None:
         await conn.execute(
             sa.text("DELETE FROM platform.audit_events WHERE id = :id"), {"id": event_id}
         )
+
+
+async def test_a_decided_term_still_drops_nothing_until_it_is_enforced(
+    app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine
+) -> None:
+    """The state the policy file actually ships in, and it is not the same as
+    having no term at all.
+
+    `days` says what was decided; `enforced` says whether it may run. They are
+    separate because DROP PARTITION is instant and irreversible, and the restore
+    procedure it leans on has not been rehearsed — recording the decision must
+    not be the same act as executing it.
+
+    Partitions are still created, because creating them is what keeps next
+    month's rows out of the default and carries no risk at all.
+    """
+    now = datetime.now(UTC)
+    ancient = await _make_month(migrator, "audit_events", _add_months(now, -60))
+    decided = _policy(
+        enforced=False,
+        tables={name: RetentionClass(days=1, description="một ngày") for name in PARENTS},
+    )
+
+    await SqlPartitionMaintenance(app_sessions, decided, _Clock(now)).prune()
+
+    existing = await _partitions(migrator, "audit_events")
+    assert ancient in existing, "a term that is not enforced still dropped a month"
+    assert _month_name("audit_events", now) in existing, "creating ahead was gated too"

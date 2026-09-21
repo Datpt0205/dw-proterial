@@ -201,10 +201,14 @@ remembering is a workflow's judgement, not the platform's.
     - Retry on the agent path: **done** (`adapters/model_retry.py`). Provider
       FALLBACK is deliberately not built: the chat factory points at a LiteLLM
       proxy where failover is configuration the application never sees.
-    - Per-tenant daily spend cap: **done**. `RunAllowancePort.spend_usd_per_day`
-      plus `run_store.spend_since`, checked in the runner beside the run count and
-      before it. Summed from `model_usage_ledger` — `worker_runs` has no cost
-      column, which the first version got wrong and only a real database said so.
+    - Per-tenant daily spend cap: **built, then removed on request.** It read
+      `platform.model_usage_ledger`, and that whole table went with it
+      (migration `aefe7c1f5d9b`) — nothing in this repo invoices anybody, so a
+      per-tenant cost ledger had two readers and no purpose behind them. What
+      that costs is stated plainly because it is a real gap: `runs_per_day`
+      still bounds HOW MANY runs a tenant starts and the per-run ceiling from
+      Mốc 1a still bounds one loop, but **a day of expensive runs now has no
+      ceiling**. Cost still reaches telemetry.
     - `cancel_thread` over HTTP: **done**. The runner's method takes a thread id
       and nothing else — it reads an in-process dict, safe while the only caller
       is a run that started it, a cross-tenant cancel the moment it is a route.

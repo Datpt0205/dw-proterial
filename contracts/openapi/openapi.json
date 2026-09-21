@@ -384,35 +384,6 @@
         "title": "CreateWorkspaceBody",
         "type": "object"
       },
-      "DailyUsageView": {
-        "properties": {
-          "cost_usd": {
-            "title": "Cost Usd",
-            "type": "number"
-          },
-          "day": {
-            "format": "date",
-            "title": "Day",
-            "type": "string"
-          },
-          "runs": {
-            "title": "Runs",
-            "type": "integer"
-          },
-          "worker_id": {
-            "title": "Worker Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "day",
-          "worker_id",
-          "runs",
-          "cost_usd"
-        ],
-        "title": "DailyUsageView",
-        "type": "object"
-      },
       "DecisionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1792,29 +1763,6 @@
         "title": "TimelineEvent",
         "type": "object"
       },
-      "ToolUsageView": {
-        "properties": {
-          "calls": {
-            "title": "Calls",
-            "type": "integer"
-          },
-          "failed": {
-            "title": "Failed",
-            "type": "integer"
-          },
-          "tool_name": {
-            "title": "Tool Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "tool_name",
-          "calls",
-          "failed"
-        ],
-        "title": "ToolUsageView",
-        "type": "object"
-      },
       "UpdateTenantBody": {
         "properties": {
           "locale": {
@@ -1881,112 +1829,6 @@
           }
         },
         "title": "UpdateTenantBody",
-        "type": "object"
-      },
-      "UsageOverviewView": {
-        "properties": {
-          "daily": {
-            "items": {
-              "$ref": "#/components/schemas/DailyUsageView"
-            },
-            "title": "Daily",
-            "type": "array"
-          },
-          "days": {
-            "title": "Days",
-            "type": "integer"
-          },
-          "since": {
-            "format": "date-time",
-            "title": "Since",
-            "type": "string"
-          },
-          "tools": {
-            "items": {
-              "$ref": "#/components/schemas/ToolUsageView"
-            },
-            "title": "Tools",
-            "type": "array"
-          },
-          "usecases": {
-            "items": {
-              "$ref": "#/components/schemas/UsecaseUsageView"
-            },
-            "title": "Usecases",
-            "type": "array"
-          }
-        },
-        "required": [
-          "days",
-          "since",
-          "usecases",
-          "daily",
-          "tools"
-        ],
-        "title": "UsageOverviewView",
-        "type": "object"
-      },
-      "UsecaseUsageView": {
-        "properties": {
-          "cost_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cost Usd"
-          },
-          "input_tokens": {
-            "title": "Input Tokens",
-            "type": "integer"
-          },
-          "last_used_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Used At"
-          },
-          "model_calls": {
-            "title": "Model Calls",
-            "type": "integer"
-          },
-          "output_tokens": {
-            "title": "Output Tokens",
-            "type": "integer"
-          },
-          "runs": {
-            "title": "Runs",
-            "type": "integer"
-          },
-          "unpriced_calls": {
-            "title": "Unpriced Calls",
-            "type": "integer"
-          },
-          "worker_id": {
-            "title": "Worker Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "worker_id",
-          "runs",
-          "model_calls",
-          "input_tokens",
-          "output_tokens",
-          "cost_usd",
-          "unpriced_calls",
-          "last_used_at"
-        ],
-        "title": "UsecaseUsageView",
         "type": "object"
       },
       "UserRefView": {
@@ -2582,51 +2424,6 @@
           }
         },
         "summary": "Update Tenant",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/api/v1/admin/usage": {
-      "get": {
-        "operationId": "usage_overview_api_v1_admin_usage_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "days",
-            "required": false,
-            "schema": {
-              "default": 30,
-              "maximum": 365,
-              "minimum": 1,
-              "title": "Days",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UsageOverviewView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Usage Overview",
         "tags": [
           "admin"
         ]

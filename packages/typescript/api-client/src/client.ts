@@ -40,9 +40,7 @@ import {
   type TimelineEvent,
   type WorkspaceMember,
   type SyncStatus,
-  type UsageOverview,
   syncStatusSchema,
-  usageOverviewSchema,
   pageSchema,
   pageQueryString,
   type Page,
@@ -272,17 +270,6 @@ export class ApiClient {
   /** Where the import stands: when it last ran, and what it is holding back. */
   getSyncStatus(): Promise<SyncStatus> {
     return this.request("GET", "/api/v1/admin/sync", syncStatusSchema);
-  }
-
-  // ---- admin: usage stats (F6) -------------------------------------------
-
-  /** Per-usecase AI usage and cost inside the window, tenant-scoped. */
-  getUsageStats(days: number): Promise<UsageOverview> {
-    return this.request(
-      "GET",
-      `/api/v1/admin/usage?days=${days}`,
-      usageOverviewSchema,
-    );
   }
 
   // ---- admin: membership management --------------------------------------

@@ -15,9 +15,9 @@ from dw_agent_runtime.adapters.checkpoint import SqlAlchemyCheckpointSaver
 from dw_agent_runtime.adapters.langchain_usage import LangchainUsageMeter
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
-from dw_agent_runtime.adapters.sql_usage import CompositeUsageRecorder, SqlUsageRecorder
 from dw_agent_runtime.adapters.telemetry_usage import TelemetryUsageRecorder
 from dw_agent_runtime.adapters.tool_execution_store import SqlToolExecutionStore
+from dw_agent_runtime.adapters.usage_recorders import CompositeUsageRecorder
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.executor import ToolExecutor
@@ -117,13 +117,12 @@ def build_runtime(
     copy = load_runtime_copy(RUNTIME_COPY_CONFIG)
 
     # ---- model gateway ---------------------------------------------------
-    # The ledger is where the invoice comes from and telemetry is where one
-    # call is inspected, so both run. Composing rather than choosing is
-    # deliberate: a wiring that picked one would eventually pick the one that
-    # cannot answer the question being asked.
-    recorders: list[UsageRecorderPort] = [
-        SqlUsageRecorder(session_factory=session_factory, id_generator=ids, clock=clock)
-    ]
+    # Telemetry only. The database ledger this used to write alongside is gone:
+    # nothing here invoices anybody, and its two readers — a per-tenant daily
+    # spend cap and an admin dashboard — went with it. The composite stays
+    # because a recorder that raises must not take the run down, and because
+    # "no recorder at all" is what a deployment with telemetry off looks like.
+    recorders: list[UsageRecorderPort] = []
     if not isinstance(telemetry, NullTelemetry):
         recorders.append(TelemetryUsageRecorder(telemetry))
     usage_recorder: UsageRecorderPort = CompositeUsageRecorder(recorders)

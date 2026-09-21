@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: retention
-policy_version: "1.2.0"
+policy_version: "1.3.0"
 
 # Dữ liệu sống bao lâu trước khi bị xoá hẳn.
 #
@@ -69,7 +69,10 @@ knowledge:
   deleted_grace_days: 30
   orphan_evidence_grace_days: 7
 
-# Hai bảng chuỗi thời gian: audit_events và model_usage_ledger.
+# Bảng chuỗi thời gian: audit_events.
+#
+# model_usage_ledger từng đứng cạnh nó và đã bị bỏ hẳn (migration aefe7c1f5d9b)
+# — repo không xuất hoá đơn cho ai, nên sổ chi phí model không có người đọc.
 #
 # Chúng phân mảnh theo tháng, nên retention ở đây là DROP PARTITION — tức thì,
 # không để lại gì phải vacuum. Nhưng cũng vì thế mà nó KHÔNG lùi được: một
@@ -89,13 +92,30 @@ knowledge:
 # cũng không tạo được nữa.
 audit:
   months_ahead: 3
+
+  # Thời hạn đã QUYẾT, nhưng chưa thực thi.
+  #
+  # `enforced: false` nghĩa là quét vẫn tạo partition trước hạn và vẫn không xoá
+  # gì cả. Vì sao tách khỏi `days: null`: hai thứ đó là hai trạng thái khác nhau,
+  # và gộp lại thì mất thông tin. `days: null` = "chưa ai quyết giữ bao lâu".
+  # `enforced: false` = "đã quyết, nhưng chưa được phép thi hành".
+  #
+  # Lý do chưa thi hành: DROP PARTITION xoá trọn một tháng, tức thì, không lùi
+  # được — và repo này chưa có quy trình khôi phục nào từng được DIỄN TẬP. Bật
+  # một thao tác không hoàn tác được lên trên một mạng lưới an toàn chưa ai thử
+  # là sai thứ tự. Lật thành `true` sau khi backup/restore có diễn tập thật.
+  enforced: false
+
   tables:
+    # Ba năm. Thời hiệu khởi kiện tranh chấp thương mại là 2 năm (Luật Thương
+    # mại Đ.319), kỳ soát xét nhìn lại 12 tháng — ba năm phủ cả hai kèm biên.
+    #
+    # Và đây là bảng CÓ dữ liệu cá nhân: `actor_id` nói ai làm gì lúc nào. Nghị
+    # định 13/2023 yêu cầu xoá khi hết mục đích, nên giữ vô hạn KHÔNG phải là
+    # phương án an toàn — nó là một vi phạm khác.
     audit_events:
-      days: null
+      days: 1095
       description: Nhật ký kiểm toán — ai làm gì, lúc nào
-    model_usage_ledger:
-      days: null
-      description: Sổ tiêu thụ model, chứng cứ cho hoá đơn
 
 # Trần mỗi lượt quét. Retention là kiểm soát dung lượng chứ không phải kiểm soát
 # tính đúng: một dòng sống quá hạn thêm một giờ không hại ai, còn một lệnh DELETE

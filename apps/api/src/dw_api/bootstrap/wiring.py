@@ -62,7 +62,6 @@ from dw_platform.adapters.persistence.membership_admin import SqlMembershipAdmin
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.provisioning_repo import SqlProvisioningRepository
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
-from dw_platform.adapters.persistence.usage_stats_repo import SqlUsageStatsRepository
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
@@ -74,7 +73,6 @@ from dw_platform.application.membership_admin import (
     RevokeMembershipHandler,
 )
 from dw_platform.application.provisioning import ProvisioningService
-from dw_platform.application.usage_stats import UsageStatsService
 
 _LOG = logging.getLogger("dw_api.bootstrap")
 
@@ -158,9 +156,6 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     )
     container.admin_console = AdminConsoleService(
         SqlAdminConsoleRepository(session_factory), authorization, clock, ids
-    )
-    container.usage_stats = UsageStatsService(
-        repo=SqlUsageStatsRepository(session_factory), authz=authorization, clock=clock
     )
     container.hierarchy = HierarchyService(
         SqlHierarchyRepository(session_factory), authorization, clock, ids

@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
@@ -98,9 +97,6 @@ class _UnmeteredPlan:
     """Any plan, no daily limit — the run quota is not what these tests exercise."""
 
     def runs_per_day(self, plan_id: str) -> int | None:
-        return None
-
-    def spend_usd_per_day(self, plan_id: str) -> Decimal | None:
         return None
 
 

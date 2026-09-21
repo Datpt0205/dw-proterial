@@ -146,7 +146,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # and a build where they disagreed would be a build that answers the
         # compliance question two ways.
         retention_policy = load_retention_policy(
-            REPO_ROOT / "configs" / "policies" / "retention@1.2.0.yaml"
+            REPO_ROOT / "configs" / "policies" / "retention@1.3.0.yaml"
         )
         retention = SqlMemoryRetention(
             session_factory=sessions, policy=retention_policy, clock=clock

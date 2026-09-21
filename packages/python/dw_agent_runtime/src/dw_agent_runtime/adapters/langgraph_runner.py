@@ -18,7 +18,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, timedelta
 from typing import Any, cast
 
 from langgraph.store.base import BaseStore
@@ -256,7 +256,6 @@ class LangGraphWorkflowRunner:
         day_start = (
             self.clock.now().astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         )
-        await self._refuse_if_out_of_money(run_context, day_start)
         limit = self.allowance.runs_per_day(run_context.plan_id)
         if limit is None:
             return
@@ -270,39 +269,6 @@ class LangGraphWorkflowRunner:
                 "quota": "runs_per_day",
                 "limit": str(limit),
                 "used": str(used),
-                "plan_id": run_context.plan_id,
-                "resets_at": (day_start + timedelta(days=1)).isoformat(),
-            },
-        )
-
-    async def _refuse_if_out_of_money(self, run_context: RunContext, day_start: datetime) -> None:
-        """The other half of the quota: what a day of runs COST, not how many.
-
-        Counting runs never bounded spend. A plan of twenty runs a day is twenty
-        chances to spend without limit, because the per-run ceiling caps one loop
-        and nothing caps the day — and the run that finally exceeds a plan's
-        worth of money looks, from the count, exactly like the third of twenty.
-
-        Checked before the count, so a tenant who is over on money hears about
-        money rather than being told they have runs left.
-
-        Same bounded slack as the count, and deliberately: runs in flight have
-        recorded no cost yet, so a day's total lags by whatever is running. The
-        alternative is a lock held across every model call a tenant makes.
-        """
-        cap = self.allowance.spend_usd_per_day(run_context.plan_id)
-        if cap is None:
-            return
-        spent = await self.run_store.spend_since(run_context.tenant_id, day_start)
-        if spent < cap:
-            return
-        raise QuotaExceededError(
-            "hôm nay đã dùng hết hạn mức chi phí của gói; thử lại sau 00:00 UTC"
-            " hoặc nâng gói để có thêm hạn mức",
-            details={
-                "quota": "spend_usd_per_day",
-                "limit": str(cap),
-                "used": str(spent),
                 "plan_id": run_context.plan_id,
                 "resets_at": (day_start + timedelta(days=1)).isoformat(),
             },

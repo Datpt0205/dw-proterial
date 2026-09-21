@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   BrainCircuit,
   Building,
   Building2,
@@ -92,13 +91,6 @@ const platformNav: NavItem[] = [
     hint: "Tenant name, timezone and language",
     icon: Settings,
     scope: "platform.tenant.settings.write",
-  },
-  {
-    href: "/admin/usage",
-    label: "Thống kê AI",
-    hint: "Usecase nào dùng nhiều, tốn bao nhiêu (F6)",
-    icon: BarChart3,
-    scope: "platform.usage.read",
   },
   {
     href: "/admin/feedback",

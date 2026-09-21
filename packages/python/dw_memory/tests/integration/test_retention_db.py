@@ -55,7 +55,7 @@ def _policy(**overrides: object) -> RetentionPolicy:
             "legal_hold": RetentionClass(days=None, description="giữ vô hạn"),
         },
         "knowledge": KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
-        "audit": AuditRetention(months_ahead=1, tables={}),
+        "audit": AuditRetention(months_ahead=1, enforced=False, tables={}),
         "batch_limit": 1000,
     }
     fields.update(overrides)

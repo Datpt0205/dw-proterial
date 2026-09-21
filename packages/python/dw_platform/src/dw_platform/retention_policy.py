@@ -87,16 +87,24 @@ class AuditRetention(BaseModel):
     to spare. A month with no partition sends its rows to the DEFAULT one, and a
     default holding a month's rows blocks that month's partition from ever being
     created — so falling behind is not self-correcting.
+
+    `enforced` is separate from `days` because "nobody has decided a term" and
+    "a term is decided but may not run yet" are different states, and collapsing
+    them loses the decision. Creating partitions ahead happens either way; only
+    dropping is gated. It exists so a decided schedule can be recorded before the
+    restore procedure it depends on has been rehearsed — enabling an irreversible
+    delete on top of an untested safety net is the wrong order, not a detail.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     months_ahead: int = Field(ge=1, le=24)
+    enforced: bool
     tables: dict[str, RetentionClass]
 
     def cutoff_for(self, table: str, *, now: datetime) -> datetime | None:
         found = self.tables.get(table)
-        if found is None or found.days is None:
+        if not self.enforced or found is None or found.days is None:
             return None
         return now - timedelta(days=found.days)
 

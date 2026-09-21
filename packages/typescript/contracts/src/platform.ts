@@ -191,52 +191,6 @@ export const adminPermissionSetSchema = z.object({
 });
 export type AdminPermissionSet = z.infer<typeof adminPermissionSetSchema>;
 
-/**
- * F6 — per-usecase AI usage and cost, read from the model-usage ledger.
- * Tenant-scoped like the rest of the admin console. Numbers exist from the
- * day metering was deployed; earlier history was never recorded.
- */
-
-// One usecase's totals inside the window. `worker_id` is the usecase key
-// ("sales_chat", "person_research", "sales_crm.stakeholder_digest", ...);
-// the screen maps it to a Vietnamese label. `cost_usd` is null when every
-// call in the window ran on an unpriced route ("chưa định giá").
-export const usageUsecaseSchema = z.object({
-  worker_id: z.string(),
-  runs: z.number().int(),
-  model_calls: z.number().int(),
-  input_tokens: z.number().int(),
-  output_tokens: z.number().int(),
-  cost_usd: z.number().nullable(),
-  unpriced_calls: z.number().int(),
-  last_used_at: z.string().nullable(),
-});
-export type UsageUsecase = z.infer<typeof usageUsecaseSchema>;
-
-export const usageDailySchema = z.object({
-  day: z.string(),
-  worker_id: z.string(),
-  runs: z.number().int(),
-  cost_usd: z.number(),
-});
-export type UsageDaily = z.infer<typeof usageDailySchema>;
-
-export const usageToolSchema = z.object({
-  tool_name: z.string(),
-  calls: z.number().int(),
-  failed: z.number().int(),
-});
-export type UsageTool = z.infer<typeof usageToolSchema>;
-
-export const usageOverviewSchema = z.object({
-  days: z.number().int(),
-  since: z.string(),
-  usecases: z.array(usageUsecaseSchema),
-  daily: z.array(usageDailySchema),
-  tools: z.array(usageToolSchema),
-});
-export type UsageOverview = z.infer<typeof usageOverviewSchema>;
-
 // A workspace member as the reporting-hierarchy editor reads it: who they are,
 // the roles they hold, and who they report to. `manager_user_id` is null for a
 // root of the tree; the API rejects an edit that would create a cycle.

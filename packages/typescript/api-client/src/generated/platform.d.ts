@@ -143,23 +143,6 @@ export interface paths {
         patch: operations["update_tenant_api_v1_admin_tenant_patch"];
         trace?: never;
     };
-    "/api/v1/admin/usage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Usage Overview */
-        get: operations["usage_overview_api_v1_admin_usage_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/workspaces": {
         parameters: {
             query?: never;
@@ -918,20 +901,6 @@ export interface components {
             /** Slug */
             slug: string;
         };
-        /** DailyUsageView */
-        DailyUsageView: {
-            /** Cost Usd */
-            cost_usd: number;
-            /**
-             * Day
-             * Format: date
-             */
-            day: string;
-            /** Runs */
-            runs: number;
-            /** Worker Id */
-            worker_id: string;
-        };
         /** DecisionRequest */
         DecisionRequest: {
             /** Approve */
@@ -1506,15 +1475,6 @@ export interface components {
             /** Resource Type */
             resource_type: string;
         };
-        /** ToolUsageView */
-        ToolUsageView: {
-            /** Calls */
-            calls: number;
-            /** Failed */
-            failed: number;
-            /** Tool Name */
-            tool_name: string;
-        };
         /** UpdateTenantBody */
         UpdateTenantBody: {
             /** Locale */
@@ -1527,41 +1487,6 @@ export interface components {
             record_visibility?: string | null;
             /** Timezone */
             timezone?: string | null;
-        };
-        /** UsageOverviewView */
-        UsageOverviewView: {
-            /** Daily */
-            daily: components["schemas"]["DailyUsageView"][];
-            /** Days */
-            days: number;
-            /**
-             * Since
-             * Format: date-time
-             */
-            since: string;
-            /** Tools */
-            tools: components["schemas"]["ToolUsageView"][];
-            /** Usecases */
-            usecases: components["schemas"]["UsecaseUsageView"][];
-        };
-        /** UsecaseUsageView */
-        UsecaseUsageView: {
-            /** Cost Usd */
-            cost_usd: number | null;
-            /** Input Tokens */
-            input_tokens: number;
-            /** Last Used At */
-            last_used_at: string | null;
-            /** Model Calls */
-            model_calls: number;
-            /** Output Tokens */
-            output_tokens: number;
-            /** Runs */
-            runs: number;
-            /** Unpriced Calls */
-            unpriced_calls: number;
-            /** Worker Id */
-            worker_id: string;
         };
         /** UserRefView */
         UserRefView: {
@@ -1904,37 +1829,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantSettingsView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    usage_overview_api_v1_admin_usage_get: {
-        parameters: {
-            query?: {
-                days?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UsageOverviewView"];
                 };
             };
             /** @description Validation Error */

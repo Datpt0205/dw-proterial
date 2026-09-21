@@ -40,6 +40,7 @@ def _policy() -> RetentionPolicy:
         knowledge=KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
         audit=AuditRetention(
             months_ahead=3,
+            enforced=True,
             tables={"audit_events": RetentionClass(days=None, description="giữ")},
         ),
         batch_limit=100,
@@ -67,3 +68,26 @@ def test_a_term_of_zero_days_is_refused_by_the_schema() -> None:
     means to write, and is one keystroke from a real term."""
     with pytest.raises(ValueError):
         RetentionClass(days=0, description="x")
+
+
+def test_a_term_that_is_not_enforced_has_no_cutoff() -> None:
+    """`days` records the decision; `enforced` says whether it may run. Reading
+    only the first would turn writing a number into destroying a month."""
+    decided = AuditRetention(
+        months_ahead=3,
+        enforced=False,
+        tables={"audit_events": RetentionClass(days=1095, description="ba năm")},
+    )
+    assert decided.cutoff_for("audit_events", now=NOW) is None
+
+
+def test_the_same_term_has_a_cutoff_once_enforced() -> None:
+    """Or the flag would be a way to disable retention that nothing switches
+    back on — the test has to be able to fail in both directions."""
+    live = AuditRetention(
+        months_ahead=3,
+        enforced=True,
+        tables={"audit_events": RetentionClass(days=1095, description="ba năm")},
+    )
+    # 1095 = 3*365, and 2024 was a leap year, so this is three years less a day.
+    assert live.cutoff_for("audit_events", now=NOW) == datetime(2023, 9, 19, tzinfo=UTC)

@@ -25,7 +25,6 @@ from dw_api.middleware.rate_limit import RateLimitMiddleware
 from dw_api.middleware.request_id import RequestIdMiddleware
 from dw_api.routes.v1.admin_console import router as admin_console_router
 from dw_api.routes.v1.admin_members import router as admin_members_router
-from dw_api.routes.v1.admin_usage import router as admin_usage_router
 from dw_api.routes.v1.approvals import router as approvals_router
 from dw_api.routes.v1.audit import router as audit_router
 from dw_api.routes.v1.auth import router as auth_router
@@ -113,7 +112,6 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
         directory_router,
         admin_members_router,
         admin_console_router,
-        admin_usage_router,
         approvals_router,
         runs_router,
         audit_router,
