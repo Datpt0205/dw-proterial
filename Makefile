@@ -20,7 +20,7 @@ COMPOSE := docker compose --env-file .env -f infra/compose/docker-compose.yml
         db-migrate migrate lint format typecheck \
         test-unit coverage test-integration test-architecture test-contract \
         test-e2e test-web test-all eval-smoke test-eval-smoke \
-        generate-contracts release-manifest release-manifest-check ci
+        generate-contracts new-context release-manifest release-manifest-check ci
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -136,6 +136,11 @@ test-eval-smoke: eval-smoke ## Alias for eval-smoke
 test-all: test-unit test-architecture test-contract test-integration test-e2e ## Everything except evals
 
 # ---------------------------------------------------------------- contracts --
+new-context: ## Scaffold a bounded context wired into all 13 seams (NAME=sales_chat)
+	@test -n "$(NAME)" || (echo "usage: make new-context NAME=sales_chat" && exit 1)
+	uv run python scripts/new_context.py --name $(NAME)
+	uv sync --all-packages
+
 generate-contracts: ## Export OpenAPI snapshot + regenerate TS types (per context)
 	uv run python scripts/generate_contracts.py
 	pnpm run generate:api-types

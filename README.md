@@ -48,9 +48,18 @@ Everything is also runnable as containers: `make docker-up`.
 
 ## Adding a bounded context
 
+```bash
+make new-context NAME=sales_chat
+```
+
+That wires all fourteen places a context joins the platform and leaves a slice
+that already passes lint, mypy, import-linter and its own test. CI generates a
+throwaway context on every push, so the seams below are checked rather than
+described.
+
 A context is a package under `packages/python/dw_<name>` with the layers
-`domain/ application/ workflows/ adapters/ presentation/`, and it joins the
-platform in exactly three places. They are marked in the code.
+`domain/ application/ workflows/ adapters/ presentation/`. Three of those places
+are code, and they are marked in the code.
 
 1. **`apps/api/src/dw_api/bootstrap/wiring.py`** — build the context's handlers
    from `container.runtime`, the published `RuntimeSeam`: session factory,

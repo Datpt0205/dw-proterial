@@ -98,6 +98,39 @@ jobs:
         run: uv run python scripts/run_evals.py --smoke
 
   # 3. frontend quality -------------------------------------------------------
+  scaffold-smoke:
+    # The skeleton's central claim is that a product can plug a bounded context
+    # in and inherit everything. Nothing tested that claim: this repo ships no
+    # context on purpose, so the fourteen seams `scripts/new_context.py` wires
+    # had never been walked end to end. Walking them found one the documented
+    # list missed — `apps/api/pyproject.toml` — which is what a claim nobody
+    # executes looks like. A throwaway context, generated and discarded on every
+    # push, is what makes the claim fail loudly when a seam moves.
+    name: A generated bounded context still plugs in
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.31"
+          enable-cache: true
+      - name: Scaffold a context
+        run: uv run python scripts/new_context.py --name smoke_ctx
+      - name: The workspace still resolves
+        run: uv sync --all-packages
+      - name: It passes the gates the platform holds itself to
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy
+          uv run lint-imports
+          uv run python scripts/verify_architecture.py
+          uv run python scripts/verify_invariants.py
+      - name: Its slice passes, and nothing else broke
+        run: uv run pytest -m unit -q
+      # No cleanup: the checkout is disposable, and a cleanup step that failed
+      # would leave a green build hiding a scaffold that cannot be undone.
+
   frontend-quality:
     name: Frontend lint · typecheck · build
     runs-on: ubuntu-latest

@@ -11,6 +11,12 @@ record a decision instead.
 
 ## Adding a bounded context (the plug-in points)
 
+Run `make new-context NAME=<name>` rather than working the list by hand:
+`scripts/new_context.py` owns all fourteen places, and the `scaffold-smoke` CI
+job generates a throwaway context on every push so a seam that moves fails there
+instead of in someone's first week. The list below is what it does, kept because
+a generator whose steps nobody can read is a different kind of unchecked claim.
+
 1. Package `packages/python/dw_<name>` with layers
    `domain/ application/ workflows/ adapters/ presentation/`.
 2. Register in the root `pyproject.toml`: `tool.uv.sources`, ruff
@@ -30,6 +36,10 @@ record a decision instead.
 6. Add Alembic migrations continuing from the baseline (`0001`).
 7. Update `scripts/verify_architecture.py` (`IMPORT_TO_DIST`) and the Dockerfile
    COPY lists.
+8. Declare the context in `apps/api/pyproject.toml`. Mounting its router makes
+   the API an importer of it, and an undeclared import builds locally and fails
+   in the container — this step was missing from the list until the generator
+   walked it and `verify_architecture.py` said so.
 
 ## Non-negotiable architecture
 
