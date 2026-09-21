@@ -226,10 +226,16 @@ What the baseline guarantees:
   every insert across the whole B-tree, and the rows already written keep the
   keys they were given.
 
-Two operational jobs belong on a schedule:
+Partition rolling is **not** an operational job: it runs in the worker, on the
+`partitions` lane, because a partition created without row security is a
+cross-tenant read addressable by name and a script on a cron is a place to
+forget that. `scripts/roll_partitions.py` used to be that job and was removed —
+it created partitions with no RLS and no `REVOKE UPDATE, DELETE` on the audit
+log, so running it re-opened both holes every month.
+
+One operational job is left, and it is still a cron:
 
 ```bash
-scripts/roll_partitions.py --months 3   # before rows need next month
 scripts/backup_postgres.sh              # pg_dump, rotated
 ```
 

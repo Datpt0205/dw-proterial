@@ -198,9 +198,16 @@ kind of change nobody makes and everybody works around.
   application that fails on its first real query while every health check still
   passes, so grants ship with the migration and are asserted by
   `dw_platform/tests/integration/test_privileges.py`.
-- Partitioned tables need next month's partition before rows need it.
-  `scripts/roll_partitions.py` is idempotent and belongs on a schedule; the
-  DEFAULT partition is a safety net, not the plan.
+- Partitioned tables need next month's partition before rows need it, and
+  creating one is not just `CREATE TABLE ... PARTITION OF`: row security is NOT
+  inherited by a partition made later, and `ALTER DEFAULT PRIVILEGES` hands it
+  the write grants the audit log must not have. So creation, `ENABLE`/`FORCE`
+  RLS, the tenant policy and the audit revoke are one function
+  (`platform.ensure_time_partitions`), called from the worker's `partitions`
+  lane — never a script, which is a place to forget one of the four.
+  The DEFAULT partition is a safety net, not the plan: rows that land there
+  block that month's partition from ever being created, which the function
+  recovers from by relocating them.
 
 ## Environments
 
