@@ -27,76 +27,82 @@ real data, what a day of runs actually costs.
 
 **Done and pinned by tests:** Mốc 0, 1a, 1b, 2, 3, 4, 5, 6. Details below.
 
-**Open decisions:** none. A second language (Go) for the application tier was
-asked about and answered in `CLAUDE.md` — allowed, provided it never
-re-implements tenant isolation, and the four conditions there are tested by
-`test_rls_coverage.py` rather than trusted.
+**Open decision, and it is Đạt's:** how long audit events and the usage ledger
+are kept. `configs/policies/retention@1.2.0.yaml` ships both as `days: null` —
+partitions are created ahead, nothing is ever dropped. DROP PARTITION destroys a
+month instantly with no soft delete in between, and the term is a legal
+obligation per deployment, not a technical default to guess. Until two numbers
+go in that file, audit grows without bound.
+
+A second language (Go) for the application tier was asked about and answered in
+`CLAUDE.md` — allowed, provided it never re-implements tenant isolation, and the
+four conditions there are tested by `test_rls_coverage.py` rather than trusted.
 
 **Next, in the order they would be asked for in an enterprise review:**
 
-1. ~~Data lifecycle~~ — **done for memory and knowledge.**
-   `configs/policies/retention@1.1.0.yaml` is the versioned answer to "how long
+1. ~~Data lifecycle~~ — **done: memory, knowledge, audit and usage.**
+   `configs/policies/retention@1.2.0.yaml` is the versioned answer to "how long
    do you keep our data", it is in the release manifest with a checksum so the
-   question can be asked about the past, and ONE file feeds both sweeps on the
-   worker's hourly lanes. Deletes, never closes a window: `valid_until` says a
+   question can be asked about the past, and ONE file feeds all three sweeps on
+   the worker's hourly lanes. Deletes, never closes a window: `valid_until` says a
    fact stopped being true, retention says we may no longer hold it.
    `legal_hold` has no term and is never swept; a class this build does not know
    is kept, not guessed.
 
-   What closing knowledge actually took, beyond the obvious sweep:
-   - **Evidence had no lifecycle at all.** `evidence -> documents` is RESTRICT,
-     and deleting a memory only cascades `memory.item_evidence` — the evidence
-     row survived for ever, pinning its document for ever. So a document cited
-     once could never be hard deleted and the grace period was a promise the
-     schema could not keep. `SqlMemoryRetention` now removes evidence nothing
-     cites, which is what makes the chain drain. It lives in memory, not
-     knowledge, because `item_evidence` is a memory table.
-   - **A cited document is held back, not crashed on.** The citation test is in
-     the SELECT, and again inside the deleting transaction — the vector deletes
-     sit between the two, so a memory proposed in that gap would otherwise fail
-     the whole batch and stall every document behind it.
-   - **Both stores, points first.** Rows without points is a pass the next hour
-     finishes; points without rows is the text of a deleted document in the only
-     store that can still return it.
-   - `KnowledgeGateway.purge_soft_deleted` was deleted. It was this feature,
-     written earlier, never called from anywhere, crash-prone on any cited
-     document — the duplicate is what would have drifted.
+    What closing knowledge actually took, beyond the obvious sweep:
+    - **Evidence had no lifecycle at all.** `evidence -> documents` is RESTRICT,
+      and deleting a memory only cascades `memory.item_evidence` — the evidence
+      row survived for ever, pinning its document for ever. So a document cited
+      once could never be hard deleted and the grace period was a promise the
+      schema could not keep. `SqlMemoryRetention` now removes evidence nothing
+      cites, which is what makes the chain drain. It lives in memory, not
+      knowledge, because `item_evidence` is a memory table.
+    - **A cited document is held back, not crashed on.** The citation test is in
+      the SELECT, and again inside the deleting transaction — the vector deletes
+      sit between the two, so a memory proposed in that gap would otherwise fail
+      the whole batch and stall every document behind it.
+    - **Both stores, points first.** Rows without points is a pass the next hour
+      finishes; points without rows is the text of a deleted document in the only
+      store that can still return it.
+    - `KnowledgeGateway.purge_soft_deleted` was deleted. It was this feature,
+      written earlier, never called from anywhere, crash-prone on any cited
+      document — the duplicate is what would have drifted.
 
-   **And done for audit and usage too.** The baseline said in a comment that "an
-   operational job creates real monthly partitions ahead of time"; it never
-   existed, every row was in the `_default` partition, and a default partition
-   cannot be dropped — so "audit retention is DROP PARTITION" could not execute
-   at all. The job exists now as a worker lane, and building it turned up two
-   holes of the family migration 0009 found:
+    **And done for audit and usage too.** The baseline said in a comment that "an
+    operational job creates real monthly partitions ahead of time"; it never
+    existed, every row was in the `_default` partition, and a default partition
+    cannot be dropped — so "audit retention is DROP PARTITION" could not execute
+    at all. The job exists now as a worker lane, and building it turned up two
+    holes of the family migration 0009 found:
 
-   - **The audit log was not append-only.** `0001_platform_grants.sql` revoked
-     UPDATE and DELETE on `platform.audit_events` and says in prose that this is
-     "enforced by the grant rather than by convention". It never revoked them on
-     `audit_events_default`, which had taken them from the blanket grant one
-     statement earlier. As `dw_app`, both `DELETE FROM audit_events_default` and
-     `UPDATE ... SET action = 'rewritten'` succeeded. `ALTER DEFAULT PRIVILEGES`
-     means every future partition would have arrived the same way, so the revoke
-     is now part of creating one.
-   - **A partition created later inherits no RLS**, which is 0009 again — a
-     monthly job would have re-opened that leak every month. Creating, policing
-     and revoking are one function, and `test_partition_maintenance.py` asks the
-     catalog rather than reading the DDL.
+    - **The audit log was not append-only.** `0001_platform_grants.sql` revoked
+      UPDATE and DELETE on `platform.audit_events` and says in prose that this is
+      "enforced by the grant rather than by convention". It never revoked them on
+      `audit_events_default`, which had taken them from the blanket grant one
+      statement earlier. As `dw_app`, both `DELETE FROM audit_events_default` and
+      `UPDATE ... SET action = 'rewritten'` succeeded. `ALTER DEFAULT PRIVILEGES`
+      means every future partition would have arrived the same way, so the revoke
+      is now part of creating one.
+    - **A partition created later inherits no RLS**, which is 0009 again — a
+      monthly job would have re-opened that leak every month. Creating, policing
+      and revoking are one function, and `test_partition_maintenance.py` asks the
+      catalog rather than reading the DDL.
 
-   Two more things the work itself taught:
-   - Creation is **self-healing**. A row for a month with no partition lands in
-     the default, and Postgres then refuses to create that month's partition.
-     Without relocation that state is terminal — one missed window and the month
-     can never be partitioned, so never dropped. Found by running the whole
-     integration suite, not this one file.
-   - **Nothing is dropped by default.** Both tables ship `days: null`. The pass
-     creates partitions ahead, which is pure gain, and drops only what somebody
-     wrote a number for — DROP PARTITION destroys a month instantly with no soft
-     delete in between, and the term is a legal obligation per deployment, not a
-     technical default. **Đạt still has to choose those two numbers.**
+    Two more things the work itself taught:
+    - Creation is **self-healing**. A row for a month with no partition lands in
+      the default, and Postgres then refuses to create that month's partition.
+      Without relocation that state is terminal — one missed window and the month
+      can never be partitioned, so never dropped. Found by running the whole
+      integration suite, not this one file.
+    - **Nothing is dropped by default.** Both tables ship `days: null`. The pass
+      creates partitions ahead, which is pure gain, and drops only what somebody
+      wrote a number for — DROP PARTITION destroys a month instantly with no soft
+      delete in between, and the term is a legal obligation per deployment, not a
+      technical default. **Đạt still has to choose those two numbers.**
 
-   Still open, and named rather than silently included: **superseded documents**
-   — how many versions back to keep is a different question from how long a
-   deletion takes to become final.
+    Still open, and named rather than silently included: **superseded documents**
+    — how many versions back to keep is a different question from how long a
+    deletion takes to become final.
 
 2. Backup and restore: no procedure, never rehearsed.
 3. Tenant offboarding and data export.
