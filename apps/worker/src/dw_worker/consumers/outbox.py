@@ -27,6 +27,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 
+from dw_kernel.ports import UtcClock
+from dw_observability.metrics import DW_OUTBOX_BACKLOG_SIZE, DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS
+from dw_observability.telemetry import TelemetryPort
 from dw_platform.application.ports import OutboxDrainPort
 from dw_platform.domain.outbox import OutboxEvent
 
@@ -65,8 +68,16 @@ def build_outbox_consumer(
     *,
     batch_size: int,
     max_attempts: int,
+    telemetry: TelemetryPort,
+    clock: UtcClock,
 ) -> Callable[[], Awaitable[None]]:
-    """Return a consumer that dispatches at most ``batch_size`` events per tick."""
+    """Return a consumer that dispatches at most ``batch_size`` events per tick.
+
+    Reports backlog size and the oldest pending event's age every tick, for
+    the same ``event_types`` this process actually claims — an event type
+    nobody handles here is correctly invisible to both, the same as it is to
+    ``claim_batch``.
+    """
     event_types = sorted(handlers)
 
     async def consume() -> None:
@@ -75,5 +86,14 @@ def build_outbox_consumer(
         )
         for event in events:
             await _deliver(event, handlers[event.event_type], drain)
+
+        backlog = await drain.backlog(event_types=event_types, max_attempts=max_attempts)
+        telemetry.set_gauge(DW_OUTBOX_BACKLOG_SIZE, backlog.pending, {})
+        age_seconds = (
+            (clock.now() - backlog.oldest_pending_at).total_seconds()
+            if backlog.oldest_pending_at is not None
+            else 0.0
+        )
+        telemetry.set_gauge(DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS, age_seconds, {})
 
     return consume

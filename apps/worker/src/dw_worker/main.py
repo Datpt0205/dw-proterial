@@ -97,7 +97,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # Uuid7: a memory id that sorts by when it was learned makes the
     # keyset page over `created_at` stable without a second column.
     ids = Uuid7Generator()
-    _ = _build_worker_telemetry(settings)
+    telemetry = _build_worker_telemetry(settings)
 
     # Every queue this process wired, with the window its jobs deserve. A queue
     # this host did not wire stays absent rather than being reaped with a
@@ -200,6 +200,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 handlers,
                 batch_size=settings.outbox_batch_size,
                 max_attempts=settings.outbox_max_attempts,
+                telemetry=telemetry,
+                clock=clock,
             ),
         )
 
@@ -223,7 +225,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     if reap_targets:
         registry.register(
             "reaper",
-            build_reaper_consumer(reap_targets, clock),
+            build_reaper_consumer(reap_targets, clock, telemetry),
             interval_seconds=REAP_INTERVAL_SECONDS,
         )
     if retention is not None:
@@ -300,6 +302,15 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     settings = WorkerSettings()
     settings.validate_for_profile()
+    # A background thread, not the asyncio loop: prometheus_client's server
+    # predates asyncio support and reads the global REGISTRY per request, so
+    # starting it before the loop exists is fine — there is nothing to race.
+    # No setting gates this off: metrics are wired unconditionally now (Ops
+    # hardening Phase 5, see `dw_observability.otel`), and a scrape target
+    # nobody points Prometheus at costs nothing.
+    from prometheus_client import start_http_server
+
+    start_http_server(settings.metrics_port)
     registry = build_registry(settings)
     shutdown_event = asyncio.Event()
 

@@ -64,6 +64,22 @@ async def test_ready_503_when_database_not_configured() -> None:
     assert response.json()["checks"]["database"] == "not_configured"
 
 
+async def test_ready_reports_redis_and_qdrant_not_configured_without_urls() -> None:
+    """Ops hardening Phase 5: `build_container`'s real wiring must add `redis`
+    and `qdrant` probes, not just `database` — asserted through the actual
+    composition root, not a hand-built container, since that's exactly the
+    wiring that regressed silently before (dw-api's telemetry duplicate, this
+    same phase).
+    """
+    settings = ApiSettings(profile="test", database_url=None, redis_url=None, qdrant_url=None)
+    response = await request_app(build_container(settings), "/api/v1/ready")
+    assert response.status_code == 503
+    checks = response.json()["checks"]
+    assert checks["redis"] == "not_configured"
+    assert checks["qdrant"] == "not_configured"
+    assert checks["database"] == "not_configured"
+
+
 async def test_production_forbids_dev_auth_mode() -> None:
     with pytest.raises(RuntimeError, match="dev auth mode is forbidden"):
         build_container(ApiSettings(profile="production", auth_mode="dev"))

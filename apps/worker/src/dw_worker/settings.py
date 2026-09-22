@@ -46,6 +46,11 @@ class WorkerSettings(BaseSettings):
     heartbeat_interval_seconds: float = Field(default=5.0, gt=0, le=60)
     poll_interval_seconds: float = Field(default=1.0, gt=0, le=60)
 
+    # Prometheus scrape target for this process (Ops hardening Phase 5). 9464
+    # is the OTel/Prometheus exporter's own convention default; dw-api has no
+    # equivalent setting because it serves `/metrics` on its existing HTTP port.
+    metrics_port: int = Field(default=9464, ge=1, le=65535)
+
     # Infrastructure for the knowledge ingest consumer (B5). When database_url /
     # s3_endpoint_url are unset, the consumer is skipped (heartbeat-only worker).
     # database_url takes no alias: DW_DATABASE_URL names the migrator connection,

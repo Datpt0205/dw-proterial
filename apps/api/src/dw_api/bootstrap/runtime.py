@@ -55,7 +55,7 @@ from dw_knowledge.ports import ObjectStoragePort
 from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker
 from dw_memory.policy import MemoryWritePolicy
 from dw_memory.service import MemoryService
-from dw_observability.telemetry import NullTelemetry, TelemetryPort
+from dw_observability.telemetry import TelemetryPort
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 
 
@@ -124,13 +124,14 @@ def build_runtime(
     # not that table back: no admin route, no dashboard, one row per
     # tenant-per-day rather than one per call, read by nothing but the
     # runner's own gate (Ops hardening Phase 3). The composite stays because a
-    # recorder that raises must not take the run down, and because "no
-    # recorder at all" is what a deployment with telemetry off looks like.
+    # recorder that raises must not take the run down — `telemetry` is always
+    # a real `OtelTelemetry` now (Ops hardening Phase 5: metrics are wired
+    # unconditionally, Langfuse configured or not), so unlike before there is
+    # no "telemetry off" state left to skip this recorder for.
     recorders: list[UsageRecorderPort] = [
-        SqlSpendGuardRecorder(session_factory=session_factory, clock=clock)
+        SqlSpendGuardRecorder(session_factory=session_factory, clock=clock),
+        TelemetryUsageRecorder(telemetry),
     ]
-    if not isinstance(telemetry, NullTelemetry):
-        recorders.append(TelemetryUsageRecorder(telemetry))
     usage_recorder: UsageRecorderPort = CompositeUsageRecorder(recorders)
     # ONE per-run spend ledger for the whole process, shared by the structured
     # gateway, every agent's budget middleware (on the seam, below) and the

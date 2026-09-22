@@ -15,6 +15,8 @@ from typing import Any
 
 import pytest
 
+from dw_observability.metrics import DW_REAPER_REAPED_TOTAL
+from dw_observability.telemetry import RecordingTelemetry
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 
@@ -50,6 +52,7 @@ async def test_every_queue_gets_its_own_window() -> None:
             ReapTarget("portal compile", slow, timedelta(minutes=20)),
         ],
         FakeClock(),
+        RecordingTelemetry(),
     )
 
     await consume()
@@ -68,6 +71,7 @@ async def test_one_broken_queue_does_not_block_the_others() -> None:
             ReapTarget("signal scan", healthy, timedelta(minutes=20)),
         ],
         FakeClock(),
+        RecordingTelemetry(),
     )
 
     await consume()
@@ -78,10 +82,31 @@ async def test_one_broken_queue_does_not_block_the_others() -> None:
 async def test_a_sweep_that_finds_nothing_is_not_an_error() -> None:
     quiet = FakeQueue()
     consume = build_reaper_consumer(
-        [ReapTarget("bidder crawl", quiet, timedelta(minutes=5))], FakeClock()
+        [ReapTarget("bidder crawl", quiet, timedelta(minutes=5))], FakeClock(), RecordingTelemetry()
     )
     await consume()
     assert quiet.asked
+
+
+async def test_reaped_rows_are_counted_by_queue() -> None:
+    reaped_ids = [uuid.uuid4(), uuid.uuid4()]
+    busy = FakeQueue(reaped=reaped_ids)
+    quiet = FakeQueue()
+    telemetry = RecordingTelemetry()
+    consume = build_reaper_consumer(
+        [
+            ReapTarget("preference match", busy, timedelta(minutes=5)),
+            ReapTarget("portal compile", quiet, timedelta(minutes=20)),
+        ],
+        FakeClock(),
+        telemetry,
+    )
+
+    await consume()
+
+    assert telemetry.metrics == [
+        (DW_REAPER_REAPED_TOTAL, len(reaped_ids), {"queue": "preference match"})
+    ]
 
 
 # ------------------------------------------------------------- registry ----

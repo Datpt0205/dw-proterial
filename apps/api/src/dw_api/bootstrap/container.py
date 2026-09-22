@@ -19,6 +19,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from dw_agent_runtime.adapters.chat_model import ChatModelFactory
@@ -140,6 +141,11 @@ class ApiContainer:
     admin_console: AdminConsoleService | None = None
     hierarchy: HierarchyService | None = None
     cache: CachePort | None = None
+    # Dedicated to the readiness probe — the runtime's own retrieval/memory
+    # clients are built (and disposed) deeper inside `build_runtime`, only
+    # when the full runtime is wired. Readiness must answer regardless, so
+    # this one is constructed and closed independently.
+    qdrant_client: AsyncQdrantClient | None = None
     feedback_storage: FeedbackAttachmentStoragePort | None = None
     # Replay protection for mutating routes that carry an `Idempotency-Key`.
     # ``None`` without a database, where the routes that use it are not mounted
@@ -182,6 +188,8 @@ class ApiContainer:
     async def shutdown(self) -> None:
         if self.run_events is not None:
             await self.run_events.stop()
+        if self.qdrant_client is not None:
+            await self.qdrant_client.close()
         for engine in (self.engine, self.provisioner_engine, *self._extra_engines):
             if engine is not None:
                 await engine.dispose()

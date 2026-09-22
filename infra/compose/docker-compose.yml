@@ -36,6 +36,9 @@ volumes:
   keycloak-data:
   clickhouse-data:
   tei-models:
+  # Rendered from alertmanager.yml.template by the alertmanager-config
+  # service below — Alertmanager's own YAML has no env-var substitution.
+  alertmanager-config:
 
 services:
   # ------------------------------------------------------------------ data --
@@ -678,4 +681,74 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    restart: unless-stopped
+
+  # Ops hardening Phase 5: minimal-but-real alerting. Run alongside `full`
+  # (`docker compose --profile full --profile observability up`), since
+  # what's scraped — api, worker — lives there.
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    profiles: ["observability"]
+    environment:
+      # dw_app, not a new role: it holds no BYPASSRLS, and the catalog views
+      # this exporter reads (pg_stat_database, pg_settings, pg_stat_bgwriter)
+      # are world-readable regardless of RLS, which only ever governs regular
+      # tables with a policy on them. Verified against this exact image
+      # before writing this — pg_settings_max_connections and
+      # pg_stat_database_numbackends both came back populated.
+      DATA_SOURCE_NAME: postgresql://dw_app:${DW_DB_APP_PASSWORD:?}@postgres:5432/dw?sslmode=disable
+    networks: [dw-internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Renders alertmanager.yml.template with the one secret Alertmanager's own
+  # config format has no env-var substitution for. `sed`, not envsubst: sed
+  # is already in every base image, so this needs no package install (and no
+  # network call) on every `up`.
+  alertmanager-config:
+    image: alpine:3.20
+    profiles: ["observability"]
+    environment:
+      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-}
+    volumes:
+      - ../alertmanager:/template:ro
+      - alertmanager-config:/out
+    entrypoint: ["/bin/sh", "/template/render-config.sh"]
+    networks: [dw-internal]
+    restart: "no"
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: ["observability"]
+    volumes:
+      - alertmanager-config:/etc/alertmanager
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    ports:
+      - "127.0.0.1:9093:9093"
+    # dw-edge for two reasons: the published UI port, and the outbound route
+    # to whatever webhook ALERTMANAGER_WEBHOOK_URL names (Slack, Discord,
+    # ...) — an external destination, same as the reason api/keycloak sit on
+    # dw-edge rather than dw-internal alone.
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      alertmanager-config:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    profiles: ["observability"]
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [dw-internal, dw-edge]
+    depends_on:
+      alertmanager:
+        condition: service_started
+      postgres-exporter:
+        condition: service_started
     restart: unless-stopped

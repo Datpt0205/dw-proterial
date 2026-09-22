@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
+import redis.asyncio as aioredis
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.sql import text
 
@@ -46,6 +48,36 @@ def database_probe(engine: AsyncEngine | None) -> DependencyProbe:
         try:
             async with engine.connect() as connection:
                 await connection.execute(text("SELECT 1"))
+            return "ok"
+        except Exception:
+            return "failed"
+
+    return probe
+
+
+def redis_probe(client: aioredis.Redis | None) -> DependencyProbe:
+    """``client`` is the already-built Valkey/Redis client, or ``None`` when
+    no ``REDIS_URL`` is configured — same convention as ``database_probe``.
+    """
+
+    async def probe() -> CheckState:
+        if client is None:
+            return "not_configured"
+        try:
+            await client.ping()
+            return "ok"
+        except Exception:
+            return "failed"
+
+    return probe
+
+
+def qdrant_probe(client: AsyncQdrantClient | None) -> DependencyProbe:
+    async def probe() -> CheckState:
+        if client is None:
+            return "not_configured"
+        try:
+            await client.get_collections()
             return "ok"
         except Exception:
             return "failed"

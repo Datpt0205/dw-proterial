@@ -17,6 +17,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.responses import Response
 
 import dw_api
 from dw_api.bootstrap import ApiContainer, build_container
@@ -104,6 +106,18 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
         )
 
     register_exception_handlers(app)
+
+    # Root-level, not `/api/v1`: this is a Prometheus scrape target, not a
+    # platform API — the endpoint stays fixed regardless of API versioning.
+    # Unauthenticated by design; the trust boundary is network segmentation
+    # (only `dw-internal`, where Prometheus lives, can reach it), the same
+    # boundary every other inter-container call in this compose file relies on.
+    # A plain route rather than `app.mount(make_asgi_app())`: a sub-mount
+    # 307-redirects a bare `GET /metrics` (no trailing slash) to `/metrics/`,
+    # which is not what a scrape config asking for `/metrics` expects.
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     app.include_router(build_health_router(container.health_service), prefix="/api/v1")
     for router in (

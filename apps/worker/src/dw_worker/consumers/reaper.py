@@ -28,6 +28,8 @@ from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 from dw_kernel.ports import UtcClock
+from dw_observability.metrics import DW_REAPER_REAPED_TOTAL
+from dw_observability.telemetry import TelemetryPort
 
 logger = logging.getLogger("dw_worker.reaper")
 
@@ -60,7 +62,7 @@ INTERVAL_SECONDS = 120.0
 
 
 def build_reaper_consumer(
-    targets: Sequence[ReapTarget], clock: UtcClock
+    targets: Sequence[ReapTarget], clock: UtcClock, telemetry: TelemetryPort
 ) -> Callable[[], Awaitable[None]]:
     """Return a consumer that settles abandoned rows in every queue it was given.
 
@@ -79,5 +81,6 @@ def build_reaper_consumer(
                 continue
             if reaped:
                 logger.warning("reaped %d abandoned %s row(s)", len(reaped), target.name)
+                telemetry.add_metric(DW_REAPER_REAPED_TOTAL, len(reaped), {"queue": target.name})
 
     return consume

@@ -19,12 +19,15 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from dw_kernel.ids import TenantId, WorkspaceId
-from dw_platform.domain.outbox import OutboxEvent
+from dw_kernel.ports import FixedClock
+from dw_observability.metrics import DW_OUTBOX_BACKLOG_SIZE, DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS
+from dw_observability.telemetry import RecordingTelemetry
+from dw_platform.domain.outbox import OutboxBacklog, OutboxEvent
 from dw_worker.consumers.outbox import (
     EventHandler,
     UndeliverableEventError,
@@ -56,7 +59,8 @@ class FakeDrain:
         self, *, event_types: Sequence[str], limit: int, max_attempts: int
     ) -> list[OutboxEvent]:
         self.claims.append((tuple(event_types), limit, max_attempts))
-        claimed = [event for event in self.events if event.event_type in set(event_types)]
+        matching = [event for event in self.events if event.event_type in set(event_types)]
+        claimed = matching[:limit]
         self.events = [event for event in self.events if event not in claimed]
         return claimed
 
@@ -65,6 +69,13 @@ class FakeDrain:
 
     async def record_failure(self, event_id: uuid.UUID, *, error: str) -> None:
         self.failures.append((event_id, error))
+
+    async def backlog(self, *, event_types: Sequence[str], max_attempts: int) -> OutboxBacklog:
+        remaining = [event for event in self.events if event.event_type in set(event_types)]
+        if not remaining:
+            return OutboxBacklog(pending=0, oldest_pending_at=None)
+        oldest = min(event.occurred_at for event in remaining)
+        return OutboxBacklog(pending=len(remaining), oldest_pending_at=oldest)
 
 
 def event(event_type: str = HANDLED_TYPE) -> OutboxEvent:
@@ -87,6 +98,8 @@ def consumer_over(drain: FakeDrain, handlers: dict[str, EventHandler]):
         handlers,
         batch_size=5,
         max_attempts=2,
+        telemetry=RecordingTelemetry(),
+        clock=FixedClock(NOW),
     )
 
 
@@ -177,6 +190,59 @@ async def test_one_failing_event_does_not_stop_the_rest_of_the_batch() -> None:
     assert drain.processed == [second.id]
     assert [event_id for event_id, _ in drain.failures] == [first.id]
     assert "RuntimeError: boom" in drain.failures[0][1]
+
+
+@pytest.mark.asyncio
+async def test_backlog_gauges_report_what_the_batch_size_left_behind() -> None:
+    """Ops hardening Phase 5: `batch_size=1` claims only one of two, so the
+    gauge must report the one left over — not zero, and not two.
+    """
+    older, newer = event(), event()
+    drain = FakeDrain([older, newer])
+    telemetry = RecordingTelemetry()
+    consume = build_outbox_consumer(
+        drain,  # type: ignore[arg-type]
+        {HANDLED_TYPE: lambda _: _ok()},
+        batch_size=1,
+        max_attempts=2,
+        telemetry=telemetry,
+        clock=FixedClock(NOW + timedelta(minutes=5)),
+    )
+
+    await consume()
+
+    assert len(drain.processed) == 1
+    [(_, size, _)] = [g for g in telemetry.gauges if g[0] == DW_OUTBOX_BACKLOG_SIZE]
+    assert size == 1
+    [(_, age, _)] = [g for g in telemetry.gauges if g[0] == DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS]
+    assert age == 300.0
+
+
+@pytest.mark.asyncio
+async def test_backlog_gauges_report_zero_age_when_nothing_is_pending() -> None:
+    one = event()
+    drain = FakeDrain([one])
+    telemetry = RecordingTelemetry()
+    consume = build_outbox_consumer(
+        drain,  # type: ignore[arg-type]
+        {HANDLED_TYPE: lambda _: _ok()},
+        batch_size=5,
+        max_attempts=2,
+        telemetry=telemetry,
+        clock=FixedClock(NOW + timedelta(hours=1)),
+    )
+
+    await consume()
+
+    assert drain.processed == [one.id]
+    [(_, size, _)] = [g for g in telemetry.gauges if g[0] == DW_OUTBOX_BACKLOG_SIZE]
+    assert size == 0
+    [(_, age, _)] = [g for g in telemetry.gauges if g[0] == DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS]
+    assert age == 0.0
+
+
+async def _ok() -> str:
+    return "ok"
 
 
 # ---------------------------------------------------------------------------

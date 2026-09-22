@@ -381,6 +381,10 @@ class RecordingTelemetry:
         self, name: str, value: int | float, attributes: Mapping[str, object]
     ) -> None: ...
 
+    def set_gauge(
+        self, name: str, value: int | float, attributes: Mapping[str, object]
+    ) -> None: ...
+
 
 async def test_tool_call_emits_span_with_names_and_no_payload() -> None:
     telemetry = RecordingTelemetry()

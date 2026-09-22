@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_kernel.ports import UtcClock
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.repositories import outbox_from_row
-from dw_platform.domain.outbox import OutboxEvent
+from dw_platform.domain.outbox import OutboxBacklog, OutboxEvent
 
 # SET LOCAL semantics (third argument true) so the flag dies with the
 # transaction. Session-wide it would ride the pooled connection back into the
@@ -98,3 +98,22 @@ class SqlOutboxDrain:
                 .where(tables.outbox_events.c.id == event_id)
                 .values(last_error=error[:_ERROR_LIMIT])
             )
+
+    async def backlog(self, *, event_types: Sequence[str], max_attempts: int) -> OutboxBacklog:
+        if not event_types:
+            return OutboxBacklog(pending=0, oldest_pending_at=None)
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_ENABLE_DRAIN)
+            row = (
+                await session.execute(
+                    sa.select(
+                        sa.func.count().label("pending"),
+                        sa.func.min(tables.outbox_events.c.occurred_at).label("oldest"),
+                    ).where(
+                        tables.outbox_events.c.processed_at.is_(None),
+                        tables.outbox_events.c.event_type.in_(list(event_types)),
+                        tables.outbox_events.c.attempts < max_attempts,
+                    )
+                )
+            ).one()
+            return OutboxBacklog(pending=row.pending, oldest_pending_at=row.oldest)

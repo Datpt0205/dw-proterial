@@ -15,7 +15,17 @@ dependencies = [
     # the package must be installed.
     "minio>=7.2,<8",
     "qdrant-client>=1.12,<1.15",
+    # Ops hardening Phase 5: the redis readiness probe (dw_api/health.py)
+    # imports the client directly for its type. Declared explicitly rather
+    # than left to resolve transitively through dw-platform's cache adapter —
+    # same reasoning as qdrant-client and prometheus-client just below.
+    "redis>=5,<6",
     "fastapi>=0.115,<1",
+    # Ops hardening Phase 5: mounts `/metrics` directly (dw_observability's
+    # PrometheusMetricReader writes into this same package's global REGISTRY).
+    # Declared explicitly rather than left to resolve transitively through
+    # dw-observability's OTel exporter — dw-api imports it in its own source.
+    "prometheus-client>=0.20,<1",
     "python-multipart>=0.0.18,<1",
     "uvicorn[standard]>=0.34,<1",
     "pydantic>=2.10,<3",

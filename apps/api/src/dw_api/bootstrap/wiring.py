@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import uuid
 
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -48,7 +49,7 @@ from dw_api.bootstrap.storage import (
     build_object_storage,
 )
 from dw_api.bootstrap.telemetry import build_telemetry
-from dw_api.health import HealthService, database_probe
+from dw_api.health import HealthService, database_probe, qdrant_probe, redis_probe
 from dw_api.settings import ApiSettings
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_platform.adapters.cache import NullCache, ValkeyCache
@@ -100,16 +101,37 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     entitlement = PlanEntitlementService(DEFAULT_PLANS)
     telemetry = build_telemetry(settings)
 
+    # Built ahead of the database gate below: neither depends on Postgres, and
+    # readiness must report both regardless of whether a database is
+    # configured at all.
+    cache = ValkeyCache.from_url(settings.redis_url) if settings.redis_url else NullCache()
+    qdrant_client = (
+        AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
+        if settings.qdrant_url
+        else None
+    )
+
+    def _health_service(engine: AsyncEngine | None) -> HealthService:
+        return HealthService(
+            probes={
+                "database": database_probe(engine),
+                "redis": redis_probe(cache.client if isinstance(cache, ValkeyCache) else None),
+                "qdrant": qdrant_probe(qdrant_client),
+            }
+        )
+
     container = ApiContainer(
         settings=settings,
         engine=None,
-        health_service=HealthService(probes={"database": database_probe(None)}),
+        health_service=_health_service(None),
         token_verifier=build_token_verifier(settings),
         access_context_factory=None,
         identity_bootstrap=None,
         uow_factory=None,
         authorization=authorization,
         entitlement=entitlement,
+        cache=cache,
+        qdrant_client=qdrant_client,
     )
     if not settings.database_url:
         _LOG.warning("no database configured: only stateless routes are mounted")
@@ -127,13 +149,11 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     )
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     container.engine = engine
-    container.health_service = HealthService(probes={"database": database_probe(engine)})
+    container.health_service = _health_service(engine)
 
     # Cache the membership lookup (the per-request AccessContext) so a burst
     # from one user hits the database once. No cache URL → straight to the
     # database, unchanged.
-    cache = ValkeyCache.from_url(settings.redis_url) if settings.redis_url else NullCache()
-    container.cache = cache
     container.access_context_factory = DbAccessContextFactory(
         CachingMembershipLookup(SqlMembershipLookup(session_factory), cache)
     )

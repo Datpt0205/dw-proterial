@@ -12,7 +12,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from dw_observability.langfuse import langfuse_otlp_config
-from dw_observability.otel import OtelTelemetry
+from dw_observability.otel import OtelTelemetry, build_telemetry, configure_tracing
 from dw_observability.telemetry import NullTelemetry, RecordingTelemetry, safe_attributes
 
 pytestmark = pytest.mark.unit
@@ -74,6 +74,33 @@ def test_otel_telemetry_exports_spans_and_metrics() -> None:
     assert points and points[0].value == 2  # type: ignore[union-attr]
 
 
+def test_otel_telemetry_gauge_reports_latest_value_not_a_sum() -> None:
+    """Ops hardening Phase 5: `set_gauge` backs the outbox backlog-size and
+    oldest-pending-age metrics, which are snapshots, not accumulators. Calling
+    `add_metric` (a Counter) twice with the same value sums to double the
+    value; a gauge set twice must report only the second value.
+    """
+    metric_reader = InMemoryMetricReader()
+    meter_provider = MeterProvider(metric_readers=[metric_reader])
+    telemetry = OtelTelemetry(
+        tracer=TracerProvider().get_tracer("test"), meter=meter_provider.get_meter("test")
+    )
+
+    telemetry.set_gauge("dw_outbox_backlog_size", 7, {"lane": "outbox"})
+    telemetry.set_gauge("dw_outbox_backlog_size", 3, {"lane": "outbox"})
+
+    metrics_data = metric_reader.get_metrics_data()
+    assert metrics_data is not None
+    points = [
+        point
+        for resource in metrics_data.resource_metrics
+        for scope in resource.scope_metrics
+        for metric in scope.metrics
+        for point in metric.data.data_points
+    ]
+    assert points and points[0].value == 3  # type: ignore[union-attr]
+
+
 def test_otel_span_records_exception_status() -> None:
     span_exporter = InMemorySpanExporter()
     provider = TracerProvider()
@@ -101,6 +128,37 @@ def test_langfuse_config_rejects_missing_scheme_or_keys() -> None:
         langfuse_otlp_config("cloud.langfuse.com", "pk", "sk")
     with pytest.raises(ValueError, match="keys"):
         langfuse_otlp_config("https://cloud.langfuse.com", "pk", "")
+
+
+def test_metrics_work_with_no_otlp_endpoint_configured() -> None:
+    """Ops hardening Phase 5: before this, `metrics.get_meter(...)` was never
+    backed by a real MeterProvider unless an OTLP endpoint (Langfuse or a
+    plain collector) happened to be configured — `add_metric` was silently a
+    no-op against OTel's proxy meter otherwise. Metrics are wired
+    unconditionally now: Prometheus is pull-based and needs no destination
+    configured to be worth turning on. `build_telemetry` must never return
+    `NullTelemetry` any more, and its meter must actually record.
+    """
+    from prometheus_client import REGISTRY, generate_latest
+
+    telemetry = build_telemetry(service_name="test-metrics-always-on")
+    assert not isinstance(telemetry, NullTelemetry)
+
+    telemetry.add_metric("dw_test_metrics_always_on_total", 1, {"probe": "unit-test"})
+
+    output = generate_latest(REGISTRY).decode()
+    assert "dw_test_metrics_always_on_total" in output
+
+
+def test_configure_tracing_is_safe_to_call_more_than_once_in_one_process() -> None:
+    """`metrics.set_meter_provider` is a global, process-wide install; a
+    second app/worker composition-root import path or a second test calling
+    this must not raise or warn its way into a broken meter."""
+    configure_tracing("test-service-a")
+    _tracer, meter = configure_tracing("test-service-b")
+    # Still a real, usable meter after the second call — not a proxy left
+    # over from a failed re-install.
+    meter.create_counter("dw_test_second_call_total").add(1, {})
 
 
 def test_recording_telemetry_captures_for_assertions() -> None:

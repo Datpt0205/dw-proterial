@@ -30,13 +30,21 @@ def safe_attributes(attributes: Mapping[str, object]) -> dict[str, AttributeValu
 
 
 class TelemetryPort(Protocol):
-    """Constructor-injected sink for spans and counters (never a global)."""
+    """Constructor-injected sink for spans, counters and gauges (never a global)."""
 
     def span(self, name: str, attributes: Mapping[str, object]) -> AbstractContextManager[None]: ...
 
     def add_metric(
         self, name: str, value: int | float, attributes: Mapping[str, object]
     ) -> None: ...
+
+    def set_gauge(self, name: str, value: int | float, attributes: Mapping[str, object]) -> None:
+        """Record a current snapshot value (a queue depth, an age in seconds) —
+        distinct from ``add_metric``, which only ever accumulates. Recording a
+        snapshot through ``add_metric`` would sum successive readings into a
+        number nobody asked for; a gauge reports the latest value only.
+        """
+        ...
 
 
 class NullTelemetry:
@@ -48,6 +56,9 @@ class NullTelemetry:
     def add_metric(self, name: str, value: int | float, attributes: Mapping[str, object]) -> None:
         return None
 
+    def set_gauge(self, name: str, value: int | float, attributes: Mapping[str, object]) -> None:
+        return None
+
 
 class RecordingTelemetry:
     """In-memory sink for tests: captures what production code would emit."""
@@ -55,6 +66,7 @@ class RecordingTelemetry:
     def __init__(self) -> None:
         self.spans: list[tuple[str, dict[str, AttributeValue]]] = []
         self.metrics: list[tuple[str, int | float, dict[str, AttributeValue]]] = []
+        self.gauges: list[tuple[str, int | float, dict[str, AttributeValue]]] = []
 
     @contextmanager
     def _record(self, name: str, attributes: Mapping[str, object]) -> Iterator[None]:
@@ -66,3 +78,6 @@ class RecordingTelemetry:
 
     def add_metric(self, name: str, value: int | float, attributes: Mapping[str, object]) -> None:
         self.metrics.append((name, value, safe_attributes(attributes)))
+
+    def set_gauge(self, name: str, value: int | float, attributes: Mapping[str, object]) -> None:
+        self.gauges.append((name, value, safe_attributes(attributes)))

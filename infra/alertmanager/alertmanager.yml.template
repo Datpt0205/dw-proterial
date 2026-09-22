@@ -1,0 +1,20 @@
+# Ops hardening Phase 5. One receiver, a generic webhook — the user points it
+# at Slack/Discord/email themselves (ALERTMANAGER_WEBHOOK_URL in .env); this
+# repo picks no vendor.
+#
+# A .template, not the config itself: Alertmanager's own YAML has no env-var
+# substitution, so the `alertmanager-config` compose service `sed`s the one
+# placeholder below into a rendered copy before Alertmanager starts (see
+# docker-compose.yml). Edit this file, not a rendered one.
+route:
+  receiver: webhook
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: webhook
+    webhook_configs:
+      - url: "__ALERTMANAGER_WEBHOOK_URL__"
+        send_resolved: true

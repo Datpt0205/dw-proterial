@@ -26,6 +26,12 @@ dependencies = [
     "asyncpg>=0.30,<1",
     "qdrant-client>=1.12,<1.15",
     "minio>=7.2,<8",
+    # Ops hardening Phase 5: this process has no HTTP server of its own to
+    # mount a route on (unlike dw-api), so it runs prometheus_client's own
+    # scrape server directly. Declared explicitly for the same reason dw-api
+    # declares it — imported in this package's own source, not borrowed
+    # transitively through dw-observability's OTel exporter.
+    "prometheus-client>=0.20,<1",
 ]
 
 

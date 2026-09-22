@@ -35,6 +35,7 @@ IMPORT_TO_DIST = {
     "minio": "minio",
     "boto3": "boto3",
     "opentelemetry": "opentelemetry-api",
+    "prometheus_client": "prometheus-client",
     "langfuse": "langfuse",
     "jwt": "pyjwt",
     "yaml": "pyyaml",

@@ -7,23 +7,26 @@ true — a stale plan is worse than none, because it is believed.
 Here rather than `docs/`: this repository deliberately ships no documentation
 directory, and this is tooling state, not a product document.
 
-## Now — ops hardening before the first bounded context
+## Now — ops hardening is done; picking the first bounded context is next
 
 A platform status review (2026-09-22) found six gaps an enterprise buyer would
 ask about. Đạt chose to close five of them first — backup/restore, retention
 enforcement, a spend guard, tenant offboarding/export, minimal alerting —
 before picking the first bounded context. Five phases, dependency-ordered
-(backup/restore gates retention enforcement). **Done and verified: Phase 0**
-(this file's own stale retention paragraph), **Phase 1** (backup off-box copy
-+ a restore drill that actually ran against live infra), **Phase 2**
-(`retention@1.4.0.yaml`: `audit.enforced` is now `true`), **Phase 3** (spend
-guard, mechanism only — **quotas still unset, needs Đạt's dollar thresholds**)
-**and Phase 4** (tenant offboarding + export, end to end — **the export
-bundle itself has no retention term yet, same open shape as audit's before
-Phase 2**). **Open: Phase 5** — minimal alerting. Full phase detail in "Ops
-hardening" below.
+(backup/restore gates retention enforcement). **All five done and verified:
+Phase 0** (this file's own stale retention paragraph), **Phase 1** (backup
+off-box copy + a restore drill that actually ran against live infra),
+**Phase 2** (`retention@1.4.0.yaml`: `audit.enforced` is now `true`),
+**Phase 3** (spend guard, mechanism only — **quotas still unset, needs Đạt's
+dollar thresholds**), **Phase 4** (tenant offboarding + export, end to end —
+**the export bundle itself has no retention term yet, same open shape as
+audit's before Phase 2**) **and Phase 5** (Prometheus + Alertmanager,
+verified against real running containers, not just config syntax — **alert
+thresholds are provisional starting points, and one metric/alert pair
+(reaper) can't fire yet because no bounded context has registered a queue for
+it to watch**). Full phase detail in "Ops hardening" below.
 
-Once ops hardening lands: `build_agent` and `MemoryService.propose` still have no
+Ops hardening has landed: `build_agent` and `MemoryService.propose` still have no
 production caller because a bounded context is what calls them, and this repo
 deliberately ships none. Adding one here to make the wiring look complete would
 break the boundary the whole repo is built on.
@@ -124,8 +127,8 @@ four conditions there are tested by `test_rls_coverage.py` rather than trusted.
 
 2. ~~Backup and restore: no procedure, never rehearsed.~~ — **Phase 1 below,
    done.** A rehearsed restore is what unblocks flipping `audit.enforced`.
-3. Tenant offboarding and data export — **Phase 4 below, open.**
-4. SLO, alerting, on-call — **Phase 5 below, open.**
+3. ~~Tenant offboarding and data export~~ — **Phase 4 below, done.**
+4. ~~SLO, alerting, on-call~~ — **Phase 5 below, done.**
 
 ## Ops hardening (in progress, started 2026-09-22)
 
@@ -229,16 +232,106 @@ session that wrote it; what follows is the durable summary.
   same shape of gap `retention@1.4.0.yaml` closed for audit/memory/knowledge,
   not yet closed here. Needs a retention term from Đạt, the same way audit's
   did; not guessed into a config.
-- **Phase 5 — open.** Minimal-but-real alerting. Confirmed by survey: zero
-  alerting infra exists today (no Prometheus/Grafana/Alertmanager, no scrape
-  endpoint — OTel export is push-only OTLP; `/api/v1/ready` only probes
-  Postgres, not Redis/Qdrant; outbox/reaper are log-only, no queue-depth
-  metric). Đạt chose the fuller option over a bash+webhook script: add an OTel
-  Collector (bridges existing metrics to Prometheus), Prometheus, Alertmanager
-  to the `observability` compose profile; extend readiness probes; emit real
-  metrics for outbox backlog and reaper activity; a small, concrete set of
-  alert rules (API/worker down, DB pool exhaustion, outbox backlog, error-rate
-  spike) — no Grafana dashboards this round, that is polish not the gap.
+- **Phase 5 — done, verified end to end against real running containers, not
+  just config syntax.** Minimal-but-real alerting. Confirmed by survey: zero
+  alerting infra existed (no Prometheus/Grafana/Alertmanager, no scrape
+  endpoint; `/api/v1/ready` only probed Postgres; outbox/reaper were log-only).
+  Đạt chose the fuller option over a bash+webhook script.
+
+  **The metrics pipeline itself was silently broken before any of this could
+  work, found by running it rather than reading it:** `metrics.get_meter(...)`
+  was never backed by a real `MeterProvider` anywhere in the codebase —
+  `metrics.get_meter_provider()` returned OTel's own `_ProxyMeterProvider`
+  whether Langfuse was configured or not, so every `add_metric` call ever made
+  (`dw_run_total` included) was a silent no-op. `dw_observability/otel.py` now
+  always installs a `PrometheusMetricReader`-backed provider — metrics no
+  longer share tracing's "only if an OTLP endpoint is set" gate, since
+  Prometheus is pull-based and needs no destination configured to be worth
+  turning on. Two more instances of the same bug class, found while fixing the
+  first: `apps/api/src/dw_api/bootstrap/telemetry.py` was a second,
+  divergent reimplementation that never called the shared builder, so
+  `dw-api` specifically would have stayed broken even after the fix; and
+  `apps/worker/src/dw_worker/main.py` built a `TelemetryPort` and then
+  discarded it (`_ = _build_worker_telemetry(settings)`) — never passed to
+  anything, so outbox/reaper metrics had nowhere to go until this was fixed
+  too.
+
+  **What's live now:**
+  - `TelemetryPort` gained `set_gauge` (`dw_observability/telemetry.py` +
+    `otel.py`) — `add_metric` is a Counter only, and using it for "how many
+    are pending right now" would have summed each tick's reading into a
+    number nobody asked for. Mutation-checked: swapping `set_gauge`'s body
+    for `add_metric`'s turns the new gauge test red.
+  - `/api/v1/ready` (`apps/api`) now probes Redis and Qdrant, not just
+    Postgres — `dw_api/health.py`'s `redis_probe`/`qdrant_probe`, wired in
+    `bootstrap/wiring.py` from resources built once and shared with the rest
+    of the container (the Qdrant client is dedicated to the probe and disposed
+    on shutdown, same lifecycle discipline as the SQL engines).
+  - `dw-api` serves `/metrics` at root (not `/api/v1` — a scrape target isn't
+    a versioned API route), a plain route rather than mounting
+    `prometheus_client`'s ASGI app (the latter 307-redirects a bare
+    `GET /metrics` to `/metrics/`, which is not what a scrape config expects
+    — found by testing the mount, not by reading `prometheus_client`'s docs).
+  - `dw-worker` runs `prometheus_client`'s own HTTP server on a dedicated port
+    (`WorkerSettings.metrics_port`, default 9464 — the OTel/Prometheus
+    exporter's own convention), since this process has no HTTP server of its
+    own to mount a route on.
+  - Outbox backlog: `OutboxDrainPort.backlog()` (new, catalog-free — same
+    filter `claim_batch` already uses) returns pending count + oldest
+    pending timestamp; the consumer reports both as gauges every tick
+    (`dw_outbox_backlog_size`, `dw_outbox_oldest_pending_age_seconds`). This
+    is live traffic today, not a metric waiting for a future context: the
+    memory-formation handler already dispatches through this same outbox.
+  - Reaper: `dw_reaper_reaped_total{queue}` increments whenever a sweep
+    actually settles an abandoned row. **Cannot fire in this deployment
+    yet** — the reaper lane only registers once a bounded context appends a
+    `ReapTarget` (`apps/worker/src/dw_worker/main.py`), and this repo ships
+    none. The metric and its alert are both real; there is nothing to trip
+    them until the first context lands. Named here rather than left to be
+    discovered as "why does this alert never fire."
+  - Prometheus + Alertmanager join the `observability` compose profile
+    (`infra/prometheus/`, `infra/alertmanager/`), run alongside `full`. Six
+    alert rules, each against a metric this codebase actually emits: API
+    down, worker down, Postgres connections >80% of `max_connections` (a new
+    `postgres-exporter` service, reusing the existing `dw_app` role — no new
+    migration, verified against a live Postgres that the catalog views it
+    reads are world-readable regardless of RLS), outbox backlog above a
+    threshold, reaper repeatedly reaping, and a run-failure-rate spike. That
+    last one uses `dw_run_total{status="failed"}`, not
+    `dw_node_failure_total` — the finer-grained per-node metric is declared
+    in `dw_observability/metrics.py` and **emitted by nothing anywhere in
+    the codebase**, a pre-existing gap found while writing this rule, not
+    introduced by it. Writing a rule against a metric nobody emits would have
+    been exactly this repo's failure-modes.md #1 ("declared, and nobody
+    reads it") in the alerting direction — decoration, not a safeguard.
+  - All six rules and both configs were validated with the real tools
+    (`promtool check config`, `amtool check-config`), and the whole pipeline
+    was run for real: `docker compose --profile observability up`, watched
+    `DwApiDown`/`DwWorkerDown` go `pending` → `firing` in Prometheus after the
+    real 2-minute window, and confirmed Alertmanager received both. Two real
+    bugs only this caught: Alertmanager's config has no env-var substitution,
+    so the first version of the render step left the literal placeholder text
+    in the rendered file (a single-quoted `sed` replacement, never shell-
+    expanded); and the *default*, no-webhook-configured state
+    (`ALERTMANAGER_WEBHOOK_URL=` empty, what `.env.example` ships) made
+    Alertmanager refuse to start at all (`unsupported scheme "" for URL`,
+    crash-looping) — fixed by rendering a receiver with zero configured
+    integrations when the URL is unset, rather than one `webhook_configs`
+    entry with an empty url.
+  - No OTel Collector: simplified away from the original plan. Prometheus is
+    pull-based, so `dw-api`/`dw-worker` expose `/metrics`/a scrape port
+    directly rather than through a bridging collector; Langfuse's OTLP trace
+    export is unchanged and separate.
+  - No new CI job: the existing `contracts` job already runs
+    `docker compose --profile full --profile observability config -q`, which
+    picks up the four new services automatically.
+
+  **Left open, named rather than silently guessed:** every alert threshold
+  (outbox backlog 500, reaper 20/hour, run-failure rate 0.2/s, DB connections
+  80%) is a starting point, not a measured number — there is no bounded
+  context yet generating real traffic to measure against, the same shape as
+  Phase 3's unset spend quotas. No Grafana dashboards — polish, not the gap
+  this phase closed.
 
 Every phase touching tenancy/authorization/data lifecycle (2–4) runs
 `.claude/skills/reviewing-feature-security/` before being called done — this

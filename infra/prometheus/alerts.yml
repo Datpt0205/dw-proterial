@@ -1,0 +1,87 @@
+# Ops hardening Phase 5 — minimal, deliberately. Every rule here fires on a
+# metric this codebase actually emits today; a rule against a metric nobody
+# writes yet would be decoration; see .claude/rules/failure-modes.md #1.
+#
+# Two known gaps, named rather than papered over with a rule that could never
+# fire:
+#   - DwReaperRepeatedlyReaping (below) cannot fire in THIS deployment: the
+#     reaper lane only registers once a bounded context appends a
+#     `ReapTarget` (apps/worker/src/dw_worker/main.py), and this repo ships
+#     none yet. The metric and the rule are both real; there is just nothing
+#     to trip them until the first context lands.
+#   - `dw_node_failure_total` (per-node failure, finer than a run's overall
+#     status) is declared in dw_observability/metrics.py and emitted by
+#     nothing — a pre-existing gap found while writing this file, not
+#     introduced by it. DwRunFailureRateSpike below alerts on `dw_run_total`
+#     instead, which IS live, until that gap is closed separately.
+groups:
+  - name: dw-platform
+    rules:
+      - alert: DwApiDown
+        expr: up{job="dw-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "dw-api is not answering /metrics"
+          description: "Prometheus has not been able to scrape dw-api for 2 minutes."
+
+      - alert: DwWorkerDown
+        expr: up{job="dw-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "dw-worker is not answering /metrics"
+          description: >
+            The worker's own scrape target is down for 2 minutes — the process
+            is gone or its event loop is wedged. Distinct from
+            DwOutboxBacklogAboveThreshold, which catches a worker that is
+            still up but not draining one lane.
+
+      - alert: DwPostgresConnectionsNearLimit
+        expr: sum(pg_stat_database_numbackends) / max(pg_settings_max_connections) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Postgres connections above 80% of max_connections"
+          description: >
+            dw_app's pool (10 + 20 overflow per apps/api/src/dw_api/bootstrap/wiring.py)
+            plus every other connected role is approaching the server's ceiling.
+
+      - alert: DwOutboxBacklogAboveThreshold
+        # 500 is a starting point, not a measured threshold — this platform
+        # has no bounded context generating outbox volume yet (see CLAUDE.md,
+        # "Once ops hardening lands"). Revisit once real traffic exists.
+        expr: dw_outbox_backlog_size > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox backlog above 500 for 15 minutes"
+          description: >
+            {{ $value }} events are pending for the types dw-worker handles;
+            dw_outbox_oldest_pending_age_seconds says how stale the oldest one is.
+
+      - alert: DwReaperRepeatedlyReaping
+        # See the file header: cannot fire until a context registers a
+        # ReapTarget. 20/hour is provisional for the same reason the backlog
+        # threshold above is.
+        expr: increase(dw_reaper_reaped_total[1h]) > 20
+        labels:
+          severity: warning
+        annotations:
+          summary: "The reaper is repeatedly settling abandoned rows in one queue"
+          description: >
+            {{ $labels.queue }} reaped {{ $value }} abandoned row(s) in the last
+            hour — a healthy worker for that queue should rarely die mid-job.
+
+      - alert: DwRunFailureRateSpike
+        expr: rate(dw_run_total{status="failed"}[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Run failure rate above 0.2/s over 5 minutes"
+          description: "dw_run_total{status=\"failed\"} is climbing faster than usual."

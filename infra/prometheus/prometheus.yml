@@ -1,0 +1,30 @@
+# Ops hardening Phase 5. Scrapes the two app processes' own `/metrics` (both
+# wired unconditionally now — see dw_observability/otel.py) plus postgres,
+# and forwards firing alerts to Alertmanager. All targets are container DNS
+# names on dw-internal; nothing here reaches outside the compose network.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: dw-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  - job_name: dw-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:9464"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]

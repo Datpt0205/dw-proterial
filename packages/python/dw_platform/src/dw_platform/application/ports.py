@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
     from dw_platform.domain.audit import AuditEvent
     from dw_platform.domain.feedback import Feedback, FeedbackAttachment
-    from dw_platform.domain.outbox import OutboxEvent
+    from dw_platform.domain.outbox import OutboxBacklog, OutboxEvent
 
 
 class VerifiedIdentity(Protocol):
@@ -241,6 +241,12 @@ class OutboxDrainPort(Protocol):
 
     async def record_failure(self, event_id: UUID, *, error: str) -> None:
         """Keep the reason a delivery failed; the attempt was already counted."""
+        ...
+
+    async def backlog(self, *, event_types: Sequence[str], max_attempts: int) -> OutboxBacklog:
+        """Count and age of what `claim_batch` would still find, for the same
+        filter — so the number a dashboard shows matches what the dispatcher
+        actually owes, not a guess at it."""
         ...
 
 

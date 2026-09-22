@@ -53,3 +53,16 @@ class OutboxEvent:
         a database that was unreachable, and those two want opposite responses.
         """
         self.last_error = error
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxBacklog:
+    """A snapshot of what a dispatcher still owes, for the types it handles.
+
+    Ops hardening Phase 5: the two numbers a "backlog above threshold" alert
+    needs. ``oldest_pending_at`` is ``None`` exactly when ``pending`` is 0 —
+    there is no oldest row in an empty backlog.
+    """
+
+    pending: int
+    oldest_pending_at: datetime | None

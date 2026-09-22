@@ -8,6 +8,11 @@ dependencies = [
     "opentelemetry-api>=1.27,<2",
     "opentelemetry-sdk>=1.27,<2",
     "opentelemetry-exporter-otlp-proto-http>=1.27,<2",
+    # Ops hardening Phase 5. Pinned tighter than the others: this package
+    # tracks a specific opentelemetry-sdk minor (~=1.44.0 as of 0.65b0), not
+    # the wide >=1.27,<2 range above — measured against what uv actually
+    # resolved (1.44.0) before adding this, not assumed compatible.
+    "opentelemetry-exporter-prometheus>=0.65b0,<1",
 ]
 
 [build-system]

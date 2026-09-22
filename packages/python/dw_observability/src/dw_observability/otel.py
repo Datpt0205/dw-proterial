@@ -4,19 +4,40 @@
 configured (plain collector or Langfuse — see ``dw_observability.langfuse``).
 Without an endpoint the API-level no-op tracer applies, so instrumented code
 never pays for unconfigured telemetry.
+
+Metrics are a separate decision from tracing, on purpose. Before Ops
+hardening Phase 5, ``metrics.get_meter(...)`` was called with no
+``MeterProvider`` ever installed — every ``add_metric`` call in this
+codebase (``dw_run_total``, ``dw_node_failure_total``, ...) was silently a
+no-op against OTel's proxy meter, Langfuse configured or not. Measured, not
+assumed: ``metrics.get_meter_provider()`` returns a ``_ProxyMeterProvider``
+until something calls ``set_meter_provider``, and nothing here ever did.
+Metrics now always get a real `MeterProvider` backed by
+``PrometheusMetricReader`` — Prometheus is pull-based, so unlike the OTLP
+trace exporter above it needs no destination configured to be worth turning
+on, only something to scrape the process's own `/metrics`.
 """
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 
 from opentelemetry import metrics, trace
+
+# `create_gauge`'s return type is exported as `_Gauge` in this pinned SDK
+# version (the synchronous Gauge instrument was still stabilising its public
+# name) — this is that same class, not a private implementation detail.
 from opentelemetry.metrics import Counter, Meter
+from opentelemetry.metrics import _Gauge as Gauge
 from opentelemetry.trace import Status, StatusCode, Tracer
 
-from dw_observability.telemetry import NullTelemetry, TelemetryPort, safe_attributes
+from dw_observability.telemetry import TelemetryPort, safe_attributes
+
+_meter_provider_lock = threading.Lock()
+_meter_provider_installed = False
 
 
 def build_telemetry(
@@ -31,9 +52,11 @@ def build_telemetry(
     """Turn Langfuse/OTLP settings into a ``TelemetryPort`` — one builder every app
     shares, so tracing is wired the same way in api, chat and worker.
 
-    Langfuse is just an OTLP endpoint (§21.4). With no endpoint (neither Langfuse
-    nor a plain collector) the result is ``NullTelemetry``: instrumented code runs
-    unchanged and pays nothing for unconfigured telemetry.
+    Langfuse is just an OTLP endpoint (§21.4) for TRACES. With no endpoint
+    (neither Langfuse nor a plain collector), spans are a no-op — OTel's own
+    default tracer, not ``NullTelemetry``: this always returns a real
+    ``OtelTelemetry`` now, because metrics are wired regardless of whether
+    tracing is.
     """
     endpoint = otel_endpoint
     headers: dict[str, str] | None = None
@@ -45,8 +68,6 @@ def build_telemetry(
         endpoint, headers = langfuse_otlp_config(
             langfuse_host, langfuse_public_key, langfuse_secret_key
         )
-    if endpoint is None:
-        return NullTelemetry()
     tracer, meter = configure_tracing(service_name, otlp_endpoint=endpoint, otlp_headers=headers)
     return OtelTelemetry(tracer=tracer, meter=meter)
 
@@ -57,7 +78,12 @@ def configure_tracing(
     otlp_endpoint: str | None = None,
     otlp_headers: Mapping[str, str] | None = None,
 ) -> tuple[Tracer, Meter]:
-    """Install a tracer/meter provider; export via OTLP when an endpoint is set."""
+    """Install a tracer (only if an OTLP endpoint is set) and a meter
+    (always). Exported spans go to `otlp_endpoint`; exported metrics go to
+    this process's own `/metrics` — a Prometheus scraper is the composition
+    root's job to expose (`apps/api`'s route, `apps/worker`'s metrics
+    server), not this function's.
+    """
     if otlp_endpoint:
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.resources import Resource
@@ -75,7 +101,32 @@ def configure_tracing(
             )
         )
         trace.set_tracer_provider(provider)
+    _ensure_meter_provider(service_name)
     return trace.get_tracer(service_name), metrics.get_meter(service_name)
+
+
+def _ensure_meter_provider(service_name: str) -> None:
+    """Install the process-wide Prometheus-backed ``MeterProvider`` exactly
+    once. ``metrics.set_meter_provider`` is itself idempotent-safe (a second
+    call is refused with a log warning, not an exception) but guarded here
+    too so a second call in the same process — a second app/worker
+    composition root import path, a test — never even attempts it or logs
+    that warning.
+    """
+    global _meter_provider_installed
+    with _meter_provider_lock:
+        if _meter_provider_installed:
+            return
+        from opentelemetry.exporter.prometheus import PrometheusMetricReader
+        from opentelemetry.sdk.metrics import MeterProvider
+        from opentelemetry.sdk.resources import Resource
+
+        reader = PrometheusMetricReader()
+        provider = MeterProvider(
+            resource=Resource.create({"service.name": service_name}), metric_readers=[reader]
+        )
+        metrics.set_meter_provider(provider)
+        _meter_provider_installed = True
 
 
 @dataclass
@@ -85,6 +136,7 @@ class OtelTelemetry:
     tracer: Tracer
     meter: Meter
     _counters: dict[str, Counter] = field(default_factory=dict)
+    _gauges: dict[str, Gauge] = field(default_factory=dict)
 
     @contextmanager
     def _span(self, name: str, attributes: Mapping[str, object]) -> Iterator[None]:
@@ -107,3 +159,10 @@ class OtelTelemetry:
             counter = self.meter.create_counter(name)
             self._counters[name] = counter
         counter.add(value, safe_attributes(attributes))
+
+    def set_gauge(self, name: str, value: int | float, attributes: Mapping[str, object]) -> None:
+        gauge = self._gauges.get(name)
+        if gauge is None:
+            gauge = self.meter.create_gauge(name)
+            self._gauges[name] = gauge
+        gauge.set(value, safe_attributes(attributes))

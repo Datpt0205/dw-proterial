@@ -19,6 +19,15 @@ DW_RETRIEVAL_HIT_RATE: Final = "dw_retrieval_hit_rate"  # labels: worker
 DW_HUMAN_INTERVENTION_RATE: Final = "dw_human_intervention_rate"  # labels: worker
 DW_TASK_SUCCESS_RATE: Final = "dw_task_success_rate"  # labels: worker
 
+# Ops hardening Phase 5. Gauges (current value, not accumulated — see
+# `TelemetryPort.set_gauge`): a Counter cannot represent "how many are
+# pending right now" without lying about it on the next tick.
+DW_OUTBOX_BACKLOG_SIZE: Final = "dw_outbox_backlog_size"  # no labels
+DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS: Final = (
+    "dw_outbox_oldest_pending_age_seconds"  # no labels; 0 when the backlog is empty
+)
+DW_REAPER_REAPED_TOTAL: Final = "dw_reaper_reaped_total"  # labels: queue
+
 ALL_METRICS: Final = (
     DW_RUN_TOTAL,
     DW_RUN_DURATION_SECONDS,
@@ -30,4 +39,7 @@ ALL_METRICS: Final = (
     DW_RETRIEVAL_HIT_RATE,
     DW_HUMAN_INTERVENTION_RATE,
     DW_TASK_SUCCESS_RATE,
+    DW_OUTBOX_BACKLOG_SIZE,
+    DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS,
+    DW_REAPER_REAPED_TOTAL,
 )
