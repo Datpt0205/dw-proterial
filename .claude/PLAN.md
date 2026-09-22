@@ -482,7 +482,7 @@ buyer asks for first.
 
 ## How a feature is checked here
 
-Three layers, in decreasing order of how much they can be skipped:
+Four layers, in decreasing order of how much they can be skipped:
 
 1. `scripts/verify_invariants.py` — mechanical, runs in CI and in the commit
    hook. Exemptions live in `RLS_EXEMPT` / `UNREAD_EXEMPT` and each needs a
@@ -490,10 +490,19 @@ Three layers, in decreasing order of how much they can be skipped:
 2. `.claude/hooks/pre-commit-gate.sh` — blocks `git commit`, runs layer 1, then
    asks only the questions this diff's file paths earn. Once per diff, not once
    per attempt. Disable with `touch .claude/no-commit-gate`.
-3. `.claude/skills/reviewing-feature-security/` — six trust boundaries, a
-   negative test at each, and a mutation check. Run before calling a feature
-   done, without being asked.
+3. `.claude/skills/reviewing-feature-security/` — six trust boundaries
+   (business logic: tenant, authz, autonomy, untrusted content, provenance,
+   resource lifecycle), a negative test at each, and a mutation check. Run
+   before calling a feature done, without being asked.
+4. `.claude/skills/reviewing-deployment-security/` — added 2026-09-22 after
+   Ops hardening Phase 5 shipped four new container images that nothing
+   scanned (none were "built," so the existing trivy reminder in layer 3
+   didn't obviously cover them). OWASP-shaped deployment/config exposure —
+   dev/mock surfaces reaching a deployed profile, response leakage, secrets
+   and defaults, CORS, outbound URLs, and scanning EVERY new image whether
+   built or pulled. Preventive, not yet backed by an incident count the way
+   `failure-modes.md` is.
 
-`.claude/rules/failure-modes.md` holds the counts these are derived from. The
-honest limit: layer 2 guarantees the questions are raised, not that they were
-answered truthfully, and no layer replaces running the thing.
+`.claude/rules/failure-modes.md` holds the counts layers 1–3 are derived from.
+The honest limit: layer 2 guarantees the questions are raised, not that they
+were answered truthfully, and no layer replaces running the thing.

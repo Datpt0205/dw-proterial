@@ -171,7 +171,11 @@ thinking:
 - **What is actually in the built image.** Scan it. `trivy image --severity
 HIGH,CRITICAL --ignore-unfixed` on the image this change produces; the four
   images here were carrying fourteen fixable findings that no amount of review
-  would have surfaced.
+  would have surfaced. This applies just as much to an image the change only
+  *references* in a compose file and pulls from a registry, not one this
+  repo's own Dockerfiles build — `reviewing-deployment-security` §6 has the
+  rule for that case, found missing the same way, later.
 
-If the change touches a Dockerfile, a lockfile or a dependency pin, one of these
-two applies and the checklist alone is not enough.
+If the change touches a Dockerfile, a lockfile, a dependency pin or a compose
+file's image list, one of these two applies and the checklist alone is not
+enough.
