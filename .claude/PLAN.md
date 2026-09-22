@@ -14,12 +14,13 @@ ask about. Đạt chose to close five of them first — backup/restore, retentio
 enforcement, a spend guard, tenant offboarding/export, minimal alerting —
 before picking the first bounded context. Five phases, dependency-ordered
 (backup/restore gates retention enforcement). **Done and verified: Phase 0**
-(this file's own stale retention paragraph) **and Phase 1** (backup off-box
-copy + a restore drill that actually ran against live infra, not just
-written — `test_restore_drill.py`). **Open: Phases 2–5** — flip
-`audit.enforced`, a spend-guard mechanism (needs Đạt's dollar thresholds,
-not decided), tenant offboarding/export, minimal alerting. Full phase detail
-in "Ops hardening" below.
+(this file's own stale retention paragraph), **Phase 1** (backup off-box copy
++ a restore drill that actually ran against live infra, not just written —
+`test_restore_drill.py`) **and Phase 2** (`retention@1.4.0.yaml`:
+`audit.enforced` is now `true` — DROP PARTITION on audit can actually run).
+**Open: Phases 3–5** — a spend-guard mechanism (needs Đạt's dollar
+thresholds, not decided), tenant offboarding/export, minimal alerting. Full
+phase detail in "Ops hardening" below.
 
 Once ops hardening lands: `build_agent` and `MemoryService.propose` still have no
 production caller because a bounded context is what calls them, and this repo
@@ -38,16 +39,15 @@ real data, what a day of runs actually costs.
 
 **Done and pinned by tests:** Mốc 0, 1a, 1b, 2, 3, 4, 5, 6. Details below.
 
-**Decided, not yet enforced — and it is a sequencing gap, not an open number.**
-`configs/policies/retention@1.3.0.yaml` already carries a chosen, cited term for
-audit: `audit.tables.audit_events.days: 1095` (Commercial Law Art. 319's 2-year
-limitation period plus a review-cycle margin; Decree 13/2023 requires deletion
-once purpose ends, since the table carries `actor_id`). What is still `false` is
-`audit.enforced` — DROP PARTITION destroys a month instantly with no soft delete
-in between, and the file says why it waits: flip it only after backup/restore
-has a rehearsal that actually ran, not a procedure written and never tried. The
-old "usage ledger" half of this note no longer applies — `platform.model_usage_ledger`
-was dropped entirely (migration `aefe7c1f5d9b`); it never had a real reader.
+**Decided AND enforced.** `configs/policies/retention@1.4.0.yaml` carries a
+chosen, cited term for audit — `audit.tables.audit_events.days: 1095`
+(Commercial Law Art. 319's 2-year limitation period plus a review-cycle
+margin; Decree 13/2023 requires deletion once purpose ends, since the table
+carries `actor_id`) — and `audit.enforced: true` as of Ops hardening Phase 2
+below, gated on the restore drill in Phase 1 actually having run. The old
+"usage ledger" half of this note no longer applies —
+`platform.model_usage_ledger` was dropped entirely (migration
+`aefe7c1f5d9b`); it never had a real reader.
 
 A second language (Go) for the application tier was asked about and answered in
 `CLAUDE.md` — allowed, provided it never re-implements tenant isolation, and the
@@ -56,7 +56,7 @@ four conditions there are tested by `test_rls_coverage.py` rather than trusted.
 **Next, in the order they would be asked for in an enterprise review:**
 
 1. ~~Data lifecycle~~ — **done: memory, knowledge, audit and usage.**
-   `configs/policies/retention@1.3.0.yaml` is the versioned answer to "how long
+   `configs/policies/retention@1.4.0.yaml` is the versioned answer to "how long
    do you keep our data", it is in the release manifest with a checksum so the
    question can be asked about the past, and ONE file feeds all three sweeps on
    the worker's hourly lanes. Deletes, never closes a window: `valid_until` says a
@@ -109,13 +109,13 @@ four conditions there are tested by `test_rls_coverage.py` rather than trusted.
       Without relocation that state is terminal — one missed window and the month
       can never be partitioned, so never dropped. Found by running the whole
       integration suite, not this one file.
-    - **Nothing is dropped by default.** The pass creates partitions ahead, which
-      is pure gain, and drops only what `audit.enforced` allows — DROP PARTITION
-      destroys a month instantly with no soft delete in between, and the term is a
-      legal obligation per deployment, not a technical default. **Đạt chose the
-      number** (`audit_events.days: 1095`, `retention@1.3.0.yaml`); what remains is
-      flipping `enforced: true`, gated on a rehearsed restore — see Ops hardening
-      below.
+    - **Nothing is dropped by default until `enforced` says so.** The pass
+      creates partitions ahead unconditionally, which is pure gain; dropping is
+      gated. **Đạt chose the number** (`audit_events.days: 1095`,
+      `retention@1.4.0.yaml`) and, as of Ops hardening Phase 2, `enforced` is
+      `true` — gated on the rehearsed restore from Phase 1 actually having run
+      first. DROP PARTITION on an expired audit month can now really happen on
+      the worker's next hourly pass.
 
     Still open, and named rather than silently included: **superseded documents**
     — how many versions back to keep is a different question from how long a
@@ -135,7 +135,7 @@ other. Landing as separate commits, tests run after each. Design detail
 session that wrote it; what follows is the durable summary.
 
 - **Phase 0 — done.** This file's stale retention paragraph (`1.2.0`, "two
-  numbers") corrected to match what `retention@1.3.0.yaml` actually ships.
+  numbers") corrected to match what the real policy file shipped.
 - **Phase 1 — done, verified against real infra.**
   `scripts/backup_postgres.sh`'s off-box copy (to a new `dw-pg-backups` MinIO
   bucket) now fails the whole run if it can't upload, rather than quietly
@@ -150,11 +150,13 @@ session that wrote it; what follows is the durable summary.
   roles that already exist. A from-scratch disaster-recovery drill (new host,
   roles provisioned from zero via `scripts/create_agent_role.py` etc.) is a
   separate, larger exercise, not yet done.
-- **Phase 2 — open, now unblocked.** Flip
-  `configs/policies/retention@1.3.0.yaml`'s `audit.enforced` to `true` (bump
-  to `1.4.0`), regenerate the release manifest
-  (`scripts/release_manifest.py`), re-run `test_partition_maintenance.py`
-  under the flipped flag.
+- **Phase 2 — done, verified.** `configs/policies/retention@1.4.0.yaml` (renamed
+  from `1.3.0`) ships `audit.enforced: true`. Release manifest regenerated and
+  `--check`-clean; `verify_invariants.py`/`verify_architecture.py` and the full
+  `dw_platform` integration suite (`test_partition_maintenance.py` included)
+  re-ran green under the flipped flag. `apps/worker/src/dw_worker/main.py`'s
+  hardcoded load path updated to match the new filename — the one place a
+  rename like this actually breaks something if missed.
 - **Phase 3 — open.** Spend guard, mechanism only — no admin UI, no route, no
   usage-stats service (Đạt's call: the old `platform.model_usage_ledger` was
   removed, commit `142a0db`, for looking like invoicing evidence it never
@@ -165,7 +167,8 @@ session that wrote it; what follows is the durable summary.
   gate in `dw_agent_runtime/adapters/langgraph_runner.py`. **Ships with the
   three plans' quotas unset (`None` = unmetered) — this needs Đạt's actual
   dollar thresholds before it protects anything. Not decided yet**, same
-  deferral shape as `legal_hold`/`enforced: false` elsewhere in this file.
+  deferral shape `legal_hold.days: null` uses elsewhere in this file: ship the
+  mechanism, decide the number later, never guess it into a config.
 - **Phase 4 — open, largest, least precedented.** Tenant offboarding + data
   export. New provisioning-owned table `platform.tenant_offboarding_requests`;
   operator calls `initiate_offboarding` (audited, existing `ProvisioningService`
