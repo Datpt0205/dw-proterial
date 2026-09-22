@@ -31,6 +31,7 @@ from dw_agent_runtime.adapters.run_store import (
     RunStatus,
     SqlWorkerRunStore,
 )
+from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardStore
 from dw_agent_runtime.autonomy import AutonomyApprovalPolicy, lower_autonomy
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
@@ -119,6 +120,10 @@ class LangGraphWorkflowRunner:
     # F6: what the graph's model calls cost. None keeps old wirings valid;
     # a run under None simply stays off the ledger, as every run did before.
     usage_meter: LangchainUsageMeter | None = None
+    # The daily spend guard (Ops hardening Phase 3). Same shape as usage_meter:
+    # None keeps every wiring that predates this field valid, and a run without
+    # it simply stays off the guard, as every run did before this existed.
+    spend_store: SqlSpendGuardStore | None = None
     _compiled: dict[tuple[str, str], Any] = field(default_factory=dict)
     # Holds a reference to every in-flight streamed run; without one the task is
     # garbage-collectable mid-run.
@@ -274,6 +279,40 @@ class LangGraphWorkflowRunner:
             },
         )
 
+    async def _require_spend_allowance(self, run_context: RunContext) -> None:
+        """Refuse a run once the tenant has spent its plan's daily ceiling.
+
+        Same shape and same slack as `_require_run_allowance`: not
+        transactional, so a burst of runs starting in the same instant can
+        overshoot by whatever they spend before the next one checks — bounded
+        by how much one tenant spends in an instant, not by the ceiling being
+        meaningless.
+
+        `spend_store` is `None` for any wiring that predates this guard, and
+        every plan ships `spend_usd_per_day=None` today (no dollar thresholds
+        decided yet) — both mean this returns immediately, same as before this
+        existed. Recording still runs either way; only the gate is off.
+        """
+        if self.spend_store is None:
+            return
+        limit = self.allowance.spend_usd_per_day(run_context.plan_id)
+        if limit is None:
+            return
+        today = self.clock.now().astimezone(UTC).date()
+        spent = await self.spend_store.spend_today(run_context.tenant_id, today)
+        if spent < limit:
+            return
+        raise QuotaExceededError(
+            "hôm nay đã dùng hết trần chi tiêu của gói; thử lại sau 00:00 UTC"
+            " hoặc nâng gói để có thêm trần",
+            details={
+                "quota": "spend_usd_per_day",
+                "limit": str(limit),
+                "used": str(spent),
+                "plan_id": run_context.plan_id,
+            },
+        )
+
     async def start(
         self,
         *,
@@ -283,6 +322,7 @@ class LangGraphWorkflowRunner:
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
         run_context = self._with_autonomy(run_context, worker.definition)
         await self._require_run_allowance(run_context)
+        await self._require_spend_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)
 
         await self.run_store.create(
@@ -338,6 +378,7 @@ class LangGraphWorkflowRunner:
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
         run_context = self._with_autonomy(run_context, worker.definition)
         await self._require_run_allowance(run_context)
+        await self._require_spend_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)
 
         await self.run_store.create(

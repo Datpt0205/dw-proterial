@@ -157,18 +157,34 @@ session that wrote it; what follows is the durable summary.
   re-ran green under the flipped flag. `apps/worker/src/dw_worker/main.py`'s
   hardcoded load path updated to match the new filename — the one place a
   rename like this actually breaks something if missed.
-- **Phase 3 — open.** Spend guard, mechanism only — no admin UI, no route, no
-  usage-stats service (Đạt's call: the old `platform.model_usage_ledger` was
-  removed, commit `142a0db`, for looking like invoicing evidence it never
-  was — nothing here invoices anybody). Design: a narrow new table
-  `platform.tenant_daily_spend_guard` (one row per tenant per day, a running
-  total — not a per-call event log, on purpose), a new
-  `RunAllowancePort.spend_usd_per_day` mirroring the existing `runs_per_day`
-  gate in `dw_agent_runtime/adapters/langgraph_runner.py`. **Ships with the
-  three plans' quotas unset (`None` = unmetered) — this needs Đạt's actual
-  dollar thresholds before it protects anything. Not decided yet**, same
-  deferral shape `legal_hold.days: null` uses elsewhere in this file: ship the
+- **Phase 3 — done, verified, mutation-checked.** Spend guard, mechanism
+  only — no admin UI, no route, no usage-stats service (Đạt's call: the old
+  `platform.model_usage_ledger` was removed, commit `142a0db`, for looking
+  like invoicing evidence it never was — nothing here invoices anybody). New
+  narrow table `platform.tenant_daily_spend_guard` (one row per tenant per
+  day, a running total — not a per-call event log, on purpose), migrations
+  `2b5ff2bceb06` + `c3ec03bd6fd1` (table + RLS; the worker-drain policy its
+  own housekeeping sweep needs). `RunAllowancePort.spend_usd_per_day` mirrors
+  the existing `runs_per_day` gate in
+  `dw_agent_runtime/adapters/langgraph_runner.py` — same "before the
+  expensive part" placement, same fail-closed shape when the dependency
+  errors (a lookup failure refuses the run; a *recording* failure does not,
+  because by then the model has already answered — asymmetric on purpose,
+  both halves have a test).
+  **Ships with the three plans' quotas unset (`None` = unmetered) — this
+  needs Đạt's actual dollar thresholds before it protects anything. Not
+  decided yet**, same deferral shape `legal_hold.days: null` uses elsewhere
+  in this file: ship the
   mechanism, decide the number later, never guess it into a config.
+  What the mutation check actually caught: the first tenant-isolation test
+  (`test_another_tenant_neither_sees_nor_increments_the_spend`) still passed
+  with the RLS policy replaced by `USING (true)`, because
+  `SqlSpendGuardStore` filters by `tenant_id` in its own WHERE clause and
+  never needed RLS to do it — the test exercised the application filter, not
+  the database one. Added `test_rls_hides_the_row_even_from_a_query_with_no_tenant_filter`,
+  a raw query with no WHERE at all, and confirmed *that one* goes red under
+  the same mutation. Failure-modes.md's "a test that cannot fail" (found 4×)
+  — this is the shape, caught before merge instead of after.
 - **Phase 4 — open, largest, least precedented.** Tenant offboarding + data
   export. New provisioning-owned table `platform.tenant_offboarding_requests`;
   operator calls `initiate_offboarding` (audited, existing `ProvisioningService`

@@ -7,6 +7,7 @@ and application handlers depend only on the protocols.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from decimal import Decimal
 from typing import Literal, Protocol, TypeVar
 from uuid import UUID
 
@@ -77,6 +78,18 @@ class RunAllowancePort(Protocol):
     """
 
     def runs_per_day(self, plan_id: str) -> int | None: ...
+
+    def spend_usd_per_day(self, plan_id: str) -> Decimal | None:
+        """The dollar ceiling a plan grants per tenant per day — the limit, not
+        the running total.
+
+        Same split as ``runs_per_day``, same meaning for ``None``: no limit,
+        not a limit of zero. Unlike ``runs_per_day``, every plan ships this
+        unset today — the numbers are a business decision nobody has made yet,
+        and guessing one into a quota table is worse than leaving the gate
+        open and saying so.
+        """
+        ...
 
 
 class StreamingWorkflowRunnerPort(Protocol):

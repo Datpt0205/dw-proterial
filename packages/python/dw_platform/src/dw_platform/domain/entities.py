@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import StrEnum
 
 from dw_kernel.ids import EntityId, TenantId, UserId, WorkspaceId
@@ -105,6 +106,11 @@ class Plan:
     name: str
     features: frozenset[str]
     quotas: dict[str, int] = field(default_factory=dict)
+    # Separate from `quotas` rather than another int in that dict: a dollar
+    # ceiling needs decimal precision, not integer counting, and `None` here
+    # means "no business decision yet" — every plan ships that way today. See
+    # dw_agent_runtime.ports.RunAllowancePort.spend_usd_per_day.
+    spend_usd_per_day: Decimal | None = None
 
     def __post_init__(self) -> None:
         if not self.plan_id.strip():
@@ -112,6 +118,8 @@ class Plan:
         for key, value in self.quotas.items():
             if value < 0:
                 raise ValueError(f"quota {key!r} must be >= 0")
+        if self.spend_usd_per_day is not None and self.spend_usd_per_day < 0:
+            raise ValueError("spend_usd_per_day must be >= 0")
 
 
 @dataclass(slots=True)

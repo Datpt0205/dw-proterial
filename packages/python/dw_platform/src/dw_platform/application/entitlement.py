@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal
 
 from dw_kernel.errors import EntitlementDeniedError
 from dw_platform.application.access_context import AccessContext
@@ -63,6 +64,20 @@ class PlanEntitlementService:
         if plan is None:
             return 0
         return plan.quotas.get("runs_per_day")
+
+    def spend_usd_per_day(self, plan_id: str) -> Decimal | None:
+        """Satisfies `dw_agent_runtime.ports.RunAllowancePort.spend_usd_per_day`.
+
+        Same refuse-unknown-plan shape as `runs_per_day`, with one difference:
+        an unknown plan there means 0 (never unlimited on a plan the database
+        has never heard of); here it also means "spend nothing more today",
+        for the same reason — the alternative is a metering hole nobody
+        notices until the bill.
+        """
+        plan = self.plans.get(plan_id)
+        if plan is None:
+            return Decimal(0)
+        return plan.spend_usd_per_day
 
     async def require_feature(self, context: AccessContext, feature: str) -> None:
         if self.has_feature(context, feature):

@@ -25,6 +25,7 @@ import signal
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardRetention
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_knowledge.retention import SqlKnowledgeRetention
@@ -112,6 +113,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     retention: RetentionPrunePort | None = None
     knowledge_retention: RetentionPrunePort | None = None
     partitions: RetentionPrunePort | None = None
+    # The spend guard's own housekeeping (Ops hardening Phase 3) — a technical
+    # constant, not a legal term, so it is not on retention_policy's cadence
+    # or file; see SqlSpendGuardRetention's docstring.
+    spend_guard_retention: RetentionPrunePort | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -166,6 +171,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             # deleted document in the only store that can still return it.
             vector_index=build_vector_index(settings),
         )
+        spend_guard_retention = SqlSpendGuardRetention(session_factory=sessions, clock=clock)
         registry.register(
             "outbox",
             build_outbox_consumer(
@@ -215,6 +221,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "partitions",
             build_retention_consumer(partitions),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if spend_guard_retention is not None:
+        registry.register(
+            "spend_guard_retention",
+            build_retention_consumer(spend_guard_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     return registry

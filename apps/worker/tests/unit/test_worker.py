@@ -99,7 +99,7 @@ def test_a_host_with_no_infrastructure_wires_no_lane() -> None:
 
 
 def test_only_the_platform_lanes_are_wired() -> None:
-    """Four lanes a database alone is enough for, and no more.
+    """Five lanes a database alone is enough for, and no more.
 
     The outbox, and retention twice. Retention joined the platform set the day
     memory got a lifecycle: `memory.items` is a platform table, so the platform
@@ -111,7 +111,14 @@ def test_only_the_platform_lanes_are_wired() -> None:
     different terms and a pass that failed would otherwise take the other's work
     down with it. They read ONE policy file, which is the part that matters: a
     build where the two halves of a compliance commitment disagreed is the
-    failure this split would otherwise invite.
+    failure this split would otherwise invite. `partitions` reads the same file
+    but only ever creates ahead of need, never deletes, so it carries none of
+    that risk.
+
+    `spend_guard_retention` is the fifth, and reads no policy file at all —
+    unlike audit/memory/knowledge, its window answers no compliance question,
+    so it is a technical constant in code, not a term in
+    `retention@1.4.0.yaml` (see `SqlSpendGuardRetention`'s docstring).
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
@@ -122,4 +129,5 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "retention",
         "retention_knowledge",
         "partitions",
+        "spend_guard_retention",
     }

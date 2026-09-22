@@ -15,6 +15,7 @@ from dw_agent_runtime.adapters.checkpoint import SqlAlchemyCheckpointSaver
 from dw_agent_runtime.adapters.langchain_usage import LangchainUsageMeter
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
+from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardRecorder, SqlSpendGuardStore
 from dw_agent_runtime.adapters.telemetry_usage import TelemetryUsageRecorder
 from dw_agent_runtime.adapters.tool_execution_store import SqlToolExecutionStore
 from dw_agent_runtime.adapters.usage_recorders import CompositeUsageRecorder
@@ -117,12 +118,17 @@ def build_runtime(
     copy = load_runtime_copy(RUNTIME_COPY_CONFIG)
 
     # ---- model gateway ---------------------------------------------------
-    # Telemetry only. The database ledger this used to write alongside is gone:
-    # nothing here invoices anybody, and its two readers — a per-tenant daily
-    # spend cap and an admin dashboard — went with it. The composite stays
-    # because a recorder that raises must not take the run down, and because
-    # "no recorder at all" is what a deployment with telemetry off looks like.
-    recorders: list[UsageRecorderPort] = []
+    # `platform.model_usage_ledger` is gone (migration aefe7c1f5d9b): nothing
+    # here invoices anybody, and its readers — a per-tenant daily spend cap and
+    # an admin dashboard — went with it. `tenant_daily_spend_guard` below is
+    # not that table back: no admin route, no dashboard, one row per
+    # tenant-per-day rather than one per call, read by nothing but the
+    # runner's own gate (Ops hardening Phase 3). The composite stays because a
+    # recorder that raises must not take the run down, and because "no
+    # recorder at all" is what a deployment with telemetry off looks like.
+    recorders: list[UsageRecorderPort] = [
+        SqlSpendGuardRecorder(session_factory=session_factory, clock=clock)
+    ]
     if not isinstance(telemetry, NullTelemetry):
         recorders.append(TelemetryUsageRecorder(telemetry))
     usage_recorder: UsageRecorderPort = CompositeUsageRecorder(recorders)
@@ -222,6 +228,7 @@ def build_runtime(
         release_manifest_ref=release_manifest_ref(),
         telemetry=telemetry,
         usage_meter=usage_meter,
+        spend_store=SqlSpendGuardStore(session_factory=session_factory),
     )
     approval_flow = ApproveAndResumeService(
         uow_factory=uow_factory,

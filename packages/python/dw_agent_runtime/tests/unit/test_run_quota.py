@@ -15,6 +15,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
@@ -60,6 +61,9 @@ class _FakePlan:
 
     def runs_per_day(self, plan_id: str) -> int | None:
         return self.limit
+
+    def spend_usd_per_day(self, plan_id: str) -> Decimal | None:
+        return None
 
 
 @dataclass(frozen=True)
