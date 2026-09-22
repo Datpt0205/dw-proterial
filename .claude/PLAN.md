@@ -7,19 +7,30 @@ true — a stale plan is worse than none, because it is believed.
 Here rather than `docs/`: this repository deliberately ships no documentation
 directory, and this is tooling state, not a product document.
 
-## Now — the platform is waiting for a bounded context
+## Now — ops hardening before the first bounded context
 
-Every platform milestone that can be finished without one is finished. What is
-left is not a gap in the platform: `build_agent` and `MemoryService.propose` have
-no production caller because a bounded context is what calls them, and this repo
+A platform status review (2026-09-22) found six gaps an enterprise buyer would
+ask about. Đạt chose to close five of them first — backup/restore, retention
+enforcement, a spend guard, tenant offboarding/export, minimal alerting —
+before picking the first bounded context. Five phases, dependency-ordered
+(backup/restore gates retention enforcement). **Done and verified: Phase 0**
+(this file's own stale retention paragraph) **and Phase 1** (backup off-box
+copy + a restore drill that actually ran against live infra, not just
+written — `test_restore_drill.py`). **Open: Phases 2–5** — flip
+`audit.enforced`, a spend-guard mechanism (needs Đạt's dollar thresholds,
+not decided), tenant offboarding/export, minimal alerting. Full phase detail
+in "Ops hardening" below.
+
+Once ops hardening lands: `build_agent` and `MemoryService.propose` still have no
+production caller because a bounded context is what calls them, and this repo
 deliberately ships none. Adding one here to make the wiring look complete would
 break the boundary the whole repo is built on.
 
-So the next real step is a decision, not a task: **pick one business context**
-(sales chat, research, lead scoring) and plug it in at the seams — a package
-under `packages/python/`, its graphs registered on the runtime seam, its worker
-YAML, its tool specs, its eval dataset. `CLAUDE.md` lists the seven plug-in
-points.
+The next-after-that step is still a decision, not a task: **pick one business
+context** (sales chat, research, lead scoring) and plug it in at the seams — a
+package under `packages/python/`, its graphs registered on the runtime seam,
+its worker YAML, its tool specs, its eval dataset. `CLAUDE.md` lists the seven
+plug-in points.
 
 Only then do the numbers this plan leaves blank become measurable: how many live
 memories one account really accumulates, whether the GIN index gets chosen with
@@ -27,12 +38,16 @@ real data, what a day of runs actually costs.
 
 **Done and pinned by tests:** Mốc 0, 1a, 1b, 2, 3, 4, 5, 6. Details below.
 
-**Open decision, and it is Đạt's:** how long audit events and the usage ledger
-are kept. `configs/policies/retention@1.2.0.yaml` ships both as `days: null` —
-partitions are created ahead, nothing is ever dropped. DROP PARTITION destroys a
-month instantly with no soft delete in between, and the term is a legal
-obligation per deployment, not a technical default to guess. Until two numbers
-go in that file, audit grows without bound.
+**Decided, not yet enforced — and it is a sequencing gap, not an open number.**
+`configs/policies/retention@1.3.0.yaml` already carries a chosen, cited term for
+audit: `audit.tables.audit_events.days: 1095` (Commercial Law Art. 319's 2-year
+limitation period plus a review-cycle margin; Decree 13/2023 requires deletion
+once purpose ends, since the table carries `actor_id`). What is still `false` is
+`audit.enforced` — DROP PARTITION destroys a month instantly with no soft delete
+in between, and the file says why it waits: flip it only after backup/restore
+has a rehearsal that actually ran, not a procedure written and never tried. The
+old "usage ledger" half of this note no longer applies — `platform.model_usage_ledger`
+was dropped entirely (migration `aefe7c1f5d9b`); it never had a real reader.
 
 A second language (Go) for the application tier was asked about and answered in
 `CLAUDE.md` — allowed, provided it never re-implements tenant isolation, and the
@@ -41,7 +56,7 @@ four conditions there are tested by `test_rls_coverage.py` rather than trusted.
 **Next, in the order they would be asked for in an enterprise review:**
 
 1. ~~Data lifecycle~~ — **done: memory, knowledge, audit and usage.**
-   `configs/policies/retention@1.2.0.yaml` is the versioned answer to "how long
+   `configs/policies/retention@1.3.0.yaml` is the versioned answer to "how long
    do you keep our data", it is in the release manifest with a checksum so the
    question can be asked about the past, and ONE file feeds all three sweeps on
    the worker's hourly lanes. Deletes, never closes a window: `valid_until` says a
@@ -94,19 +109,91 @@ four conditions there are tested by `test_rls_coverage.py` rather than trusted.
       Without relocation that state is terminal — one missed window and the month
       can never be partitioned, so never dropped. Found by running the whole
       integration suite, not this one file.
-    - **Nothing is dropped by default.** Both tables ship `days: null`. The pass
-      creates partitions ahead, which is pure gain, and drops only what somebody
-      wrote a number for — DROP PARTITION destroys a month instantly with no soft
-      delete in between, and the term is a legal obligation per deployment, not a
-      technical default. **Đạt still has to choose those two numbers.**
+    - **Nothing is dropped by default.** The pass creates partitions ahead, which
+      is pure gain, and drops only what `audit.enforced` allows — DROP PARTITION
+      destroys a month instantly with no soft delete in between, and the term is a
+      legal obligation per deployment, not a technical default. **Đạt chose the
+      number** (`audit_events.days: 1095`, `retention@1.3.0.yaml`); what remains is
+      flipping `enforced: true`, gated on a rehearsed restore — see Ops hardening
+      below.
 
     Still open, and named rather than silently included: **superseded documents**
     — how many versions back to keep is a different question from how long a
     deletion takes to become final.
 
-2. Backup and restore: no procedure, never rehearsed.
-3. Tenant offboarding and data export.
-4. SLO, alerting, on-call.
+2. ~~Backup and restore: no procedure, never rehearsed.~~ — **Phase 1 below,
+   done.** A rehearsed restore is what unblocks flipping `audit.enforced`.
+3. Tenant offboarding and data export — **Phase 4 below, open.**
+4. SLO, alerting, on-call — **Phase 5 below, open.**
+
+## Ops hardening (in progress, started 2026-09-22)
+
+Five phases, dependency-ordered — backup/restore must exist and be proven
+before retention enforcement can turn on; the rest are independent of each
+other. Landing as separate commits, tests run after each. Design detail
+(exact files, migrations, port signatures) lived in a plan-mode file for the
+session that wrote it; what follows is the durable summary.
+
+- **Phase 0 — done.** This file's stale retention paragraph (`1.2.0`, "two
+  numbers") corrected to match what `retention@1.3.0.yaml` actually ships.
+- **Phase 1 — done, verified against real infra.**
+  `scripts/backup_postgres.sh`'s off-box copy (to a new `dw-pg-backups` MinIO
+  bucket) now fails the whole run if it can't upload, rather than quietly
+  finishing local-only. New `scripts/restore_postgres.sh`. New
+  `packages/python/dw_platform/tests/integration/test_restore_drill.py` — runs
+  `pg_dump`/`pg_restore` for real via `docker exec` (the same mechanism the
+  scripts use, not a logical row-copy) against the live stack: dumps the
+  migrated test database, restores into a scratch one, confirms a single
+  alembic head and that a seeded row survived. Ran, passes.
+  Scope, stated honestly: this rehearses restore *within the same running
+  cluster* — the dump carries no `CREATE ROLE`, so GRANTs resolve against
+  roles that already exist. A from-scratch disaster-recovery drill (new host,
+  roles provisioned from zero via `scripts/create_agent_role.py` etc.) is a
+  separate, larger exercise, not yet done.
+- **Phase 2 — open, now unblocked.** Flip
+  `configs/policies/retention@1.3.0.yaml`'s `audit.enforced` to `true` (bump
+  to `1.4.0`), regenerate the release manifest
+  (`scripts/release_manifest.py`), re-run `test_partition_maintenance.py`
+  under the flipped flag.
+- **Phase 3 — open.** Spend guard, mechanism only — no admin UI, no route, no
+  usage-stats service (Đạt's call: the old `platform.model_usage_ledger` was
+  removed, commit `142a0db`, for looking like invoicing evidence it never
+  was — nothing here invoices anybody). Design: a narrow new table
+  `platform.tenant_daily_spend_guard` (one row per tenant per day, a running
+  total — not a per-call event log, on purpose), a new
+  `RunAllowancePort.spend_usd_per_day` mirroring the existing `runs_per_day`
+  gate in `dw_agent_runtime/adapters/langgraph_runner.py`. **Ships with the
+  three plans' quotas unset (`None` = unmetered) — this needs Đạt's actual
+  dollar thresholds before it protects anything. Not decided yet**, same
+  deferral shape as `legal_hold`/`enforced: false` elsewhere in this file.
+- **Phase 4 — open, largest, least precedented.** Tenant offboarding + data
+  export. New provisioning-owned table `platform.tenant_offboarding_requests`;
+  operator calls `initiate_offboarding` (audited, existing `ProvisioningService`
+  shape); a new worker lane exports all 17 tenant-scoped tables (enumerated
+  across `knowledge`/`memory`/`platform`) plus Qdrant points and MinIO objects
+  to the existing `dw-exports` bucket, then purges — running under ordinary
+  `app.tenant_id` scoping for exactly that one tenant, NOT the cross-tenant
+  `app.worker_drain` GUC the retention sweep uses, and NOT through
+  `dw_provisioner` (which deliberately cannot touch business data). A second
+  explicit `finalize_offboarding` operator call flips `platform.tenants.status`
+  once the worker reports done — keeps that mutation inside the provisioner
+  boundary as designed. Needs two small port additions found during design:
+  `ObjectStoragePort` has no `list`/`delete`, the Qdrant adapter has no
+  bulk delete-by-tenant.
+- **Phase 5 — open.** Minimal-but-real alerting. Confirmed by survey: zero
+  alerting infra exists today (no Prometheus/Grafana/Alertmanager, no scrape
+  endpoint — OTel export is push-only OTLP; `/api/v1/ready` only probes
+  Postgres, not Redis/Qdrant; outbox/reaper are log-only, no queue-depth
+  metric). Đạt chose the fuller option over a bash+webhook script: add an OTel
+  Collector (bridges existing metrics to Prometheus), Prometheus, Alertmanager
+  to the `observability` compose profile; extend readiness probes; emit real
+  metrics for outbox backlog and reaper activity; a small, concrete set of
+  alert rules (API/worker down, DB pool exhaustion, outbox backlog, error-rate
+  spike) — no Grafana dashboards this round, that is polish not the gap.
+
+Every phase touching tenancy/authorization/data lifecycle (2–4) runs
+`.claude/skills/reviewing-feature-security/` before being called done — this
+repo's standing rule, not re-asked for.
 
 ## Mốc 3 — nhớ được giữa các lượt (chi tiết)
 

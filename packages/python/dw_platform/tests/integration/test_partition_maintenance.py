@@ -489,9 +489,11 @@ async def test_a_decided_term_still_drops_nothing_until_it_is_enforced(
     having no term at all.
 
     `days` says what was decided; `enforced` says whether it may run. They are
-    separate because DROP PARTITION is instant and irreversible, and the restore
-    procedure it leans on has not been rehearsed — recording the decision must
-    not be the same act as executing it.
+    separate because DROP PARTITION is instant and irreversible, and flipping
+    `enforced` must be its own deliberate act, gated on the restore procedure it
+    leans on actually having run — see test_restore_drill.py, which now proves
+    dump -> restore -> migrate-heads round-trips rather than leaving that as a
+    written-but-untried comment.
 
     Partitions are still created, because creating them is what keeps next
     month's rows out of the default and carries no risk at all.

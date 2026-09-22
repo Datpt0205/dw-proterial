@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# Nightly Postgres backup for the sales_dw box.
+# Nightly Postgres backup — local dump plus an off-box copy to the MinIO this
+# stack already runs.
 #
 # Why this exists (C2): the database lived on a single Docker volume with NO
 # backup — a bad migration, an accidental `down -v`, or disk loss meant total,
 # unrecoverable loss of every tenant's CRM data. This gives a daily recovery
-# point. It is the FIRST line, not the last: a dump on the same box does not
-# survive the box itself, so DEST_REMOTE below (an off-box copy) is the part to
-# wire once a destination exists.
+# point. A dump on the same box does not survive the box itself, so the MinIO
+# copy below is not optional — it is what makes this a backup rather than a
+# second copy of the same failure.
 #
-# Restore:  gunzip -c dw_YYYYmmdd_HHMMSS.dump.gz | \
-#             docker exec -i dw-postgres-1 pg_restore -U dw_admin -d dw --clean --if-exists
+# Restore: scripts/restore_postgres.sh (same directory) — it pulls the dump
+# back from MinIO (or takes a local path) and runs the pg_restore for you.
+# The mechanism is rehearsed on every CI push by
+# packages/python/dw_platform/tests/integration/test_restore_drill.py, which
+# proves dump -> restore -> migrate-heads round-trips; that is not the same
+# claim as a human having run restore_postgres.sh against this specific host.
 #
 # Install (on the server, as the ubuntu user):
 #   crontab -e   →   15 2 * * *  /home/ubuntu/base_agent/scripts/backup_postgres.sh >> /home/ubuntu/pg_backups/backup.log 2>&1
@@ -20,6 +25,9 @@ DB="${PG_DB:-dw}"
 PG_USER="${PG_USER:-dw_admin}"
 DEST="${BACKUP_DIR:-/home/ubuntu/pg_backups}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
+MC_ALIAS="${MC_ALIAS:-dw}"
+MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://localhost:9000}"
+S3_BUCKET_PG_BACKUPS="${S3_BUCKET_PG_BACKUPS:-dw-pg-backups}"
 
 mkdir -p "$DEST"
 stamp="$(date +%Y%m%d_%H%M%S)"
@@ -42,8 +50,17 @@ fi
 # run of failures never deletes the last good copy.
 find "$DEST" -name "${DB}_*.dump.gz" -mtime "+${KEEP_DAYS}" -print -delete
 
-# Off-box copy — the part that survives losing the box. Left as an explicit hole
-# rather than a silent absence: point DEST_REMOTE at MinIO/S3/another host and
-# uncomment. Example (MinIO via mc):
-#   mc cp "$out" "${DEST_REMOTE:?set DEST_REMOTE}"
+# Off-box copy — the part that survives losing the box. Required, not best-effort:
+# a local-only dump is exactly the single-volume risk this script exists to close,
+# so a failed upload fails the whole run (cron mail/log picks it up) rather than
+# silently leaving last night as the newest off-box copy.
+if [ -z "${MINIO_ROOT_USER:-}" ] || [ -z "${MINIO_ROOT_PASSWORD:-}" ]; then
+  echo "[$(date -Is)] MINIO_ROOT_USER/MINIO_ROOT_PASSWORD not set; refusing to" \
+    "finish with a local-only backup" >&2
+  exit 1
+fi
+mc alias set "$MC_ALIAS" "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
+mc cp "$out" "$MC_ALIAS/$S3_BUCKET_PG_BACKUPS/"
+echo "[$(date -Is)] off-box copy ok: $MC_ALIAS/$S3_BUCKET_PG_BACKUPS/$(basename "$out")"
+
 echo "[$(date -Is)] done"
