@@ -30,7 +30,7 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from dw_kernel.errors import NotFoundError
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ports import SystemClock, Uuid4Generator
 from dw_platform.adapters.persistence.identity_provisioning import SqlIdentityBootstrap
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
@@ -50,6 +50,8 @@ _PLATFORM_GRANTS = (
     "GRANT SELECT, INSERT, UPDATE, DELETE ON platform.entitlements TO dw_provisioner",
     "GRANT SELECT, INSERT, DELETE ON platform.platform_operators TO dw_provisioner",
     "GRANT SELECT, INSERT ON platform.provisioning_audit TO dw_provisioner",
+    # Migration 5d9d89ffc716.
+    "GRANT SELECT, INSERT, UPDATE ON platform.tenant_offboarding_requests TO dw_provisioner",
     "GRANT SELECT ON platform.roles TO dw_provisioner",
     "GRANT SELECT ON platform.users TO dw_provisioner",
     "GRANT SELECT ON platform.plans TO dw_provisioner",
@@ -213,6 +215,107 @@ async def test_locking_a_tenant_denies_its_members(
         assert denied is None  # the same member is frozen out once locked
     finally:
         await app_engine.dispose()
+
+
+async def test_initiate_offboarding_flags_the_tenant_and_files_a_request(
+    provisioner_engine: AsyncEngine,
+) -> None:
+    service = _service(provisioner_engine)
+    created = await service.create_tenant(_ctx(), slug="offco", name="Off Co", plan_id="basic")
+
+    status = await service.initiate_offboarding(_ctx(), tenant_id=created.tenant_id)
+
+    assert status.tenant_id == created.tenant_id
+    assert status.status == "requested"
+    tenants = await service.list_tenants(_ctx())
+    match = [t for t in tenants if t.id == created.tenant_id]
+    assert match and match[0].status == "offboarding"
+
+
+async def test_a_second_initiate_while_one_is_in_flight_is_a_conflict(
+    provisioner_engine: AsyncEngine,
+) -> None:
+    service = _service(provisioner_engine)
+    created = await service.create_tenant(_ctx(), slug="offco2", name="Off Co 2", plan_id="basic")
+    await service.initiate_offboarding(_ctx(), tenant_id=created.tenant_id)
+
+    with pytest.raises(ConflictError):
+        await service.initiate_offboarding(_ctx(), tenant_id=created.tenant_id)
+
+    # The first request's "offboarding" status must survive the conflict —
+    # the bug a rollback-to-active on ConflictError would have reintroduced.
+    tenants = await service.list_tenants(_ctx())
+    match = [t for t in tenants if t.id == created.tenant_id]
+    assert match and match[0].status == "offboarding"
+
+
+async def test_initiate_offboarding_for_an_unknown_tenant_is_refused(
+    provisioner_engine: AsyncEngine,
+) -> None:
+    service = _service(provisioner_engine)
+    with pytest.raises(NotFoundError):
+        await service.initiate_offboarding(_ctx(), tenant_id=uuid.uuid4())
+
+
+async def test_get_offboarding_status_with_no_request_is_refused(
+    provisioner_engine: AsyncEngine,
+) -> None:
+    service = _service(provisioner_engine)
+    created = await service.create_tenant(_ctx(), slug="offco3", name="Off Co 3", plan_id="basic")
+
+    with pytest.raises(NotFoundError):
+        await service.get_offboarding_status(_ctx(), tenant_id=created.tenant_id)
+
+
+async def test_finalize_before_the_worker_completes_it_is_refused(
+    provisioner_engine: AsyncEngine,
+) -> None:
+    service = _service(provisioner_engine)
+    created = await service.create_tenant(_ctx(), slug="offco4", name="Off Co 4", plan_id="basic")
+    await service.initiate_offboarding(_ctx(), tenant_id=created.tenant_id)
+
+    with pytest.raises(DomainError):
+        await service.finalize_offboarding(_ctx(), tenant_id=created.tenant_id)
+
+    # Still "offboarding", not "offboarded" — finalize must not have moved it.
+    tenants = await service.list_tenants(_ctx())
+    match = [t for t in tenants if t.id == created.tenant_id]
+    assert match and match[0].status == "offboarding"
+
+
+async def test_finalize_after_the_worker_reports_completed_offboards_the_tenant(
+    provisioner_engine: AsyncEngine, db_urls: DatabaseUrls
+) -> None:
+    """The worker lane reports "completed" by updating its own row as dw_app,
+    scoped to the target tenant — simulated here directly against the table
+    rather than through the (not yet built) worker lane itself."""
+    service = _service(provisioner_engine)
+    created = await service.create_tenant(_ctx(), slug="offco5", name="Off Co 5", plan_id="basic")
+    await service.initiate_offboarding(_ctx(), tenant_id=created.tenant_id)
+
+    app_engine = create_async_engine(db_urls.app, poolclass=NullPool)
+    try:
+        async with app_engine.connect() as conn, conn.begin():
+            await conn.execute(
+                sa.text("SELECT set_config('app.tenant_id', :t, true)"),
+                {"t": str(created.tenant_id)},
+            )
+            await conn.execute(
+                sa.text(
+                    "UPDATE platform.tenant_offboarding_requests"
+                    " SET status = 'completed', export_key = :key"
+                    " WHERE tenant_id = :t"
+                ),
+                {"t": str(created.tenant_id), "key": f"{created.tenant_id}/exports/x.zip"},
+            )
+    finally:
+        await app_engine.dispose()
+
+    await service.finalize_offboarding(_ctx(), tenant_id=created.tenant_id)
+
+    tenants = await service.list_tenants(_ctx())
+    match = [t for t in tenants if t.id == created.tenant_id]
+    assert match and match[0].status == "offboarded"
 
 
 async def test_provisioner_cannot_read_business_data(provisioner_engine: AsyncEngine) -> None:

@@ -84,6 +84,8 @@ class _RecordingIndex:
 
     async def tombstone_document(self, document_id: uuid.UUID) -> None: ...
 
+    async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None: ...
+
     async def search(
         self,
         vector: Sequence[float],

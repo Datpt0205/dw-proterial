@@ -202,6 +202,28 @@ class QdrantVectorIndexAdapter:
                 "failed to delete document vectors", details={"error": type(exc).__name__}
             ) from exc
 
+    def _tenant_filter(self, tenant_id: uuid.UUID) -> models.Filter:
+        return models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id",
+                    match=models.MatchValue(value=str(tenant_id)),
+                )
+            ]
+        )
+
+    async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None:
+        try:
+            await self.client.delete(
+                self.collection,
+                points_selector=models.FilterSelector(filter=self._tenant_filter(tenant_id)),
+                wait=True,
+            )
+        except Exception as exc:
+            raise InfrastructureError(
+                "failed to delete tenant vectors", details={"error": type(exc).__name__}
+            ) from exc
+
     async def tombstone_document(self, document_id: uuid.UUID) -> None:
         try:
             await self.client.set_payload(

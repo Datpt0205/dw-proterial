@@ -96,6 +96,8 @@ class CapturingIndex:
 
     async def tombstone_document(self, document_id: uuid.UUID) -> None: ...
 
+    async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None: ...
+
     async def search(self, vector, trusted_filter, top_k, extra_filters=()):
         self.captured.append(trusted_filter)
         self.captured_filters.append(tuple(extra_filters))
@@ -119,6 +121,12 @@ class FakeStorage:
 
     async def get_object(self, key: str) -> bytes:
         return b""
+
+    async def list_objects(self, prefix: str) -> list[str]:
+        return []
+
+    async def delete_object(self, key: str) -> None:
+        return None
 
 
 def make_gateway(index: CapturingIndex) -> KnowledgeGateway:

@@ -22,6 +22,7 @@ import asyncio
 import contextlib
 import logging
 import signal
+from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -34,18 +35,24 @@ from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
+from dw_platform.adapters.persistence.offboarding import SqlTenantOffboarding
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
 from dw_platform.retention_policy import load_retention_policy
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
+    build_export_bucket,
+    build_feedback_bucket,
     build_ingest_components,
+    build_object_storage,
     build_vector_index,
 )
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import MemoryIndexPort, memory_handlers
+from dw_worker.consumers.offboarding import INTERVAL_SECONDS as OFFBOARDING_INTERVAL_SECONDS
+from dw_worker.consumers.offboarding import TenantOffboardingLane, build_offboarding_consumer
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
@@ -117,6 +124,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # constant, not a legal term, so it is not on retention_policy's cadence
     # or file; see SqlSpendGuardRetention's docstring.
     spend_guard_retention: RetentionPrunePort | None = None
+    # Ops hardening Phase 4. Needs object storage too, not just a database -
+    # export/purge touch three buckets and the vector index alongside Postgres.
+    offboarding_consumer: Callable[[], Awaitable[None]] | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -172,6 +182,17 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             vector_index=build_vector_index(settings),
         )
         spend_guard_retention = SqlSpendGuardRetention(session_factory=sessions, clock=clock)
+        if settings.s3_endpoint_url:
+            offboarding_consumer = build_offboarding_consumer(
+                TenantOffboardingLane(
+                    store=SqlTenantOffboarding(session_factory=sessions),
+                    artifacts=build_object_storage(settings),
+                    exports=build_export_bucket(settings),
+                    attachments=build_feedback_bucket(settings),
+                    vector_index=build_vector_index(settings),
+                    clock=clock,
+                )
+            )
         registry.register(
             "outbox",
             build_outbox_consumer(
@@ -228,6 +249,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             "spend_guard_retention",
             build_retention_consumer(spend_guard_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if offboarding_consumer is not None:
+        registry.register(
+            "offboarding", offboarding_consumer, interval_seconds=OFFBOARDING_INTERVAL_SECONDS
         )
     return registry
 

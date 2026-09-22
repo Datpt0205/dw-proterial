@@ -189,6 +189,12 @@ class FeedbackAttachmentStoragePort(Protocol):
 
     async def delete(self, key: str) -> None: ...
 
+    async def list(self, prefix: str) -> list[str]:
+        """Every key under `prefix`. Tenant offboarding's export/purge is the
+        only caller that needs the whole set rather than one key it already
+        knows."""
+        ...
+
 
 class OutboxRepositoryPort(Protocol):
     """Transactional outbox written in the same transaction as aggregates."""

@@ -131,3 +131,18 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "partitions",
         "spend_guard_retention",
     }
+
+
+def test_the_offboarding_lane_needs_object_storage_too_not_just_a_database() -> None:
+    """Unlike every lane above, a database alone is not enough for this one:
+    export/purge touch three buckets and the vector index alongside Postgres,
+    so it stays unregistered — not half-wired against infra that is not
+    there — until `s3_endpoint_url` is set too."""
+    db_only = bare_settings(database_url="postgresql+asyncpg://dw:dw@localhost/dw")
+    assert "offboarding" not in build_registry(db_only).all()
+
+    db_and_s3 = bare_settings(
+        database_url="postgresql+asyncpg://dw:dw@localhost/dw",
+        s3_endpoint_url="http://localhost:9000",
+    )
+    assert "offboarding" in build_registry(db_and_s3).all()

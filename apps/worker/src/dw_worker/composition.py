@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -33,6 +34,9 @@ from dw_knowledge.ingest_jobs import IngestJobStore
 from dw_knowledge.ports import DocumentParserPort, EmbeddingPort, ObjectStoragePort, VectorIndexPort
 from dw_worker.settings import WorkerSettings
 
+if TYPE_CHECKING:
+    from minio import Minio
+
 # The image sets DW_REPO_ROOT=/app; outside a container the checkout root is
 # four levels up from this file.
 REPO_ROOT = Path(os.environ.get("DW_REPO_ROOT", str(Path(__file__).resolve().parents[4])))
@@ -48,21 +52,48 @@ class IngestComponents:
     object_storage: ObjectStoragePort
 
 
-def build_object_storage(settings: WorkerSettings) -> ObjectStoragePort:
-    """Public: a context's own lane may stage artifacts in the same bucket."""
+def _build_minio_client(settings: WorkerSettings) -> Minio:
     from minio import Minio
-
-    from dw_knowledge.adapters.minio_storage import MinioObjectStorageAdapter
 
     assert settings.s3_endpoint_url is not None
     endpoint = settings.s3_endpoint_url.replace("http://", "").replace("https://", "")
-    client = Minio(
+    return Minio(
         endpoint,
         access_key=settings.s3_access_key or "",
         secret_key=settings.s3_secret_key or "",
         secure=settings.s3_endpoint_url.startswith("https://"),
     )
-    return MinioObjectStorageAdapter(client=client, bucket=settings.s3_bucket)
+
+
+def build_object_storage(settings: WorkerSettings) -> ObjectStoragePort:
+    """Public: a context's own lane may stage artifacts in the same bucket."""
+    from dw_knowledge.adapters.minio_storage import MinioObjectStorageAdapter
+
+    return MinioObjectStorageAdapter(
+        client=_build_minio_client(settings), bucket=settings.s3_bucket
+    )
+
+
+def build_export_bucket(settings: WorkerSettings) -> ObjectStoragePort:
+    """Tenant offboarding's export destination — the `dw-exports` bucket
+    already used elsewhere, not a new one made for this feature."""
+    from dw_knowledge.adapters.minio_storage import MinioObjectStorageAdapter
+
+    return MinioObjectStorageAdapter(
+        client=_build_minio_client(settings), bucket=settings.s3_bucket_exports
+    )
+
+
+def build_feedback_bucket(settings: WorkerSettings) -> ObjectStoragePort:
+    """The same bucket `dw_api`'s feedback attachments live in — offboarding
+    reads and deletes from it, `dw_knowledge`'s generic adapter is reused
+    rather than depending on `dw_api`'s own (see
+    `dw_worker.consumers.offboarding.BucketPort`'s docstring)."""
+    from dw_knowledge.adapters.minio_storage import MinioObjectStorageAdapter
+
+    return MinioObjectStorageAdapter(
+        client=_build_minio_client(settings), bucket=settings.feedback_bucket
+    )
 
 
 def build_embeddings(settings: WorkerSettings) -> EmbeddingPort:

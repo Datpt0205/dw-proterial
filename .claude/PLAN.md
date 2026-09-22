@@ -15,12 +15,13 @@ enforcement, a spend guard, tenant offboarding/export, minimal alerting —
 before picking the first bounded context. Five phases, dependency-ordered
 (backup/restore gates retention enforcement). **Done and verified: Phase 0**
 (this file's own stale retention paragraph), **Phase 1** (backup off-box copy
-+ a restore drill that actually ran against live infra, not just written —
-`test_restore_drill.py`) **and Phase 2** (`retention@1.4.0.yaml`:
-`audit.enforced` is now `true` — DROP PARTITION on audit can actually run).
-**Open: Phases 3–5** — a spend-guard mechanism (needs Đạt's dollar
-thresholds, not decided), tenant offboarding/export, minimal alerting. Full
-phase detail in "Ops hardening" below.
++ a restore drill that actually ran against live infra), **Phase 2**
+(`retention@1.4.0.yaml`: `audit.enforced` is now `true`), **Phase 3** (spend
+guard, mechanism only — **quotas still unset, needs Đạt's dollar thresholds**)
+**and Phase 4** (tenant offboarding + export, end to end — **the export
+bundle itself has no retention term yet, same open shape as audit's before
+Phase 2**). **Open: Phase 5** — minimal alerting. Full phase detail in "Ops
+hardening" below.
 
 Once ops hardening lands: `build_agent` and `MemoryService.propose` still have no
 production caller because a bounded context is what calls them, and this repo
@@ -185,20 +186,49 @@ session that wrote it; what follows is the durable summary.
   a raw query with no WHERE at all, and confirmed *that one* goes red under
   the same mutation. Failure-modes.md's "a test that cannot fail" (found 4×)
   — this is the shape, caught before merge instead of after.
-- **Phase 4 — open, largest, least precedented.** Tenant offboarding + data
-  export. New provisioning-owned table `platform.tenant_offboarding_requests`;
-  operator calls `initiate_offboarding` (audited, existing `ProvisioningService`
-  shape); a new worker lane exports all 17 tenant-scoped tables (enumerated
-  across `knowledge`/`memory`/`platform`) plus Qdrant points and MinIO objects
-  to the existing `dw-exports` bucket, then purges — running under ordinary
-  `app.tenant_id` scoping for exactly that one tenant, NOT the cross-tenant
-  `app.worker_drain` GUC the retention sweep uses, and NOT through
-  `dw_provisioner` (which deliberately cannot touch business data). A second
-  explicit `finalize_offboarding` operator call flips `platform.tenants.status`
-  once the worker reports done — keeps that mutation inside the provisioner
-  boundary as designed. Needs two small port additions found during design:
-  `ObjectStoragePort` has no `list`/`delete`, the Qdrant adapter has no
-  bulk delete-by-tenant.
+- **Phase 4 — done, verified end to end, mutation-checked.** Tenant
+  offboarding + data export. Landed as three pieces:
+  - **Postgres** (`SqlTenantOffboarding`, `dw_platform`): `export_rows`/
+    `purge_rows` are catalog-discovered, not a hand-maintained table list —
+    `pg_policies` filtered to `tenant_isolation_%`, the same query
+    `test_migration_and_rls.py` already used to prove RLS coverage. Real
+    count found by asking the catalog, not assumed: 23 tenant-scoped tables
+    today, not the 17 first estimated. Two catalog surprises the tests now
+    pin: `platform.tenants` carries a `tenant_isolation_%` policy but no
+    `tenant_id` column (excluded by checking the column exists, not a
+    special case); `platform.audit_events` is exportable but not purgeable
+    (`dw_app` has no DELETE there — append-only, governed by
+    `retention@1.4.0.yaml`, not by offboarding). Purge order for the one
+    real FK chain (`memory.items → knowledge.evidence →
+    knowledge.{chunks,documents} → platform.worker_runs`) is hand-ordered
+    from the actual constraint graph, not guessed; everything else purges in
+    any order, checked to have no FK between them. `claim_requested` runs
+    under `app.worker_drain` for exactly one query (nothing else tells the
+    worker which tenant has work waiting); a stale claim (`updated_at` >30
+    minutes old at `'exporting'`/`'purging'`) is reclaimed rather than stuck
+    forever, safe because every step is naturally idempotent.
+  - **Provisioning** (`dw_platform.application.provisioning`):
+    `initiate_offboarding`/`get_offboarding_status`/`finalize_offboarding` +
+    3 routes under `RequireProvisioningContext`. Real bug caught before it
+    shipped: the request must be filed *before* the tenant status flips, or
+    a `ConflictError` rollback on a second concurrent `initiate` clobbers a
+    still-in-flight first request's `"offboarding"` status — regression-
+    tested.
+  - **Worker lane** (`dw_worker.consumers.offboarding`): claims, exports
+    (Postgres rows + knowledge artifacts + feedback attachments, zipped),
+    uploads to `dw-exports`, purges (rows + both buckets + Qdrant), reports
+    back. Real bug caught before it shipped: feedback attachment keys are
+    `feedback/{tenant_id}/...`, not `{tenant_id}/...` like knowledge
+    artifacts — a wrong prefix would have silently exported and purged
+    nothing from that bucket. One tenant failing does not stop another
+    claimed the same tick (mutation-checked: removing the try/except turns
+    the isolation test red).
+  **Known gap, named rather than silently shipped:** the export bundle in
+  `dw-exports` has nothing that ever deletes it. A tenant's full data
+  (PII included) sits there indefinitely once offboarding completes — the
+  same shape of gap `retention@1.4.0.yaml` closed for audit/memory/knowledge,
+  not yet closed here. Needs a retention term from Đạt, the same way audit's
+  did; not guessed into a config.
 - **Phase 5 — open.** Minimal-but-real alerting. Confirmed by survey: zero
   alerting infra exists today (no Prometheus/Grafana/Alertmanager, no scrape
   endpoint — OTel export is push-only OTLP; `/api/v1/ready` only probes

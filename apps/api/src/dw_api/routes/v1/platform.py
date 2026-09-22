@@ -18,7 +18,7 @@ from dw_api.bootstrap import ApiContainer
 from dw_api.dependencies.auth import RequireProvisioningContext
 from dw_api.dependencies.services import RequireContainer
 from dw_kernel.errors import InfrastructureError
-from dw_platform.application.provisioning import ProvisioningService
+from dw_platform.application.provisioning import OffboardingStatus, ProvisioningService
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
@@ -72,6 +72,17 @@ class OperatorView(BaseModel):
 class AddOperatorRequest(BaseModel):
     email: str
     note: str | None = None
+
+
+class OffboardingStatusView(BaseModel):
+    request_id: UUID
+    tenant_id: UUID
+    status: str
+    requested_by: UUID
+    requested_at: datetime
+    export_key: str | None
+    error: str | None
+    updated_at: datetime
 
 
 def _service(container: ApiContainer) -> ProvisioningService:
@@ -191,6 +202,56 @@ async def unlock_tenant(
     container: RequireContainer,
 ) -> None:
     await _service(container).set_tenant_status(context, tenant_id=tenant_id, status="active")
+
+
+def _offboarding_view(status: OffboardingStatus) -> OffboardingStatusView:
+    return OffboardingStatusView(
+        request_id=status.request_id,
+        tenant_id=status.tenant_id,
+        status=status.status,
+        requested_by=status.requested_by,
+        requested_at=status.requested_at,
+        export_key=status.export_key,
+        error=status.error,
+        updated_at=status.updated_at,
+    )
+
+
+@router.post("/tenants/{tenant_id}/offboard", response_model=OffboardingStatusView, status_code=202)
+async def initiate_offboarding(
+    tenant_id: UUID,
+    context: RequireProvisioningContext,
+    container: RequireContainer,
+) -> OffboardingStatusView:
+    """Files the request and flips the tenant to `offboarding` immediately.
+
+    202, not 200 or 204: the export/purge itself runs later, on the worker's
+    offboarding lane — this call only starts it.
+    """
+    status = await _service(container).initiate_offboarding(context, tenant_id=tenant_id)
+    return _offboarding_view(status)
+
+
+@router.get("/tenants/{tenant_id}/offboard", response_model=OffboardingStatusView)
+async def get_offboarding_status(
+    tenant_id: UUID,
+    context: RequireProvisioningContext,
+    container: RequireContainer,
+) -> OffboardingStatusView:
+    status = await _service(container).get_offboarding_status(context, tenant_id=tenant_id)
+    return _offboarding_view(status)
+
+
+@router.post("/tenants/{tenant_id}/offboard/finalize", status_code=204)
+async def finalize_offboarding(
+    tenant_id: UUID,
+    context: RequireProvisioningContext,
+    container: RequireContainer,
+) -> None:
+    """The operator's explicit second step, once GET .../offboard reports
+    `completed` — see ProvisioningService.finalize_offboarding's docstring
+    for why this is not automatic."""
+    await _service(container).finalize_offboarding(context, tenant_id=tenant_id)
 
 
 @router.post("/tenants/{tenant_id}/org-admins", response_model=UserRefView, status_code=201)

@@ -67,3 +67,14 @@ class MinioAttachmentStorage:
             raise InfrastructureError(
                 "attachment storage delete failed", details={"key": key}
             ) from exc
+
+    def _list_sync(self, prefix: str) -> list[str]:
+        return [obj.object_name for obj in self.client.list_objects(self.bucket, prefix=prefix)]
+
+    async def list(self, prefix: str) -> list[str]:
+        try:
+            return await asyncio.to_thread(self._list_sync, prefix)
+        except MinioException as exc:
+            raise InfrastructureError(
+                "attachment storage list failed", details={"prefix": prefix}
+            ) from exc

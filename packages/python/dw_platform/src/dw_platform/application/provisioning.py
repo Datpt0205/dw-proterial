@@ -62,6 +62,26 @@ class UserRef:
 
 
 @dataclass(frozen=True, slots=True)
+class OffboardingStatus:
+    """The state of a tenant's export + purge, as the worker lane reports it.
+
+    `status` mirrors `ck_tenant_offboarding_requests_status`:
+    requested -> exporting -> purging -> completed, or -> failed from any of
+    the first three. `export_key` is set once the export bundle is uploaded;
+    `error` is set only on `failed`.
+    """
+
+    request_id: UUID
+    tenant_id: UUID
+    status: str
+    requested_by: UUID
+    requested_at: datetime
+    export_key: str | None
+    error: str | None
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class NewTenant:
     tenant_id: UUID
     workspace_id: UUID
@@ -96,6 +116,18 @@ class ProvisioningRepositoryPort(Protocol):
 
     async def set_tenant_status(self, tenant_id: UUID, status: str) -> bool:
         """Returns False if no tenant had that id."""
+        ...
+
+    async def create_offboarding_request(
+        self, *, request_id: UUID, tenant_id: UUID, requested_by: UUID
+    ) -> None:
+        """Fails on the DB's own unique-active-request index if one is already
+        in flight for this tenant — the caller surfaces that as a conflict."""
+        ...
+
+    async def get_offboarding_status(self, tenant_id: UUID) -> OffboardingStatus | None:
+        """The tenant's own request, whichever status it's in. `None` if none
+        was ever filed."""
         ...
 
     async def rename_tenant(self, tenant_id: UUID, name: str) -> bool:
@@ -206,6 +238,67 @@ class ProvisioningService:
             raise NotFoundError("unknown tenant", details={"tenant_id": str(tenant_id)})
         await self._audit(
             context, "platform.tenant.status", "tenant", str(tenant_id), {"status": status}
+        )
+
+    async def initiate_offboarding(
+        self, context: ProvisioningContext, *, tenant_id: UUID
+    ) -> OffboardingStatus:
+        """File the request a worker lane will pick up, then set the tenant to
+        `"offboarding"` — through `self.repo.set_tenant_status` directly, not
+        the public `set_tenant_status` above, which refuses anything outside
+        `active`/`locked` on purpose: an operator must not be able to set this
+        status by hand, only by starting this flow.
+
+        The request is filed FIRST, deliberately: `create_offboarding_request`
+        raises `ConflictError` when one is already in flight for this tenant
+        (the DB's own unique-active-request index), and at that point nothing
+        has been touched yet — no status flip to un-do, no risk of clobbering
+        the "offboarding" status a still-in-flight first request already set.
+        """
+        request_id = self.ids.new_uuid()
+        await self.repo.create_offboarding_request(
+            request_id=request_id, tenant_id=tenant_id, requested_by=context.principal_id
+        )
+        changed = await self.repo.set_tenant_status(tenant_id, "offboarding")
+        if not changed:
+            raise NotFoundError("unknown tenant", details={"tenant_id": str(tenant_id)})
+        await self._audit(
+            context, "platform.tenant.offboarding_initiate", "tenant", str(tenant_id), {}
+        )
+        status = await self.repo.get_offboarding_status(tenant_id)
+        assert status is not None, "just inserted"
+        return status
+
+    async def get_offboarding_status(
+        self, context: ProvisioningContext, *, tenant_id: UUID
+    ) -> OffboardingStatus:
+        status = await self.repo.get_offboarding_status(tenant_id)
+        if status is None:
+            raise NotFoundError(
+                "no offboarding request for this tenant", details={"tenant_id": str(tenant_id)}
+            )
+        return status
+
+    async def finalize_offboarding(self, context: ProvisioningContext, *, tenant_id: UUID) -> None:
+        """The operator's explicit second step, once the worker lane reports
+        `completed`. Keeps `platform.tenants` / `provisioning_audit` mutation
+        inside the provisioner boundary as designed — the worker, running as
+        `dw_app` under the target tenant's own context, never writes either
+        directly."""
+        status = await self.repo.get_offboarding_status(tenant_id)
+        if status is None:
+            raise NotFoundError(
+                "no offboarding request for this tenant", details={"tenant_id": str(tenant_id)}
+            )
+        if status.status != "completed":
+            raise DomainError(
+                "export/purge has not completed yet", details={"status": status.status}
+            )
+        changed = await self.repo.set_tenant_status(tenant_id, "offboarded")
+        if not changed:
+            raise NotFoundError("unknown tenant", details={"tenant_id": str(tenant_id)})
+        await self._audit(
+            context, "platform.tenant.offboarding_finalize", "tenant", str(tenant_id), {}
         )
 
     async def rename_tenant(

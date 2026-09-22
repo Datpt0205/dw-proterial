@@ -20,6 +20,7 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.identity_bootstrap import BootstrapView
 from dw_platform.application.provisioning import (
+    OffboardingStatus,
     OperatorRef,
     ProvisioningService,
     TenantSummary,
@@ -104,6 +105,12 @@ class FakeRepo:
     async def record_audit(self, **kw: object) -> None:
         self.audits.append(kw)
 
+    async def create_offboarding_request(self, **kw: object) -> None:
+        self.created.append(kw)
+
+    async def get_offboarding_status(self, tenant_id: uuid.UUID) -> OffboardingStatus | None:
+        return None
+
 
 def make_container(repo: FakeRepo, is_operator: bool) -> ApiContainer:
     async def ok_probe() -> CheckState:
@@ -138,6 +145,35 @@ async def _request(container: ApiContainer, method: str, path: str, **kw: object
 
 async def test_non_operator_is_forbidden() -> None:
     response = await _request(make_container(FakeRepo(), False), "GET", "/api/v1/platform/tenants")
+    assert response.status_code == 403
+
+
+async def test_non_operator_cannot_initiate_offboarding() -> None:
+    """The same gate, on the newest routes — refused at the dependency, never
+    reaching `FakeRepo` (which does not even implement the offboarding methods
+    yet in this fixture, and does not need to: 403 happens before any of
+    them would be called)."""
+    response = await _request(
+        make_container(FakeRepo(), False),
+        "POST",
+        f"/api/v1/platform/tenants/{TARGET}/offboard",
+    )
+    assert response.status_code == 403
+
+
+async def test_non_operator_cannot_read_offboarding_status() -> None:
+    response = await _request(
+        make_container(FakeRepo(), False), "GET", f"/api/v1/platform/tenants/{TARGET}/offboard"
+    )
+    assert response.status_code == 403
+
+
+async def test_non_operator_cannot_finalize_offboarding() -> None:
+    response = await _request(
+        make_container(FakeRepo(), False),
+        "POST",
+        f"/api/v1/platform/tenants/{TARGET}/offboard/finalize",
+    )
     assert response.status_code == 403
 
 

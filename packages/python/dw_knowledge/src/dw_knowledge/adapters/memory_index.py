@@ -48,6 +48,10 @@ class InMemoryVectorIndexAdapter:
     async def tombstone_document(self, document_id: uuid.UUID) -> None:
         self._tombstoned.add(document_id)
 
+    async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None:
+        for key in [k for k, c in self._chunks.items() if c.tenant_id == tenant_id]:
+            del self._chunks[key]
+
     async def search(
         self,
         vector: Sequence[float],

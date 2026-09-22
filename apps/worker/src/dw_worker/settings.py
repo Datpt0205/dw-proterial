@@ -77,6 +77,19 @@ class WorkerSettings(BaseSettings):
         default="dw-artifacts",
         validation_alias=AliasChoices("DW_WORKER_S3_BUCKET", "S3_BUCKET_ARTIFACTS"),
     )
+    # Tenant offboarding's export destination — the bucket already exists
+    # (infra/compose/docker-compose.yml's minio-setup), matched here rather
+    # than a new one made for this feature.
+    s3_bucket_exports: str = Field(
+        default="dw-exports",
+        validation_alias=AliasChoices("DW_WORKER_S3_BUCKET_EXPORTS", "S3_BUCKET_EXPORTS"),
+    )
+    # Same bucket dw_api's feedback attachments live in (dw_api/settings.py's
+    # `feedback_bucket`) — offboarding needs to read and delete a tenant's
+    # attachments from the same place they were written to.
+    feedback_bucket: str = Field(
+        default="feedback", validation_alias=AliasChoices("DW_WORKER_FEEDBACK_BUCKET")
+    )
 
     # Which Qdrant collection this process reads and writes. Named explicitly
     # because the collection's vector width is fixed at creation: moving to a

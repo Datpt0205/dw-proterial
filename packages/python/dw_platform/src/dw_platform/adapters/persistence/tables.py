@@ -312,6 +312,29 @@ provisioning_audit = sa.Table(
     ),
 )
 
+# The handoff between the provisioner (files the request) and the worker's
+# offboarding lane (exports + purges as dw_app, reports back). Migration
+# 5d9d89ffc716.
+tenant_offboarding_requests = sa.Table(
+    "tenant_offboarding_requests",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+    sa.Column("status", sa.Text, nullable=False, server_default="requested"),
+    sa.Column("requested_by", UUID(as_uuid=True), nullable=False),
+    sa.Column(
+        "requested_at",
+        sa.TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=sa.text("now()"),
+    ),
+    sa.Column("export_key", sa.Text, nullable=True),
+    sa.Column("error", sa.Text, nullable=True),
+    sa.Column(
+        "updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+)
+
 # Tables whose rows belong to exactly one tenant → RLS enabled + forced.
 TENANT_SCOPED_TABLES = (
     "workspaces",

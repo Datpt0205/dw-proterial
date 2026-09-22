@@ -15,14 +15,24 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_kernel.errors import ConflictError, NotFoundError
 from dw_platform.adapters.persistence import tables
 from dw_platform.application.provisioning import (
+    OffboardingStatus,
     OperatorRef,
     TenantSummary,
     UserRef,
 )
+
+# Matched by name, like every other constraint-driven error mapping in this
+# package (see admin_console_repo.py, run_store.py) — Postgres embeds the
+# constraint name in the error text, which is more stable to match on than
+# parsing SQLSTATE codes for two constraints that need two different answers.
+_ACTIVE_REQUEST_INDEX = "uq_tenant_offboarding_requests_active"
+_TENANT_FK = "fk_tenant_offboarding_requests_tenant_id_tenants"
 
 
 @dataclass(frozen=True)
@@ -158,6 +168,53 @@ class SqlProvisioningRepository:
             )
         assert isinstance(result, CursorResult)
         return bool(result.rowcount)
+
+    async def create_offboarding_request(
+        self, *, request_id: UUID, tenant_id: UUID, requested_by: UUID
+    ) -> None:
+        try:
+            async with self.session_factory() as session, session.begin():
+                await session.execute(
+                    sa.insert(tables.tenant_offboarding_requests).values(
+                        id=request_id, tenant_id=tenant_id, requested_by=requested_by
+                    )
+                )
+        except IntegrityError as exc:
+            if _ACTIVE_REQUEST_INDEX in str(exc.orig):
+                raise ConflictError(
+                    "an offboarding request is already in flight for this tenant",
+                    details={"tenant_id": str(tenant_id)},
+                ) from exc
+            if _TENANT_FK in str(exc.orig):
+                raise NotFoundError(
+                    "unknown tenant", details={"tenant_id": str(tenant_id)}
+                ) from exc
+            raise
+
+    async def get_offboarding_status(self, tenant_id: UUID) -> OffboardingStatus | None:
+        # A failed (or, once terminal, a completed) request does not block a
+        # later retry — only the live-request unique index does — so a tenant
+        # can have more than one row here over time. Always the most recent.
+        stmt = (
+            sa.select(tables.tenant_offboarding_requests)
+            .where(tables.tenant_offboarding_requests.c.tenant_id == tenant_id)
+            .order_by(tables.tenant_offboarding_requests.c.requested_at.desc())
+            .limit(1)
+        )
+        async with self.session_factory() as session:
+            row = (await session.execute(stmt)).first()
+        if row is None:
+            return None
+        return OffboardingStatus(
+            request_id=row.id,
+            tenant_id=row.tenant_id,
+            status=row.status,
+            requested_by=row.requested_by,
+            requested_at=row.requested_at,
+            export_key=row.export_key,
+            error=row.error,
+            updated_at=row.updated_at,
+        )
 
     async def rename_tenant(self, tenant_id: UUID, name: str) -> bool:
         async with self.session_factory() as session, session.begin():

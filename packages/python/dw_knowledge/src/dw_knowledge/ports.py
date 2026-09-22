@@ -138,6 +138,12 @@ class VectorIndexPort(Protocol):
         them, but keep them for traceability until a retention purge."""
         ...
 
+    async def delete_by_tenant(self, tenant_id: UUID) -> None:
+        """HARD-remove every point this tenant owns. Tenant offboarding's own
+        purge, not a per-document loop — bounded by one filtered delete rather
+        than one round trip per document."""
+        ...
+
     async def search(
         self,
         vector: Sequence[float],
@@ -168,3 +174,11 @@ class ObjectStoragePort(Protocol):
     async def put_object(self, key: str, data: bytes, content_type: str) -> str: ...
 
     async def get_object(self, key: str) -> bytes: ...
+
+    async def list_objects(self, prefix: str) -> list[str]:
+        """Every key under `prefix`. Tenant offboarding's export/purge is the
+        only caller that needs the whole set rather than one key it already
+        knows."""
+        ...
+
+    async def delete_object(self, key: str) -> None: ...
