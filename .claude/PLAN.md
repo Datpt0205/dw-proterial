@@ -497,33 +497,3 @@ Three layers, in decreasing order of how much they can be skipped:
 `.claude/rules/failure-modes.md` holds the counts these are derived from. The
 honest limit: layer 2 guarantees the questions are raised, not that they were
 answered truthfully, and no layer replaces running the thing.
-
-## Cross-tool review (Codex) — decided in part, not built (2026-09-22)
-
-Đạt proposed a fourth layer: Codex as an independent external reviewer,
-triggered from a `Stop` hook after tests/lint/typecheck pass, capped at a
-fixed number of review rounds so disagreement between Claude and Codex can't
-burn tokens unbounded. Two things decided now; the rest waits.
-
-**Decided:** `AGENTS.md` (repo root) is the shared policy file Codex reads —
-it defers to `CLAUDE.md` and `.claude/rules/failure-modes.md` for facts
-rather than copying them, same "one owner per fact" reasoning as everywhere
-else in this repo. `CLAUDE.md` Work style #8 points to it. **Decided:** when
-the loop is built, the internal-reviewer role folds into
-`.claude/skills/reviewing-feature-security/` rather than new
-`.claude/agents/code-reviewer.md` / `security-auditor.md` files — a
-subagent file nothing calls is exactly failure-modes.md #1 ("declared, and
-nobody reads it"), and this repo already has a skill doing that job, wired
-into `session-start.sh`'s reminder every session.
-
-**Not built, on purpose:** `codex` CLI is not installed on the dev machine
-this was decided on — checked (`command -v codex`), not assumed. Building
-`quality-gate.sh` / a Codex-invoking hook before that exists would be
-exactly the "declared and nobody reads it" shape one layer up. Also
-undecided: how a new `Stop` hook composes with `session-stop.sh`, which
-already owns that slot (PLAN.md-truthfulness gate, has its own
-`stop_hook_active` loop guard and `.claude/no-stop-gate` kill switch) — a
-second Stop hook needs its own round-counter state file (same fingerprint
-pattern `pre-commit-gate.sh` already uses) and an explicit MAX_REVIEW_ROUNDS,
-or a Claude/Codex disagreement loops forever. Pick this up after Codex CLI is
-installed and `codex login` has run.

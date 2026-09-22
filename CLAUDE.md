@@ -253,7 +253,3 @@ security/dependency scan, eval smoke, container build and a compose smoke test.
    mock adapter and a documented port.
 6. Keep diffs focused; update this file when the architecture changes.
 7. Record a decision rather than deviating silently.
-8. `AGENTS.md` at the repo root is the same engineering policy for tooling
-   that isn't Claude Code (Codex and similar). It defers to this file for
-   architecture and to `.claude/rules/failure-modes.md` for documented
-   failure modes rather than restating them — keep facts in one file.
