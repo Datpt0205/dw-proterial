@@ -687,7 +687,7 @@ services:
   # (`docker compose --profile full --profile observability up`), since
   # what's scraped — api, worker — lives there.
   postgres-exporter:
-    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.17.1
     profiles: ["observability"]
     environment:
       # dw_app, not a new role: it holds no BYPASSRLS, and the catalog views
@@ -720,7 +720,7 @@ services:
     restart: "no"
 
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.28.1
     profiles: ["observability"]
     volumes:
       - alertmanager-config:/etc/alertmanager

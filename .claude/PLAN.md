@@ -333,6 +333,39 @@ session that wrote it; what follows is the durable summary.
   Phase 3's unset spend quotas. No Grafana dashboards — polish, not the gap
   this phase closed.
 
+  **Follow-up, 2026-09-22: the three new images, actually scanned.** The
+  `reviewing-feature-security` trivy reminder reads narrowly as "the image
+  this change produces" — none of Phase 5's four new images are built by
+  this repo, so the first pass scanned nothing. Ran it properly, and the
+  first read of the results (reported as "a few CVEs") was itself wrong —
+  a `tail`-truncated table hid most of the table's rows. The real,
+  deduplicated count with `--severity HIGH,CRITICAL --ignore-unfixed`:
+  `postgres-exporter:v0.15.0` 45 (2 CRITICAL), `prometheus:v3.6.0` 44 (2
+  CRITICAL), `alertmanager:v0.27.0` 46 (2 CRITICAL), `alpine:3.20` (the
+  `alertmanager-config` init image) 0. Overwhelmingly Go stdlib /
+  `golang.org/x/*` transitive DoS-class bugs baked into the binary
+  regardless of whether the vulnerable function is ever called, plus one
+  shared CRITICAL on all three (`CVE-2025-68121`, a `crypto/tls` certificate-
+  validation issue) and, on `prometheus` only, `CVE-2026-33186` (gRPC-Go
+  authz DoS — not reachable here, this deployment uses no remote-write/
+  federation). Real-world exposure is lower than the raw count: all three
+  run on `dw-internal`/`dw-edge` bound to `127.0.0.1`, never the public
+  internet, the same network posture this compose file already gives
+  Qdrant and Valkey.
+
+  Checked whether a newer tag helps rather than assumed it: `prometheus`
+  latest (`v3.7.3`) carries the identical 44/2-CRITICAL — an upstream
+  release-cadence gap this repo bumping its pin cannot close, so it stays on
+  `v3.6.0`. `postgres-exporter` and `alertmanager` newer tags each drop one
+  CRITICAL and several dozen HIGH for free; bumped to `v0.17.1` /
+  `v0.28.1` respectively, each re-verified live (config still parses, the
+  exact metric names `DwPostgresConnectionsNearLimit` reads are still
+  populated, Alertmanager still loads the rendered config and Prometheus
+  still discovers it) before the pin changed — a version bump gets the same
+  "run it, don't trust the changelog" treatment as any other dependency
+  change. The remaining ~39–44 per image are accepted, written down here
+  rather than left silent, per `reviewing-deployment-security` §6.
+
 Every phase touching tenancy/authorization/data lifecycle (2–4) runs
 `.claude/skills/reviewing-feature-security/` before being called done — this
 repo's standing rule, not re-asked for.
