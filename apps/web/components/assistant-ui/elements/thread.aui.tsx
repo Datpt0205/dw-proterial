@@ -84,10 +84,10 @@ export type ThreadComponents = {
   /**
    * Rendered in the viewport footer, directly above the composer.
    *
-   * Local addition. The sales panel keeps an upload control and the status of
-   * the file being read there, and both belong beside the input rather than at
-   * the top of the transcript - a file you just attached is about the message
-   * you are about to send.
+   * Local addition. A narrow side-panel host keeps an upload control and the
+   * status of the file being read there, and both belong beside the input
+   * rather than at the top of the transcript - a file you just attached is
+   * about the message you are about to send.
    */
   ComposerAccessory?: ComponentType | undefined;
   /**
@@ -95,7 +95,7 @@ export type ThreadComponents = {
    * attachment button sits.
    *
    * Local addition, and it replaces `ComposerAddAttachment` rather than
-   * joining it. This product's upload attaches a file to the CRM record being
+   * joining it. A host may attach a file to the business record being
    * viewed, not to the message being typed - a different destination, a
    * different lifecycle - and the runtime has no attachment adapter, so the
    * built-in button had nothing behind it.
@@ -115,10 +115,10 @@ export type ThreadProps = {
    * Where the composer sits before the first message.
    *
    * `"auto"` centres it, which is what a full-page chat wants. `"docked"`
-   * keeps it at the bottom from the start. Local addition, for the sales
-   * panel: it is a column about as wide as a phone, and a greeting floating
-   * in the middle of it with empty space above and below reads as a screen
-   * that failed to load rather than as an invitation.
+   * keeps it at the bottom from the start. Local addition, for a narrow
+   * side-panel host: it is a column about as wide as a phone, and a greeting
+   * floating in the middle of it with empty space above and below reads as a
+   * screen that failed to load rather than as an invitation.
    */
   emptyLayout?: "auto" | "docked" | undefined;
 };

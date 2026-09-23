@@ -48,8 +48,8 @@ async def test_every_queue_gets_its_own_window() -> None:
     fast, slow = FakeQueue(), FakeQueue()
     consume = build_reaper_consumer(
         [
-            ReapTarget("preference match", fast, timedelta(minutes=5)),
-            ReapTarget("portal compile", slow, timedelta(minutes=20)),
+            ReapTarget("fast queue", fast, timedelta(minutes=5)),
+            ReapTarget("slow queue", slow, timedelta(minutes=20)),
         ],
         FakeClock(),
         RecordingTelemetry(),
@@ -67,8 +67,8 @@ async def test_one_broken_queue_does_not_block_the_others() -> None:
     healthy = FakeQueue(reaped=[uuid.uuid4()])
     consume = build_reaper_consumer(
         [
-            ReapTarget("research run", broken, timedelta(minutes=15)),
-            ReapTarget("signal scan", healthy, timedelta(minutes=20)),
+            ReapTarget("broken queue", broken, timedelta(minutes=15)),
+            ReapTarget("healthy queue", healthy, timedelta(minutes=20)),
         ],
         FakeClock(),
         RecordingTelemetry(),
@@ -82,7 +82,7 @@ async def test_one_broken_queue_does_not_block_the_others() -> None:
 async def test_a_sweep_that_finds_nothing_is_not_an_error() -> None:
     quiet = FakeQueue()
     consume = build_reaper_consumer(
-        [ReapTarget("bidder crawl", quiet, timedelta(minutes=5))], FakeClock(), RecordingTelemetry()
+        [ReapTarget("lone queue", quiet, timedelta(minutes=5))], FakeClock(), RecordingTelemetry()
     )
     await consume()
     assert quiet.asked
@@ -95,8 +95,8 @@ async def test_reaped_rows_are_counted_by_queue() -> None:
     telemetry = RecordingTelemetry()
     consume = build_reaper_consumer(
         [
-            ReapTarget("preference match", busy, timedelta(minutes=5)),
-            ReapTarget("portal compile", quiet, timedelta(minutes=20)),
+            ReapTarget("busy queue", busy, timedelta(minutes=5)),
+            ReapTarget("quiet queue", quiet, timedelta(minutes=20)),
         ],
         FakeClock(),
         telemetry,
@@ -105,7 +105,7 @@ async def test_reaped_rows_are_counted_by_queue() -> None:
     await consume()
 
     assert telemetry.metrics == [
-        (DW_REAPER_REAPED_TOTAL, len(reaped_ids), {"queue": "preference match"})
+        (DW_REAPER_REAPED_TOTAL, len(reaped_ids), {"queue": "busy queue"})
     ]
 
 

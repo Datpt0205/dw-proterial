@@ -162,10 +162,10 @@ export function DataTable<T>({
                         // One compact fixed row height for every table and every
                         // cell, whatever it holds — plain text, an avatar badge,
                         // a quick-edit button. Row height tracked the tallest
-                        // cell otherwise, so a page with badges (Lead/Account)
-                        // sat taller than one without and needed scrolling that
-                        // Opp did not; pinning it tight is the single knob that
-                        // fits every list on one page.
+                        // cell otherwise, so a page whose rows carried badges sat
+                        // taller than one without and needed scrolling that a
+                        // plainer list did not; pinning it tight is the single
+                        // knob that fits every list on one page.
                         "h-9 px-3 align-middle",
                         meta.truncate
                           ? "truncate"

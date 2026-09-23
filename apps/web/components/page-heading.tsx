@@ -5,7 +5,7 @@ import { cn } from "@dw/ui";
 interface PageHeadingProps {
   eyebrow?: string;
   /** Usually the record name; a node when the title carries an inline control
-   * (e.g. the pin button on an opportunity). */
+   * (e.g. a pin button on the record). */
   title: ReactNode;
   description?: ReactNode;
   icon?: LucideIcon;

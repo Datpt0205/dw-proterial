@@ -28,11 +28,11 @@ export function Modal({
   subtitle?: string;
   children: React.ReactNode;
   className?: string;
-  /** Buttons that belong in the header's right corner (spec 003 US6: the
-   * create-lead form keeps Cancel/Create in view without scrolling). */
+  /** Buttons that belong in the header's right corner (a short create-record
+   * form keeps Cancel/Create in view without scrolling). */
   headerActions?: React.ReactNode;
   /** Buttons pinned below the scroll area — always in view however long the
-   * body grows (the create-account form keeps Cancel/Create here). */
+   * body grows (a long create-record form keeps Cancel/Create here instead). */
   footerActions?: React.ReactNode;
 }) {
   return (

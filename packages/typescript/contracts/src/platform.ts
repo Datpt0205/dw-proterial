@@ -59,8 +59,8 @@ export const integrationSchema = z.object({
 export type Integration = z.infer<typeof integrationSchema>;
 
 /**
- * The workspace roster. Every CRM record stores an owner as a bare user id;
- * this is what turns one into a person the UI can show or pick.
+ * The workspace roster. Every business record stores an owner as a bare user
+ * id; this is what turns one into a person the UI can show or pick.
  */
 export const workspaceMemberSchema = z.object({
   user_id: z.string().uuid(),
@@ -72,63 +72,6 @@ export const workspaceMemberSchema = z.object({
   permission_set_keys: z.array(z.string()),
 });
 export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
-
-/**
- * SugarCRM sync status, as the admin page reports it.
- *
- * The importer runs in its own container and shares only the database, so
- * everything here is read from the two tables it keeps for itself. `runs`
- * answers "is it alive": a pass that finds nothing changed writes no record at
- * all, so the data's own timestamps cannot tell a quiet sync from a dead one.
- * `held` is the list of fields this system claimed because somebody edited
- * them — the one place a person can see where the two systems disagree.
- */
-export const syncModuleCountSchema = z.object({
-  table: z.string(),
-  from_sugar: z.number(),
-  total: z.number(),
-});
-
-export const syncHeldFieldSchema = z.object({
-  table: z.string(),
-  record_id: z.string(),
-  record_name: z.string(),
-  url: z.string(),
-  field: z.string(),
-  local_value: z.string().nullable(),
-  sugar_value: z.string().nullable(),
-  locked_at: z.string().nullable(),
-});
-
-export const syncRunSchema = z.object({
-  started_at: z.string(),
-  finished_at: z.string().nullable(),
-  status: z.enum(["running", "ok", "failed"]),
-  seconds: z.number().nullable(),
-  created: z.number(),
-  updated: z.number(),
-  unchanged: z.number(),
-  failed: z.number(),
-  error: z.string().nullable(),
-});
-
-export const syncStatusSchema = z.object({
-  last_sync_at: z.string().nullable(),
-  seconds_since: z.number().nullable(),
-  state: z.enum(["ok", "failing", "stale", "never_run"]),
-  tracked_records: z.number(),
-  tracked_fields: z.number(),
-  modules: z.array(syncModuleCountSchema),
-  held_fields: z.array(syncHeldFieldSchema),
-  held_total: z.number(),
-  held_shown: z.number(),
-  runs: z.array(syncRunSchema),
-});
-
-export type SyncStatus = z.infer<typeof syncStatusSchema>;
-export type SyncModuleCount = z.infer<typeof syncModuleCountSchema>;
-export type SyncHeldField = z.infer<typeof syncHeldFieldSchema>;
-export type SyncRun = z.infer<typeof syncRunSchema>;
 
 /**
  * Admin console read models. Unlike the operator-only /platform provisioning

@@ -8,15 +8,15 @@ That is why this is a precondition of the duplicate check rather than a
 background tidy-up.
 
 Gathered here rather than left in three claim loops for two reasons. Two of the
-five queues had no periodic caller at all - a research run and a signal scan
-were reaped by nobody - and the three that did only reaped on the tick that also
-claimed, so a queue with nothing to claim still reaped while a queue that was
-busy reaped on every job. One consumer on its own cadence gives every table the
-same treatment and puts all five windows in one place to read.
+five queues had no periodic caller at all - a long-running background job and a
+lightweight lookup were reaped by nobody - and the three that did only reaped on
+the tick that also claimed, so a queue with nothing to claim still reaped while a
+queue that was busy reaped on every job. One consumer on its own cadence gives
+every table the same treatment and puts all five windows in one place to read.
 
 Each window is the job's own: five minutes for a pass that makes ten model
-calls, twenty for a compile that drives a browser, and long enough for a
-research run that its slowest healthy round is never mistaken for a dead worker.
+calls, twenty for a job that drives a browser, and long enough for the slowest
+of them that its healthy round is never mistaken for a dead worker.
 """
 
 from __future__ import annotations

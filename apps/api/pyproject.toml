@@ -11,8 +11,8 @@ dependencies = [
     "dw-memory",
     "dw-connectors",
     "dw-observability",
-    # The composition root (bootstrap/main) mounts the sales-intel context, so
-    # the package must be installed.
+    # Object storage for knowledge documents and feedback attachments
+    # (bootstrap/storage.py) — backbone infra, not a business context's.
     "minio>=7.2,<8",
     "qdrant-client>=1.12,<1.15",
     # Ops hardening Phase 5: the redis readiness probe (dw_api/health.py)

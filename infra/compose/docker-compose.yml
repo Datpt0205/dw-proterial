@@ -355,22 +355,17 @@ services:
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_DEFAULT_CHANNEL: ${SLACK_DEFAULT_CHANNEL:-}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
-      SLACK_USER_AN_ID: ${SLACK_USER_AN_ID:-}
-      SLACK_USER_BINH_ID: ${SLACK_USER_BINH_ID:-}
-      SLACK_USER_CHI_ID: ${SLACK_USER_CHI_ID:-}
       SLACK_USER_MAP_JSON: ${SLACK_USER_MAP_JSON:-}
       DW_PUBLIC_WEB_URL: ${DW_PUBLIC_WEB_URL:-http://localhost:3000}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      # Search providers for the sales_intel research lane (empty = fixed corpus).
-      SEARCH_PROVIDER_ORDER: ${SEARCH_PROVIDER_ORDER:-}
-      SERPER_API_KEY: ${SERPER_API_KEY:-}
+      # Zalo (dw_connectors: zalo_bot.py/zalo_link.py/zalo_approval_notifier.py) is
+      # a real, tested channel port like Slack — just not wired into any
+      # composition root yet, the same "built, no production caller" shape as
+      # build_agent. Left set here for whichever context wires it in first.
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
       ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:-}
       ZALO_LINK_SECRET: ${ZALO_LINK_SECRET:-}
       ZALO_BOT_LINK: ${ZALO_BOT_LINK:-}
-      EXA_API_KEY: ${EXA_API_KEY:-}
-      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
-      APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-dw_knowledge}
       REDIS_URL: redis://valkey:6379/0
@@ -543,26 +538,13 @@ services:
       DW_WORKER_EMBED_DIMENSION: ${DW_API_EMBED_DIMENSION:-1024}
       DW_SLACK_APPROVALS_ENABLED: ${DW_SLACK_APPROVALS_ENABLED:-false}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
-      SLACK_USER_AN_ID: ${SLACK_USER_AN_ID:-}
-      SLACK_USER_BINH_ID: ${SLACK_USER_BINH_ID:-}
-      SLACK_USER_CHI_ID: ${SLACK_USER_CHI_ID:-}
       SLACK_USER_MAP_JSON: ${SLACK_USER_MAP_JSON:-}
       DW_PUBLIC_WEB_URL: ${DW_PUBLIC_WEB_URL:-http://localhost:3000}
-      # How many research runs this worker drives at once. 1 is the old
-      # one-at-a-time behaviour, where a second person pressing Research waited
-      # out the first run; 3 is what the lane now defaults to.
-      DW_WORKER_RESEARCH_CONCURRENCY: ${DW_WORKER_RESEARCH_CONCURRENCY:-3}
-      DW_WORKER_PERSON_RESEARCH_CONCURRENCY: ${DW_WORKER_PERSON_RESEARCH_CONCURRENCY:-3}
-      # Search providers for the sales_intel research lane (empty = fixed corpus).
-      SEARCH_PROVIDER_ORDER: ${SEARCH_PROVIDER_ORDER:-}
-      SERPER_API_KEY: ${SERPER_API_KEY:-}
+      # See the api service's own comment: a real, tested, unwired channel port.
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
       ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:-}
       ZALO_LINK_SECRET: ${ZALO_LINK_SECRET:-}
       ZALO_BOT_LINK: ${ZALO_BOT_LINK:-}
-      EXA_API_KEY: ${EXA_API_KEY:-}
-      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
-      APIFY_API_TOKEN: ${APIFY_API_TOKEN:-}
     networks: [dw-internal, dw-edge]
     depends_on:
       migrate:

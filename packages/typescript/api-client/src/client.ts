@@ -39,8 +39,6 @@ import {
   type Run,
   type TimelineEvent,
   type WorkspaceMember,
-  type SyncStatus,
-  syncStatusSchema,
   pageSchema,
   pageQueryString,
   type Page,
@@ -263,13 +261,6 @@ export class ApiClient {
       "/api/v1/directory/members",
       z.array(workspaceMemberSchema),
     );
-  }
-
-  // ---- admin: SugarCRM sync ----------------------------------------------
-
-  /** Where the import stands: when it last ran, and what it is holding back. */
-  getSyncStatus(): Promise<SyncStatus> {
-    return this.request("GET", "/api/v1/admin/sync", syncStatusSchema);
   }
 
   // ---- admin: membership management --------------------------------------
@@ -766,7 +757,6 @@ export type {
   Page,
   PageParams,
   Run,
-  SyncStatus,
   TimelineEvent,
   WorkspaceMember,
 };

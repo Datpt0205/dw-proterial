@@ -55,8 +55,8 @@ const MarkdownTextImpl: FC<MarkdownTextProps> = ({ components }) => {
       className="aui-md"
       components={markdownComponents}
       // Một khối ```mermaid thành sơ đồ thật thay vì mấy dòng chữ. Trả lời về
-      // quy trình - luồng duyệt, các bước chuyển đổi lead - đọc bằng hình
-      // nhanh hơn hẳn bằng danh sách.
+      // quy trình - luồng duyệt, các bước của một workflow nhiều giai đoạn -
+      // đọc bằng hình nhanh hơn hẳn bằng danh sách.
       componentsByLanguage={{ mermaid: { SyntaxHighlighter: MermaidDiagram } }}
       defer
     />

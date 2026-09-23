@@ -12,9 +12,9 @@ import { MarkdownAnswer } from "../markdown-answer";
  * and the only way to see it is to pin the behaviour first.
  *
  * Two of these are security claims, not formatting ones. The model writes
- * this text out of CRM notes and pasted email, which the prompt classifies
- * as untrusted, so "raw HTML stays characters" and "a javascript: href is
- * not a link" are load-bearing.
+ * this text out of business records and pasted email, which the prompt
+ * classifies as untrusted, so "raw HTML stays characters" and "a javascript:
+ * href is not a link" are load-bearing.
  */
 
 describe("MarkdownAnswer", () => {
@@ -59,7 +59,7 @@ describe("MarkdownAnswer", () => {
     // on 2026-08-19: mid-stream, the text holds a header row and nothing
     // after it, and the parser used to make no progress on that line.
     const { container } = render(
-      <MarkdownAnswer text={`| Lead | Ngân sách |`} />,
+      <MarkdownAnswer text={`| Tên | Ngân sách |`} />,
     );
 
     expect(container.textContent).toContain("Ngân sách");
@@ -68,7 +68,7 @@ describe("MarkdownAnswer", () => {
   it("renders a GFM table with per-column alignment", () => {
     render(
       <MarkdownAnswer
-        text={`| Lead | Giá trị |\n| :--- | ---: |\n| FPT | 1.000 |`}
+        text={`| Tên | Giá trị |\n| :--- | ---: |\n| FPT | 1.000 |`}
       />,
     );
 

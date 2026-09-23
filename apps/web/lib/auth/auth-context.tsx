@@ -39,7 +39,7 @@ interface AuthContextValue {
   status: AuthStatus;
   error: string | null;
   subject: string | null;
-  /** The platform user id every CRM record stores as owner or assignee. */
+  /** The platform user id a business record stores as owner or assignee. */
   principalId: string | null;
   displayName: string;
   email: string | null;

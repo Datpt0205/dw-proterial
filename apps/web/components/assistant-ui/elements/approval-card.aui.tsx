@@ -33,9 +33,9 @@ export function ApprovalCard({
    * Cái sắp được ghi.
    *
    * Bản registry nhận một chuỗi và vẽ nó bằng font mono - hợp với một lệnh
-   * shell. Ở đây thứ cần duyệt là một bộ trường CRM có nhãn tiếng Việt, nên nó
-   * nhận luôn ReactNode: người bấm Approve phải nhìn thấy tên sắp được ghi,
-   * không phải một chuỗi đã bị ép phẳng.
+   * shell. Ở đây thứ cần duyệt có thể là một bộ trường dữ liệu có nhãn ngôn
+   * ngữ tự nhiên, nên nó nhận luôn ReactNode: người bấm Approve phải nhìn
+   * thấy tên sắp được ghi, không phải một chuỗi đã bị ép phẳng.
    */
   command: ReactNode;
   title: string;
