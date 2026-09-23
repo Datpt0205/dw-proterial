@@ -198,26 +198,10 @@ class ApiSettings(BaseSettings):
     )
 
     # --- task connector ---
-    # "none" (nothing integrated) | "mock" (test placeholder) | "slack".
+    # "none" (nothing integrated) | "mock" (test placeholder).
     task_connector: str = Field(
         default="mock",
         validation_alias=AliasChoices("DW_API_TASK_CONNECTOR", "DW_TASK_CONNECTOR"),
-    )
-    slack_bot_token: str | None = Field(
-        default=None, validation_alias=AliasChoices("DW_API_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN")
-    )
-    slack_default_channel: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("DW_API_SLACK_DEFAULT_CHANNEL", "SLACK_DEFAULT_CHANNEL"),
-    )
-    slack_signing_secret: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("DW_API_SLACK_SIGNING_SECRET", "SLACK_SIGNING_SECRET"),
-    )
-    # Member ids are deliberately configuration, never guessed from display
-    # names: {"<subject>": "<slack_member_id>"}.
-    slack_user_map_json: str = Field(
-        default="", validation_alias=AliasChoices("SLACK_USER_MAP_JSON")
     )
 
     public_web_url: str = Field(
@@ -262,18 +246,6 @@ class ApiSettings(BaseSettings):
         """Local/test may call localhost providers; a deployed profile never does."""
         return not self.is_deployed
 
-    def slack_user_reverse_map(self) -> dict[str, str]:
-        """slack_member_id -> subject, from the configured map."""
-        if not self.slack_user_map_json.strip():
-            return {}
-        import json
-
-        raw = json.loads(self.slack_user_map_json)
-        if not isinstance(raw, dict):
-            return {}
-        forward = {str(k): str(v).strip() for k, v in raw.items()}
-        return {slack_id: subject for subject, slack_id in forward.items() if slack_id}
-
     def require_database_url(self) -> str:
         if not self.database_url:
             raise RuntimeError(
@@ -298,7 +270,7 @@ class ApiSettings(BaseSettings):
             if self.task_connector == "mock":
                 raise RuntimeError(
                     f"the mock task connector is forbidden in the {self.profile} profile — "
-                    "use 'none' if no external task system is integrated, or 'slack'"
+                    "use 'none' if no external task system is integrated"
                 )
             if self.embedding_provider == "hash":
                 raise RuntimeError(
@@ -323,11 +295,5 @@ class ApiSettings(BaseSettings):
                 "LANGFUSE_ENABLED requires LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY "
                 "and LANGFUSE_SECRET_KEY"
             )
-        if self.task_connector not in ("none", "mock", "slack"):
-            raise RuntimeError("DW_TASK_CONNECTOR must be 'none', 'mock' or 'slack'")
-        if self.task_connector == "slack" and not (
-            self.slack_bot_token and self.slack_default_channel
-        ):
-            raise RuntimeError(
-                "DW_TASK_CONNECTOR=slack requires SLACK_BOT_TOKEN and SLACK_DEFAULT_CHANNEL"
-            )
+        if self.task_connector not in ("none", "mock"):
+            raise RuntimeError("DW_TASK_CONNECTOR must be 'none' or 'mock'")

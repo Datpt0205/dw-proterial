@@ -1,7 +1,8 @@
 """Canonical connector contracts (anti-corruption layer boundary).
 
-Slack ``user_id``, Teams ``aadObjectId`` and HR ``employee_code`` all map to
-``OrganizationPersonRef``; raw provider payloads never become domain entities.
+A provider's own id shape (Zalo's numeric user id, Teams' ``aadObjectId``, HR's
+``employee_code``) all map to ``OrganizationPersonRef``; raw provider payloads
+never become domain entities.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ class OrganizationPersonRef(BaseModel):
     person_id: UUID
     display_name: str
     department_id: UUID | None = None
-    external_identities: dict[str, str] = {}  # e.g. {"slack": "U123", "teams": "aad-guid"}
+    external_identities: dict[str, str] = {}  # e.g. {"zalo": "123456", "teams": "aad-guid"}
 
 
 class CreateExternalTask(BaseModel):

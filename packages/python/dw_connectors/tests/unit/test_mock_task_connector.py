@@ -18,7 +18,7 @@ def make_command(title: str = "Chuẩn bị báo cáo tuần") -> CreateExternal
         assignee=OrganizationPersonRef(
             person_id=uuid.UUID(int=4),
             display_name="Nguyễn Văn A",
-            external_identities={"slack": "U0001"},
+            external_identities={"zalo": "U0001"},
         ),
     )
 

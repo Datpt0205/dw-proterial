@@ -33,7 +33,7 @@ class _FakeSender:
     """Satisfies ``ChatSenderPort`` structurally — no base class, no network.
 
     This is what a port buys: the fake is four lines, and the same test would
-    hold for a Slack or Teams sender without knowing either exists.
+    hold for a Teams sender without knowing it exists.
     """
 
     def __init__(self) -> None:

@@ -176,8 +176,8 @@ kind of change nobody makes and everybody works around.
 - Channels are reached through a port, never a provider's client. `ChatSenderPort`
   is the narrow intersection every channel can satisfy; code needing one
   provider's own features takes that provider's client and says so in its type.
-  A provider adapter that does not fit gets an anti-corruption layer
-  (`SlackChatSender`), not a widened port.
+  A provider adapter that does not fit gets an anti-corruption layer, not a
+  widened port.
 - Approval pauses and resumes a durable, checkpointed run.
 
 ## Data model rules

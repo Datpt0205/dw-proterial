@@ -251,7 +251,6 @@ forbidden_modules = [
     "minio",
     "openai",
     "anthropic",
-    "slack_sdk",
     "dw_platform",
     "dw_agent_runtime",
     "dw_knowledge",
@@ -278,7 +277,6 @@ forbidden_modules = [
     "minio",
     "openai",
     "anthropic",
-    "slack_sdk",
     "opentelemetry",
 ]
 

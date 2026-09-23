@@ -104,9 +104,7 @@ async def test_reaped_rows_are_counted_by_queue() -> None:
 
     await consume()
 
-    assert telemetry.metrics == [
-        (DW_REAPER_REAPED_TOTAL, len(reaped_ids), {"queue": "busy queue"})
-    ]
+    assert telemetry.metrics == [(DW_REAPER_REAPED_TOTAL, len(reaped_ids), {"queue": "busy queue"})]
 
 
 # ------------------------------------------------------------- registry ----

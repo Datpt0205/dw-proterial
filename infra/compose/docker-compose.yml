@@ -352,16 +352,12 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       DW_TASK_CONNECTOR: ${DW_TASK_CONNECTOR:-mock}
-      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
-      SLACK_DEFAULT_CHANNEL: ${SLACK_DEFAULT_CHANNEL:-}
-      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
-      SLACK_USER_MAP_JSON: ${SLACK_USER_MAP_JSON:-}
       DW_PUBLIC_WEB_URL: ${DW_PUBLIC_WEB_URL:-http://localhost:3000}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      # Zalo (dw_connectors: zalo_bot.py/zalo_link.py/zalo_approval_notifier.py) is
-      # a real, tested channel port like Slack — just not wired into any
-      # composition root yet, the same "built, no production caller" shape as
-      # build_agent. Left set here for whichever context wires it in first.
+      # Zalo (dw_connectors: zalo_bot.py/zalo_link.py) is a real, tested
+      # channel port — just not wired into any composition root yet, the
+      # same "built, no production caller" shape as build_agent. Left set
+      # here for whichever context wires it in first.
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
       ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:-}
       ZALO_LINK_SECRET: ${ZALO_LINK_SECRET:-}
@@ -536,9 +532,6 @@ services:
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
       DW_WORKER_EMBED_URL: ${DW_API_EMBED_URL:-http://tei-embed:80}
       DW_WORKER_EMBED_DIMENSION: ${DW_API_EMBED_DIMENSION:-1024}
-      DW_SLACK_APPROVALS_ENABLED: ${DW_SLACK_APPROVALS_ENABLED:-false}
-      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
-      SLACK_USER_MAP_JSON: ${SLACK_USER_MAP_JSON:-}
       DW_PUBLIC_WEB_URL: ${DW_PUBLIC_WEB_URL:-http://localhost:3000}
       # See the api service's own comment: a real, tested, unwired channel port.
       ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
