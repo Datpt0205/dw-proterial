@@ -69,7 +69,10 @@ class MinioAttachmentStorage:
             ) from exc
 
     def _list_sync(self, prefix: str) -> list[str]:
-        return [obj.object_name for obj in self.client.list_objects(self.bucket, prefix=prefix)]
+        return [
+            obj.object_name
+            for obj in self.client.list_objects(self.bucket, prefix=prefix, recursive=True)
+        ]
 
     async def list(self, prefix: str) -> list[str]:
         try:
