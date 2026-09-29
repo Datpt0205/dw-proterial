@@ -719,6 +719,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "types-pyyaml" },
+    { name = "tzdata" },
 ]
 
 [package.metadata]
@@ -735,6 +736,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0,<8" },
     { name = "ruff", specifier = ">=0.9,<1" },
     { name = "types-pyyaml", specifier = ">=6.0,<7" },
+    { name = "tzdata", specifier = ">=2024.1" },
 ]
 
 [[package]]

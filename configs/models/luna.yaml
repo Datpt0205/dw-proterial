@@ -1,0 +1,47 @@
+schema_version: "1.0"
+profile_id: luna
+routing_policy_version: "1.0.0"
+# Every generation route on gpt-5.6-luna through one OpenAI-compatible gateway
+# (OPENAI_BASE_URL). Enable with:
+#   DW_MODEL_PROVIDER=openai_compatible
+#   DW_API_MODEL_PROFILE=luna
+#   DW_API_OPENAI_STRUCTURED_MODE=json_schema
+#   OPENAI_BASE_URL / OPENAI_API_KEY in .env, never in a committed file.
+# Unlike `gateway`, the `reasoning` route is on luna too, so every
+# model-backed call runs on the one model Đạt chose. NO `temperature` anywhere: the gateway answers 400 for the
+# gpt-5.6 family (see `gateway.yaml`). Measured 2026-09-28: both routes by
+# `make check-model`, the fallback by a direct call.
+# No `embedding` route: with DW_API_EMBEDDING_PROVIDER=openai_compatible the
+# API refuses to start on this profile; use `gateway` for that.
+structured_extraction:
+  provider: openai_responses
+  model: gpt-5.6-luna
+  timeout_seconds: 60
+  reasoning_effort: low
+  price_per_million_input: 0.20
+  price_per_million_output: 1.20
+reasoning:
+  provider: openai_responses
+  model: gpt-5.6-luna
+  timeout_seconds: 120
+  reasoning_effort: medium
+  price_per_million_input: 0.20
+  price_per_million_output: 1.20
+chat:
+  provider: openai_responses
+  model: gpt-5.6-luna
+  timeout_seconds: 180
+  reasoning_effort: medium
+  price_per_million_input: 0.20
+  price_per_million_output: 1.20
+# Tried when the primary route fails twice (provider error, timeout or schema
+# mismatch): a different model through the same gateway.
+fallback:
+  provider: openai_compatible
+  model: gpt-4o-mini
+  timeout_seconds: 60
+  price_per_million_input: 0.15
+  price_per_million_output: 0.60
+budgets:
+  max_input_tokens_per_run: 100000
+  max_cost_usd_per_run: 1.00

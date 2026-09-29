@@ -55,7 +55,10 @@ def _workers() -> list[dict[str, Any]]:
                 "worker_version": raw["worker_version"],
                 "graph_version": raw["graph_version"],
                 "prompt_bundle_version": raw["prompt_bundle_version"],
-                "toolset_version": raw["toolset_version"],
+                # None for a worker that calls no tool — see contracts.py's
+                # own field docstring; the invariant below only holds workers
+                # that declare one to a real pin.
+                "toolset_version": raw.get("toolset_version"),
                 "policy_version": raw["policy_version"],
                 "memory_policy_version": raw["memory_policy_version"],
                 "autonomy_level": raw.get("autonomy_level", "A2"),

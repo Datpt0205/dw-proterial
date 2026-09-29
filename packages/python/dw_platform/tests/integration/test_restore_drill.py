@@ -29,14 +29,14 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
-from pg_harness import TEST_DB, DatabaseUrls, recreate_database, run_alembic
+from pg_harness import TEST_DB, DatabaseUrls, postgres_container, recreate_database, run_alembic
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 pytestmark = pytest.mark.integration
 
 RESTORE_DB = "dw_test_restore_drill"
-CONTAINER = os.environ.get("PG_CONTAINER", "dw-postgres-1")
+CONTAINER = postgres_container()
 PG_USER = os.environ.get("PG_USER", "dw_admin")
 
 

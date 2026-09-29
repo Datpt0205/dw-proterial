@@ -134,6 +134,44 @@ export const adminPermissionSetSchema = z.object({
 });
 export type AdminPermissionSet = z.infer<typeof adminPermissionSetSchema>;
 
+// A separation-of-duty rule: no membership may hold a scope from each side.
+// `waivable` false means no tenant can lift it. `waiver` is this tenant's open
+// decision to lift it, with the reason recorded when it was made.
+export const adminSodWaiverSchema = z.object({
+  reason: z.string(),
+  granted_by: z.string(),
+  granted_at: z.string(),
+});
+export type AdminSodWaiver = z.infer<typeof adminSodWaiverSchema>;
+
+export const adminSodRuleSchema = z.object({
+  key: z.string(),
+  description: z.string(),
+  left_scopes: z.array(z.string()),
+  right_scopes: z.array(z.string()),
+  waivable: z.boolean(),
+  waiver: adminSodWaiverSchema.nullable(),
+});
+export type AdminSodRule = z.infer<typeof adminSodRuleSchema>;
+
+// One message in the caller's own in-app inbox. `link` is an app-relative
+// path (the database refuses anything else).
+export const notificationSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  body: z.string(),
+  link: z.string().nullable(),
+  created_at: z.string(),
+  read_at: z.string().nullable(),
+});
+export type AppNotification = z.infer<typeof notificationSchema>;
+
+export const inboxSchema = z.object({
+  items: z.array(notificationSchema),
+  unread: z.number().int(),
+});
+export type Inbox = z.infer<typeof inboxSchema>;
+
 // A workspace member as the reporting-hierarchy editor reads it: who they are,
 // the roles they hold, and who they report to. `manager_user_id` is null for a
 // root of the tree; the API rejects an edit that would create a cycle.

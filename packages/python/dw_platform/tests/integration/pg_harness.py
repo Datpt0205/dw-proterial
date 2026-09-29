@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
-from pg_test_db import REPO_ROOT, DatabaseUrls, database_urls, recreate_database, run_alembic
+from pg_test_db import (
+    REPO_ROOT,
+    DatabaseUrls,
+    database_urls,
+    postgres_container,
+    recreate_database,
+    run_alembic,
+)
 
-__all__ = ["REPO_ROOT", "DatabaseUrls", "database_urls", "recreate_database", "run_alembic"]
+__all__ = [
+    "REPO_ROOT",
+    "DatabaseUrls",
+    "database_urls",
+    "postgres_container",
+    "recreate_database",
+    "run_alembic",
+]
 
 TEST_DB = "dw_test"
 

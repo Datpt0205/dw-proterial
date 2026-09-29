@@ -11,7 +11,7 @@ from dw_agent_runtime.model.budget import route_cost
 from dw_agent_runtime.model.gateway import InMemoryUsageRecorder, RoutingModelGateway
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.model.prompts import PromptArtifact, PromptRegistry
-from dw_agent_runtime.ports import ModelRequest
+from dw_agent_runtime.ports import ModelOutputInvalidError, ModelRequest
 from dw_agent_runtime.registry import ConfigError
 from dw_kernel.errors import DomainError, NotFoundError
 
@@ -94,6 +94,7 @@ def make_gateway(adapter: MockModelAdapter) -> RoutingModelGateway:
         prompts=prompts,
         adapters={"mock": adapter},
         usage_recorder=InMemoryUsageRecorder(),
+        default_profile="balanced",
     )
 
 
@@ -147,6 +148,7 @@ async def test_recorded_usage_carries_the_route_price() -> None:
         prompts=prompts,
         adapters={"openai_responses": adapter},
         usage_recorder=recorder,
+        default_profile="balanced",
     )
     run_context = make_run_context()
 
@@ -208,8 +210,11 @@ async def test_gateway_rejects_schema_invalid_mock_response() -> None:
         prompt_version="1.0.0",
         variables={"content": "x"},
     )
-    with pytest.raises(DomainError, match="schema validation"):
+    # The specific type, so a caller degrading to "not understood" can catch
+    # exactly this; still a DomainError for every caller that does not care.
+    with pytest.raises(ModelOutputInvalidError, match="schema validation") as raised:
         await gateway.generate_structured(request, SummaryOutput, run_context=make_run_context())
+    assert isinstance(raised.value, DomainError)
 
 
 async def test_gateway_unknown_provider_fails_fast() -> None:
@@ -218,7 +223,11 @@ async def test_gateway_unknown_provider_fails_fast() -> None:
     prompts = PromptRegistry()
     prompts.register(make_prompt())
     gateway = RoutingModelGateway(
-        profiles=profiles, prompts=prompts, adapters={}, usage_recorder=InMemoryUsageRecorder()
+        profiles=profiles,
+        prompts=prompts,
+        adapters={},
+        usage_recorder=InMemoryUsageRecorder(),
+        default_profile="balanced",
     )
     request = ModelRequest(
         task="reasoning",
@@ -302,6 +311,7 @@ async def test_gateway_uses_fallback_route_when_primary_provider_errors() -> Non
         prompts=prompts,
         adapters={"flaky": FailingAdapter(), "mock": mock},
         usage_recorder=InMemoryUsageRecorder(),
+        default_profile="with_fallback",
     )
     request = ModelRequest(
         task="structured_extraction",
@@ -314,3 +324,132 @@ async def test_gateway_uses_fallback_route_when_primary_provider_errors() -> Non
         request, SummaryOutput, run_context=make_run_context()
     )
     assert output.summary == "từ fallback"
+
+
+class _Down:
+    """A provider that is always unavailable, so only a fallback answers."""
+
+    provider_name = "down"
+
+    async def complete_json(
+        self, prompt: Any, json_schema: Any, route: Any, *, max_output_tokens: Any
+    ) -> Any:
+        from dw_kernel.errors import InfrastructureError
+
+        raise InfrastructureError("provider down")
+
+
+class _ProfileRecorder:
+    """Keeps the profile each recorded request names, next to its usage."""
+
+    def __init__(self) -> None:
+        self.records: list[tuple[str | None, str]] = []
+
+    async def record(self, run_context: RunContext, request: ModelRequest, usage: Any) -> None:
+        self.records.append((request.model_profile, usage.model))
+
+
+def _profile(profile_id: str, model: str, *, fallback: str | None = None) -> Any:
+    from dw_agent_runtime.model.profiles import ModelProfile, ModelRoute
+
+    primary = ModelRoute(provider="down" if fallback else "mock", model=model)
+    return ModelProfile(
+        schema_version="1.0",
+        profile_id=profile_id,
+        routing_policy_version="1.0.0",
+        structured_extraction=primary,
+        reasoning=primary,
+        fallback=ModelRoute(provider="mock", model=fallback) if fallback else None,
+    )
+
+
+def _summarizing_gateway(
+    profiles: ModelProfileRegistry, recorder: _ProfileRecorder, *, default_profile: str
+) -> RoutingModelGateway:
+    adapter = MockModelAdapter()
+    adapter.register_builder(
+        "demo.summarize", "1.0.0", lambda prompt: {"summary": "x", "language": "vi"}
+    )
+    prompts = PromptRegistry()
+    prompts.register(make_prompt())
+    return RoutingModelGateway(
+        profiles=profiles,
+        prompts=prompts,
+        adapters={"mock": adapter, "down": _Down()},
+        usage_recorder=recorder,
+        default_profile=default_profile,
+    )
+
+
+_UNNAMED = ModelRequest(
+    task="structured_extraction",
+    prompt_id="demo.summarize",
+    prompt_version="1.0.0",
+    variables={"content": "x"},
+)
+
+
+async def test_a_request_naming_no_profile_runs_on_the_deployments_own() -> None:
+    """A context's calls often name no profile. They ran on `balanced` whatever
+    the deployment configured, so one set up for a real model sent every one
+    of them to the mock profile, where each failed."""
+    profiles = ModelProfileRegistry()
+    profiles.register(_profile("balanced", "platform-default-1"))
+    profiles.register(_profile("deployment", "deployment-1"))
+    recorder = _ProfileRecorder()
+    gateway = _summarizing_gateway(profiles, recorder, default_profile="deployment")
+
+    await gateway.generate_structured(_UNNAMED, SummaryOutput, run_context=make_run_context())
+
+    # The recorders (the trace among them) name the profile actually used.
+    assert recorder.records == [("deployment", "deployment-1")]
+
+
+async def test_a_request_naming_a_profile_keeps_it() -> None:
+    profiles = ModelProfileRegistry()
+    profiles.register(_profile("balanced", "platform-default-1"))
+    profiles.register(_profile("deployment", "deployment-1"))
+    recorder = _ProfileRecorder()
+    gateway = _summarizing_gateway(profiles, recorder, default_profile="deployment")
+
+    await gateway.generate_structured(
+        _UNNAMED.model_copy(update={"model_profile": "balanced"}),
+        SummaryOutput,
+        run_context=make_run_context(),
+    )
+
+    assert recorder.records == [("balanced", "platform-default-1")]
+
+
+async def test_a_tenants_own_profile_routes_its_calls_and_no_one_elses() -> None:
+    """The route read the platform's profile while the budget read the
+    tenant's, so a tenant on its own model contract was billed against its
+    own ceiling on the platform's model."""
+    tenant = uuid.uuid4()
+    profiles = ModelProfileRegistry()
+    profiles.register(_profile("deployment", "platform-1"))
+    profiles.register(_profile("deployment", "tenant-own-1"), tenant_id=tenant)
+    recorder = _ProfileRecorder()
+    gateway = _summarizing_gateway(profiles, recorder, default_profile="deployment")
+
+    own = make_run_context().model_copy(update={"tenant_id": tenant})
+    await gateway.generate_structured(_UNNAMED, SummaryOutput, run_context=own)
+    await gateway.generate_structured(_UNNAMED, SummaryOutput, run_context=make_run_context())
+
+    assert [model for _, model in recorder.records] == ["tenant-own-1", "platform-1"]
+
+
+async def test_a_tenants_own_profile_supplies_its_fallback() -> None:
+    tenant = uuid.uuid4()
+    profiles = ModelProfileRegistry()
+    profiles.register(_profile("deployment", "primary-1", fallback="platform-fallback-1"))
+    profiles.register(
+        _profile("deployment", "primary-1", fallback="tenant-fallback-1"), tenant_id=tenant
+    )
+    recorder = _ProfileRecorder()
+    gateway = _summarizing_gateway(profiles, recorder, default_profile="deployment")
+
+    own = make_run_context().model_copy(update={"tenant_id": tenant})
+    await gateway.generate_structured(_UNNAMED, SummaryOutput, run_context=own)
+
+    assert [model for _, model in recorder.records] == ["tenant-fallback-1"]

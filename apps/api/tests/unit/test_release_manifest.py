@@ -54,10 +54,18 @@ def test_manifest_contains_every_required_section() -> None:
     # context adds its own worker/prompt/policy assertions beside these; naming
     # one here would make this test fail on a checkout that does not host it.
     assert {p["prompt_id"] for p in manifest["prompt_bundles"]} >= {"platform.untrusted_demo"}
-    # Every worker's toolset_version must resolve to a pin file, or a run records
-    # a toolset nobody can reconstruct.
+    # Every worker that DECLARES a toolset_version must have it resolve to a
+    # pin file, or a run records a toolset nobody can reconstruct. `None` is
+    # the honest value for a worker that calls no tool at all (a plain graph,
+    # not an agent loop) — see `WorkerDefinition.toolset_version`'s own
+    # docstring — and is exempt from this check rather than required to
+    # resolve to nothing.
     pinned = {(t["toolset_id"], t["version"]) for t in manifest["toolsets"]}
-    assert {(w["worker_id"], w["toolset_version"]) for w in manifest["workers"]} <= pinned
+    assert {
+        (w["worker_id"], w["toolset_version"])
+        for w in manifest["workers"]
+        if w["toolset_version"] is not None
+    } <= pinned
     assert {d["dataset_id"] for d in manifest["eval_datasets"]} >= {"platform_smoke"}
 
 

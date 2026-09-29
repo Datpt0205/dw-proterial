@@ -8,6 +8,7 @@ import {
   MessageSquarePlus,
   Network,
   PlugZap,
+  Scale,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -84,6 +85,13 @@ const platformNav: NavItem[] = [
     hint: "Who reports to whom in the workspace",
     icon: Network,
     scope: "platform.members.write",
+  },
+  {
+    href: "/admin/separation-of-duties",
+    label: "Separation of duties",
+    hint: "Duties no one person may hold, and this tenant's waivers",
+    icon: Scale,
+    scope: "platform.roles.read",
   },
   {
     href: "/admin/settings",

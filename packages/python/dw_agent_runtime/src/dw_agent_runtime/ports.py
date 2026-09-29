@@ -14,6 +14,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from dw_agent_runtime.contracts import RunContext
+from dw_kernel.errors import DomainError
 
 OutputT = TypeVar("OutputT", bound=BaseModel)
 
@@ -29,14 +30,27 @@ class ModelRequest(BaseModel):
     prompt_id: str
     prompt_version: str
     variables: dict[str, str] = {}
-    model_profile: str = "balanced"
+    # None runs on the deployment's own profile (the gateway's
+    # `default_profile`). Name one only for a call that must differ from it.
+    model_profile: str | None = None
     max_output_tokens: int | None = None
     # "auto" preserves legacy routing (task=="reasoning" -> reasoning route).
     route_kind: RouteKind = "auto"
 
 
+class ModelOutputInvalidError(DomainError):
+    """Every attempt's output failed the requested schema.
+
+    A subclass, not a bare `DomainError`, so a caller that has to degrade to
+    "I did not understand" can catch exactly this — never a
+    budget refusal or a prompt/variable mismatch, which are other
+    `DomainError`s and must not be dressed up as a misunderstanding.
+    """
+
+
 class ModelGateway(Protocol):
-    """Single entry point for LLM calls; output is always schema-validated."""
+    """Single entry point for LLM calls; output is always schema-validated.
+    When no attempt produces valid output, raises `ModelOutputInvalidError`."""
 
     async def generate_structured(
         self,

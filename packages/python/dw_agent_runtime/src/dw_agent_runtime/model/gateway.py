@@ -15,10 +15,10 @@ from pydantic import ValidationError
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import RunBudgetLedger, route_cost
-from dw_agent_runtime.model.profiles import ModelProfileRegistry, ModelRoute
+from dw_agent_runtime.model.profiles import ModelProfile, ModelProfileRegistry, ModelRoute
 from dw_agent_runtime.model.prompts import PromptRegistry, RenderedPrompt
-from dw_agent_runtime.ports import ModelRequest, OutputT
-from dw_kernel.errors import DomainError, InfrastructureError, NotFoundError
+from dw_agent_runtime.ports import ModelOutputInvalidError, ModelRequest, OutputT
+from dw_kernel.errors import InfrastructureError, NotFoundError
 
 _LOG = logging.getLogger("dw_agent_runtime.model")
 
@@ -89,12 +89,16 @@ class RoutingModelGateway:
     prompts: PromptRegistry
     adapters: dict[str, ModelProviderAdapter]
     usage_recorder: UsageRecorderPort
+    # What a request naming no profile runs on: the deployment's own
+    # (DW_API_MODEL_PROFILE). No default here, so a host cannot forget it —
+    # while requests defaulted to "balanced", a deployment configured for a
+    # real model still sent every call that named no profile to the mock.
+    default_profile: str
     # Per-run ceiling from the profile's own `budgets`. Enforced here because
     # this is the only place every model call passes through.
     budget: RunBudgetLedger = field(default_factory=RunBudgetLedger)
 
-    def _route(self, request: ModelRequest) -> ModelRoute:
-        profile = self.profiles.resolve(request.model_profile)
+    def _route(self, request: ModelRequest, profile: ModelProfile) -> ModelRoute:
         if request.route_kind == "deep_reasoning":
             # Visible-thinking route is optional; degrade to reasoning route.
             return profile.deep_reasoning or profile.reasoning
@@ -104,12 +108,12 @@ class RoutingModelGateway:
             return profile.reasoning
         return profile.structured_extraction
 
-    def _attempts(self, request: ModelRequest) -> list[ModelRoute]:
+    def _attempts(self, request: ModelRequest, profile: ModelProfile) -> list[ModelRoute]:
         """Attempt order: primary, primary again (transient-failure retry),
         then the profile's fallback route when it is a different model."""
-        primary = self._route(request)
+        primary = self._route(request, profile)
         attempts = [primary, primary]
-        fallback = self.profiles.resolve(request.model_profile).fallback
+        fallback = profile.fallback
         if fallback is not None and (fallback.provider, fallback.model) != (
             primary.provider,
             primary.model,
@@ -148,18 +152,25 @@ class RoutingModelGateway:
         # Transient provider errors and schema-invalid outputs get one retry
         # on the primary route, then the profile fallback (if any). Non-model
         # errors (unknown provider, missing mock fixture) fail fast.
-        profile = self.profiles.resolve(request.model_profile, tenant_id=run_context.tenant_id)
+        # One tenant-aware resolution for the route, the fallback and the
+        # budget alike. The route used to be resolved without the tenant, so a
+        # tenant with its own profile was charged against its own ceiling on
+        # the platform's model. The effective id goes onto the request so the
+        # usage recorders name the profile actually used.
+        profile_id = request.model_profile or self.default_profile
+        request = request.model_copy(update={"model_profile": profile_id})
+        profile = self.profiles.resolve(profile_id, tenant_id=run_context.tenant_id)
         # Checked before the call, not after: the point is to not make it.
         self.budget.check(run_context.run_id, profile.budgets, task=request.task)
 
         last_error: Exception | None = None
-        for index, route in enumerate(self._attempts(request)):
+        for index, route in enumerate(self._attempts(request, profile)):
             adapter = self.adapters.get(route.provider)
             if adapter is None:
                 if index == 0:
                     raise NotFoundError(
                         "model provider not configured",
-                        details={"provider": route.provider, "profile": request.model_profile},
+                        details={"provider": route.provider, "profile": profile_id},
                     )
                 continue  # fallback route pointing at an unwired provider
             started = perf_counter()
@@ -180,7 +191,7 @@ class RoutingModelGateway:
             try:
                 return output_type.model_validate(raw), reasoning or ""
             except ValidationError as exc:
-                last_error = DomainError(
+                last_error = ModelOutputInvalidError(
                     "model output failed schema validation",
                     details={
                         "prompt_id": request.prompt_id,

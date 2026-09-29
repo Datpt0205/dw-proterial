@@ -14,11 +14,15 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import NotFoundError
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.adapters.persistence.separation_of_duties import (
+    separation_of_duties_conflict,
+)
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.membership_admin import UserRef
@@ -99,21 +103,30 @@ class SqlMembershipAdminRepository:
                     "workspace not found in this tenant",
                     details={"workspace_id": str(workspace_id)},
                 )
-            await session.execute(
-                pg_insert(tables.memberships)
-                .values(
-                    id=uuid.uuid4(),
-                    tenant_id=context.tenant_id,
-                    workspace_id=workspace_id,
-                    user_id=user_id,
-                    role_keys=sorted(role_keys),
-                    department=department,
+            try:
+                await session.execute(
+                    pg_insert(tables.memberships)
+                    .values(
+                        id=uuid.uuid4(),
+                        tenant_id=context.tenant_id,
+                        workspace_id=workspace_id,
+                        user_id=user_id,
+                        role_keys=sorted(role_keys),
+                        department=department,
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_memberships_scope_user",
+                        set_={"role_keys": sorted(role_keys), "department": department},
+                    )
                 )
-                .on_conflict_do_update(
-                    constraint="uq_memberships_scope_user",
-                    set_={"role_keys": sorted(role_keys), "department": department},
-                )
-            )
+            except IntegrityError as exc:
+                # The database refused a combination of roles one person may
+                # not hold (the membership's existing permission sets
+                # included): nothing was granted, and no audit row claims it.
+                conflict = separation_of_duties_conflict(exc)
+                if conflict is None:
+                    raise
+                raise conflict from exc
             await SqlAuditRepository(session).append(audit)
 
     async def revoke(

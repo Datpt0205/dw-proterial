@@ -26,6 +26,31 @@ _SET_LOOKUP_CONTEXT = text("SELECT set_config('app.tenant_id', :tenant_id, true)
 _RECORDS_ALL_READ = "crm.records.all.read"
 
 
+async def effective_scopes(
+    session: AsyncSession, role_keys: frozenset[str], permission_set_keys: frozenset[str]
+) -> frozenset[str]:
+    """A membership's scopes: its roles' and its permission sets', unioned.
+
+    Permission Sets (ADR-001 Phase 3) are additive scopes attached to a
+    membership on top of its role, so a set grants a capability without a new
+    role. The one reading of that rule on this side of the database; the
+    access context and "who in this workspace holds X" both ask it."""
+    scopes: set[str] = set()
+    if role_keys:
+        for (role_scopes,) in await session.execute(
+            sa.select(tables.roles.c.scopes).where(tables.roles.c.key.in_(role_keys))
+        ):
+            scopes.update(role_scopes)
+    if permission_set_keys:
+        for (set_scopes,) in await session.execute(
+            sa.select(tables.permission_sets.c.scopes).where(
+                tables.permission_sets.c.key.in_(permission_set_keys)
+            )
+        ):
+            scopes.update(set_scopes)
+    return frozenset(scopes)
+
+
 @dataclass(frozen=True)
 class SqlMembershipLookup:
     """Implements ``MembershipLookupPort``."""
@@ -91,25 +116,11 @@ class SqlMembershipLookup:
                 return None
 
             role_keys = frozenset(membership_row.role_keys)
-            scopes: set[str] = set()
-            if role_keys:
-                roles_result = await session.execute(
-                    sa.select(tables.roles.c.scopes).where(tables.roles.c.key.in_(role_keys))
+            scopes = set(
+                await effective_scopes(
+                    session, role_keys, frozenset(membership_row.permission_set_keys)
                 )
-                for (role_scopes,) in roles_result:
-                    scopes.update(role_scopes)
-            # Permission Sets (ADR-001 Phase 3): additive scopes attached to this
-            # membership on top of its role. Unioned in, so a set grants a
-            # capability without a new role.
-            perm_set_keys = frozenset(membership_row.permission_set_keys)
-            if perm_set_keys:
-                ps_result = await session.execute(
-                    sa.select(tables.permission_sets.c.scopes).where(
-                        tables.permission_sets.c.key.in_(perm_set_keys)
-                    )
-                )
-                for (ps_scopes,) in ps_result:
-                    scopes.update(ps_scopes)
+            )
 
             entitlement_row = (
                 await session.execute(

@@ -37,6 +37,7 @@ from dw_api.routes.v1.integrations import router as integrations_router
 from dw_api.routes.v1.knowledge import router as knowledge_router
 from dw_api.routes.v1.me import router as me_router
 from dw_api.routes.v1.memory import router as memory_router
+from dw_api.routes.v1.notifications import router as notifications_router
 from dw_api.routes.v1.platform import router as platform_router
 from dw_api.routes.v1.runs import router as runs_router
 
@@ -123,6 +124,7 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     for router in (
         auth_router,
         me_router,
+        notifications_router,
         directory_router,
         admin_members_router,
         admin_console_router,

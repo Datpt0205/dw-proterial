@@ -99,7 +99,7 @@ def test_a_host_with_no_infrastructure_wires_no_lane() -> None:
 
 
 def test_only_the_platform_lanes_are_wired() -> None:
-    """Five lanes a database alone is enough for, and no more.
+    """Six lanes a database alone is enough for, and no more.
 
     The outbox, and retention twice. Retention joined the platform set the day
     memory got a lifecycle: `memory.items` is a platform table, so the platform
@@ -119,6 +119,8 @@ def test_only_the_platform_lanes_are_wired() -> None:
     unlike audit/memory/knowledge, its window answers no compliance question,
     so it is a technical constant in code, not a term in
     `retention@1.4.0.yaml` (see `SqlSpendGuardRetention`'s docstring).
+    `notifications_retention` is the sixth, on the same footing: the in-app
+    inbox's 90 days live in `platform.prune_notifications()` itself.
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
@@ -130,6 +132,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "retention_knowledge",
         "partitions",
         "spend_guard_retention",
+        "notifications_retention",
     }
 
 

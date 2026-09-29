@@ -108,9 +108,38 @@ must have one.
 
 Python 3.12 with a uv workspace. FastAPI, Pydantic v2, SQLAlchemy 2 async,
 Alembic. LangGraph for orchestration/checkpoint/HITL. PostgreSQL, Qdrant,
-Redis/Valkey, MinIO/S3. Next.js, TypeScript strict, Tailwind, shadcn/ui.
-OpenTelemetry, optional Langfuse. Ruff, mypy, pytest, import-linter, pre-commit.
-pnpm workspace and lockfile. Pin versions; commit lockfiles; never `latest`.
+Redis/Valkey, MinIO/S3. Next.js, TypeScript strict, Ant Design v6 (below),
+Tailwind for layout only. OpenTelemetry, optional Langfuse. Ruff, mypy, pytest,
+import-linter, pre-commit. pnpm workspace and lockfile. Pin versions; commit
+lockfiles; never `latest`.
+
+## Web UI
+
+Ant Design v6 (`antd`) is the component library, decided 2026-09-28 in place
+of shadcn/ui; the measurements behind it are in `.claude/plans/web-ui.md`.
+
+- **One component system.** New UI uses `antd`, `@ant-design/icons`, and
+  `@ant-design/nextjs-registry` for server-rendered styles. No new shadcn/ui
+  component is added; an existing one is replaced when its page is next
+  touched, not in one sweep. ProComponents waits for a stable release that
+  supports v6 (its v6 line was still beta on 2026-09-27).
+- **Tailwind is for layout only** (flex, grid, spacing). Colour, type and
+  radius come from the antd theme.
+- **One owner of the tokens:** the antd theme (`ConfigProvider`, `vi_VN`
+  locale) in `@dw/ui`, emitted as CSS variables. Tailwind's colours map to
+  those variables and are never defined a second time.
+- **Layer order:** `@layer theme, base, antd, components, utilities;` before
+  `@import "tailwindcss"`, with `AntdRegistry` given the `antd` layer. A wrong
+  order fails silently (Tailwind classes on antd components are ignored), so
+  the switch ships with a test that fails without it.
+- **Bundle:** about +250 kB first-load JS on a page using Table, Form, Select
+  and DatePicker is accepted.
+- **Dates:** dayjs with the `vi` locale, behind `lib/dates.ts` — one
+  formatter, not two.
+- **One shared shell:** `@dw/ui` owns the theme, the top-navbar layout (a
+  horizontal menu, a drawer below the `lg` breakpoint) and the domain-neutral
+  pieces a context reuses (page header, status tags, the case workspace). A
+  context imports antd primitives directly; `@dw/ui` does not re-wrap them.
 
 ## Layer rules
 
@@ -247,9 +276,58 @@ security/dependency scan, eval smoke, container build and a compose smoke test.
 
 1. Inspect before changing.
 2. Plan, and state assumptions.
-3. Work in small phases; run tests after each.
-4. Prefer a thin end-to-end slice over empty abstractions.
-5. Never leave a placeholder-only module. A deferred component ships a working
+3. Size is not a reason to go faster. A one-line fix earns the same questions
+   as a new bounded context: is this the simplest approach that solves the
+   problem, how does it behave once a second tenant/case/scale hits it, what
+   will it interact with once more is built on top, and what could it
+   silently break. Where the answer is "not sure," that is what
+   `.claude/rules/failure-modes.md` and `reviewing-feature-security`'s
+   mutation check are for — run them rather than re-deriving the checklist
+   from memory, and slow down rather than guess.
+4. Work in small phases; run tests after each.
+5. Prefer a thin end-to-end slice over empty abstractions.
+6. Never leave a placeholder-only module. A deferred component ships a working
    mock adapter and a documented port.
-6. Keep diffs focused; update this file when the architecture changes.
-7. Record a decision rather than deviating silently.
+7. Keep diffs focused; update this file when the architecture changes.
+8. Record a decision rather than deviating silently.
+9. Write SOLID, cleanly factored, reusable, properly-composed code as a
+   matter of course — `.claude/rules/code-quality.md` shows what that looks
+   like in this codebase's own idiom (ports over branching, one dispatch
+   table instead of two copies, composition over inheritance), not as a
+   textbook checklist. It answers to the same "senior engineer" test as
+   everything else here: appropriately factored, not over-abstracted for
+   what the task actually asked.
+
+## Agent skills
+
+Matt Pocock's engineering skills are installed as a project plugin
+(`mattpocock-skills@claude-plugins-official`, pinned by the marketplace to one
+commit). `/ask-matt` routes to the right one.
+
+### Issue tracker
+
+Local markdown in `.claude/plans/`, the plan the session hooks already enforce:
+specs and tickets under `.claude/plans/<area>/<feature>/`, the area file stays
+the summary. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles (`needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`), written as a ticket's `Status:` line. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: `CONTEXT-MAP.md` at the root, a `CONTEXT.md` and `docs/adr/`
+per context. ADRs carry a status, and not every decision recorded in this
+repo is settled. See `docs/agents/domain.md`.
+
+### Where the skills meet this repo's own gates
+
+- `/implement` ends in `/code-review` and a commit. Before `/code-review`, run
+  `reviewing-feature-security` and the scoped mutation check; the pre-commit
+  gate still asks its questions.
+- `/code-review`'s Standards axis reads this file and `.claude/rules/`
+  (`code-quality.md`, `failure-modes.md`). The plugin's skill is
+  `mattpocock-skills:code-review`, not Claude Code's built-in `/code-review`.
+- A slice is finished when its area file in `.claude/plans/` says so.

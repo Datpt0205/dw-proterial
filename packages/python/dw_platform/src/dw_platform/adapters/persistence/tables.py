@@ -335,6 +335,69 @@ tenant_offboarding_requests = sa.Table(
     ),
 )
 
+policy_overrides = sa.Table(
+    "policy_overrides",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+    sa.Column("policy_id", sa.Text, nullable=False),
+    sa.Column("content", JSONB, nullable=False),
+    sa.Column(
+        "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+    sa.Column(
+        "updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+)
+
+# Separation of duties (migrations b9862fa13a80, 6b26771e549d). The rules are a
+# platform catalogue the application reads; the membership trigger enforces
+# them. A waiver is one tenant's recorded decision to lift a waivable rule.
+sod_rules = sa.Table(
+    "sod_rules",
+    metadata,
+    sa.Column("key", sa.Text, primary_key=True),
+    sa.Column("description", sa.Text, nullable=False),
+    sa.Column("left_scopes", JSONB, nullable=False),
+    sa.Column("right_scopes", JSONB, nullable=False),
+    sa.Column("waivable", sa.Boolean, nullable=False, server_default=sa.text("false")),
+)
+
+sod_waivers = sa.Table(
+    "sod_waivers",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+    sa.Column("rule_key", sa.Text, sa.ForeignKey("sod_rules.key"), nullable=False),
+    sa.Column("reason", sa.Text, nullable=False),
+    sa.Column("granted_by", UUID(as_uuid=True), nullable=False),
+    sa.Column(
+        "granted_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+    sa.Column("revoked_at", sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.Column("revoked_by", UUID(as_uuid=True), nullable=True),
+    sa.Column("revoke_reason", sa.Text, nullable=True),
+)
+
+# One person's in-app inbox (migration 855ae928c3fa). RLS narrows reads and
+# updates to rows addressed to the bound principal.
+notifications = sa.Table(
+    "notifications",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), sa.ForeignKey("workspaces.id"), nullable=False),
+    sa.Column("recipient_user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("source_key", sa.Text, nullable=False),
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("body", sa.Text, nullable=False, server_default=sa.text("''")),
+    sa.Column("link", sa.Text, nullable=True),
+    sa.Column(
+        "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+    sa.Column("read_at", sa.TIMESTAMP(timezone=True), nullable=True),
+)
+
 # Tables whose rows belong to exactly one tenant → RLS enabled + forced.
 TENANT_SCOPED_TABLES = (
     "workspaces",

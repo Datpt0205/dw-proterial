@@ -59,6 +59,7 @@ from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
     RevokeMembershipHandler,
 )
+from dw_platform.application.notifications import NotificationService
 from dw_platform.application.ports import (
     AccessContextFactoryPort,
     FeedbackAttachmentStoragePort,
@@ -67,6 +68,7 @@ from dw_platform.application.ports import (
     WorkspaceDirectoryPort,
 )
 from dw_platform.application.provisioning import ProvisioningService
+from dw_platform.application.separation_of_duties import SeparationOfDutiesService
 
 
 @dataclass(frozen=True)
@@ -140,6 +142,8 @@ class ApiContainer:
     revoke_membership: RevokeMembershipHandler | None = None
     admin_console: AdminConsoleService | None = None
     hierarchy: HierarchyService | None = None
+    separation_of_duties: SeparationOfDutiesService | None = None
+    notifications: NotificationService | None = None
     cache: CachePort | None = None
     # Dedicated to the readiness probe — the runtime's own retrieval/memory
     # clients are built (and disposed) deeper inside `build_runtime`, only

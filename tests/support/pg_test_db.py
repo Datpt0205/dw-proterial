@@ -34,7 +34,7 @@ def load_env() -> dict[str, str]:
         {
             k: v
             for k, v in os.environ.items()
-            if k.startswith(("DW_", "POSTGRES", "MINIO", "QDRANT", "S3_"))
+            if k.startswith(("DW_", "POSTGRES", "MINIO", "QDRANT", "S3_", "COMPOSE_"))
         }
     )
     return values
@@ -45,6 +45,17 @@ class DatabaseUrls:
     admin: str
     migrator: str
     app: str
+
+
+def postgres_container() -> str:
+    """This checkout's Postgres container, named the way compose names it:
+    after `COMPOSE_PROJECT_NAME`, read from the same `.env` the credentials
+    come from. A second dw-based checkout on the machine owns "dw-postgres-1";
+    a test that `docker exec`s must never land in that one."""
+    explicit = os.environ.get("PG_CONTAINER")
+    if explicit:
+        return explicit
+    return f"{load_env().get('COMPOSE_PROJECT_NAME', 'dw')}-postgres-1"
 
 
 def database_urls(test_db: str) -> DatabaseUrls:

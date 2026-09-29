@@ -80,8 +80,8 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     ports:
-      - "127.0.0.1:6333:6333"
-      - "127.0.0.1:6334:6334"
+      - "127.0.0.1:${DW_QDRANT_HOST_PORT:-6333}:6333"
+      - "127.0.0.1:${DW_QDRANT_GRPC_HOST_PORT:-6334}:6334"
     networks: [dw-internal, dw-edge]
     healthcheck:
       test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
@@ -99,7 +99,7 @@ services:
     volumes:
       - valkey-data:/data
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${DW_VALKEY_HOST_PORT:-6379}:6379"
     networks: [dw-internal, dw-edge]
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
@@ -124,8 +124,8 @@ services:
     volumes:
       - minio-data:/data
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:${DW_MINIO_HOST_PORT:-9000}:9000"
+      - "127.0.0.1:${DW_MINIO_CONSOLE_HOST_PORT:-9001}:9001"
     networks: [dw-internal, dw-edge]
     healthcheck:
       # UBI-micro image has no curl/grep; use bash /dev/tcp HTTP probe.
@@ -189,7 +189,8 @@ services:
       # http:// it sees on the upstream. Harmless locally where no proxy sets it.
       KC_PROXY_HEADERS: xforwarded
       # Host 8686 -> container 8080 (avoids a clash with other local apps on 8080).
-      # The frontend URL must match the mapped host port so token `iss` = :8686.
+      # The frontend URL must match the mapped host port so token `iss` = :8686;
+      # a checkout that moves DW_KEYCLOAK_HOST_PORT sets KC_HOSTNAME to match.
       # A server behind a domain sets KC_HOSTNAME in its .env to the public https
       # URL (e.g. https://sales.dxrank.vn) so `iss` matches DW_*_OIDC_ISSUER_URL
       # and Keycloak stops answering "HTTPS required". Hardcoding localhost here
@@ -203,7 +204,7 @@ services:
       # mount degrades to the default theme instead of breaking login.
       - ../keycloak/themes/sales:/opt/keycloak/themes/sales:ro
     ports:
-      - "127.0.0.1:8686:8080"
+      - "127.0.0.1:${DW_KEYCLOAK_HOST_PORT:-8686}:8080"
     networks: [dw-internal, dw-edge]
     depends_on:
       postgres:
@@ -266,7 +267,7 @@ services:
     volumes:
       - tei-models:/data
     ports:
-      - "127.0.0.1:8085:80"
+      - "127.0.0.1:${DW_TEI_EMBED_HOST_PORT:-8085}:80"
     networks: [dw-internal, dw-edge]
     healthcheck:
       test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/127.0.0.1/80"]
@@ -304,7 +305,7 @@ services:
     volumes:
       - tei-models:/data
     ports:
-      - "127.0.0.1:8086:80"
+      - "127.0.0.1:${DW_TEI_RERANK_HOST_PORT:-8086}:80"
     networks: [dw-internal, dw-edge]
     healthcheck:
       test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/127.0.0.1/80"]
@@ -387,7 +388,7 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${DW_API_HOST_PORT:-8000}:8000"
     networks: [dw-internal, dw-edge]
     depends_on:
       migrate:
@@ -641,7 +642,7 @@ services:
       <<: *langfuse-env
       NEXTAUTH_URL: http://localhost:3001
     ports:
-      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:${DW_LANGFUSE_HOST_PORT:-3001}:3000"
     networks: [dw-internal, dw-edge]
     depends_on:
       langfuse-worker:
@@ -701,7 +702,7 @@ services:
       - alertmanager-config:/etc/alertmanager
     command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
     ports:
-      - "127.0.0.1:9093:9093"
+      - "127.0.0.1:${DW_ALERTMANAGER_HOST_PORT:-9093}:9093"
     # dw-edge for two reasons: the published UI port, and the outbound route
     # to whatever webhook ALERTMANAGER_WEBHOOK_URL names (Slack, Discord,
     # ...) — an external destination, same as the reason api/keycloak sit on
@@ -719,7 +720,7 @@ services:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports:
-      - "127.0.0.1:9090:9090"
+      - "127.0.0.1:${DW_PROMETHEUS_HOST_PORT:-9090}:9090"
     networks: [dw-internal, dw-edge]
     depends_on:
       alertmanager:

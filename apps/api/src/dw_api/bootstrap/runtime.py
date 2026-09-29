@@ -144,6 +144,9 @@ def build_runtime(
         prompts=prompts,
         adapters=build_model_adapters(settings),
         usage_recorder=usage_recorder,
+        # Resolved here so a profile id nobody registered fails at startup,
+        # not on the first model call.
+        default_profile=profiles.resolve(settings.model_profile).profile_id,
         budget=budget,
     )
     # The LangChain path (agent loops, structured output) bills into the same

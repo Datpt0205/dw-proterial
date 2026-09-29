@@ -133,12 +133,15 @@ defaults, and a CHECK constraint on anything with a fixed set of values.
 
 Four kinds of thing, four homes. Putting them in one place is how they get lost.
 
-| Kind                                       | Home                                                           |
-| ------------------------------------------ | -------------------------------------------------------------- |
-| A decision about the architecture, and why | `CLAUDE.md` — it travels with the code and is reviewed with it |
-| A failure mode worth avoiding next time    | this file                                                      |
-| Where the work stands and what is next     | `.claude/PLAN.md` — read into context at session start         |
-| A standing instruction from the user       | user-level memory, not the repo                                |
+| Kind                                       | Home                                                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| A decision about the architecture, and why | `CLAUDE.md` — it travels with the code and is reviewed with it                       |
+| A failure mode worth avoiding next time    | this file                                                                            |
+| Where the work stands and what is next     | `.claude/plans/<area>.md`, indexed by `.claude/PLAN.md`, read whole at session start |
+| A standing instruction from the user       | user-level memory, not the repo                                                      |
 
-A session that ends without `.claude/PLAN.md` matching reality has lost whatever
-it learned, however good the code was.
+A session that ends without the plan matching reality — the area file it
+worked in, and the index when an area's state, next step or owed decision
+changed — has lost whatever it learned, however good the code was. The index
+stays short on purpose: the session-start hook warns past 80 lines, because a
+plan that grows until only its top is read hides exactly what was added last.

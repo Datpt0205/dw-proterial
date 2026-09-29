@@ -35,6 +35,7 @@ from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
+from dw_platform.adapters.persistence.notifications import SqlNotificationRetention
 from dw_platform.adapters.persistence.offboarding import SqlTenantOffboarding
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
@@ -124,6 +125,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # constant, not a legal term, so it is not on retention_policy's cadence
     # or file; see SqlSpendGuardRetention's docstring.
     spend_guard_retention: RetentionPrunePort | None = None
+    # The in-app inbox's own bound: 90 days, the database's constant.
+    notifications_retention: RetentionPrunePort | None = None
     # Ops hardening Phase 4. Needs object storage too, not just a database -
     # export/purge touch three buckets and the vector index alongside Postgres.
     offboarding_consumer: Callable[[], Awaitable[None]] | None = None
@@ -182,6 +185,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             vector_index=build_vector_index(settings),
         )
         spend_guard_retention = SqlSpendGuardRetention(session_factory=sessions, clock=clock)
+        notifications_retention = SqlNotificationRetention(session_factory=sessions)
         if settings.s3_endpoint_url:
             offboarding_consumer = build_offboarding_consumer(
                 TenantOffboardingLane(
@@ -250,6 +254,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "spend_guard_retention",
             build_retention_consumer(spend_guard_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if notifications_retention is not None:
+        registry.register(
+            "notifications_retention",
+            build_retention_consumer(notifications_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     if offboarding_consumer is not None:

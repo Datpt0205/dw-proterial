@@ -10,6 +10,7 @@ import { NAV_ITEMS } from "../lib/nav/registry";
 import { hasAnyRole } from "../lib/nav/roles";
 import { LoginScreen } from "./login-screen";
 import { NavLinks } from "./nav-links";
+import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { FeedbackLauncher } from "./feedback/launcher";
@@ -184,6 +185,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
                 <WorkspaceSwitcher />
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <NotificationBell />
                 <SessionChip />
               </div>
             </div>

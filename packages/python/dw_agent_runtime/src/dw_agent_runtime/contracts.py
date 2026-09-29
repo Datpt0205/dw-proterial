@@ -57,7 +57,15 @@ class WorkerDefinition(BaseModel):
     domain: str = Field(pattern=_SLUG_PATTERN)
     graph_version: str = Field(pattern=_SEMVER_PATTERN)
     prompt_bundle_version: str = Field(pattern=_SEMVER_PATTERN)
-    toolset_version: str = Field(pattern=_SEMVER_PATTERN)
+    # None only for a worker that calls no tool at all (a plain graph, not an
+    # agent loop) — never a placeholder for one that does. `platform.worker_
+    # runs.toolset_version` is nullable for the identical reason (migration
+    # 0005): inventing a version for something that was not there is worse
+    # than admitting it was not. A worker that returns a value here still
+    # owes the release manifest a real, resolvable `Toolset`
+    # (`test_manifest_contains_every_required_section`) — this does not
+    # relax that for anything that actually offers a tool.
+    toolset_version: str | None = Field(default=None, pattern=_SEMVER_PATTERN)
     policy_version: str = Field(pattern=_SEMVER_PATTERN)
     memory_policy_version: str = Field(pattern=_SEMVER_PATTERN)
     default_model_profile: str

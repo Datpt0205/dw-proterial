@@ -19,6 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_kernel.errors import ConflictError
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.adapters.persistence.separation_of_duties import (
+    separation_of_duties_conflict,
+)
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.admin_console import (
@@ -210,18 +213,26 @@ class SqlAdminConsoleRepository:
     ) -> bool:
         scope = TenantScope.from_access_context(context)
         async with tenant_session(self.session_factory, scope) as session:
-            row = (
-                await session.execute(
-                    sa.update(tables.memberships)
-                    .where(
-                        tables.memberships.c.tenant_id == context.tenant_id,
-                        tables.memberships.c.workspace_id == context.workspace_id,
-                        tables.memberships.c.user_id == user_id,
+            try:
+                row = (
+                    await session.execute(
+                        sa.update(tables.memberships)
+                        .where(
+                            tables.memberships.c.tenant_id == context.tenant_id,
+                            tables.memberships.c.workspace_id == context.workspace_id,
+                            tables.memberships.c.user_id == user_id,
+                        )
+                        .values(permission_set_keys=sorted(permission_set_keys))
+                        .returning(tables.memberships.c.id)
                     )
-                    .values(permission_set_keys=sorted(permission_set_keys))
-                    .returning(tables.memberships.c.id)
-                )
-            ).first()
+                ).first()
+            except IntegrityError as exc:
+                # A permission set cannot carry a scope past separation of
+                # duties either: the trigger judges roles and sets together.
+                conflict = separation_of_duties_conflict(exc)
+                if conflict is None:
+                    raise
+                raise conflict from exc
             if row is None:
                 return False
             await SqlAuditRepository(session).append(audit)

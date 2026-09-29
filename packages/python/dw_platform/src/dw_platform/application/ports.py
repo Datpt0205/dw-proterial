@@ -7,7 +7,7 @@ these; handlers depend only on the protocols.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from types import TracebackType
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
@@ -96,6 +96,42 @@ class WorkspaceDirectoryPort(Protocol):
 
     async def list_candidates(self, context: AccessContext) -> list[IdentityRef]:
         """Signed-in identities not already in this workspace — a grant picker."""
+        ...
+
+
+class PolicyOverridePort(Protocol):
+    """A tenant's own replacement for a platform-default policy document.
+
+    The write half `TenantOverlay`'s own docstring already names as a
+    covered artifact kind ("a policy") but never had storage built for.
+    `content` is raw JSON: this port has no opinion on what shape a given
+    `policy_id` needs — validating a submitted document against its own
+    schema is the owning bounded context's job (the Pydantic model it
+    declares for its own `policy_id`), the same
+    split every other port in this platform draws between "persist this"
+    and "is this valid". A tenant's override is the WHOLE document, never
+    merged field-by-field with the platform default — matches how every
+    other `TenantOverlay`-resolved artifact already resolves.
+    """
+
+    async def get(self, context: AccessContext, policy_id: str) -> dict[str, object] | None: ...
+
+    async def put(
+        self,
+        context: AccessContext,
+        policy_id: str,
+        content: Mapping[str, object],
+        *,
+        audit: AuditEvent,
+    ) -> None:
+        """Persists `content` and `audit` in the SAME transaction — a policy
+        override changes what a business rule (an SLA breach, eventually a
+        retention term) means for a whole tenant, and CLAUDE.md's own
+        provenance rule applies to it exactly as it does to a membership
+        grant: the write and its audit trail commit together or not at all.
+        Required, not optional — `membership_admin.py`'s `grant()`/`revoke()`
+        already take `audit: AuditEvent` the same way, not a keyword a caller
+        can forget to pass."""
         ...
 
 

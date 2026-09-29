@@ -172,7 +172,7 @@ thinking:
 HIGH,CRITICAL --ignore-unfixed` on the image this change produces; the four
   images here were carrying fourteen fixable findings that no amount of review
   would have surfaced. This applies just as much to an image the change only
-  *references* in a compose file and pulls from a registry, not one this
+  _references_ in a compose file and pulls from a registry, not one this
   repo's own Dockerfiles build — `reviewing-deployment-security` §6 has the
   rule for that case, found missing the same way, later.
 

@@ -5,7 +5,7 @@ description: Run this before finishing any change that adds an API route, a resp
 
 # Reviewing deployment security before it ships
 
-`reviewing-feature-security` asks who else can reach a piece of *logic*. This
+`reviewing-feature-security` asks who else can reach a piece of _logic_. This
 skill asks a different question: given the right caller and the right tenant,
 what does this environment expose that it shouldn't — a debug surface, a dev
 default, an unscanned image, a URL this app will fetch on someone else's say-so.
@@ -15,8 +15,8 @@ real traffic, a CORS origin that's really a wildcard, a webhook nobody scanned.
 
 This repo already has the right mechanism for most of this —
 `settings.is_deployed` / `DEPLOYED_PROFILES`, never `profile == "production"`
-(`CLAUDE.md`, Environments) — so most of this skill is *using that mechanism
-correctly for the new surface*, not inventing a new one.
+(`CLAUDE.md`, Environments) — so most of this skill is _using that mechanism
+correctly for the new surface_, not inventing a new one.
 
 Unlike `.claude/rules/failure-modes.md`, this skill is not yet backed by a
 count of times each shape has actually shipped here — it is preventive, not a
@@ -107,7 +107,7 @@ comes from configuration or, worse, a request.
 `trivy image --severity HIGH,CRITICAL --ignore-unfixed` "on the image this
 change produces" — read narrowly, that covers `dw-api`/`dw-worker`/`dw-docgen`,
 the images this repo's own Dockerfiles build. It does not obviously cover an
-image a change merely *references* in `docker-compose.yml` and pulls from a
+image a change merely _references_ in `docker-compose.yml` and pulls from a
 registry (an exporter, a proxy, a sidecar) — found the gap this way while
 shipping Ops hardening Phase 5's Prometheus/Alertmanager services, where the
 first pass scanned nothing because none of the four new images were "built."
@@ -117,8 +117,8 @@ compose file — built by this repo or merely pulled — gets scanned before the
 change ships**, same command, same severity floor. A HIGH/CRITICAL finding
 with a fix available doesn't have to block the commit by itself (a Go-stdlib
 DoS CVE in a vendored binary is a different risk than one in code this repo
-wrote), but it has to be a decision written down (`.claude/PLAN.md` or the
-commit message), not silence.
+wrote), but it has to be a decision written down (the area's plan file under
+`.claude/plans/`, or the commit message), not silence.
 
 A dependency version bump gets the same "run it, don't trust the changelog"
 treatment `failure-modes.md` #4 already requires for libraries generally —

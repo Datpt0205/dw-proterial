@@ -783,6 +783,27 @@
         "title": "IdentityRefView",
         "type": "object"
       },
+      "InboxView": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "unread": {
+            "title": "Unread",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "unread"
+        ],
+        "title": "InboxView",
+        "type": "object"
+      },
       "IngestJobView": {
         "properties": {
           "attempts": {
@@ -1173,6 +1194,128 @@
           "name"
         ],
         "title": "NewTenantView",
+        "type": "object"
+      },
+      "NotificationView": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "body",
+          "link",
+          "created_at",
+          "read_at"
+        ],
+        "title": "NotificationView",
+        "type": "object"
+      },
+      "OffboardingStatusView": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "export_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Export Key"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requested_by": {
+            "format": "uuid",
+            "title": "Requested By",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "tenant_id",
+          "status",
+          "requested_by",
+          "requested_at",
+          "export_key",
+          "error",
+          "updated_at"
+        ],
+        "title": "OffboardingStatusView",
         "type": "object"
       },
       "OperatorView": {
@@ -1589,6 +1732,81 @@
         "title": "SetPermissionSetsBody",
         "type": "object"
       },
+      "SodRuleView": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "left_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Left Scopes",
+            "type": "array"
+          },
+          "right_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Right Scopes",
+            "type": "array"
+          },
+          "waivable": {
+            "title": "Waivable",
+            "type": "boolean"
+          },
+          "waiver": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SodWaiverView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "description",
+          "left_scopes",
+          "right_scopes",
+          "waivable",
+          "waiver"
+        ],
+        "title": "SodRuleView",
+        "type": "object"
+      },
+      "SodWaiverView": {
+        "properties": {
+          "granted_at": {
+            "format": "date-time",
+            "title": "Granted At",
+            "type": "string"
+          },
+          "granted_by": {
+            "format": "uuid",
+            "title": "Granted By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "granted_by",
+          "granted_at"
+        ],
+        "title": "SodWaiverView",
+        "type": "object"
+      },
       "TenantSettingsView": {
         "properties": {
           "locale": {
@@ -1900,6 +2118,21 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WaiverDecisionBody": {
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "WaiverDecisionBody",
         "type": "object"
       },
       "WorkspaceMemberView": {
@@ -2364,6 +2597,121 @@
           }
         },
         "summary": "List Roles",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/separation-of-duties": {
+      "get": {
+        "operationId": "list_separation_of_duties_api_v1_admin_separation_of_duties_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SodRuleView"
+                  },
+                  "title": "Response List Separation Of Duties Api V1 Admin Separation Of Duties Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Separation Of Duties",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/separation-of-duties/{rule_key}/waiver": {
+      "post": {
+        "operationId": "waive_separation_of_duties_rule_api_v1_admin_separation_of_duties__rule_key__waiver_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_key",
+            "required": true,
+            "schema": {
+              "title": "Rule Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaiverDecisionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Waive Separation Of Duties Rule",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/separation-of-duties/{rule_key}/waiver/revoke": {
+      "post": {
+        "operationId": "revoke_separation_of_duties_waiver_api_v1_admin_separation_of_duties__rule_key__waiver_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_key",
+            "required": true,
+            "schema": {
+              "title": "Rule Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaiverDecisionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Separation Of Duties Waiver",
         "tags": [
           "admin"
         ]
@@ -3441,6 +3789,77 @@
         ]
       }
     },
+    "/api/v1/notifications": {
+      "get": {
+        "operationId": "list_notifications_api_v1_notifications_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "post": {
+        "operationId": "mark_all_notifications_read_api_v1_notifications_read_all_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mark All Notifications Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/{notification_id}/read": {
+      "post": {
+        "operationId": "mark_notification_read_api_v1_notifications__notification_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notification Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark Notification Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
     "/api/v1/platform/operators": {
       "get": {
         "operationId": "list_operators_api_v1_platform_operators_get",
@@ -3689,6 +4108,128 @@
           }
         },
         "summary": "Lock Tenant",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/offboard": {
+      "get": {
+        "operationId": "get_offboarding_status_api_v1_platform_tenants__tenant_id__offboard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Offboarding Status",
+        "tags": [
+          "platform"
+        ]
+      },
+      "post": {
+        "description": "Files the request and flips the tenant to `offboarding` immediately.\n\n202, not 200 or 204: the export/purge itself runs later, on the worker's\noffboarding lane — this call only starts it.",
+        "operationId": "initiate_offboarding_api_v1_platform_tenants__tenant_id__offboard_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OffboardingStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Initiate Offboarding",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/offboard/finalize": {
+      "post": {
+        "description": "The operator's explicit second step, once GET .../offboard reports\n`completed` — see ProvisioningService.finalize_offboarding's docstring\nfor why this is not automatic.",
+        "operationId": "finalize_offboarding_api_v1_platform_tenants__tenant_id__offboard_finalize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Finalize Offboarding",
         "tags": [
           "platform"
         ]

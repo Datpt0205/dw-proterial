@@ -61,7 +61,11 @@ from dw_platform.adapters.persistence.idempotency_store import SqlIdempotencySto
 from dw_platform.adapters.persistence.identity_provisioning import SqlIdentityBootstrap
 from dw_platform.adapters.persistence.membership_admin import SqlMembershipAdminRepository
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
+from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
 from dw_platform.adapters.persistence.provisioning_repo import SqlProvisioningRepository
+from dw_platform.adapters.persistence.separation_of_duties_repo import (
+    SqlSeparationOfDutiesRepository,
+)
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.authorization import ScopeAuthorizationService
@@ -73,7 +77,9 @@ from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
     RevokeMembershipHandler,
 )
+from dw_platform.application.notifications import NotificationService
 from dw_platform.application.provisioning import ProvisioningService
+from dw_platform.application.separation_of_duties import SeparationOfDutiesService
 
 _LOG = logging.getLogger("dw_api.bootstrap")
 
@@ -180,6 +186,10 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     container.hierarchy = HierarchyService(
         SqlHierarchyRepository(session_factory), authorization, clock, ids
     )
+    container.separation_of_duties = SeparationOfDutiesService(
+        SqlSeparationOfDutiesRepository(session_factory), authorization, clock, ids
+    )
+    container.notifications = NotificationService(SqlNotificationRepository(session_factory))
 
     # ---- provisioning ----------------------------------------------------
     # A second engine as the provisioner role: writes across tenants but holds

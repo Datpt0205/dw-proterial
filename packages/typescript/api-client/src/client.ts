@@ -18,12 +18,16 @@ import {
   adminTenantSchema,
   adminRoleSchema,
   adminPermissionSetSchema,
+  adminSodRuleSchema,
+  inboxSchema,
   hierarchyMemberSchema,
   type AdminWorkspace,
   type AdminTenant,
   type AutonomyLevel,
   type AdminRole,
   type AdminPermissionSet,
+  type AdminSodRule,
+  type Inbox,
   type HierarchyMember,
   type Approval,
   type AuditEvent,
@@ -44,6 +48,7 @@ import {
   type Page,
   type PageParams,
 } from "@dw/contracts";
+import type { components } from "./generated/platform";
 
 /**
  * Typed API client core. Endpoint methods generated from OpenAPI are layered on
@@ -137,6 +142,38 @@ const userRefSchema = z.object({
   display_name: z.string(),
 });
 export type PlatformUserRef = z.infer<typeof userRefSchema>;
+
+/** True only when A and B are the same type, both ways. */
+type SameType<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : false
+  : false;
+
+type Generated = components["schemas"];
+
+// The hand-kept zod mirror must describe exactly what the route declares:
+// if either side drifts, these lines stop compiling instead of a response
+// quietly losing a field (zod strips unknown keys) in production. Mutual
+// assignability alone misses a new OPTIONAL field — FastAPI leaves any
+// field with a default out of `required` — so every object's key set is
+// compared too.
+const _sodRuleMirrorsTheRoute: [
+  SameType<AdminSodRule, Generated["SodRuleView"]>,
+  SameType<keyof AdminSodRule, keyof Generated["SodRuleView"]>,
+  SameType<
+    keyof NonNullable<AdminSodRule["waiver"]>,
+    keyof Generated["SodWaiverView"]
+  >,
+] = [true, true, true];
+void _sodRuleMirrorsTheRoute;
+
+const _inboxMirrorsTheRoute: [
+  SameType<Inbox, Generated["InboxView"]>,
+  SameType<keyof Inbox, keyof Generated["InboxView"]>,
+  SameType<keyof Inbox["items"][number], keyof Generated["NotificationView"]>,
+] = [true, true, true];
+void _inboxMirrorsTheRoute;
 
 export class ApiClient {
   constructor(private readonly options: ApiClientOptions) {}
@@ -396,6 +433,60 @@ export class ApiClient {
       "PUT",
       `/api/v1/admin/members/${userId}/permission-sets`,
       { body: { permission_set_keys: keys } },
+    );
+  }
+
+  // ---- notifications ---------------------------------------------------------
+
+  /** The caller's own latest notifications and how many are unread. */
+  listNotifications(signal?: AbortSignal): Promise<Inbox> {
+    return this.request("GET", "/api/v1/notifications", inboxSchema, {
+      signal,
+    });
+  }
+
+  /** Mark one of the caller's own read. 404 for anyone else's. */
+  markNotificationRead(id: string): Promise<void> {
+    return this.requestNoContent(
+      "POST",
+      `/api/v1/notifications/${encodeURIComponent(id)}/read`,
+    );
+  }
+
+  markAllNotificationsRead(): Promise<void> {
+    return this.requestNoContent("POST", "/api/v1/notifications/read-all");
+  }
+
+  // ---- admin: separation of duties ------------------------------------------
+
+  /** Every separation-of-duty rule, with this tenant's open waiver of each. */
+  listSeparationOfDuties(): Promise<AdminSodRule[]> {
+    return this.request(
+      "GET",
+      "/api/v1/admin/separation-of-duties",
+      z.array(adminSodRuleSchema),
+    );
+  }
+
+  /** Lift a waivable rule for the whole tenant, on the record. 409 if the
+   * rule is a floor or already waived. */
+  waiveSeparationOfDutiesRule(ruleKey: string, reason: string): Promise<void> {
+    return this.requestNoContent(
+      "POST",
+      `/api/v1/admin/separation-of-duties/${encodeURIComponent(ruleKey)}/waiver`,
+      { body: { reason } },
+    );
+  }
+
+  /** Close the tenant's waiver. 409 while members still hold both sides. */
+  revokeSeparationOfDutiesWaiver(
+    ruleKey: string,
+    reason: string,
+  ): Promise<void> {
+    return this.requestNoContent(
+      "POST",
+      `/api/v1/admin/separation-of-duties/${encodeURIComponent(ruleKey)}/waiver/revoke`,
+      { body: { reason } },
     );
   }
 

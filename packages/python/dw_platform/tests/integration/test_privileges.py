@@ -69,6 +69,57 @@ async def test_the_application_cannot_rewrite_the_audit_log(app_engine: AsyncEng
             await conn.execute(sa.text("DELETE FROM platform.audit_events"))
 
 
+_CATALOGUE = ("platform.roles", "platform.permission_sets")
+
+
+async def test_the_application_cannot_rewrite_the_role_catalogue(app_engine: AsyncEngine) -> None:
+    """Which scopes a membership carries changes in migrations alone.
+
+    No application code writes these tables, so a write under application
+    credentials could only be someone widening a role past a
+    separation-of-duty rule (migration 648e2f7c3edb).
+    """
+    async with app_engine.connect() as conn:
+        for table in _CATALOGUE:
+            await conn.execute(sa.text(f"SELECT count(*) FROM {table}"))
+            await conn.rollback()
+            for statement in (
+                f"UPDATE {table} SET scopes = scopes || '[\"platform.admin\"]'::jsonb",
+                f"DELETE FROM {table}",
+                f"INSERT INTO {table} (key, name, scopes) VALUES ('probe', 'Probe', '[]')",
+            ):
+                with pytest.raises(Exception, match="permission denied"):
+                    await conn.execute(sa.text(statement))
+                await conn.rollback()
+
+
+async def test_no_application_role_can_write_the_role_catalogue(db_urls: DatabaseUrls) -> None:
+    """Asked of the catalog, so every verb and every runtime role is covered,
+    `dw_provisioner` included: it is granted SELECT on roles and no more."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            writable = (
+                await conn.execute(
+                    sa.text(
+                        """
+                        SELECT r.rolname, t.tbl, v.verb
+                        FROM pg_roles r
+                        CROSS JOIN unnest(CAST(:tables AS text[])) AS t(tbl)
+                        CROSS JOIN unnest(ARRAY['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'])
+                            AS v(verb)
+                        WHERE r.rolname IN ('dw_app', 'dw_provisioner', 'dw_agent_ro')
+                          AND has_table_privilege(r.rolname, t.tbl, v.verb)
+                        """
+                    ),
+                    {"tables": list(_CATALOGUE)},
+                )
+            ).all()
+    finally:
+        await migrator.dispose()
+    assert writable == []
+
+
 async def test_the_application_cannot_read_the_provisioning_record(
     app_engine: AsyncEngine,
 ) -> None:

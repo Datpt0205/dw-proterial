@@ -20,7 +20,9 @@
 #   crontab -e   →   15 2 * * *  /home/ubuntu/base_agent/scripts/backup_postgres.sh >> /home/ubuntu/pg_backups/backup.log 2>&1
 set -euo pipefail
 
-CONTAINER="${PG_CONTAINER:-dw-postgres-1}"
+# This checkout's own container: compose names it after the project, and
+# a second dw-based checkout on the same host owns "dw-postgres-1".
+CONTAINER="${PG_CONTAINER:-${COMPOSE_PROJECT_NAME:-dw}-postgres-1}"
 DB="${PG_DB:-dw}"
 PG_USER="${PG_USER:-dw_admin}"
 DEST="${BACKUP_DIR:-/home/ubuntu/pg_backups}"

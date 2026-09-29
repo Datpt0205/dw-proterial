@@ -65,3 +65,6 @@ blob-report/
 # Marker written by .claude/hooks/pre-commit-gate.sh; per-checkout state.
 .claude/.commit-gate-seen
 .claude/.session-head
+
+# Runtime state written by `make dev` (the worker heartbeat); never source.
+.dw/

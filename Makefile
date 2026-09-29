@@ -120,7 +120,7 @@ test-web: ## Browser tests for the web app (requires the stack; not in CI)
 	pnpm --filter @dw/web exec playwright test
 
 check-model: ## Probe the configured LLM gateway (live call, needs OPENAI_* in .env)
-	python scripts/check_model_gateway.py
+	uv run python scripts/check_model_gateway.py
 
 check-deepgram: ## Probe Deepgram transcription (live call, needs DEEPGRAM_API_KEY in .env)
 	python scripts/check_deepgram.py

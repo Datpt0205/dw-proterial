@@ -125,6 +125,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/separation-of-duties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Separation Of Duties */
+        get: operations["list_separation_of_duties_api_v1_admin_separation_of_duties_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/separation-of-duties/{rule_key}/waiver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Waive Separation Of Duties Rule */
+        post: operations["waive_separation_of_duties_rule_api_v1_admin_separation_of_duties__rule_key__waiver_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/separation-of-duties/{rule_key}/waiver/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Separation Of Duties Waiver */
+        post: operations["revoke_separation_of_duties_waiver_api_v1_admin_separation_of_duties__rule_key__waiver_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/tenant": {
         parameters: {
             query?: never;
@@ -511,6 +562,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notifications */
+        get: operations["list_notifications_api_v1_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark All Notifications Read */
+        post: operations["mark_all_notifications_read_api_v1_notifications_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Notification Read */
+        post: operations["mark_notification_read_api_v1_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/operators": {
         parameters: {
             query?: never;
@@ -592,6 +694,52 @@ export interface paths {
         put?: never;
         /** Lock Tenant */
         post: operations["lock_tenant_api_v1_platform_tenants__tenant_id__lock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/offboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Offboarding Status */
+        get: operations["get_offboarding_status_api_v1_platform_tenants__tenant_id__offboard_get"];
+        put?: never;
+        /**
+         * Initiate Offboarding
+         * @description Files the request and flips the tenant to `offboarding` immediately.
+         *
+         *     202, not 200 or 204: the export/purge itself runs later, on the worker's
+         *     offboarding lane — this call only starts it.
+         */
+        post: operations["initiate_offboarding_api_v1_platform_tenants__tenant_id__offboard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/offboard/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finalize Offboarding
+         * @description The operator's explicit second step, once GET .../offboard reports
+         *     `completed` — see ProvisioningService.finalize_offboarding's docstring
+         *     for why this is not automatic.
+         */
+        post: operations["finalize_offboarding_api_v1_platform_tenants__tenant_id__offboard_finalize_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1064,6 +1212,13 @@ export interface components {
              */
             user_id: string;
         };
+        /** InboxView */
+        InboxView: {
+            /** Items */
+            items: components["schemas"]["NotificationView"][];
+            /** Unread */
+            unread: number;
+        };
         /** IngestJobView */
         IngestJobView: {
             /** Attempts */
@@ -1241,6 +1396,61 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** NotificationView */
+        NotificationView: {
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Link */
+            link: string | null;
+            /** Read At */
+            read_at: string | null;
+            /** Title */
+            title: string;
+        };
+        /** OffboardingStatusView */
+        OffboardingStatusView: {
+            /** Error */
+            error: string | null;
+            /** Export Key */
+            export_key: string | null;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Requested By
+             * Format: uuid
+             */
+            requested_by: string;
+            /** Status */
+            status: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** OperatorView */
         OperatorView: {
             /**
@@ -1405,6 +1615,35 @@ export interface components {
             /** Permission Set Keys */
             permission_set_keys: string[];
         };
+        /** SodRuleView */
+        SodRuleView: {
+            /** Description */
+            description: string;
+            /** Key */
+            key: string;
+            /** Left Scopes */
+            left_scopes: string[];
+            /** Right Scopes */
+            right_scopes: string[];
+            /** Waivable */
+            waivable: boolean;
+            waiver: components["schemas"]["SodWaiverView"] | null;
+        };
+        /** SodWaiverView */
+        SodWaiverView: {
+            /**
+             * Granted At
+             * Format: date-time
+             */
+            granted_at: string;
+            /**
+             * Granted By
+             * Format: uuid
+             */
+            granted_by: string;
+            /** Reason */
+            reason: string;
+        };
         /** TenantSettingsView */
         TenantSettingsView: {
             /** Locale */
@@ -1512,6 +1751,11 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WaiverDecisionBody */
+        WaiverDecisionBody: {
+            /** Reason */
+            reason: string;
         };
         /** WorkspaceMemberView */
         WorkspaceMemberView: {
@@ -1785,6 +2029,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleView"][];
+                };
+            };
+        };
+    };
+    list_separation_of_duties_api_v1_admin_separation_of_duties_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SodRuleView"][];
+                };
+            };
+        };
+    };
+    waive_separation_of_duties_rule_api_v1_admin_separation_of_duties__rule_key__waiver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaiverDecisionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_separation_of_duties_waiver_api_v1_admin_separation_of_duties__rule_key__waiver_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaiverDecisionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2526,6 +2856,73 @@ export interface operations {
             };
         };
     };
+    list_notifications_api_v1_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxView"];
+                };
+            };
+        };
+    };
+    mark_all_notifications_read_api_v1_notifications_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mark_notification_read_api_v1_notifications__notification_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_operators_api_v1_platform_operators_get: {
         parameters: {
             query?: never;
@@ -2697,6 +3094,97 @@ export interface operations {
         };
     };
     lock_tenant_api_v1_platform_tenants__tenant_id__lock_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_offboarding_status_api_v1_platform_tenants__tenant_id__offboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffboardingStatusView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    initiate_offboarding_api_v1_platform_tenants__tenant_id__offboard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffboardingStatusView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finalize_offboarding_api_v1_platform_tenants__tenant_id__offboard_finalize_post: {
         parameters: {
             query?: never;
             header?: never;

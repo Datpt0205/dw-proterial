@@ -8,11 +8,12 @@ their own tenant. Reads and writes are scoped by RLS underneath.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
@@ -29,6 +30,12 @@ from dw_platform.application.admin_console import (
 )
 from dw_platform.application.cache import membership_cache_pattern, tenant_cache_pattern
 from dw_platform.application.hierarchy import HierarchyService, SetManager
+from dw_platform.application.separation_of_duties import (
+    RevokeWaiver,
+    SeparationOfDutiesService,
+    SodRuleStatus,
+    WaiveRule,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -106,6 +113,27 @@ class SetManagerBody(BaseModel):
     manager_user_id: UUID | None = None
 
 
+class SodWaiverView(BaseModel):
+    reason: str
+    granted_by: UUID
+    granted_at: datetime
+
+
+class SodRuleView(BaseModel):
+    key: str
+    description: str
+    left_scopes: list[str]
+    right_scopes: list[str]
+    # False: a floor no tenant can lower, whatever its size.
+    waivable: bool
+    # This tenant's open waiver of the rule, if it has one.
+    waiver: SodWaiverView | None
+
+
+class WaiverDecisionBody(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+
+
 def _service(container: RequireContainer) -> AdminConsoleService:
     if container.admin_console is None:
         raise InfrastructureError("database is not configured")
@@ -116,6 +144,12 @@ def _hierarchy(container: RequireContainer) -> HierarchyService:
     if container.hierarchy is None:
         raise InfrastructureError("database is not configured")
     return container.hierarchy
+
+
+def _separation_of_duties(container: RequireContainer) -> SeparationOfDutiesService:
+    if container.separation_of_duties is None:
+        raise InfrastructureError("database is not configured")
+    return container.separation_of_duties
 
 
 @router.get("/workspaces", response_model=list[WorkspaceSummaryView])
@@ -301,6 +335,57 @@ async def set_manager(
             membership_cache_pattern(context.tenant_id, context.workspace_id)
         )
     return Response(status_code=204)
+
+
+@router.get("/separation-of-duties", response_model=list[SodRuleView])
+async def list_separation_of_duties(
+    context: RequireAccessContext, container: RequireContainer
+) -> list[SodRuleView]:
+    rows = await _separation_of_duties(container).list_rules(context)
+    return [_rule_view(r) for r in rows]
+
+
+@router.post("/separation-of-duties/{rule_key}/waiver", status_code=204)
+async def waive_separation_of_duties_rule(
+    rule_key: str,
+    payload: WaiverDecisionBody,
+    context: RequireAccessContext,
+    container: RequireContainer,
+) -> Response:
+    await _separation_of_duties(container).waive(
+        context, WaiveRule(rule_key=rule_key, reason=payload.reason)
+    )
+    return Response(status_code=204)
+
+
+@router.post("/separation-of-duties/{rule_key}/waiver/revoke", status_code=204)
+async def revoke_separation_of_duties_waiver(
+    rule_key: str,
+    payload: WaiverDecisionBody,
+    context: RequireAccessContext,
+    container: RequireContainer,
+) -> Response:
+    await _separation_of_duties(container).revoke(
+        context, RevokeWaiver(rule_key=rule_key, reason=payload.reason)
+    )
+    return Response(status_code=204)
+
+
+def _rule_view(r: SodRuleStatus) -> SodRuleView:
+    return SodRuleView(
+        key=r.key,
+        description=r.description,
+        left_scopes=list(r.left_scopes),
+        right_scopes=list(r.right_scopes),
+        waivable=r.waivable,
+        waiver=None
+        if r.waiver is None
+        else SodWaiverView(
+            reason=r.waiver.reason,
+            granted_by=r.waiver.granted_by,
+            granted_at=r.waiver.granted_at,
+        ),
+    )
 
 
 def _tenant_view(s: TenantSettings) -> TenantSettingsView:

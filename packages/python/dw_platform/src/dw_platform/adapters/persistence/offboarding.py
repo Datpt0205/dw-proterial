@@ -44,11 +44,19 @@ _SET_DRAIN = text("SELECT set_config('app.worker_drain', 'on', true)")
 # Comfortably above how long one tenant's export+purge should ever take.
 _STALE_CLAIM_MINUTES = 30
 
+# Joined from `pg_policy` and privileges asked by oid, not by name through
+# the `pg_policies` view: the planner is free to evaluate a name-based
+# `has_table_privilege` on every `pg_class` row before the join narrows them
+# to policies, and a name in `pg_toast` is "permission denied for schema" to
+# dw_app. Measured: adding three tables changed the plan and this query
+# failed on every call. An oid needs no schema lookup.
 _CATALOG_COLUMNS = (
-    "SELECT DISTINCT p.schemaname, p.tablename"
-    " FROM pg_policies p"
-    " WHERE p.policyname LIKE 'tenant_isolation_%'"
-    "   AND has_table_privilege('dw_app', format('%I.%I', p.schemaname, p.tablename), 'SELECT')"
+    "SELECT DISTINCT n.nspname AS schemaname, c.relname AS tablename"
+    " FROM pg_policy pol"
+    " JOIN pg_class c ON c.oid = pol.polrelid"
+    " JOIN pg_namespace n ON n.oid = c.relnamespace"
+    " WHERE pol.polname LIKE 'tenant_isolation_%'"
+    "   AND has_table_privilege('dw_app', c.oid, 'SELECT')"
     # platform.tenants carries a tenant_isolation_% policy (it IS the tenant,
     # keyed on `id`) but no `tenant_id` column of its own — the generic
     # `WHERE tenant_id = :t` this class runs would fail on it with "column
@@ -56,14 +64,14 @@ _CATALOG_COLUMNS = (
     # the column actually existing excludes it (and anything shaped like it
     # later) without a hand-maintained exception list.
     "   AND EXISTS ("
-    "     SELECT 1 FROM information_schema.columns c"
-    "     WHERE c.table_schema = p.schemaname AND c.table_name = p.tablename"
-    "       AND c.column_name = 'tenant_id'"
+    "     SELECT 1 FROM information_schema.columns ic"
+    "     WHERE ic.table_schema = n.nspname AND ic.table_name = c.relname"
+    "       AND ic.column_name = 'tenant_id'"
     "   )"
 )
 
 # Every table this class may SELECT from a tenant to export it.
-_CATALOG_EXPORTABLE = text(_CATALOG_COLUMNS + " ORDER BY p.schemaname, p.tablename")
+_CATALOG_EXPORTABLE = text(_CATALOG_COLUMNS + " ORDER BY schemaname, tablename")
 
 # Only the ones `dw_app` may also DELETE from. `platform.audit_events` is
 # exportable but not this: `0001_platform_grants.sql` revokes UPDATE/DELETE
@@ -73,9 +81,8 @@ _CATALOG_EXPORTABLE = text(_CATALOG_COLUMNS + " ORDER BY p.schemaname, p.tablena
 # revoke could apply to a table added later, and asking `has_table_privilege`
 # instead of hand-naming `audit_events` catches that one too.
 _CATALOG_PURGEABLE = text(
-    _CATALOG_COLUMNS
-    + "   AND has_table_privilege('dw_app', format('%I.%I', p.schemaname, p.tablename), 'DELETE')"
-    " ORDER BY p.schemaname, p.tablename"
+    _CATALOG_COLUMNS + "   AND has_table_privilege('dw_app', c.oid, 'DELETE')"
+    " ORDER BY schemaname, tablename"
 )
 
 # FK RESTRICT edges among tenant-scoped tables, checked against the catalog
