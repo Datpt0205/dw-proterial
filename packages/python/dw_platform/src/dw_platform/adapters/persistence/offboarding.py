@@ -150,7 +150,10 @@ class SqlTenantOffboarding:
             await session.execute(_SET_TENANT, {"tenant_id": str(tenant_id)})
             for schema, table in await self._exportable_tables(session):
                 result = await session.execute(
-                    text(f"SELECT * FROM {_quoted(schema, table)} WHERE tenant_id = :t"),
+                    # B608 is a false positive here: the identifiers come from the catalog
+                    # (`_CATALOG_*`), never from a caller, and `_quoted` quotes them; the
+                    # tenant is a bind parameter. Same for the DELETE in `purge_rows`.
+                    text(f"SELECT * FROM {_quoted(schema, table)} WHERE tenant_id = :t"),  # nosec B608
                     {"t": str(tenant_id)},
                 )
                 exported.append(
@@ -171,7 +174,7 @@ class SqlTenantOffboarding:
             rest = [t for t in tables if t not in _ORDERED_FIRST]
             for schema, table in [*ordered_first, *rest]:
                 await session.execute(
-                    text(f"DELETE FROM {_quoted(schema, table)} WHERE tenant_id = :t"),
+                    text(f"DELETE FROM {_quoted(schema, table)} WHERE tenant_id = :t"),  # nosec B608
                     {"t": str(tenant_id)},
                 )
 
