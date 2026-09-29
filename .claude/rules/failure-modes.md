@@ -85,7 +85,8 @@ A new guard ships with a demonstration that removing the guard turns a test red.
 MinIO withdrew both its images from Docker Hub; the error read as a credentials
 problem. The move to quay.io held until MinIO withdrew them there too: twelve
 unpushed commits later, CI failed on a pull that only worked on the dev machine
-because its cache still held the image. deepagents changed which builtin tools it installs. Three of five
+because its cache still held the image. The store is SeaweedFS now, behind a
+contract test any replacement must pass first. deepagents changed which builtin tools it installs. Three of five
 documented assumptions about `SummarizationMiddleware` were wrong when run. mypy
 narrowed `sys.platform` differently per machine, so a typecheck passed locally and
 failed in CI.

@@ -50,7 +50,7 @@ services:
       resources:
         limits:
           memory: 768m
-  minio:
+  s3:
     deploy:
       resources:
         limits:

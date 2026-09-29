@@ -5,7 +5,8 @@ attachments, offboarding export bundles) goes through `ObjectStoragePort`,
 and every unit test of those callers uses a fake. So nothing else asks the
 real server whether the adapter's promises hold: a missing bucket is created,
 bytes round-trip, a prefix lists every key under it at any depth and nothing
-outside it, a missing key reads as `NotFoundError`, a delete removes.
+outside it, a missing key reads as `NotFoundError`, a delete removes, and a
+request that carries no signature is refused.
 
 This is the test to run against a new server before the stack moves to it. The
 S3 server is replaceable: MinIO withdrew its images from two registries in one
@@ -15,6 +16,8 @@ year. The contract is not replaceable.
 from __future__ import annotations
 
 import asyncio
+import urllib.error
+import urllib.request
 import uuid
 from collections.abc import Iterator
 
@@ -91,3 +94,21 @@ def test_a_delete_removes_the_object(storage: MinioObjectStorageAdapter) -> None
     with pytest.raises(NotFoundError):
         asyncio.run(storage.get_object("t1/gone.txt"))
     assert asyncio.run(storage.list_objects("t1/")) == []
+
+
+def test_the_store_refuses_an_unsigned_request(client: Minio) -> None:
+    """With no identity configured, SeaweedFS's S3 gateway allows every request,
+    its documented allow-all mode, and a default that fails open. Compose
+    requires the credentials (`:?`). This asserts the running server actually
+    enforces them, so a store started without them fails here instead of
+    serving every tenant's objects to anyone who asks."""
+    endpoint = runtime_urls().minio_endpoint
+    bucket = f"dw-anon-{uuid.uuid4().hex[:12]}"
+
+    for method, path in (("PUT", f"/{bucket}"), ("GET", "/")):
+        request = urllib.request.Request(f"http://{endpoint}{path}", method=method)
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            urllib.request.urlopen(request, timeout=10)
+        assert refused.value.code == 403, (method, path)
+
+    assert not client.bucket_exists(bucket)

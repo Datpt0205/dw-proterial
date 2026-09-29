@@ -193,7 +193,7 @@ jobs:
       - name: pnpm audit (frontend, high+)
         run: pnpm install --frozen-lockfile && pnpm audit --audit-level high
 
-  # 6. integration tests (real Postgres/Qdrant/Redis/MinIO) -------------------
+  # 6. integration tests (real Postgres/Qdrant/Redis/S3) ----------------------
   integration:
     name: Integration · RLS · checkpoint · E2E slices
     runs-on: ubuntu-latest
@@ -227,13 +227,13 @@ jobs:
       - name: Sync workspace
         run: uv sync --all-packages
       - name: Start infra profile
-        # One-shot services (minio-setup) exit 0 by design, but `up --wait`
+        # One-shot services (s3-setup) exit 0 by design, but `up --wait`
         # treats any exited container as failure — so wait only on the
         # long-running services the tests actually need.
         run: |
           cp .env.example .env
           docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d
-          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey minio keycloak docgen docgen-gateway
+          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey s3 keycloak docgen docgen-gateway
       - name: Integration tests
         run: uv run pytest -m integration
       - name: E2E tests
@@ -262,7 +262,7 @@ jobs:
           docker image prune -af
           df -h /
       - name: Build and start full profile
-        # No --wait: migrate/minio-setup are one-shots that exit 0 and
+        # No --wait: migrate/s3-setup are one-shots that exit 0 and
         # would fail the wait; the curl retries below do the readiness gating.
         run: |
           cp .env.example .env

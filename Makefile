@@ -34,19 +34,19 @@ bootstrap: ## Install all Python + Node dependencies and local config
 	@echo ">> bootstrap complete"
 
 # -------------------------------------------------------------------- infra --
-# `--wait` reports any container that exits as a failure, and minio-setup is a
+# `--wait` reports any container that exits as a failure, and s3-setup is a
 # one-shot bucket creator that always exits — so the health wait names the
-# long-running services and minio-setup is started on its own.
+# long-running services and s3-setup is started on its own.
 # docgen is here rather than only in `full`: an agent offers document
 # generation whenever the sandbox answers, and `make dev` runs the apps on the
 # host. It costs one ~1GB image build the first time.
-INFRA_SERVICES = postgres qdrant valkey minio keycloak docgen docgen-gateway
-# Same reason for the full stack: migrate, seed and minio-setup all run once and
+INFRA_SERVICES = postgres qdrant valkey s3 keycloak docgen docgen-gateway
+# Same reason for the full stack: migrate, seed and s3-setup all run once and
 # exit, so `--wait` on the whole profile reports a healthy stack as a failure.
 FULL_SERVICES = $(INFRA_SERVICES) api worker web
 MODEL_SERVICES = tei-embed tei-rerank
 
-infra-up: ## Start data plane (Postgres/Qdrant/Valkey/MinIO/Keycloak) in Docker
+infra-up: ## Start data plane (Postgres/Qdrant/Valkey/S3/Keycloak) in Docker
 	$(COMPOSE) --profile infra up -d
 	$(COMPOSE) --profile infra up -d --wait $(INFRA_SERVICES)
 

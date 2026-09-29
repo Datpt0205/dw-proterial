@@ -5,9 +5,10 @@ The template is the server's config: it points every issuer and public URL at
 Applied verbatim to a developer machine it breaks three things at once, all of
 them silently:
 
-- the Postgres, MinIO and Keycloak passwords are baked into local volumes at
-  first init, so replacing them makes every connection fail with a password
-  error that reads like a code bug;
+- the Postgres and Keycloak passwords are baked into local volumes at first
+  init, and the object store's credentials and endpoint are this machine's own,
+  so replacing them makes every connection fail with a password error that
+  reads like a code bug;
 - `DW_MODEL_PROVIDER=mock` with an empty `OPENAI_API_KEY` sends every model call
   to the deterministic mock, which returns plausible answers and no error;
 - the search provider keys are absent from the template, and a lane with no

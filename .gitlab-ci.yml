@@ -161,7 +161,7 @@ frontend-audit:
     - pnpm audit --audit-level high
 
 # =========================================================================
-# 6. integration (real Postgres/Qdrant/Redis/MinIO/docgen)
+# 6. integration (real Postgres/Qdrant/Redis/S3/docgen)
 # =========================================================================
 integration:
   stage: integration
@@ -185,7 +185,7 @@ integration:
   script:
     - cp .env.example .env
     - docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d
-    - docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey minio keycloak docgen docgen-gateway
+    - docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey s3 keycloak docgen docgen-gateway
     - uv run pytest -m integration
     - uv run pytest -m e2e || test $? -eq 5
   after_script:

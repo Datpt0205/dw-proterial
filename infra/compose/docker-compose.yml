@@ -32,7 +32,7 @@ volumes:
   postgres-data:
   qdrant-data:
   valkey-data:
-  minio-data:
+  s3-data:
   keycloak-data:
   clickhouse-data:
   tei-models:
@@ -109,56 +109,60 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  minio:
-    # quay.io, not Docker Hub: MinIO withdrew BOTH `minio/minio` and `minio/mc`
-    # from Docker Hub, and a withdrawn image does not degrade politely — the
-    # daemon reports "repository does not exist or may require docker login",
-    # which reads as a credentials problem and is not one. The tag is unchanged
-    # and the digest matches; only the registry moved.
-    image: quay.io/minio/minio:RELEASE.2024-01-16T16-07-38Z
+  s3:
+    # SeaweedFS in single-node `mini` mode: the S3-compatible object store
+    # (Apache-2.0). It replaced MinIO on 2026-09-29, after MinIO withdrew its
+    # images from Docker Hub and then quay.io. The platform speaks plain S3
+    # (the `minio` Python SDK is used as a generic S3 client), so the server is
+    # replaceable. What a replacement must pass first is
+    # `packages/python/dw_knowledge/tests/integration/test_object_storage_contract.py`.
+    #
+    # Credentials are required (`:?`), not defaulted: with no identity
+    # configured, SeaweedFS's S3 gateway runs in allow-all mode. That is a
+    # fail-open default, and the contract test's unsigned-request case guards
+    # it. The variable names are still MINIO_ROOT_* so existing .env files and
+    # server env keep working; they are the object store's root credentials.
+    image: chrislusf/seaweedfs:4.48
     profiles: ["infra", "full", "observability"]
-    command: ["server", "/data", "--console-address", ":9001"]
+    command: ["mini", "-dir=/data"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?}
     volumes:
-      - minio-data:/data
+      - s3-data:/data
     ports:
-      - "127.0.0.1:${DW_MINIO_HOST_PORT:-9000}:9000"
-      - "127.0.0.1:${DW_MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+      - "127.0.0.1:${DW_MINIO_HOST_PORT:-9000}:8333"
     networks: [dw-internal, dw-edge]
     healthcheck:
-      # UBI-micro image has no curl/grep; use bash /dev/tcp HTTP probe.
-      test:
-        - CMD-SHELL
-        - >
-          bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000;
-          printf "GET /minio/health/live HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
-          read -r status <&3; [[ "$$status" == *"200"* ]]'
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8333/healthz >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 6
-      start_period: 10s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
 
-  minio-setup:
-    # Same withdrawal as the server above.
-    image: quay.io/minio/mc:RELEASE.2024-01-13T08-44-48Z
+  s3-setup:
+    # Creates the buckets with a generic S3 client (rclone), not the server's
+    # own tooling, so the next server swap leaves this job alone. `rclone
+    # mkdir` on an existing bucket succeeds (measured), so re-running is safe.
+    image: rclone/rclone:1.75.1
     profiles: ["infra", "full", "observability"]
     depends_on:
-      minio:
+      s3:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set dw http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
-      mc mb --ignore-existing dw/$${S3_BUCKET_ARTIFACTS} &&
-      mc mb --ignore-existing dw/$${S3_BUCKET_EXPORTS} &&
-      mc mb --ignore-existing dw/$${S3_BUCKET_PG_BACKUPS} &&
-      mc mb --ignore-existing dw/langfuse
-      "
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        rclone mkdir s3:$${S3_BUCKET_ARTIFACTS} &&
+        rclone mkdir s3:$${S3_BUCKET_EXPORTS} &&
+        rclone mkdir s3:$${S3_BUCKET_PG_BACKUPS} &&
+        rclone mkdir s3:langfuse
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      RCLONE_CONFIG_S3_TYPE: s3
+      RCLONE_CONFIG_S3_PROVIDER: Other
+      RCLONE_CONFIG_S3_ENDPOINT: http://s3:8333
+      RCLONE_CONFIG_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?}
+      RCLONE_CONFIG_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?}
       S3_BUCKET_ARTIFACTS: ${S3_BUCKET_ARTIFACTS:-dw-artifacts}
       S3_BUCKET_EXPORTS: ${S3_BUCKET_EXPORTS:-dw-exports}
       S3_BUCKET_PG_BACKUPS: ${S3_BUCKET_PG_BACKUPS:-dw-pg-backups}
@@ -366,7 +370,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-dw_knowledge}
       REDIS_URL: redis://valkey:6379/0
-      S3_ENDPOINT_URL: http://minio:9000
+      S3_ENDPOINT_URL: http://s3:8333
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
       # OIDC: the token issuer is the browser-facing Keycloak URL, but the API
@@ -399,7 +403,7 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
-      minio:
+      s3:
         condition: service_healthy
       keycloak:
         condition: service_started
@@ -516,7 +520,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-dw_knowledge}
       REDIS_URL: redis://valkey:6379/0
-      S3_ENDPOINT_URL: http://minio:9000
+      S3_ENDPOINT_URL: http://s3:8333
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
       # Knowledge ingest consumer: embed with the same self-hosted BGE-M3 as the
@@ -549,7 +553,7 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      minio:
+      s3:
         condition: service_healthy
     restart: unless-stopped
 
@@ -615,7 +619,7 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
       REDIS_CONNECTION_STRING: redis://valkey:6379/1
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://s3:8333
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
@@ -631,7 +635,7 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
-      minio:
+      s3:
         condition: service_healthy
     restart: unless-stopped
 

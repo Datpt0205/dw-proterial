@@ -59,10 +59,9 @@ services:
     ports: !override
       - "0.0.0.0:26379:6379"
 
-  minio:
+  s3:
     ports: !override
-      - "0.0.0.0:29000:9000"
-      - "0.0.0.0:29001:9001"
+      - "0.0.0.0:29000:8333"
 
   keycloak:
     environment:

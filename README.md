@@ -37,7 +37,7 @@ three declared seams and inherits everything above.
 ```bash
 make bootstrap        # Python (uv) + Node (pnpm) dependencies
 cp .env.example .env  # then fill in the secrets it names
-make infra-up         # Postgres, Qdrant, Valkey, MinIO, Keycloak, docgen
+make infra-up         # Postgres, Qdrant, Valkey, S3 (SeaweedFS), Keycloak, docgen
 make migrate          # create the schema
 make dev              # api + worker + web, with reload
 ```
@@ -265,7 +265,7 @@ make ci               # all of the above, as CI runs them
 CI (GitHub Actions and GitLab CI both ship, running the same commands) covers
 config/contract validation, Python lint + type check, frontend lint/type/build,
 unit tests, import-boundary and dependency rules, integration tests against real
-Postgres/Qdrant/Redis/MinIO, a dependency and secret scan, the eval smoke suite,
+Postgres/Qdrant/Redis/S3, a dependency and secret scan, the eval smoke suite,
 a container build and a compose smoke test.
 
 Safety is tested, not asserted: the eval suite grades prompt containment, the

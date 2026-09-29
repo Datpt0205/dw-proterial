@@ -108,7 +108,7 @@ must have one.
 
 Python 3.12 with a uv workspace. FastAPI, Pydantic v2, SQLAlchemy 2 async,
 Alembic. LangGraph for orchestration/checkpoint/HITL. PostgreSQL, Qdrant,
-Redis/Valkey, MinIO/S3. Next.js, TypeScript strict, Ant Design v6 (below),
+Redis/Valkey, S3-compatible object storage (SeaweedFS in compose). Next.js, TypeScript strict, Ant Design v6 (below),
 Tailwind for layout only. OpenTelemetry, optional Langfuse. Ruff, mypy, pytest,
 import-linter, pre-commit. pnpm workspace and lockfile. Pin versions; commit
 lockfiles; never `latest`.

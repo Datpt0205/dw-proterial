@@ -35,23 +35,23 @@ context. All five are done and on `main`. The full narrative is at
     - `dw-api` serves `/metrics` at the root;
     - `dw-worker` serves its own scrape port (9464);
     - six alert rules, each against a metric the code really emits.
+- **Object storage is SeaweedFS** (`chrislusf/seaweedfs:4.48`, `weed mini`;
+  compose service `s3`), since 2026-09-29.
+    - MinIO withdrew its images from Docker Hub and then quay.io. Đạt chose
+      replacing it over mirroring the old image.
+    - The code speaks plain S3, so the swap was compose-only.
+    - Buckets and the backup scripts use `rclone/rclone:1.75.1`, a generic
+      client, so the next swap touches neither.
+    - A replacement must first pass
+      `dw_knowledge/tests/integration/test_object_storage_contract.py`
+      (5 tests). The last of them refuses unsigned requests: without
+      credentials SeaweedFS allows everything, measured at 200 on an unsigned
+      PUT.
+    - The earlier `SignatureDoesNotMatch` failures in the `dw_knowledge`
+      suite no longer reproduce: 37/37 passed on MinIO and on SeaweedFS.
 
 ## Open
 
-- **MinIO can no longer be pulled** (measured 2026-09-29). MinIO withdrew
-  `minio/minio` and `minio/mc` from Docker Hub, and now from quay.io too,
-  where even `:latest` is gone. Local stacks keep running from the image
-  cache. CI's integration and container jobs fail at the pull, the first
-  red CI on `main` since 2026-09-21.
-    - **In progress:** replace MinIO with a maintained S3-compatible
-      server. Đạt chose that over mirroring the old image to GHCR.
-    - **Scope:** the code needs only plain S3 (bucket_exists, make_bucket,
-      put/get/list/remove). The MinIO-specific parts are the `mc`
-      bucket-setup job, `mc` in the backup and restore scripts, and the
-      `/minio/health/live` healthcheck.
-    - **How a candidate is judged:**
-      `dw_knowledge/tests/integration/test_object_storage_contract.py`
-      against it first.
 - **Spend guard quotas are unset.** Every plan's `spend_usd_per_day` is `None`,
   so nothing is metered until Đạt gives dollar thresholds.
 - **Offboarding export bundles in `dw-exports` are never deleted.** They hold a
@@ -71,6 +71,8 @@ context. All five are done and on `main`. The full narrative is at
   transitive Go stdlib/x code. Pins: `prometheus:v3.6.0` (a newer tag did not
   help), `postgres-exporter:v0.17.1`, `alertmanager:v0.28.1`. Re-scan on every
   bump.
-- **`dw_knowledge` MinIO tests failed** with `SignatureDoesNotMatch` in 16
-  integration tests. That was seen 2026-09-23 on the old stack and has not been
-  re-checked on the `dw_codebase` stack.
+    - `chrislusf/seaweedfs:4.48`: none (trivy 0.74.0, 2026-09-29).
+    - `rclone/rclone:1.75.1` carries 3 fixable HIGH, all denial of service:
+      CVE-2026-14456 in libcrypto3 (twice) and CVE-2026-84445 in grpc.
+      Accepted: rclone runs as a one-shot client on the internal network and
+      opens no listener. Move to the next rclone release that clears them.
