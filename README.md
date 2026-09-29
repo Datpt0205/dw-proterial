@@ -262,7 +262,7 @@ make lint typecheck test-unit test-architecture test-contract eval-smoke
 make ci               # all of the above, as CI runs them
 ```
 
-CI (GitHub Actions and GitLab CI both ship, running the same commands) covers
+CI (GitHub Actions) covers
 config/contract validation, Python lint + type check, frontend lint/type/build,
 unit tests, import-boundary and dependency rules, integration tests against real
 Postgres/Qdrant/Redis/S3, a dependency and secret scan, the eval smoke suite,

@@ -8,7 +8,7 @@ name: Deploy
 #   run manually    -> deploy dev, uat or production
 #
 # Every job is three lines because the deploy itself lives in scripts/deploy.sh,
-# which the GitLab pipeline and a human on the box both run too. The overlay the
+# which a human on the box runs too. The overlay the
 # script picks is what pins the profile the app validates itself against.
 on:
   push:

@@ -8,7 +8,7 @@
 # as is decided by the argument to this script, never by whether somebody set a
 # variable in .env correctly.
 #
-# The same script runs from GitHub Actions, from GitLab CI and by hand. It lived
+# The same script runs from GitHub Actions and by hand. It lived
 # as four near-identical copies of this shell before; four copies drift, and the
 # one that drifts is discovered during an incident.
 set -euo pipefail
