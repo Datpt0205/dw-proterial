@@ -41,6 +41,18 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
+- **CI: three run-state announcement tests time out** (2026-09-29, run
+  36526991963). The tests are in
+  `dw_agent_runtime/tests/integration/test_run_state_announcements.py`: the
+  LISTEN side never hears the NOTIFY within 5 s, and the fourth test, which
+  expects silence, passes.
+    - This is the first CI integration run since 2026-09-21, when it was
+      green, so twelve ops commits and the platform commit were never run
+      there.
+    - Locally they pass alone (4/4) and with the rest of `dw_agent_runtime`
+      (48/48).
+    - A full-suite local run, in CI's order, is testing whether other tests
+      running first in the session cause it.
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).
