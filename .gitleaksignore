@@ -6,3 +6,8 @@
 #
 # Prefer an inline `# gitleaks:allow` comment where the language permits one:
 # it survives a rebase, and this file's fingerprints do not.
+
+# CLAUDE.md, Required stack: prose, not a credential. The generic-api-key rule
+# read "Valkey, S3-compatible" as key, value. Reworded in the next commit so it
+# cannot recur; this fingerprint covers the one commit that already carries it.
+68b26af76ea4f46d6b981049c5b099269226181e:CLAUDE.md:generic-api-key:111
