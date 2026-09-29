@@ -38,6 +38,20 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **MinIO can no longer be pulled** (measured 2026-09-29). MinIO withdrew
+  `minio/minio` and `minio/mc` from Docker Hub, and now from quay.io too,
+  where even `:latest` is gone. Local stacks keep running from the image
+  cache. CI's integration and container jobs fail at the pull, the first
+  red CI on `main` since 2026-09-21.
+    - **In progress:** replace MinIO with a maintained S3-compatible
+      server. Đạt chose that over mirroring the old image to GHCR.
+    - **Scope:** the code needs only plain S3 (bucket_exists, make_bucket,
+      put/get/list/remove). The MinIO-specific parts are the `mc`
+      bucket-setup job, `mc` in the backup and restore scripts, and the
+      `/minio/health/live` healthcheck.
+    - **How a candidate is judged:**
+      `dw_knowledge/tests/integration/test_object_storage_contract.py`
+      against it first.
 - **Spend guard quotas are unset.** Every plan's `spend_usd_per_day` is `None`,
   so nothing is metered until Đạt gives dollar thresholds.
 - **Offboarding export bundles in `dw-exports` are never deleted.** They hold a

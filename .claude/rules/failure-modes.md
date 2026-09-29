@@ -80,10 +80,12 @@ move on.
 
 A new guard ships with a demonstration that removing the guard turns a test red.
 
-## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 4×)
+## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 5×)
 
 MinIO withdrew both its images from Docker Hub; the error read as a credentials
-problem. deepagents changed which builtin tools it installs. Three of five
+problem. The move to quay.io held until MinIO withdrew them there too: twelve
+unpushed commits later, CI failed on a pull that only worked on the dev machine
+because its cache still held the image. deepagents changed which builtin tools it installs. Three of five
 documented assumptions about `SummarizationMiddleware` were wrong when run. mypy
 narrowed `sys.platform` differently per machine, so a typecheck passed locally and
 failed in CI.
