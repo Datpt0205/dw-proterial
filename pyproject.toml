@@ -172,7 +172,14 @@ ignore_missing_imports = true
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-q --strict-markers"
+# `-p no:anyio`: async tests and fixtures have one runner, pytest-asyncio in
+# auto mode. With anyio's plugin also loaded, the two `pytest_fixture_setup`
+# wrappers race in plugin-registration order (the order of site-packages), and
+# when anyio wins an async fixture runs on a loop that is not running while the
+# test does: three LISTEN/NOTIFY tests timed out on the 2026-09-20 runner image.
+# With the plugin off, `--strict-markers` turns any `pytest.mark.anyio` into a
+# collection error instead of a race.
+addopts = "-q --strict-markers -p no:anyio"
 testpaths = [
     "packages/python",
     "apps/api/tests",

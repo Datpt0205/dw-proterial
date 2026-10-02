@@ -41,18 +41,16 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
-- **CI: three run-state announcement tests time out** (2026-09-29, run
-  36526991963). The tests are in
-  `dw_agent_runtime/tests/integration/test_run_state_announcements.py`: the
-  LISTEN side never hears the NOTIFY within 5 s, and the fourth test, which
-  expects silence, passes.
-    - This is the first CI integration run since 2026-09-21, when it was
-      green, so twelve ops commits and the platform commit were never run
-      there.
-    - Locally they pass alone (4/4) and with the rest of `dw_agent_runtime`
-      (48/48).
-    - A full-suite local run, in CI's order, is testing whether other tests
-      running first in the session cause it.
+- **CI: the three run-state announcement timeouts were a plugin race**
+  (fixed 2026-10-02). pytest-asyncio (auto mode) and anyio's pytest plugin both
+  wrap async fixtures; the one registered last wins, and registration follows
+  the order of site-packages. On the runner image of 2026-09-20 anyio won for
+  modules marked `pytest.mark.anyio`, so the LISTEN fixture ran on a loop that
+  was not running and never heard the NOTIFY. Reproduced locally by forcing
+  the order (3 failed), green after the fix in both orders (4 passed); the
+  product code was never at fault. The anyio plugin is now off in `addopts`
+  (`-p no:anyio`) and the marker is gone from four modules, so a new
+  `pytest.mark.anyio` is a collection error under `--strict-markers`.
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).
