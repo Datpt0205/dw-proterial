@@ -8,6 +8,12 @@
 # it survives a rebase, and this file's fingerprints do not.
 
 # CLAUDE.md, Required stack: prose, not a credential. The generic-api-key rule
-# read "Valkey, S3-compatible" as key, value. Reworded in the next commit so it
-# cannot recur; this fingerprint covers the one commit that already carries it.
+# read the cache product's name (it contains "key") followed by a comma and the
+# next word as a key/value pair. Reworded in the next commit so it cannot recur;
+# this fingerprint covers the one commit that already carries it.
 68b26af76ea4f46d6b981049c5b099269226181e:CLAUDE.md:generic-api-key:111
+
+# This file, as first committed: its comment quoted the phrase above verbatim,
+# so the same rule matched the comment. Rewritten so the phrase is described,
+# not quoted; this fingerprint covers the one commit that carries the quote.
+8c46c65566ee25b330580a9f1b0476b7e7e4cbee:.gitleaksignore:generic-api-key:11
