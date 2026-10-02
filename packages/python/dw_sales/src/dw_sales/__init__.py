@@ -1,0 +1,1 @@
+"""The Sales bounded context."""

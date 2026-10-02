@@ -247,6 +247,14 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     container.tool_registry = wiring.tool_registry
 
     # ---- BOUNDED CONTEXTS PLUG IN HERE -----------------------------------
+    # Sales: built from the seam, never from a global. `container.runtime`
+    # carries the session factory, clock, ids, registries and gateways; anything
+    # this context needs beyond them is its own adapter.
+    from dw_sales.adapters.sink import InMemorySalesSink
+    from dw_sales.application.handlers import HandleSales
+
+    container.sales_handler = HandleSales(InMemorySalesSink())
+
     # Build your context from `container.runtime` (the RuntimeSeam) and attach
     # its handlers, then mount its router in `main.create_app`. Nothing above
     # this line may import a business package.

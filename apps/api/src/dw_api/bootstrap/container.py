@@ -124,6 +124,7 @@ class ApiContainer:
     entitlement: PlanEntitlementService
 
     run_store: SqlWorkerRunStore | None = None
+    sales_handler: object | None = None
     # Holds one LISTEN connection for the process; started and stopped by the
     # app's lifespan, never by a request.
     run_events: RunStateListener | None = None

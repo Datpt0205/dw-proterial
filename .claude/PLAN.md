@@ -14,24 +14,22 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed      |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Decided; not started    |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Spec + tickets; building |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-09-29)
+## Now (2026-10-02)
 
-- **This repo is the platform seed, with no bounded context.** It is what a
-  product starts from. The Supply Chain context was built here, then removed
-  on 2026-09-29 when Đạt chose another direction. The platform work it
-  produced stayed: notifications, separation of duties and waivers, policy
-  overrides, the model-profile fixes, and the antd decision.
-  `platform-runtime.md` lists the pieces still waiting for a first caller.
-- **Products live in their own repos.** The first is E-HSDT bid preparation
-  for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
-  plans and research live there, not here.
-- **Next:** the antd shell slice (`web-ui.md`), since the shared shell is
-  platform work.
+- **This repo is now the Proterial product repo** (`origin`
+  `Datpt0205/dw-proterial`; the platform seed stays in `Datpt0205/codebase`).
+  Context `dw_sales` is scaffolded; DW1 (Đơn hàng & Báo giá) is being built
+  end to end on mock data: `sales.md`, spec and tickets under
+  `sales/dw1-portal-demo/`.
+- Platform pieces still waiting for a first caller: `platform-runtime.md`.
+- **Next:** tickets 01–07 of `sales/dw1-portal-demo/`; the antd shell slice
+  (`web-ui.md`) is ticket 07.
 
 ## Decisions Đạt owes
 

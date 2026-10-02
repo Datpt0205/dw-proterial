@@ -33,6 +33,7 @@ members = [
     "dw-memory",
     "dw-observability",
     "dw-platform",
+    "dw-sales",
     "dw-worker",
 ]
 
@@ -990,6 +991,7 @@ dependencies = [
     { name = "dw-memory" },
     { name = "dw-observability" },
     { name = "dw-platform" },
+    { name = "dw-sales" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "minio" },
@@ -1015,6 +1017,7 @@ requires-dist = [
     { name = "dw-memory", editable = "packages/python/dw_memory" },
     { name = "dw-observability", editable = "packages/python/dw_observability" },
     { name = "dw-platform", editable = "packages/python/dw_platform" },
+    { name = "dw-sales", editable = "packages/python/dw_sales" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "minio", specifier = ">=7.2,<8" },
@@ -1201,6 +1204,31 @@ requires-dist = [
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10,<3" },
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "redis", specifier = ">=5,<6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36,<2.1" },
+]
+
+[[package]]
+name = "dw-sales"
+version = "0.1.0"
+source = { editable = "packages/python/dw_sales" }
+dependencies = [
+    { name = "dw-agent-runtime" },
+    { name = "dw-kernel" },
+    { name = "dw-platform" },
+    { name = "fastapi" },
+    { name = "langgraph" },
+    { name = "pydantic" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dw-agent-runtime", editable = "packages/python/dw_agent_runtime" },
+    { name = "dw-kernel", editable = "packages/python/dw_kernel" },
+    { name = "dw-platform", editable = "packages/python/dw_platform" },
+    { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "langgraph", specifier = ">=0.6,<2" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36,<2.1" },
 ]
 
