@@ -20,6 +20,7 @@ dw-memory = { workspace = true }
 dw-connectors = { workspace = true }
 dw-observability = { workspace = true }
 dw-evals = { workspace = true }
+dw-sales = { workspace = true }
 dw-api = { workspace = true }
 dw-docgen = { workspace = true }
 dw-worker = { workspace = true }
@@ -108,6 +109,7 @@ known-first-party = [
     "dw_observability",
     "dw_evals",
     "dw_api",
+    "dw_sales",
     "dw_docgen",
     "dw_worker",
 ]
@@ -145,6 +147,7 @@ mypy_path = [
     "packages/python/dw_connectors/src",
     "packages/python/dw_observability/src",
     "packages/python/dw_evals/src",
+    "packages/python/dw_sales/src",
     "apps/api/src",
     "apps/docgen/src",
     "apps/worker/src",
@@ -208,6 +211,7 @@ source = [
     "packages/python/dw_observability/src",
     "packages/python/dw_platform/src",
     "apps/api/src",
+    "packages/python/dw_sales/src",
     "apps/docgen/src",
     "apps/worker/src",
 ]
@@ -237,7 +241,17 @@ root_packages = [
     "dw_connectors",
     "dw_observability",
     "dw_evals",
+    "dw_sales",
 ]
+
+[[tool.importlinter.contracts]]
+# Contexts are independent: one importing another is a super-agent forming, and
+# the second one is always where it starts. The platform may not import a
+# context either — that direction is what keeps the skeleton reusable.
+name = "Sales is independent"
+type = "forbidden"
+source_modules = ["dw_sales"]
+forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]
 
 [[tool.importlinter.contracts]]
 name = "Kernel is pure (stdlib only)"
