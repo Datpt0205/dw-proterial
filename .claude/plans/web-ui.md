@@ -82,3 +82,23 @@ the theme, the shell and the shared composites, not primitive wrappers.
   also measures the bundle on this app. It is platform work (the shared
   shell), so it lands in this repo and every product inherits it.
 - The web vitest suite is not run by CI.
+- Gaps `.claude/rules/ui-quality.md` found in `apps/web` (2026-09-30), to fix
+  in the antd slice or the first product screen, not per screen:
+    - `lib/dates.ts` formats in the browser's time zone and prints date first,
+      while the briefs write time first with "giờ Việt Nam"; it returns "—" for
+      null, which reads as "none" where the value is unknown;
+    - no `lib/money.ts`; `Intl`'s VND style prints "₫" where the briefs write
+      "đ";
+    - `layout.tsx` sets `lang="en"` and one `<title>` ("Digital Worker
+      Platform") for every page; many platform screens are English (the
+      "Close" label in `modal.tsx`, `LoadMore`);
+    - the table-to-card rules in the `globals.css` phone block are unlayered
+      and `!important` and will override antd `Table`; the unlayered
+      `:focus-visible` rule would replace antd's focus style;
+    - sonner's `<Toaster>` in `layout.tsx` and `useCachedResource`'s raw
+      `failure.message` toast; feedback moves to `App.useApp()`;
+    - the API client sends no `Idempotency-Key`;
+    - Tailwind `lg` is 1024 px, antd's is 992 px, and nothing maps them;
+    - `playwright.config.ts` has one Desktop Chrome project: no viewport
+      projects, no non-Vietnam `timezoneId`, no screenshot script;
+    - `--muted-foreground` on `--background` measures 4.43:1, below 4.5:1.

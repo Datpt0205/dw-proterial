@@ -11,7 +11,7 @@ and where its glossary and decisions live.
 - **`CONTEXT-MAP.md`** at the repo root: it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
 - **`docs/adr/`**: system-wide decisions, which here means the platform's (tenancy, authorization, the agent runtime, data model rules). Read the ones that touch the area you're about to work in.
 - **A context's own `docs/adr/`**, next to its `CONTEXT.md` (`packages/python/dw_<name>/docs/adr/`), for decisions that belong to that context alone.
-- **`CLAUDE.md`**, the architecture of record, and **`.claude/rules/`** (`code-quality.md`, `failure-modes.md`), the standards a review applies.
+- **`CLAUDE.md`**, the architecture of record, and **`.claude/rules/`** (`code-quality.md`, `failure-modes.md`, `ui-quality.md`), the standards a review applies.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 

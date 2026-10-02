@@ -328,6 +328,6 @@ repo is settled. See `docs/agents/domain.md`.
   `reviewing-feature-security` and the scoped mutation check; the pre-commit
   gate still asks its questions.
 - `/code-review`'s Standards axis reads this file and `.claude/rules/`
-  (`code-quality.md`, `failure-modes.md`). The plugin's skill is
+  (`code-quality.md`, `failure-modes.md`, `ui-quality.md`). The plugin's skill is
   `mattpocock-skills:code-review`, not Claude Code's built-in `/code-review`.
 - A slice is finished when its area file in `.claude/plans/` says so.
