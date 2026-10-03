@@ -21,9 +21,18 @@ overrides:
   # raising the postcss floor to 8.5.26 covers every path to it, not just the
   # one postcss happens to pin today.
   "nanoid@<3.3.17": ">=3.3.17 <4"
-  "brace-expansion@<1.1.17": "^1.1.17"
-  "brace-expansion@>=2.0.0 <2.1.3": "^2.1.3"
-  "brace-expansion@>=4.0.0 <5.0.8": "5.0.9"
+  "brace-expansion@<1.1.21": "^1.1.21"
+  "brace-expansion@>=2.0.0 <2.1.7": "^2.1.7"
+  "brace-expansion@>=4.0.0 <5.0.12": "^5.0.12"
+
+# GHSA-vfj7-8cjw-p6xm (braces <=3.0.3, stack exhaustion on deeply nested
+# patterns) has no fixed release: 3.0.3 is the newest braces on the registry
+# (checked 2026-10-03). It is reached only through eslint-config-next's
+# fast-glob, which expands this repo's own lint globs and ships in no build.
+# Drop this entry once `pnpm view braces version` prints 3.0.4 or later.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
 
 # `@openuidev/assistant-ui` declares a peer on the Vercel AI SDK, but only its
 # `/ai-sdk` subpath imports it - and that subpath is for the AI SDK runtime,

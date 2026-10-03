@@ -231,8 +231,10 @@ before this change and after it. CI builds on Linux.
   screen is what the server renders. Its payload is only the not-found
   fallback.
 - next/font/google downloads at build time, so an offline build fails.
-- `pnpm audit --audit-level high` reports six brace-expansion advisories, via
-  eslint and openapi-typescript. They were there before this change.
+- `pnpm audit --audit-level high` passes since 2026-10-03: the brace-expansion
+  advisories are fixed by raised override floors. braces GHSA-vfj7-8cjw-p6xm
+  has no fixed release and is ignored in `pnpm-workspace.yaml`, which says when
+  to drop the entry; it reaches only eslint-config-next's lint globs.
 - With reduced motion, the theme does not yet set `motion: false`.
 - CI does not run the web vitest suite or the Playwright specs, so every
   guard above runs only where someone runs it. Ticket 10, waiting on Đạt's

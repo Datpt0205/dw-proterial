@@ -31,9 +31,7 @@ own file and a row here.
   for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
   plans and research live there, not here.
 - **Next:** the rest of the antd shell tickets (`web-ui/antd-shell/`
-  03–09: dates, money, UI test projects, feedback, theme and shared pieces),
-  and the dependency findings that keep the security job red (pip-audit,
-  pnpm audit).
+  03–09: dates, money, UI test projects, feedback, theme and shared pieces).
 
 ## Decisions Đạt owes
 
