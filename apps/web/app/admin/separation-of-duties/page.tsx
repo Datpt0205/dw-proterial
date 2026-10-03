@@ -16,6 +16,7 @@ import {
 import { ApiError } from "@dw/api-client";
 import { apiClient } from "../../../lib/session";
 import { useAuth } from "../../../lib/auth/auth-context";
+import { formatDateTime } from "../../../lib/dates";
 import { PageHeading } from "../../../components/page-heading";
 import { EmptyState } from "../../../components/empty-state";
 
@@ -152,7 +153,7 @@ function RuleCard({
 
         {rule.waiver && (
           <p className="rounded-md bg-muted px-3 py-2">
-            Waived on {new Date(rule.waiver.granted_at).toLocaleString()}:{" "}
+            Waived on {formatDateTime(rule.waiver.granted_at)}:{" "}
             {rule.waiver.reason}
           </p>
         )}

@@ -77,28 +77,24 @@ the theme, the shell and the shared composites, not primitive wrappers.
 
 ## Open
 
-- The switch itself has not started. The first slice installs antd and the
-  registry, builds the top-navbar shell, and adds the layer-order test. It
-  also measures the bundle on this app. It is platform work (the shared
-  shell), so it lands in this repo and every product inherits it.
-- The web vitest suite is not run by CI.
-- Gaps `.claude/rules/ui-quality.md` found in `apps/web` (2026-09-30), to fix
-  in the antd slice or the first product screen, not per screen:
-    - `lib/dates.ts` formats in the browser's time zone and prints date first,
-      while the briefs write time first with "giờ Việt Nam"; it returns "—" for
-      null, which reads as "none" where the value is unknown;
-    - no `lib/money.ts`; `Intl`'s VND style prints "₫" where the briefs write
-      "đ";
-    - `layout.tsx` sets `lang="en"` and one `<title>` ("Digital Worker
-      Platform") for every page; many platform screens are English (the
-      "Close" label in `modal.tsx`, `LoadMore`);
-    - the table-to-card rules in the `globals.css` phone block are unlayered
-      and `!important` and will override antd `Table`; the unlayered
-      `:focus-visible` rule would replace antd's focus style;
-    - sonner's `<Toaster>` in `layout.tsx` and `useCachedResource`'s raw
-      `failure.message` toast; feedback moves to `App.useApp()`;
+- 2026-10-03: the first slice landed (Sales ticket 07): antd 6.6.5, icons,
+  nextjs-registry and dayjs pinned; `AntdRegistry` on the `antd` layer with a
+  layer-order test that goes red without either half; the antd theme owns
+  the tokens and Tailwind maps to its variables; a top navbar with a drawer
+  below 992 px; `lib/dates.ts` (Asia/Ho_Chi_Minh, time first, "Không rõ")
+  and `lib/money.ts`; `lang="vi"`; `globals.css` rules all in `@layer base`;
+  Tailwind breakpoints equal antd's; muted text at 4.5:1 or above. Shell
+  cost: about 130 kB first-load JS per route.
+- The web vitest suite is not run by CI (one step in `frontend-quality`).
+- `next build` fails on this Windows account at the standalone symlink copy
+  (EPERM), as it does at HEAD; the Linux builder stage passes.
+- Still open from the 2026-09-30 ui-quality gaps:
+    - many platform screens and labels are English under `lang="vi"`;
+    - sonner's `<Toaster>` and `useCachedResource`'s raw `failure.message`
+      toast; feedback moves to `App.useApp()` page by page;
     - the API client sends no `Idempotency-Key`;
-    - Tailwind `lg` is 1024 px, antd's is 992 px, and nothing maps them;
     - `playwright.config.ts` has one Desktop Chrome project: no viewport
       projects, no non-Vietnam `timezoneId`, no screenshot script;
-    - `--muted-foreground` on `--background` measures 4.43:1, below 4.5:1.
+    - the header's workspace switcher, bell and session chip are still
+      hand-built Tailwind dropdowns; no offline banner or session-expiry
+      warning.

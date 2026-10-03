@@ -12,16 +12,21 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  UserCog,
 } from "lucide-react";
-import type { NavItem } from "./types";
+import { salesNav } from "../../app/sales/_meta/nav";
+import type { NavEntry, NavItem } from "./types";
+import { navPages } from "./visible";
 
 /**
  * Platform-level nav (not owned by any bounded context). Sending feedback is
  * not a nav item — it is the round button at the bottom-left of every page
  * (spec 003 US5); only the admins' inbox is listed here, under Admin. The
- * provisioning area (ADR-002) is shown only to a Platform Operator.
+ * provisioning area (ADR-002) is shown only to a Platform Operator. The admin
+ * pages share one group: a top bar has room for a handful of entries, not
+ * thirteen.
  */
-const platformNav: NavItem[] = [
+const platformNav: NavEntry[] = [
   {
     href: "/",
     label: "Home",
@@ -65,47 +70,54 @@ const platformNav: NavItem[] = [
     scope: "approvals.read",
   },
   {
-    href: "/admin",
-    label: "Roles & access",
-    hint: "Manage users, roles and scopes in this workspace",
-    icon: ShieldCheck,
-    scope: "platform.members.read",
-    exact: true,
-  },
-  {
-    href: "/admin/workspaces",
-    label: "Workspaces",
-    hint: "The tenant's workspaces (departments)",
-    icon: Building2,
-    scope: "platform.workspaces.write",
-  },
-  {
-    href: "/admin/hierarchy",
-    label: "Reporting line",
-    hint: "Who reports to whom in the workspace",
-    icon: Network,
-    scope: "platform.members.write",
-  },
-  {
-    href: "/admin/separation-of-duties",
-    label: "Separation of duties",
-    hint: "Duties no one person may hold, and this tenant's waivers",
-    icon: Scale,
-    scope: "platform.roles.read",
-  },
-  {
-    href: "/admin/settings",
-    label: "Tenant settings",
-    hint: "Tenant name, timezone and language",
-    icon: Settings,
-    scope: "platform.tenant.settings.write",
-  },
-  {
-    href: "/admin/feedback",
-    label: "Feedback inbox",
-    hint: "What members reported, with their screenshots",
-    icon: MessageSquarePlus,
-    scope: "platform.members.read",
+    key: "admin",
+    label: "Admin",
+    icon: UserCog,
+    items: [
+      {
+        href: "/admin",
+        label: "Roles & access",
+        hint: "Manage users, roles and scopes in this workspace",
+        icon: ShieldCheck,
+        scope: "platform.members.read",
+        exact: true,
+      },
+      {
+        href: "/admin/workspaces",
+        label: "Workspaces",
+        hint: "The tenant's workspaces (departments)",
+        icon: Building2,
+        scope: "platform.workspaces.write",
+      },
+      {
+        href: "/admin/hierarchy",
+        label: "Reporting line",
+        hint: "Who reports to whom in the workspace",
+        icon: Network,
+        scope: "platform.members.write",
+      },
+      {
+        href: "/admin/separation-of-duties",
+        label: "Separation of duties",
+        hint: "Duties no one person may hold, and this tenant's waivers",
+        icon: Scale,
+        scope: "platform.roles.read",
+      },
+      {
+        href: "/admin/settings",
+        label: "Tenant settings",
+        hint: "Tenant name, timezone and language",
+        icon: Settings,
+        scope: "platform.tenant.settings.write",
+      },
+      {
+        href: "/admin/feedback",
+        label: "Feedback inbox",
+        hint: "What members reported, with their screenshots",
+        icon: MessageSquarePlus,
+        scope: "platform.members.read",
+      },
+    ],
   },
   {
     href: "/platform",
@@ -117,11 +129,12 @@ const platformNav: NavItem[] = [
 ];
 
 /**
- * Sidebar nav registry — the ONLY place nav manifests are aggregated.
+ * Navbar registry — the ONLY place nav manifests are aggregated.
  *
  * PLUG-IN POINT: a bounded context ships its own manifest inside its route
- * folder (e.g. `app/<context>/_meta/nav.ts` exporting `NavItem[]`) and adds
- * exactly one import + one spread here, in the context's wiring PR:
+ * folder (e.g. `app/<context>/_meta/nav.ts` exporting `NavEntry[]`, usually
+ * one group named after the context) and adds exactly one import + one spread
+ * here, in the context's wiring PR:
  *
  *   import { contextNav } from "../../app/<context>/_meta/nav";
  *   ...contextNav, ...platformNav,
@@ -129,7 +142,11 @@ const platformNav: NavItem[] = [
  * Day-to-day nav changes (labels, icons, scopes, new pages) then live in the
  * context-owned manifest — this file is edited once per context and frozen.
  */
-export const NAV_ITEMS: NavItem[] = [
+export const NAV: NavEntry[] = [
   // <context navs plug in here>
+  ...salesNav,
   ...platformNav,
 ];
+
+/** Every page in `NAV`, groups opened up: for what lists pages, not the bar. */
+export const NAV_ITEMS: NavItem[] = navPages(NAV);

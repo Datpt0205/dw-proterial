@@ -37,7 +37,7 @@ export function WorkspaceSwitcher() {
         onClick={() => setOpen((v) => !v)}
         title={`${active.tenantName} · ${active.workspaceName}`}
         className={cn(
-          "flex max-w-[15rem] items-center gap-2 rounded-lg border bg-white px-2.5 py-1.5 text-left",
+          "flex w-full max-w-[15rem] items-center gap-2 rounded-lg border bg-white px-2.5 py-1.5 text-left",
           multiple && "hover:bg-muted",
         )}
       >

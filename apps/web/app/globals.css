@@ -1,67 +1,50 @@
+/* The cascade order, declared before anything else names a layer. antd's rules
+   sit in `antd` (AntdRegistry `layer`, components/ui-root.tsx): above
+   Tailwind's preflight in `base`, so the reset does not strip antd's buttons
+   and inputs, and below `utilities`, so a Tailwind class on an antd component
+   wins. A wrong order errors nowhere, the classes are silently ignored, so
+   components/__tests__/layer-order.test.tsx compiles this file and checks the
+   order Tailwind's output declares. */
+@layer theme, base, antd, components, utilities;
+
 @import "tailwindcss";
 @import "tw-shimmer";
 
 @source "../../../packages/typescript/ui/src";
 
-/* Enterprise navy palette */
-:root {
-  color-scheme: light;
-  --background: #f4f7fb;
-  --foreground: #10243e;
-  --card: oklch(1 0 0);
-  --card-foreground: #10243e;
-  --popover: oklch(1 0 0);
-  --popover-foreground: #10243e;
-  --primary: #0b3155;
-  --primary-foreground: #ffffff;
-  --secondary: #eaf0f6;
-  --secondary-foreground: #153957;
-  --muted: #eef2f6;
-  --muted-foreground: #64748b;
-  --accent: #e4edf5;
-  --accent-foreground: #0b3155;
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.548 0.144 152.48);
-  --warning: oklch(0.681 0.148 76.343);
-  --border: #dce4ec;
-  --input: #cbd7e3;
-  --ring: #2673a6;
-  --radius: 0.75rem;
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: #10243e;
-  --sidebar-accent: #edf3f8;
-}
-
+/* Colour, type and radius have one owner: the antd theme in @dw/ui
+   (`appTheme`), emitted as `--ant-*` variables on <html> (`THEME_ROOT_CLASS`).
+   Tailwind's names point at those variables and define nothing of their own;
+   components/__tests__/theme.test.ts fails on a name that points at a
+   variable the theme does not emit. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--ant-color-bg-layout);
+  --color-foreground: var(--ant-color-text);
+  --color-card: var(--ant-color-bg-container);
+  --color-card-foreground: var(--ant-color-text);
+  --color-popover: var(--ant-color-bg-elevated);
+  --color-popover-foreground: var(--ant-color-text);
+  --color-primary: var(--ant-color-primary);
+  --color-primary-foreground: var(--ant-color-text-light-solid);
+  --color-secondary: var(--ant-color-fill-secondary);
+  --color-secondary-foreground: var(--ant-color-text);
+  --color-muted: var(--ant-color-fill-secondary);
+  --color-muted-foreground: var(--ant-color-text-secondary);
+  --color-accent: var(--ant-color-primary-bg);
+  --color-accent-foreground: var(--ant-color-primary);
+  --color-destructive: var(--ant-color-error);
+  --color-destructive-foreground: var(--ant-color-text-light-solid);
+  --color-success: var(--ant-color-success);
+  --color-warning: var(--ant-color-warning);
+  --color-border: var(--ant-color-border-secondary);
+  --color-input: var(--ant-color-border);
+  --color-ring: var(--ant-color-primary-border);
+  --radius-sm: var(--ant-border-radius-sm);
+  --radius-md: var(--ant-border-radius);
+  --radius-lg: var(--ant-border-radius-lg);
+  --radius-xl: calc(var(--ant-border-radius-lg) + 4px);
+  --font-sans: var(--ant-font-family);
+  --font-mono: var(--ant-font-family-code);
 
   /* Content that arrives while the user is already looking at the space it
      lands in - a research section filling a card that has been on screen for a
@@ -92,6 +75,18 @@
   }
 }
 
+/* antd's screen tokens (screenSM … screenXXL). A media query cannot read a
+   variable, so these are values, and theme.test.ts fails the day they differ
+   from the theme's: with Tailwind's own `lg` (1024px) the navbar, which
+   switches at antd's 992px, and a page's `lg:` layout would change 32px apart. */
+@theme {
+  --breakpoint-sm: 576px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1600px;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -101,191 +96,207 @@
   }
 }
 
-/* The default border colour, in the base layer on purpose: unlayered it would
-   beat every `border-*` colour utility (a bare `*` rule outranks anything in
-   @layer utilities), which silently greyed out every coloured border in the
-   app — stage badges, drag-over highlights, the Kanban stage line. */
+/* Everything below is in the base layer. Unlayered CSS outranks every layer,
+   so a rule written outside one beats antd's components and every utility. */
 @layer base {
+  /* The default border colour, in the base layer on purpose: unlayered it would
+     beat every `border-*` colour utility (a bare `*` rule outranks anything in
+     @layer utilities), which silently greyed out every coloured border in the
+     app — stage badges, drag-over highlights, the Kanban stage line. */
   * {
-    border-color: var(--border);
+    border-color: var(--color-border);
   }
-}
 
-html {
-  scroll-behavior: smooth;
-  /* Always reserve the scrollbar's width, even on pages short enough not to
-     need one. Without this, navigating from a short page (no scrollbar) to a
-     tall one (scrollbar present) changes the content width by the scrollbar's
-     ~15px, which shifts everything centred in the header — the search bar
-     visibly jumps sideways. Reserving the gutter keeps the width constant. */
-  scrollbar-gutter: stable;
-}
-
-/* Calm, consistent application surfaces. */
-main section,
-main .rounded-2xl.border.bg-card {
-  border-color: rgba(203, 215, 227, 0.78);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.025),
-    0 10px 28px rgba(15, 23, 42, 0.035);
-}
-
-main table thead {
-  background: rgba(241, 245, 249, 0.72);
-}
-main table th {
-  height: 2.75rem;
-  letter-spacing: 0.055em;
-}
-main table tbody tr {
-  transition:
-    background-color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-main table tbody tr:hover {
-  background: rgba(239, 246, 255, 0.6);
-}
-
-/* App-wide scrollbars (BA 2026-08-25): thin, both axes, and invisible until
-   the pointer is over the scrolling container — a fat grey rail beside every
-   panel reads as chrome, not content. Firefox first (its shorthand cannot be
-   hover-scoped per thumb, so it stays thin + subtle), WebKit below. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
-}
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: transparent;
-}
-*:hover::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.45);
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.6);
-}
-
-::selection {
-  background: #c8dfef;
-  color: #0b3155;
-}
-
-button,
-a,
-input,
-select,
-textarea {
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* A control that does something says so under the pointer.
-
-   The browser default for `button` is the arrow, and Tailwind's preflight does
-   not change it, so every plain `<button>` in the app - the filter chips, the
-   status chips, the pagination arrows, the expanding rows - read as text. One
-   rule here rather than a class on each: a control that is missed is a control
-   nobody presses, and the ones that were missed were the ones written by hand
-   rather than through the Button component.
-
-   Disabled is excluded on purpose: a disabled control is not pressable, and
-   the pointer is the only thing that says so before the click. */
-button:not(:disabled),
-summary,
-/* A native select opens a menu on click; Tailwind v4 leaves it on the text
-   cursor, which reads as "this is a label" until you try it. */
-select:not(:disabled),
-[role="button"]:not([aria-disabled="true"]),
-label:has(> input[type="radio"]),
-label:has(> input[type="checkbox"]) {
-  cursor: pointer;
-}
-
-button:disabled,
-select:disabled,
-[role="button"][aria-disabled="true"] {
-  cursor: not-allowed;
-}
-
-:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-/* Form fields carry their own focus style (border/ring from the component);
-   the offset outline on top of it reads as a double edge. This rule is
-   unlayered, so utilities like focus-visible:outline-none cannot beat it —
-   the exception has to live here. Buttons and links keep the outline. */
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: none;
-}
-
-@media (max-width: 639px) {
-  main table {
-    min-width: 0 !important;
+  html {
+    scroll-behavior: smooth;
+    /* Always reserve the scrollbar's width, even on pages short enough not to
+       need one. Without this, navigating from a short page (no scrollbar) to a
+       tall one (scrollbar present) changes the content width by the
+       scrollbar's ~15px, which shifts everything centred in the header — the
+       search bar visibly jumps sideways. Reserving the gutter keeps the width
+       constant. */
+    scrollbar-gutter: stable;
+    /* The sticky navbar's height (the theme's Layout `headerHeight`; the
+       theme test compares them), so a focused element scrolled into view is
+       never under the bar (WCAG 2.4.11). */
+    scroll-padding-top: 64px;
   }
-  main table thead {
-    display: none;
+
+  /* Calm, consistent surfaces for the cards drawn before antd. */
+  main .rounded-2xl.border.bg-card {
+    border-color: var(--ant-color-border-secondary);
+    box-shadow: var(--ant-box-shadow-tertiary);
   }
-  main table tbody {
-    display: grid;
-    gap: 0.625rem;
-    padding: 0.625rem;
+
+  /* The tables @dw/ui's `Table` draws. antd's Table styles itself, and a rule
+     here that reached it would restyle every antd table in a `main`. */
+  main table[data-slot="table"] thead {
+    background: var(--ant-color-fill-alter);
   }
-  main table tbody tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.5rem 1rem;
-    border: 1px solid var(--border) !important;
-    border-radius: 1rem;
-    padding: 0.875rem;
-    background: white;
+  main table[data-slot="table"] th {
+    height: 2.75rem;
+    letter-spacing: 0.055em;
   }
-  main table tbody tr:has(.animate-pulse) {
-    display: block;
+  main table[data-slot="table"] tbody tr {
+    transition:
+      background-color 0.18s ease,
+      box-shadow 0.18s ease;
   }
-  main table tbody td {
-    padding: 0 !important;
-    min-width: 0;
+  main table[data-slot="table"] tbody tr:hover {
+    background: var(--ant-control-item-bg-hover);
   }
-  main table tbody td:first-child {
-    grid-column: 1 / -1;
-    font-size: 0.9375rem;
+
+  /* App-wide scrollbars (BA 2026-08-25): thin, both axes, and invisible until
+     the pointer is over the scrolling container — a fat grey rail beside every
+     panel reads as chrome, not content. Firefox first (its shorthand cannot be
+     hover-scoped per thumb, so it stays thin + subtle), WebKit below. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ant-color-fill) transparent;
   }
-  main table tbody td:not(:first-child) {
-    font-size: 0.75rem;
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
   }
-  main table tbody td:last-child {
-    text-align: right;
-  }
-  main .overflow-x-auto:has(> table) {
-    overflow: visible;
-    border: 0;
+  *::-webkit-scrollbar-track {
     background: transparent;
-    box-shadow: none;
   }
+  *::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: transparent;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background: var(--ant-color-text-quaternary);
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--ant-color-text-tertiary);
+  }
+
+  ::selection {
+    background: var(--ant-color-primary-bg-hover);
+    color: var(--ant-color-primary);
+  }
+
+  button,
+  a,
   input,
   select,
   textarea {
-    font-size: 16px !important;
+    -webkit-tap-highlight-color: transparent;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+  /* A control that does something says so under the pointer.
+
+     The browser default for `button` is the arrow, and Tailwind's preflight
+     does not change it, so every plain `<button>` in the app - the filter
+     chips, the status chips, the pagination arrows, the expanding rows - read
+     as text. One rule here rather than a class on each: a control that is
+     missed is a control nobody presses, and the ones that were missed were
+     the ones written by hand rather than through the Button component.
+
+     Disabled is excluded on purpose: a disabled control is not pressable, and
+     the pointer is the only thing that says so before the click. */
+  button:not(:disabled),
+  summary,
+  /* A native select opens a menu on click; Tailwind v4 leaves it on the text
+     cursor, which reads as "this is a label" until you try it. */
+  select:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label:has(> input[type="radio"]),
+  label:has(> input[type="checkbox"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* The focus ring for everything antd does not draw itself; antd's own
+     focus styles sit in a later layer and win on its components. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* Form fields carry their own focus style (border/ring from the
+     component); the offset outline on top of it reads as a double edge.
+     Buttons and links keep the outline. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+  }
+
+  /* Phones. `!important` in this layer outranks every normal declaration in
+     every layer, utilities included: that is what turns the @dw/ui tables into
+     cards, and why these rules name `[data-slot="table"]` and never a bare
+     `table`. */
+  @media (width < theme(--breakpoint-sm)) {
+    main table[data-slot="table"] {
+      min-width: 0 !important;
+    }
+    main table[data-slot="table"] thead {
+      display: none;
+    }
+    main table[data-slot="table"] tbody {
+      display: grid;
+      gap: 0.625rem;
+      padding: 0.625rem;
+    }
+    main table[data-slot="table"] tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.5rem 1rem;
+      border: 1px solid var(--color-border) !important;
+      border-radius: 1rem;
+      padding: 0.875rem;
+      background: var(--ant-color-bg-container);
+    }
+    main table[data-slot="table"] tbody tr:has(.animate-pulse) {
+      display: block;
+    }
+    main table[data-slot="table"] tbody td {
+      padding: 0 !important;
+      min-width: 0;
+    }
+    main table[data-slot="table"] tbody td:first-child {
+      grid-column: 1 / -1;
+      font-size: 0.9375rem;
+    }
+    main table[data-slot="table"] tbody td:not(:first-child) {
+      font-size: 0.75rem;
+    }
+    main table[data-slot="table"] tbody td:last-child {
+      text-align: right;
+    }
+    main .overflow-x-auto:has(> table[data-slot="table"]) {
+      overflow: visible;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    /* 16px stops iOS zooming the page when a field takes focus; it outranks
+       antd's field size on purpose. */
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  /* With reduced motion asked for, nothing animates. `!important` in this
+     layer outranks antd's transitions as well; the theme also turns antd's
+     motion off (`UiProvider`). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
   }
 }
 
