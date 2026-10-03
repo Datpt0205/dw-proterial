@@ -51,6 +51,14 @@ Mốc 6 (running many customers) is half done:
   product code was never at fault. The anyio plugin is now off in `addopts`
   (`-p no:anyio`) and the marker is gone from four modules, so a new
   `pytest.mark.anyio` is a collection error under `--strict-markers`.
+- **Tenant-schema guards read the catalog** (2026-10-02).
+  `test_rls_coverage.py` and the USAGE test in `test_privileges.py` find every
+  non-system schema with a `tenant_id` column instead of naming three, so a
+  context's new schema is checked the day it exists (failure-modes #0). Still
+  named by hand: `0001_platform_grants.sql` grants USAGE and default table
+  privileges on `platform, knowledge, memory` only, so a new schema's migration
+  ships both itself. The USAGE test catches a missing USAGE; missing table
+  grants are caught only by the context's own tests running as `dw_app`.
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).

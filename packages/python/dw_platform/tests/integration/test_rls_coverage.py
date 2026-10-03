@@ -19,19 +19,28 @@ a partition added months from now, which Postgres will not police on its own.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
 from pg_harness import DatabaseUrls
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
 pytestmark = pytest.mark.integration
 
-# Schemas that hold tenant data. A new one belongs here the day it is created.
-_TENANT_SCHEMAS = ("platform", "knowledge", "memory")
-
+# Every table with a `tenant_id` column, in whatever schema it lives. No schema
+# is named: a hand-kept list of schemas is blind to the one added after it, the
+# same blindness as the text checker above, one level up. `pg_*` is dropped
+# whole because Postgres refuses to create a schema with that prefix, so the
+# exclusion hides nothing a migration can make — it removes `pg_catalog`,
+# `pg_toast*` and other sessions' `pg_temp_*`.
 _TENANT_TABLES = sa.text(
     """
     SELECT n.nspname AS schema, c.relname AS name,
@@ -39,7 +48,8 @@ _TENANT_TABLES = sa.text(
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind IN ('r', 'p')
-      AND n.nspname = ANY(:schemas)
+      AND NOT starts_with(n.nspname, 'pg_')
+      AND n.nspname <> 'information_schema'
       AND EXISTS (
           SELECT 1 FROM pg_attribute a
           WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped
@@ -47,6 +57,26 @@ _TENANT_TABLES = sa.text(
     ORDER BY 1, 2
     """
 )
+
+# The floor discovery must clear, not the list: the schemas the platform itself
+# ships. A discovery query gone wrong fails here instead of returning nothing
+# and passing every check built on top of it.
+_PLATFORM_SCHEMAS = frozenset({"platform", "knowledge", "memory"})
+
+
+async def tenant_tables(conn: AsyncConnection | AsyncSession) -> Sequence[sa.Row[Any]]:
+    """Every tenant table the catalog holds — the one answer to "which tables,
+    in which schemas", shared with `test_privileges.py`."""
+    rows = (await conn.execute(_TENANT_TABLES)).all()
+    assert rows, "found no tenant tables at all — the query is wrong, not the schema"
+    missed = _PLATFORM_SCHEMAS - {r.schema for r in rows}
+    assert not missed, f"schema discovery missed {sorted(missed)} — the query is wrong"
+    return rows
+
+
+async def tenant_schemas(conn: AsyncConnection | AsyncSession) -> list[str]:
+    return sorted({r.schema for r in await tenant_tables(conn)})
+
 
 _POLICIES = sa.text(
     "SELECT schemaname, tablename, policyname, qual, with_check"
@@ -89,9 +119,12 @@ async def session(db_urls: DatabaseUrls) -> AsyncIterator[AsyncSession]:
 
 
 async def test_rls_covers_every_tenant_table(session: AsyncSession) -> None:
-    """Including partitions, which the text-based checker cannot see."""
-    rows = (await session.execute(_TENANT_TABLES, {"schemas": list(_TENANT_SCHEMAS)})).all()
-    assert rows, "found no tenant tables at all — the query is wrong, not the schema"
+    """Including partitions, which the text-based checker cannot see — and
+    including schemas nobody listed. The tables come from the catalog, every
+    non-system schema with a `tenant_id` column, because a hand-kept tuple of
+    schema names goes blind to the next schema exactly the way the text checker
+    went blind to partitions: a table there without RLS would stay green."""
+    rows = await tenant_tables(session)
 
     missing = [f"{r.schema}.{r.name}" for r in rows if not r.enabled]
     forced_off = [f"{r.schema}.{r.name}" for r in rows if r.enabled and not r.forced]
@@ -105,10 +138,11 @@ async def test_rls_covers_every_tenant_table(session: AsyncSession) -> None:
 async def test_every_tenant_table_actually_has_a_policy(session: AsyncSession) -> None:
     """RLS with no policy denies everything, which is safe and unusable — and
     RLS with a policy on the parent only is what this suite exists to catch."""
-    rows = (await session.execute(_TENANT_TABLES, {"schemas": list(_TENANT_SCHEMAS)})).all()
+    rows = await tenant_tables(session)
+    schemas = sorted({r.schema for r in rows})
     policed = {
         (r.schemaname, r.tablename)
-        for r in (await session.execute(_POLICIES, {"schemas": list(_TENANT_SCHEMAS)})).all()
+        for r in (await session.execute(_POLICIES, {"schemas": schemas})).all()
     }
 
     without = [f"{r.schema}.{r.name}" for r in rows if (r.schema, r.name) not in policed]
@@ -171,7 +205,7 @@ async def test_every_policy_actually_consults_the_tenant_setting(
     because no tenant is resolved yet, and the background drain narrows by its
     own flag. Anything narrowing by none of them needs a written reason.
     """
-    rows = (await session.execute(_POLICIES, {"schemas": list(_TENANT_SCHEMAS)})).all()
+    rows = (await session.execute(_POLICIES, {"schemas": await tenant_schemas(session)})).all()
     assert rows, "no policies at all — the query is wrong, not the schema"
 
     def narrows(predicate: str | None) -> bool:
