@@ -114,8 +114,13 @@ jobs:
         with:
           version: "0.11.31"
           enable-cache: true
-      - name: Scaffold a context
-        run: uv run python scripts/new_context.py --name smoke_ctx
+      # Two, because every product has at least one context before it adds the
+      # next: a second context is where anchors on the last list entry and
+      # clashing test module names show up, and one alone passes both.
+      - name: Scaffold two contexts
+        run: |
+          uv run python scripts/new_context.py --name smoke_ctx
+          uv run python scripts/new_context.py --name smoke_two
       - name: The workspace still resolves
         run: uv sync --all-packages
       - name: It passes the gates the platform holds itself to

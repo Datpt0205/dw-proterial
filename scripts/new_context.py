@@ -335,7 +335,10 @@ def build_router(handler: Handle{cls}) -> APIRouter:
     return router
 '''
         ),
-        "tests/unit/__init__.py": "",
+        # No `tests/unit/__init__.py`: with one, every context's tests are the
+        # package `unit`, and pytest imports the second context's file as
+        # `unit.<file>` from the first one's directory. The file name below is
+        # unique per context, which is all a module without a package needs.
         f"tests/unit/test_{ctx.name}_slice.py": (
             f'''"""The generated slice, end to end, no infrastructure.
 
