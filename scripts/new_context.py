@@ -307,9 +307,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from {p}.application.handlers import Handle{cls}
 from {p}.domain.entities import {cls}Request
 
-router = APIRouter(prefix="/api/v1/{ctx.name.replace("_", "-")}", tags=["{ctx.name}"])
-
-
 class _Body(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -317,7 +314,13 @@ class _Body(BaseModel):
 
 
 def build_router(handler: Handle{cls}) -> APIRouter:
-    """Injected, never resolved from a global: the app owns the wiring."""
+    """Injected, never resolved from a global: the app owns the wiring.
+
+    The router is built here, per call. A module-level one would collect a
+    route on every call, and a second app would be served by the first app's
+    handler.
+    """
+    router = APIRouter(prefix="/api/v1/{ctx.name.replace("_", "-")}", tags=["{ctx.name}"])
 
     @router.post("/requests")
     async def create(body: _Body) -> dict[str, str]:
@@ -363,6 +366,26 @@ async def test_a_handled_request_reaches_the_sink_and_comes_back_summarised() ->
 
     assert summary == "báo giá quý 4"
     assert sink.recorded == [request]
+
+
+def test_each_built_router_serves_its_own_handler() -> None:
+    """Two apps, two handlers: each request lands in its own app's sink."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from {p}.presentation.routes import build_router
+
+    first, second = InMemory{cls}Sink(), InMemory{cls}Sink()
+    first_app, second_app = FastAPI(), FastAPI()
+    first_app.include_router(build_router(Handle{cls}(first)))
+    second_app.include_router(build_router(Handle{cls}(second)))
+
+    path = "/api/v1/{ctx.name.replace("_", "-")}/requests"
+    response = TestClient(second_app).post(path, json={{"subject": "x"}})
+
+    assert response.status_code == 200
+    assert len(second.recorded) == 1
+    assert first.recorded == []
 
 
 def test_an_empty_subject_is_refused_by_the_entity() -> None:
@@ -415,11 +438,21 @@ def _patch_root_pyproject(ctx: Context) -> None:
         f'    "packages/python/{ctx.package}/src",\n',
         what="coverage source",
     )
-    before = text
-    text = text.replace(
-        '    "dw_observability",\n    "dw_evals",\n]\n\n[[tool.importlinter.contracts]]',
-        f'    "dw_observability",\n    "dw_evals",\n    "{ctx.package}",\n]\n\n'
-        f"""[[tool.importlinter.contracts]]
+    # Anchored on the block's own opening line, not on its last entries: once a
+    # context exists, "dw_evals" is no longer the last name in `root_packages`,
+    # and an anchor on the closing lines either finds nothing or lands in another
+    # list that happens to end the same way.
+    opening = "root_packages = [\n"
+    start = text.find(opening)
+    close = text.find("\n]\n", start) if start >= 0 else -1
+    if start < 0 or close < 0:
+        raise ScaffoldError("import-linter root_packages: anchor not found")
+    if f'    "{ctx.package}",\n' in text[start:close]:
+        raise ScaffoldError(f"import-linter root_packages: {ctx.package} already listed")
+    text = text[: close + 1] + f'    "{ctx.package}",\n' + text[close + 1 :]
+    after_block = text.find("\n]\n", start) + len("\n]\n")
+    contract = f"""
+[[tool.importlinter.contracts]]
 # Contexts are independent: one importing another is a super-agent forming, and
 # the second one is always where it starts. The platform may not import a
 # context either — that direction is what keeps the skeleton reusable.
@@ -427,12 +460,8 @@ name = "{ctx.title} is independent"
 type = "forbidden"
 source_modules = ["{ctx.package}"]
 forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]
-
-[[tool.importlinter.contracts]]""",
-        1,
-    )
-    if text == before:
-        raise ScaffoldError("import-linter root_packages: anchor not found")
+"""
+    text = text[:after_block] + contract + text[after_block:]
     _write(path, text)
 
 
@@ -473,8 +502,10 @@ def _patch_api(ctx: Context) -> None:
         text,
         "    # ---- BOUNDED CONTEXT ROUTERS MOUNT HERE ------------------------------\n",
         f"""    # Guarded on the dependency it needs: a context whose wiring is absent
-    # mounts nothing rather than mounting a route that 500s on every call.
-    if container.{ctx.name}_handler is not None:
+    # mounts nothing rather than mounting a route that 500s on every call. The
+    # generated sample route takes no identity, so it also stays out of every
+    # deployed profile until the context replaces it with a real one.
+    if container.{ctx.name}_handler is not None and not settings.is_deployed:
         from {p}.application.handlers import Handle{cls}
         from {p}.presentation.routes import build_router as build_{ctx.name}_router
 
