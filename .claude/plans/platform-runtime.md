@@ -59,6 +59,13 @@ Mốc 6 (running many customers) is half done:
   privileges on `platform, knowledge, memory` only, so a new schema's migration
   ships both itself. The USAGE test catches a missing USAGE; missing table
   grants are caught only by the context's own tests running as `dw_app`.
+- **Offboarding reads every workspace of a tenant** (2026-10-03,
+  `platform-runtime/workspace-scope-offboarding/`, ticket 01 done). The lane sets
+  `app.workspace_scope = 'tenant'` per transaction; `test_rls_coverage.py` fails a
+  policy that reads it outside `tenant AND (workspace OR scope)` and a
+  workspace-narrowed table that does not read it. Needed before the first
+  context narrows its tables by workspace. Found on the way: offboarding loses
+  in-app notifications unexported (`ops-hardening.md` Open).
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).

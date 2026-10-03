@@ -273,3 +273,190 @@ async def test_a_connection_that_never_scopes_itself_reads_nothing(
         )
     ).scalar_one()
     assert still_there == 1, "the probe row vanished, so the zero above proved nothing"
+
+
+# --- The workspace scope: a setting that widens, so it is never trusted alone --
+#
+# A context may narrow its tables by workspace as well as tenant. The offboarding
+# lane sets `app.workspace_scope = 'tenant'` to read every workspace of the one
+# tenant it is working on, and nothing else sets it. A policy may read the scope
+# only as the alternative to its workspace clause, inside an AND whose other side
+# is the tenant clause:
+#
+#     tenant_id = <app.tenant_id> AND (workspace_id = <app.workspace_id>
+#                                      OR <app.workspace_scope> = 'tenant')
+#
+# Read anywhere else, it opens a tenant's rows to any transaction that sets it.
+# The rules below apply to every schema `tenant_schemas` discovers.
+_TENANT_SETTING = "current_setting('app.tenant_id'"
+_WORKSPACE_SETTING = "current_setting('app.workspace_id'"
+_SCOPE_SETTING = "current_setting('app.workspace_scope'"
+
+
+def _closing(expr: str, opening: int) -> int:
+    """Index of the parenthesis closing the one at `opening`, skipping quoted
+    literals (Postgres doubles a quote inside one)."""
+    depth, i, quoted = 0, opening, False
+    while i < len(expr):
+        c = expr[i]
+        if quoted:
+            if c == "'" and expr[i + 1 : i + 2] == "'":
+                i += 1
+            elif c == "'":
+                quoted = False
+        elif c == "'":
+            quoted = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    raise AssertionError(f"unbalanced policy expression: {expr}")
+
+
+def _top_level(expr: str) -> tuple[str | None, list[str]]:
+    """The outermost operator of a policy expression and its operands.
+
+    Postgres prints a policy fully parenthesised (measured on 16: `a AND b OR c`
+    comes back as `((a AND b) OR c)`), so once the parentheses wrapping the whole
+    expression come off, the operators left at depth zero are all one operator.
+    The operator is None for a single term.
+    """
+    s = expr.strip()
+    while s.startswith("(") and _closing(s, 0) == len(s) - 1:
+        s = s[1:-1].strip()
+    operator: str | None = None
+    parts: list[str] = []
+    depth, start, i, quoted = 0, 0, 0, False
+    while i < len(s):
+        c = s[i]
+        if quoted:
+            if c == "'" and s[i + 1 : i + 2] == "'":
+                i += 1
+            elif c == "'":
+                quoted = False
+        elif c == "'":
+            quoted = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        elif depth == 0:
+            word = next((w for w in (" AND ", " OR ") if s.startswith(w, i)), None)
+            if word is not None:
+                found = word.strip()
+                assert operator in (None, found), f"mixed operators at one level: {expr}"
+                operator = found
+                parts.append(s[start:i].strip())
+                i += len(word)
+                start = i
+                continue
+        i += 1
+    parts.append(s[start:].strip())
+    return operator, parts
+
+
+def scope_outside_a_tenant_clause(policies: Sequence[sa.Row[Any]]) -> list[str]:
+    """Policies that read the scope anywhere but beside a pure tenant clause."""
+    bad = []
+    for r in policies:
+        for expr in (r.qual, r.with_check):
+            if expr is None or _SCOPE_SETTING not in expr:
+                continue
+            operator, parts = _top_level(expr)
+            tenant_clause = [
+                p
+                for p in parts
+                if _TENANT_SETTING in p and _SCOPE_SETTING not in p and _top_level(p)[0] != "OR"
+            ]
+            if operator != "AND" or not tenant_clause:
+                bad.append(f"{r.schemaname}.{r.tablename}.{r.policyname}")
+                break
+    return bad
+
+
+def workspace_tables_blind_to_scope(policies: Sequence[sa.Row[Any]]) -> list[str]:
+    """Tables narrowed by workspace with no policy reading the scope: the
+    offboarding lane would export none of their rows, delete none, and the purge
+    of the tenant's workspaces would then CASCADE them away unexported."""
+
+    def reads(r: sa.Row[Any], setting: str) -> bool:
+        return any(e is not None and setting in e for e in (r.qual, r.with_check))
+
+    narrowed = {f"{r.schemaname}.{r.tablename}" for r in policies if reads(r, _WORKSPACE_SETTING)}
+    scoped = {f"{r.schemaname}.{r.tablename}" for r in policies if reads(r, _SCOPE_SETTING)}
+    return sorted(narrowed - scoped)
+
+
+async def test_the_workspace_scope_only_ever_sits_beside_a_tenant_clause(
+    session: AsyncSession,
+) -> None:
+    rows = (await session.execute(_POLICIES, {"schemas": await tenant_schemas(session)})).all()
+    assert scope_outside_a_tenant_clause(rows) == [], (
+        "policies reading app.workspace_scope outside `tenant AND (workspace OR scope)`"
+    )
+
+
+async def test_a_workspace_narrowed_table_lets_offboarding_read_every_workspace(
+    session: AsyncSession,
+) -> None:
+    rows = (await session.execute(_POLICIES, {"schemas": await tenant_schemas(session)})).all()
+    assert workspace_tables_blind_to_scope(rows) == [], (
+        "tables narrowed by app.workspace_id with no policy reading app.workspace_scope"
+    )
+
+
+_TENANT = "tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid"
+_WORKSPACE = "workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid"
+_SCOPE = "current_setting('app.workspace_scope', true) = 'tenant'"
+
+
+async def test_the_scope_rules_catch_the_wrong_shapes(session: AsyncSession) -> None:
+    """The two rules above pass on today's schema because no table is narrowed
+    by workspace yet, which proves nothing about them. These are real
+    Postgres-printed policies of each shape, made and rolled back in one
+    transaction."""
+    shapes = {
+        "spec": f"{_TENANT} AND ({_WORKSPACE} OR {_SCOPE})",
+        "tenant_or_scope": f"{_TENANT} OR {_SCOPE}",
+        "unparenthesised": f"{_TENANT} AND {_WORKSPACE} OR {_SCOPE}",
+        "weak_tenant": f"({_TENANT} OR {_SCOPE}) AND ({_WORKSPACE} OR {_SCOPE})",
+        "scope_alone": _SCOPE,
+        # A tenant clause widened by something other than the scope.
+        "loose_tenant": f"({_TENANT} OR workspace_id IS NULL) AND ({_WORKSPACE} OR {_SCOPE})",
+    }
+    probe, blind = "public.scope_rules_probe", "public.scope_rules_blind"
+    try:
+        for table in (probe, blind):
+            await session.execute(
+                sa.text(f"CREATE TABLE {table} (tenant_id uuid, workspace_id uuid)")
+            )
+        for name, using in shapes.items():
+            await session.execute(sa.text(f"CREATE POLICY {name} ON {probe} USING ({using})"))
+        await session.execute(
+            sa.text(
+                f"CREATE POLICY write_side ON {probe} FOR INSERT WITH CHECK ({_TENANT} OR {_SCOPE})"
+            )
+        )
+        await session.execute(
+            sa.text(f"CREATE POLICY ws_only ON {blind} USING ({_TENANT} AND {_WORKSPACE})")
+        )
+        rows = [
+            r
+            for r in (await session.execute(_POLICIES, {"schemas": ["public"]})).all()
+            if r.tablename.startswith("scope_rules_")
+        ]
+
+        assert sorted(scope_outside_a_tenant_clause(rows)) == [
+            "public.scope_rules_probe.loose_tenant",
+            "public.scope_rules_probe.scope_alone",
+            "public.scope_rules_probe.tenant_or_scope",
+            "public.scope_rules_probe.unparenthesised",
+            "public.scope_rules_probe.weak_tenant",
+            "public.scope_rules_probe.write_side",
+        ]
+        assert workspace_tables_blind_to_scope(rows) == ["public.scope_rules_blind"]
+    finally:
+        await session.rollback()

@@ -11,8 +11,16 @@ found while building this).
 
 `export_rows`/`purge_rows` run entirely under `app.tenant_id` for the one
 tenant they target — the ordinary RLS mechanism every tenant-scoped query
-already uses. `claim_requested` is the one exception: nothing tells the
-worker which tenant has a request waiting until it asks, and asking is
+already uses — plus `app.workspace_scope = 'tenant'`. A context may narrow its
+tables by workspace as well (`tenant AND (workspace OR app.workspace_scope =
+'tenant')`); under `app.tenant_id` alone such a table reads zero rows, so the
+export would miss them silently, the purge would delete none, and the purge of
+`platform.workspaces` would then CASCADE them away unexported. This class is the
+only place that sets the scope, per transaction; `test_rls_coverage.py` keeps
+every policy that reads it inside a tenant clause.
+
+`claim_requested` is the one exception to running under one tenant: nothing
+tells the worker which tenant has a request waiting until it asks, and asking is
 itself the cross-tenant read `app.tenant_id` scoping exists to prevent — so
 it runs under `app.worker_drain`, like the retention sweep, but only for that
 one query. Migration `dd1db8ca43a2`.
@@ -37,6 +45,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 __all__ = ["ExportedTable", "SqlTenantOffboarding"]
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
+# Every workspace of the one tenant, for this transaction only (`true`): a pooled
+# connection must not carry the scope into whoever borrows it next.
+_SET_TENANT_ALL_WORKSPACES = text(
+    "SELECT set_config('app.tenant_id', :tenant_id, true),"
+    "       set_config('app.workspace_scope', 'tenant', true)"
+)
 _SET_DRAIN = text("SELECT set_config('app.worker_drain', 'on', true)")
 
 # How long an in-progress request goes untouched before `claim_requested`
@@ -147,7 +161,7 @@ class SqlTenantOffboarding:
     async def export_rows(self, tenant_id: UUID) -> list[ExportedTable]:
         exported: list[ExportedTable] = []
         async with self.session_factory() as session, session.begin():
-            await session.execute(_SET_TENANT, {"tenant_id": str(tenant_id)})
+            await session.execute(_SET_TENANT_ALL_WORKSPACES, {"tenant_id": str(tenant_id)})
             for schema, table in await self._exportable_tables(session):
                 result = await session.execute(
                     # B608 is a false positive here: the identifiers come from the catalog
@@ -167,7 +181,7 @@ class SqlTenantOffboarding:
 
     async def purge_rows(self, tenant_id: UUID) -> None:
         async with self.session_factory() as session, session.begin():
-            await session.execute(_SET_TENANT, {"tenant_id": str(tenant_id)})
+            await session.execute(_SET_TENANT_ALL_WORKSPACES, {"tenant_id": str(tenant_id)})
             await self._record_purge_audit(session, tenant_id)
             tables = await self._purgeable_tables(session)
             ordered_first = [t for t in _ORDERED_FIRST if t in tables]

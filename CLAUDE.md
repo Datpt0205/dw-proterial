@@ -163,6 +163,12 @@ adapter. Constructor injection — no service locator, no mutable global client.
 - Entitlement checks and authorization checks are separate concerns.
 - Negative tests for cross-tenant reads and writes are mandatory.
 - Hiding a control is not authorization. Enforce where the mutation happens.
+- A table narrowed by workspace as well uses one policy shape on both sides:
+  `tenant AND (workspace OR current_setting('app.workspace_scope') = 'tenant')`.
+  Only the offboarding lane sets `app.workspace_scope`, per transaction, to
+  export and purge every workspace of one tenant; `test_rls_coverage.py` fails
+  a policy that reads it outside that shape and a workspace-narrowed table that
+  does not read it.
 
 ## Per-tenant artifacts
 
