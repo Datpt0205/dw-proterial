@@ -13,7 +13,7 @@ git: every slice's commit message, and the pre-split narrative at
 | ---------------------------------- | ----------------------------------- | ----------------------- |
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed      |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Decided; not started    |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Shell done; 03–09 next  |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -30,8 +30,10 @@ own file and a row here.
 - **Products live in their own repos.** The first is E-HSDT bid preparation
   for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
   plans and research live there, not here.
-- **Next:** the antd shell slice (`web-ui.md`), since the shared shell is
-  platform work.
+- **Next:** the rest of the antd shell tickets (`web-ui/antd-shell/`
+  03–09: dates, money, UI test projects, feedback, theme and shared pieces),
+  and the dependency findings that keep the security job red (pip-audit,
+  pnpm audit).
 
 ## Decisions Đạt owes
 
@@ -40,7 +42,8 @@ own file and a row here.
       are enforced only in the runner);
     - the model profile and key for uat/production (local runs on `luna`,
       gpt-5.6-luna, `make check-model`; the key is only in local `.env`);
-    - whether CI runs the web vitest suite.
+    - whether CI runs the web vitest suite and the Playwright specs, the
+      antd layer-order spec among them (`web-ui/antd-shell` ticket 10).
 - **Ops:**
     - spend guard dollar thresholds per plan;
     - a retention term for offboarding export bundles;

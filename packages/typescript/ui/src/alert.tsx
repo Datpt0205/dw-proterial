@@ -14,7 +14,7 @@ export const alertVariants = cva(
         success:
           "border-success/40 bg-success/10 text-foreground [&>svg]:text-success",
         destructive:
-          "border-destructive/40 bg-destructive/10 text-destructive [&>svg]:text-destructive",
+          "border-destructive/40 bg-destructive/10 text-destructive-text [&>svg]:text-destructive",
       },
     },
     defaultVariants: { variant: "default" },

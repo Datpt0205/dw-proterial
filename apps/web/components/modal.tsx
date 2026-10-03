@@ -58,7 +58,7 @@ export function Modal({
               className,
             )}
           >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b bg-slate-50/70 p-5 sm:rounded-t-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b bg-muted p-5 sm:rounded-t-2xl">
               <div className="min-w-0">
                 <Dialog.Title className="truncate text-base font-semibold">
                   {title}
@@ -83,7 +83,7 @@ export function Modal({
               {children}
             </div>
             {footerActions && (
-              <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-slate-50/70 p-4 sm:rounded-b-2xl">
+              <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-muted p-4 sm:rounded-b-2xl">
                 {footerActions}
               </div>
             )}

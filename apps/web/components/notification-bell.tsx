@@ -80,7 +80,7 @@ export function NotificationBell() {
           unread ? `Notifications, ${unread} unread` : "Notifications"
         }
         onClick={() => setOpen((value) => !value)}
-        className="relative flex size-10 items-center justify-center rounded-xl border bg-white text-foreground shadow-sm"
+        className="relative flex size-10 items-center justify-center rounded-xl border bg-card text-foreground shadow-sm"
       >
         <Bell className="size-5" />
         {unread > 0 && (
@@ -90,7 +90,7 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 z-40 mt-2 w-80 max-w-[90vw] rounded-xl border bg-white shadow-lg">
+        <div className="absolute right-0 z-40 mt-2 w-80 max-w-[90vw] rounded-xl border bg-popover shadow-lg">
           <div className="flex items-center justify-between border-b px-3 py-2">
             <span className="text-sm font-semibold">Notifications</span>
             {unread > 0 && (

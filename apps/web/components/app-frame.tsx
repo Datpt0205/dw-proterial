@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bot, Loader2, LogOut, Menu, X } from "lucide-react";
-import { Button } from "@dw/ui";
+import { Badge, Typography } from "antd";
+import { Bot, Loader2, LogOut } from "lucide-react";
+import { AppShell, Button, type AppShellItem } from "@dw/ui";
 import { useAuth } from "../lib/auth/auth-context";
+import { AUTH_MODE } from "../lib/auth/config";
+import { useNavBadges } from "../lib/nav/badges";
 import { NAV_ITEMS } from "../lib/nav/registry";
 import { hasAnyRole } from "../lib/nav/roles";
 import { LoginScreen } from "./login-screen";
-import { NavLinks } from "./nav-links";
 import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
@@ -32,9 +34,11 @@ export function AppFrame({ children }: { children: ReactNode }) {
     useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const [navigationOpen, setNavigationOpen] = useState(false);
+  const badges = useNavBadges();
 
-  // The nav the user can actually reach — the same filter NavLinks applies.
+  // The nav the user can actually reach. Three filters: scope is the
+  // permission the API enforces anyway, role is who the page is for, and
+  // operatorOnly is the cross-tenant provisioning area.
   const visibleNav = useMemo(
     () =>
       NAV_ITEMS.filter(
@@ -59,19 +63,19 @@ export function AppFrame({ children }: { children: ReactNode }) {
     return null;
   }, [status, active, isPlatformOperator, pathname]);
 
-  useEffect(() => setNavigationOpen(false), [pathname]);
   useEffect(() => {
     if (redirectTo) router.replace(redirectTo);
   }, [redirectTo, router]);
-  useEffect(() => {
-    document.body.style.overflow = navigationOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [navigationOpen]);
 
-  // The dev-login page renders outside the gate (it is how you authenticate).
-  if (pathname === "/dev-login") return <>{children}</>;
+  // The dev-login page renders outside the gate (it is how you authenticate),
+  // and so does its layer-check fixture (app/dev-login/layer-check), which
+  // exists only in dev-auth builds.
+  if (
+    pathname === "/dev-login" ||
+    (AUTH_MODE === "dev" && pathname === "/dev-login/layer-check")
+  ) {
+    return <>{children}</>;
+  }
 
   if (status === "loading") {
     return (
@@ -123,78 +127,59 @@ export function AppFrame({ children }: { children: ReactNode }) {
       </div>
     );
   }
+  const navItems: AppShellItem[] = visibleNav.map((item) => {
+    const Icon = item.icon;
+    const count = item.badgeKey ? badges[item.badgeKey] : undefined;
+    return {
+      key: item.href,
+      icon: <Icon className="size-4" />,
+      label: (
+        // Out of the tab order: the menu is the keyboard's way in (AppShellItem).
+        <Link href={item.href} title={item.hint} tabIndex={-1}>
+          {item.label}
+          {count ? <Badge count={count} size="small" className="ml-2" /> : null}
+        </Link>
+      ),
+    };
+  });
+  const selectedKey = visibleNav.find((item) =>
+    item.exact
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href + "/"),
+  )?.href;
+
   return (
     <>
-      <div className="flex min-h-dvh bg-background">
-        {navigationOpen && (
-          <button
-            aria-label="Close menu"
-            className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[2px] lg:hidden"
-            onClick={() => setNavigationOpen(false)}
-          />
-        )}
-        {/* The rule lives on the blocks, not on the whole rail: the brand sits
-            in the same band as the header and shares its bottom line, while
-            only the nav below carries the vertical divider. */}
-        <aside
-          className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,86vw)] flex-col bg-white/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-[11rem] lg:translate-x-0 lg:shadow-none ${navigationOpen ? "translate-x-0" : "-translate-x-full"}`}
-        >
+      <AppShell
+        brand={
           <Link
             href={home}
-            className="flex h-16 shrink-0 items-center gap-2.5 border-b px-5"
+            aria-label="Digital Worker"
+            className="flex items-center gap-2.5"
           >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#123f67] to-[#071f38] text-primary-foreground shadow-lg shadow-primary/15">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Bot className="size-4" />
             </span>
-            <span className="min-w-0">
-              <span className="block text-[13px] font-bold leading-tight tracking-wide">
-                Digital Worker
-              </span>
-              <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Platform
-              </span>
-            </span>
-            <button
-              type="button"
-              aria-label="Close menu"
-              className="ml-auto rounded-lg p-2 text-muted-foreground hover:bg-muted lg:hidden"
-              onClick={(event) => {
-                event.preventDefault();
-                setNavigationOpen(false);
-              }}
-            >
-              <X className="size-5" />
-            </button>
+            <Typography.Text strong className="hidden sm:inline">
+              Digital Worker
+            </Typography.Text>
           </Link>
-          <div className="flex-1 overflow-y-auto border-r px-3 py-4">
-            <NavLinks />
-          </div>
-        </aside>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur-xl">
-            <div className="flex h-16 items-center justify-between gap-2 px-3 sm:px-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <button
-                  type="button"
-                  aria-label="Open menu"
-                  onClick={() => setNavigationOpen(true)}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-xl border bg-white text-foreground shadow-sm lg:hidden"
-                >
-                  <Menu className="size-5" />
-                </button>
-                <WorkspaceSwitcher />
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <NotificationBell />
-                <SessionChip />
-              </div>
-            </div>
-          </header>
-          <main className="flex-1 px-3 py-4 sm:px-4 sm:py-5">
-            <div className="mx-auto w-full max-w-[100rem]">{children}</div>
-          </main>
-        </div>
-      </div>
+        }
+        items={navItems}
+        onNavigate={(href) => router.push(href)}
+        selectedKey={selectedKey}
+        extra={
+          <>
+            <WorkspaceSwitcher />
+            <NotificationBell />
+            <SessionChip />
+          </>
+        }
+        navLabel="Main navigation"
+        menuLabel="Open menu"
+      >
+        {children}
+      </AppShell>
       {/* Spec 003 US5: feedback is a utility beside the app, pinned to the
           bottom-left corner of every page rather than a line in the nav. */}
       <FeedbackLauncher />

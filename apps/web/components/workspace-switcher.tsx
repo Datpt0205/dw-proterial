@@ -30,28 +30,28 @@ export function WorkspaceSwitcher() {
   const multiple = memberships.length > 1;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <button
         type="button"
         disabled={!multiple}
         onClick={() => setOpen((v) => !v)}
         title={`${active.tenantName} · ${active.workspaceName}`}
         className={cn(
-          "flex max-w-[15rem] items-center gap-2 rounded-lg border bg-white px-2.5 py-1.5 text-left",
+          "flex w-full max-w-[15rem] items-center gap-2 rounded-lg border bg-card px-2.5 py-1.5 text-left",
           multiple && "hover:bg-muted",
         )}
       >
-        <Building2 className="size-4 shrink-0 text-slate-400" />
+        <Building2 className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 leading-tight">
-          <span className="block truncate text-xs font-semibold text-slate-700">
+          <span className="block truncate text-xs font-semibold text-foreground">
             {active.tenantName}
           </span>
-          <span className="block truncate text-[11px] text-slate-500">
+          <span className="block truncate text-[11px] text-muted-foreground">
             {active.workspaceName}
           </span>
         </span>
         {multiple && (
-          <ChevronsUpDown className="size-3.5 shrink-0 text-slate-400" />
+          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
         )}
       </button>
       {open && multiple && (
@@ -66,7 +66,7 @@ export function WorkspaceSwitcher() {
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
               >
-                <Layers className="size-3.5 shrink-0 text-slate-400" />
+                <Layers className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">
                     {m.tenantName}

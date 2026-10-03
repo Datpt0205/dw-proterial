@@ -9,9 +9,12 @@ export const badgeVariants = cva(
       variant: {
         default: "border-transparent bg-primary text-primary-foreground",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
-        destructive: "border-transparent bg-destructive/15 text-destructive",
-        success: "border-transparent bg-success/15 text-success",
-        warning: "border-transparent bg-warning/15 text-warning",
+        // Text in the status's text colour: the status colour itself fails
+        // on its own tint (light success 2.96:1, warning 3.27:1).
+        destructive:
+          "border-transparent bg-destructive/15 text-destructive-text",
+        success: "border-transparent bg-success/15 text-success-text",
+        warning: "border-transparent bg-warning/15 text-warning-text",
         outline: "text-foreground",
       },
     },

@@ -1,36 +1,51 @@
+/* Cascade order, stated before anything declares a layer. antd's styles are in
+   `@layer antd` (AntdRegistry `layer`): above Tailwind's preflight, so the
+   reset does not strip antd's buttons, and below the utilities, so a Tailwind
+   class on an antd component applies. Get this wrong and nothing errors - the
+   classes are just ignored - so e2e/antd-shell.spec.ts checks it in a browser. */
+@layer theme, base, antd, components, utilities;
+
 @import "tailwindcss";
 @import "tw-shimmer";
 
 @source "../../../packages/typescript/ui/src";
 
-/* Enterprise navy palette */
+/* Every colour here is a name for an antd token: the theme in @dw/ui owns the
+   values (light and dark), emits them as `--ant-*` on the class the root layout
+   puts on <html>, and these only give them the names Tailwind and the shadcn
+   components use. Nothing here is a value of its own. */
 :root {
-  color-scheme: light;
-  --background: #f4f7fb;
-  --foreground: #10243e;
-  --card: oklch(1 0 0);
-  --card-foreground: #10243e;
-  --popover: oklch(1 0 0);
-  --popover-foreground: #10243e;
-  --primary: #0b3155;
-  --primary-foreground: #ffffff;
-  --secondary: #eaf0f6;
-  --secondary-foreground: #153957;
-  --muted: #eef2f6;
-  --muted-foreground: #64748b;
-  --accent: #e4edf5;
-  --accent-foreground: #0b3155;
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.548 0.144 152.48);
-  --warning: oklch(0.681 0.148 76.343);
-  --border: #dce4ec;
-  --input: #cbd7e3;
-  --ring: #2673a6;
-  --radius: 0.75rem;
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: #10243e;
-  --sidebar-accent: #edf3f8;
+  /* Native controls and scrollbars follow the OS, as the theme does. */
+  color-scheme: light dark;
+  --background: var(--ant-color-bg-layout);
+  --foreground: var(--ant-color-text);
+  --card: var(--ant-color-bg-container);
+  --card-foreground: var(--ant-color-text);
+  --popover: var(--ant-color-bg-elevated);
+  --popover-foreground: var(--ant-color-text);
+  --primary: var(--ant-color-primary);
+  --primary-foreground: var(--ant-color-text-light-solid);
+  --secondary: var(--ant-color-fill-secondary);
+  --secondary-foreground: var(--ant-color-text);
+  --muted: var(--ant-color-fill-tertiary);
+  --muted-foreground: var(--ant-color-text-secondary);
+  --accent: var(--ant-control-item-bg-hover);
+  --accent-foreground: var(--ant-color-text);
+  --destructive: var(--ant-color-error);
+  --destructive-foreground: var(--ant-color-text-light-solid);
+  --success: var(--ant-color-success);
+  --warning: var(--ant-color-warning);
+  /* Status text on its own light tint. The status colour itself is for icons,
+     borders and solid fills: on its tint, light #1f9d4c is 2.96:1. */
+  --destructive-text: var(--ant-color-error-text);
+  --success-text: var(--ant-color-success-text);
+  --warning-text: var(--ant-color-warning-text);
+  --border: var(--ant-color-border-secondary);
+  --input: var(--ant-color-border);
+  --ring: var(--ant-color-primary);
+  /* antd's large radius; the md and xl steps below are offsets from it that
+     antd has no token for. */
+  --radius: var(--ant-border-radius-lg);
 }
 
 @theme inline {
@@ -52,16 +67,19 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-destructive-text: var(--destructive-text);
+  --color-success-text: var(--success-text);
+  --color-warning-text: var(--warning-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-sm: var(--ant-border-radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* The theme's family (Be Vietnam Pro, then system fonts), so text outside
+     antd's App - a portal, a toast - is set in it too. */
+  --font-sans: var(--ant-font-family);
 
   /* Content that arrives while the user is already looking at the space it
      lands in - a research section filling a card that has been on screen for a
@@ -90,6 +108,18 @@
       height: 0;
     }
   }
+}
+
+/* antd's breakpoints (screenSM … screenXXL), so `lg:` and the navbar's switch
+   to a drawer happen at the same width. A media query cannot read a CSS
+   variable, so these are the one place the numbers are written again;
+   e2e/antd-shell.spec.ts fails if they and antd's disagree. */
+@theme {
+  --breakpoint-sm: 576px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1600px;
 }
 
 @keyframes fade-in {
@@ -121,17 +151,20 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* Calm, consistent application surfaces. */
+/* Calm, consistent application surfaces.
+
+   These restyle the shadcn card and table, and stay unlayered so they keep
+   beating those components' own utilities, as before. Unlayered also beats
+   antd: the change that adds the first antd Table deletes the table rules here
+   with the phone block's (ui-quality). */
 main section,
 main .rounded-2xl.border.bg-card {
-  border-color: rgba(203, 215, 227, 0.78);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.025),
-    0 10px 28px rgba(15, 23, 42, 0.035);
+  border-color: var(--ant-color-border-secondary);
+  box-shadow: var(--ant-box-shadow-tertiary);
 }
 
 main table thead {
-  background: rgba(241, 245, 249, 0.72);
+  background: var(--ant-color-fill-alter);
 }
 main table th {
   height: 2.75rem;
@@ -143,13 +176,15 @@ main table tbody tr {
     box-shadow 0.18s ease;
 }
 main table tbody tr:hover {
-  background: rgba(239, 246, 255, 0.6);
+  background: var(--ant-color-fill-alter);
 }
 
 /* App-wide scrollbars (BA 2026-08-25): thin, both axes, and invisible until
    the pointer is over the scrolling container — a fat grey rail beside every
    panel reads as chrome, not content. Firefox first (its shorthand cannot be
-   hover-scoped per thumb, so it stays thin + subtle), WebKit below. */
+   hover-scoped per thumb, so it stays thin + subtle), WebKit below. antd has
+   no scrollbar token, so the greys are this file's own; being translucent,
+   they read on the light and the dark background alike. */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
@@ -173,8 +208,8 @@ main table tbody tr:hover {
 }
 
 ::selection {
-  background: #c8dfef;
-  color: #0b3155;
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-text);
 }
 
 button,
@@ -185,50 +220,81 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* A control that does something says so under the pointer.
+/* In the base layer, so antd's own cursor wins on its components and a
+   utility wins anywhere. */
+@layer base {
+  /* A control that does something says so under the pointer.
 
-   The browser default for `button` is the arrow, and Tailwind's preflight does
-   not change it, so every plain `<button>` in the app - the filter chips, the
-   status chips, the pagination arrows, the expanding rows - read as text. One
-   rule here rather than a class on each: a control that is missed is a control
-   nobody presses, and the ones that were missed were the ones written by hand
-   rather than through the Button component.
+     The browser default for `button` is the arrow, and Tailwind's preflight
+     does not change it, so every plain `<button>` in the app - the filter
+     chips, the status chips, the pagination arrows, the expanding rows - read
+     as text. One rule here rather than a class on each: a control that is
+     missed is a control nobody presses, and the ones that were missed were the
+     ones written by hand rather than through the Button component.
 
-   Disabled is excluded on purpose: a disabled control is not pressable, and
-   the pointer is the only thing that says so before the click. */
-button:not(:disabled),
-summary,
-/* A native select opens a menu on click; Tailwind v4 leaves it on the text
-   cursor, which reads as "this is a label" until you try it. */
-select:not(:disabled),
-[role="button"]:not([aria-disabled="true"]),
-label:has(> input[type="radio"]),
-label:has(> input[type="checkbox"]) {
-  cursor: pointer;
+     Disabled is excluded on purpose: a disabled control is not pressable, and
+     the pointer is the only thing that says so before the click. */
+  button:not(:disabled),
+  summary,
+  /* A native select opens a menu on click; Tailwind v4 leaves it on the text
+     cursor, which reads as "this is a label" until you try it. */
+  select:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label:has(> input[type="radio"]),
+  label:has(> input[type="checkbox"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* `!important` here outranks the `!important` of every later layer and of
+     unlayered CSS, so neither antd nor a utility brings motion back. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
 }
 
-button:disabled,
-select:disabled,
-[role="button"][aria-disabled="true"] {
-  cursor: not-allowed;
+/* The focus outline, in the components layer: after antd's, so it replaces
+   antd's own ring on antd's controls (3px of colorPrimaryBorder, 1.79:1 on
+   white and 1.27:1 on the dark card), and before the utilities, so a
+   `focus-visible:` utility still wins. e2e/antd-shell.spec.ts reads it off a
+   focused antd Button. */
+@layer components {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Form fields carry their own focus style (border/ring from the component);
+     the offset outline on top of it reads as a double edge. More specific
+     than the rule above, so it wins inside this layer; buttons and links keep
+     the outline. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+  }
 }
 
-:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
+/* Phones: antd's xs, below Tailwind's (now antd's) `sm`.
 
-/* Form fields carry their own focus style (border/ring from the component);
-   the offset outline on top of it reads as a double edge. This rule is
-   unlayered, so utilities like focus-visible:outline-none cannot beat it —
-   the exception has to live here. Buttons and links keep the outline. */
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: none;
-}
-
-@media (max-width: 639px) {
+   Unlayered, as before antd, so the table-to-card rules beat the shadcn
+   table's own utilities without `!important`; the few that had it keep it,
+   and an `!`-utility still beats those. In a layer they would need
+   `!important` on everything, and in the base layer that outranks antd and
+   every utility, `!` included. They go with the first antd Table, whose
+   `scroll.x` they would flatten (ui-quality). */
+@media (width < theme(--breakpoint-sm)) {
   main table {
     min-width: 0 !important;
   }
@@ -247,7 +313,7 @@ select:focus-visible {
     border: 1px solid var(--border) !important;
     border-radius: 1rem;
     padding: 0.875rem;
-    background: white;
+    background: var(--card);
   }
   main table tbody tr:has(.animate-pulse) {
     display: block;
@@ -272,20 +338,12 @@ select:focus-visible {
     background: transparent;
     box-shadow: none;
   }
+  /* 16px stops iOS zooming into a focused field; it stays after the table
+     rules go, and it beats antd's control font size on purpose. */
   input,
   select,
   textarea {
     font-size: 16px !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
   }
 }
 
