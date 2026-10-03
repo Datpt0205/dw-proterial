@@ -1,0 +1,93 @@
+[
+  {
+    "code": "VLX",
+    "name": "Velatrix Electronics Vietnam Co., Ltd.",
+    "email_domains": ["velatrix.example"],
+    "contacts": [
+      { "address": "an.trinh@velatrix.example", "display_name": "Trịnh Mỹ An" },
+      {
+        "address": "purchasing@velatrix.example",
+        "display_name": "Velatrix Purchasing"
+      }
+    ],
+    "language": "vi",
+    "intra_group": false,
+    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+  },
+  {
+    "code": "NRV",
+    "name": "Norvanta Automotive Components Vietnam Co., Ltd.",
+    "email_domains": ["norvanta.example"],
+    "contacts": [
+      {
+        "address": "hana.westbrook@norvanta.example",
+        "display_name": "Hana Westbrook"
+      },
+      {
+        "address": "po-desk@norvanta.example",
+        "display_name": "Norvanta PO Desk"
+      }
+    ],
+    "language": "en",
+    "intra_group": false,
+    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+  },
+  {
+    "code": "KMH",
+    "name": "Kumohana Devices Vietnam Co., Ltd.",
+    "email_domains": ["kumohana.example", "vn.kumohana.example"],
+    "contacts": [
+      {
+        "address": "takumi.arai@vn.kumohana.example",
+        "display_name": "新井 匠 (Takumi Arai)"
+      },
+      {
+        "address": "purchasing@kumohana.example",
+        "display_name": "Kumohana Purchasing"
+      }
+    ],
+    "language": "ja",
+    "intra_group": false,
+    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+  },
+  {
+    "code": "CVG",
+    "name": "Corvane Group Japan Ltd.",
+    "email_domains": ["corvane-group.example"],
+    "contacts": [
+      {
+        "address": "scm@corvane-group.example",
+        "display_name": "Corvane Supply Chain Desk"
+      }
+    ],
+    "language": "en",
+    "intra_group": true,
+    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+  },
+  {
+    "code": "BRN",
+    "name": "Công ty TNHH Brennic Việt Nam",
+    "email_domains": ["brennic.example"],
+    "contacts": [
+      { "address": "thu.vo@brennic.example", "display_name": "Võ Minh Thư" }
+    ],
+    "language": "vi",
+    "intra_group": false,
+    "compliance": { "noc_confirmed": false, "esf_fiscal_year": 2025 }
+  },
+  {
+    "code": "QRL",
+    "name": "Quorilo Medical Devices Co., Ltd.",
+    "email_domains": ["quorilo.example"],
+    "contacts": [
+      { "address": "ivy.tran@quorilo.example", "display_name": "Ivy Tran" },
+      {
+        "address": "procurement@quorilo.example",
+        "display_name": "Quorilo Procurement"
+      }
+    ],
+    "language": "en",
+    "intra_group": false,
+    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+  }
+]

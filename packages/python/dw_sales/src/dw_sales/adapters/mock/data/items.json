@@ -1,0 +1,542 @@
+[
+  {
+    "prv_code": "HW-1001",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG24",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-1124"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1002",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG24",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "red",
+      "packaging": "reel",
+      "spec_no": "SP-1124"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1003",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG24",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "white",
+      "packaging": "reel",
+      "spec_no": "SP-1124"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1004",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG22",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-1122"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1005",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG22",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "red",
+      "packaging": "reel",
+      "spec_no": "SP-1122"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1006",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG20",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-1120"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1007",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG26",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "blue",
+      "packaging": "reel",
+      "spec_no": "SP-1126"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 14
+  },
+  {
+    "prv_code": "HW-1008",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG18",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-1118"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1009",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG24",
+      "conductor": "bare_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-1224"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1010",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "single",
+      "gauge": "AWG22",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "yellow",
+      "packaging": "coil",
+      "spec_no": "SP-1322"
+    },
+    "uom": "m",
+    "moq": "3050",
+    "pack_multiple": "305",
+    "standard_lead_time_days": 14
+  },
+  {
+    "prv_code": "HW-1011",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG20",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "green",
+      "packaging": "reel",
+      "spec_no": "SP-1120"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "HW-1012",
+    "family": "hook_up_wire",
+    "attributes": {
+      "cores": 1,
+      "stranding": "stranded",
+      "gauge": "AWG18",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "red",
+      "packaging": "reel",
+      "spec_no": "SP-1118"
+    },
+    "uom": "m",
+    "moq": "6100",
+    "pack_multiple": "610",
+    "standard_lead_time_days": 21
+  },
+  {
+    "prv_code": "CB-2001",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 2,
+      "stranding": "stranded",
+      "gauge": "0.5mm2",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-5201"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2002",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 2,
+      "stranding": "stranded",
+      "gauge": "0.5mm2",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "black",
+      "packaging": "drum",
+      "spec_no": "SP-5201"
+    },
+    "uom": "m",
+    "moq": "5000",
+    "pack_multiple": "1000",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2003",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 2,
+      "stranding": "stranded",
+      "gauge": "0.75mm2",
+      "conductor": "bare_copper",
+      "shield": "none",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5202"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 28
+  },
+  {
+    "prv_code": "CB-2004",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 3,
+      "stranding": "stranded",
+      "gauge": "0.75mm2",
+      "conductor": "tinned_copper",
+      "shield": "braid",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5303"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2005",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 4,
+      "stranding": "stranded",
+      "gauge": "0.5mm2",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5404"
+    },
+    "uom": "m",
+    "moq": "5000",
+    "pack_multiple": "500",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2006",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 4,
+      "stranding": "stranded",
+      "gauge": "0.75mm2",
+      "conductor": "tinned_copper",
+      "shield": "braid",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-5405"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2007",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 4,
+      "stranding": "stranded",
+      "gauge": "AWG22",
+      "conductor": "tinned_copper",
+      "shield": "braid",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5406"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2008",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 6,
+      "stranding": "stranded",
+      "gauge": "AWG24",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5601"
+    },
+    "uom": "m",
+    "moq": "5000",
+    "pack_multiple": "500",
+    "standard_lead_time_days": 45
+  },
+  {
+    "prv_code": "CB-2009",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 8,
+      "stranding": "stranded",
+      "gauge": "AWG24",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5801"
+    },
+    "uom": "m",
+    "moq": "5000",
+    "pack_multiple": "500",
+    "standard_lead_time_days": 45
+  },
+  {
+    "prv_code": "CB-2010",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 2,
+      "stranding": "stranded",
+      "gauge": "AWG22",
+      "conductor": "tinned_copper",
+      "shield": "braid",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-5207"
+    },
+    "uom": "m",
+    "moq": "3050",
+    "pack_multiple": "305",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2011",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 3,
+      "stranding": "stranded",
+      "gauge": "1.25mm2",
+      "conductor": "bare_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "drum",
+      "spec_no": "SP-5308"
+    },
+    "uom": "m",
+    "moq": "2000",
+    "pack_multiple": "500",
+    "standard_lead_time_days": 28
+  },
+  {
+    "prv_code": "CB-2012",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 2,
+      "stranding": "stranded",
+      "gauge": "1.25mm2",
+      "conductor": "bare_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "drum",
+      "spec_no": "SP-5208"
+    },
+    "uom": "m",
+    "moq": "2000",
+    "pack_multiple": "500",
+    "standard_lead_time_days": 28
+  },
+  {
+    "prv_code": "CB-2013",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 4,
+      "stranding": "stranded",
+      "gauge": "0.3mm2",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "white",
+      "packaging": "reel",
+      "spec_no": "SP-5407"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2014",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 2,
+      "stranding": "stranded",
+      "gauge": "0.3mm2",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "white",
+      "packaging": "reel",
+      "spec_no": "SP-5209"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2015",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 6,
+      "stranding": "stranded",
+      "gauge": "0.5mm2",
+      "conductor": "tinned_copper",
+      "shield": "braid",
+      "colour": "black",
+      "packaging": "drum",
+      "spec_no": "SP-5602"
+    },
+    "uom": "m",
+    "moq": "5000",
+    "pack_multiple": "1000",
+    "standard_lead_time_days": 45
+  },
+  {
+    "prv_code": "CB-2016",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 5,
+      "stranding": "stranded",
+      "gauge": "0.75mm2",
+      "conductor": "tinned_copper",
+      "shield": "foil",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5501"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  },
+  {
+    "prv_code": "CB-2017",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 2,
+      "stranding": "stranded",
+      "gauge": "0.5mm2",
+      "conductor": "tinned_copper",
+      "shield": "none",
+      "colour": "black",
+      "packaging": "reel",
+      "spec_no": "SP-5210"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 28
+  },
+  {
+    "prv_code": "CB-2018",
+    "family": "multi_core_cable",
+    "attributes": {
+      "cores": 3,
+      "stranding": "stranded",
+      "gauge": "AWG20",
+      "conductor": "tinned_copper",
+      "shield": "braid",
+      "colour": "grey",
+      "packaging": "reel",
+      "spec_no": "SP-5309"
+    },
+    "uom": "m",
+    "moq": "3000",
+    "pack_multiple": "300",
+    "standard_lead_time_days": 35
+  }
+]

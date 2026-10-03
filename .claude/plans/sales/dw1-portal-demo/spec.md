@@ -23,7 +23,7 @@ In:
   attachments. Processing starts from a button, not a mailbox.
 - Order flow: classify → read PO (Excel incl. one-sheet-per-page; text PDF)
   → map customer code to PRV code → checks → Sales review → Bravo upload file
-  + confirmation or correction email draft.
+    - confirmation or correction email draft.
 - Quotation flow: quote request → Design request draft → Design reply
   (simulated) → price evidence → price decided by Sales → quotation file →
   head-of-Sales approval → email draft.
@@ -65,19 +65,19 @@ Out (this slice):
 
 ## Findings the checks raise
 
-| Code                     | Rule                                                                 |
-| ------------------------ | -------------------------------------------------------------------- |
-| `code_unmapped`          | Customer code not in the convert list and no attribute match         |
-| `code_ambiguous`         | No exact convert entry; more than one item matches the attributes     |
-| `price_mismatch`         | PO unit price ≠ valid quotation price (tolerance from policy)        |
-| `quotation_missing`      | No valid quotation for customer + item on the PO date                |
-| `lme_band_mismatch`      | Quotation's LME band ≠ band of the month's LME                       |
-| `moq_violation`          | Quantity < MOQ                                                       |
-| `pack_multiple`          | Quantity not a multiple of the packing unit                          |
-| `requested_date_short_lt`| Requested date earlier than PO date + standard lead time             |
-| `missing_noc_esf`        | Customer has no NOC or no ESF for the current fiscal year (warning)  |
-| `duplicate_po`           | Same customer PO number already has a case                           |
-| `revised_po`             | Same PO number with a higher revision; diff instead of a new upload  |
+| Code                      | Rule                                                                |
+| ------------------------- | ------------------------------------------------------------------- |
+| `code_unmapped`           | Customer code not in the convert list and no attribute match        |
+| `code_ambiguous`          | No exact convert entry; more than one item matches the attributes   |
+| `price_mismatch`          | PO unit price ≠ valid quotation price (tolerance from policy)       |
+| `quotation_missing`       | No valid quotation for customer + item on the PO date               |
+| `lme_band_mismatch`       | Quotation's LME band ≠ band of the month's LME                      |
+| `moq_violation`           | Quantity < MOQ                                                      |
+| `pack_multiple`           | Quantity not a multiple of the packing unit                         |
+| `requested_date_short_lt` | Requested date earlier than PO date + standard lead time            |
+| `missing_noc_esf`         | Customer has no NOC or no ESF for the current fiscal year (warning) |
+| `duplicate_po`            | Same customer PO number already has a case                          |
+| `revised_po`              | Same PO number with a higher revision; diff instead of a new upload |
 
 ## Done when
 

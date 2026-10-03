@@ -15,6 +15,21 @@ dependencies = [
     "langgraph>=0.6,<2",
     "pydantic>=2.10,<3",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
+    # Reads Excel POs and RFQs with their `sheet!cell` anchors, writes the mock
+    # attachments and, later, the Bravo upload file. The range `apps/docgen`
+    # already declares, as FastAPI and LangGraph follow their owners above.
+    "openpyxl>=3.1,<4",
+    # Reads the text layer of PDF POs page by page. Pure Python on purpose: a
+    # customer's attachment is attacker-controlled and is parsed inside the API
+    # process, where a memory-safety bug in a native parser would be a breach.
+    "pypdf>=6,<7",
+    # Writes the mock text-PDF attachments (`adapters/mock/generate_attachments.py`)
+    # with an embedded font, so Vietnamese survives into the text layer.
+    "reportlab>=5,<6",
+    # Loads `configs/policies/sales_order_rules@*.yaml`, beside the model that
+    # validates it, as `dw_platform` and `dw_knowledge` load their policies. The
+    # range those packages already declare.
+    "pyyaml>=6,<7",
 ]
 
 [build-system]

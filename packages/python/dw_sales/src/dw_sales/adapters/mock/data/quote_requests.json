@@ -1,0 +1,50 @@
+[
+  {
+    "message_id": "M09",
+    "name": "QRL-RFQ-2609-03.xlsx",
+    "customer_code": "QRL",
+    "rfq_no": "QRL-RFQ-2609-03",
+    "rfq_date": "2026-09-29",
+    "quote_due": "2026-10-09",
+    "currency": "USD",
+    "remarks": "New infusion pump line. Please quote MOQ and lead time.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "QR-NEW-3C26",
+        "attributes": {
+          "family": "multi_core_cable",
+          "cores": 3,
+          "gauge": "AWG26",
+          "stranding": "stranded",
+          "conductor": "tinned_copper",
+          "shield": "braid",
+          "colour": "white",
+          "packaging": "reel",
+          "pack_length_m": "300"
+        },
+        "quantity": "6000",
+        "required_date": "2026-12-15"
+      }
+    ]
+  },
+  {
+    "message_id": "M10",
+    "name": "KMH-RFQ-260930-02.xlsx",
+    "customer_code": "KMH",
+    "rfq_no": "KMH-RFQ-260930-02",
+    "rfq_date": "2026-09-30",
+    "quote_due": "2026-10-07",
+    "currency": "USD",
+    "remarks": "目標価格 0.6500 USD/m でご検討ください。 Target price 0.6500 USD/m.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "KMH-21-0045",
+        "quantity": "9000",
+        "target_price": "0.6500",
+        "required_date": "2026-12-18"
+      }
+    ]
+  }
+]

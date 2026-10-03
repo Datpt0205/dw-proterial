@@ -1,0 +1,50 @@
+[
+  {
+    "month": "2025-10",
+    "usd_per_tonne": "9420"
+  },
+  {
+    "month": "2025-11",
+    "usd_per_tonne": "9515"
+  },
+  {
+    "month": "2025-12",
+    "usd_per_tonne": "9680"
+  },
+  {
+    "month": "2026-01",
+    "usd_per_tonne": "9860"
+  },
+  {
+    "month": "2026-02",
+    "usd_per_tonne": "9745"
+  },
+  {
+    "month": "2026-03",
+    "usd_per_tonne": "9990"
+  },
+  {
+    "month": "2026-04",
+    "usd_per_tonne": "10215"
+  },
+  {
+    "month": "2026-05",
+    "usd_per_tonne": "10380"
+  },
+  {
+    "month": "2026-06",
+    "usd_per_tonne": "10155"
+  },
+  {
+    "month": "2026-07",
+    "usd_per_tonne": "10470"
+  },
+  {
+    "month": "2026-08",
+    "usd_per_tonne": "10610"
+  },
+  {
+    "month": "2026-09",
+    "usd_per_tonne": "10870"
+  }
+]

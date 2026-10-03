@@ -1,0 +1,393 @@
+[
+  {
+    "quote_no": "Q26-0101",
+    "customer_code": "VLX",
+    "prv_code": "HW-1001",
+    "unit_price": "0.0420",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0102",
+    "customer_code": "VLX",
+    "prv_code": "HW-1002",
+    "unit_price": "0.0420",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0103",
+    "customer_code": "VLX",
+    "prv_code": "CB-2001",
+    "unit_price": "0.4850",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "10500",
+      "high_usd_per_tonne": "11000"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0104",
+    "customer_code": "VLX",
+    "prv_code": "CB-2007",
+    "unit_price": "0.7120",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "10500",
+      "high_usd_per_tonne": "11000"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q25-0311",
+    "customer_code": "VLX",
+    "prv_code": "CB-2001",
+    "unit_price": "0.4590",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "9500",
+      "high_usd_per_tonne": "10000"
+    },
+    "valid_from": "2025-10-01",
+    "valid_to": "2026-03-31"
+  },
+  {
+    "quote_no": "Q26-0121",
+    "customer_code": "NRV",
+    "prv_code": "HW-1004",
+    "unit_price": "0.0510",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0122",
+    "customer_code": "NRV",
+    "prv_code": "CB-2007",
+    "unit_price": "0.6980",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "10500",
+      "high_usd_per_tonne": "11000"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0123",
+    "customer_code": "NRV",
+    "prv_code": "CB-2006",
+    "unit_price": "0.8240",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "10500",
+      "high_usd_per_tonne": "11000"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q25-0298",
+    "customer_code": "NRV",
+    "prv_code": "HW-1004",
+    "unit_price": "0.0490",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2025-10-01",
+    "valid_to": "2026-03-31"
+  },
+  {
+    "quote_no": "Q26-0141",
+    "customer_code": "KMH",
+    "prv_code": "CB-2005",
+    "unit_price": "0.6150",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "5000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0142",
+    "customer_code": "KMH",
+    "prv_code": "HW-1007",
+    "unit_price": "0.0330",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 14,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q25-0233",
+    "customer_code": "KMH",
+    "prv_code": "CB-2007",
+    "unit_price": "0.7350",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "9500",
+      "high_usd_per_tonne": "10000"
+    },
+    "valid_from": "2025-10-01",
+    "valid_to": "2026-03-31"
+  },
+  {
+    "quote_no": "Q26-0161",
+    "customer_code": "CVG",
+    "prv_code": "HW-1003",
+    "unit_price": "0.0385",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "quote_no": "Q26-0162",
+    "customer_code": "CVG",
+    "prv_code": "HW-1004",
+    "unit_price": "0.0465",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "quote_no": "Q26-0163",
+    "customer_code": "CVG",
+    "prv_code": "HW-1006",
+    "unit_price": "0.0590",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "quote_no": "Q26-0164",
+    "customer_code": "CVG",
+    "prv_code": "CB-2004",
+    "unit_price": "0.9050",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "quote_no": "Q26-0165",
+    "customer_code": "CVG",
+    "prv_code": "CB-2009",
+    "unit_price": "1.1800",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "5000",
+    "lead_time_days": 45,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "quote_no": "Q26-0166",
+    "customer_code": "CVG",
+    "prv_code": "CB-2008",
+    "unit_price": "0.8900",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "5000",
+    "lead_time_days": 45,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "9500",
+      "high_usd_per_tonne": "10000"
+    },
+    "valid_from": "2026-04-01",
+    "valid_to": "2027-03-31"
+  },
+  {
+    "quote_no": "Q26-0181",
+    "customer_code": "BRN",
+    "prv_code": "HW-1001",
+    "unit_price": "1150",
+    "currency": "VND",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q25-0412",
+    "customer_code": "BRN",
+    "prv_code": "CB-2003",
+    "unit_price": "13900",
+    "currency": "VND",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 28,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2025-10-01",
+    "valid_to": "2026-03-31"
+  },
+  {
+    "quote_no": "Q26-0183",
+    "customer_code": "BRN",
+    "prv_code": "CB-2012",
+    "unit_price": "21800",
+    "currency": "VND",
+    "uom": "m",
+    "moq": "2000",
+    "lead_time_days": 28,
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "10500",
+      "high_usd_per_tonne": "11000"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0201",
+    "customer_code": "QRL",
+    "prv_code": "HW-1006",
+    "unit_price": "0.0640",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0202",
+    "customer_code": "QRL",
+    "prv_code": "CB-2010",
+    "unit_price": "0.3150",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3050",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0203",
+    "customer_code": "QRL",
+    "prv_code": "HW-1008",
+    "unit_price": "0.0910",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0204",
+    "customer_code": "QRL",
+    "prv_code": "CB-2013",
+    "unit_price": "0.4420",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "3000",
+    "lead_time_days": 35,
+    "copper_basis": {
+      "kind": "fixed"
+    },
+    "valid_from": "2026-07-01",
+    "valid_to": "2026-12-31"
+  }
+]

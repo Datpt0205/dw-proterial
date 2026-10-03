@@ -1,6 +1,6 @@
 # 01 — Mock data and the ports it sits behind
 
-Status: ready-for-agent
+Status: done (2026-10-03)
 Blocked by: —
 
 ## What
