@@ -1,3 +1,30 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "overrides": [
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "excludedFiles": ["lib/dates.ts", "**/__tests__/**", "e2e/**"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "NewExpression[callee.name='Date'][arguments.length>0]",
+            "message": "A date becomes text through lib/dates.ts (formatDate, formatDateTime), which owns the zone (giờ Việt Nam), the order and the unknown label (CLAUDE.md \"Web UI\")."
+          },
+          {
+            "selector": "CallExpression[callee.property.name=/^toLocale(Date|Time)String$/]",
+            "message": "A date becomes text through lib/dates.ts (formatDate, formatDateTime), not in the browser's zone and locale."
+          },
+          {
+            "selector": "NewExpression[callee.object.name='Intl'][callee.property.name='DateTimeFormat']",
+            "message": "A date becomes text through lib/dates.ts (formatDate, formatDateTime): one formatter, not two."
+          },
+          {
+            "selector": "ImportDeclaration[importKind!='type'][source.value=/^dayjs/]",
+            "message": "dayjs is set up once, in lib/dates.ts (plugins, the vi locale); import from there. A type-only import is fine."
+          }
+        ]
+      }
+    }
+  ]
 }

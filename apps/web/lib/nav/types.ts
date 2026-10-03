@@ -18,3 +18,21 @@ export interface NavItem {
   /** Shown only to a Platform Operator (ADR-002), regardless of scope/role. */
   operatorOnly?: boolean;
 }
+
+/**
+ * Pages that sit under one name in the navbar: a submenu on the bar, a section
+ * in the drawer. A group has no page of its own and shows only while one of
+ * its items does.
+ */
+export interface NavGroup {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+}
+
+export type NavEntry = NavItem | NavGroup;
+
+export function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return "items" in entry;
+}

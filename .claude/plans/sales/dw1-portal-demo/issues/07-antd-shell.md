@@ -1,6 +1,6 @@
 # 07 — antd v6 shell slice (platform)
 
-Status: ready-for-agent
+Status: done (2026-10-03)
 Blocked by: —
 
 ## What

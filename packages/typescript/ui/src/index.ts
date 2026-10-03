@@ -1,4 +1,8 @@
 export { cn } from "./cn";
+export { appTheme } from "./theme";
+export { THEME_ROOT_CLASS } from "./theme-class";
+export { UiProvider } from "./provider";
+export { AppShell, type AppShellProps } from "./app-shell";
 export { Button, buttonVariants, type ButtonProps } from "./button";
 export {
   Card,

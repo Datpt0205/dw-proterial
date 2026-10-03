@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 import type { AppNotification, Inbox } from "@dw/contracts";
+import { formatDateTime } from "../lib/dates";
 import { apiClient } from "../lib/session";
 
 // How often the badge checks for something new while the app is open.
@@ -125,7 +126,7 @@ export function NotificationBell() {
                       </span>
                     )}
                     <span className="block text-xs text-muted-foreground">
-                      {new Date(item.created_at).toLocaleString()}
+                      {formatDateTime(item.created_at)}
                     </span>
                   </button>
                 </li>

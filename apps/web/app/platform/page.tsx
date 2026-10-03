@@ -268,7 +268,7 @@ function TenantsCard({
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[42rem] text-sm">
+            <table data-slot="table" className="w-full min-w-[42rem] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-3 py-2 font-medium">Company</th>

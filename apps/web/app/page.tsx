@@ -7,26 +7,23 @@ import { EmptyState } from "../components/empty-state";
 import { PageHeading } from "../components/page-heading";
 import { useAuth } from "../lib/auth/auth-context";
 import { NAV_ITEMS } from "../lib/nav/registry";
-import { hasAnyRole } from "../lib/nav/roles";
+import { canSee } from "../lib/nav/visible";
 
 /**
  * The platform landing page.
  *
  * A bounded context owns its own home screen; this one only points at the
  * platform areas the signed-in person can actually reach, read from the same
- * nav registry the sidebar renders — so a page added to the registry appears
- * here too, and nothing here can offer a link the sidebar would hide.
+ * nav registry and the same filter the navbar uses — so a page added to the
+ * registry appears here too, and nothing here can offer a link the navbar
+ * would hide.
  */
 export default function HomePage() {
-  const { displayName, active, isPlatformOperator, hasScope, roles } =
-    useAuth();
+  const auth = useAuth();
+  const { displayName, active } = auth;
 
   const destinations = NAV_ITEMS.filter(
-    (item) =>
-      item.href !== "/" &&
-      (!item.operatorOnly || isPlatformOperator) &&
-      (!item.scope || hasScope(item.scope)) &&
-      (!item.roles || hasAnyRole(roles, item.roles)),
+    (item) => item.href !== "/" && canSee(item, auth),
   );
 
   return (
