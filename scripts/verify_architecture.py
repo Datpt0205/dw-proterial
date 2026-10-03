@@ -42,6 +42,8 @@ IMPORT_TO_DIST = {
     "deepagents": "deepagents",
     "playwright": "playwright",
     "reportlab": "reportlab",
+    "openpyxl": "openpyxl",
+    "pypdf": "pypdf",
     "langchain": "langchain",
     "langchain_core": "langchain-core",
     "langchain_openai": "langchain-openai",

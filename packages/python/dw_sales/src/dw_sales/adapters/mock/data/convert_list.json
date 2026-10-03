@@ -1,0 +1,207 @@
+[
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "VX-W24-BK",
+    "prv_code": "HW-1001"
+  },
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "VX-W24-RD",
+    "prv_code": "HW-1002"
+  },
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "VX-C2F05",
+    "prv_code": "CB-2001"
+  },
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "VX-C4B22",
+    "prv_code": "CB-2007"
+  },
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "VX-W22-BK",
+    "prv_code": "HW-1004"
+  },
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "VX-C2N075",
+    "prv_code": "CB-2003"
+  },
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "VX-W24-WH",
+    "prv_code": "HW-1003"
+  },
+  {
+    "customer_code": "VLX",
+    "customer_item_code": "PN-1001",
+    "prv_code": "HW-1009"
+  },
+  {
+    "customer_code": "NRV",
+    "customer_item_code": "NV-HW22-BK",
+    "prv_code": "HW-1004"
+  },
+  {
+    "customer_code": "NRV",
+    "customer_item_code": "NV-CB4-22-GY",
+    "prv_code": "CB-2007"
+  },
+  {
+    "customer_code": "NRV",
+    "customer_item_code": "NV-CB4-075-BK",
+    "prv_code": "CB-2006"
+  },
+  {
+    "customer_code": "NRV",
+    "customer_item_code": "NV-HW24-WH",
+    "prv_code": "HW-1003"
+  },
+  {
+    "customer_code": "NRV",
+    "customer_item_code": "NV-CB2-05-BK",
+    "prv_code": "CB-2001"
+  },
+  {
+    "customer_code": "NRV",
+    "customer_item_code": "NV-CB2-05-BK-D",
+    "prv_code": "CB-2002"
+  },
+  {
+    "customer_code": "NRV",
+    "customer_item_code": "PN-1001",
+    "prv_code": "CB-2011"
+  },
+  {
+    "customer_code": "KMH",
+    "customer_item_code": "KMH-21-0077",
+    "prv_code": "HW-1007"
+  },
+  {
+    "customer_code": "KMH",
+    "customer_item_code": "KMH-21-0045",
+    "prv_code": "CB-2007"
+  },
+  {
+    "customer_code": "KMH",
+    "customer_item_code": "KMH-21-0031",
+    "prv_code": "HW-1001"
+  },
+  {
+    "customer_code": "KMH",
+    "customer_item_code": "KMH-21-0052",
+    "prv_code": "CB-2013"
+  },
+  {
+    "customer_code": "KMH",
+    "customer_item_code": "KMH-21-0060",
+    "prv_code": "CB-2014"
+  },
+  {
+    "customer_code": "KMH",
+    "customer_item_code": "KMH-21-0063",
+    "prv_code": "HW-1010"
+  },
+  {
+    "customer_code": "KMH",
+    "customer_item_code": "KMH-20-0310",
+    "prv_code": "CB-2005"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0001",
+    "prv_code": "HW-1003"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0002",
+    "prv_code": "HW-1004"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0003",
+    "prv_code": "HW-1006"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0004",
+    "prv_code": "CB-2004"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0005",
+    "prv_code": "CB-2009"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0006",
+    "prv_code": "CB-2008"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0007",
+    "prv_code": "CB-2016"
+  },
+  {
+    "customer_code": "CVG",
+    "customer_item_code": "CVG-0008",
+    "prv_code": "CB-2018"
+  },
+  {
+    "customer_code": "BRN",
+    "customer_item_code": "BRN-W-0007",
+    "prv_code": "HW-1001"
+  },
+  {
+    "customer_code": "BRN",
+    "customer_item_code": "BRN-C-0112",
+    "prv_code": "CB-2003"
+  },
+  {
+    "customer_code": "BRN",
+    "customer_item_code": "BRN-C-0118",
+    "prv_code": "CB-2012"
+  },
+  {
+    "customer_code": "BRN",
+    "customer_item_code": "BRN-W-0009",
+    "prv_code": "HW-1002"
+  },
+  {
+    "customer_code": "BRN",
+    "customer_item_code": "BRN-C-0120",
+    "prv_code": "CB-2011"
+  },
+  {
+    "customer_code": "QRL",
+    "customer_item_code": "QR-HW20-BK",
+    "prv_code": "HW-1006"
+  },
+  {
+    "customer_code": "QRL",
+    "customer_item_code": "QR-CB2-AWG22",
+    "prv_code": "CB-2010"
+  },
+  {
+    "customer_code": "QRL",
+    "customer_item_code": "QR-HW18-BK",
+    "prv_code": "HW-1008"
+  },
+  {
+    "customer_code": "QRL",
+    "customer_item_code": "QR-CB4-03-WH",
+    "prv_code": "CB-2013"
+  },
+  {
+    "customer_code": "QRL",
+    "customer_item_code": "QR-HW22-RD",
+    "prv_code": "HW-1005"
+  },
+  {
+    "customer_code": "QRL",
+    "customer_item_code": "QR-HW18-RD",
+    "prv_code": "HW-1012"
+  }
+]
