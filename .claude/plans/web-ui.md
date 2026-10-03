@@ -77,8 +77,11 @@ the theme, the shell and the shared composites, not primitive wrappers.
 
 ## First slice: the antd shell (2026-10-02, committed)
 
-Spec and tickets: [`web-ui/antd-shell/`](web-ui/antd-shell/spec.md) (10
-tickets; 01 CI and 02 this slice resolved, 03–09 ready, 10 waits on Đạt).
+Spec and tickets: [`web-ui/antd-shell/`](web-ui/antd-shell/spec.md) (18
+tickets; 01 CI and 02 this slice resolved, 03–09 ready, 10 waits on Đạt; 11–18
+added 2026-10-03 for the design parts no ticket owned: button and field
+conventions, skip link, session-expiry warning, dark mode before hydration,
+colour-mode choice, command palette, `lang="vi"` and menu labels).
 
 - **Dependencies:** antd 6.6.5, @ant-design/icons 6.3.4,
   @ant-design/nextjs-registry 1.3.0 and dayjs 1.11.23 in `apps/web`.

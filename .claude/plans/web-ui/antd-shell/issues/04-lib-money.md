@@ -1,14 +1,14 @@
 # 04 — `lib/money.ts`
 
 Status: ready-for-agent
-Blocked by: 02
+Blocked by: 02, 05
 Area: web-ui
 
 ## Mục tiêu
 
 Một chỗ duy nhất định dạng và đọc số tiền: `18.450.000.000 đ`, không bao giờ "₫"; đọc
 được số dán vào theo cả hai kiểu ngăn nghìn; từ chối số lẻ mơ hồ thay vì nhân 1 000.
-Đọc số thành chữ không ở đây: thuộc `dw_bid` (D12).
+Đọc số thành chữ không ở đây: thuộc domain của context của sản phẩm (D12).
 
 ## Việc cần làm
 
@@ -34,8 +34,8 @@ Một chỗ duy nhất định dạng và đọc số tiền: `18.450.000.000 đ
   `Intl.NumberFormat` và thuộc tính `currency: "VND"`. Lệnh cấm `toLocaleString` của
   ticket 03 đã chặn đường còn lại; nếu 03 chưa xong thì ticket này thêm luật đó, trừ
   `lib/money.ts` và `lib/dates.ts`.
-- Thêm một mục tiền vào fixture `/dev-login/ui-kit` khi ticket 05 đã có nó; nếu 04
-  xong trước 05 thì 05 thêm.
+- Thêm mục "Tiền" vào fixture `/dev-login/ui-kit` của 05: các dạng in ở trên và một ô
+  `InputNumber` tiền cho test con trỏ.
 
 ## Tiêu chí chấp nhận
 
@@ -54,7 +54,7 @@ Test vitest ở `apps/web/lib/__tests__/money.test.ts`:
 - [ ] Render antd `InputNumber` với `moneyInputFormatter`/`moneyInputParser` trong
       jsdom: gõ `18450000000` thì ô hiện `18.450.000.000`, giá trị là số
       `18450000000`; dán `18,450,000,000` ra cùng giá trị.
-- [ ] Playwright trên fixture (sau 05): gõ thêm chữ số vào giữa số đã có thì con trỏ
+- [ ] Playwright `@ui` trên fixture: gõ thêm chữ số vào giữa số đã có thì con trỏ
       không nhảy về cuối. Đo hành vi của antd trước; nếu antd làm nhảy con trỏ, ghi lại
       dưới Comments và chọn cách sửa trước khi đóng ticket.
 - [ ] Một test chạy ESLint trên đoạn có `currency: "VND"` đặt ở một trang ra lỗi; đặt ở
@@ -67,7 +67,7 @@ Test vitest ở `apps/web/lib/__tests__/money.test.ts`:
   `parseMoney`; `V3Field.dc.html` kiểu `money`).
 - `ui-quality.md` §8, §9 (nhánh `bidding`): một formatter tiền, "đ" thay "₫", dán theo
   cả hai kiểu, số nguyên, số lẻ dấu chấm thì đọc đúng hoặc từ chối.
-- D12 (Đạt 2/10/2026): hàm xử lý tiếng Việt nằm trong `dw_bid`, nên đọc số thành chữ
+- D12 (Đạt 2/10/2026): hàm xử lý tiếng Việt nằm trong context của sản phẩm, nên đọc số thành chữ
   không ở `lib/money.ts`.
 - `failure-modes.md` #2 (một dữ kiện, hai bản sao), #4 (đo `InputNumber` trước khi dựa
   vào nó).

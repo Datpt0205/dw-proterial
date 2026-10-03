@@ -1,7 +1,7 @@
 # 06 — Thông báo qua `App.useApp()`, gỡ sonner
 
 Status: ready-for-agent
-Blocked by: 02
+Blocked by: 02, 05
 Area: web-ui
 
 ## Mục tiêu
@@ -30,6 +30,8 @@ báo ở 4 tệp, và `useCachedResource` in `failure.message`, tức `"permissi
     - `apps/web/lib/use-cached-pages.ts`.
 - `useCachedResource` và `useCachedPages` gọi `App.useApp()` bên trong hook; câu lỗi
   lấy từ `errorMessage()` (`apps/web/lib/error-message.ts`).
+- Thêm mục "Thông báo" vào fixture `/dev-login/ui-kit` của 05: mỗi loại một nút phát
+  thử (thành công, lỗi có "Thử lại", có Hoàn tác, hộp xác nhận).
 - Sửa `apps/web/lib/__tests__/use-cached-pages.test.tsx` (đang mock `sonner`).
 - Gỡ `sonner` khỏi `apps/web/package.json` và lockfile.
 - Luật ESLint trong `apps/web/.eslintrc.json`:
@@ -55,7 +57,7 @@ báo ở 4 tệp, và `useCachedResource` in `failure.message`, tức `"permissi
     - `const { message } = App.useApp()` không ra lỗi.
 - [ ] `grep -rn "sonner" apps/web --include=*.ts --include=*.tsx` (bỏ `node_modules`)
       không còn kết quả; `pnpm why sonner --filter @dw/web` không còn.
-- [ ] Playwright trên fixture `/dev-login/ui-kit` (sau 05): bấm nút thử phát thông báo
+- [ ] Playwright `@ui` trên fixture `/dev-login/ui-kit`: bấm nút thử phát thông báo
       thì nó hiện ở nửa dưới màn hình, có `role` để trình đọc màn hình đọc được.
 - [ ] `pnpm run lint`, `pnpm run typecheck`, `pnpm --filter @dw/web test` xanh.
 

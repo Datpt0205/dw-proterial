@@ -20,6 +20,10 @@ bảng của mình (ví dụ bảng kết luận của sản phẩm, chữ chờ
       và `colorErrorText` `#ff6b61`.
     - Bo góc theo design: nút viên thuốc (component token của `Button`), trường 11px, thẻ
       20px, `Modal` và `Drawer` 24px. Cỡ nút nhỏ 28px. Không viết số trong component.
+    - Mục menu hiện tại đậm 600, màu `colorText` (spec mục "Khung"), ở header sáng lẫn
+      tối và trong ngăn kéo. Hôm nay là độ đậm mặc định của antd với màu liên kết
+      (`.claude/plans/web-ui.md` mục Open). Đo trước component token nào của `Menu` làm
+      được; không có token cho độ đậm thì một quy tắc trong `@dw/ui`, không ở trang.
     - Một bảng `STATUS_TONES` cho sáng và tối, đúng spec mục "Tông trạng thái": `success`,
       `error`, `warning`, `gold`, `info`, `geekblue`, `unknown`, `neutral`,
       `neutralStrong`, `outline`, `infoOutline`, `successDashed`, `warningOutline`,
@@ -65,6 +69,9 @@ bảng của mình (ví dụ bảng kết luận của sản phẩm, chữ chờ
       ở `phone-390` chạm vào nhãn thì gợi ý bật, chạm lần nữa thì tắt.
 - [ ] Playwright: nút chính trên fixture có `border-radius` không nhỏ hơn nửa chiều cao;
       ô nhập 11px; ở chế độ tối nút nguy hiểm có nền `rgb(214, 58, 48)`.
+- [ ] Playwright `@ui`: mục `aria-current="page"` trên fixture có `font-weight` 600 và
+      màu bằng `colorText`, ở `desktop-1280` (menu ngang) và `phone-390` (ngăn kéo), sáng
+      lẫn tối; tỷ lệ tương phản với nền header ≥ 4,5:1.
 - [ ] Không có màu hex, `rgba(` hay số px của bo góc trong `status-tag.tsx`.
 - [ ] `pnpm --filter @dw/ui test`, `pnpm run lint`, `pnpm run typecheck` xanh.
 
@@ -80,6 +87,7 @@ bảng của mình (ví dụ bảng kết luận của sản phẩm, chữ chờ
   antd) (nhánh `bidding`).
 - Spec, Câu hỏi còn mở 7 (catalog và CSS khung lệch màu lỗi).
 - Ticket 02, mục Comments.
+- `.claude/plans/web-ui.md` mục Open (mục menu hiện tại chưa đậm 600, màu chữ chính).
 
 ## Comments
 

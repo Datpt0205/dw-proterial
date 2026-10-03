@@ -66,6 +66,18 @@ Mốc 6 (running many customers) is half done:
   workspace-narrowed table that does not read it. Needed before the first
   context narrows its tables by workspace. Found on the way: offboarding loses
   in-app notifications unexported (`ops-hardening.md` Open).
+- **Approval decisions audited; approvals, runs and audit read by workspace**
+  (`platform-runtime/approval-audit-and-workspace/`, tickets 01–02 open):
+  HITL-11 and the rest of TEN-04. Ticket 01 comes before the first product gate.
+- **Tickets written for the first product, platform side** (2026-10-03, all
+  `ready-for-agent`, product-neutral), each under `platform-runtime/<folder>/`:
+  `scope-holder-check` (ask whether a user holds a scope without an
+  `AccessContext`, for apply-time checks and worker lanes), `eval-grader-registry`
+  (a context registers its own graders), `approval-inbox-link` (`/approvals`
+  links a context's approval to that context's own inbox), `nav-any-scope` (a
+  menu item shown for any of several scopes), `support-access` (support access
+  the customer grants, ADR 0008), `tenant-members-and-invitations` (tenant-wide
+  users, per-workspace roles, invitations).
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).

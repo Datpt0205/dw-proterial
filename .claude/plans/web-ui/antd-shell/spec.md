@@ -25,8 +25,7 @@ Trước khi có màn nghiệp vụ nào, web có một khung dùng chung đúng
 ## Trong phạm vi
 
 - Shell antd: theme A sáng/tối trong `@dw/ui`, provider `vi_VN` phát CSS variable,
-  `AppShell` menu ngang, thứ tự layer, Tailwind ánh xạ vào token antd (ticket 02,
-  đang làm).
+  `AppShell` menu ngang, thứ tự layer, Tailwind ánh xạ vào token antd (ticket 02).
 - `apps/web/lib/dates.ts` và `apps/web/lib/money.ts` (03, 04).
 - Hạ tầng kiểm thử UI: project Playwright theo bề rộng và theo múi giờ, trang fixture
   không cần API, vitest cho `@dw/ui` (05).
@@ -36,32 +35,39 @@ Trước khi có màn nghiệp vụ nào, web có một khung dùng chung đúng
 - `PageHeader`, `MaskedValue`, `AbsentValue` trong `@dw/ui` (08).
 - `RegionState` ánh xạ mã lỗi sang trạng thái; phát hiện mất mạng một lần trong shell
   (09).
-- CI chạy test web (10, chờ Đạt).
+- CI chạy test web, cả spec fixture lẫn spec cần API (10, chờ Đạt).
+- Quy ước nút (11) và trường (12) của design: theme, mục trên fixture, test.
+- Nút "Bỏ qua tới nội dung chính" và vùng `main` (13); cảnh báo phiên sắp hết hạn
+  2 phút trước (14). Hai việc này là yêu cầu truy cập (WCAG 2.4.1, 2.2.1), nên không
+  để P1.
+- Chế độ tối không nháy sáng khi tải (15); mục menu hiện tại đậm 600, màu chữ chính
+  (07).
+- `<html lang="vi">` và nhãn menu nền tảng bằng tiếng Việt (18, chờ Đạt, Câu hỏi còn
+  mở 4).
 
 ## Ngoài phạm vi
 
 - Bảng nhãn của sản phẩm (kết luận, mức độ, trạng thái gói, trạng thái cổng): do
   context của sản phẩm khai, chữ chờ D60.
-- Đọc số tiền thành chữ: thuộc `dw_bid` (D12). `lib/money.ts` chỉ định dạng và đọc số.
+- Đọc số tiền thành chữ: thuộc domain của context của sản phẩm (D12). `lib/money.ts` chỉ định dạng và đọc số.
 - Mục menu của sản phẩm: context khai trong manifest của nó, nối một lần ở
   `lib/nav/registry.ts`.
 - Thay các trang shadcn hiện có: thay khi trang đó được sửa lần sau, không quét một
   lượt (`CLAUDE.md`).
 - Dịch các trang nền tảng đang viết tiếng Anh (Câu hỏi còn mở 4).
 - Màn Duyệt theo design v3 (`V3Approvals`): thuộc lát sản phẩm làm cổng.
-- **P1, thành ticket sau khi cần:** bảng lệnh Ctrl K; chỉ báo "Đang lưu… / Đã lưu";
-  cảnh báo phiên sắp hết hạn 2 phút trước; băng quyền hỗ trợ; nút chọn Sáng / Tối /
-  Theo máy trong menu người dùng; nút "Bỏ qua tới nội dung chính"; script chụp
-  prototype cạnh app; `Idempotency-Key` trong API client (cần trước màn đầu tiên có
-  nút quyết cổng).
+- **P1, đã có ticket, không chặn slice:** nút chọn Sáng / Tối / Theo máy trong menu
+  người dùng (16, chờ Câu hỏi còn mở 6); bảng lệnh Ctrl K (17).
+- **P1, thành ticket sau khi cần:** chỉ báo "Đang lưu… / Đã lưu"; băng quyền hỗ trợ;
+  script chụp prototype cạnh app; `Idempotency-Key` trong API client (cần trước màn
+  đầu tiên có nút quyết cổng).
 - **P2:** chuyển động riêng của design (vào trang lệch nhịp, nháy dòng 2,4s, đường cong
   nảy). Code dùng token `motion*` của antd.
 
 ## Vai và quyền
 
-Lát này không biết vai nào. Sản phẩm đầu tiên có bốn vai (Người đại diện, Nhân viên
-dự thầu, Phụ trách dự toán, Lãnh đạo; D17) và dùng vai quản trị sẵn có của nền tảng
-cho quản lý người dùng. Cả hai do server phân giải; S0 không thêm, không đọc vai nào.
+Lát này không biết vai nào. Sản phẩm có vai riêng, do server phân giải; S0 không thêm,
+không đọc vai nào.
 
 - Shell nhận danh sách mục menu đã lọc theo scope (cơ chế sẵn có ở
   `components/app-frame.tsx`). Ẩn mục menu không phải là phân quyền.
@@ -72,11 +78,11 @@ cho quản lý người dùng. Cả hai do server phân giải; S0 không thêm,
 
 ## Màn hình
 
-| Route                    | File v3                          | Hiện gì                                                                                                                                           |
-| ------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mọi trang đã đăng nhập   | `EHSDT v3.dc.html` (khung)       | `AppShell`: header 56px, menu ngang từ 992px, ngăn kéo dưới 992px; sáng/tối theo máy; băng mất mạng dưới header (09); thông báo nổi giữa đáy (06) |
-| `/dev-login/layer-check` | không                            | Fixture của 02: shell và một nút antd mang lớp Tailwind. Chỉ có ở bản dev-auth, bản khác trả 404                                                  |
-| `/dev-login/ui-kit`      | `V3Catalog.dc.html` (`#catalog`) | Fixture của 05, các ticket 07–09 thêm phần: giờ, tiền, nhãn, ô đặc biệt, trạng thái vùng. Chỉ có ở bản dev-auth, bản khác trả 404                 |
+| Route                    | File v3                          | Hiện gì                                                                                                                                                                               |
+| ------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mọi trang đã đăng nhập   | `EHSDT v3.dc.html` (khung)       | `AppShell`: header 56px, menu ngang từ 992px, ngăn kéo dưới 992px; sáng/tối theo máy; băng mất mạng dưới header (09); thông báo nổi giữa đáy (06)                                     |
+| `/dev-login/layer-check` | không                            | Fixture của 02: shell và một nút antd mang lớp Tailwind. Chỉ có ở bản dev-auth, bản khác trả 404                                                                                      |
+| `/dev-login/ui-kit`      | `V3Catalog.dc.html` (`#catalog`) | Fixture của 05 (giờ); các ticket 04, 06–09, 11, 12, 17 thêm phần: tiền, thông báo, nhãn, ô đặc biệt, trạng thái vùng, nút, trường, bảng lệnh. Chỉ có ở bản dev-auth, bản khác trả 404 |
 
 Hai fixture là bản code của trang `#catalog`: cho Playwright chạy ở mọi bề rộng và múi
 giờ mà không cần API, và cho người xem từng trạng thái cạnh nhau.
@@ -101,6 +107,16 @@ giờ mà không cần API, và cho người xem từng trạng thái cạnh nha
   tự tắt sau 4,2 giây; có nút Hoàn tác thì 7 giây, và chỉ khi server hoàn tác thật; lỗi
   có nút "Thử lại" không tự tắt (06).
 - **Hộp xác nhận** focus mặc định vào "Hủy"; hộp gõ mã focus vào ô gõ.
+- **Bỏ qua tới nội dung chính:** liên kết đầu tiên của trang, ẩn tới khi nhận focus
+  bằng Tab, hiện ở góc trên trái. Enter chuyển focus vào `main#main` (13).
+- **Cảnh báo phiên:** 2 phút trước khi phiên đăng nhập hết, một hộp thoại báo giờ hết
+  phiên và có nút chính "Ở lại đăng nhập", focus vào nút đó. Bấm thì gia hạn phiên tại
+  chỗ; trang và dữ liệu đã nhập giữ nguyên. Không gia hạn được thì hộp đổi sang nút
+  "Đăng nhập lại" (đề xuất). Design thêm mục này theo WCAG 2.2.1 (14).
+- **Bảng lệnh** Ctrl K (Cmd K trên Mac): ô tìm và danh sách mục menu người đó thấy;
+  Enter mở mục, Esc đóng (17, P1). Chỉ liệt kê mục menu là phần đề xuất của spec này.
+- **Menu người dùng** có ô Sáng / Tối / Theo máy, mặc định Theo máy (16, P1, chờ Câu
+  hỏi còn mở 6).
 
 ### Token bảng màu A (EHSDT v3.dc.html, V3Catalog)
 
@@ -218,7 +234,7 @@ xuất)" là chữ của spec này, design không vẽ.
 | Không áp dụng | `MinusOutlined` + "Không áp dụng", tông `neutral`, gợi ý ghi lý do | không áp cho mục này                                                                     |
 | —             | "—", chữ mờ                                                        | trường không bắt buộc người dùng chưa nhập. Không bao giờ thay cho "Chưa rõ" hay "Đã ẩn" |
 
-Câu ai được xem (ví dụ "Chỉ Phụ trách dự toán và Người đại diện xem được") hiện một
+Câu ai được xem (ví dụ "Chỉ vai X và Y xem được") hiện một
 lần ở vùng, không lặp ở từng ô; ở ô chỉ có trong gợi ý. Khi đang tải: thanh khung
 xương rộng cố định 80px, không lộ độ dài số.
 
@@ -309,7 +325,12 @@ Mỗi chốt chặn có một test đỏ khi gỡ chốt (`failure-modes.md` #3)
 | Mã lạ không biến mất                                        | 07     | vitest: mã không có trong bảng vẫn hiện chính mã                                  |
 | `MaskedValue` không mang giá trị                            | 08     | tsc: truyền `value` là lỗi kiểu; vitest: DOM không có chữ số                      |
 | Mọi `ErrorCode` có trạng thái; 403 ≠ gói dịch vụ ≠ mất mạng | 09     | vitest duyệt `Object.values(ErrorCode)`; ca `entitlement_denied`, `TypeError`     |
-| Test web chạy trong CI                                      | 10     | bước CI đỏ khi một test vitest hoặc Playwright fixture đỏ                         |
+| Test web chạy trong CI                                      | 10     | bước CI đỏ khi một test vitest, Playwright fixture hoặc spec `@api` đỏ            |
+| Nút chỉ có biểu tượng có `aria-label`                       | 11     | test ESLint: `<Button icon={…} />` không `aria-label` ra lỗi                      |
+| Bộ đếm ký tự theo một hàm                                   | 12     | vitest: 90% hiện "Còn N ký tự", vượt hiện "Vượt N ký tự"                          |
+| Tab đầu tiên tới "Bỏ qua tới nội dung chính"                | 13     | Playwright `@ui`: gỡ liên kết thì Tab đầu tiên rơi vào nút khác                   |
+| Cảnh báo trước khi phiên hết                                | 14     | vitest với đồng hồ giả: gỡ hẹn giờ thì không có hộp thoại lúc còn 2 phút          |
+| Máy tối không thấy trang sáng khi tải                       | 15     | Playwright tắt JS, `colorScheme: "dark"`: nền trang và header tối                 |
 
 Fixture dưới `/dev-login/` là đường chỉ có ở bản dev: chạy
 `reviewing-deployment-security` trên thay đổi thêm nó. `NEXT_PUBLIC_AUTH_MODE` được
@@ -317,8 +338,9 @@ nướng lúc build; bản triển khai dùng `oidc`.
 
 ## Tiêu chí xong của slice
 
-- Ticket 02–09 ở `Status: resolved`, mỗi ticket ghi commit và phần chứng minh gỡ chốt
-  thì test đỏ dưới `## Comments`. Ticket 10 đã có quyết định của Đạt và đã làm theo.
+- Ticket 02–09 và 11–15 ở `Status: resolved`, mỗi ticket ghi commit và phần chứng
+  minh gỡ chốt thì test đỏ dưới `## Comments`. Ticket 10 và 18 đã có quyết định của
+  Đạt và đã làm theo. Ticket 16, 17 là P1, không chặn slice.
 - Chạy xanh: `pnpm run format:check`, `pnpm run lint`, `pnpm run typecheck`,
   `pnpm --filter @dw/web build`, `pnpm --filter @dw/web test`,
   `pnpm --filter @dw/ui test`, `pnpm --filter @dw/web e2e` (mọi project; spec cần API
@@ -331,7 +353,7 @@ nướng lúc build; bản triển khai dùng `oidc`.
 ## Phụ thuộc
 
 - S0 không chờ lát nào khác. Ticket 01 (CI xanh) đã xong.
-- Mọi lát web của `dw_bid` (S1–S7) dựng trên S0: giờ đóng thầu qua `lib/dates.ts`,
+- Mọi lát web của sản phẩm dựng trên S0: thời điểm qua `lib/dates.ts`,
   tiền qua `lib/money.ts`, bảng nhãn của sản phẩm qua `StatusTag`, giá bị ẩn qua
   `MaskedValue`, mọi vùng tải dữ liệu qua `RegionState`. Backend của lát 1 không chờ
   S0 (D07).
@@ -345,8 +367,9 @@ nướng lúc build; bản triển khai dùng `oidc`.
 
 1. **CI có chạy test web không?** Đạt còn nợ quyết định này (`PLAN.md`). Hôm nay CI
    chạy lint, typecheck, build cho web nhưng không chạy vitest hay Playwright, nên test
-   layer của 02 và mọi test của S0 chỉ chạy trên máy người làm. Khuyến nghị: có, ở
-   ticket 10.
+   layer của 02 và mọi test của S0 chỉ chạy trên máy người làm. Spec Playwright cần
+   API (của nền tảng và của mọi context, như test âm "trường bị ẩn không có trong DOM
+   lẫn phản hồi mạng") cũng chưa chạy ở đâu. Khuyến nghị: có, cả hai, ở ticket 10.
 2. **Múi giờ hiển thị có theo tenant không?** `platform.tenants.timezone` là chữ tự
    do, sửa được ở Quản trị, không chỗ nào đọc (`failure-modes.md` #1). Khuyến nghị: S0
    giữ một hằng `Asia/Ho_Chi_Minh` và nhãn "giờ Việt Nam" trong `lib/dates.ts`, vì
@@ -358,14 +381,15 @@ nướng lúc build; bản triển khai dùng `oidc`.
    đọc được.
 4. **Trang nền tảng viết tiếng Anh, locale là `vi_VN`, `<html lang="en">`.** Bản demo sẽ
    lẫn hai thứ tiếng ở menu ("Approvals", "Audit log") và ở các trang nền tảng. Ai dịch,
-   lúc nào? Khuyến nghị: một ticket nền tảng nhỏ đổi `lang="vi"` và dịch nhãn menu nền
-   tảng trước buổi demo; màn Duyệt được dựng lại ở lát làm cổng.
+   lúc nào? Khuyến nghị: ticket 18 đổi `lang="vi"` và dịch nhãn menu nền tảng trước
+   buổi demo; màn Duyệt được dựng lại ở lát làm cổng.
 5. **API báo "bị ẩn" thế nào?** `MaskedValue` cần biết trường vắng vì bị ẩn chứ không
    phải vì không có. Khuyến nghị: một quy ước chung cho mọi API (ví dụ danh sách
    `redacted_fields` trong phản hồi), chốt ở lát đầu tiên trả giá.
 6. **Ô chọn Sáng / Tối / Theo máy.** Design vẽ ô này trong menu người dùng, ghi "(chờ
    D07)"; D07 chốt "sáng/tối theo máy như design". S0 chỉ theo máy. Có cần cho người
-   dùng tự chọn không? Nếu có: ticket P1.
+   dùng tự chọn không? Nếu có: ticket 16 (P1). Phần không nháy sáng khi tải không chờ
+   câu này (ticket 15).
 7. **Bảng catalog và CSS của khung v3 lệch màu lỗi.** Catalog ghi `colorError`
    `#e0352b` (sáng) và `#ff453a` (tối); CSS khung dùng `#c4271e`, và ở chế độ tối tách
    nền nút `#d63a30` với chữ `#ff6b61`. Chữ trắng trên `#e0352b` đạt 4,46:1, trên
@@ -373,15 +397,23 @@ nướng lúc build; bản triển khai dùng `oidc`.
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                              | Status          | Blocked by |
-| --- | ----------------------------------------------------------------------------------- | --------------- | ---------- |
-| 01  | [CI xanh trên `main`](issues/01-ci-green.md)                                        | resolved        | —          |
-| 02  | [Shell antd: theme A, provider, AppShell, thứ tự layer](issues/02-antd-shell.md)    | claimed         | 01         |
-| 03  | [`lib/dates.ts` theo giờ Việt Nam](issues/03-lib-dates.md)                          | ready-for-agent | 02         |
-| 04  | [`lib/money.ts`](issues/04-lib-money.md)                                            | ready-for-agent | 02         |
-| 05  | [Hạ tầng kiểm thử UI: bề rộng, múi giờ, fixture](issues/05-ui-test-harness.md)      | ready-for-agent | 02, 03     |
-| 06  | [Thông báo qua `App.useApp()`, gỡ sonner](issues/06-app-feedback.md)                | ready-for-agent | 02         |
-| 07  | [Theme v3 còn lại, tông trạng thái, `StatusTag`](issues/07-status-tones-and-tag.md) | ready-for-agent | 02, 05     |
-| 08  | [`PageHeader`, `MaskedValue`, `AbsentValue`](issues/08-page-header-and-cells.md)    | ready-for-agent | 05, 07     |
-| 09  | [`RegionState` và băng mất mạng](issues/09-region-state-and-offline.md)             | ready-for-agent | 03, 05, 07 |
-| 10  | [CI chạy test web](issues/10-web-tests-in-ci.md)                                    | needs-info      | 05         |
+| #   | Ticket                                                                              | Status          | Blocked by     |
+| --- | ----------------------------------------------------------------------------------- | --------------- | -------------- |
+| 01  | [CI xanh trên `main`](issues/01-ci-green.md)                                        | resolved        | —              |
+| 02  | [Shell antd: theme A, provider, AppShell, thứ tự layer](issues/02-antd-shell.md)    | resolved        | 01             |
+| 03  | [`lib/dates.ts` theo giờ Việt Nam](issues/03-lib-dates.md)                          | ready-for-agent | 02             |
+| 04  | [`lib/money.ts`](issues/04-lib-money.md)                                            | ready-for-agent | 02, 05         |
+| 05  | [Hạ tầng kiểm thử UI: bề rộng, múi giờ, fixture](issues/05-ui-test-harness.md)      | ready-for-agent | 02, 03         |
+| 06  | [Thông báo qua `App.useApp()`, gỡ sonner](issues/06-app-feedback.md)                | ready-for-agent | 02, 05         |
+| 07  | [Theme v3 còn lại, tông trạng thái, `StatusTag`](issues/07-status-tones-and-tag.md) | ready-for-agent | 02, 05         |
+| 08  | [`PageHeader`, `MaskedValue`, `AbsentValue`](issues/08-page-header-and-cells.md)    | ready-for-agent | 05, 07         |
+| 09  | [`RegionState` và băng mất mạng](issues/09-region-state-and-offline.md)             | ready-for-agent | 03, 05, 07     |
+| 10  | [CI chạy test web](issues/10-web-tests-in-ci.md)                                    | needs-info      | 05             |
+| 11  | [Quy ước nút](issues/11-button-conventions.md)                                      | ready-for-agent | 05, 07         |
+| 12  | [Quy ước trường: nhãn, gợi ý, lỗi, bộ đếm, ô giờ](issues/12-field-conventions.md)   | ready-for-agent | 03, 04, 05, 07 |
+| 13  | [Bỏ qua tới nội dung chính, vùng `main`](issues/13-skip-link-and-main.md)           | ready-for-agent | 05             |
+| 14  | [Cảnh báo phiên sắp hết hạn](issues/14-session-expiry-warning.md)                   | ready-for-agent | 03, 06         |
+| 15  | [Chế độ tối không nháy sáng khi tải](issues/15-dark-mode-before-hydration.md)       | ready-for-agent | 05             |
+| 16  | [Ô Sáng / Tối / Theo máy (P1)](issues/16-color-mode-choice.md)                      | needs-info      | 15             |
+| 17  | [Bảng lệnh Ctrl K (P1)](issues/17-command-palette.md)                               | ready-for-agent | 05             |
+| 18  | [`lang="vi"` và nhãn menu nền tảng](issues/18-lang-vi-and-nav-labels.md)            | needs-info      | 02             |

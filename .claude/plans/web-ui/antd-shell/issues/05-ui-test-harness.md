@@ -20,12 +20,24 @@ chạy (máy Đạt ở +07, runner CI ở UTC), và `@dw/ui` không có test n�
     - Mọi project khác đặt rõ `timezoneId: "Asia/Ho_Chi_Minh"`, để máy dev và CI chạy
       như nhau; giữ `locale: "vi-VN"`.
     - Spec gắn thẻ `@ui` (chỉ dùng fixture, không cần API) chạy ở mọi project bề rộng;
-      spec gắn `@tz` chạy ở `tz-los-angeles` và `desktop-1280`; `feedback.spec.ts` (cần
-      API) chỉ chạy ở `desktop-1280`. Dùng `grep`/`grepInvert` theo project.
+      spec gắn `@tz` chạy ở `tz-los-angeles` và `desktop-1280`; spec cần API gắn `@api`
+      (hôm nay chỉ `feedback.spec.ts`) và chỉ chạy ở `desktop-1280`. Dùng
+      `grep`/`grepInvert` theo project. Thẻ `@api` là thứ ticket 10 dùng để gom spec cần
+      API vào CI, nên spec mới của một context chỉ cần gắn thẻ.
+    - Gắn thẻ `@ui` cho mọi test trong `e2e/antd-shell.spec.ts` (hôm nay không test nào
+      có thẻ; mọi test chỉ dùng fixture `/dev-login/layer-check`, không gọi API) và thẻ
+      `@api` cho mọi test trong `feedback.spec.ts`.
+    - Luật: mọi test dưới `e2e/` mang đúng một trong ba thẻ `@ui`, `@tz`, `@api`. Test
+      không thẻ thì không project nào chạy, và ticket 10 sẽ không bao giờ thấy nó
+      (`failure-modes.md` #1). Một bước kiểm đọc
+      `playwright test --list --reporter=json` và đỏ khi có test không thẻ hoặc mang
+      hơn một thẻ; bước này chạy trong `pnpm --filter @dw/web test`, để ticket 10 gom
+      được nó mà không thêm bước. Đo trước, ghi dưới Comments: `--list` không dựng
+      `webServer` và không cần trình duyệt.
 - Fixture `apps/web/app/dev-login/ui-kit/page.tsx`, theo mẫu `layer-check` của 02: chỉ
   ở bản dev-auth (`AUTH_MODE !== "dev"` thì `notFound()`), không gọi API, dữ liệu là
   hằng cố định (không `Date.now()`). Bọc trong `AppShell`. Mục đầu tiên: giờ (mọi dạng
-  của 03, cùng các ca biên) và tiền (04 nếu đã xong). Ticket 07–09 thêm mục của mình.
+  của 03, cùng các ca biên). Ticket 04, 06–09, 11, 12, 17 thêm mục của mình.
 - `apps/web/components/app-frame.tsx`: cho fixture mới đi qua cổng đăng nhập, chỉ ở
   chế độ dev, cùng điều kiện với `layer-check`.
 - `packages/typescript/ui`: thêm script `test` (vitest, jsdom,
@@ -49,7 +61,10 @@ chạy (máy Đạt ở +07, runner CI ở UTC), và `@dw/ui` không có test n�
       không cho đường dẫn fixture đi qua cổng đăng nhập. Bỏ điều kiện chế độ dev thì test
       đỏ.
 - [ ] `pnpm --filter @dw/ui test` chạy và xanh; làm hỏng test khói thì lệnh đỏ.
-- [ ] `pnpm --filter @dw/web e2e --grep @ui` xanh khi không có API chạy.
+- [ ] `pnpm --filter @dw/web e2e --grep @ui` xanh khi không có API chạy, và danh sách
+      nó chạy có các test của `e2e/antd-shell.spec.ts`.
+- [ ] Thêm vào `e2e/` một test không thẻ (hoặc mang cả `@ui` lẫn `@api`) thì bước kiểm
+      thẻ đỏ và nêu tên test đó. Gỡ test thử thì xanh lại.
 - [ ] Chạy `reviewing-deployment-security` cho đường fixture mới; ghi kết luận dưới
       Comments.
 
