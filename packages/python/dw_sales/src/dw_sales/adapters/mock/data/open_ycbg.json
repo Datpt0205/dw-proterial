@@ -1,0 +1,38 @@
+[
+  {
+    "ycbg_no": "YCBG-2609-012",
+    "customer_code": "BRN",
+    "rfq_no": "BRN-RFQ-2609-02",
+    "issued_on": "2026-09-10"
+  },
+  {
+    "ycbg_no": "YCBG-2609-019",
+    "customer_code": "CVG",
+    "rfq_no": "CVG-RFQ-260916-01",
+    "issued_on": "2026-09-16"
+  },
+  {
+    "ycbg_no": "YCBG-2609-028",
+    "customer_code": "QRL",
+    "rfq_no": "QRL-RFQ-2609-03",
+    "issued_on": "2026-09-29"
+  },
+  {
+    "ycbg_no": "YCBG-2609-029",
+    "customer_code": "VLX",
+    "rfq_no": "VLX-RFQ-2609-07",
+    "issued_on": "2026-09-29"
+  },
+  {
+    "ycbg_no": "YCBG-2609-030",
+    "customer_code": "KMH",
+    "rfq_no": "KMH-RFQ-260930-02",
+    "issued_on": "2026-09-30"
+  },
+  {
+    "ycbg_no": "YCBG-2610-001",
+    "customer_code": "NRV",
+    "rfq_no": "NRV-RFQ-26-0112",
+    "issued_on": "2026-10-01"
+  }
+]

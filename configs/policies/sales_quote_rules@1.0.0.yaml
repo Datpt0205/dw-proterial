@@ -1,0 +1,37 @@
+schema_version: "1.0"
+policy_id: sales_quote_rules
+policy_version: "1.0.0"
+
+# The quotation policy of the fictional seller in the DW1 demo
+# (`packages/python/dw_sales`). Every number here is invented for the demo and
+# is no company's policy: the real one has not been provided yet, and when it
+# is, it replaces this file as a new version.
+#
+# Nothing here sets a price. DW1 gathers the evidence and Sales decides
+# (`dw_sales.domain.quotes.PricingDecision`); this file decides what the
+# evidence offers beside the facts, the copper basis a price follows, and how
+# long a quotation holds. Read by `dw_sales.application.quotation.QuoteRules`.
+
+# A reference price is offered only because this rule exists: set it to `null`
+# and the evidence offers facts and no number. The reference is the mean of the
+# prices the item is quoted at on the day, to any customer, in the request's
+# currency, counting a price tied to an LME band only while the month's LME is
+# inside the band. It is formed from other customers' prices, so it is
+# internal like them and never reaches the customer.
+#
+# The band is how far from the reference a price may sit before it is worth a
+# second look, below and above. Sales may still decide a price outside it.
+reference_price:
+  band_below_percent: 3
+  band_above_percent: 10
+
+# How a quoted price follows copper, which `price_basis_mismatch` checks a
+# decision against: `lme_band` (the price holds while LME is inside the band
+# `sales_pricing.copper_adders` gives the latest published month) or `fixed`.
+# Who approves is not here: any holder of `sales.quote.approve` other than the
+# person who decided the price, which is not a setting (spec decision 7).
+copper_basis: lme_band
+
+# How long a quotation's prices hold, counting the quotation's own date: a
+# quotation issued on 1 October 2026 holds to 29 December 2026.
+validity_days: 90

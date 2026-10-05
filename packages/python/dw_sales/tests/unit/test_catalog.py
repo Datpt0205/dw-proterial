@@ -10,11 +10,13 @@ import pytest
 from pydantic import ValidationError
 
 from dw_sales.domain.catalog import (
+    BravoOrder,
     Customer,
     FixedCopper,
     Item,
     LmeBand,
     LmeMonth,
+    OpenYcbg,
     Quotation,
     fiscal_year,
     month_key,
@@ -32,6 +34,9 @@ def _customer(**overrides: Any) -> dict[str, Any]:
         "language": "vi",
         "intra_group": False,
         "compliance": {"noc_confirmed": True, "esf_fiscal_year": 2026},
+        "status": "official",
+        "confirmation_channel": "email",
+        "sales_pic": "an.nguyen@alpha.local",
     } | overrides
 
 
@@ -84,7 +89,20 @@ def _item(**overrides: Any) -> dict[str, Any]:
     ],
 )
 def test_the_fiscal_year_turns_on_the_first_of_april(day: date, expected: int) -> None:
-    assert fiscal_year(day) == expected
+    assert fiscal_year(day, start_month=4) == expected
+
+
+def test_the_fiscal_year_turns_where_the_policy_says() -> None:
+    """The month is the policy's (`sales_order_rules`), so another one moves it."""
+    assert fiscal_year(date(2026, 3, 31), start_month=1) == 2026
+    assert fiscal_year(date(2026, 9, 30), start_month=10) == 2025
+    assert fiscal_year(date(2026, 10, 1), start_month=10) == 2026
+
+
+@pytest.mark.parametrize("month", [0, 13])
+def test_a_fiscal_year_start_that_is_no_month_is_refused(month: int) -> None:
+    with pytest.raises(ValueError, match="not a month"):
+        fiscal_year(date(2026, 9, 30), start_month=month)
 
 
 def test_month_key_is_the_key_an_lme_month_is_stored_under() -> None:
@@ -163,10 +181,12 @@ def test_a_quotation_with_an_impossible_value_is_refused(overrides: dict[str, An
 
 def test_a_contact_outside_the_customers_domains_is_refused() -> None:
     """Drafts are addressed to contacts only, so a contact must be the customer's."""
-    with pytest.raises(ValidationError, match="outside VLX's domains"):
+    with pytest.raises(ValidationError, match=r"customer VLX: contacts\[0\] is outside") as refused:
         Customer.model_validate(
             _customer(contacts=[{"address": "attacker@evil.example"}]),
         )
+
+    assert "attacker" not in str(refused.value)
 
 
 def test_a_customer_may_list_several_domains() -> None:
@@ -218,3 +238,142 @@ def test_a_gauge_has_one_spelling(gauge: str) -> None:
 def test_an_item_with_an_impossible_value_is_refused(overrides: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         Item.model_validate(_item(**overrides))
+
+
+@pytest.mark.parametrize(
+    ("overrides", "secret"),
+    [
+        ({"email_domains": ["Secret-Domain.example"]}, "Secret-Domain"),
+        ({"contacts": [{"address": "secret.person@evil.example"}]}, "secret.person"),
+        ({"sales_pic": "secret-pic"}, "secret-pic"),
+        ({"name": ""}, None),
+    ],
+    ids=["domain", "contact", "sales_pic", "name"],
+)
+def test_a_refusal_names_the_field_never_the_value(
+    overrides: dict[str, Any], secret: str | None
+) -> None:
+    """Spec decision 8: a refusal travels into logs, and the value is a customer's."""
+    with pytest.raises(ValidationError) as refused:
+        Customer.model_validate(_customer(**overrides))
+
+    assert "input_value" not in str(refused.value)
+    if secret is not None:
+        assert secret not in str(refused.value)
+
+
+def test_a_quotation_refusal_carries_no_price() -> None:
+    with pytest.raises(ValidationError) as refused:
+        Quotation.model_validate(_quotation(unit_price="-0.4271"))
+
+    assert "0.4271" not in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"status": "provisional"},
+        {"confirmation_channel": "fax"},
+        {"sales_pic": "not-an-address"},
+    ],
+)
+def test_a_customer_with_an_unknown_status_channel_or_pic_is_refused(
+    overrides: dict[str, Any],
+) -> None:
+    with pytest.raises(ValidationError):
+        Customer.model_validate(_customer(**overrides))
+
+
+@pytest.mark.parametrize("field", ["status", "confirmation_channel", "sales_pic"])
+def test_a_customer_that_forgets_a_field_is_refused_not_defaulted(field: str) -> None:
+    """A forgotten status would read as official, a forgotten PIC as unassigned:
+    both fail open, so neither has a default."""
+    record = _customer()
+    del record[field]
+
+    with pytest.raises(ValidationError):
+        Customer.model_validate(record)
+
+
+def test_a_customer_without_a_sales_pic_says_so_explicitly() -> None:
+    assert Customer.model_validate(_customer(sales_pic=None)).sales_pic is None
+
+
+def test_an_unscreened_customer_reads_as_unscreened() -> None:
+    """The denial-list date defaults to never, the side that raises a warning."""
+    customer = Customer.model_validate(_customer())
+
+    assert customer.compliance.denial_list_checked_on is None
+
+
+def test_a_value_outside_the_vocabulary_is_unmapped_not_a_load_failure() -> None:
+    """What a source adapter's anti-corruption layer hands over for a colour or a
+    unit DW1 has no word for: the record loads, the value is None."""
+    attributes = _item()["attributes"] | {"colour": None, "packaging": None}
+    item = Item.model_validate(_item(attributes=attributes, uom=None, family=None))
+
+    assert item.attributes.colour is None
+    assert item.uom is None
+    assert Quotation.model_validate(_quotation(uom=None)).uom is None
+
+
+def test_an_attribute_left_out_is_refused_rather_than_read_as_unmapped() -> None:
+    attributes = _item()["attributes"]
+    del attributes["colour"]
+
+    with pytest.raises(ValidationError):
+        Item.model_validate(_item(attributes=attributes))
+
+
+def _order(**overrides: Any) -> dict[str, Any]:
+    return {
+        "so_no": "SO26-0919",
+        "customer_code": "QRL",
+        "po_no": "QRL-PO-0918-07",
+        "po_revision": 0,
+        "order_date": "2026-09-19",
+        "currency": "USD",
+        "lines": [
+            {
+                "line_no": 1,
+                "prv_code": "HW-1006",
+                "quantity": "12200",
+                "unit_price": "0.0640",
+                "delivery_date": "2026-11-20",
+            }
+        ],
+    } | overrides
+
+
+def test_an_erp_order_reads_with_its_lines() -> None:
+    order = BravoOrder.model_validate(_order())
+
+    assert order.lines[0].prv_code == "HW-1006"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"lines": []},
+        {"lines": [_order()["lines"][0], _order()["lines"][0]]},
+        {"po_revision": -1},
+        {"currency": "EUR"},
+    ],
+    ids=["no_lines", "repeated_line", "negative_revision", "unknown_currency"],
+)
+def test_an_impossible_erp_order_is_refused(overrides: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        BravoOrder.model_validate(_order(**overrides))
+
+
+def test_an_open_ycbg_names_the_request_it_was_raised_from() -> None:
+    ycbg = OpenYcbg.model_validate(
+        {
+            "ycbg_no": "YCBG-2609-028",
+            "customer_code": "QRL",
+            "rfq_no": "QRL-RFQ-2609-03",
+            "issued_on": "2026-09-29",
+        }
+    )
+
+    assert (ycbg.customer_code, ycbg.rfq_no) == ("QRL", "QRL-RFQ-2609-03")

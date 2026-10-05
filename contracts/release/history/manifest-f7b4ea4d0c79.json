@@ -1,0 +1,75 @@
+{
+  "api_version": "0.1.0",
+  "approval_policy_version": "1.0.0",
+  "copy_bundles": [
+    {
+      "checksum": "2866325cda2ce8ea08d86d4869fdd677572499e0d17f36344a255e6516979410",
+      "copy_id": "platform.runtime",
+      "version": "1.3.0"
+    },
+    {
+      "checksum": "d15eb453fc6e6c8a12f13bce4776ad5ea54c92d45725cb4bf08c2c8b8c05f5f5",
+      "copy_id": "platform.runtime",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "dcfeed6e919c29bac34362aea015040597fcec5657dbc8fe82a86866fc9ec1db",
+      "copy_id": "platform.runtime",
+      "version": "1.5.0"
+    }
+  ],
+  "eval_datasets": [
+    {
+      "checksum": "ce36d6b3e5531666e296c86cd5b907f91734079ddfe99d3924b72a601d9c00e6",
+      "dataset_id": "platform_smoke",
+      "version": "1.0.0"
+    }
+  ],
+  "knowledge_index_version": "2026-07-25.structure-1",
+  "memory_policy_version": "1.0.0",
+  "platform_version": "0.1.0",
+  "policies": [
+    {
+      "checksum": "bbebba26b5708933b6f8ab5c43a08f57d4c6ef595e09afb1a9422df0b7d6b49c",
+      "policy_id": "attachment_ingest",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "5eefabcbed58080bf1cfeb524bbe9d8ce395b4adee9bbb9de4e357534d04a03e",
+      "policy_id": "retention",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "f314c9825e2330fd097a7d3181b19fed33e4f2b6370ca5eaa73c95e7727de3e6",
+      "policy_id": "sales_order_rules",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",
+      "policy_id": "sales_pricing",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "bc0133244d3da8da0501a2b1d94a284257be921877c43d8e6e2a3abfe785d96e",
+      "policy_id": "sales_quote_rules",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",
+      "policy_id": "worker_runs",
+      "version": "1.0.0"
+    }
+  ],
+  "prompt_bundles": [
+    {
+      "checksum": "d09bde4799b114aa013b9af9c82681cf225b4055bf2e2935870d45b78285bf63",
+      "prompt_id": "platform.untrusted_demo",
+      "version": "1.0.0"
+    }
+  ],
+  "rubrics": [],
+  "schema_version": "1.0",
+  "tool_specs": [],
+  "toolsets": [],
+  "workers": []
+}

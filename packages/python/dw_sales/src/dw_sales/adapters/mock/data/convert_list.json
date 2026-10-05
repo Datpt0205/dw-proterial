@@ -203,5 +203,10 @@
     "customer_code": "QRL",
     "customer_item_code": "QR-HW18-RD",
     "prv_code": "HW-1012"
+  },
+  {
+    "customer_code": "TZ2609",
+    "customer_item_code": "LM-W22-RD",
+    "prv_code": "HW-1005"
   }
 ]

@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockInbox
-from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, attachment_path
+from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.domain.messages import EmailAddress, InboundMessage
 
@@ -33,7 +35,7 @@ def test_the_mock_satisfies_the_port(inbox: MockInbox) -> None:
 async def test_messages_are_listed_oldest_first_by_instant(inbox: MockInbox) -> None:
     messages = await inbox.list_messages(SCOPE)
 
-    assert len(messages) == 12
+    assert len(messages) == 32
     instants = [m.received_at for m in messages]
     assert instants == sorted(instants)
     # The fixture mixes offsets (M02 is sent from +09:00). Its file order and
@@ -88,7 +90,7 @@ async def test_every_attachment_reads_back_as_the_file_its_digest_describes(
             assert attachment.size == len(content.data)
             assert attachment.sha256 == hashlib.sha256(content.data).hexdigest()
             read += 1
-    assert read == 11
+    assert read == 29
 
 
 @pytest.mark.parametrize(
@@ -133,3 +135,34 @@ async def test_a_message_id_listed_twice_is_refused(inbox: MockInbox) -> None:
 
     with pytest.raises(ValueError, match="appears twice"):
         MockInbox([no_attachments, no_attachments], {})
+
+
+async def test_message_ids_follow_the_order_they_are_read_in(inbox: MockInbox) -> None:
+    """The README's tables read top to bottom in processing order."""
+    ids = [m.message_id for m in await inbox.list_messages(SCOPE)]
+
+    assert ids == sorted(ids, key=lambda mid: int(mid[1:]))
+
+
+async def test_the_mail_systems_results_are_read_from_the_fixture(inbox: MockInbox) -> None:
+    unverified = [
+        m.message_id
+        for m in await inbox.list_messages(SCOPE)
+        if {m.authentication.spf, m.authentication.dkim, m.authentication.dmarc} != {"pass"}
+    ]
+
+    assert unverified == ["M19"]
+
+
+def test_a_fixture_message_that_states_no_mail_results_is_refused(tmp_path: Path) -> None:
+    """The message model defaults to unverified; a fixture must not lean on it."""
+    (record,) = [
+        m
+        for m in json.loads((DATA_DIR / "inbox.json").read_text(encoding="utf-8"))
+        if m["message_id"] == "M11"
+    ]
+    del record["authentication"]
+    (tmp_path / "inbox.json").write_text(json.dumps([record]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"inbox\.json\[0\].*authentication"):
+        MockInbox.load(data_dir=tmp_path)

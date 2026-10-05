@@ -389,5 +389,18 @@
     },
     "valid_from": "2026-07-01",
     "valid_to": "2026-12-31"
+  },
+  {
+    "quote_no": "Q26-0221",
+    "customer_code": "TZ2609",
+    "prv_code": "HW-1005",
+    "unit_price": "0.0560",
+    "currency": "USD",
+    "uom": "m",
+    "moq": "6100",
+    "lead_time_days": 21,
+    "copper_basis": { "kind": "fixed" },
+    "valid_from": "2026-08-01",
+    "valid_to": "2027-01-31"
   }
 ]

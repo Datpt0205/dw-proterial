@@ -1,0 +1,45 @@
+schema_version: "1.0"
+policy_id: sales_pricing
+policy_version: "1.0.0"
+
+# MOCK. The pricing inputs of the fictional seller in the DW1 demo
+# (`packages/python/dw_sales`). Every number here is invented and is no
+# company's policy: the real one has not been provided, and when it is, it
+# arrives as the tenant's own version in storage, never as an edit to this
+# file. Validated by `dw_sales.domain.pricing.SalesPricing`.
+#
+# Nothing here sets a price. The copper component and the floor are evidence
+# and a finding for Sales; the price is Sales' decision. There is no approval
+# matrix: which price or discount needs which approver is owed by the
+# customer, and until it arrives any holder of `sales.quote.approve` other
+# than the pricer approves.
+#
+# Numbers are quoted as strings so they are read exactly.
+
+# Added to LME copper (USD per tonne) while LME is inside the band, low end
+# included, high end not. Contiguous and in order: an LME price outside the
+# table has no adder, and the copper component is then unknown, not zero.
+copper_adders:
+  - band: { low_usd_per_tonne: "9000", high_usd_per_tonne: "9500" }
+    adder_usd_per_tonne: "310"
+  - band: { low_usd_per_tonne: "9500", high_usd_per_tonne: "10000" }
+    adder_usd_per_tonne: "335"
+  - band: { low_usd_per_tonne: "10000", high_usd_per_tonne: "10500" }
+    adder_usd_per_tonne: "360"
+  - band: { low_usd_per_tonne: "10500", high_usd_per_tonne: "11000" }
+    adder_usd_per_tonne: "385"
+  - band: { low_usd_per_tonne: "11000", high_usd_per_tonne: "11500" }
+    adder_usd_per_tonne: "410"
+
+# The lowest price before `price_below_policy_floor` is raised: the copper
+# component times (1 + this).
+floor_margin: "0.18"
+
+# Freight per kilometre of cable, by incoterm and destination zone. A lane
+# that is not listed has no rate, and the evidence says so.
+freight:
+  - { incoterm: EXW, destination: factory, usd_per_km: "0" }
+  - { incoterm: FCA, destination: port_north, usd_per_km: "3.40" }
+  - { incoterm: DAP, destination: domestic_north, usd_per_km: "5.80" }
+  - { incoterm: DAP, destination: domestic_south, usd_per_km: "8.60" }
+  - { incoterm: CIF, destination: japan, usd_per_km: "19.50" }

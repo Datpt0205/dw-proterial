@@ -12,7 +12,14 @@
     ],
     "language": "vi",
     "intra_group": false,
-    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+    "compliance": {
+      "noc_confirmed": true,
+      "esf_fiscal_year": 2026,
+      "denial_list_checked_on": "2026-09-01"
+    },
+    "status": "official",
+    "confirmation_channel": "email",
+    "sales_pic": "an.nguyen@alpha.local"
   },
   {
     "code": "NRV",
@@ -30,7 +37,14 @@
     ],
     "language": "en",
     "intra_group": false,
-    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+    "compliance": {
+      "noc_confirmed": true,
+      "esf_fiscal_year": 2026,
+      "denial_list_checked_on": "2026-09-01"
+    },
+    "status": "official",
+    "confirmation_channel": "portal",
+    "sales_pic": "an.nguyen@alpha.local"
   },
   {
     "code": "KMH",
@@ -48,7 +62,14 @@
     ],
     "language": "ja",
     "intra_group": false,
-    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+    "compliance": {
+      "noc_confirmed": true,
+      "esf_fiscal_year": 2026,
+      "denial_list_checked_on": "2026-09-01"
+    },
+    "status": "official",
+    "confirmation_channel": "email",
+    "sales_pic": "dieu.hoang@alpha.local"
   },
   {
     "code": "CVG",
@@ -62,7 +83,14 @@
     ],
     "language": "en",
     "intra_group": true,
-    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+    "compliance": {
+      "noc_confirmed": true,
+      "esf_fiscal_year": 2026,
+      "denial_list_checked_on": "2026-09-01"
+    },
+    "status": "official",
+    "confirmation_channel": "email",
+    "sales_pic": "an.nguyen@alpha.local"
   },
   {
     "code": "BRN",
@@ -73,7 +101,14 @@
     ],
     "language": "vi",
     "intra_group": false,
-    "compliance": { "noc_confirmed": false, "esf_fiscal_year": 2025 }
+    "compliance": {
+      "noc_confirmed": false,
+      "esf_fiscal_year": 2025,
+      "denial_list_checked_on": "2026-09-01"
+    },
+    "status": "official",
+    "confirmation_channel": "email",
+    "sales_pic": "an.nguyen@alpha.local"
   },
   {
     "code": "QRL",
@@ -88,6 +123,34 @@
     ],
     "language": "en",
     "intra_group": false,
-    "compliance": { "noc_confirmed": true, "esf_fiscal_year": 2026 }
+    "compliance": {
+      "noc_confirmed": true,
+      "esf_fiscal_year": 2026,
+      "denial_list_checked_on": "2026-09-01"
+    },
+    "status": "official",
+    "confirmation_channel": "email",
+    "sales_pic": "dieu.hoang@alpha.local"
+  },
+  {
+    "code": "TZ2609",
+    "name": "Công ty TNHH Lumora Sensors Việt Nam",
+    "email_domains": ["lumora.example"],
+    "contacts": [
+      {
+        "address": "minh.dao@lumora.example",
+        "display_name": "Đào Quang Minh"
+      }
+    ],
+    "language": "vi",
+    "intra_group": false,
+    "compliance": {
+      "noc_confirmed": true,
+      "esf_fiscal_year": 2026,
+      "denial_list_checked_on": null
+    },
+    "status": "temporary",
+    "confirmation_channel": "email",
+    "sales_pic": "an.nguyen@alpha.local"
   }
 ]

@@ -1,0 +1,296 @@
+[
+  {
+    "so_no": "SO25-1021",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2510-0412",
+    "po_revision": 0,
+    "order_date": "2025-10-21",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "HW-1001",
+        "quantity": "12200",
+        "unit_price": "0.0405",
+        "delivery_date": "2025-11-28"
+      },
+      {
+        "line_no": 2,
+        "prv_code": "HW-1002",
+        "quantity": "6100",
+        "unit_price": "0.0405",
+        "delivery_date": "2025-11-28"
+      }
+    ]
+  },
+  {
+    "so_no": "SO25-1120",
+    "customer_code": "KMH",
+    "po_no": "KMH-2025-1118-B",
+    "po_revision": 0,
+    "order_date": "2025-11-20",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2007",
+        "quantity": "3000",
+        "unit_price": "0.7350",
+        "delivery_date": "2026-01-08"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0115",
+    "customer_code": "BRN",
+    "po_no": "BRN-PO-2601-004",
+    "po_revision": 0,
+    "order_date": "2026-01-15",
+    "currency": "VND",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2003",
+        "quantity": "3000",
+        "unit_price": "13900",
+        "delivery_date": "2026-02-27"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0211",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2602-0077",
+    "po_revision": 0,
+    "order_date": "2026-02-11",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2001",
+        "quantity": "6000",
+        "unit_price": "0.4590",
+        "delivery_date": "2026-03-27"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0408",
+    "customer_code": "NRV",
+    "po_no": "NRV-PO-26-0190",
+    "po_revision": 0,
+    "order_date": "2026-04-08",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "HW-1004",
+        "quantity": "12200",
+        "unit_price": "0.0510",
+        "delivery_date": "2026-05-15"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0420",
+    "customer_code": "CVG",
+    "po_no": "CVG-260415-03",
+    "po_revision": 0,
+    "order_date": "2026-04-20",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "HW-1003",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "delivery_date": "2026-06-01"
+      },
+      {
+        "line_no": 2,
+        "prv_code": "HW-1004",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "delivery_date": "2026-06-01"
+      },
+      {
+        "line_no": 3,
+        "prv_code": "HW-1006",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "delivery_date": "2026-06-01"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0615",
+    "customer_code": "CVG",
+    "po_no": "CVG-260610-05",
+    "po_revision": 0,
+    "order_date": "2026-06-15",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "delivery_date": "2026-07-31"
+      },
+      {
+        "line_no": 2,
+        "prv_code": "CB-2009",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "delivery_date": "2026-08-14"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0706",
+    "customer_code": "QRL",
+    "po_no": "QRL-PO-0703-02",
+    "po_revision": 0,
+    "order_date": "2026-07-06",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2010",
+        "quantity": "3050",
+        "unit_price": "0.3150",
+        "delivery_date": "2026-08-21"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0730",
+    "customer_code": "KMH",
+    "po_no": "KMH-2026-0728-A",
+    "po_revision": 0,
+    "order_date": "2026-07-30",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2005",
+        "quantity": "5000",
+        "unit_price": "0.6150",
+        "delivery_date": "2026-09-04"
+      },
+      {
+        "line_no": 2,
+        "prv_code": "HW-1007",
+        "quantity": "6100",
+        "unit_price": "0.0330",
+        "delivery_date": "2026-08-21"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0805",
+    "customer_code": "BRN",
+    "po_no": "BRN-PO-2608-022",
+    "po_revision": 0,
+    "order_date": "2026-08-05",
+    "currency": "VND",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "HW-1001",
+        "quantity": "6100",
+        "unit_price": "1150",
+        "delivery_date": "2026-09-04"
+      },
+      {
+        "line_no": 2,
+        "prv_code": "CB-2012",
+        "quantity": "2000",
+        "unit_price": "21800",
+        "delivery_date": "2026-09-18"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0812",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2608-0102",
+    "po_revision": 0,
+    "order_date": "2026-08-12",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2007",
+        "quantity": "3000",
+        "unit_price": "0.7120",
+        "delivery_date": "2026-09-25"
+      },
+      {
+        "line_no": 2,
+        "prv_code": "HW-1001",
+        "quantity": "6100",
+        "unit_price": "0.0420",
+        "delivery_date": "2026-09-11"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0820",
+    "customer_code": "TZ2609",
+    "po_no": "LMR-PO-2608-001",
+    "po_revision": 0,
+    "order_date": "2026-08-20",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "HW-1005",
+        "quantity": "6100",
+        "unit_price": "0.0560",
+        "delivery_date": "2026-09-25"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0825",
+    "customer_code": "NRV",
+    "po_no": "NRV-PO-26-0388",
+    "po_revision": 0,
+    "order_date": "2026-08-25",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "CB-2007",
+        "quantity": "3600",
+        "unit_price": "0.6980",
+        "delivery_date": "2026-10-09"
+      }
+    ]
+  },
+  {
+    "so_no": "SO26-0919",
+    "customer_code": "QRL",
+    "po_no": "QRL-PO-0918-07",
+    "po_revision": 0,
+    "order_date": "2026-09-19",
+    "currency": "USD",
+    "lines": [
+      {
+        "line_no": 1,
+        "prv_code": "HW-1006",
+        "quantity": "12200",
+        "unit_price": "0.0640",
+        "delivery_date": "2026-11-20"
+      },
+      {
+        "line_no": 2,
+        "prv_code": "HW-1008",
+        "quantity": "6100",
+        "unit_price": "0.0910",
+        "delivery_date": "2026-11-20"
+      }
+    ]
+  }
+]
