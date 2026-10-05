@@ -298,6 +298,16 @@ def test_of_two_valid_quotations_the_later_issue_applies() -> None:
     assert found is newer
 
 
+def test_another_customers_quotation_never_becomes_this_customers_basis() -> None:
+    """The port is asked for this customer's quotations; an adapter that
+    answers with every customer's must still not make another customer's
+    price the one a line is checked against, nor the `expected` of a
+    `price_mismatch` that holders of `sales.price.read` alone are shown."""
+    theirs = _quotation(quote_no="Q26-0104", customer_code="KMH", unit_price="0.7120")
+
+    assert current_quotation([theirs], customer_code="NRV", prv_code="CB-2007", day=PO_DATE) is None
+
+
 # -------------------------------------------------------------- line checks --
 
 

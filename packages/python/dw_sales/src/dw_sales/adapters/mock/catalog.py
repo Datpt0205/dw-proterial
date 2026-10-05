@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict
 
-from dw_kernel.errors import ConflictError
+from dw_kernel.errors import ConflictError, PermissionDeniedError
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.application.ports import SalesScope, Snapshot
 from dw_sales.domain.catalog import (
@@ -48,12 +48,15 @@ def _index[KeyT, RecordT](
 class MockSalesCatalog:
     """Implements `SalesCatalogPort`, and `QuotationLedgerPort`, for a demo deployment.
 
-    Serves the same fictional company to every scope: it stands in for one
-    tenant's ERP, where a real adapter resolves the tenant's own source from
-    the scope. The records are validated and cross-checked when it is built, so
-    a hand-edited fixture that names a missing item fails at startup rather
-    than as a mapping that silently finds nothing. Every read answers with the
-    one ``as_of`` the fixture set was exported at.
+    Bound to the one scope whose ERP it stands in for: any other scope reads
+    an empty catalogue and has its writes refused. A real adapter resolves the
+    tenant's own source from the scope; this one has a single source, and
+    serving it to every scope would hand one company's customers and prices
+    to every tenant of the deployment. The records are validated and
+    cross-checked when it is built, so a hand-edited fixture that names a
+    missing item fails at startup rather than as a mapping that silently finds
+    nothing. Every read answers with the one ``as_of`` the fixture set was
+    exported at.
 
     It is also the demo's quotation master list: a row `record` writes is a
     quotation every later read returns, which is how a sent quotation becomes
@@ -65,6 +68,7 @@ class MockSalesCatalog:
     def __init__(
         self,
         *,
+        scope: SalesScope,
         as_of: datetime,
         customers: Iterable[Customer],
         items: Iterable[Item],
@@ -76,6 +80,7 @@ class MockSalesCatalog:
     ) -> None:
         if as_of.utcoffset() is None:
             raise ValueError("as_of needs a timezone")
+        self._scope = scope
         self._as_of = as_of
         self._customers = _index(customers, lambda c: c.code, "customer code")
         self._customer_by_domain: dict[str, Customer] = {}
@@ -130,11 +135,12 @@ class MockSalesCatalog:
             self._require(ycbg.customer_code, (), f"YCBG {ycbg.ycbg_no}")
 
     @classmethod
-    def load(cls, data_dir: Path = DATA_DIR) -> MockSalesCatalog:
+    def load(cls, scope: SalesScope, data_dir: Path = DATA_DIR) -> MockSalesCatalog:
         snapshot = _SnapshotFixture.model_validate(
             json.loads((data_dir / "snapshot.json").read_text(encoding="utf-8"))
         )
         return cls(
+            scope=scope,
             as_of=snapshot.as_of,
             customers=read_records(data_dir / "customers.json", Customer),
             items=read_records(data_dir / "items.json", Item),
@@ -152,65 +158,72 @@ class MockSalesCatalog:
             if prv_code not in self._items:
                 raise ValueError(f"{owner} names unknown item {prv_code!r}")
 
-    def _at[T](self, data: T) -> Snapshot[T]:
-        return Snapshot(data=data, as_of=self._as_of)
+    def _one[T](self, scope: SalesScope, record: T | None) -> Snapshot[T | None]:
+        """``record`` for the scope this catalogue is bound to; None for any other."""
+        return Snapshot(data=record if scope == self._scope else None, as_of=self._as_of)
+
+    def _many[T](self, scope: SalesScope, records: Sequence[T]) -> Snapshot[Sequence[T]]:
+        """``records`` for the scope this catalogue is bound to; none for any other."""
+        return Snapshot(data=records if scope == self._scope else (), as_of=self._as_of)
 
     async def customer_by_code(self, scope: SalesScope, code: str) -> Snapshot[Customer | None]:
-        return self._at(self._customers.get(code))
+        return self._one(scope, self._customers.get(code))
 
     async def customer_by_email_domain(
         self, scope: SalesScope, domain: str
     ) -> Snapshot[Customer | None]:
-        return self._at(self._customer_by_domain.get(domain.lower()))
+        return self._one(scope, self._customer_by_domain.get(domain.lower()))
 
     async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]:
-        return self._at(tuple(self._customers.values()))
+        return self._many(scope, tuple(self._customers.values()))
 
     async def items(self, scope: SalesScope) -> Snapshot[Sequence[Item]]:
-        return self._at(tuple(self._items.values()))
+        return self._many(scope, tuple(self._items.values()))
 
     async def item_by_prv_code(self, scope: SalesScope, prv_code: str) -> Snapshot[Item | None]:
-        return self._at(self._items.get(prv_code))
+        return self._one(scope, self._items.get(prv_code))
 
     async def convert_entry(
         self, scope: SalesScope, customer_code: str, customer_item_code: str
     ) -> Snapshot[ConvertEntry | None]:
-        return self._at(self._convert.get((customer_code, customer_item_code)))
+        return self._one(scope, self._convert.get((customer_code, customer_item_code)))
 
     async def convert_list(self, scope: SalesScope) -> Snapshot[Sequence[ConvertEntry]]:
-        return self._at(tuple(self._convert.values()))
+        return self._many(scope, tuple(self._convert.values()))
 
     async def quotations_valid_on(
         self, scope: SalesScope, customer_code: str, prv_code: str, day: date
     ) -> Snapshot[Sequence[Quotation]]:
-        return self._at(
+        return self._many(
+            scope,
             tuple(
                 q
                 for q in self._quotations
                 if q.customer_code == customer_code
                 and q.prv_code == prv_code
                 and q.is_valid_on(day)
-            )
+            ),
         )
 
     async def quotations_for_item(
         self, scope: SalesScope, prv_code: str
     ) -> Snapshot[Sequence[Quotation]]:
-        return self._at(tuple(q for q in self._quotations if q.prv_code == prv_code))
+        return self._many(scope, tuple(q for q in self._quotations if q.prv_code == prv_code))
 
     async def quotations(self, scope: SalesScope) -> Snapshot[Sequence[Quotation]]:
-        return self._at(self._quotations)
+        return self._many(scope, self._quotations)
 
     async def lme_for_month(self, scope: SalesScope, month: str) -> Snapshot[LmeMonth | None]:
-        return self._at(self._lme.get(month))
+        return self._one(scope, self._lme.get(month))
 
     async def lme_months(self, scope: SalesScope) -> Snapshot[Sequence[LmeMonth]]:
-        return self._at(tuple(self._lme.values()))
+        return self._many(scope, tuple(self._lme.values()))
 
     async def orders_for_po(
         self, scope: SalesScope, customer_code: str, po_no: str
     ) -> Snapshot[Sequence[BravoOrder]]:
-        return self._at(
+        return self._many(
+            scope,
             tuple(
                 sorted(
                     (
@@ -220,22 +233,25 @@ class MockSalesCatalog:
                     ),
                     key=lambda o: (o.po_revision, o.order_date, o.so_no),
                 )
-            )
+            ),
         )
 
     async def orders_since(self, scope: SalesScope, since: date) -> Snapshot[Sequence[BravoOrder]]:
-        return self._at(tuple(o for o in self._orders if o.order_date >= since))
+        return self._many(scope, tuple(o for o in self._orders if o.order_date >= since))
 
     async def open_ycbg(self, scope: SalesScope) -> Snapshot[Sequence[OpenYcbg]]:
-        return self._at(self._ycbg)
+        return self._many(scope, self._ycbg)
 
     async def record(self, scope: SalesScope, rows: Sequence[Quotation]) -> None:
         """Adds master-list rows, one per quoted line.
 
         Idempotent: a row already held is skipped. A row that differs from the
         held one for its quote number and item, or reuses another customer's
-        quote number, is refused and nothing is written.
+        quote number, is refused and nothing is written. So is any write from
+        a scope other than the one this master list belongs to.
         """
+        if scope != self._scope:
+            raise PermissionDeniedError("the master list is not this scope's to write")
         held = {(q.quote_no, q.prv_code): q for q in self._quotations}
         owners = {q.quote_no: q.customer_code for q in self._quotations}
         new: list[Quotation] = []

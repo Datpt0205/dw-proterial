@@ -59,8 +59,8 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
-CATALOG = MockSalesCatalog.load()
-INBOX = MockInbox.load()
+CATALOG = MockSalesCatalog.load(SCOPE)
+INBOX = MockInbox.load(SCOPE)
 RULES = load_order_rules(
     Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.0.0.yaml"
 )
@@ -264,11 +264,14 @@ class InMemoryOrderCases:
 
 
 def _intake(
-    inbox: MockInbox = INBOX, cases: InMemoryOrderCases | None = None, rules: OrderRules = RULES
+    inbox: MockInbox = INBOX,
+    cases: InMemoryOrderCases | None = None,
+    rules: OrderRules = RULES,
+    catalog: MockSalesCatalog = CATALOG,
 ) -> OrderIntake:
     ids = itertools.count(1)
     return OrderIntake(
-        catalog=CATALOG,
+        catalog=catalog,
         inbox=inbox,
         reader=mock_po_readers(),
         rules=PlatformOrderRules(rules),
@@ -704,7 +707,7 @@ def _built(
         body_text=body,
         attachments=tuple(attachments),
     )
-    return message, MockInbox([message], contents)
+    return message, MockInbox([message], contents, scope=SCOPE)
 
 
 M01_XLSX = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
@@ -856,13 +859,18 @@ async def test_a_revision_of_a_closed_case_is_routed_not_attached() -> None:
 
 
 async def test_another_tenants_case_is_not_this_tenants_duplicate() -> None:
-    """Intake asks for earlier cases in the caller's scope only."""
+    """Intake asks for earlier cases in the caller's scope only. The other
+    tenant has the same PO in its own mailbox and master data."""
     cases = InMemoryOrderCases()
-    intake = _intake(cases=cases)
     other_tenant = SalesScope(TenantId(uuid.UUID(int=7)), WorkspaceId(uuid.UUID(int=8)))
-    cases.keep(other_tenant, await intake.process(other_tenant, await _message("M01")))
+    theirs = _intake(
+        MockInbox.load(other_tenant), cases, catalog=MockSalesCatalog.load(other_tenant)
+    )
+    their_outcome = await theirs.process(other_tenant, await _message("M01"))
+    assert their_outcome.case is not None
+    cases.keep(other_tenant, their_outcome)
 
-    outcome = await intake.process(SCOPE, await _message("M08"))
+    outcome = await _intake(cases=cases).process(SCOPE, await _message("M08"))
 
     assert outcome.case is not None
     assert outcome.case.findings == ()
@@ -898,3 +906,65 @@ def test_a_disposition_says_exactly_what_its_kind_needs(fields: dict[str, object
     with pytest.raises(ValidationError):
         MessageDisposition.model_validate({"message_id": "M99", **fields})
     assert MessageDisposition.pending("M99").kind is DispositionKind.NOT_YET_PROCESSED
+
+
+# ------------------------------------------------- mapping confirmation (O2) --
+
+
+async def _in_review(message_id: str) -> tuple[OrderIntake, OrderCase]:
+    cases = InMemoryOrderCases()
+    case = (await _process([message_id], cases))[message_id].case
+    assert case is not None
+    return _intake(cases=cases), case.start_review()
+
+
+@pytest.mark.parametrize(
+    ("message_id", "line_no", "prv_code", "mapped"),
+    [("M05", 2, "CB-2005", "candidate"), ("M05", 1, "CB-2002", "ambiguous")],
+)
+async def test_a_candidate_is_confirmed_and_its_line_checked_again_against_the_item(
+    message_id: str, line_no: int, prv_code: str, mapped: str
+) -> None:
+    intake, case = await _in_review(message_id)
+    assert case.line(line_no).mapping.status == mapped
+
+    confirmed = await intake.confirm_mapping(SCOPE, case, line_no, prv_code, AN, T0)
+
+    line = confirmed.line(line_no)
+    assert (line.mapping.status, line.mapping.prv_code) == ("candidate_confirmed", prv_code)
+    assert line.basis.item is not None and line.basis.item.prv_code == prv_code
+    assert not line.mapping.hand_entered
+    assert all(not f.is_open for f in confirmed.findings if f.key == f"code_ambiguous:{line_no}")
+
+
+async def test_a_code_typed_for_an_unmapped_line_must_be_in_the_item_master() -> None:
+    """M04 line 3 has no candidate, so Sales may type a code: one the item
+    master holds, which the line is then checked against, and no other."""
+    intake, case = await _in_review("M04")
+    assert case.line(3).mapping.status == "unmapped"
+
+    with pytest.raises(ConflictError, match="no such PRV code") as refused:
+        await intake.confirm_mapping(SCOPE, case, 3, "CB-9999", AN, T0)
+    assert "CB-9999" not in str(refused.value) + str(refused.value.details)
+    typed = await intake.confirm_mapping(SCOPE, case, 3, "CB-2007", AN, T0)
+
+    assert typed.line(3).mapping.hand_entered
+    assert AN.user_id in typed.makers
+    assert typed.finding("code_unmapped:3").disposition.kind == "corrected_by_sales"
+
+
+async def test_a_code_is_looked_up_in_the_callers_item_master_only() -> None:
+    """Another tenant's item master does not hold the demo company's items."""
+    intake, case = await _in_review("M04")
+    other_tenant = SalesScope(TenantId(uuid.UUID(int=7)), WorkspaceId(uuid.UUID(int=8)))
+
+    with pytest.raises(ConflictError, match="no such PRV code"):
+        await intake.confirm_mapping(other_tenant, case, 3, "CB-2007", AN, T0)
+
+
+async def test_a_line_is_not_checked_again_under_rules_the_case_was_not_checked_under() -> None:
+    _, case = await _in_review("M05")
+    newer = RULES.model_copy(update={"policy_version": "1.1.0"})
+
+    with pytest.raises(ConflictError, match="no longer apply"):
+        await _intake(rules=newer).confirm_mapping(SCOPE, case, 2, "CB-2005", AN, T0)
