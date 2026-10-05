@@ -19,11 +19,13 @@ from dw_sales.domain.messages import EmailAddress, InboundMessage
 pytestmark = pytest.mark.unit
 
 SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
+OTHER_TENANT = SalesScope(TenantId(uuid.UUID(int=9)), WorkspaceId(uuid.UUID(int=10)))
+OTHER_WORKSPACE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=10)))
 
 
 @pytest.fixture(scope="module")
 def inbox() -> MockInbox:
-    return MockInbox.load()
+    return MockInbox.load(SCOPE)
 
 
 def test_the_mock_satisfies_the_port(inbox: MockInbox) -> None:
@@ -62,9 +64,20 @@ async def test_messages_are_sorted_by_instant_whatever_order_they_arrive_in() ->
     hanoi = message("HANOI", "2026-09-22T09:00:00+07:00")
     next_day = message("NEXT-DAY", "2026-09-23T08:00:00+07:00")
 
-    listed = await MockInbox([next_day, hanoi, tokyo], {}).list_messages(SCOPE)
+    listed = await MockInbox([next_day, hanoi, tokyo], {}, scope=SCOPE).list_messages(SCOPE)
 
     assert [m.message_id for m in listed] == ["TOKYO", "HANOI", "NEXT-DAY"]
+
+
+@pytest.mark.parametrize("scope", [OTHER_TENANT, OTHER_WORKSPACE], ids=["tenant", "workspace"])
+async def test_another_scope_sees_an_empty_mailbox(inbox: MockInbox, scope: SalesScope) -> None:
+    """The mock stands in for one tenant's mailbox: another scope naming the
+    demo's own message and attachment ids reads nothing."""
+    assert await inbox.read_attachment(SCOPE, "M01", "M01-A1") is not None
+
+    assert await inbox.list_messages(scope) == ()
+    assert await inbox.get_message(scope, "M01") is None
+    assert await inbox.read_attachment(scope, "M01", "M01-A1") is None
 
 
 async def test_every_message_is_found_by_its_id(inbox: MockInbox) -> None:
@@ -123,9 +136,9 @@ async def test_content_that_disagrees_with_its_description_is_refused_at_load(
     contents = {(m.message_id, a.attachment_id): b"" for m in messages for a in m.attachments}
 
     with pytest.raises(ValueError, match="M01-A1"):
-        MockInbox(messages, contents)
+        MockInbox(messages, contents, scope=SCOPE)
     with pytest.raises(ValueError, match="no content"):
-        MockInbox([first], {})
+        MockInbox([first], {}, scope=SCOPE)
 
 
 async def test_a_message_id_listed_twice_is_refused(inbox: MockInbox) -> None:
@@ -134,7 +147,7 @@ async def test_a_message_id_listed_twice_is_refused(inbox: MockInbox) -> None:
     assert no_attachments is not None
 
     with pytest.raises(ValueError, match="appears twice"):
-        MockInbox([no_attachments, no_attachments], {})
+        MockInbox([no_attachments, no_attachments], {}, scope=SCOPE)
 
 
 async def test_message_ids_follow_the_order_they_are_read_in(inbox: MockInbox) -> None:
@@ -165,4 +178,4 @@ def test_a_fixture_message_that_states_no_mail_results_is_refused(tmp_path: Path
     (tmp_path / "inbox.json").write_text(json.dumps([record]), encoding="utf-8")
 
     with pytest.raises(ValueError, match=r"inbox\.json\[0\].*authentication"):
-        MockInbox.load(data_dir=tmp_path)
+        MockInbox.load(SCOPE, data_dir=tmp_path)

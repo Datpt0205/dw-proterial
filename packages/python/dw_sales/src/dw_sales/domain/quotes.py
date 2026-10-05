@@ -33,7 +33,7 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from dw_kernel.errors import ConflictError, PermissionDeniedError
+from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -1587,14 +1587,22 @@ class QuoteCase(BaseModel):
         return self._moved(QuoteStatus.DESIGN_REPLIED)
 
     def decide_price(
-        self, decision: PricingDecision, findings: Iterable[QuoteFinding]
+        self, decision: PricingDecision, findings: Iterable[QuoteFinding], *, by: uuid.UUID
     ) -> QuoteCase:
         """Sales' price and the findings it raised (`price_findings`).
 
-        From `pending_approval` or `approved` this is the change after submit:
-        the document and any approval go, and the quotation is priced again.
-        Every replaced decision is kept.
+        ``by`` is the verified caller, and the decision must be theirs: its
+        ``decided_by`` is the one person who may not approve it, so a decision
+        recorded under someone else's name would let its real author approve
+        their own price. From `pending_approval` or `approved` this is the
+        change after submit: the document and any approval go, and the
+        quotation is priced again. Every replaced decision is kept.
         """
+        if decision.decided_by != by:
+            raise DomainError(
+                "a price decision is recorded as its actor's",
+                details={"case_id": str(self.case_id), "field": "decided_by"},
+            )
         raised = tuple(findings)
         if any(finding.code not in PRICE_FINDINGS for finding in raised):
             raise ValueError("a price decision raises price findings only")

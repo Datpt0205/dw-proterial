@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from dw_kernel.errors import ConflictError, PermissionDeniedError
+from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.application.ports import SalesScope
@@ -77,7 +77,7 @@ BEFORE_SENT = [
 
 
 def _kmh() -> Customer:
-    customer = asyncio.run(MockSalesCatalog.load().customer_by_code(SCOPE, "KMH")).data
+    customer = asyncio.run(MockSalesCatalog.load(SCOPE).customer_by_code(SCOPE, "KMH")).data
     assert customer is not None
     return customer
 
@@ -210,6 +210,7 @@ def _priced(case: QuoteCase, decision: PricingDecision | None = None) -> QuoteCa
             prescribed_basis="lme_band",
             quote_rules_version="sales_quote_rules@1.0.0",
         ),
+        by=chosen.decided_by,
     )
 
 
@@ -590,6 +591,17 @@ def test_the_person_who_priced_it_cannot_approve_it_even_holding_the_capability(
 
     with pytest.raises(ConflictError, match="separation of duties"):
         _approve(_case(QuoteStatus.PENDING_APPROVAL), pricer)
+
+
+def test_a_price_decided_under_another_persons_name_is_refused() -> None:
+    """Else the pricer, naming the approver as ``decided_by``, could then
+    approve their own price: the check above compares against that name."""
+    replied = _case(QuoteStatus.DESIGN_REPLIED)
+    as_the_head = _decision(by=APPROVER)
+
+    with pytest.raises(DomainError, match="its actor's"):
+        replied.decide_price(as_the_head, (), by=PRICER)
+    assert replied.decide_price(as_the_head, (), by=APPROVER).status is QuoteStatus.PRICED
 
 
 def test_a_stored_case_approved_by_its_pricer_cannot_be_read_back() -> None:

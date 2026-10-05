@@ -9,7 +9,9 @@ cell; nothing here interprets it.
 
 The file is attacker-controlled and is parsed inside the API process, so the
 work is bounded before openpyxl sees it: by what the archive declares it holds,
-and by the rows and columns read, whatever dimensions a sheet claims.
+and by the rows and columns read, whatever dimensions a sheet claims. A
+macro-enabled workbook is not read at all (spec decision 13), as on the order
+side.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from pydantic import ValidationError
 
+from dw_sales.adapters.readers.excel import MACROS_PART
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Currency, CustomerItemCode, DocumentNo, Name, PrvCode, Uom
@@ -142,6 +145,8 @@ def _read_cells(data: bytes) -> list[tuple[str, _Cells]] | None:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             entries = archive.infolist()
         if len(entries) > _MAX_ENTRIES:
+            return None
+        if any(entry.filename == MACROS_PART for entry in entries):
             return None
         if sum(entry.file_size for entry in entries) > _MAX_UNCOMPRESSED_BYTES:
             return None

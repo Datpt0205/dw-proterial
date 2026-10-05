@@ -566,8 +566,8 @@ def check_customer(
         )
     if compliance := _compliance_finding(customer, po_date, received_date(received_at), rules):
         found.append(compliance)
-    results = (authentication.spf, authentication.dkim, authentication.dmarc)
-    if any(result != "pass" for result in results):
+    if not authentication.verified:
+        results = (authentication.spf, authentication.dkim, authentication.dmarc)
         found.append(
             rules.finding(
                 FindingCode.SENDER_UNVERIFIED,

@@ -58,7 +58,8 @@ from dw_sales.domain.orders import (
 PARSER_VERSION = "excel_po_reader@1.1.0"
 _PAGE_NUMBER = re.compile(r"(\d{1,3})\s*/\s*(\d{1,3})")
 _PLAIN_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
-_MACROS = "xl/vbaProject.bin"
+# The part a macro-enabled workbook carries its VBA in: such a file is not read (decision 13).
+MACROS_PART = "xl/vbaProject.bin"
 
 
 @dataclass(frozen=True)
@@ -146,7 +147,7 @@ def _open(data: bytes, caps: IntakeCaps) -> tuple[Workbook, Workbook]:
             entries = archive.infolist()
     except zipfile.BadZipFile as exc:
         raise _RefusedError("not an .xlsx workbook") from exc
-    if any(entry.filename == _MACROS for entry in entries):
+    if any(entry.filename == MACROS_PART for entry in entries):
         raise _RefusedError("a macro-enabled workbook is not read")
     unpacked = sum(entry.file_size for entry in entries)
     if unpacked > caps.max_unpacked_bytes:

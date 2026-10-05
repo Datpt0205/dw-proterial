@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field
 
+from dw_kernel.errors import PermissionDeniedError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
@@ -29,6 +30,8 @@ from dw_sales.domain.catalog import (
 pytestmark = pytest.mark.unit
 
 SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
+OTHER_TENANT = SalesScope(TenantId(uuid.UUID(int=9)), WorkspaceId(uuid.UUID(int=10)))
+OTHER_WORKSPACE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=10)))
 # The day the demo's mailbox is read: every PO in it is dated September 2026.
 DEMO_DAY = date(2026, 9, 30)
 AS_OF = datetime.fromisoformat(
@@ -38,7 +41,7 @@ AS_OF = datetime.fromisoformat(
 
 @pytest.fixture(scope="module")
 def catalog() -> MockSalesCatalog:
-    return MockSalesCatalog.load()
+    return MockSalesCatalog.load(SCOPE)
 
 
 async def _rebuild(catalog: MockSalesCatalog, **overrides: Any) -> MockSalesCatalog:
@@ -53,7 +56,7 @@ async def _rebuild(catalog: MockSalesCatalog, **overrides: Any) -> MockSalesCata
         "bravo_orders": (await catalog.orders_since(SCOPE, date(2000, 1, 1))).data,
         "open_ycbg": (await catalog.open_ycbg(SCOPE)).data,
     }
-    return MockSalesCatalog(**(records | overrides))
+    return MockSalesCatalog(**({"scope": SCOPE} | records | overrides))
 
 
 def test_the_mock_satisfies_the_port(catalog: MockSalesCatalog) -> None:
@@ -86,6 +89,48 @@ async def test_every_read_returns_the_snapshots_as_of_beside_its_data(
 
     assert {read.as_of for read in reads} == {AS_OF}
     assert AS_OF.utcoffset() is not None
+
+
+@pytest.mark.parametrize("scope", [OTHER_TENANT, OTHER_WORKSPACE], ids=["tenant", "workspace"])
+async def test_another_scope_reads_an_empty_catalogue(
+    catalog: MockSalesCatalog, scope: SalesScope
+) -> None:
+    """The mock stands in for one tenant's ERP. Another tenant, or another
+    workspace of the same one, asking for the very keys the demo holds gets
+    nothing back: no customer, no item, no price."""
+    assert (await catalog.customer_by_code(SCOPE, "VLX")).data is not None
+    singles = [
+        await catalog.customer_by_code(scope, "VLX"),
+        await catalog.customer_by_email_domain(scope, "velatrix.example"),
+        await catalog.item_by_prv_code(scope, "HW-1001"),
+        await catalog.convert_entry(scope, "VLX", "PN-1001"),
+        await catalog.lme_for_month(scope, "2026-09"),
+    ]
+    lists = [
+        await catalog.customers(scope),
+        await catalog.items(scope),
+        await catalog.convert_list(scope),
+        await catalog.quotations_valid_on(scope, "VLX", "HW-1001", DEMO_DAY),
+        await catalog.quotations_for_item(scope, "HW-1001"),
+        await catalog.quotations(scope),
+        await catalog.lme_months(scope),
+        await catalog.orders_for_po(scope, "QRL", "QRL-PO-0918-07"),
+        await catalog.orders_since(scope, date(2000, 1, 1)),
+        await catalog.open_ycbg(scope),
+    ]
+
+    assert [read.data for read in singles] == [None] * len(singles)
+    assert [tuple(read.data) for read in lists] == [()] * len(lists)
+
+
+async def test_another_scope_cannot_write_the_master_list(catalog: MockSalesCatalog) -> None:
+    rebuilt = await _rebuild(catalog)
+    (row,) = [q for q in (await rebuilt.quotations(SCOPE)).data if q.quote_no == "Q26-0104"]
+    new_row = row.model_copy(update={"quote_no": "Q26-0999"})
+
+    with pytest.raises(PermissionDeniedError):
+        await rebuilt.record(OTHER_TENANT, [new_row])
+    assert "Q26-0999" not in {q.quote_no for q in (await rebuilt.quotations(SCOPE)).data}
 
 
 async def test_a_snapshot_without_a_timezone_is_refused(catalog: MockSalesCatalog) -> None:

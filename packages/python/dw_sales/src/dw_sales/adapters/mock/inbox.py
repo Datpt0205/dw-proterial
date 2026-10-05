@@ -53,13 +53,18 @@ class _MessageFixture(BaseModel):
 class MockInbox:
     """Implements `InboxPort` for a demo deployment.
 
-    Serves the same fictional mailbox to every scope; a real adapter reads the
-    mailbox configured for the scope's tenant and workspace. Attachment bytes
-    are held in memory: the fixture set is a few hundred kilobytes.
+    Bound to the one scope whose mailbox it stands in for: any other scope
+    sees an empty mailbox. A real adapter reads the mailbox configured for the
+    scope's tenant and workspace. Attachment bytes are held in memory: the
+    fixture set is a few hundred kilobytes.
     """
 
     def __init__(
-        self, messages: Sequence[InboundMessage], contents: dict[tuple[str, str], bytes]
+        self,
+        messages: Sequence[InboundMessage],
+        contents: dict[tuple[str, str], bytes],
+        *,
+        scope: SalesScope,
     ) -> None:
         by_id: dict[str, InboundMessage] = {}
         for message in messages:
@@ -77,12 +82,18 @@ class MockInbox:
                 # Fails here, not on first read, when the bytes disagree with
                 # the description the message carries.
                 AttachmentContent(attachment=attachment, data=data)
+        self._scope = scope
         self._messages = tuple(sorted(by_id.values(), key=lambda m: m.received_at))
         self._by_id = by_id
         self._contents = dict(contents)
 
     @classmethod
-    def load(cls, data_dir: Path = DATA_DIR, attachments_dir: Path = ATTACHMENTS_DIR) -> MockInbox:
+    def load(
+        cls,
+        scope: SalesScope,
+        data_dir: Path = DATA_DIR,
+        attachments_dir: Path = ATTACHMENTS_DIR,
+    ) -> MockInbox:
         messages: list[InboundMessage] = []
         contents: dict[tuple[str, str], bytes] = {}
         for fixture in read_records(data_dir / "inbox.json", _MessageFixture):
@@ -113,18 +124,18 @@ class MockInbox:
                     authentication=fixture.authentication,
                 )
             )
-        return cls(messages, contents)
+        return cls(messages, contents, scope=scope)
 
     async def list_messages(self, scope: SalesScope) -> Sequence[InboundMessage]:
-        return self._messages
+        return self._messages if scope == self._scope else ()
 
     async def get_message(self, scope: SalesScope, message_id: str) -> InboundMessage | None:
-        return self._by_id.get(message_id)
+        return self._by_id.get(message_id) if scope == self._scope else None
 
     async def read_attachment(
         self, scope: SalesScope, message_id: str, attachment_id: str
     ) -> AttachmentContent | None:
-        message = self._by_id.get(message_id)
+        message = await self.get_message(scope, message_id)
         attachment = message.attachment(attachment_id) if message is not None else None
         if attachment is None:
             return None

@@ -55,7 +55,7 @@ def test_rendering_twice_gives_the_same_bytes(rendered: dict[str, bytes]) -> Non
 async def test_every_attachment_in_the_inbox_has_a_document_and_no_document_is_orphaned(
     rendered: dict[str, bytes],
 ) -> None:
-    inbox = MockInbox.load()
+    inbox = MockInbox.load(SCOPE)
     carried = {
         attachment_file_name(message.message_id, attachment.name)
         for message in await inbox.list_messages(SCOPE)

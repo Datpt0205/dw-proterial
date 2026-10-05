@@ -1132,7 +1132,10 @@ class OrderCase(BaseModel):
         exception is a line with none (`code_unmapped`): Sales may type a code
         the item master holds, and ``recheck`` must have been checked against
         exactly that item. Either way the line's item checks are replaced by
-        ``recheck``'s, run under this case's rules.
+        ``recheck``'s item findings, run under this case's rules. Its mapping
+        and value findings are not taken: the mapping is this confirmation,
+        and the line's values, read from the same cells, keep the findings and
+        decisions they already have.
         """
         line = self.line(line_no)
         mapping = line.mapping
@@ -1144,7 +1147,8 @@ class OrderCase(BaseModel):
         item = recheck.line.basis.item
         if item is None or item.prv_code != prv_code or recheck.line.line_no != line_no:
             raise DomainError("the line was checked again against another item", details=details)
-        if any(f.rule_version != self.rules_version for f in recheck.findings):
+        rechecked = [f for f in recheck.findings if f.code in ITEM_FINDINGS]
+        if any(f.rule_version != self.rules_version for f in rechecked):
             raise ConflictError("the line was checked again under other rules", details=details)
         confirmed = LineMapping(
             status=MappingStatus.CANDIDATE_CONFIRMED,
@@ -1164,7 +1168,7 @@ class OrderCase(BaseModel):
                 kept.append(f.model_copy(update={"disposition": corrected}))
         return self._edited(
             lines=tuple(new_line if x.line_no == line_no else x for x in self.lines),
-            findings=_in_line_order((*kept, *recheck.findings)),
+            findings=_in_line_order((*kept, *rechecked)),
         )
 
     def request_correction(self) -> OrderCase:

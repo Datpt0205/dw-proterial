@@ -146,17 +146,19 @@ class ReplyAttached:
 # Why a reply was not attached, in words that name no value of the reply.
 _NO_CASE_WAITING: Final = "no case awaits Design under the reply's YCBG number"
 _LINES_UNANSWERED: Final = "the reply does not answer exactly the lines its case asked"
+_NOT_FROM_DESIGN: Final = "the reply does not come from a Design mailbox the mail system verified"
 
 
 @dataclass(frozen=True, slots=True)
 class ReplyUnmatched:
     """The reply is not attached and the message goes to Sales: no case awaits
-    Design under its YCBG number (`design_reply_unmatched`), or the one that
-    does asked other lines than the reply answers (`other`). Nothing else of
-    the reply (customer, item, wording) is tried."""
+    Design under its YCBG number (`design_reply_unmatched`), the one that does
+    asked other lines than the reply answers (`other`), or the message is not
+    from a Design mailbox (`other`, its file left unread, so ``ycbg_no`` is
+    None). Nothing else of the reply (customer, item, wording) is tried."""
 
     message_id: str
-    ycbg_no: str
+    ycbg_no: str | None
     reason: RoutingReason = RoutingReason.DESIGN_REPLY_UNMATCHED
     detail: str = _NO_CASE_WAITING
 
@@ -185,7 +187,14 @@ class ScreeningRow(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class QuotationService:
-    """What DW1 prepares for a request for quotation; Sales decides on the case."""
+    """What DW1 prepares for a request for quotation; Sales decides on the case.
+
+    ``design_mailboxes``: the addresses Design replies from, supplied by the
+    composition root from the deployment's configuration. A reply sets the
+    specification a customer is quoted and the copper weight the price floor
+    is computed from, so only mail from one of them, with every sender check
+    passed, is taken as Design's. Empty takes no reply at all.
+    """
 
     catalog: SalesCatalogPort
     inbox: InboxPort
@@ -195,6 +204,7 @@ class QuotationService:
     ledger: QuotationLedgerPort
     rules: QuoteRules
     pricing: SalesPricing
+    design_mailboxes: frozenset[str]
 
     # ---------------------------------------------------------- step 1 --
 
@@ -271,11 +281,21 @@ class QuotationService:
     ) -> ReplyAttached | ReplyUnmatched:
         """Design's reply, matched to its case by the YCBG number it quotes.
 
-        Attached only to the one case of the scope recorded under that number
-        and waiting on Design; anything else (no such case, one not waiting, or
-        more than one) routes the message to Sales.
+        Only a message from one of `design_mailboxes` that the mail system
+        verified is read as one; any other sender is routed to Sales unread,
+        whatever its file says. Attached only to the one case of the scope
+        recorded under that number and waiting on Design; anything else (no
+        such case, one not waiting, or more than one) routes the message to
+        Sales.
         """
         message = await self._message(scope, message_id)
+        if not self._from_design(message):
+            return ReplyUnmatched(
+                message_id=message_id,
+                ycbg_no=None,
+                reason=RoutingReason.OTHER,
+                detail=_NOT_FROM_DESIGN,
+            )
         found = await self._files(scope, message, self.reply_reader.read)
         if len(found) != 1:
             raise NotADesignReplyError(message_id)
@@ -398,9 +418,10 @@ class QuotationService:
         return tuple(evidence)
 
     async def decide_price(
-        self, scope: SalesScope, case: QuoteCase, decision: PricingDecision
+        self, scope: SalesScope, case: QuoteCase, decision: PricingDecision, *, by: uuid.UUID
     ) -> QuoteCase:
-        """Sales' price on the case, with the findings it raises.
+        """Sales' price on the case, with the findings it raises. ``by`` is the
+        verified caller, whose decision it must be (`QuoteCase.decide_price`).
 
         `price_basis_mismatch` compares the decision's LME month with the
         latest month published when it was decided, read here once and
@@ -418,7 +439,7 @@ class QuotationService:
             prescribed_basis=self.rules.copper_basis,
             quote_rules_version=self.rules.version,
         )
-        return case.decide_price(decision, findings)
+        return case.decide_price(decision, findings, by=by)
 
     # ------------------------------------------------------- steps 8-9 --
 
@@ -507,6 +528,10 @@ class QuotationService:
         )
 
     # --------------------------------------------------------- helpers --
+
+    def _from_design(self, message: InboundMessage) -> bool:
+        mailboxes = {address.lower() for address in self.design_mailboxes}
+        return message.authentication.verified and message.sender.address.lower() in mailboxes
 
     async def _message(self, scope: SalesScope, message_id: str) -> InboundMessage:
         message = await self.inbox.get_message(scope, message_id)

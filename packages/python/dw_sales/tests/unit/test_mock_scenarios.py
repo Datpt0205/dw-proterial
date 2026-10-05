@@ -124,12 +124,12 @@ class ReplyMatch:
 
 @pytest.fixture(scope="module")
 def catalog() -> MockSalesCatalog:
-    return MockSalesCatalog.load()
+    return MockSalesCatalog.load(SCOPE)
 
 
 @pytest.fixture(scope="module")
 def inbox() -> MockInbox:
-    return MockInbox.load()
+    return MockInbox.load(SCOPE)
 
 
 # ------------------------------------------------------------ the README --

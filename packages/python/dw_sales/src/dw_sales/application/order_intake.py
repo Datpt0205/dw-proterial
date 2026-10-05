@@ -40,7 +40,7 @@ from dw_sales.application.order_ports import (
     PoDocumentReaderPort,
 )
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
-from dw_sales.domain.catalog import Customer, customers_named
+from dw_sales.domain.catalog import Customer, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
     CaseKind,
@@ -51,6 +51,7 @@ from dw_sales.domain.dispositions import (
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import (
     IntakeCaps,
+    MappedLine,
     OrderRules,
     check_customer,
     check_document,
@@ -60,11 +61,14 @@ from dw_sales.domain.order_checks import (
     map_line,
 )
 from dw_sales.domain.orders import (
+    Actor,
     Finding,
     LineCheck,
     OrderCase,
     OrderStatus,
     PoDocument,
+    PoHeader,
+    PoLine,
     Unreadable,
 )
 
@@ -250,30 +254,11 @@ class OrderIntake:
             )
             as_of.append(entry.as_of)
             mapped = map_line(po_line, entry=entry.data, items=items.data)
-            quotation = None
-            if mapped.item is not None:
-                valid = await self.catalog.quotations_valid_on(
-                    scope, customer.code, mapped.item.prv_code, header.po_date
-                )
-                as_of.append(valid.as_of)
-                quotation = current_quotation(
-                    valid.data,
-                    customer_code=customer.code,
-                    prv_code=mapped.item.prv_code,
-                    day=header.po_date,
-                )
-            checks.append(
-                check_line(
-                    po_line,
-                    mapped,
-                    currency=header.currency,
-                    po_date=header.po_date,
-                    received_at=message.received_at,
-                    quotation=quotation,
-                    lme=lme.data,
-                    rules=rules,
-                )
+            check, quoted_as_of = await self._check_line(
+                scope, customer.code, header, message.received_at, po_line, mapped, lme.data, rules
             )
+            as_of.extend(quoted_as_of)
+            checks.append(check)
         orders = await self.catalog.orders_for_po(scope, customer.code, header.po_no)
         as_of.append(orders.as_of)
         history = check_history(
@@ -342,6 +327,90 @@ class OrderIntake:
                 f"a revision of a case in {history.base.status}, which takes none",
             )
         return self._on_case(message, kind, DispositionKind.ATTACHED_TO_CASE, revised)
+
+    async def confirm_mapping(
+        self,
+        scope: SalesScope,
+        case: OrderCase,
+        line_no: int,
+        prv_code: str,
+        actor: Actor,
+        at: datetime,
+    ) -> OrderCase:
+        """Sales confirms a line's PRV code, and the line is checked again (step 2).
+
+        The code is looked up in ``scope``'s item master and refused when it is
+        not there: a confirmed candidate, or a code typed for an unmapped line,
+        is an item the company sells, never a string taken on trust. The line
+        is checked against that item under the rules stamped on the case, and
+        refused once the tenant's rules have moved on: a recheck under other
+        rules would put two versions on one case. Which codes a line may take
+        is the case's to decide (`OrderCase.confirm_mapping`).
+        """
+        line = case.line(line_no)
+        details: dict[str, object] = {"case_id": str(case.case_id), "line": line_no}
+        rules = await self.rules.rules(scope)
+        if rules.version != case.rules_version:
+            raise ConflictError(
+                "the case was checked under rules that no longer apply", details=details
+            )
+        item = (await self.catalog.item_by_prv_code(scope, prv_code)).data
+        if item is None:
+            raise ConflictError(
+                "the item master has no such PRV code", details={**details, "field": "prv_code"}
+            )
+        header = case.header
+        lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
+        mapped = MappedLine(line.mapping, item, line.basis.convert_prv_code)
+        recheck, _ = await self._check_line(
+            scope,
+            case.customer_code,
+            header,
+            case.received_at,
+            line.po_line,
+            mapped,
+            lme.data,
+            rules,
+        )
+        return case.confirm_mapping(line_no, prv_code, actor, at, recheck)
+
+    async def _check_line(
+        self,
+        scope: SalesScope,
+        customer_code: str,
+        header: PoHeader,
+        received_at: datetime,
+        po_line: PoLine,
+        mapped: MappedLine,
+        lme: LmeMonth | None,
+        rules: OrderRules,
+    ) -> tuple[LineCheck, list[datetime]]:
+        """One line checked against its item and the customer's quotation for it
+        on the PO date, with the ``as_of`` of what that read."""
+        quotation = None
+        read: list[datetime] = []
+        if mapped.item is not None:
+            valid = await self.catalog.quotations_valid_on(
+                scope, customer_code, mapped.item.prv_code, header.po_date
+            )
+            read.append(valid.as_of)
+            quotation = current_quotation(
+                valid.data,
+                customer_code=customer_code,
+                prv_code=mapped.item.prv_code,
+                day=header.po_date,
+            )
+        check = check_line(
+            po_line,
+            mapped,
+            currency=header.currency,
+            po_date=header.po_date,
+            received_at=received_at,
+            quotation=quotation,
+            lme=lme,
+            rules=rules,
+        )
+        return check, read
 
     async def _buyer(
         self, scope: SalesScope, readable: Sequence[AttachmentContent], caps: IntakeCaps

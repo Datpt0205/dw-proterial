@@ -149,7 +149,7 @@ def test_every_value_is_read_from_the_cell_its_label_or_column_names() -> None:
 
 
 async def test_both_mock_requests_are_read_with_their_own_sheet_names() -> None:
-    inbox = MockInbox.load()
+    inbox = MockInbox.load(SCOPE)
     sheets = {}
     for message_id in ("M09", "M10"):
         message = await inbox.get_message(SCOPE, message_id)
@@ -327,7 +327,7 @@ def test_a_file_that_is_not_a_request_this_reader_knows_is_not_read(data: bytes,
 
 
 async def test_each_mock_attachment_is_read_by_exactly_the_reader_its_fixture_names() -> None:
-    inbox = MockInbox.load()
+    inbox = MockInbox.load(SCOPE)
     requests, replies = set(), set()
     for message in await inbox.list_messages(SCOPE):
         for attachment in message.attachments:
@@ -345,7 +345,7 @@ async def test_each_mock_attachment_is_read_by_exactly_the_reader_its_fixture_na
 
 
 async def _mock_reply(message_id: str) -> DesignReplyDocument:
-    inbox = MockInbox.load()
+    inbox = MockInbox.load(SCOPE)
     message = await inbox.get_message(SCOPE, message_id)
     assert message is not None
     content = await inbox.read_attachment(SCOPE, message_id, message.attachments[0].attachment_id)
@@ -427,3 +427,21 @@ def test_a_reply_line_the_domain_refuses_is_unreadable_at_its_cell_never_a_raw_e
         ExcelDesignReplyReader().read(_content(_reply_bytes(0), "R.xlsx"))
 
     assert refused.value.at.cell_ref == "YCBG!A7"
+
+
+def _with_macros(data: bytes) -> bytes:
+    """The same workbook saved as a macro-enabled one would carry its VBA."""
+    with zipfile.ZipFile(io.BytesIO(data)) as source:
+        parts = {name: source.read(name) for name in source.namelist()}
+    return _zip(parts | {"xl/vbaProject.bin": b"\xd0\xcf\x11\xe0"}, zipfile.ZIP_DEFLATED)
+
+
+def test_a_macro_enabled_workbook_is_read_neither_as_a_request_nor_as_a_reply() -> None:
+    """Spec decision 13, as `ExcelPoReader` refuses one: the same request and
+    reply read, and are left to a person once they carry macros."""
+    request, reply = _bytes(_workbook()), _reply_bytes(1)
+    assert _read(request) is not None
+    assert ExcelDesignReplyReader().read(_content(reply, "R.xlsx")) is not None
+
+    assert _read(_with_macros(request)) is None
+    assert ExcelDesignReplyReader().read(_content(_with_macros(reply), "R.xlsx")) is None

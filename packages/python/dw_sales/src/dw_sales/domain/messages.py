@@ -151,6 +151,12 @@ class MailAuthentication(BaseModel):
     dkim: MailAuthResult = "none"
     dmarc: MailAuthResult = "none"
 
+    @property
+    def verified(self) -> bool:
+        """Every method passed: the only result that shows the sender is who
+        the From line says. Anything else, unknown included, is unverified."""
+        return self.spf == self.dkim == self.dmarc == "pass"
+
 
 class InboundMessage(BaseModel):
     """One email as the mailbox received it."""
