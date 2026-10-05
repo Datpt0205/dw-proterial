@@ -46,5 +46,40 @@
         "required_date": "2026-12-18"
       }
     ]
+  },
+  {
+    "message_id": "M14",
+    "name": "VLX-RFQ-2609-07.xlsx",
+    "customer_code": "VLX",
+    "rfq_no": "VLX-RFQ-2609-07",
+    "rfq_date": "2026-09-28",
+    "quote_due": "2026-10-05",
+    "currency": "USD",
+    "remarks": "Báo giá cho dự án mới / Quotation for a new project.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "VX-C2N075",
+        "quantity": "6000",
+        "required_date": "2026-12-15"
+      }
+    ]
+  },
+  {
+    "message_id": "M23",
+    "name": "NRV-RFQ-26-0112.xlsx",
+    "customer_code": "NRV",
+    "rfq_no": "NRV-RFQ-26-0112",
+    "rfq_date": "2026-10-01",
+    "quote_due": "2026-10-09",
+    "currency": "USD",
+    "remarks": "Quantity to follow.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "NV-HW24-WH",
+        "required_date": "2027-01-15"
+      }
+    ]
   }
 ]

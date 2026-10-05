@@ -457,5 +457,788 @@
         "requested_date": "2026-12-18"
       }
     ]
+  },
+  {
+    "message_id": "M13",
+    "name": "NRV-PO-26-0471.xlsx",
+    "layout": "xlsx",
+    "customer_code": "NRV",
+    "po_no": "NRV-PO-26-0471",
+    "revision": 0,
+    "po_date": "2026-09-26",
+    "currency": "USD",
+    "remarks": "Downloaded from the Norvanta supplier portal.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "NV-HW22-BK",
+        "quantity": "12200",
+        "unit_price": "0.0510",
+        "requested_date": "2026-11-27"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "NV-CB4-22-GY",
+        "quantity": "3000",
+        "unit_price": "0.6980",
+        "requested_date": "2026-12-11"
+      }
+    ]
+  },
+  {
+    "message_id": "M15",
+    "name": "TVT-PO-0929-01.xlsx",
+    "layout": "xlsx",
+    "po_no": "TVT-PO-0929-01",
+    "revision": 0,
+    "po_date": "2026-09-29",
+    "currency": "USD",
+    "buyer_name": "Talverra Trading Co., Ltd.",
+    "remarks": "First order. Please register us as a customer.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "TV-0001",
+        "quantity": "6100",
+        "unit_price": "0.0500",
+        "requested_date": "2026-11-30",
+        "attributes": {
+          "family": "hook_up_wire",
+          "cores": 1,
+          "gauge": "AWG22",
+          "stranding": "stranded",
+          "conductor": "tinned_copper",
+          "shield": "none",
+          "colour": "red",
+          "packaging": "reel",
+          "pack_length_m": "610"
+        }
+      }
+    ]
+  },
+  {
+    "message_id": "M16",
+    "name": "BRN-PO-2609-044.pdf",
+    "layout": "pdf_image",
+    "customer_code": "BRN",
+    "po_no": "BRN-PO-2609-044",
+    "revision": 0,
+    "po_date": "2026-09-29",
+    "currency": "VND",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "BRN-W-0007",
+        "quantity": "6100",
+        "unit_price": "1150",
+        "requested_date": "2026-12-01"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "BRN-C-0118",
+        "quantity": "2000",
+        "unit_price": "21800",
+        "requested_date": "2026-12-01"
+      }
+    ]
+  },
+  {
+    "message_id": "M19",
+    "name": "QRL-PO-0918-07.xlsx",
+    "layout": "xlsx",
+    "customer_code": "QRL",
+    "po_no": "QRL-PO-0918-07",
+    "revision": 0,
+    "po_date": "2026-09-18",
+    "currency": "USD",
+    "remarks": "Please confirm this order.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "QR-HW20-BK",
+        "quantity": "12200",
+        "unit_price": "0.0640",
+        "requested_date": "2026-11-20"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "QR-HW18-BK",
+        "quantity": "6100",
+        "unit_price": "0.0910",
+        "requested_date": "2026-11-20"
+      }
+    ]
+  },
+  {
+    "message_id": "M20",
+    "name": "CVG-260930-11.xlsx",
+    "layout": "xlsx_sheet_per_page",
+    "customer_code": "CVG",
+    "po_no": "CVG-260930-11",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "lines_per_page": 6,
+    "remarks": "Intra-group order, second half of the fiscal year. Partial deliveries per line.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 3,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2026-12-14",
+        "description": "=HYPERLINK(\"https://attacker.example/po\",\"CVG-0003\")"
+      },
+      {
+        "no": 4,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 5,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 6,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2026-12-21"
+      },
+      {
+        "no": 7,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2026-12-21"
+      },
+      {
+        "no": 8,
+        "customer_item_code": "CVG-0003",
+        "quantity": "18300",
+        "unit_price": "0.0590",
+        "requested_date": "2026-12-21"
+      },
+      {
+        "no": 9,
+        "customer_item_code": "CVG-0004",
+        "quantity": "6000",
+        "unit_price": "0.9050",
+        "requested_date": "2026-12-21"
+      },
+      {
+        "no": 10,
+        "customer_item_code": "CVG-0005",
+        "quantity": "10000",
+        "unit_price": "1.1800",
+        "requested_date": "2026-12-21"
+      },
+      {
+        "no": 11,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2026-12-28"
+      },
+      {
+        "no": 12,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2026-12-28"
+      },
+      {
+        "no": 13,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2026-12-28"
+      },
+      {
+        "no": 14,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2026-12-28"
+      },
+      {
+        "no": 15,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2026-12-28"
+      },
+      {
+        "no": 16,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2027-01-04"
+      },
+      {
+        "no": 17,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2027-01-04"
+      },
+      {
+        "no": 18,
+        "customer_item_code": "CVG-0003",
+        "quantity": "18300",
+        "unit_price": "0.0590",
+        "requested_date": "2027-01-04"
+      },
+      {
+        "no": 19,
+        "customer_item_code": "CVG-0004",
+        "quantity": "6000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-01-04"
+      },
+      {
+        "no": 20,
+        "customer_item_code": "CVG-0005",
+        "quantity": "10000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-01-04"
+      },
+      {
+        "no": 21,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 22,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 23,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 24,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 25,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 26,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2027-01-18"
+      },
+      {
+        "no": 27,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2027-01-18"
+      },
+      {
+        "no": 28,
+        "customer_item_code": "CVG-0003",
+        "quantity": "18300",
+        "unit_price": "0.0590",
+        "requested_date": "2027-01-18"
+      },
+      {
+        "no": 29,
+        "customer_item_code": "CVG-0004",
+        "quantity": "6000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-01-18"
+      },
+      {
+        "no": 30,
+        "customer_item_code": "CVG-0005",
+        "quantity": "10000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-01-18"
+      },
+      {
+        "no": 31,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2027-01-25"
+      },
+      {
+        "no": 32,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2027-01-25"
+      },
+      {
+        "no": 33,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2027-01-25"
+      },
+      {
+        "no": 34,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-01-25"
+      },
+      {
+        "no": 35,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-01-25"
+      },
+      {
+        "no": 36,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2027-02-01"
+      },
+      {
+        "no": 37,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2027-02-01"
+      },
+      {
+        "no": 38,
+        "customer_item_code": "CVG-0003",
+        "quantity": "18300",
+        "unit_price": "0.0590",
+        "requested_date": "2027-02-01"
+      },
+      {
+        "no": 39,
+        "customer_item_code": "CVG-0004",
+        "quantity": "6000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-02-01"
+      },
+      {
+        "no": 40,
+        "customer_item_code": "CVG-0005",
+        "quantity": "10000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-02-01"
+      },
+      {
+        "no": 41,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2027-02-08"
+      },
+      {
+        "no": 42,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2027-02-08"
+      },
+      {
+        "no": 43,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2027-02-08"
+      },
+      {
+        "no": 44,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-02-08"
+      },
+      {
+        "no": 45,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-02-08"
+      },
+      {
+        "no": 46,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2027-02-15"
+      },
+      {
+        "no": 47,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2027-02-15"
+      },
+      {
+        "no": 48,
+        "customer_item_code": "CVG-0003",
+        "quantity": "18300",
+        "unit_price": "0.0590",
+        "requested_date": "2027-02-15"
+      },
+      {
+        "no": 49,
+        "customer_item_code": "CVG-0004",
+        "quantity": "6000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-02-15"
+      },
+      {
+        "no": 50,
+        "customer_item_code": "CVG-0005",
+        "quantity": "10000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-02-15"
+      },
+      {
+        "no": 51,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2027-02-22"
+      },
+      {
+        "no": 52,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2027-02-22"
+      },
+      {
+        "no": 53,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2027-02-22"
+      },
+      {
+        "no": 54,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-02-22"
+      },
+      {
+        "no": 55,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-02-22"
+      },
+      {
+        "no": 56,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2027-03-01"
+      },
+      {
+        "no": 57,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2027-03-01"
+      },
+      {
+        "no": 58,
+        "customer_item_code": "CVG-0003",
+        "quantity": "18300",
+        "unit_price": "0.0590",
+        "requested_date": "2027-03-01"
+      },
+      {
+        "no": 59,
+        "customer_item_code": "CVG-0004",
+        "quantity": "6000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-03-01"
+      },
+      {
+        "no": 60,
+        "customer_item_code": "CVG-0005",
+        "quantity": "10000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-03-01"
+      },
+      {
+        "no": 61,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2027-03-08"
+      },
+      {
+        "no": 62,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2027-03-08"
+      }
+    ]
+  },
+  {
+    "message_id": "M21",
+    "name": "VLX-PO-2609-0131.xlsx",
+    "layout": "xlsx",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2609-0131",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "printed_total": "786.60",
+    "remarks": "Giao một đợt / Single delivery",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "VX-W24-BK",
+        "quantity": "6100",
+        "unit_price": "0.0420",
+        "requested_date": "2026-12-04"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "VX-W24-RD",
+        "quantity": "12200",
+        "unit_price": "0.0420",
+        "requested_date": "2026-12-04"
+      }
+    ]
+  },
+  {
+    "message_id": "M22",
+    "name": "CVG-260930-12.xlsx",
+    "layout": "xlsx_sheet_per_page",
+    "customer_code": "CVG",
+    "po_no": "CVG-260930-12",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "lines_per_page": 4,
+    "remarks": "Intra-group order.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 3,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 4,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2026-12-21"
+      },
+      {
+        "no": 6,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2026-12-28"
+      },
+      {
+        "no": 7,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 8,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2027-01-11"
+      }
+    ]
+  },
+  {
+    "message_id": "M24",
+    "name": "KMH-2026-0930-C.xlsx",
+    "layout": "xlsx",
+    "customer_code": "KMH",
+    "po_no": "KMH-2026-0930-C",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "JPY",
+    "remarks": "円建てでお願いします。 Priced in JPY.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "KMH-21-0077",
+        "quantity": "12200",
+        "unit_price": "5.10",
+        "requested_date": "2026-12-04"
+      }
+    ]
+  },
+  {
+    "message_id": "M26",
+    "name": "QRL-PO-0930-16.xlsx",
+    "layout": "xlsx",
+    "customer_code": "QRL",
+    "po_no": "QRL-PO-0930-16",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "QR-HW20-BK",
+        "quantity": "6100",
+        "unit_price": "0.0640",
+        "requested_date": "2026-11-27"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "QR-HW18-BK",
+        "quantity": "20130",
+        "unit_price": "0.0910",
+        "requested_date": "2026-11-27",
+        "uom": "FT"
+      }
+    ]
+  },
+  {
+    "message_id": "M27",
+    "name": "CVG-261001-02.xlsx",
+    "layout": "xlsx_sheet_per_page",
+    "customer_code": "CVG",
+    "po_no": "CVG-261001-02",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "lines_per_page": 3,
+    "hidden_lines": [2],
+    "hidden_pages": [2],
+    "remarks": "Intra-group order.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "CVG-0001",
+        "quantity": "6100",
+        "unit_price": "0.0385",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "CVG-0002",
+        "quantity": "6100",
+        "unit_price": "0.0465",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 3,
+        "customer_item_code": "CVG-0003",
+        "quantity": "6100",
+        "unit_price": "0.0590",
+        "requested_date": "2026-12-14"
+      },
+      {
+        "no": 4,
+        "customer_item_code": "CVG-0001",
+        "quantity": "12200",
+        "unit_price": "0.0385",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 5,
+        "customer_item_code": "CVG-0004",
+        "quantity": "3000",
+        "unit_price": "0.9050",
+        "requested_date": "2027-01-11"
+      },
+      {
+        "no": 6,
+        "customer_item_code": "CVG-0005",
+        "quantity": "5000",
+        "unit_price": "1.1800",
+        "requested_date": "2027-01-18"
+      },
+      {
+        "no": 7,
+        "customer_item_code": "CVG-0002",
+        "quantity": "12200",
+        "unit_price": "0.0465",
+        "requested_date": "2027-02-08"
+      }
+    ]
+  },
+  {
+    "message_id": "M28",
+    "name": "LMR-PO-2609-001.xlsx",
+    "layout": "xlsx",
+    "customer_code": "TZ2609",
+    "po_no": "LMR-PO-2609-001",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "remarks": "Đơn hàng thứ hai / Second order",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "LM-W22-RD",
+        "quantity": "12200",
+        "unit_price": "0.0560",
+        "requested_date": "2026-12-04"
+      }
+    ]
   }
 ]

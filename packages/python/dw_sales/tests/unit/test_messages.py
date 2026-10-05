@@ -9,7 +9,14 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from dw_sales.domain.messages import Attachment, AttachmentContent, EmailAddress, InboundMessage
+from dw_sales.domain.messages import (
+    Attachment,
+    AttachmentContent,
+    EmailAddress,
+    InboundMessage,
+    MailAuthentication,
+    is_email_address,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -95,7 +102,7 @@ def test_attachment_content_is_exactly_the_bytes_described() -> None:
     attachment = Attachment.model_validate(_attachment())
 
     assert AttachmentContent(attachment=attachment, data=_DATA).data == _DATA
-    with pytest.raises(ValidationError, match="bytes, content is"):
+    with pytest.raises(ValidationError, match="size is not the content's"):
         AttachmentContent(attachment=attachment, data=_DATA + b"!")
     same_size_other_bytes = _DATA.replace(b"0118", b"0119")
     with pytest.raises(ValidationError, match="content changed"):
@@ -114,3 +121,56 @@ def test_an_attachment_is_found_by_its_id_within_its_message() -> None:
     assert found is not None
     assert found.name == "VLX-PO-2609-0118.xlsx"
     assert message.attachment("M01-A2") is None
+
+
+@pytest.mark.parametrize(
+    ("model", "record", "secret"),
+    [
+        (EmailAddress, {"address": "secret person@evil.example"}, "secret person"),
+        (Attachment, _attachment(name="secret/../PO.xlsx"), "secret"),
+    ],
+    ids=["address", "file_name"],
+)
+def test_a_refusal_names_the_field_never_the_value(
+    model: type[EmailAddress] | type[Attachment], record: dict[str, Any], secret: str
+) -> None:
+    """Spec decision 8: an address or a file name is a customer's data in a log."""
+    with pytest.raises(ValidationError) as refused:
+        model.model_validate(record)
+
+    assert secret not in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("an.nguyen@alpha.local", True),
+        ("An.Trinh@Velatrix.Example", True),
+        ("an.nguyen@", False),
+        ("an nguyen@alpha.local", False),
+        ("a@b", False),
+    ],
+)
+def test_one_rule_says_what_an_email_address_is(value: str, expected: bool) -> None:
+    assert is_email_address(value) is expected
+    assert (EmailAddress.model_validate({"address": value}) is not None) if expected else True
+
+
+def test_a_message_whose_mail_results_are_unknown_reads_as_unverified() -> None:
+    """The default proves nothing: ``none`` on all three, never ``pass``."""
+    message = InboundMessage.model_validate(_message())
+
+    assert message.authentication == MailAuthentication(spf="none", dkim="none", dmarc="none")
+
+
+def test_the_mail_systems_results_are_carried_as_stated() -> None:
+    results = {"spf": "softfail", "dkim": "fail", "dmarc": "fail"}
+    message = InboundMessage.model_validate(_message(authentication=results))
+
+    assert message.authentication.model_dump() == results
+
+
+@pytest.mark.parametrize("field", ["spf", "dkim", "dmarc"])
+def test_a_mail_result_outside_rfc_8601_is_refused(field: str) -> None:
+    with pytest.raises(ValidationError):
+        MailAuthentication.model_validate({field: "ok"})

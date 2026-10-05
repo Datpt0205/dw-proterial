@@ -10,7 +10,13 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict
 
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path, read_records
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.messages import Attachment, AttachmentContent, EmailAddress, InboundMessage
+from dw_sales.domain.messages import (
+    Attachment,
+    AttachmentContent,
+    EmailAddress,
+    InboundMessage,
+    MailAuthentication,
+)
 
 
 class _AttachmentFixture(BaseModel):
@@ -38,6 +44,10 @@ class _MessageFixture(BaseModel):
     received_at: AwareDatetime
     body_text: str
     attachments: tuple[_AttachmentFixture, ...] = ()
+    # Required here although the message model defaults it to "unverified":
+    # a fixture states what the mail system concluded, so a scenario never
+    # depends on a default nobody wrote down.
+    authentication: MailAuthentication
 
 
 class MockInbox:
@@ -100,6 +110,7 @@ class MockInbox:
                     received_at=fixture.received_at,
                     body_text=fixture.body_text,
                     attachments=tuple(attachments),
+                    authentication=fixture.authentication,
                 )
             )
         return cls(messages, contents)

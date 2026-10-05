@@ -1,0 +1,77 @@
+[
+  {
+    "message_id": "M18",
+    "name": "YCBG-2609-028-reply.xlsx",
+    "ycbg_no": "YCBG-2609-028",
+    "reply_date": "2026-10-01",
+    "lines": [
+      {
+        "no": 1,
+        "bp_code": "BP-26-0311",
+        "spec_no": "SP-5311",
+        "prv_code": null,
+        "copper_kg_per_km": "3.6"
+      }
+    ]
+  },
+  {
+    "message_id": "M25",
+    "name": "YCBG-2609-030-reply.xlsx",
+    "ycbg_no": "YCBG-2609-030",
+    "reply_date": "2026-10-01",
+    "lines": [
+      {
+        "no": 1,
+        "bp_code": "BP-25-0187",
+        "spec_no": "SP-5406",
+        "prv_code": "CB-2007",
+        "copper_kg_per_km": "11.8"
+      }
+    ]
+  },
+  {
+    "message_id": "M29",
+    "name": "YCBG-2609-029-reply.xlsx",
+    "ycbg_no": "YCBG-2609-029",
+    "reply_date": "2026-10-02",
+    "lines": [
+      {
+        "no": 1,
+        "bp_code": "BP-24-0092",
+        "spec_no": "SP-5202",
+        "prv_code": "CB-2003",
+        "copper_kg_per_km": "13.5"
+      }
+    ]
+  },
+  {
+    "message_id": "M30",
+    "name": "YCBG-2610-001-reply.xlsx",
+    "ycbg_no": "YCBG-2610-001",
+    "reply_date": "2026-10-02",
+    "lines": [
+      {
+        "no": 1,
+        "bp_code": "BP-23-0041",
+        "spec_no": "SP-1124",
+        "prv_code": "HW-1003",
+        "copper_kg_per_km": "1.8"
+      }
+    ]
+  },
+  {
+    "message_id": "M32",
+    "name": "YCBG-2608-044-reply.xlsx",
+    "ycbg_no": "YCBG-2608-044",
+    "reply_date": "2026-10-02",
+    "lines": [
+      {
+        "no": 1,
+        "bp_code": "BP-26-0290",
+        "spec_no": "SP-5212",
+        "prv_code": null,
+        "copper_kg_per_km": "6.2"
+      }
+    ]
+  }
+]

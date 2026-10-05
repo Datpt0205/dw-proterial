@@ -19,8 +19,10 @@ ATTACHMENTS_DIR = MOCK_ROOT / "attachments"
 def read_records[RecordT: BaseModel](path: Path, model: type[RecordT]) -> tuple[RecordT, ...]:
     """Every record in a JSON array file, each validated by ``model``.
 
-    A record that fails names its position, because these files are edited by
-    hand and "1 validation error for Quotation" does not say which of 25.
+    A record that fails names its position and the fields that failed, because
+    these files are edited by hand and "1 validation error for Quotation" does
+    not say which of 25. It never names a value: these files stand in for a
+    customer's data, and a refusal ends up in a log (spec decision 8).
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
@@ -30,9 +32,14 @@ def read_records[RecordT: BaseModel](path: Path, model: type[RecordT]) -> tuple[
         try:
             records.append(model.model_validate(entry))
         except ValidationError as exc:
+            problems = "; ".join(
+                f"{'.'.join(str(part) for part in error['loc']) or 'record'}: {error['msg']}"
+                for error in exc.errors(include_url=False, include_input=False)
+            )
+            # `from None`: the chained error's own text would carry the input.
             raise ValueError(
-                f"{path.name}[{index}] is not a valid {model.__name__}: {exc}"
-            ) from exc
+                f"{path.name}[{index}] is not a valid {model.__name__}: {problems}"
+            ) from None
     return tuple(records)
 
 

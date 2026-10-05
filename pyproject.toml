@@ -263,6 +263,66 @@ source_modules = ["dw_sales"]
 forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]
 
 [[tool.importlinter.contracts]]
+# The Sales domain decides from values it is handed: no framework, no store,
+# no provider SDK, and no file parser. Reading a customer's file is an
+# adapter's job (dw_sales.adapters.readers); a domain that parsed files would
+# be a domain that cannot be tested without them.
+name = "Sales domain is pure"
+type = "forbidden"
+source_modules = ["dw_sales.domain"]
+forbidden_modules = [
+    "fastapi",
+    "sqlalchemy",
+    "alembic",
+    "langgraph",
+    "langchain",
+    "qdrant_client",
+    "redis",
+    "httpx",
+    "boto3",
+    "minio",
+    "openai",
+    "anthropic",
+    "opentelemetry",
+    "openpyxl",
+    "pypdf",
+    "reportlab",
+]
+
+[[tool.importlinter.contracts]]
+# Clean/Hexagonal direction inside the context: adapters and presentation
+# depend on application ports, application on the domain, never the reverse.
+# Adapters and presentation are independent of each other; only a composition
+# root (apps/api, apps/worker) puts them together.
+name = "dw_sales layers"
+type = "layers"
+containers = ["dw_sales"]
+layers = [
+    "presentation | adapters",
+    "workflows",
+    "application",
+    "domain",
+]
+
+[[tool.importlinter.contracts]]
+# The skeleton is reusable because nothing in it knows a product: a platform
+# package importing a bounded context is the context leaking into every
+# product built on this platform.
+name = "Platform does not import contexts"
+type = "forbidden"
+source_modules = [
+    "dw_kernel",
+    "dw_platform",
+    "dw_agent_runtime",
+    "dw_knowledge",
+    "dw_memory",
+    "dw_connectors",
+    "dw_observability",
+    "dw_evals",
+]
+forbidden_modules = ["dw_sales"]
+
+[[tool.importlinter.contracts]]
 name = "Kernel is pure (stdlib only)"
 type = "forbidden"
 source_modules = ["dw_kernel"]

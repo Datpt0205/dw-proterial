@@ -4,10 +4,12 @@
 
 The files stand in for what customers' own systems print, so the layouts and
 the wording of item descriptions are theirs (documented in `README.md`), not
-this context's. Purchase orders come from `data/purchase_orders.json` and
-requests for quotation from `data/quote_requests.json`. A line that states no
-attributes is described the way the catalogue describes the item its code maps
-to, so a description never disagrees with the item it stands for.
+this context's. Purchase orders come from `data/purchase_orders.json`,
+requests for quotation from `data/quote_requests.json` and Design's replies
+from `data/design_replies.json`. A line that states no attributes is described
+the way the catalogue describes the item its code maps to, so a description
+never disagrees with the item it stands for, unless the fixture gives the
+printed words verbatim.
 
 Byte-for-byte deterministic: fixed document dates, fixed zip entry times and
 no compression anywhere. A regeneration changes nothing unless a fixture did,
@@ -22,7 +24,7 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
-from typing import Literal, Self
+from typing import Literal, NamedTuple, Self
 
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -49,6 +51,7 @@ from dw_sales.domain.catalog import (
     Customer,
     Item,
     ItemFamily,
+    Language,
     Packaging,
     Shield,
     Stranding,
@@ -162,9 +165,23 @@ class OrderLine(BaseModel):
     customer_item_code: str
     # None: described as the catalogue describes the item the code maps to.
     attributes: StatedAttributes | None = None
+    # Printed exactly as given, for a description no catalogue would print
+    # (ticket 06's formula test). Excludes ``attributes``.
+    description: str | None = Field(default=None, min_length=1)
     quantity: Decimal = Field(gt=0)
+    # The unit as the customer prints it; DW1's vocabulary has only ``m``.
+    uom: str = Field(default="m", min_length=1, max_length=8)
     unit_price: Decimal = Field(gt=0)
     requested_date: date
+
+    @model_validator(mode="after")
+    def _described_one_way(self) -> Self:
+        if self.attributes is not None and self.description is not None:
+            raise ValueError(f"line {self.no}: attributes or a verbatim description, not both")
+        return self
+
+
+Layout = Literal["xlsx", "xlsx_sheet_per_page", "pdf", "pdf_image"]
 
 
 class PurchaseOrderDocument(BaseModel):
@@ -174,8 +191,11 @@ class PurchaseOrderDocument(BaseModel):
 
     message_id: str
     name: str
-    layout: Literal["xlsx", "xlsx_sheet_per_page", "pdf"]
-    customer_code: str
+    layout: Layout
+    # The customer whose document this is; None for a buyer no customer is.
+    customer_code: str | None = None
+    # The buyer the document names when it is no customer (printed in English).
+    buyer_name: str | None = None
     po_no: str
     revision: int = Field(ge=0)
     po_date: date
@@ -186,10 +206,17 @@ class PurchaseOrderDocument(BaseModel):
     # The PDF layout only: printed under the buyer's name, and as a second page.
     buyer_address: str = ""
     terms: tuple[str, ...] = ()
+    # The TOTAL the buyer's system printed, when it is not the sum of the lines.
+    printed_total: Decimal | None = None
+    # The Excel layouts only: lines whose row is hidden, and pages (sheets) hidden.
+    hidden_lines: tuple[int, ...] = ()
+    hidden_pages: tuple[int, ...] = ()
     lines: tuple[OrderLine, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _layout_has_what_it_needs(self) -> Self:
+        if (self.customer_code is None) == (self.buyer_name is None):
+            raise ValueError(f"{self.name}: a customer_code or a buyer_name, one of them")
         if (self.layout == "xlsx_sheet_per_page") != (self.lines_per_page is not None):
             raise ValueError(
                 f"{self.name}: lines_per_page goes with the sheet-per-page layout only"
@@ -198,9 +225,27 @@ class PurchaseOrderDocument(BaseModel):
         # not print is a fixture edit that silently changes nothing.
         if self.layout != "pdf" and (self.buyer_address or self.terms):
             raise ValueError(f"{self.name}: buyer_address and terms are printed by the PDF only")
-        if [line.no for line in self.lines] != list(range(1, len(self.lines) + 1)):
-            raise ValueError(f"{self.name}: lines are numbered 1..n in order")
+        if self.layout not in ("xlsx", "xlsx_sheet_per_page") and (
+            self.hidden_lines or self.hidden_pages
+        ):
+            raise ValueError(f"{self.name}: only an Excel layout hides rows or sheets")
+        numbers = [line.no for line in self.lines]
+        # Increasing, so a README line number names one printed line. Gaps are
+        # allowed: a PO that skips a number is a fixture (`line_total_mismatch`).
+        if numbers != sorted(set(numbers)):
+            raise ValueError(f"{self.name}: lines are numbered in increasing order")
+        if not set(self.hidden_lines) <= set(numbers):
+            raise ValueError(f"{self.name}: hidden_lines names a line the PO lacks")
+        pages = len(self.pages())
+        if not all(1 <= page < pages for page in self.hidden_pages):
+            # The last page carries the TOTAL, which stays visible.
+            raise ValueError(f"{self.name}: hidden_pages names no page before the last")
         return self
+
+    def pages(self) -> list[tuple[OrderLine, ...]]:
+        """The lines as the file prints them, page by page (sheet by sheet)."""
+        size = self.lines_per_page or len(self.lines)
+        return [self.lines[start : start + size] for start in range(0, len(self.lines), size)]
 
 
 class QuoteRequestLine(BaseModel):
@@ -209,7 +254,8 @@ class QuoteRequestLine(BaseModel):
     no: int = Field(ge=1)
     customer_item_code: str
     attributes: StatedAttributes | None = None
-    quantity: Decimal = Field(gt=0)
+    # None: the request leaves the quantity blank (`rfq_incomplete`).
+    quantity: Decimal | None = Field(default=None, gt=0)
     target_price: Decimal | None = Field(default=None, gt=0)
     required_date: date
 
@@ -230,6 +276,39 @@ class QuoteRequestDocument(BaseModel):
     lines: tuple[QuoteRequestLine, ...] = Field(min_length=1)
 
 
+class DesignReplyLine(BaseModel):
+    model_config = _FROZEN
+
+    # The request's line this answers.
+    no: int = Field(ge=1)
+    bp_code: str
+    spec_no: str
+    # None while Design has still to create the item's code.
+    prv_code: str | None = None
+    copper_kg_per_km: Decimal = Field(gt=0)
+
+
+class DesignReplyDocument(BaseModel):
+    """Design's answer to one YCBG, attached to message ``message_id``.
+
+    Names the YCBG and nothing else of the request: matching the reply to a
+    case is by that number only.
+    """
+
+    model_config = _FROZEN
+
+    message_id: str
+    name: str
+    ycbg_no: str
+    reply_date: date
+    lines: tuple[DesignReplyLine, ...] = Field(min_length=1)
+
+
+class _Buyer(NamedTuple):
+    name: str
+    language: Language
+
+
 class _Catalogue:
     """The slice of master data the documents print: names and descriptions."""
 
@@ -241,12 +320,25 @@ class _Catalogue:
             for e in read_records(data_dir / "convert_list.json", ConvertEntry)
         }
 
+    def buyer(self, po: PurchaseOrderDocument) -> _Buyer:
+        if po.customer_code is None:
+            assert po.buyer_name is not None  # the document's validator
+            return _Buyer(po.buyer_name, "en")
+        customer = self.customers[po.customer_code]
+        return _Buyer(customer.name, customer.language)
+
     def describe(
-        self, customer_code: str, customer_item_code: str, stated: StatedAttributes | None
+        self,
+        customer_code: str | None,
+        customer_item_code: str,
+        stated: StatedAttributes | None,
+        verbatim: str | None = None,
     ) -> str:
+        if verbatim is not None:
+            return verbatim
         if stated is not None:
             return stated.describe()
-        prv_code = self.convert.get((customer_code, customer_item_code))
+        prv_code = self.convert.get((customer_code, customer_item_code)) if customer_code else None
         if prv_code is None:
             raise ValueError(
                 f"{customer_code} line {customer_item_code} states no attributes and has no"
@@ -263,22 +355,30 @@ def load_quote_requests(data_dir: Path = DATA_DIR) -> tuple[QuoteRequestDocument
     return read_records(data_dir / "quote_requests.json", QuoteRequestDocument)
 
 
+def load_design_replies(data_dir: Path = DATA_DIR) -> tuple[DesignReplyDocument, ...]:
+    return read_records(data_dir / "design_replies.json", DesignReplyDocument)
+
+
 def render_attachments(data_dir: Path = DATA_DIR) -> dict[str, bytes]:
     """Every attachment's bytes, by its file name in `attachments/`."""
     catalogue = _Catalogue(data_dir)
     rendered: dict[str, bytes] = {}
     for po in load_purchase_orders(data_dir):
-        customer = catalogue.customers[po.customer_code]
-        if po.layout == "pdf":
-            data = _po_pdf(po, customer, catalogue)
-        else:
-            data = _po_xlsx(po, customer, catalogue)
+        match po.layout:
+            case "pdf":
+                data = _po_pdf(po, catalogue)
+            case "pdf_image":
+                data = _scanned_pdf(po)
+            case "xlsx" | "xlsx_sheet_per_page":
+                data = _po_xlsx(po, catalogue)
         rendered[attachment_file_name(po.message_id, po.name)] = data
     for rfq in load_quote_requests(data_dir):
         customer = catalogue.customers[rfq.customer_code]
         rendered[attachment_file_name(rfq.message_id, rfq.name)] = _rfq_xlsx(
             rfq, customer, catalogue
         )
+    for reply in load_design_replies(data_dir):
+        rendered[attachment_file_name(reply.message_id, reply.name)] = _design_reply_xlsx(reply)
     return rendered
 
 
@@ -305,10 +405,21 @@ def _amount(quantity: Decimal, unit_price: Decimal, currency: Currency) -> Decim
 
 
 def _total(po: PurchaseOrderDocument) -> Decimal:
-    """The sum of the printed line amounts, as a buyer's system adds them."""
+    """The TOTAL as printed: the buyer's sum of the line amounts, unless the
+    fixture says the buyer's system printed another."""
+    if po.printed_total is not None:
+        return po.printed_total
     return sum(
         (_amount(line.quantity, line.unit_price, po.currency) for line in po.lines), Decimal(0)
     )
+
+
+def _set(sheet: Worksheet, row: int, column: int, value: _CellValue) -> None:
+    cell = sheet.cell(row=row, column=column, value=value)
+    if isinstance(value, str) and value.startswith("="):
+        # Text the customer typed, not a formula: openpyxl would otherwise
+        # store it as one, with no cached value, which is a different fixture.
+        cell.data_type = "s"
 
 
 def _header(sheet: Worksheet, rows: Sequence[tuple[str, _CellValue, str, _CellValue]]) -> None:
@@ -337,23 +448,25 @@ def _table(
         sheet.cell(row=9, column=column, value=title)
     for offset, values in enumerate(rows):
         for column, (value, number_format) in enumerate(zip(values, formats, strict=True), start=1):
-            cell = sheet.cell(row=10 + offset, column=column, value=value)
+            _set(sheet, 10 + offset, column, value)
             if number_format is not None:
-                cell.number_format = number_format
+                sheet.cell(row=10 + offset, column=column).number_format = number_format
     for letter, width in zip("ABCDEFGH", (6, 18, 72, 12, 6, 13, 15, 15), strict=False):
         sheet.column_dimensions[letter].width = width
     return 10 + len(rows)
 
 
-def _po_xlsx(po: PurchaseOrderDocument, customer: Customer, catalogue: _Catalogue) -> bytes:
+def _po_xlsx(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
+    buyer = catalogue.buyer(po)
     workbook = _new_workbook()
-    page_size = po.lines_per_page or len(po.lines)
-    pages = [po.lines[start : start + page_size] for start in range(0, len(po.lines), page_size)]
+    pages = po.pages()
     for number, lines in enumerate(pages, start=1):
-        title = _PO_SHEET[customer.language] if po.lines_per_page is None else f"Page {number}"
+        title = _PO_SHEET[buyer.language] if po.lines_per_page is None else f"Page {number}"
         sheet: Worksheet = workbook.create_sheet(title)
-        sheet["A1"] = customer.name.upper()
-        sheet["A2"] = "PURCHASE ORDER" + _TITLE_SUFFIX[customer.language]
+        if number in po.hidden_pages:
+            sheet.sheet_state = "hidden"
+        sheet["A1"] = buyer.name.upper()
+        sheet["A2"] = "PURCHASE ORDER" + _TITLE_SUFFIX[buyer.language]
         page_label = ("Page", f"{number} / {len(pages)}") if po.lines_per_page else ("", "")
         _header(
             sheet,
@@ -368,9 +481,11 @@ def _po_xlsx(po: PurchaseOrderDocument, customer: Customer, catalogue: _Catalogu
             [
                 line.no,
                 line.customer_item_code,
-                catalogue.describe(po.customer_code, line.customer_item_code, line.attributes),
+                catalogue.describe(
+                    po.customer_code, line.customer_item_code, line.attributes, line.description
+                ),
                 line.quantity,
-                "m",
+                line.uom,
                 line.unit_price,
                 _amount(line.quantity, line.unit_price, po.currency),
                 line.requested_date,
@@ -401,11 +516,14 @@ def _po_xlsx(po: PurchaseOrderDocument, customer: Customer, catalogue: _Catalogu
                 "yyyy-mm-dd",
             ),
         )
+        for offset, line in enumerate(lines):
+            if line.no in po.hidden_lines:
+                sheet.row_dimensions[10 + offset].hidden = True
         if number == len(pages):
             sheet.cell(row=next_row, column=6, value="TOTAL")
             total_cell = sheet.cell(row=next_row, column=7, value=_total(po))
             total_cell.number_format = _AMOUNT_FORMAT[po.currency]
-    return _xlsx_bytes(workbook, creator=customer.name, stamp=po.po_date)
+    return _xlsx_bytes(workbook, creator=buyer.name, stamp=po.po_date)
 
 
 def _rfq_xlsx(rfq: QuoteRequestDocument, customer: Customer, catalogue: _Catalogue) -> bytes:
@@ -449,6 +567,33 @@ def _rfq_xlsx(rfq: QuoteRequestDocument, customer: Customer, catalogue: _Catalog
         (None, None, None, "#,##0", None, _PRICE_FORMAT[rfq.currency], "yyyy-mm-dd"),
     )
     return _xlsx_bytes(workbook, creator=customer.name, stamp=rfq.rfq_date)
+
+
+def _design_reply_xlsx(reply: DesignReplyDocument) -> bytes:
+    """The seller's own Design reply form: the YCBG it answers and, per
+    requested line, what Design specified."""
+    workbook = _new_workbook()
+    sheet: Worksheet = workbook.create_sheet("YCBG")
+    sheet["A1"] = SELLER_NAME.upper() + " / DESIGN"
+    sheet["A2"] = "YCBG REPLY / PHẢN HỒI YCBG"
+    _header(
+        sheet,
+        [
+            ("YCBG No.", reply.ycbg_no, "Reply Date", reply.reply_date),
+            ("From", "Design", "", ""),
+        ],
+    )
+    rows: list[list[_CellValue]] = [
+        [line.no, line.bp_code, line.spec_no, line.prv_code, line.copper_kg_per_km]
+        for line in reply.lines
+    ]
+    _table(
+        sheet,
+        ("No.", "BP Code", "Spec No.", "PRV Code", "Copper (kg/km)"),
+        rows,
+        (None, None, None, None, "0.00"),
+    )
+    return _xlsx_bytes(workbook, creator=SELLER_NAME, stamp=reply.reply_date)
 
 
 def _new_workbook() -> Workbook:
@@ -511,16 +656,17 @@ def _vi_date(day: date) -> str:
     return day.strftime("%d/%m/%Y")
 
 
-def _po_pdf(po: PurchaseOrderDocument, customer: Customer, catalogue: _Catalogue) -> bytes:
+def _po_pdf(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
     """A Vietnamese text PDF: header and lines on page 1, terms on page 2."""
-    if customer.language != "vi":
+    buyer = catalogue.buyer(po)
+    if buyer.language != "vi":
         raise ValueError(f"{po.name}: the PDF layout is the Vietnamese one")
     pdfmetrics.registerFont(TTFont(_FONT, str(FONT_PATH)))
     buffer = io.BytesIO()
     width, height = landscape(A4)
     canvas = Canvas(buffer, pagesize=(width, height), invariant=1, pageCompression=0)
     canvas.setTitle(f"Đơn đặt hàng {po.po_no}")
-    canvas.setAuthor(customer.name)
+    canvas.setAuthor(buyer.name)
     pages = 2 if po.terms else 1
 
     def text(x: float, y: float, value: str, size: float = 9, right: bool = False) -> None:
@@ -531,7 +677,7 @@ def _po_pdf(po: PurchaseOrderDocument, customer: Customer, catalogue: _Catalogue
             canvas.drawString(x, y, value)
 
     y = height - 50
-    text(40, y, customer.name.upper(), 12)
+    text(40, y, buyer.name.upper(), 12)
     if po.buyer_address:
         y -= 14
         text(40, y, po.buyer_address, 8)
@@ -566,9 +712,11 @@ def _po_pdf(po: PurchaseOrderDocument, customer: Customer, catalogue: _Catalogue
         values = (
             str(line.no),
             line.customer_item_code,
-            catalogue.describe(po.customer_code, line.customer_item_code, line.attributes),
+            catalogue.describe(
+                po.customer_code, line.customer_item_code, line.attributes, line.description
+            ),
             _vi_number(line.quantity),
-            "m",
+            line.uom,
             _vi_number(line.unit_price),
             _vi_number(_amount(line.quantity, line.unit_price, po.currency)),
             _vi_date(line.requested_date),
@@ -592,6 +740,83 @@ def _po_pdf(po: PurchaseOrderDocument, customer: Customer, catalogue: _Catalogue
         canvas.showPage()
     canvas.save()
     return buffer.getvalue()
+
+
+# A4 portrait in points, drawn at one pixel per point.
+_SCAN_WIDTH, _SCAN_HEIGHT = 595, 842
+
+
+def _scanned_pdf(po: PurchaseOrderDocument) -> bytes:
+    """A one-page PDF holding a single 1-bit image and no text at all.
+
+    What a PO scanned on an office copier looks like to a parser: there is
+    nothing to extract, which is the point of the fixture. The page is drawn
+    as bars (a letterhead, header rows, one table row per line) rather than as
+    glyphs, so no font rasteriser can make two machines draw it differently,
+    and the PDF is written by hand, uncompressed, because image compression
+    would go through the platform's zlib.
+    """
+    pixels = [[True] * _SCAN_WIDTH for _ in range(_SCAN_HEIGHT)]  # True is white
+
+    def bar(x: int, y: int, w: int, h: int) -> None:
+        for pixel_row in pixels[y : y + h]:
+            pixel_row[x : x + w] = [False] * min(w, _SCAN_WIDTH - x)
+
+    bar(40, 40, 260, 14)  # the buyer's name
+    bar(40, 70, 180, 10)  # PURCHASE ORDER
+    for pair in range(5):  # header label/value pairs
+        bar(40, 100 + 16 * pair, 70, 6)
+        bar(130, 100 + 16 * pair, 40 + 23 * ((pair * 7 + len(po.po_no)) % 5), 6)
+    table_top = 200
+    for index, _line in enumerate(po.lines):
+        y = table_top + 22 * index
+        bar(40, y, 515, 1)  # the row's rule
+        bar(46, y + 7, 10, 6)  # No.
+        bar(66, y + 7, 70, 6)  # code
+        bar(146, y + 7, 150 + 17 * ((index * 5 + 3) % 7), 6)  # description
+        bar(420, y + 7, 45, 6)  # quantity
+        bar(480, y + 7, 60, 6)  # amount
+    bar(40, table_top + 22 * len(po.lines), 515, 1)
+    bar(380, table_top + 22 * len(po.lines) + 30, 160, 10)  # TOTAL
+    bar(420, 720, 110, 2)  # the signature line
+
+    row_bytes = (_SCAN_WIDTH + 7) // 8
+    image = bytearray()
+    for pixel_row in pixels:
+        packed = bytearray(row_bytes)
+        for x, white in enumerate(pixel_row):
+            if white:
+                packed[x // 8] |= 0x80 >> (x % 8)
+        image += packed
+    content = f"q {_SCAN_WIDTH} 0 0 {_SCAN_HEIGHT} 0 0 cm /Scan Do Q\n".encode("ascii")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {_SCAN_WIDTH} {_SCAN_HEIGHT}]"
+            " /Resources << /XObject << /Scan 4 0 R >> >> /Contents 5 0 R >>"
+        ).encode("ascii"),
+        (
+            f"<< /Type /XObject /Subtype /Image /Width {_SCAN_WIDTH} /Height {_SCAN_HEIGHT}"
+            f" /ColorSpace /DeviceGray /BitsPerComponent 1 /Length {len(image)} >>\nstream\n"
+        ).encode("ascii")
+        + bytes(image)
+        + b"\nendstream",
+        f"<< /Length {len(content)} >>\nstream\n".encode("ascii") + content + b"endstream",
+    ]
+    out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets: list[int] = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n".encode("ascii") + body + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii")
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode("ascii")
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+    ).encode("ascii")
+    return bytes(out)
 
 
 if __name__ == "__main__":

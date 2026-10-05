@@ -20,7 +20,8 @@
         "name": "VLX-PO-2609-0118.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M02",
@@ -43,7 +44,8 @@
         "name": "CVG-260922-07.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M03",
@@ -66,7 +68,8 @@
         "name": "BRN-PO-2609-031.pdf",
         "media_type": "application/pdf"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M04",
@@ -89,7 +92,8 @@
         "name": "NRV-PO-26-0457.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M05",
@@ -112,7 +116,8 @@
         "name": "KMH-2026-0925-A.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M06",
@@ -135,7 +140,8 @@
         "name": "QRL-PO-0926-12.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M07",
@@ -158,7 +164,8 @@
         "name": "NRV-PO-26-0457-Rev1.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M08",
@@ -181,7 +188,8 @@
         "name": "VLX-PO-2609-0118.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M09",
@@ -204,7 +212,8 @@
         "name": "QRL-RFQ-2609-03.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M10",
@@ -227,7 +236,8 @@
         "name": "KMH-RFQ-260930-02.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M11",
@@ -243,7 +253,8 @@
     ],
     "subject": "Hỏi lịch giao hàng – PO VLX-PO-2609-0118",
     "received_at": "2026-09-30T16:05:00+07:00",
-    "body_text": "Chào chị Vy,\n\nPO VLX-PO-2609-0118 dòng 3 và 4 bên em có thể nhận sớm hơn, vào tuần 46, được không ạ? Nhờ chị kiểm tra giúp lịch giao.\n\nCảm ơn chị,\nTrịnh Mỹ An"
+    "body_text": "Chào chị Vy,\n\nPO VLX-PO-2609-0118 dòng 3 và 4 bên em có thể nhận sớm hơn, vào tuần 46, được không ạ? Nhờ chị kiểm tra giúp lịch giao.\n\nCảm ơn chị,\nTrịnh Mỹ An",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   },
   {
     "message_id": "M12",
@@ -266,6 +277,473 @@
         "name": "QRL-PO-0930-15.xlsx",
         "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }
-    ]
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M13",
+    "sender": {
+      "address": "sales-desk@seller.example",
+      "display_name": "Sales Desk – Demo Wire & Cable"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "FW: Norvanta portal PO NRV-PO-26-0471",
+    "received_at": "2026-10-01T09:00:00+07:00",
+    "body_text": "Chuyển DW1 xử lý PO tải từ cổng nhà cung cấp của Norvanta.\n\n---------- Forwarded ----------\nNorvanta supplier portal: purchase order NRV-PO-26-0471 is ready for download.",
+    "attachments": [
+      {
+        "attachment_id": "M13-A1",
+        "name": "NRV-PO-26-0471.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M14",
+    "sender": {
+      "address": "sales.manager@seller.example",
+      "display_name": "Sales Manager – Demo Wire & Cable"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "FW: RFQ VLX-RFQ-2609-07",
+    "received_at": "2026-10-01T09:20:00+07:00",
+    "body_text": "Nhờ team báo giá giúp yêu cầu này của Velatrix.\n\n---------- Forwarded ----------\nDear Sales, please quote the attached RFQ VLX-RFQ-2609-07 by 5 October.",
+    "attachments": [
+      {
+        "attachment_id": "M14-A1",
+        "name": "VLX-RFQ-2609-07.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M15",
+    "sender": {
+      "address": "orders@talverra.example",
+      "display_name": "Talverra Purchasing"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Purchase order TVT-PO-0929-01",
+    "received_at": "2026-10-01T09:40:00+07:00",
+    "body_text": "Hello,\n\nPlease find our first purchase order attached. We are not yet registered as your customer.\n\nRegards,\nTalverra Purchasing",
+    "attachments": [
+      {
+        "attachment_id": "M15-A1",
+        "name": "TVT-PO-0929-01.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M16",
+    "sender": {
+      "address": "thu.vo@brennic.example",
+      "display_name": "Võ Minh Thư"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Đơn đặt hàng BRN-PO-2609-044 (bản scan)",
+    "received_at": "2026-10-01T10:00:00+07:00",
+    "body_text": "Kính gửi Phòng Kinh doanh,\n\nBrennic gửi bản scan đơn đặt hàng BRN-PO-2609-044 đã ký. Vui lòng xác nhận.\n\nTrân trọng,\nVõ Minh Thư",
+    "attachments": [
+      {
+        "attachment_id": "M16-A1",
+        "name": "BRN-PO-2609-044.pdf",
+        "media_type": "application/pdf"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M17",
+    "sender": {
+      "address": "thu.vo@brennic.example",
+      "display_name": "Võ Minh Thư"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Xin hàng mẫu cáp 2 lõi 1.25mm2",
+    "received_at": "2026-10-01T10:20:00+07:00",
+    "body_text": "Kính gửi Phòng Kinh doanh,\n\nBrennic cần 50 m hàng mẫu cáp 2 lõi 1.25mm2 (mã BRN-C-0118) để thử nghiệm cho dự án mới. Nhờ anh chị gửi giúp trong tháng 10.\n\nTrân trọng,\nVõ Minh Thư",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M18",
+    "sender": {
+      "address": "design@seller.example",
+      "display_name": "Design – Demo Wire & Cable"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Re: YCBG-2609-028",
+    "received_at": "2026-10-01T10:40:00+07:00",
+    "body_text": "Design reply to YCBG-2609-028 attached: new design, item code to be created.",
+    "attachments": [
+      {
+        "attachment_id": "M18-A1",
+        "name": "YCBG-2609-028-reply.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M19",
+    "sender": {
+      "address": "ivy.tran@quorilo.example",
+      "display_name": "Ivy Tran"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO QRL-PO-0918-07",
+    "received_at": "2026-10-01T11:00:00+07:00",
+    "body_text": "Hi team,\n\nSending PO QRL-PO-0918-07 again in case it was missed.\n\nThanks,\nIvy Tran",
+    "attachments": [
+      {
+        "attachment_id": "M19-A1",
+        "name": "QRL-PO-0918-07.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "softfail", "dkim": "fail", "dmarc": "fail" }
+  },
+  {
+    "message_id": "M20",
+    "sender": {
+      "address": "scm@corvane-group.example",
+      "display_name": "Corvane Supply Chain Desk"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Intra-group PO CVG-260930-11 (11 pages)",
+    "received_at": "2026-10-01T13:20:00+09:00",
+    "body_text": "Dear Sales team,\n\nPlease find attached intra-group purchase order CVG-260930-11: 11 pages, 62 lines, deliveries from December 2026 to March 2027.\n\nBest regards,\nSupply Chain Desk",
+    "attachments": [
+      {
+        "attachment_id": "M20-A1",
+        "name": "CVG-260930-11.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M21",
+    "sender": {
+      "address": "an.trinh@velatrix.example",
+      "display_name": "Trịnh Mỹ An"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO VLX-PO-2609-0131",
+    "received_at": "2026-10-01T11:40:00+07:00",
+    "body_text": "Chào chị,\n\nVelatrix gửi PO VLX-PO-2609-0131 (2 dòng) đính kèm.\n\nTrân trọng,\nTrịnh Mỹ An",
+    "attachments": [
+      {
+        "attachment_id": "M21-A1",
+        "name": "VLX-PO-2609-0131.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M22",
+    "sender": {
+      "address": "scm@corvane-group.example",
+      "display_name": "Corvane Supply Chain Desk"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Intra-group PO CVG-260930-12 (2 pages)",
+    "received_at": "2026-10-01T14:00:00+09:00",
+    "body_text": "Dear Sales team,\n\nPlease find attached intra-group purchase order CVG-260930-12.\n\nBest regards,\nSupply Chain Desk",
+    "attachments": [
+      {
+        "attachment_id": "M22-A1",
+        "name": "CVG-260930-12.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M23",
+    "sender": {
+      "address": "po-desk@norvanta.example",
+      "display_name": "Norvanta PO Desk"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "RFQ NRV-RFQ-26-0112",
+    "received_at": "2026-10-01T13:30:00+07:00",
+    "body_text": "Hello,\n\nPlease quote the attached RFQ NRV-RFQ-26-0112. The quantity will follow.\n\nRegards,\nNorvanta PO Desk",
+    "attachments": [
+      {
+        "attachment_id": "M23-A1",
+        "name": "NRV-RFQ-26-0112.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M24",
+    "sender": {
+      "address": "purchasing@kumohana.example",
+      "display_name": "Kumohana Purchasing"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "注文書 KMH-2026-0930-C / Purchase order KMH-2026-0930-C",
+    "received_at": "2026-10-01T14:10:00+07:00",
+    "body_text": "営業ご担当者様\n\n注文書 KMH-2026-0930-C を添付いたします（円建て）。\n\nDear Sales team, please find our PO KMH-2026-0930-C attached, priced in JPY.\n\nKumohana Devices Vietnam – Purchasing",
+    "attachments": [
+      {
+        "attachment_id": "M24-A1",
+        "name": "KMH-2026-0930-C.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M25",
+    "sender": {
+      "address": "design@seller.example",
+      "display_name": "Design – Demo Wire & Cable"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Re: YCBG-2609-030",
+    "received_at": "2026-10-01T15:00:00+07:00",
+    "body_text": "Design reply to YCBG-2609-030 attached.",
+    "attachments": [
+      {
+        "attachment_id": "M25-A1",
+        "name": "YCBG-2609-030-reply.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M26",
+    "sender": {
+      "address": "procurement@quorilo.example",
+      "display_name": "Quorilo Procurement"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO QRL-PO-0930-16",
+    "received_at": "2026-10-01T15:30:00+07:00",
+    "body_text": "Hi team,\n\nPlease process the attached PO QRL-PO-0930-16.\n\nQuorilo Procurement",
+    "attachments": [
+      {
+        "attachment_id": "M26-A1",
+        "name": "QRL-PO-0930-16.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M27",
+    "sender": {
+      "address": "scm@corvane-group.example",
+      "display_name": "Corvane Supply Chain Desk"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Intra-group PO CVG-261001-02 (3 pages)",
+    "received_at": "2026-10-02T09:00:00+09:00",
+    "body_text": "Dear Sales team,\n\nPlease find attached intra-group purchase order CVG-261001-02: 3 pages, 7 lines.\n\nBest regards,\nSupply Chain Desk",
+    "attachments": [
+      {
+        "attachment_id": "M27-A1",
+        "name": "CVG-261001-02.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M28",
+    "sender": {
+      "address": "minh.dao@lumora.example",
+      "display_name": "Đào Quang Minh"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Đơn hàng LMR-PO-2609-001",
+    "received_at": "2026-10-02T08:30:00+07:00",
+    "body_text": "Chào anh chị,\n\nLumora gửi đơn hàng LMR-PO-2609-001 đính kèm.\n\nTrân trọng,\nĐào Quang Minh",
+    "attachments": [
+      {
+        "attachment_id": "M28-A1",
+        "name": "LMR-PO-2609-001.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M29",
+    "sender": {
+      "address": "design@seller.example",
+      "display_name": "Design – Demo Wire & Cable"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Re: YCBG-2609-029",
+    "received_at": "2026-10-02T09:15:00+07:00",
+    "body_text": "Design reply to YCBG-2609-029 attached.",
+    "attachments": [
+      {
+        "attachment_id": "M29-A1",
+        "name": "YCBG-2609-029-reply.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M30",
+    "sender": {
+      "address": "design@seller.example",
+      "display_name": "Design – Demo Wire & Cable"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Re: YCBG-2610-001",
+    "received_at": "2026-10-02T10:00:00+07:00",
+    "body_text": "Design reply to YCBG-2610-001 attached.",
+    "attachments": [
+      {
+        "attachment_id": "M30-A1",
+        "name": "YCBG-2610-001-reply.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M31",
+    "sender": {
+      "address": "an.trinh@velatrix.example",
+      "display_name": "Trịnh Mỹ An"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Khiếu nại lô hàng giao ngày 25/09 – PO VLX-PO-2608-0102",
+    "received_at": "2026-10-02T10:45:00+07:00",
+    "body_text": "Chào chị,\n\nLô cáp CB-2007 giao ngày 25/09 theo PO VLX-PO-2608-0102 có 2 cuộn bị móp lõi cuộn, dây bên trong bị trầy vỏ. Bên em gửi kèm số lô trên nhãn: LOT-2609-118. Nhờ chị chuyển bộ phận chất lượng kiểm tra giúp.\n\nTrân trọng,\nTrịnh Mỹ An",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M32",
+    "sender": {
+      "address": "design@seller.example",
+      "display_name": "Design – Demo Wire & Cable"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Re: YCBG-2608-044",
+    "received_at": "2026-10-02T11:30:00+07:00",
+    "body_text": "Design reply to YCBG-2608-044 attached.",
+    "attachments": [
+      {
+        "attachment_id": "M32-A1",
+        "name": "YCBG-2608-044-reply.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   }
 ]
