@@ -30,7 +30,7 @@ own file and a row here.
 - A conformance review found the plan missed process steps (cross-check,
   revised PO, quotation steps) and roles; the spec and tickets are amended.
 - Platform pieces still waiting for a first caller: `platform-runtime.md`.
-- **Next:** sales tickets 06 → 08 (01–05, 07 and 11 are done; 05 uncommitted).
+- **Next:** sales ticket 08, then 09 (01–07 and 11 are done; 06 uncommitted).
 
 ## Decisions Đạt owes
 

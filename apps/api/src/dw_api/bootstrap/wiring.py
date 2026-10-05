@@ -41,7 +41,12 @@ from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
 from dw_api.bootstrap.container import ApiContainer
 from dw_api.bootstrap.identity import build_token_verifier
-from dw_api.bootstrap.paths import POLICIES_DIR, WORKER_RUN_POLICY, release_manifest_ref
+from dw_api.bootstrap.paths import (
+    COPY_DIR,
+    POLICIES_DIR,
+    WORKER_RUN_POLICY,
+    release_manifest_ref,
+)
 from dw_api.bootstrap.runtime import build_runtime
 from dw_api.bootstrap.storage import (
     build_attachment_storage,
@@ -296,12 +301,18 @@ def build_sales(
     """
     from dw_kernel.ids import TenantId, WorkspaceId
     from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+    from dw_sales.adapters.artifact_files import ArtifactFiles
     from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
     from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
     from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
     from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
     from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
-    from dw_sales.adapters.policy_files import load_kpi, load_pricing, load_quote_rules
+    from dw_sales.adapters.policy_files import (
+        load_artifact_copy,
+        load_kpi,
+        load_pricing,
+        load_quote_rules,
+    )
     from dw_sales.adapters.readers import mock_po_readers
     from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
     from dw_sales.adapters.source_view import FileSourceView
@@ -319,6 +330,7 @@ def build_sales(
     catalog = MockSalesCatalog.load(scope)
     inbox = MockInbox.load(scope)
     order_rules = load_order_rules(POLICIES_DIR / "sales_order_rules@1.0.0.yaml")
+    quote_rules = load_quote_rules(POLICIES_DIR / "sales_quote_rules@1.1.0.yaml")
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
@@ -326,7 +338,7 @@ def build_sales(
         reply_reader=ExcelDesignReplyReader(),
         cases=SqlQuoteCaseLookup(session_factory),
         ledger=catalog,
-        rules=load_quote_rules(POLICIES_DIR / "sales_quote_rules@1.1.0.yaml"),
+        rules=quote_rules,
         pricing=load_pricing(POLICIES_DIR / "sales_pricing@1.0.0.yaml"),
     )
     intake = OrderIntake(
@@ -352,6 +364,13 @@ def build_sales(
         holders=holders,
         notifications=notifications,
         artifact_bytes=artifact_bytes,
+        artifact_writer=ArtifactFiles(),
+        artifact_copy=load_artifact_copy(
+            emails=COPY_DIR / "sales_emails@1.0.0.yaml",
+            documents=COPY_DIR / "sales_documents@1.0.0.yaml",
+            upload=POLICIES_DIR / "sales_bravo_upload@1.0.0.yaml",
+            quote_rules=quote_rules,
+        ),
         release_manifest_ref=release_manifest_ref,
     )
     return SalesMount(services=services)

@@ -37,7 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dw_kernel.errors import InfrastructureError
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.artifacts_service import Download
+from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.overview_service import OverviewView, WorkItem
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
@@ -81,6 +81,13 @@ class VersionBody(BaseModel):
     model_config = _BODY
 
     case_version: int = Field(ge=1)
+
+
+class RenderBody(VersionBody):
+    """An artifact kind to render from the case at the version the caller saw;
+    which kinds are open now is `GET .../artifacts`'s ``available``."""
+
+    kind: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{2,47}$")]
 
 
 class DispositionBody(VersionBody):
@@ -198,6 +205,14 @@ class ProcessAllView(BaseModel):
     results: list[MessageDispositionView]
 
 
+class RenderedView(BaseModel):
+    """The files one render stored: ids, template, version and hash only."""
+
+    model_config = ConfigDict(frozen=True)
+
+    artifacts: list[ArtifactView]
+
+
 @dataclass(frozen=True)
 class SalesMount:
     """What the composition root mounts: the services, or None when no data
@@ -298,6 +313,21 @@ def build_router(
         return await svc.sources.order_source(
             context, case_id, attachment_id, page=page, sheet=sheet
         )
+
+    @router.get("/orders/{case_id}/artifacts", response_model=ArtifactListView)
+    async def order_artifacts(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ArtifactListView:
+        return await svc.artifacts.order_artifacts(context, case_id)
+
+    @router.post(
+        "/orders/{case_id}/artifacts", response_model=RenderedView, dependencies=prepare_scope
+    )
+    async def render_order_artifact(
+        case_id: uuid.UUID, body: RenderBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> RenderedView:
+        rendered = await svc.artifacts.render_order(
+            context, case_id, kind=body.kind, case_version=body.case_version
+        )
+        return await idem.record(RenderedView(artifacts=rendered))
 
     @router.get("/orders/{case_id}/artifacts/{artifact_id}", response_class=Response)
     async def order_artifact(
@@ -488,6 +518,21 @@ def build_router(
         return await svc.sources.quote_source(
             context, case_id, attachment_id, page=page, sheet=sheet
         )
+
+    @router.get("/quotes/{case_id}/artifacts", response_model=ArtifactListView)
+    async def quote_artifacts(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ArtifactListView:
+        return await svc.artifacts.quote_artifacts(context, case_id)
+
+    @router.post(
+        "/quotes/{case_id}/artifacts", response_model=RenderedView, dependencies=quote_scope
+    )
+    async def render_quote_artifact(
+        case_id: uuid.UUID, body: RenderBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> RenderedView:
+        rendered = await svc.artifacts.render_quote(
+            context, case_id, kind=body.kind, case_version=body.case_version
+        )
+        return await idem.record(RenderedView(artifacts=rendered))
 
     @router.get("/quotes/{case_id}/artifacts/{artifact_id}", response_class=Response)
     async def quote_artifact(
@@ -687,8 +732,14 @@ def build_router(
 
 
 def _download(download: Download) -> Response:
+    """The file as stored, never rendered inline by the browser and never kept
+    by a shared cache: a Bravo upload or a quotation carries prices."""
     return Response(
         content=download.data,
         media_type=download.record.content_type,
-        headers={"Content-Disposition": f'attachment; filename="{download.file_name}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{download.file_name}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )

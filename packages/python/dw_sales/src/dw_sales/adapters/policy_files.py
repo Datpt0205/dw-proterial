@@ -13,6 +13,12 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
+from dw_sales.application.artifact_content import (
+    BravoUploadLayout,
+    SalesDocumentCopy,
+    SalesEmailCopy,
+)
+from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.pricing import SalesPricing
@@ -37,3 +43,29 @@ def load_pricing(path: Path) -> SalesPricing:
 
 def load_kpi(path: Path) -> SalesKpi:
     return load_policy(path, SalesKpi)
+
+
+def load_bravo_upload(path: Path) -> BravoUploadLayout:
+    return load_policy(path, BravoUploadLayout)
+
+
+def load_copy[T: (SalesEmailCopy, SalesDocumentCopy)](path: Path, model: type[T]) -> T:
+    """``configs/copy/<copy_id>@<version>.yaml``, refused when named for
+    another copy or version."""
+    loaded = model.model_validate(yaml.safe_load(path.read_bytes()))
+    if path.name != f"{loaded.ref}.yaml":
+        raise ValueError(f"{path.name} holds {loaded.ref}")
+    return loaded
+
+
+def load_artifact_copy(
+    *, emails: Path, documents: Path, upload: Path, quote_rules: QuoteRules
+) -> ArtifactCopy:
+    """What every Sales artifact is rendered with, each file pinned by the
+    release manifest; Design's mailboxes are the quote rules' own."""
+    return ArtifactCopy(
+        emails=load_copy(emails, SalesEmailCopy),
+        documents=load_copy(documents, SalesDocumentCopy),
+        upload=load_bravo_upload(upload),
+        design_mailboxes=quote_rules.design_mailboxes,
+    )

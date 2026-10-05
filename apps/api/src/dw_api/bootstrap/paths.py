@@ -23,6 +23,7 @@ TOOL_SPECS_DIR = CONFIGS / "tools"
 TOOLSETS_DIR = CONFIGS / "toolsets"
 WORKERS_DIR = CONFIGS / "workers"
 POLICIES_DIR = CONFIGS / "policies"
+COPY_DIR = CONFIGS / "copy"
 
 # The platform's own user-facing words, versioned like a prompt bundle so a
 # deployment can change them without a release.

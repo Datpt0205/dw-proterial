@@ -293,6 +293,10 @@ class ArtifactLogPort(Protocol):
 
     async def get(self, artifact_id: uuid.UUID) -> ArtifactRecord | None: ...
 
+    async def for_case(self, case_kind: CaseKind, case_id: uuid.UUID) -> Sequence[ArtifactRecord]:
+        """Every artifact rendered for the case, oldest first, at any version."""
+        ...
+
 
 class WorkerSwitchPort(Protocol):
     async def state(self) -> WorkerState: ...

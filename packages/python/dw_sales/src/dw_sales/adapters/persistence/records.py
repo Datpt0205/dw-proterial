@@ -227,23 +227,38 @@ class SqlArtifactLog:
             .mappings()
             .first()
         )
-        if row is None:
-            return None
-        case = _case_of(row)
-        assert case is not None  # ck_artifacts_one_case
-        return ArtifactRecord(
-            artifact_id=row["id"],
-            case_kind=case[0],
-            case_id=case[1],
-            case_version=row["case_version"],
-            kind=row["kind"],
-            template_ref=row["template_ref"],
-            sha256=row["sha256"],
-            content_type=row["content_type"],
-            size_bytes=row["size_bytes"],
-            created_by=row["created_by"],
-            created_at=row["created_at"],
+        return None if row is None else _artifact(row)
+
+    async def for_case(self, case_kind: CaseKind, case_id: uuid.UUID) -> list[ArtifactRecord]:
+        column = _A.c.order_case_id if case_kind is CaseKind.ORDER else _A.c.quote_case_id
+        rows = (
+            (
+                await self.session.execute(
+                    sa.select(_A).where(column == case_id).order_by(_A.c.created_at, _A.c.id)
+                )
+            )
+            .mappings()
+            .all()
         )
+        return [_artifact(row) for row in rows]
+
+
+def _artifact(row: RowMapping) -> ArtifactRecord:
+    case = _case_of(row)
+    assert case is not None  # ck_artifacts_one_case
+    return ArtifactRecord(
+        artifact_id=row["id"],
+        case_kind=case[0],
+        case_id=case[1],
+        case_version=row["case_version"],
+        kind=row["kind"],
+        template_ref=row["template_ref"],
+        sha256=row["sha256"],
+        content_type=row["content_type"],
+        size_bytes=row["size_bytes"],
+        created_by=row["created_by"],
+        created_at=row["created_at"],
+    )
 
 
 @dataclass(frozen=True)

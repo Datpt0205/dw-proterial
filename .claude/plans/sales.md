@@ -53,7 +53,17 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   audit rows in the same transaction, the Design mailbox in
   `sales_quote_rules@1.1.0`, and `price_floor_unknown` (fail closed, Đạt did
   not object). `sales_kpi@1.0.0` shipped. Details in the ticket's "As built".
-- Next: 06 → 08.
+- 2026-10-05, ticket 06 built (uncommitted): every artifact in the table
+  rendered from the case by `POST /orders|quotes/{id}/artifacts`, listed by
+  `GET .../artifacts`, stored under `{tenant}/{workspace}/sales/{case}/{id}`
+  with template `id@version`, case version and sha256, downloaded only in its
+  state and at the case's current version (409 `stale_artifact` after an
+  edit). Copy `sales_emails@1.0.0`, `sales_documents@1.0.0` and policy
+  `sales_bravo_upload@1.0.0` (MOCK) are pinned by the manifest. reportlab
+  stays a runtime dependency (G38). The confirmation draft opens at
+  `confirmed`, not `cross_checked`; details in the ticket's "As built".
+- Next: 08 (the TypeScript client needs regenerating for the artifact
+  routes), then 09.
 - Offboarding export reads a partitioned parent and its partitions, so audit
   and event rows come out twice (pre-existing; platform).
 - Open from the 02/03 pass: routing reasons (complaint, sample request,
@@ -79,9 +89,16 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | review | `077d54b`     | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping              |
 | 04     | `5ed607b`     | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding              |
 | 11     | `87ab107`     | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
-| 05     | (uncommitted) | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
+| 05     | `3557de8`     | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
+| 06     | (uncommitted) | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
 
 ## Open
+
+- From ticket 06 (2026-10-05): a `value_uncertain` correction is one value
+  for a whole region, so the upload file carries the values as read (domain
+  follow-up); an object written before its record commits can be orphaned
+  (purged by offboarding); rendering is not stopped by the pause (Đạt to
+  decide); the web client types need `pnpm run generate:api-types`.
 
 - From ticket 05 (2026-10-05):
     - The overview loads every case of the workspace; SQL aggregates before

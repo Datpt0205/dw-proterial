@@ -247,6 +247,102 @@
         "title": "ApprovalView",
         "type": "object"
       },
+      "ArtifactListView": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactView"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "available": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available",
+            "type": "array"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_version",
+          "available",
+          "artifacts"
+        ],
+        "title": "ArtifactListView",
+        "type": "object"
+      },
+      "ArtifactView": {
+        "description": "One stored file: what the approval view shows beside it (template,\ncase version, hash), and whether this caller may download it now.",
+        "properties": {
+          "artifact_id": {
+            "format": "uuid",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "format": "uuid",
+            "title": "Created By",
+            "type": "string"
+          },
+          "downloadable": {
+            "title": "Downloadable",
+            "type": "boolean"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "template_ref": {
+            "title": "Template Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "kind",
+          "case_version",
+          "template_ref",
+          "sha256",
+          "content_type",
+          "size_bytes",
+          "file_name",
+          "created_by",
+          "created_at",
+          "downloadable"
+        ],
+        "title": "ArtifactView",
+        "type": "object"
+      },
       "AssignOrgAdminRequest": {
         "properties": {
           "email": {
@@ -5637,6 +5733,45 @@
         "title": "RenameWorkspaceBody",
         "type": "object"
       },
+      "RenderBody": {
+        "additionalProperties": false,
+        "description": "An artifact kind to render from the case at the version the caller saw;\nwhich kinds are open now is `GET .../artifacts`'s ``available``.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "kind": {
+            "pattern": "^[a-z][a-z0-9_]{2,47}$",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "kind"
+        ],
+        "title": "RenderBody",
+        "type": "object"
+      },
+      "RenderedView": {
+        "description": "The files one render stored: ids, template, version and hash only.",
+        "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactView"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "artifacts"
+        ],
+        "title": "RenderedView",
+        "type": "object"
+      },
       "ResumeBody": {
         "additionalProperties": false,
         "properties": {
@@ -9776,6 +9911,118 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/artifacts": {
+      "get": {
+        "operationId": "order_artifacts_api_v1_sales_orders__case_id__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactListView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Artifacts",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "render_order_artifact_api_v1_sales_orders__case_id__artifacts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Render Order Artifact",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/artifacts/{artifact_id}": {
       "get": {
         "operationId": "order_artifact_api_v1_sales_orders__case_id__artifacts__artifact_id__get",
@@ -10833,6 +11080,118 @@
           }
         },
         "summary": "Approval",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/artifacts": {
+      "get": {
+        "operationId": "quote_artifacts_api_v1_sales_quotes__case_id__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactListView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Artifacts",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "render_quote_artifact_api_v1_sales_quotes__case_id__artifacts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Render Quote Artifact",
         "tags": [
           "sales"
         ]

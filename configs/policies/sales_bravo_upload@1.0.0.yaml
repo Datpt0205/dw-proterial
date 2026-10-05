@@ -1,0 +1,49 @@
+schema_version: "1.0"
+policy_id: sales_bravo_upload
+policy_version: "1.0.0"
+
+# MOCK. The layout of the Bravo upload file DW1 prepares once an order is
+# prepared (dw_sales ticket 06, WIV-03-012 step 3). The customer's Bravo import
+# template has not been provided yet (requirements doc, inputs owed); these
+# columns and headers are invented for the demo, and every file made from them
+# says so on its second sheet. The real template arrives as a tenant version of
+# this policy, never as an edit here.
+#
+# Code decides every value (`dw_sales.application.order_artifacts.upload_values`):
+# the line as read from the PO, the PRV code Sales mapped it to, DW1's
+# suggested date. This file decides only which of those values the template
+# has, in what order and under what header. Read by
+# `dw_sales.application.artifact_content.BravoUploadLayout`.
+mock: true
+sheet_name: "SO_IMPORT"
+columns:
+  - field: customer_code
+    header: "MaKH"
+  - field: po_no
+    header: "SoPO"
+  - field: revision
+    header: "LanSua"
+  - field: po_date
+    header: "NgayPO"
+  - field: line_no
+    header: "Dong"
+  - field: prv_code
+    header: "MaHang"
+  - field: customer_item_code
+    header: "MaHangKH"
+  - field: description
+    header: "DienGiai"
+  - field: quantity
+    header: "SoLuong"
+  - field: uom
+    header: "DVT"
+  - field: unit_price
+    header: "DonGia"
+  - field: currency
+    header: "MaNT"
+  - field: amount
+    header: "ThanhTien"
+  - field: requested_date
+    header: "NgayYeuCau"
+  - field: suggested_delivery_date
+    header: "NgayGiaoDeXuat"
