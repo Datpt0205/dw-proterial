@@ -12,8 +12,10 @@ from dataclasses import dataclass
 
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.application.access import Gate, SalesAuthorizationPort
+from dw_sales.application.artifact_content import ArtifactWriterPort
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.inbox_service import InboxService
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.order_intake import OrderIntake
@@ -65,6 +67,8 @@ def assemble(
     holders: ScopeHoldersPort,
     notifications: NotificationSenderPort,
     artifact_bytes: ArtifactBytesPort,
+    artifact_writer: ArtifactWriterPort,
+    artifact_copy: ArtifactCopy,
     release_manifest_ref: str | None,
 ) -> SalesServices:
     gate = Gate(authorization)
@@ -87,7 +91,18 @@ def assemble(
         quotes=QuoteQueries(uow, gate, clock, quotation),
         quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog),
         sources=SourceService(uow, gate, clock, inbox, files),
-        artifacts=ArtifactService(uow, gate, artifact_bytes),
+        artifacts=ArtifactService(
+            uow,
+            gate,
+            artifact_bytes,
+            clock,
+            ids,
+            artifact_writer,
+            artifact_copy,
+            catalog,
+            directory,
+            quotation,
+        ),
         master_data=MasterDataService(gate, catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         gate=gate,

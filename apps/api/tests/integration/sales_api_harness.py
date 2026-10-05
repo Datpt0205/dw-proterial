@@ -64,10 +64,14 @@ def user_id(subject: str) -> uuid.UUID:
 
 
 class MemoryArtifacts:
-    """`ArtifactBytesPort` over a dict: ticket 06 writes the real store."""
+    """`ArtifactBytesPort` over a dict, by the key the server derived."""
 
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
+
+    async def put_object(self, key: str, data: bytes, content_type: str) -> str:
+        self.objects[key] = data
+        return key
 
     async def get_object(self, key: str) -> bytes:
         return self.objects[key]

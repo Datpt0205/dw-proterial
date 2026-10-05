@@ -1,0 +1,365 @@
+schema_version: "1.0"
+copy_id: sales_emails
+version: "1.0.0"
+mock: true
+description: >-
+  The words of every draft DW1 prepares for Sales (dw_sales ticket 06), keyed
+  by artifact kind and language. MOCK: fictional wording for the demo seller on
+  seller.example. The customer's own wording arrives only as a tenant version
+  of this copy (spec decision 14), never in this file. Read by
+  dw_sales.application.artifact_content.SalesEmailCopy.
+
+# Code fills every ${value}: numbers, dates, codes and names come from the
+# case and master data, never from these words. A template naming a value the
+# draft does not have refuses to render; a (kind, language) with no template
+# refuses too, and never falls back to another language. A draft to the
+# customer is in the customer's language (vi, en, ja); a note to Design is in
+# Vietnamese.
+
+# Who a customer draft is from, until the customer answers (requirements doc
+# §3.1): `drafting_pic`, the PIC who drafts it and sends it from their own
+# mailbox, or `shared_sales`. Reply-To is always the shared Sales address.
+sender:
+  from: drafting_pic
+  shared_sales:
+    address: sales@seller.example
+    display_name: "Phòng Kinh doanh (demo)"
+
+emails:
+  # ---------------------------------------------------------------- orders --
+  confirmation_draft:
+    vi:
+      subject: "Xác nhận đơn hàng ${po_no} (lần sửa ${revision})"
+      line: "- Dòng ${line_no}: ${customer_item_code} (${prv_code}) ${description}: ${quantity} ${uom} × ${unit_price} ${currency}, ngày giao xác nhận ${confirmed_date}"
+      body: |-
+        Kính gửi ${customer_name},
+
+        Chúng tôi xác nhận đơn hàng ${po_no} (lần sửa ${revision}, ngày ${po_date}), số đơn bán ${bravo_so_no}:
+
+        ${lines}
+
+        Người phụ trách: ${pic}
+        Người kiểm tra: ${checker}
+
+        Trân trọng.
+      words:
+        no_cross_check: "(không yêu cầu kiểm chéo)"
+    en:
+      subject: "Order confirmation ${po_no} (revision ${revision})"
+      line: "- Line ${line_no}: ${customer_item_code} (${prv_code}) ${description}: ${quantity} ${uom} × ${unit_price} ${currency}, confirmed delivery ${confirmed_date}"
+      body: |-
+        Dear ${customer_name},
+
+        We confirm your order ${po_no} (revision ${revision}, dated ${po_date}), our sales order ${bravo_so_no}:
+
+        ${lines}
+
+        Prepared by: ${pic}
+        Checked by: ${checker}
+
+        Best regards.
+      words:
+        no_cross_check: "(no second check required)"
+    ja:
+      subject: "ご注文確認 ${po_no}（改訂 ${revision}）"
+      line: "- ${line_no}行目: ${customer_item_code}（${prv_code}）${description}: ${quantity} ${uom} × ${unit_price} ${currency}、確定納期 ${confirmed_date}"
+      body: |-
+        ${customer_name} 御中
+
+        ご注文 ${po_no}（改訂 ${revision}、${po_date} 付）を、弊社受注番号 ${bravo_so_no} にて確認いたしました。
+
+        ${lines}
+
+        担当: ${pic}
+        確認: ${checker}
+
+        よろしくお願いいたします。
+      words:
+        no_cross_check: "（ダブルチェック対象外）"
+
+  correction_request:
+    vi:
+      subject: "Đề nghị điều chỉnh đơn hàng ${po_no} (lần sửa ${revision})"
+      line: "- ${line}: ${finding}. Trên PO: ${po_value}; giá trị đúng: ${expected}; căn cứ: ${basis} (${anchor})"
+      body: |-
+        Kính gửi ${customer_name},
+
+        Khi kiểm tra đơn hàng ${po_no} (lần sửa ${revision}, ngày ${po_date}), chúng tôi thấy các điểm sau cần quý khách điều chỉnh:
+
+        ${lines}
+
+        Rất mong quý khách gửi lại PO đã điều chỉnh.
+
+        Trân trọng.
+      words:
+        line: "Dòng ${line_no}"
+        whole_po: "Toàn bộ PO"
+        finding.code_unmapped: "Mã hàng chưa có trong danh mục quy đổi"
+        finding.code_ambiguous: "Mã hàng ứng với nhiều sản phẩm"
+        finding.price_mismatch: "Đơn giá khác báo giá"
+        finding.currency_mismatch: "Tiền tệ khác báo giá"
+        finding.uom_mismatch: "Đơn vị tính khác"
+        finding.quotation_missing: "Chưa có báo giá còn hiệu lực"
+        finding.lme_band_mismatch: "Giá không theo mức LME của tháng"
+        finding.moq_violation: "Số lượng dưới mức đặt hàng tối thiểu"
+        finding.pack_multiple: "Số lượng không chẵn quy cách đóng gói"
+        finding.line_total_mismatch: "Tổng các dòng không khớp hoặc thiếu dòng"
+        finding.value_uncertain: "Giá trị trên PO không đọc rõ"
+        basis.quotation: "báo giá ${quote_no}"
+        basis.no_quotation: "không có báo giá còn hiệu lực"
+        basis.item: "danh mục hàng (${prv_code})"
+        basis.convert_list: "danh mục quy đổi mã hàng"
+        basis.document: "nội dung PO"
+    en:
+      subject: "Request to correct order ${po_no} (revision ${revision})"
+      line: "- ${line}: ${finding}. On the PO: ${po_value}; expected: ${expected}; checked against: ${basis} (${anchor})"
+      body: |-
+        Dear ${customer_name},
+
+        While checking your order ${po_no} (revision ${revision}, dated ${po_date}) we found the following points that need your correction:
+
+        ${lines}
+
+        We would appreciate a corrected PO.
+
+        Best regards.
+      words:
+        line: "Line ${line_no}"
+        whole_po: "Whole PO"
+        finding.code_unmapped: "Item code not in our code list"
+        finding.code_ambiguous: "Item code matches more than one product"
+        finding.price_mismatch: "Unit price differs from our quotation"
+        finding.currency_mismatch: "Currency differs from our quotation"
+        finding.uom_mismatch: "Unit of measure differs"
+        finding.quotation_missing: "No valid quotation"
+        finding.lme_band_mismatch: "Price does not follow the month's LME band"
+        finding.moq_violation: "Quantity below the minimum order quantity"
+        finding.pack_multiple: "Quantity is not a whole number of packs"
+        finding.line_total_mismatch: "Line total does not match or a line is missing"
+        finding.value_uncertain: "A value on the PO cannot be read clearly"
+        basis.quotation: "quotation ${quote_no}"
+        basis.no_quotation: "no valid quotation"
+        basis.item: "item master (${prv_code})"
+        basis.convert_list: "customer code list"
+        basis.document: "the PO itself"
+    ja:
+      subject: "ご注文 ${po_no}（改訂 ${revision}）修正のお願い"
+      line: "- ${line}: ${finding}。注文書: ${po_value}／正しい値: ${expected}／根拠: ${basis}（${anchor}）"
+      body: |-
+        ${customer_name} 御中
+
+        ご注文 ${po_no}（改訂 ${revision}、${po_date} 付）を確認したところ、以下の点について修正をお願いいたします。
+
+        ${lines}
+
+        修正後の注文書をお送りいただけますと幸いです。
+
+        よろしくお願いいたします。
+      words:
+        line: "${line_no}行目"
+        whole_po: "注文書全体"
+        finding.code_unmapped: "品番が品番対照表にありません"
+        finding.code_ambiguous: "品番が複数の製品に該当します"
+        finding.price_mismatch: "単価がお見積りと異なります"
+        finding.currency_mismatch: "通貨がお見積りと異なります"
+        finding.uom_mismatch: "単位が異なります"
+        finding.quotation_missing: "有効なお見積りがありません"
+        finding.lme_band_mismatch: "単価が当月のLME区分に沿っていません"
+        finding.moq_violation: "数量が最小発注数量未満です"
+        finding.pack_multiple: "数量が梱包単位の倍数ではありません"
+        finding.line_total_mismatch: "合計が一致しないか、行が欠けています"
+        finding.value_uncertain: "注文書の値が判読できません"
+        basis.quotation: "見積書 ${quote_no}"
+        basis.no_quotation: "有効な見積書なし"
+        basis.item: "品目マスタ（${prv_code}）"
+        basis.convert_list: "品番対照表"
+        basis.document: "注文書の記載"
+
+  cannot_supply_draft:
+    vi:
+      subject: "Về đơn hàng ${po_no}: chúng tôi không thể cung cấp"
+      line: "- Dòng ${line_no}: ${customer_item_code} ${description}: ${quantity} ${uom}"
+      body: |-
+        Kính gửi ${customer_name},
+
+        Rất tiếc chúng tôi không thể cung cấp đơn hàng ${po_no} (lần sửa ${revision}, ngày ${po_date}):
+
+        ${lines}
+
+        Mong quý khách thông cảm.
+
+        Trân trọng.
+    en:
+      subject: "Your order ${po_no}: we are unable to supply"
+      line: "- Line ${line_no}: ${customer_item_code} ${description}: ${quantity} ${uom}"
+      body: |-
+        Dear ${customer_name},
+
+        We regret that we are unable to supply your order ${po_no} (revision ${revision}, dated ${po_date}):
+
+        ${lines}
+
+        Thank you for your understanding.
+
+        Best regards.
+    ja:
+      subject: "ご注文 ${po_no} につきまして（供給不可のご連絡）"
+      line: "- ${line_no}行目: ${customer_item_code} ${description}: ${quantity} ${uom}"
+      body: |-
+        ${customer_name} 御中
+
+        誠に恐れ入りますが、ご注文 ${po_no}（改訂 ${revision}、${po_date} 付）は弊社にて供給いたしかねます。
+
+        ${lines}
+
+        何卒ご了承くださいますようお願い申し上げます。
+
+  design_code_request:
+    vi:
+      subject: "Cần Design tạo mã: ${customer_code} PO ${po_no}"
+      line: "- Dòng ${line_no}: mã khách ${customer_item_code}, ${description}, ${quantity} ${uom}, ngày yêu cầu ${requested_date}"
+      body: |-
+        Gửi Design,
+
+        PO ${po_no} (lần sửa ${revision}) của ${customer_name} (${customer_code}) có các dòng chưa có mã PRV, không có trong danh mục quy đổi và không khớp sản phẩm nào theo thông số:
+
+        ${lines}
+
+        Nhờ Design tạo mã và báo lại cho Sales.
+
+  # ---------------------------------------------------------------- quotes --
+  design_request_draft:
+    vi:
+      subject: "YCBG ${ycbg_no}: ${customer_name} (${rfq_no})"
+      line: "- Dòng ${line_no}: mã khách ${customer_item_code}, mã PRV đã biết ${known_prv_code}, ${description}, ${quantity} ${uom}, cần trước ${needed_by}"
+      body: |-
+        Gửi Design,
+
+        Nhờ Design xem yêu cầu báo giá ${rfq_no} của ${customer_name} (${customer_code}), phiếu YCBG ${ycbg_no}, hạn báo giá ${quote_due}:
+
+        ${lines}
+
+        Khi trả lời, xin ghi số YCBG ${ycbg_no}.
+
+  spec_discussion_draft:
+    vi:
+      subject: "Về yêu cầu báo giá ${rfq_no}: thông số đề xuất"
+      line: "- Dòng ${line_no}: ${customer_item_code} ${description}: mã thiết kế ${bp_code}, thông số số ${spec_no}"
+      body: |-
+        Kính gửi ${customer_name},
+
+        Với yêu cầu báo giá ${rfq_no}, bộ phận thiết kế của chúng tôi đề xuất thông số sau:
+
+        ${lines}
+
+        Mong quý khách xem và cho ý kiến trước khi chúng tôi báo giá.
+
+        Trân trọng.
+    en:
+      subject: "Your request for quotation ${rfq_no}: proposed specification"
+      line: "- Line ${line_no}: ${customer_item_code} ${description}: design ${bp_code}, specification ${spec_no}"
+      body: |-
+        Dear ${customer_name},
+
+        For your request for quotation ${rfq_no}, our design team proposes the following specification:
+
+        ${lines}
+
+        Please review it and let us know your comments before we quote.
+
+        Best regards.
+    ja:
+      subject: "お見積り依頼 ${rfq_no}：仕様のご提案"
+      line: "- ${line_no}行目: ${customer_item_code} ${description}: 設計番号 ${bp_code}、仕様書番号 ${spec_no}"
+      body: |-
+        ${customer_name} 御中
+
+        お見積り依頼 ${rfq_no} につきまして、弊社設計部門より以下の仕様をご提案いたします。
+
+        ${lines}
+
+        お見積り前にご確認のうえ、ご意見をお聞かせください。
+
+        よろしくお願いいたします。
+
+  decline_draft:
+    vi:
+      subject: "Về yêu cầu báo giá ${rfq_no}"
+      body: |-
+        Kính gửi ${customer_name},
+
+        Cảm ơn quý khách đã gửi yêu cầu báo giá ${rfq_no}. Rất tiếc chúng tôi không thể báo giá lần này: ${reason}.
+
+        Trân trọng.
+      words:
+        reason.not_our_product: "sản phẩm này không nằm trong danh mục sản xuất của chúng tôi"
+        reason.design_cannot: "bộ phận thiết kế không đáp ứng được thông số yêu cầu"
+        reason.customer_rejected_spec: "thông số đề xuất chưa được quý khách chấp thuận"
+        reason.commercial: "điều kiện thương mại chưa phù hợp"
+    en:
+      subject: "Your request for quotation ${rfq_no}"
+      body: |-
+        Dear ${customer_name},
+
+        Thank you for your request for quotation ${rfq_no}. We regret that we cannot quote this time: ${reason}.
+
+        Best regards.
+      words:
+        reason.not_our_product: "the product is outside our range"
+        reason.design_cannot: "our design team cannot meet the required specification"
+        reason.customer_rejected_spec: "the proposed specification was not accepted"
+        reason.commercial: "the commercial terms do not fit"
+    ja:
+      subject: "お見積り依頼 ${rfq_no} につきまして"
+      body: |-
+        ${customer_name} 御中
+
+        お見積り依頼 ${rfq_no} をいただき、ありがとうございます。誠に恐れ入りますが、今回はお見積りを辞退させていただきます（${reason}）。
+
+        よろしくお願いいたします。
+      words:
+        reason.not_our_product: "弊社の取扱製品ではないため"
+        reason.design_cannot: "ご要求仕様に弊社設計が対応できないため"
+        reason.customer_rejected_spec: "ご提案した仕様にご同意いただけなかったため"
+        reason.commercial: "取引条件が合わないため"
+
+  send_draft:
+    vi:
+      subject: "Báo giá ${quote_no} cho yêu cầu ${their_reference}"
+      line: "- Dòng ${line_no}: ${customer_item_code} ${description}, thông số số ${spec_no}: ${quantity} ${uom} × ${unit_price} ${currency}"
+      body: |-
+        Kính gửi ${customer_name},
+
+        Chúng tôi gửi báo giá ${quote_no} cho yêu cầu ${their_reference}, hiệu lực đến ${valid_to}:
+
+        ${lines}
+
+        Báo giá chi tiết ở tệp đính kèm (xlsx và PDF).
+
+        Trân trọng.
+    en:
+      subject: "Quotation ${quote_no} for your request ${their_reference}"
+      line: "- Line ${line_no}: ${customer_item_code} ${description}, specification ${spec_no}: ${quantity} ${uom} × ${unit_price} ${currency}"
+      body: |-
+        Dear ${customer_name},
+
+        Please find our quotation ${quote_no} for your request ${their_reference}, valid until ${valid_to}:
+
+        ${lines}
+
+        The full quotation is attached (xlsx and PDF).
+
+        Best regards.
+    ja:
+      subject: "御見積書 ${quote_no}（ご依頼 ${their_reference}）"
+      line: "- ${line_no}行目: ${customer_item_code} ${description}、仕様書番号 ${spec_no}: ${quantity} ${uom} × ${unit_price} ${currency}"
+      body: |-
+        ${customer_name} 御中
+
+        ご依頼 ${their_reference} に対する御見積書 ${quote_no}（有効期限 ${valid_to}）をお送りいたします。
+
+        ${lines}
+
+        詳細は添付の御見積書（xlsx・PDF）をご確認ください。
+
+        よろしくお願いいたします。

@@ -210,6 +210,9 @@ class NotificationSenderPort(Protocol):
 
 class ArtifactBytesPort(Protocol):
     """The bytes of a generated artifact, by the object key its record derives
-    (tenant and workspace first, `ArtifactRecord.object_key`)."""
+    (tenant and workspace first, `ArtifactRecord.object_key`), in the bucket
+    tenant offboarding exports and purges by the tenant's prefix."""
+
+    async def put_object(self, key: str, data: bytes, content_type: str) -> str: ...
 
     async def get_object(self, key: str) -> bytes: ...

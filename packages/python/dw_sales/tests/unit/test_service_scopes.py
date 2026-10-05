@@ -68,7 +68,7 @@ order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE)
 quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE)
 quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE)
 sources = SourceService(STORE, GATE, CLOCK, STORE, STORE)
-artifacts = ArtifactService(STORE, GATE, STORE)
+artifacts = ArtifactService(STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE)
 master = MasterDataService(GATE, STORE)
 overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE)
 worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
@@ -134,6 +134,15 @@ CALLS: dict[str, tuple[str, Call]] = {
         lambda c: sources.order_source(c, CASE, "A1", page=None, sheet="PO"),
     ),
     "artifacts.order": ("sales.case.read", lambda c: artifacts.order_artifact(c, CASE, CASE)),
+    "artifacts.order_list": ("sales.case.read", lambda c: artifacts.order_artifacts(c, CASE)),
+    "artifacts.render_order": (
+        "sales.case.read",
+        lambda c: artifacts.render_order(c, CASE, kind="bravo_upload", case_version=1),
+    ),
+    "artifacts.render_quote": (
+        "sales.case.read",
+        lambda c: artifacts.render_quote(c, CASE, kind="send_draft", case_version=1),
+    ),
     "master.quotations": ("sales.case.read", master.quotations),
     "overview": ("sales.overview.read", overview.overview),
     "worker.resume": ("sales.worker.resume", lambda c: worker.resume(c, "đã kiểm tra")),
@@ -168,3 +177,27 @@ async def test_the_source_of_a_case_needs_the_price_scope_besides_reading_it() -
         await serve(_context("sales.case.read"))
 
     assert refused.value.details["action"] == "sales.price.read"
+
+
+@pytest.mark.parametrize(
+    ("render", "scope"),
+    [
+        (
+            lambda c: artifacts.render_order(c, CASE, kind="bravo_upload", case_version=1),
+            "sales.order.prepare",
+        ),
+        (
+            lambda c: artifacts.render_quote(c, CASE, kind="ycbg_draft", case_version=1),
+            "sales.quote.prepare",
+        ),
+    ],
+)
+async def test_rendering_an_artifact_needs_the_write_scope_besides_reading_the_case(
+    render: Call, scope: str
+) -> None:
+    """A reader may download what is open to them; storing a new file is a
+    write, and it takes the context's own write scope."""
+    with pytest.raises(PermissionDeniedError) as refused:
+        await render(_context("sales.case.read", "sales.price.read"))
+
+    assert refused.value.details["action"] == scope

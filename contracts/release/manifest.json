@@ -16,6 +16,16 @@
       "checksum": "dcfeed6e919c29bac34362aea015040597fcec5657dbc8fe82a86866fc9ec1db",
       "copy_id": "platform.runtime",
       "version": "1.5.0"
+    },
+    {
+      "checksum": "a4d226832c9a75737bd25da430a2ee0465eb1891626d9fdc2e26a8f4b7ad7af1",
+      "copy_id": "sales_documents",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "b95c6c69ad61aa72716e6ba750f203733839ce5476384724b4cedb2f6af1677e",
+      "copy_id": "sales_emails",
+      "version": "1.0.0"
     }
   ],
   "eval_datasets": [
@@ -25,7 +35,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "87ab1076dcdf8aaf36435028b0340a34feec5c10",
+  "git_sha": "3557de88964701162e8e5ef498afdfebf18ae170",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "1.0.0",
   "platform_version": "0.1.0",
@@ -39,6 +49,11 @@
       "checksum": "5eefabcbed58080bf1cfeb524bbe9d8ce395b4adee9bbb9de4e357534d04a03e",
       "policy_id": "retention",
       "version": "1.4.0"
+    },
+    {
+      "checksum": "c5035251d916d76a355d7d647388dd2844f933a9ae5b3d0846a48788c5dc14ef",
+      "policy_id": "sales_bravo_upload",
+      "version": "1.0.0"
     },
     {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",

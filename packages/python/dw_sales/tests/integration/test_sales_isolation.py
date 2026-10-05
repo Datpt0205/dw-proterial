@@ -7,6 +7,7 @@ migrator), so a zero is isolation and not an empty table.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -21,8 +22,9 @@ from dw_kernel.errors import NotFoundError
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
-from dw_sales.application.case_store import CaseEvent
+from dw_sales.application.case_store import ArtifactRecord, CaseEvent
 from dw_sales.application.ports import SalesScope
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
 
 pytestmark = pytest.mark.integration
@@ -90,6 +92,36 @@ async def test_an_outsider_reads_none_of_the_cases(
             {"t": small_run.scope.tenant_id.value},
         )
     assert held, "the owner's rows are there: the zeros above are isolation"
+
+
+async def test_an_outsider_lists_none_of_a_cases_artifacts(
+    small_run: OrderRun, outsider: SalesScope, uow: SqlSalesUnitOfWorkFactory
+) -> None:
+    """Ticket 06's listing reads by case id only; the policy narrows it."""
+    case = _a_case(small_run)
+    record = ArtifactRecord(
+        artifact_id=uuid.uuid4(),
+        case_kind=CaseKind.ORDER,
+        case_id=case.case_id,
+        case_version=case.case_version,
+        kind="bravo_upload",
+        template_ref="sales_bravo_upload@1.0.0",
+        sha256="b" * 64,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size_bytes=10,
+        created_by=uuid.UUID(int=0xA1),
+        created_at=datetime(2026, 10, 5, tzinfo=UTC),
+    )
+    async with uow(small_run.scope) as work:
+        await work.artifacts.add(record)
+        await work.commit()
+
+    async with uow(small_run.scope) as work:
+        assert await work.artifacts.for_case(CaseKind.ORDER, case.case_id) == [record]
+        assert await work.artifacts.for_case(CaseKind.QUOTE, case.case_id) == []
+    async with uow(outsider) as work:
+        assert await work.artifacts.for_case(CaseKind.ORDER, case.case_id) == []
+        assert await work.artifacts.get(record.artifact_id) is None
 
 
 async def test_an_outsider_cannot_change_a_case(

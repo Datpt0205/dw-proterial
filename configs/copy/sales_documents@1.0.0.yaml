@@ -1,0 +1,276 @@
+schema_version: "1.0"
+copy_id: sales_documents
+version: "1.0.0"
+mock: true
+description: >-
+  The words of every sheet and document DW1 prepares for Sales (dw_sales
+  ticket 06): titles, heading labels and column headers, keyed by artifact
+  kind and language. MOCK: fictional forms for the demo seller. The customer's
+  own forms arrive only as a tenant version of this copy (spec decision 14).
+  Read by dw_sales.application.artifact_content.SalesDocumentCopy.
+
+# Internal sheets are in Vietnamese; the quotation is in the language of the
+# customer it is addressed to. A label or a word a sheet needs and this copy
+# lacks refuses to render, and so does a (kind, language) with no entry.
+
+documents:
+  # What every internal sheet carries below its own heading.
+  common:
+    vi:
+      title: "Thông tin chung"
+      labels:
+        case_version: "Phiên bản hồ sơ"
+        template: "Mẫu"
+        generated_at: "Tạo lúc (giờ Việt Nam)"
+
+  # The second sheet of the upload file; the import sheet's own layout is
+  # configs/policies/sales_bravo_upload@<version>.yaml.
+  bravo_upload:
+    vi:
+      title: "File nhập Bravo"
+      labels:
+        sheet: "Ghi chu"
+      words:
+        mock: "MẪU GIẢ LẬP (MOCK) theo ${layout}: chưa phải mẫu nhập Bravo của khách hàng. Kiểm tra trước khi nhập."
+
+  cross_check_sheet:
+    vi:
+      title: "Phiếu kiểm chéo đơn hàng (WIV-03-012 bước 9)"
+      labels:
+        sheet: "Kiem cheo"
+        customer: "Khách hàng"
+        po_no: "Số PO"
+        revision: "Lần sửa"
+        bravo_so_no: "Số đơn bán trên Bravo"
+        bravo_recorded_by: "Người nhập Bravo"
+        bravo_recorded_at: "Thời điểm ghi số đơn"
+        prepared_by: "Người tự kiểm"
+      columns:
+        line_no: "Dòng"
+        field: "Giá trị"
+        po_value: "Trên PO"
+        anchor: "Vị trí trên PO"
+        upload_value: "Trong file nhập Bravo"
+        findings: "Điểm cần xem"
+        disposition: "Quyết định"
+        typed_by: "Sales nhập tay"
+        customer_item_code: "Mã hàng của khách"
+        prv_code: "Mã PRV"
+        description: "Mô tả"
+        quantity: "Số lượng"
+        uom: "Đơn vị tính"
+        unit_price: "Đơn giá"
+        amount: "Thành tiền"
+        requested_date: "Ngày khách yêu cầu"
+      words:
+        disposition.open: "Chưa quyết định"
+        disposition.accepted: "Chấp nhận"
+        disposition.corrected_by_sales: "Sales sửa giá trị"
+        disposition.ask_customer: "Yêu cầu khách sửa"
+
+  portal_checklist:
+    vi:
+      title: "Danh sách xác nhận trên portal của khách"
+      labels:
+        sheet: "Portal"
+        customer: "Khách hàng"
+        po_no: "Số PO"
+        revision: "Lần sửa"
+        bravo_so_no: "Số đơn bán trên Bravo"
+        pic: "Người phụ trách"
+        checker: "Người kiểm tra"
+      columns:
+        line_no: "Dòng"
+        customer_item_code: "Mã hàng của khách"
+        prv_code: "Mã PRV"
+        quantity: "Số lượng"
+        uom: "Đơn vị tính"
+        unit_price: "Đơn giá"
+        currency: "Tiền tệ"
+        confirmed_date: "Ngày giao xác nhận"
+        entered: "Đã nhập trên portal (đánh dấu)"
+
+  change_summary:
+    vi:
+      title: "Thay đổi cần cập nhật trên Bravo (PO sửa đổi)"
+      labels:
+        sheet: "Thay doi"
+        customer: "Khách hàng"
+        po_no: "Số PO"
+        revision: "Lần sửa mới"
+        bravo_so_no: "Số đơn bán trên Bravo"
+      columns:
+        line_no: "Dòng"
+        field: "Giá trị"
+        before: "Trước"
+        after: "Sau"
+        customer_item_code: "Mã hàng của khách"
+        description: "Mô tả"
+        quantity: "Số lượng"
+        uom: "Đơn vị tính"
+        unit_price: "Đơn giá"
+        amount: "Thành tiền"
+        requested_date: "Ngày khách yêu cầu"
+
+  convert_list_proposal:
+    vi:
+      title: "Đề xuất bổ sung danh mục quy đổi mã hàng"
+      labels:
+        sheet: "Convert list"
+        po_no: "Từ PO"
+      columns:
+        customer_code: "Mã khách hàng"
+        customer: "Khách hàng"
+        customer_item_code: "Mã hàng của khách"
+        prv_code: "Mã PRV"
+        confirmed_by: "Sales xác nhận"
+        date: "Ngày xác nhận"
+      words:
+        mock: "MẪU GIẢ LẬP (MOCK): cột của danh mục quy đổi thật chưa có. Tệp này chỉ là đề xuất, DW1 không ghi vào danh mục."
+
+  ycbg_draft:
+    vi:
+      title: "Phiếu yêu cầu báo giá (YCBG)"
+      labels:
+        sheet: "YCBG"
+        customer: "Khách hàng"
+        rfq_no: "Số yêu cầu của khách"
+        quote_due: "Hạn báo giá"
+        ycbg_no: "Số YCBG trên Bravo"
+      columns:
+        line_no: "Dòng"
+        customer_item_code: "Mã hàng của khách"
+        known_prv_code: "Mã PRV đã biết"
+        description: "Mô tả"
+        quantity: "Số lượng"
+        uom: "Đơn vị tính"
+        needed_by: "Cần trước ngày"
+      words:
+        mock: "MẪU GIẢ LẬP (MOCK): chưa phải mẫu YCBG của khách hàng."
+
+  master_list_update:
+    vi:
+      title: "Cập nhật danh sách báo giá (master list)"
+      labels:
+        sheet: "Master list"
+      columns:
+        quote_no: "Số báo giá"
+        customer_code: "Mã khách hàng"
+        prv_code: "Mã PRV"
+        unit_price: "Đơn giá"
+        currency: "Tiền tệ"
+        uom: "Đơn vị tính"
+        moq: "MOQ"
+        lead_time_days: "Thời gian giao (ngày)"
+        copper_basis: "Căn cứ giá đồng"
+        valid_from: "Hiệu lực từ"
+        valid_to: "Hiệu lực đến"
+      words:
+        mock: "MẪU GIẢ LẬP (MOCK): cột của master list thật chưa có."
+        copper.fixed: "Cố định"
+        copper.lme_band: "Theo LME ${low}–${high} USD/t"
+
+  # ------------------------------------------------- the customer's document --
+  quotation:
+    vi:
+      title: "BÁO GIÁ"
+      labels:
+        sheet: "Bao gia"
+        status: "Tình trạng"
+        quote_no: "Số báo giá"
+        customer: "Kính gửi"
+        their_reference: "Theo yêu cầu số"
+        issued_on: "Ngày báo giá"
+        valid_to: "Hiệu lực đến"
+        currency: "Tiền tệ"
+        lme: "Giá đồng LME áp dụng"
+        document_sha256: "Mã băm dữ liệu báo giá"
+        approved_by: "Người duyệt"
+        approved_at: "Thời điểm duyệt"
+      columns:
+        line_no: "STT"
+        customer_item_code: "Mã hàng của quý khách"
+        description: "Mô tả"
+        prv_code: "Mã sản phẩm"
+        bp_code: "Mã thiết kế"
+        spec_no: "Số thông số"
+        quantity: "Số lượng"
+        uom: "Đơn vị tính"
+        unit_price: "Đơn giá"
+        moq: "Số lượng tối thiểu"
+        lead_time_days: "Thời gian giao (ngày)"
+        copper_basis: "Căn cứ giá đồng"
+      words:
+        preview: "BẢN XEM TRƯỚC: CHƯA DUYỆT, KHÔNG GỬI KHÁCH"
+        final: "Đã duyệt"
+        mock: "Mẫu báo giá giả lập (MOCK) của bản demo."
+        copper.fixed: "Cố định"
+        copper.lme_band: "Theo LME ${low}–${high} USD/t"
+    en:
+      title: "QUOTATION"
+      labels:
+        sheet: "Quotation"
+        status: "Status"
+        quote_no: "Quotation no."
+        customer: "To"
+        their_reference: "Your reference"
+        issued_on: "Date"
+        valid_to: "Valid until"
+        currency: "Currency"
+        lme: "LME copper applied"
+        document_sha256: "Quotation data hash"
+        approved_by: "Approved by"
+        approved_at: "Approved at"
+      columns:
+        line_no: "No."
+        customer_item_code: "Your item code"
+        description: "Description"
+        prv_code: "Product code"
+        bp_code: "Design code"
+        spec_no: "Specification no."
+        quantity: "Quantity"
+        uom: "Unit"
+        unit_price: "Unit price"
+        moq: "Minimum order quantity"
+        lead_time_days: "Lead time (days)"
+        copper_basis: "Copper basis"
+      words:
+        preview: "PREVIEW: NOT APPROVED, DO NOT SEND"
+        final: "Approved"
+        mock: "Fictional (MOCK) quotation form of the demo."
+        copper.fixed: "Fixed"
+        copper.lme_band: "LME band ${low}–${high} USD/t"
+    ja:
+      title: "御見積書"
+      labels:
+        sheet: "見積書"
+        status: "状態"
+        quote_no: "見積番号"
+        customer: "宛先"
+        their_reference: "貴社ご依頼番号"
+        issued_on: "見積日"
+        valid_to: "有効期限"
+        currency: "通貨"
+        lme: "適用LME銅価格"
+        document_sha256: "見積データのハッシュ"
+        approved_by: "承認者"
+        approved_at: "承認日時"
+      columns:
+        line_no: "No."
+        customer_item_code: "貴社品番"
+        description: "品名"
+        prv_code: "弊社品番"
+        bp_code: "設計番号"
+        spec_no: "仕様書番号"
+        quantity: "数量"
+        uom: "単位"
+        unit_price: "単価"
+        moq: "最小発注数量"
+        lead_time_days: "納期（日）"
+        copper_basis: "銅価条件"
+      words:
+        preview: "プレビュー：未承認・送付不可"
+        final: "承認済み"
+        mock: "デモ用の架空（MOCK）見積書様式です。"
+        copper.fixed: "固定"
+        copper.lme_band: "LME ${low}–${high} USD/t 区分"
