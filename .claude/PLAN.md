@@ -27,11 +27,11 @@ own file and a row here.
   Context `dw_sales` is scaffolded; DW1 (Đơn hàng & Báo giá) is being built
   end to end on mock data: `sales.md`, spec and tickets under
   `sales/dw1-portal-demo/`.
-- A conformance review found the plan misses process steps (cross-check,
-  revised PO, quotation steps) and roles; `sales.md` lists the amendments.
+- A conformance review found the plan missed process steps (cross-check,
+  revised PO, quotation steps) and roles; the spec and tickets are amended.
 - Platform pieces still waiting for a first caller: `platform-runtime.md`.
-- **Next:** finish tickets 01–03 and 07, amend the spec and tickets per the
-  review, then 04/05/06/08.
+- **Next:** the 01 fixture follow-up and the 02/03 amendment pass, then
+  04 → 11 → 05 → 06 → 08.
 
 ## Decisions Đạt owes
 
