@@ -94,7 +94,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | 11     | `87ab107` | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
 | 05     | `3557de8` | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
 | 06     | `2f737ca` | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
-| 08     | this one  | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown       |
+| 08     | `88fb7b6` | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown       |
 
 ## Open
 
