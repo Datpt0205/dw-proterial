@@ -50,9 +50,64 @@ async def test_the_application_can_read_the_tables_it_serves(app_engine: AsyncEn
             "platform.memberships",
             "knowledge.documents",
             "memory.items",
+            *_SALES_TABLES,
         ):
             # The count is irrelevant; being allowed to ask is the assertion.
             await conn.execute(sa.text(f"SELECT count(*) FROM {table}"))
+
+
+# Migration 621864952a54. A context's schema is granted like the platform's.
+_SALES_TABLES = (
+    "sales.order_cases",
+    "sales.order_revisions",
+    "sales.order_lines",
+    "sales.order_findings",
+    "sales.quote_cases",
+    "sales.messages",
+    "sales.artifacts",
+    "sales.source_served",
+    "sales.worker_state",
+    "sales.case_events",
+)
+
+
+async def test_the_application_writes_the_sales_tables_it_serves(db_urls: DatabaseUrls) -> None:
+    """Asked of the catalog: the case tables take every verb, the records that
+    are facts about the past take no UPDATE, and the case event log, every
+    partition included, takes no UPDATE or DELETE, like the audit log."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            held = {
+                (row.tbl, row.verb)
+                for row in await conn.execute(
+                    sa.text(
+                        """
+                        SELECT c.relname AS tbl, v.verb
+                        FROM pg_class c
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE'])
+                            AS v(verb)
+                        WHERE n.nspname = 'sales' AND c.relkind IN ('r', 'p')
+                          AND has_table_privilege('dw_app', c.oid, v.verb)
+                        """
+                    )
+                )
+            }
+    finally:
+        await migrator.dispose()
+
+    every = {"SELECT", "INSERT", "UPDATE", "DELETE"}
+    for table in ("order_cases", "order_revisions", "order_lines", "order_findings"):
+        assert {verb for tbl, verb in held if tbl == table} == every, table
+    for table in ("quote_cases", "messages", "worker_state"):
+        assert {verb for tbl, verb in held if tbl == table} == every, table
+    for table in ("artifacts", "source_served"):
+        assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
+    event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}
+    assert {"case_events", "case_events_default"} <= event_tables
+    for table in event_tables:
+        assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
 
 
 async def test_the_application_cannot_rewrite_the_audit_log(app_engine: AsyncEngine) -> None:

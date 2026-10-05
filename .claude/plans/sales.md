@@ -43,10 +43,15 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   with the PO when recording the order number; NOC/ESF blocks confirmation,
   not preparation. The cross-checker must also differ from the Bravo
   recorder. The quotation approval matrix waits for Proterial (ticket 12).
-- Next: 04 → 11 → 05 → 06 → 08 against the amended spec. Still owed before
-  calling the core done: reviewing-feature-security and /code-review on
-  02/03; server-side price hiding and the maker/checker DB CHECKs land in
-  04/05.
+- Next: 11 → 05 → 06 → 08. Owed into 05: domain carries earlier makers
+  (the DB already refuses), QuoteCase gets rules/parser version and catalog
+  as_of, one actor id type for orders and quotes, worker events written to
+  platform.audit_events by handlers, the Design mailbox as a policy key.
+- Quote findings fail open when copper weight, LME or USD is unknown; the
+  orchestrator's default (fail closed: blocks approval without a reason, as
+  on the order side) lands with 05 unless Đạt objects.
+- Offboarding export reads a partitioned parent and its partitions, so audit
+  and event rows come out twice (pre-existing; platform).
 - Open from the 02/03 pass: routing reasons (complaint, sample request,
   delivery change) are keyword tables, against operator guideline §6,
   accepted by the spec for the demo; ticket 03 added the ledger to the mock
@@ -67,6 +72,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | 07     | `78af2bd` | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money           |
 | 01     | `b5f990b` | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12         |
 | 02, 03 | `ad467dd` | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32 |
+| review | `077d54b` | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping       |
+| 04     | next      | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding       |
 
 ## Open
 
