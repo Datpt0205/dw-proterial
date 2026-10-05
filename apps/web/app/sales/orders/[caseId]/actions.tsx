@@ -14,9 +14,9 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   Typography,
 } from "antd";
+import { StatusTag } from "@dw/ui";
 import { CalendarOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import {
@@ -532,9 +532,12 @@ function ConfirmDrawer({
               key: "sug",
               render: (_, l) =>
                 l.suggested_delivery_date ? (
-                  <Tag icon={<CalendarOutlined aria-hidden />}>
+                  <StatusTag
+                    tone="gray"
+                    icon={<CalendarOutlined aria-hidden />}
+                  >
                     Gợi ý {formatDate(l.suggested_delivery_date)}
-                  </Tag>
+                  </StatusTag>
                 ) : (
                   "Chưa có gợi ý"
                 ),

@@ -14,3 +14,16 @@
  * string.
  */
 export const THEME_ROOT_CLASS = "dw-theme";
+
+/**
+ * The CSS variables the root layout's `next/font` loaders put on `<html>`,
+ * which the theme's `fontFamily` and `fontFamilyCode` read. `next/font` takes
+ * only literals, so `apps/web/app/layout.tsx` writes these names out again;
+ * `theme.test.ts` fails the day the two differ.
+ */
+export const FONT_VARIABLE = {
+  /** Be Vietnam Pro, Vietnamese subset: every UI text. */
+  sans: "--font-dw-sans",
+  /** JetBrains Mono: codes and identifiers. */
+  mono: "--font-dw-mono",
+} as const;

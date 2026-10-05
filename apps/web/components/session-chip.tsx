@@ -1,114 +1,128 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, LogOut, ScrollText } from "lucide-react";
-import { Badge, cn } from "@dw/ui";
+import { LogoutOutlined, ProfileOutlined } from "@ant-design/icons";
+import { Avatar, Button, Dropdown, theme, Typography } from "antd";
 import { useAuth } from "../lib/auth/auth-context";
-import { roleLabel } from "../lib/nav/roles";
+import { initials } from "../lib/initials";
+import { displayRole } from "../lib/nav/roles";
 
-// Seniority low → high. Only the most senior role is badged, by its FULL name
-// ("Tenant Admin", "System Admin") so two different admins never both read as a
-// bare "admin". A platform operator outranks every in-tenant role and shows as
-// "Platform Admin". A role a bounded context adds is unranked and therefore
-// only badged when the person holds nothing else.
-const ROLE_RANK = ["member", "approver", "org_admin", "platform_admin"];
-
-function badgeVariant(
-  role: string | undefined,
-  operator: boolean,
-): "warning" | "success" | "secondary" {
-  if (operator || role === "platform_admin" || role === "org_admin")
-    return "warning";
-  if (role === "approver") return "success";
-  return "secondary";
-}
-
-/** Header chip: who is signed in, where to go next, and sign-out. */
-export function SessionChip() {
-  const { status, displayName, roles, isPlatformOperator, logout, hasScope } =
-    useAuth();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
-  }, [open]);
-
+/**
+ * The account at the end of the navbar: initials, and on a wide screen the
+ * name and the role the person works as; the menu repeats them with the
+ * email, the activity log where the person may read it, and sign-out. The
+ * role comes from `displayRole`, which names a context's role from the role
+ * catalogue.
+ */
+export function SessionChip({
+  contextPrefix = null,
+}: {
+  /** The role prefix of the context the bar is, when it is one. */
+  contextPrefix?: string | null;
+}) {
+  const {
+    status,
+    displayName,
+    email,
+    roles,
+    active,
+    isPlatformOperator,
+    logout,
+    hasScope,
+  } = useAuth();
+  const { token } = theme.useToken();
   if (status !== "ready") return null;
 
-  const topRole = [...roles].sort(
-    (a, b) => ROLE_RANK.indexOf(b) - ROLE_RANK.indexOf(a),
-  )[0];
-  // A platform operator (creates tenants) outranks any in-tenant role.
-  const roleText = isPlatformOperator
-    ? "Platform Admin"
-    : topRole
-      ? roleLabel(topRole)
-      : null;
-  const roleVariant = badgeVariant(topRole, isPlatformOperator);
+  const role = displayRole({
+    roles,
+    roleNames: active?.roleNames ?? {},
+    contextPrefix,
+    isPlatformOperator,
+  });
+  const name = displayName || "Người dùng";
 
   return (
-    <div className="relative flex items-center gap-1.5" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full border bg-card py-1 pl-1 pr-2.5 text-sm shadow-sm transition-colors hover:bg-accent/50"
-      >
-        <span className="flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-          {(displayName || "?").charAt(0).toUpperCase()}
-        </span>
-        <span className="hidden max-w-[9rem] truncate font-medium sm:inline">
-          {displayName || "User"}
-        </span>
-        {roleText && (
-          <Badge variant={roleVariant} className="hidden md:inline-flex">
-            {roleText}
-          </Badge>
-        )}
-        <ChevronDown
-          className={cn(
-            "size-4 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 overflow-hidden rounded-xl border bg-popover p-1.5 shadow-xl">
-          <div className="px-2.5 py-2">
-            <p className="truncate text-sm font-semibold">{displayName}</p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {roleText && <Badge variant={roleVariant}>{roleText}</Badge>}
-            </div>
+    <Dropdown
+      trigger={["click"]}
+      placement="bottomRight"
+      popupRender={(menu) => (
+        <div
+          className="w-72 max-w-[90vw] overflow-hidden"
+          style={{
+            background: token.colorBgElevated,
+            borderRadius: token.borderRadiusLG,
+            boxShadow: token.boxShadowSecondary,
+          }}
+        >
+          <div className="flex flex-col gap-0.5 px-4 pb-2 pt-3">
+            <Typography.Text strong>{name}</Typography.Text>
+            {email ? (
+              <Typography.Text type="secondary">{email}</Typography.Text>
+            ) : null}
+            {role ? <Typography.Text>{role}</Typography.Text> : null}
           </div>
-          <div className="my-1 border-t" />
-          {hasScope("approvals.read") && (
-            <Link
-              href="/audit"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <ScrollText className="size-4" /> Audit log
-            </Link>
-          )}
-          <div className="my-1 border-t" />
-          <button
-            type="button"
-            onClick={logout}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="size-4" /> Sign out
-          </button>
+          {menu}
         </div>
       )}
-    </div>
+      menu={{
+        items: [
+          ...(hasScope("approvals.read")
+            ? [
+                {
+                  key: "audit",
+                  icon: <ProfileOutlined aria-hidden />,
+                  label: <Link href="/audit">Nhật ký hoạt động</Link>,
+                },
+              ]
+            : []),
+          {
+            key: "logout",
+            icon: <LogoutOutlined aria-hidden />,
+            label: "Đăng xuất",
+            onClick: logout,
+          },
+        ],
+      }}
+    >
+      <Button
+        type="text"
+        className="h-auto px-1 py-1"
+        aria-label={`Tài khoản: ${name}${role ? `, ${role}` : ""}`}
+      >
+        <span className="flex items-center gap-2">
+          <Avatar
+            size={32}
+            style={{
+              backgroundColor: token.colorFill,
+              color: token.colorText,
+              fontSize: token.fontSizeSM,
+              fontWeight: token.fontWeightStrong,
+            }}
+          >
+            {initials(name)}
+          </Avatar>
+          <span className="hidden min-w-0 flex-col items-start leading-tight 2xl:flex">
+            <Typography.Text
+              strong
+              ellipsis
+              className="max-w-44 leading-tight"
+              style={{ fontSize: token.fontSizeSM + 1 }}
+            >
+              {name}
+            </Typography.Text>
+            {role ? (
+              <Typography.Text
+                type="secondary"
+                ellipsis
+                className="max-w-44 leading-tight"
+                style={{ fontSize: token.fontSizeSM }}
+              >
+                {role}
+              </Typography.Text>
+            ) : null}
+          </span>
+        </span>
+      </Button>
+    </Dropdown>
   );
 }

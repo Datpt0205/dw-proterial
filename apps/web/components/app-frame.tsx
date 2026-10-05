@@ -5,13 +5,20 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Loader2, LogOut } from "lucide-react";
 import { RobotOutlined } from "@ant-design/icons";
-import { Avatar, Badge, theme, Typography, type MenuProps } from "antd";
+import {
+  Avatar,
+  Badge,
+  theme,
+  Typography,
+  type GlobalToken,
+  type MenuProps,
+} from "antd";
 import { AppShell, Button } from "@dw/ui";
 import { useAuth } from "../lib/auth/auth-context";
 import { useNavBadges } from "../lib/nav/badges";
 import { NAV } from "../lib/nav/registry";
 import { isNavGroup, type NavEntry, type NavItem } from "../lib/nav/types";
-import { currentPage, navPages, visibleNav } from "../lib/nav/visible";
+import { barNav, currentPage, navPages, visibleNav } from "../lib/nav/visible";
 import { LoginScreen } from "./login-screen";
 import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
@@ -31,11 +38,13 @@ function CenteredCard({ children }: { children: ReactNode }) {
 type MenuItems = NonNullable<MenuProps["items"]>;
 
 /** A page as a menu item: its label is the link, so it opens in a new tab,
- * can be copied, and works from the keyboard (antd focuses the link). */
+ * can be copied, and works from the keyboard (antd focuses the link). A count
+ * is the prototype's grey pill, with its meaning in the link's name. */
 function pageItem(
   page: NavItem,
   current: string | undefined,
   badges: Record<string, number>,
+  token: GlobalToken,
 ): MenuItems[number] {
   const Icon = page.icon;
   const count = page.badgeKey ? badges[page.badgeKey] : undefined;
@@ -46,9 +55,22 @@ function pageItem(
       <Link
         href={page.href}
         aria-current={page.href === current ? "page" : undefined}
+        aria-label={count ? `${page.label} (${count})` : undefined}
       >
         {page.label}
-        {count ? <Badge count={count} size="small" className="ms-2" /> : null}
+        {count ? (
+          <Badge
+            count={count}
+            overflowCount={99}
+            className="ms-1.5"
+            style={{
+              backgroundColor: token.colorFill,
+              color: token.colorTextSecondary,
+              boxShadow: "none",
+              fontWeight: token.fontWeightStrong,
+            }}
+          />
+        ) : null}
       </Link>
     ),
   };
@@ -58,15 +80,18 @@ function menuItems(
   entries: readonly NavEntry[],
   current: string | undefined,
   badges: Record<string, number>,
+  token: GlobalToken,
 ): MenuItems {
   return entries.map((entry) => {
-    if (!isNavGroup(entry)) return pageItem(entry, current, badges);
+    if (!isNavGroup(entry)) return pageItem(entry, current, badges, token);
     const Icon = entry.icon;
     return {
       key: `group:${entry.key}`,
       icon: <Icon className="size-4" aria-hidden />,
       label: entry.label,
-      children: entry.items.map((page) => pageItem(page, current, badges)),
+      children: entry.items.map((page) =>
+        pageItem(page, current, badges, token),
+      ),
     };
   });
 }
@@ -81,8 +106,10 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const badges = useNavBadges();
   const { token } = theme.useToken();
 
-  // The nav the user can actually reach.
-  const nav = useMemo(() => visibleNav(NAV, auth), [auth]);
+  // The nav the user can actually reach, and the bar drawn from it: a
+  // context's own pages for someone whose work is that context alone.
+  const bar = useMemo(() => barNav(visibleNav(NAV, auth)), [auth]);
+  const nav = bar.entries;
   const pages = useMemo(() => navPages(nav), [nav]);
   // Where the logo points; the old /feedback page is gone (spec 003 US5).
   const home = pages[0]?.href ?? "/";
@@ -162,29 +189,48 @@ export function AppFrame({ children }: { children: ReactNode }) {
         brand={
           <Link
             href={home}
-            aria-label="Digital Worker"
+            aria-label={
+              bar.context
+                ? `Digital Worker · ${bar.context.context!.product}, về trang đầu`
+                : "Digital Worker, về trang đầu"
+            }
             className="flex items-center gap-2"
           >
             <Avatar
               shape="square"
-              size={32}
+              size={28}
               icon={<RobotOutlined />}
-              style={{ backgroundColor: token.colorPrimary }}
+              style={{
+                backgroundColor: token.colorPrimary,
+                borderRadius: token.borderRadius,
+              }}
             />
-            <Typography.Text strong className="hidden sm:inline">
+            <Typography.Text
+              strong
+              className="hidden whitespace-nowrap sm:inline"
+              style={{ fontSize: token.fontSizeLG }}
+            >
               Digital Worker
+              {bar.context ? (
+                <Typography.Text
+                  type="secondary"
+                  style={{ fontSize: token.fontSizeLG }}
+                >
+                  {` · ${bar.context.context!.product}`}
+                </Typography.Text>
+              ) : null}
             </Typography.Text>
           </Link>
         }
-        navItems={menuItems(nav, current, badges)}
+        workspace={<WorkspaceSwitcher />}
+        navItems={menuItems(nav, current, badges, token)}
         selectedKey={current}
         actions={
           <>
-            <div className="min-w-0">
-              <WorkspaceSwitcher />
-            </div>
             <NotificationBell />
-            <SessionChip />
+            <SessionChip
+              contextPrefix={bar.context?.context?.roleKeyPrefix ?? null}
+            />
           </>
         }
       >

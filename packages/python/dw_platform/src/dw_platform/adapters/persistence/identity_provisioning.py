@@ -30,6 +30,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence import tables
+from dw_platform.adapters.persistence.membership_lookup import effective_scopes
 from dw_platform.application.identity_bootstrap import (
     BootstrapView,
     WorkspaceMembershipView,
@@ -218,6 +219,7 @@ class SqlIdentityBootstrap:
                 sa.select(
                     tables.memberships.c.workspace_id,
                     tables.memberships.c.role_keys,
+                    tables.memberships.c.permission_set_keys,
                     tables.workspaces.c.slug.label("workspace_slug"),
                     tables.workspaces.c.name.label("workspace_name"),
                     tables.tenants.c.id.label("tenant_id"),
@@ -242,21 +244,22 @@ class SqlIdentityBootstrap:
         role_keys: set[str] = set()
         for row in rows:
             role_keys.update(row.role_keys)
-        scope_by_role: dict[str, list[str]] = {}
+        name_by_role: dict[str, str] = {}
         if role_keys:
-            role_rows = await session.execute(
-                sa.select(tables.roles.c.key, tables.roles.c.scopes).where(
+            name_rows = await session.execute(
+                sa.select(tables.roles.c.key, tables.roles.c.name).where(
                     tables.roles.c.key.in_(role_keys)
                 )
             )
-            for key, role_scopes in role_rows:
-                scope_by_role[key] = list(role_scopes)
+            name_by_role = {row.key: row.name for row in name_rows}
 
         views: list[WorkspaceMembershipView] = []
         for row in rows:
-            scopes: set[str] = set()
-            for key in row.role_keys:
-                scopes.update(scope_by_role.get(key, []))
+            # The same union the access context resolves (roles + permission
+            # sets), so the screen is never told less than the API allows.
+            scopes = await effective_scopes(
+                session, frozenset(row.role_keys), frozenset(row.permission_set_keys)
+            )
             views.append(
                 WorkspaceMembershipView(
                     tenant_id=row.tenant_id,
@@ -267,6 +270,9 @@ class SqlIdentityBootstrap:
                     workspace_name=row.workspace_name,
                     roles=tuple(sorted(row.role_keys)),
                     scopes=tuple(sorted(scopes)),
+                    role_names={
+                        key: name_by_role[key] for key in row.role_keys if key in name_by_role
+                    },
                 )
             )
         return tuple(views)

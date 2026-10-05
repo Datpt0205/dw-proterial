@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Descriptions, Space, Table, Tag, Typography } from "antd";
+import { Button, Descriptions, Space, Table, Typography } from "antd";
+import { StatusTag } from "@dw/ui";
 import {
   CalendarOutlined,
   CheckCircleOutlined,
@@ -200,17 +201,20 @@ export function LinesTable({
             render: (_, line) => (
               <Space orientation="vertical" size={2}>
                 {line.confirmed_delivery_date ? (
-                  <Tag
-                    color="success"
+                  <StatusTag
+                    tone="ok"
                     icon={<CheckCircleOutlined aria-hidden />}
                   >
                     Đã xác nhận {formatDate(line.confirmed_delivery_date)}
-                  </Tag>
+                  </StatusTag>
                 ) : null}
                 {line.suggested_delivery_date ? (
-                  <Tag icon={<CalendarOutlined aria-hidden />}>
+                  <StatusTag
+                    tone="gray"
+                    icon={<CalendarOutlined aria-hidden />}
+                  >
                     Gợi ý {formatDate(line.suggested_delivery_date)}
-                  </Tag>
+                  </StatusTag>
                 ) : (
                   <Typography.Text>Chưa có gợi ý</Typography.Text>
                 )}
@@ -331,9 +335,9 @@ function LineDetail({
       {line.flags.length ? (
         <Space wrap>
           {line.flags.map((flag) => (
-            <Tag key={`${flag.field}:${flag.flag}`} color="purple">
+            <StatusTag tone="unk" key={`${flag.field}:${flag.flag}`}>
               {label(FIELD, flag.field)}: {label(REGION_FLAG, flag.flag)}
-            </Tag>
+            </StatusTag>
           ))}
         </Space>
       ) : null}

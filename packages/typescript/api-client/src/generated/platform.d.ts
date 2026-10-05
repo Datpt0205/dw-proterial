@@ -1777,6 +1777,10 @@ export interface components {
         };
         /** WorkspaceMembershipModel */
         WorkspaceMembershipModel: {
+            /** Role Names */
+            role_names?: {
+                [key: string]: string;
+            };
             /** Roles */
             roles: string[];
             /** Scopes */

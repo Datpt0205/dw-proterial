@@ -8,6 +8,7 @@ import { RegionState } from "../../../../components/region-state";
 import { salesApi } from "../../_lib/api";
 import { useResource } from "../../_lib/use-resource";
 import { SCOPE } from "../../_components/sales-frame";
+import { salesCrumbs } from "../../_components/crumbs";
 import { ScopeGate } from "../../_components/scope-gate";
 
 /**
@@ -32,6 +33,10 @@ function Screening() {
   return (
     <div className="space-y-4">
       <PageHeader
+        breadcrumb={salesCrumbs(
+          { title: "Báo giá", href: "/sales/quotes" },
+          "Rà soát báo giá năm",
+        )}
         title="Rà soát báo giá năm"
         description="Mã đã báo cho khách nhưng 12 tháng không có đơn nào, trên dữ liệu giả lập. Sales quyết định giữ hay bỏ từng báo giá."
         extra={<Link href="/sales/quotes">Về danh sách báo giá</Link>}

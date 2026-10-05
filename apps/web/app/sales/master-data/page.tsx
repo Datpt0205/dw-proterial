@@ -2,16 +2,9 @@
 
 import { Suspense, useCallback, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  Alert,
-  Table,
-  Tabs,
-  Tag,
-  Typography,
-  type TableColumnsType,
-} from "antd";
+import { Alert, Table, Tabs, Typography, type TableColumnsType } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
-import { PageHeader } from "@dw/ui";
+import { PageHeader, StatusTag } from "@dw/ui";
 import { RegionState } from "../../../components/region-state";
 import { formatDate, formatDateTime, formatMonth } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
@@ -23,6 +16,7 @@ import {
   UsdPerTonne,
 } from "../_components/money";
 import { SCOPE } from "../_components/sales-frame";
+import { salesCrumbs } from "../_components/crumbs";
 import { ScopeGate } from "../_components/scope-gate";
 
 type S = SalesSchemas;
@@ -65,6 +59,7 @@ function MasterData() {
   return (
     <div className="space-y-4">
       <PageHeader
+        breadcrumb={salesCrumbs("Dữ liệu giả lập")}
         title="Dữ liệu giả lập"
         description="Dữ liệu chủ mà DW1 đọc qua cổng kết nối giả lập: hư cấu, chỉ đọc. Khi có Bravo và SharePoint thật, cổng được thay mà quy trình không đổi."
       />
@@ -150,7 +145,11 @@ function Customers() {
           title: "Trạng thái",
           dataIndex: "status",
           render: (s: string) =>
-            s === "temporary" ? <Tag color="warning">Mã tạm thời</Tag> : s,
+            s === "temporary" ? (
+              <StatusTag tone="warn">Mã tạm thời</StatusTag>
+            ) : (
+              s
+            ),
         },
         { title: "Ngôn ngữ", dataIndex: "language" },
         { title: "Kênh xác nhận", dataIndex: "confirmation_channel" },
@@ -158,7 +157,7 @@ function Customers() {
           title: "NOC",
           dataIndex: "noc_confirmed",
           render: (v: boolean) =>
-            v ? "Có" : <Tag color="warning">Chưa có</Tag>,
+            v ? "Có" : <StatusTag tone="warn">Chưa có</StatusTag>,
         },
         {
           title: "ESF (năm tài chính)",

@@ -27,6 +27,8 @@ export interface NavItem {
   badgeKey?: string;
   /** Shown only to a Platform Operator (ADR-002), regardless of scope/role. */
   operatorOnly?: boolean;
+  /** Administers the tenant or the platform (see `barNav`). */
+  administration?: boolean;
 }
 
 /**
@@ -39,6 +41,15 @@ export interface NavGroup {
   label: string;
   icon: NavIcon;
   items: NavItem[];
+  /** Administers the tenant or the platform (see `barNav`). */
+  administration?: boolean;
+  /**
+   * Set on a bounded context's group: the product it is, and the prefix its
+   * role keys carry (the context's migration owns the keys). Someone whose
+   * work is this context alone gets its pages as the bar (`barNav`) and their
+   * role named by the role catalogue.
+   */
+  context?: { product: string; roleKeyPrefix: string };
 }
 
 export type NavEntry = NavItem | NavGroup;

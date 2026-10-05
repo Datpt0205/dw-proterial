@@ -7191,6 +7191,13 @@
       },
       "WorkspaceMembershipModel": {
         "properties": {
+          "role_names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Role Names",
+            "type": "object"
+          },
           "roles": {
             "items": {
               "type": "string"

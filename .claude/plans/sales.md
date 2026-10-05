@@ -63,10 +63,10 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   stays a runtime dependency (G38). The confirmation draft opens at
   `confirmed`, not `cross_checked`; details in the ticket's "As built".
 - Next: 09 (evals, security, demo script). Owed by the API to the pages:
-  role names and permission-set scopes in `/auth/bootstrap` (the web keeps
-  a stopgap roster in `app/sales/_lib/viewer.ts` with a test against the
-  migration), the PO-read attributes for the candidate picker, order due
-  dates in my-work, Vietnamese refusal messages, server time.
+  the PO-read attributes for the candidate picker, order due dates in
+  my-work, Vietnamese refusal messages, server time. (Role names and
+  permission-set scopes landed in `/auth/bootstrap` on 2026-10-05; the web
+  stopgap roster is gone.)
 - Offboarding export reads a partitioned parent and its partitions, so audit
   and event rows come out twice (pre-existing; platform).
 - Open from the 02/03 pass: routing reasons (complaint, sample request,
@@ -80,9 +80,21 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   English, and lists are plain tables. The prototype uses Be Vietnam Pro
   (JetBrains Mono for codes), a bright primary, a Sales-only header with
   counts, a "Cần xử lý" panel, Segmented tabs with counts, search/sort and
-  two-line rows. Proposed next: a restyle pass (theme tokens in `@dw/ui`,
-  Sales-first header, list page pattern). Đạt owes the primary colour
-  (prototype `#0071e3` or the current navy `#0b3155`).
+  two-line rows. Primary decided `#0071e3` by Đạt 2026-10-05.
+- 2026-10-05, restyle built (uncommitted): theme from the prototype
+  (`web-ui.md` has the mapping and the nearest-passing values); Sales-only
+  bar for a PIC/head/viewer with counts (my-work, unprocessed mail) and the
+  Vietnamese role name; the four lists on the prototype's list pattern
+  (breadcrumb, summary line, "Cần xử lý", Segmented tabs with counts,
+  diacritics-insensitive search, `Intl.Collator('vi')` sort, two-line rows,
+  `StatusTag`s, red "còn X giờ" inside a day, assignee avatar; tab/q/sort in
+  the URL); order and quote detail with the 4-fact summary strip, the
+  procedure card and findings as severity-barred rows. API: bootstrap
+  returns `role_names` and the effective scopes (roles + permission sets,
+  via `effective_scopes`); OpenAPI and TS types regenerated.
+  Left different from the prototype: lists on white tables; no command
+  palette; the bar overflows "…" between 992 and ~1250px; customer names come
+  from the mock master data (a code it lacks shows the code).
 - Dev: realm redirect URIs allow port 3300 only; `.env` sets
   `DW_WEB_PORT=3300`, but `scripts/dev.sh` defaults to 3000, so a run
   without the env var cannot sign in.

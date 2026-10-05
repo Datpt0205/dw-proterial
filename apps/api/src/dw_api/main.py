@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -53,7 +54,20 @@ _CORS_HEADERS = [
     "Idempotency-Key",
 ]
 _CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
-_LOCAL_WEB_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+
+def _local_web_origins(public_web_url: str) -> list[str]:
+    """The dev web origin, read from the one setting that names the web app.
+
+    A hard-coded port here was a second copy of `DW_PUBLIC_WEB_URL`: moving the
+    web to another port left the API refusing its own front end. Both host
+    spellings are allowed because browsers treat them as different origins.
+    """
+    parts = urlsplit(public_web_url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    swap = {"localhost": "127.0.0.1", "127.0.0.1": "localhost"}
+    host = parts.hostname or ""
+    return list(dict.fromkeys([origin, origin.replace(host, swap.get(host, host), 1)]))
 
 
 def create_app(container: ApiContainer | None = None) -> FastAPI:
@@ -94,7 +108,7 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     # explicitly, local/test fall back to the dev web origin.
     cors_origins = settings.cors_origins
     if not cors_origins and not settings.is_deployed:
-        cors_origins = _LOCAL_WEB_ORIGINS
+        cors_origins = _local_web_origins(settings.public_web_url)
     if cors_origins:
         from starlette.middleware.cors import CORSMiddleware
 

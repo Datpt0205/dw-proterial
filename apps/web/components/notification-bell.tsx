@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck } from "lucide-react";
+import { BellOutlined, CheckOutlined } from "@ant-design/icons";
+import { Badge, Button, Empty, List, Popover, Typography } from "antd";
 import type { AppNotification, Inbox } from "@dw/contracts";
 import { formatDateTime } from "../lib/dates";
 import { apiClient } from "../lib/session";
@@ -16,11 +17,11 @@ function internalPath(link: string | null): string | null {
   return link && link.startsWith("/") && !link.startsWith("//") ? link : null;
 }
 
+/** The bell in the navbar: the unread count, and the latest notifications. */
 export function NotificationBell() {
   const router = useRouter();
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [open, setOpen] = useState(false);
-  const panel = useRef<HTMLDivElement>(null);
 
   const load = useCallback((signal?: AbortSignal) => {
     apiClient()
@@ -40,17 +41,6 @@ export function NotificationBell() {
       window.clearInterval(timer);
     };
   }, [load]);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent) => {
-      if (panel.current && !panel.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
 
   const follow = async (item: AppNotification) => {
     setOpen(false);
@@ -72,69 +62,80 @@ export function NotificationBell() {
   };
 
   const unread = inbox?.unread ?? 0;
+  const items = inbox?.items ?? [];
 
   return (
-    <div className="relative" ref={panel}>
-      <button
-        type="button"
-        aria-label={
-          unread ? `Notifications, ${unread} unread` : "Notifications"
-        }
-        onClick={() => setOpen((value) => !value)}
-        className="relative flex size-10 items-center justify-center rounded-xl border bg-white text-foreground shadow-sm"
-      >
-        <Bell className="size-5" />
-        {unread > 0 && (
-          <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-destructive px-1 text-center text-xs font-semibold text-destructive-foreground">
-            {unread > 99 ? "99+" : unread}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute right-0 z-40 mt-2 w-80 max-w-[90vw] rounded-xl border bg-white shadow-lg">
-          <div className="flex items-center justify-between border-b px-3 py-2">
-            <span className="text-sm font-semibold">Notifications</span>
-            {unread > 0 && (
-              <button
-                type="button"
-                onClick={() => void readAll()}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <CheckCheck className="size-3.5" /> Mark all read
-              </button>
-            )}
-          </div>
-          <ul className="max-h-96 overflow-y-auto">
-            {(inbox?.items ?? []).length === 0 ? (
-              <li className="px-3 py-6 text-center text-sm text-muted-foreground">
-                Nothing yet.
-              </li>
-            ) : (
-              inbox?.items.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => void follow(item)}
-                    className={`block w-full border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted ${
-                      item.read_at === null ? "bg-primary/5" : ""
-                    }`}
-                  >
-                    <span className="block font-medium">{item.title}</span>
-                    {item.body && (
-                      <span className="block text-xs text-muted-foreground">
-                        {item.body}
-                      </span>
-                    )}
-                    <span className="block text-xs text-muted-foreground">
-                      {formatDateTime(item.created_at)}
-                    </span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      trigger="click"
+      placement="bottomRight"
+      arrow={false}
+      title={
+        <div className="flex items-center justify-between gap-3">
+          <span>Thông báo</span>
+          {unread > 0 ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<CheckOutlined aria-hidden />}
+              onClick={() => void readAll()}
+            >
+              Đánh dấu đã đọc
+            </Button>
+          ) : null}
         </div>
-      )}
-    </div>
+      }
+      content={
+        <div className="max-h-96 w-80 max-w-[85vw] overflow-y-auto">
+          {items.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Không có thông báo mới"
+            />
+          ) : (
+            <List
+              dataSource={items}
+              rowKey="id"
+              renderItem={(item) => (
+                <List.Item className="!px-0">
+                  <Button
+                    type="text"
+                    block
+                    className="h-auto whitespace-normal py-2 text-start"
+                    onClick={() => void follow(item)}
+                  >
+                    <span className="flex w-full flex-col items-start gap-0.5">
+                      <Typography.Text strong={item.read_at === null}>
+                        {item.title}
+                      </Typography.Text>
+                      {item.body ? (
+                        <Typography.Text type="secondary">
+                          {item.body}
+                        </Typography.Text>
+                      ) : null}
+                      <Typography.Text type="secondary">
+                        {formatDateTime(item.created_at)}
+                      </Typography.Text>
+                    </span>
+                  </Button>
+                </List.Item>
+              )}
+            />
+          )}
+        </div>
+      }
+    >
+      <Button
+        type="text"
+        shape="circle"
+        aria-label={unread ? `Thông báo, ${unread} chưa đọc` : "Thông báo"}
+        icon={
+          <Badge count={unread} size="small" overflowCount={99}>
+            <BellOutlined aria-hidden />
+          </Badge>
+        }
+      />
+    </Popover>
   );
 }

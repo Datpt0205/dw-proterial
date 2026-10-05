@@ -55,7 +55,11 @@ async def migrator_engine(db_urls: DatabaseUrls) -> AsyncIterator[AsyncEngine]:
 
 
 async def _grant_membership_in_new_tenant(
-    migrator: AsyncEngine, user_id: uuid.UUID, *, slug: str
+    migrator: AsyncEngine,
+    user_id: uuid.UUID,
+    *,
+    slug: str,
+    permission_set_keys: tuple[str, ...] = (),
 ) -> uuid.UUID:
     """As the migrator (BYPASSRLS), stand up a fresh tenant/workspace and put
     the user in it — the shape an Org Admin's grant produces. Returns the new
@@ -77,6 +81,7 @@ async def _grant_membership_in_new_tenant(
                 workspace_id=workspace_id,
                 user_id=user_id,
                 role_keys=["member"],
+                permission_set_keys=list(permission_set_keys),
             )
         )
     return tenant_id
@@ -179,3 +184,53 @@ async def test_bootstrap_sees_a_membership_in_a_non_default_tenant(
     second = await bootstrap.bootstrap(identity)
     assert [m.tenant_id for m in second.memberships] == [other_tenant]
     assert second.memberships[0].workspace_name == "Sales"
+
+
+async def test_bootstrap_scopes_include_the_permission_sets_and_name_the_roles(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine
+) -> None:
+    """The session is told what the access context will allow: a permission
+    set's scopes count, not only the role's. Without them a screen disables an
+    action the API would accept (approval authority without being a manager is
+    the case permission sets exist for). Each role comes with the name the
+    role catalogue gives it, so a screen never keeps its own copy."""
+    bootstrap = _bootstrap(app_engine, auto_provision=False)
+    identity = _Identity(subject=f"sub-{uuid.uuid4()}", email="boost@example.com")
+    first = await bootstrap.bootstrap(identity)
+    await _grant_membership_in_new_tenant(
+        migrator_engine,
+        first.principal_id,
+        slug=f"gamma-{uuid.uuid4().hex[:8]}",
+        permission_set_keys=("approver_boost",),
+    )
+
+    (membership,) = (await bootstrap.bootstrap(identity)).memberships
+
+    assert membership.roles == ("member",)
+    assert "approvals.decide" in membership.scopes  # from approver_boost
+    assert "knowledge.read" in membership.scopes  # from the member role
+    async with migrator_engine.connect() as conn:
+        catalogue_name = (
+            await conn.execute(sa.select(tables.roles.c.name).where(tables.roles.c.key == "member"))
+        ).scalar_one()
+    assert membership.role_names == {"member": catalogue_name}
+
+
+async def test_bootstrap_scopes_without_a_permission_set_stay_the_roles_only(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine
+) -> None:
+    """The refusal side: a member holding no permission set is not told it may
+    decide approvals. Were the union taken over every set, or a missing set
+    read as "all of them", the screen would offer what the API refuses."""
+    bootstrap = _bootstrap(app_engine, auto_provision=False)
+    identity = _Identity(subject=f"sub-{uuid.uuid4()}", email="plain@example.com")
+    first = await bootstrap.bootstrap(identity)
+    await _grant_membership_in_new_tenant(
+        migrator_engine, first.principal_id, slug=f"delta-{uuid.uuid4().hex[:8]}"
+    )
+
+    (membership,) = (await bootstrap.bootstrap(identity)).memberships
+
+    assert membership.roles == ("member",)
+    assert "approvals.decide" not in membership.scopes
+    assert "knowledge.read" in membership.scopes

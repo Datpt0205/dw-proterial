@@ -9,12 +9,12 @@ git: every slice's commit message, and the pre-split narrative at
 
 ## Areas
 
-| Area                               | File                                | State                    |
-| ---------------------------------- | ----------------------------------- | ------------------------ |
-| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed       |
-| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps  |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Shell landed; pages next |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Spec + tickets; building |
+| Area                               | File                                | State                           |
+| ---------------------------------- | ----------------------------------- | ------------------------------- |
+| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed              |
+| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps         |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Prototype theme; Sales restyled |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Spec + tickets; building        |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -49,8 +49,7 @@ own file and a row here.
       ADR-001..003 point at documents this repo never had.
 - **Sales:**
     - the interim defaults listed in `sales.md` Open;
-    - whether pausing DW1 also stops rendering drafts and files;
-    - the primary colour for the Sales restyle (prototype blue or navy).
+    - whether pausing DW1 also stops rendering drafts and files.
 
 ## How a feature is checked here
 

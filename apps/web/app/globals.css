@@ -119,7 +119,7 @@
     /* The sticky navbar's height (the theme's Layout `headerHeight`; the
        theme test compares them), so a focused element scrolled into view is
        never under the bar (WCAG 2.4.11). */
-    scroll-padding-top: 64px;
+    scroll-padding-top: 56px;
   }
 
   /* Calm, consistent surfaces for the cards drawn before antd. */

@@ -41,3 +41,39 @@ export function hasAnyRole(
   const held = new Set(userRoles);
   return required.some((role) => held.has(role));
 }
+
+// Seniority low → high among the platform's roles. A role a bounded context
+// adds is unranked and is named by the role catalogue instead.
+const ROLE_RANK = ["member", "approver", "org_admin", "platform_admin"];
+
+/**
+ * What the account menu calls the person. In a bounded context's bar, the
+ * roles that context gave them (`roleKeyPrefix`), by the names the role
+ * catalogue gives them (`/auth/bootstrap` `role_names`, Vietnamese for Sales):
+ * the screen keeps no copy of those names. Elsewhere, the most senior platform
+ * role in the wording above, a Platform Operator first; an unranked role the
+ * person holds alone reads as its catalogue name.
+ */
+export function displayRole({
+  roles,
+  roleNames,
+  contextPrefix,
+  isPlatformOperator,
+}: {
+  roles: readonly string[];
+  roleNames: Readonly<Record<string, string>>;
+  contextPrefix: string | null;
+  isPlatformOperator: boolean;
+}): string | null {
+  const named = (key: string) => roleNames[key] ?? ROLE_LABELS[key] ?? key;
+  if (contextPrefix) {
+    const own = roles.filter((key) => key.startsWith(contextPrefix));
+    if (own.length) return own.map(named).join(", ");
+  }
+  if (isPlatformOperator) return "Platform Admin";
+  const top = [...roles].sort(
+    (a, b) => ROLE_RANK.indexOf(b) - ROLE_RANK.indexOf(a),
+  )[0];
+  if (!top) return null;
+  return ROLE_LABELS[top] ?? named(top);
+}

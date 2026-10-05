@@ -95,6 +95,45 @@ the theme, the shell and the shared composites, not primitive wrappers.
     - the API client sends no `Idempotency-Key`;
     - `playwright.config.ts` has one Desktop Chrome project: no viewport
       projects, no non-Vietnam `timezoneId`, no screenshot script;
-    - the header's workspace switcher, bell and session chip are still
-      hand-built Tailwind dropdowns; no offline banner or session-expiry
-      warning.
+    - no offline banner or session-expiry warning (the header's workspace
+      switcher, bell and account menu are antd since 2026-10-05).
+
+## Theme from the E-HSDT v3 prototype (2026-10-05, uncommitted)
+
+Đạt: "chỉnh giao diện cho giống bản design". The prototype's light palette
+and its `#catalog` token table are the source; `@dw/ui/src/theme.ts` is the
+one place they land, and `theme.test.ts` measures every pair. Mapping kept
+here once (ui-quality: "the product records that mapping once"):
+
+- **Primary:** decided `#0071e3` (Đạt, 2026-10-05). It is 4.31:1 as text on
+  the page background `#f5f5f7`, so the theme uses the nearest passing blue,
+  `#006edc` (4.52:1; white on it 4.9:1). Hover/press go darker (`#0064c8`,
+  `#0058b0`). The selection tint `--sel` (#ebf4fd) carries primary text at
+  4.4:1, so `colorPrimaryBg` is `#f0f7ff`. Links `#0060c0` (`--link`).
+- **Other nearest-passing values:** field border `#8c8c91` (prototype
+  `#8e8e93` is 2.99:1 on the page); error `#c4271e` (the prototype's `--err`;
+  the catalog's `#e0352b` is 4.46:1 on white). Everything else is the
+  prototype's value: text `#1d1d1f`/`#515154`/`#6e6e73`, page `#f5f5f7`,
+  separators `#e3e3e8`, status text-on-tint pairs (`okTx`, `warnTx`, …).
+- **Type:** Be Vietnam Pro (Vietnamese subset) and JetBrains Mono for codes,
+  self-hosted by `next/font` in `app/layout.tsx` (fetched at build, no call
+  to Google at run time); the variable names live in `FONT_VARIABLE` and a
+  test compares them with the layout's literals.
+- **Shape:** radius 8 controls / 12 cards / 16 dialogs, buttons as pills;
+  56px frosted navbar (`scroll-padding-top` follows).
+- **Status tags:** `@dw/ui` `StatusTag` with the prototype's label-table
+  tones (`STATUS_TONES`): tint + its text colour, pill, icon; `unk` dashed
+  purple only. antd's own status tags draw `colorSuccess` etc. as text on
+  their tint (fails 4.5:1), which is why the tag reads the theme's pairs.
+- **Shell:** the bar is words only (icons stay in the drawer); brand, then
+  the workspace block, the pages with count pills, bell, account (initials;
+  name and role from 1600px, always in its menu). `barNav`: someone who
+  reaches exactly one bounded context (`NavGroup.context`) and administers
+  nothing gets that context's pages as the bar; administrators keep every
+  menu. Role names come from `/auth/bootstrap` `role_names`
+  (`platform.roles.name`); the English `ROLE_LABELS` remain for platform
+  roles only.
+- **Not taken from the prototype:** list rows sit on white tables, not on the
+  page grey (a translucent table breaks sticky headers and fixed columns);
+  no dark mode, no command palette, no motion beyond antd's; selected menu
+  items are primary-coloured, not bold black.
