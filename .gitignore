@@ -68,3 +68,6 @@ blob-report/
 
 # Runtime state written by `make dev` (the worker heartbeat); never source.
 .dw/
+
+# Design handoffs from other products (local only; repo is public)
+docs/design/
