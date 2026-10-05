@@ -25,6 +25,7 @@ from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseRepository
 from dw_sales.adapters.persistence.records import (
     SqlArtifactLog,
+    SqlCaseEventLog,
     SqlMessageLog,
     SqlSourceServed,
     SqlWorkerSwitch,
@@ -40,6 +41,7 @@ class SqlSalesUnitOfWork:
     orders: SqlOrderCaseRepository
     quotes: SqlQuoteCaseRepository
     messages: SqlMessageLog
+    events: SqlCaseEventLog
     served: SqlSourceServed
     artifacts: SqlArtifactLog
     worker: SqlWorkerSwitch
@@ -75,6 +77,7 @@ class SqlSalesUnitOfWork:
         self.orders = SqlOrderCaseRepository(session, scope)
         self.quotes = SqlQuoteCaseRepository(session, scope)
         self.messages = SqlMessageLog(session, scope)
+        self.events = SqlCaseEventLog(session, scope)
         self.served = SqlSourceServed(session, scope)
         self.artifacts = SqlArtifactLog(session, scope)
         self.worker = SqlWorkerSwitch(session, scope)

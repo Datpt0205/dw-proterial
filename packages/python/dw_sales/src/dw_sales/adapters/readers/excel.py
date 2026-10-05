@@ -167,6 +167,16 @@ def _open(data: bytes, caps: IntakeCaps) -> tuple[Workbook, Workbook]:
     return values, formulas
 
 
+def open_for_viewing(data: bytes, caps: IntakeCaps) -> tuple[Workbook, Workbook]:
+    """The workbook twice (printed values, formulas) under the caps reading
+    uses, for showing a person the sheet; a refusal is a ValueError naming
+    why, never a value from the file."""
+    try:
+        return _open(data, caps)
+    except _RefusedError as refused:
+        raise ValueError(refused.reason) from None
+
+
 class _Book:
     def __init__(self, values: Workbook, formulas: Workbook, attachment: Attachment) -> None:
         self.sheets = [
@@ -304,7 +314,7 @@ class _Sheet:
             for column in self.worksheet.column_dimensions.values()
         ):
             found.append(RegionFlag.HIDDEN_COLUMN)
-        if _font_matches_fill(cell):
+        if font_matches_fill(cell):
             found.append(RegionFlag.FONT_MATCHES_FILL)
         formula = self._formulas[cell.coordinate]
         if isinstance(formula, Cell) and formula.data_type == "f" and cell.value is None:
@@ -322,7 +332,7 @@ class _Sheet:
         return None
 
 
-def _font_matches_fill(cell: Cell) -> bool:
+def font_matches_fill(cell: Cell) -> bool:
     """Text drawn in its own background colour: there, and invisible."""
     fill = cell.fill
     if fill is None or fill.fill_type != "solid":

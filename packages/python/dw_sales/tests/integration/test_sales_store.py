@@ -30,6 +30,9 @@ from dw_sales.domain.orders import Accepted, Actor, OrderStatus
 
 pytestmark = pytest.mark.integration
 
+AN_ID = uuid.UUID(int=0xA1)
+DIEU_ID = uuid.UUID(int=0xD1)
+
 # Prices the golden runs handle (M04's PO and quotation, M10's decision and
 # the other customers' quotations M10's evidence shows). None may reach an
 # event (spec decision 8, ticket 04 G27).
@@ -151,7 +154,7 @@ async def test_a_disposition_reads_back_with_who_and_when(
 ) -> None:
     case = order_run.outcomes["M02"].case
     assert case is not None
-    an = Actor(user_id="dev|an.nguyen")
+    an = Actor(user_id=AN_ID)
     (finding,) = case.findings
     reviewing = case.start_review()
     decided = reviewing.dispose(
@@ -179,7 +182,7 @@ async def test_records_the_flows_keep_besides_cases(
     case = order_run.outcomes["M01"].case
     assert case is not None
     served = ServedSource(
-        principal_id="dev|dieu.hoang",
+        principal_id=DIEU_ID,
         case_kind=CaseKind.ORDER,
         case_id=case.case_id,
         case_version=case.case_version,
@@ -198,10 +201,10 @@ async def test_records_the_flows_keep_besides_cases(
         sha256="a" * 64,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         size_bytes=4096,
-        created_by="dev|an.nguyen",
+        created_by=AN_ID,
         created_at=T0,
     )
-    paused = WorkerState(paused=True, changed_by="dev|an.nguyen", changed_at=T0)
+    paused = WorkerState(paused=True, changed_by=AN_ID, changed_at=T0)
     async with uow(order_run.scope) as work:
         assert await work.worker.state() == WorkerState(paused=False)
         await work.served.record(served)
@@ -210,13 +213,9 @@ async def test_records_the_flows_keep_besides_cases(
         await work.worker.set(paused)
         await work.commit()
     async with uow(order_run.scope) as work:
-        regions = await work.served.served(
-            "dev|dieu.hoang", CaseKind.ORDER, case.case_id, case.case_version
-        )
+        regions = await work.served.served(DIEU_ID, CaseKind.ORDER, case.case_id, case.case_version)
         assert regions == {SourceRegion(case.attachment_id, None, "PO")}
-        assert not await work.served.served(
-            "dev|an.nguyen", CaseKind.ORDER, case.case_id, case.case_version
-        )
+        assert not await work.served.served(AN_ID, CaseKind.ORDER, case.case_id, case.case_version)
         assert await work.artifacts.get(artifact.artifact_id) == artifact
         assert await work.worker.state() == paused
 
@@ -225,6 +224,6 @@ async def test_leaving_without_commit_keeps_nothing(
     order_run: OrderRun, uow: SqlSalesUnitOfWorkFactory
 ) -> None:
     async with uow(order_run.scope) as work:
-        await work.worker.set(WorkerState(paused=True, changed_by="dev|an.nguyen", changed_at=T0))
+        await work.worker.set(WorkerState(paused=True, changed_by=AN_ID, changed_at=T0))
     async with uow(order_run.scope) as work:
         assert await work.worker.state() == WorkerState(paused=False)

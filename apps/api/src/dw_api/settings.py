@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Literal
 
 from pydantic import AliasChoices, Field
@@ -102,6 +103,22 @@ class ApiSettings(BaseSettings):
     auto_provision_default_membership: bool = Field(
         default=False,
         validation_alias=AliasChoices("DW_API_AUTO_PROVISION_MEMBERSHIP"),
+    )
+
+    # --- the Sales context's demo data source (dw_sales, ticket 05) ---
+    # DW1's master data and mailbox are fictional mocks bound to ONE
+    # (tenant, workspace); every other scope reads them empty. Outside a
+    # deployed profile they default to the first-login tenant and workspace
+    # above. In a deployed profile they are wired only when both are named
+    # here; otherwise every /api/v1/sales route answers that no data source is
+    # configured.
+    sales_demo_tenant_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DW_API_SALES_DEMO_TENANT_ID", "SALES_DEMO_TENANT_ID"),
+    )
+    sales_demo_workspace_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DW_API_SALES_DEMO_WORKSPACE_ID", "SALES_DEMO_WORKSPACE_ID"),
     )
 
     # --- artifact storage (MinIO/S3) ---
@@ -242,6 +259,21 @@ class ApiSettings(BaseSettings):
         """True for profiles real people sign into (``uat``, ``production``)."""
         return self.profile in DEPLOYED_PROFILES
 
+    def sales_demo_scope(self) -> tuple[uuid.UUID, uuid.UUID] | None:
+        """The one (tenant, workspace) DW1's mocks stand in for, or None.
+
+        Named explicitly, it is that pair in any profile. Unnamed, a deployed
+        profile has none (the mocks are not wired), and local/test fall back to
+        the first-login tenant and workspace, where the demo personas live.
+        """
+        if self.sales_demo_tenant_id is not None:
+            if self.sales_demo_workspace_id is None:
+                raise RuntimeError("SALES_DEMO_TENANT_ID needs SALES_DEMO_WORKSPACE_ID beside it")
+            return uuid.UUID(self.sales_demo_tenant_id), uuid.UUID(self.sales_demo_workspace_id)
+        if self.is_deployed:
+            return None
+        return uuid.UUID(self.default_tenant_id), uuid.UUID(self.default_workspace_id)
+
     def outbound_allow_private(self) -> bool:
         """Local/test may call localhost providers; a deployed profile never does."""
         return not self.is_deployed
@@ -286,6 +318,8 @@ class ApiSettings(BaseSettings):
                 raise RuntimeError(
                     f"CORS origins must be listed explicitly in the {self.profile} profile"
                 )
+        # Fails at startup, not on the first Sales request.
+        self.sales_demo_scope()
         if self.auth_mode == "oidc" and not self.oidc_issuer_url:
             raise RuntimeError("auth_mode=oidc requires DW_API_OIDC_ISSUER_URL")
         if self.langfuse_enabled and not (

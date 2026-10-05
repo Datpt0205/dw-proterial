@@ -45,6 +45,8 @@ from dw_sales.domain.quotes import (
     UnitPrice,
 )
 
+# Stamped on every request it reads (`RfqDocument.parser_version`).
+PARSER_VERSION: Final = "excel_rfq_reader@1.0.0"
 _SUFFIX: Final = ".xlsx"
 # A request for quotation is a few kilobytes. The bound is on what the archive
 # declares it holds uncompressed, which zipfile holds an entry to as it inflates.
@@ -373,6 +375,7 @@ def _request(sheet: _Sheet) -> RfqDocument:
             ) from exc
     try:
         return RfqDocument(
+            parser_version=PARSER_VERSION,
             buyer=sheet.buyer(),
             rfq_no=sheet.read(
                 Sourced[DocumentNo], "the RFQ number", sheet.beside(_RFQ_NO, above=header), _text

@@ -10,12 +10,15 @@ replaced by ERP, SharePoint or Microsoft 365 adapters without the flow changing.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol
 
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.application.access_context import AccessContext
+from dw_platform.application.directory import WorkspaceMember
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -25,7 +28,6 @@ from dw_sales.domain.catalog import (
     OpenYcbg,
     Quotation,
 )
-from dw_sales.domain.entities import SalesRequest
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
 
 
@@ -54,12 +56,6 @@ class Snapshot[T]:
 
     data: T
     as_of: datetime
-
-
-class SalesSinkPort(Protocol):
-    """Where a handled request goes. A real context names its repository here."""
-
-    async def record(self, request: SalesRequest) -> None: ...
 
 
 class SalesCatalogPort(Protocol):
@@ -168,3 +164,52 @@ class InboxPort(Protocol):
         """The bytes of one attachment, or None when that message has no such
         attachment."""
         ...
+
+
+# ------------------------------------------------- the platform, as Sales uses it --
+#
+# Each of these is the narrowest slice of a platform service this context
+# calls. The composition root hands in the platform's own object, which
+# satisfies the Protocol as it stands: no adapter restates who is in a
+# workspace or who holds a scope.
+
+
+class MemberDirectoryPort(Protocol):
+    """Who works in the caller's workspace: how a customer's Sales PIC, known
+    by address in master data, becomes the user a case is assigned to, and a
+    principal id becomes a name in a notification."""
+
+    async def list_members(self, context: AccessContext) -> list[WorkspaceMember]: ...
+
+
+class ScopeHoldersPort(Protocol):
+    """The members of a workspace holding any of ``scopes``, read by the same
+    function that builds the access context, so who is told to act and who
+    may act cannot disagree."""
+
+    async def holding(
+        self, context: AccessContext, workspace_id: uuid.UUID, scopes: frozenset[str]
+    ) -> list[uuid.UUID]: ...
+
+
+class NotificationSenderPort(Protocol):
+    """In-app notifications to members of the caller's workspace. Idempotent
+    by ``source_key``: delivering again is a no-op."""
+
+    async def deliver(
+        self,
+        context: AccessContext,
+        *,
+        recipients: Sequence[uuid.UUID],
+        source_key: str,
+        title: str,
+        body: str,
+        link: str | None,
+    ) -> None: ...
+
+
+class ArtifactBytesPort(Protocol):
+    """The bytes of a generated artifact, by the object key its record derives
+    (tenant and workspace first, `ArtifactRecord.object_key`)."""
+
+    async def get_object(self, key: str) -> bytes: ...

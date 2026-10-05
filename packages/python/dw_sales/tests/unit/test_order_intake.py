@@ -65,7 +65,7 @@ RULES = load_order_rules(
     Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.0.0.yaml"
 )
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
-AN = Actor(user_id="dev|an.nguyen")
+AN = Actor(user_id=uuid.UUID(int=0xA1))
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 
 type Golden = tuple[str, str, int | None, str | None, str | None]

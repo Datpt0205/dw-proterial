@@ -25,6 +25,149 @@
         "title": "AddOperatorRequest",
         "type": "object"
       },
+      "Amount": {
+        "anyOf": [
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          },
+          {
+            "$ref": "#/components/schemas/Hidden"
+          }
+        ]
+      },
+      "AnswerBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "customer_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "needed_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needed By"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "required": [
+          "case_version"
+        ],
+        "title": "AnswerBody",
+        "type": "object"
+      },
+      "ApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decision": {
+            "enum": [
+              "approve",
+              "return"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "document_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Sha256"
+          },
+          "reasons": {
+            "maxProperties": 100,
+            "patternProperties": {
+              "^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$": {
+                "maxLength": 1000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              }
+            },
+            "title": "Reasons",
+            "type": "object"
+          }
+        },
+        "required": [
+          "case_version",
+          "decision"
+        ],
+        "title": "ApprovalBody",
+        "type": "object"
+      },
       "ApprovalView": {
         "properties": {
           "approval_type": {
@@ -115,6 +258,34 @@
           "email"
         ],
         "title": "AssignOrgAdminRequest",
+        "type": "object"
+      },
+      "AttachmentView": {
+        "properties": {
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "attachment_id",
+          "name",
+          "media_type",
+          "size"
+        ],
+        "title": "AttachmentView",
         "type": "object"
       },
       "AuditEventView": {
@@ -325,6 +496,124 @@
         "title": "BootstrapResponse",
         "type": "object"
       },
+      "BravoEntryBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "entry_compared": {
+            "title": "Entry Compared",
+            "type": "boolean"
+          },
+          "so_no": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z0-9][A-Z0-9/-]{1,31}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "So No"
+          }
+        },
+        "required": [
+          "case_version",
+          "entry_compared"
+        ],
+        "title": "BravoEntryBody",
+        "type": "object"
+      },
+      "BravoOrderLineView": {
+        "properties": {
+          "delivery_date": {
+            "format": "date",
+            "title": "Delivery Date",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "prv_code": {
+            "title": "Prv Code",
+            "type": "string"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        },
+        "required": [
+          "line_no",
+          "prv_code",
+          "quantity",
+          "unit_price",
+          "delivery_date"
+        ],
+        "title": "BravoOrderLineView",
+        "type": "object"
+      },
+      "BravoOrderView": {
+        "properties": {
+          "currency": {
+            "enum": [
+              "USD",
+              "VND",
+              "JPY"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/BravoOrderLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "order_date": {
+            "format": "date",
+            "title": "Order Date",
+            "type": "string"
+          },
+          "po_no": {
+            "title": "Po No",
+            "type": "string"
+          },
+          "po_revision": {
+            "title": "Po Revision",
+            "type": "integer"
+          },
+          "so_no": {
+            "title": "So No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "so_no",
+          "customer_code",
+          "po_no",
+          "po_revision",
+          "order_date",
+          "currency",
+          "lines"
+        ],
+        "title": "BravoOrderView",
+        "type": "object"
+      },
       "CancelResult": {
         "description": "Whether a run was actually stopped, not whether the request was understood.\n\n`False` is an ordinary answer: the turn had already finished, or another\nprocess holds it. A caller pressing Stop twice should get 200 both times —\nthe second one describes a thread that is already not running, which is what\nthey asked for.",
         "properties": {
@@ -337,6 +626,214 @@
           "cancelled"
         ],
         "title": "CancelResult",
+        "type": "object"
+      },
+      "CaseChangeView": {
+        "description": "What a mutation answers: which case, at which version, in which state.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_kind": {
+            "$ref": "#/components/schemas/CaseKind"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_kind",
+          "case_id",
+          "case_version",
+          "status"
+        ],
+        "title": "CaseChangeView",
+        "type": "object"
+      },
+      "CaseKind": {
+        "enum": [
+          "order",
+          "quote"
+        ],
+        "title": "CaseKind",
+        "type": "string"
+      },
+      "CloseBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/CloseReason"
+          },
+          "superseded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By"
+          }
+        },
+        "required": [
+          "case_version",
+          "reason"
+        ],
+        "title": "CloseBody",
+        "type": "object"
+      },
+      "CloseReason": {
+        "enum": [
+          "duplicate",
+          "not_an_order",
+          "superseded",
+          "cannot_supply"
+        ],
+        "title": "CloseReason",
+        "type": "string"
+      },
+      "ConfirmBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "delivery_dates": {
+            "items": {
+              "$ref": "#/components/schemas/LineDate"
+            },
+            "maxItems": 9999,
+            "minItems": 1,
+            "title": "Delivery Dates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_version",
+          "delivery_dates"
+        ],
+        "title": "ConfirmBody",
+        "type": "object"
+      },
+      "ConvertEntryView": {
+        "properties": {
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "customer_item_code": {
+            "title": "Customer Item Code",
+            "type": "string"
+          },
+          "prv_code": {
+            "title": "Prv Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_code",
+          "customer_item_code",
+          "prv_code"
+        ],
+        "title": "ConvertEntryView",
+        "type": "object"
+      },
+      "CopperBasisView": {
+        "description": "How a price follows copper. A band's limits are prices of copper.",
+        "properties": {
+          "high_usd_per_tonne": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "fixed",
+              "lme_band"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "low_usd_per_tonne": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "CopperBasisView",
+        "type": "object"
+      },
+      "CoverageView": {
+        "properties": {
+          "checks_run": {
+            "title": "Checks Run",
+            "type": "integer"
+          },
+          "findings": {
+            "title": "Findings",
+            "type": "integer"
+          },
+          "lines_printed": {
+            "title": "Lines Printed",
+            "type": "integer"
+          },
+          "lines_read": {
+            "title": "Lines Read",
+            "type": "integer"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Regions",
+            "type": "array"
+          },
+          "unchecked_regions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unchecked Regions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines_printed",
+          "lines_read",
+          "regions",
+          "unchecked_regions",
+          "checks_run",
+          "findings"
+        ],
+        "title": "CoverageView",
         "type": "object"
       },
       "CreateTenantRequest": {
@@ -384,6 +881,132 @@
         "title": "CreateWorkspaceBody",
         "type": "object"
       },
+      "CrossCheckBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "decision": {
+            "enum": [
+              "accept",
+              "return"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "case_version",
+          "decision"
+        ],
+        "title": "CrossCheckBody",
+        "type": "object"
+      },
+      "CustomerView": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "confirmation_channel": {
+            "title": "Confirmation Channel",
+            "type": "string"
+          },
+          "contacts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Contacts",
+            "type": "array"
+          },
+          "denial_list_checked_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Denial List Checked On"
+          },
+          "esf_fiscal_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Esf Fiscal Year"
+          },
+          "intra_group": {
+            "title": "Intra Group",
+            "type": "boolean"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "noc_confirmed": {
+            "title": "Noc Confirmed",
+            "type": "boolean"
+          },
+          "sales_pic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sales Pic"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "language",
+          "intra_group",
+          "status",
+          "confirmation_channel",
+          "contacts",
+          "sales_pic",
+          "noc_confirmed",
+          "esf_fiscal_year",
+          "denial_list_checked_on"
+        ],
+        "title": "CustomerView",
+        "type": "object"
+      },
       "DecisionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -415,6 +1038,86 @@
           "approve"
         ],
         "title": "DecisionRequest",
+        "type": "object"
+      },
+      "DeclineBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/DeclineReason"
+          }
+        },
+        "required": [
+          "case_version",
+          "reason"
+        ],
+        "title": "DeclineBody",
+        "type": "object"
+      },
+      "DeclineReason": {
+        "enum": [
+          "not_our_product",
+          "design_cannot",
+          "customer_rejected_spec",
+          "commercial"
+        ],
+        "title": "DeclineReason",
+        "type": "string"
+      },
+      "DeclineView": {
+        "properties": {
+          "declined_at": {
+            "format": "date-time",
+            "title": "Declined At",
+            "type": "string"
+          },
+          "declined_by": {
+            "format": "uuid",
+            "title": "Declined By",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "declined_by",
+          "declined_at",
+          "reason",
+          "note"
+        ],
+        "title": "DeclineView",
         "type": "object"
       },
       "DemoUser": {
@@ -463,6 +1166,105 @@
           "workspace_id"
         ],
         "title": "DemoUser",
+        "type": "object"
+      },
+      "DesignLineView": {
+        "properties": {
+          "anchors": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceAnchor"
+            },
+            "title": "Anchors",
+            "type": "object"
+          },
+          "bp_code": {
+            "title": "Bp Code",
+            "type": "string"
+          },
+          "copper_kg_per_km": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copper Kg Per Km"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "prv_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prv Code"
+          },
+          "spec_no": {
+            "title": "Spec No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "bp_code",
+          "spec_no",
+          "prv_code",
+          "copper_kg_per_km",
+          "anchors"
+        ],
+        "title": "DesignLineView",
+        "type": "object"
+      },
+      "DesignReplyView": {
+        "properties": {
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DesignLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "reply_date": {
+            "format": "date",
+            "title": "Reply Date",
+            "type": "string"
+          },
+          "ycbg_no": {
+            "title": "Ycbg No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "received_at",
+          "attachment_id",
+          "ycbg_no",
+          "reply_date",
+          "lines"
+        ],
+        "title": "DesignReplyView",
         "type": "object"
       },
       "DevSessionRequest": {
@@ -531,6 +1333,310 @@
           "expires_at"
         ],
         "title": "DevSessionResponse",
+        "type": "object"
+      },
+      "DispositionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "disposition": {
+            "enum": [
+              "open",
+              "accepted",
+              "corrected_by_sales",
+              "ask_customer"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "case_version",
+          "disposition"
+        ],
+        "title": "DispositionBody",
+        "type": "object"
+      },
+      "DispositionView": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "DispositionView",
+        "type": "object"
+      },
+      "EvidenceView": {
+        "description": "What Sales weighs for one line (step 7). Only for `sales.price.read`;\nother customers' rows and the reference price only for\n`sales.price.other_customers.read` too.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "copper_usd_per_uom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freight_usd_per_km": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "lme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LmeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/OrderedLineView"
+            },
+            "title": "Orders",
+            "type": "array"
+          },
+          "other_customers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/QuotationRowView"
+                },
+                "type": "array"
+              },
+              {
+                "$ref": "#/components/schemas/Hidden"
+              }
+            ],
+            "title": "Other Customers"
+          },
+          "own_history": {
+            "items": {
+              "$ref": "#/components/schemas/QuotationRowView"
+            },
+            "title": "Own History",
+            "type": "array"
+          },
+          "pricing_policy": {
+            "title": "Pricing Policy",
+            "type": "string"
+          },
+          "prv_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prv Code"
+          },
+          "reference_price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "$ref": "#/components/schemas/Hidden"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Price"
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "line_no",
+          "prv_code",
+          "as_of",
+          "pricing_policy",
+          "target_price",
+          "own_history",
+          "other_customers",
+          "orders",
+          "lme",
+          "copper_usd_per_uom",
+          "floor",
+          "freight_usd_per_km",
+          "reference_price"
+        ],
+        "title": "EvidenceView",
+        "type": "object"
+      },
+      "ExportRow": {
+        "description": "One surveyed step in one month (giờ Việt Nam): how many times DW1\ntook a case through it, beside the minutes it takes by hand.",
+        "properties": {
+          "manual_baseline_minutes": {
+            "title": "Manual Baseline Minutes",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          },
+          "times": {
+            "title": "Times",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step_id",
+          "month",
+          "times",
+          "manual_baseline_minutes"
+        ],
+        "title": "ExportRow",
         "type": "object"
       },
       "FeedbackAttachmentView": {
@@ -631,6 +1737,66 @@
         "title": "FeedbackView",
         "type": "object"
       },
+      "FindingCode": {
+        "description": "The order checks of the spec's findings table, one code each.",
+        "enum": [
+          "code_unmapped",
+          "code_ambiguous",
+          "price_mismatch",
+          "currency_mismatch",
+          "uom_mismatch",
+          "quotation_missing",
+          "lme_band_mismatch",
+          "moq_violation",
+          "pack_multiple",
+          "line_total_mismatch",
+          "value_uncertain",
+          "customer_unknown",
+          "duplicate_po",
+          "requested_date_short_lt",
+          "missing_noc_esf",
+          "revised_po",
+          "revision_without_base",
+          "customer_temporary",
+          "sender_unverified"
+        ],
+        "title": "FindingCode",
+        "type": "string"
+      },
+      "FixedCopper": {
+        "additionalProperties": false,
+        "description": "The price does not move with copper.",
+        "properties": {
+          "kind": {
+            "const": "fixed",
+            "default": "fixed",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "FixedCopper",
+        "type": "object"
+      },
+      "FlaggedValue": {
+        "additionalProperties": false,
+        "description": "One value read from a flagged region, by the field it fills.",
+        "properties": {
+          "field": {
+            "pattern": "^[a-z_]{1,32}$",
+            "title": "Field",
+            "type": "string"
+          },
+          "flag": {
+            "$ref": "#/components/schemas/RegionFlag"
+          }
+        },
+        "required": [
+          "field",
+          "flag"
+        ],
+        "title": "FlaggedValue",
+        "type": "object"
+      },
       "GrantMemberRequest": {
         "properties": {
           "department": {
@@ -698,6 +1864,19 @@
           "api_version"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "Hidden": {
+        "description": "An amount the caller may not see: there, and not shown.",
+        "properties": {
+          "hidden": {
+            "const": true,
+            "default": true,
+            "title": "Hidden",
+            "type": "boolean"
+          }
+        },
+        "title": "Hidden",
         "type": "object"
       },
       "HierarchyMemberView": {
@@ -781,6 +1960,62 @@
           "email"
         ],
         "title": "IdentityRefView",
+        "type": "object"
+      },
+      "InboxMessageView": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentView"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "body_text": {
+            "title": "Body Text",
+            "type": "string"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/MessageDispositionView"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "sender_name": {
+            "title": "Sender Name",
+            "type": "string"
+          },
+          "sender_verified": {
+            "title": "Sender Verified",
+            "type": "boolean"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "sender",
+          "sender_name",
+          "subject",
+          "received_at",
+          "body_text",
+          "attachments",
+          "sender_verified",
+          "disposition"
+        ],
+        "title": "InboxMessageView",
         "type": "object"
       },
       "InboxView": {
@@ -957,6 +2192,117 @@
         "title": "IntegrationView",
         "type": "object"
       },
+      "ItemBasisView": {
+        "properties": {
+          "moq": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Moq",
+            "type": "string"
+          },
+          "pack_multiple": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Pack Multiple",
+            "type": "string"
+          },
+          "prv_code": {
+            "title": "Prv Code",
+            "type": "string"
+          },
+          "standard_lead_time_days": {
+            "title": "Standard Lead Time Days",
+            "type": "integer"
+          },
+          "uom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uom"
+          }
+        },
+        "required": [
+          "prv_code",
+          "uom",
+          "moq",
+          "pack_multiple",
+          "standard_lead_time_days"
+        ],
+        "title": "ItemBasisView",
+        "type": "object"
+      },
+      "ItemView": {
+        "properties": {
+          "cores": {
+            "title": "Cores",
+            "type": "integer"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "gauge": {
+            "title": "Gauge",
+            "type": "string"
+          },
+          "moq": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Moq",
+            "type": "string"
+          },
+          "pack_multiple": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Pack Multiple",
+            "type": "string"
+          },
+          "prv_code": {
+            "title": "Prv Code",
+            "type": "string"
+          },
+          "spec_no": {
+            "title": "Spec No",
+            "type": "string"
+          },
+          "standard_lead_time_days": {
+            "title": "Standard Lead Time Days",
+            "type": "integer"
+          },
+          "uom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uom"
+          }
+        },
+        "required": [
+          "prv_code",
+          "family",
+          "spec_no",
+          "cores",
+          "gauge",
+          "uom",
+          "moq",
+          "pack_multiple",
+          "standard_lead_time_days"
+        ],
+        "title": "ItemView",
+        "type": "object"
+      },
       "KnowledgeDocumentView": {
         "properties": {
           "chunk_count": {
@@ -1017,6 +2363,518 @@
           "scope"
         ],
         "title": "KnowledgeDocumentView",
+        "type": "object"
+      },
+      "LabelledAnchor": {
+        "description": "Where one value was read, named by the field (and line) it fills.",
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/SourceAnchor"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          }
+        },
+        "required": [
+          "field",
+          "anchor"
+        ],
+        "title": "LabelledAnchor",
+        "type": "object"
+      },
+      "LineBasisView": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "checks_run": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Checks Run",
+            "type": "array"
+          },
+          "convert_prv_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convert Prv Code"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemBasisView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lead_time_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Time Days"
+          },
+          "lead_time_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Time Source"
+          },
+          "lme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LmeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quotation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuotationBasisView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "convert_prv_code",
+          "candidates",
+          "item",
+          "quotation",
+          "lme",
+          "lead_time_days",
+          "lead_time_source",
+          "checks_run"
+        ],
+        "title": "LineBasisView",
+        "type": "object"
+      },
+      "LineChangeView": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "line_no",
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "LineChangeView",
+        "type": "object"
+      },
+      "LineDate": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed_date": {
+            "format": "date",
+            "title": "Confirmed Date",
+            "type": "string"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "line_no",
+          "confirmed_date"
+        ],
+        "title": "LineDate",
+        "type": "object"
+      },
+      "LmeBand": {
+        "additionalProperties": false,
+        "description": "The price holds while LME copper is in ``[low, high)`` USD per tonne.",
+        "properties": {
+          "high_usd_per_tonne": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "High Usd Per Tonne"
+          },
+          "kind": {
+            "const": "lme_band",
+            "default": "lme_band",
+            "title": "Kind",
+            "type": "string"
+          },
+          "low_usd_per_tonne": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Low Usd Per Tonne"
+          }
+        },
+        "required": [
+          "low_usd_per_tonne",
+          "high_usd_per_tonne"
+        ],
+        "title": "LmeBand",
+        "type": "object"
+      },
+      "LmeView": {
+        "properties": {
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "usd_per_tonne": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "month",
+          "usd_per_tonne"
+        ],
+        "title": "LmeView",
+        "type": "object"
+      },
+      "MappingBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "prv_code": {
+            "pattern": "^[A-Z0-9][A-Z0-9-]{1,31}$",
+            "title": "Prv Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "prv_code"
+        ],
+        "title": "MappingBody",
+        "type": "object"
+      },
+      "MappingCounts": {
+        "properties": {
+          "confirmed_candidate": {
+            "title": "Confirmed Candidate",
+            "type": "integer"
+          },
+          "convert_list": {
+            "title": "Convert List",
+            "type": "integer"
+          },
+          "unresolved": {
+            "title": "Unresolved",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "convert_list",
+          "confirmed_candidate",
+          "unresolved"
+        ],
+        "title": "MappingCounts",
+        "type": "object"
+      },
+      "MappingView": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
+          "hand_entered": {
+            "title": "Hand Entered",
+            "type": "boolean"
+          },
+          "prv_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prv Code"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "prv_code",
+          "candidates",
+          "confirmed_by",
+          "confirmed_at",
+          "hand_entered"
+        ],
+        "title": "MappingView",
+        "type": "object"
+      },
+      "MasterDataView_BravoOrderView_": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BravoOrderView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "MasterDataView[BravoOrderView]",
+        "type": "object"
+      },
+      "MasterDataView_ConvertEntryView_": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConvertEntryView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "MasterDataView[ConvertEntryView]",
+        "type": "object"
+      },
+      "MasterDataView_CustomerView_": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "MasterDataView[CustomerView]",
+        "type": "object"
+      },
+      "MasterDataView_ItemView_": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "MasterDataView[ItemView]",
+        "type": "object"
+      },
+      "MasterDataView_LmeView_": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LmeView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "MasterDataView[LmeView]",
+        "type": "object"
+      },
+      "MasterDataView_OpenYcbgView_": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OpenYcbgView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "MasterDataView[OpenYcbgView]",
+        "type": "object"
+      },
+      "MasterDataView_QuotationRowView_": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QuotationRowView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
+        ],
+        "title": "MasterDataView[QuotationRowView]",
         "type": "object"
       },
       "MeResponse": {
@@ -1164,6 +3022,137 @@
           "created_by_run_id"
         ],
         "title": "MemoryItemView",
+        "type": "object"
+      },
+      "MessageDispositionView": {
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "case_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "processed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "MessageDispositionView",
+        "type": "object"
+      },
+      "MessagesView": {
+        "properties": {
+          "oldest_waiting_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Waiting Seconds"
+          },
+          "routed_to_sales": {
+            "title": "Routed To Sales",
+            "type": "integer"
+          },
+          "routed_without_owner": {
+            "title": "Routed Without Owner",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "without_disposition": {
+            "title": "Without Disposition",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "without_disposition",
+          "oldest_waiting_seconds",
+          "routed_to_sales",
+          "routed_without_owner"
+        ],
+        "title": "MessagesView",
         "type": "object"
       },
       "NewTenantView": {
@@ -1318,6 +3307,35 @@
         "title": "OffboardingStatusView",
         "type": "object"
       },
+      "OpenYcbgView": {
+        "properties": {
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "issued_on": {
+            "format": "date",
+            "title": "Issued On",
+            "type": "string"
+          },
+          "rfq_no": {
+            "title": "Rfq No",
+            "type": "string"
+          },
+          "ycbg_no": {
+            "title": "Ycbg No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ycbg_no",
+          "customer_code",
+          "rfq_no",
+          "issued_on"
+        ],
+        "title": "OpenYcbgView",
+        "type": "object"
+      },
       "OperatorView": {
         "properties": {
           "created_at": {
@@ -1365,6 +3383,967 @@
           "created_at"
         ],
         "title": "OperatorView",
+        "type": "object"
+      },
+      "OrderCaseView": {
+        "properties": {
+          "assigned_to": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "attachment_sha256": {
+            "title": "Attachment Sha256",
+            "type": "string"
+          },
+          "base_so_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base So No"
+          },
+          "bravo_entry_compared": {
+            "title": "Bravo Entry Compared",
+            "type": "boolean"
+          },
+          "bravo_recorded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bravo Recorded At"
+          },
+          "bravo_recorded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bravo Recorded By"
+          },
+          "bravo_so_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bravo So No"
+          },
+          "buyer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buyer"
+          },
+          "buyer_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "catalog_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog As Of"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/LineChangeView"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Reason"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed By"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/CoverageView"
+          },
+          "cross_check_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Check Required"
+          },
+          "cross_checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Checked At"
+          },
+          "cross_checked_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Checked By"
+          },
+          "currency": {
+            "enum": [
+              "USD",
+              "VND",
+              "JPY"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "duplicate_of_case": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of Case"
+          },
+          "duplicate_of_so": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Of So"
+          },
+          "export_control_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Export Control Mode"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/OrderFindingView"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "header_anchors": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceAnchor"
+            },
+            "title": "Header Anchors",
+            "type": "object"
+          },
+          "header_flags": {
+            "items": {
+              "$ref": "#/components/schemas/FlaggedValue"
+            },
+            "title": "Header Flags",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/OrderLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "makers": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Makers",
+            "type": "array"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "parser_version": {
+            "title": "Parser Version",
+            "type": "string"
+          },
+          "po_date": {
+            "format": "date",
+            "title": "Po Date",
+            "type": "string"
+          },
+          "po_no": {
+            "title": "Po No",
+            "type": "string"
+          },
+          "prepared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared At"
+          },
+          "prepared_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared By"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "release_manifest_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Manifest Ref"
+          },
+          "returned_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned At"
+          },
+          "returned_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned By"
+          },
+          "returned_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned Reason"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "rules_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules Version"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "superseded": {
+            "items": {
+              "$ref": "#/components/schemas/SupersededView"
+            },
+            "title": "Superseded",
+            "type": "array"
+          },
+          "superseded_by_case": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Case"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "status",
+          "customer_code",
+          "message_id",
+          "received_at",
+          "assigned_to",
+          "po_no",
+          "revision",
+          "po_date",
+          "currency",
+          "attachment_id",
+          "attachment_sha256",
+          "header_anchors",
+          "header_flags",
+          "buyer",
+          "buyer_anchor",
+          "total",
+          "total_anchor",
+          "coverage",
+          "lines",
+          "findings",
+          "changes",
+          "superseded",
+          "rules_version",
+          "parser_version",
+          "catalog_as_of",
+          "release_manifest_ref",
+          "cross_check_required",
+          "export_control_mode",
+          "duplicate_of_case",
+          "duplicate_of_so",
+          "base_so_no",
+          "prepared_by",
+          "prepared_at",
+          "bravo_so_no",
+          "bravo_recorded_by",
+          "bravo_recorded_at",
+          "bravo_entry_compared",
+          "cross_checked_by",
+          "cross_checked_at",
+          "returned_reason",
+          "returned_by",
+          "returned_at",
+          "confirmed_by",
+          "confirmed_at",
+          "close_reason",
+          "closed_by",
+          "closed_at",
+          "superseded_by_case",
+          "makers"
+        ],
+        "title": "OrderCaseView",
+        "type": "object"
+      },
+      "OrderFindingView": {
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "code": {
+            "$ref": "#/components/schemas/FindingCode"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/DispositionView"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          },
+          "rule_version": {
+            "title": "Rule Version",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "code",
+          "severity",
+          "blocking",
+          "line_no",
+          "expected",
+          "actual",
+          "rule_version",
+          "disposition",
+          "allowed"
+        ],
+        "title": "OrderFindingView",
+        "type": "object"
+      },
+      "OrderLineView": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "anchors": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceAnchor"
+            },
+            "title": "Anchors",
+            "type": "object"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/LineBasisView"
+          },
+          "confirmed_delivery_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Delivery Date"
+          },
+          "customer_item_code": {
+            "title": "Customer Item Code",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/FlaggedValue"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/MappingView"
+          },
+          "pc_confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pc Confirmed At"
+          },
+          "pc_confirmed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pc Confirmed By"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "requested_date": {
+            "format": "date",
+            "title": "Requested Date",
+            "type": "string"
+          },
+          "suggested_delivery_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Delivery Date"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "uom": {
+            "title": "Uom",
+            "type": "string"
+          },
+          "value_states": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ValueState"
+            },
+            "title": "Value States",
+            "type": "object"
+          }
+        },
+        "required": [
+          "line_no",
+          "customer_item_code",
+          "description",
+          "quantity",
+          "uom",
+          "unit_price",
+          "amount",
+          "requested_date",
+          "anchors",
+          "flags",
+          "value_states",
+          "mapping",
+          "basis",
+          "suggested_delivery_date",
+          "confirmed_delivery_date",
+          "pc_confirmed_by",
+          "pc_confirmed_at"
+        ],
+        "title": "OrderLineView",
+        "type": "object"
+      },
+      "OrderSummaryView": {
+        "description": "A row of the order list: no amount at all.",
+        "properties": {
+          "assigned_to": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "lines": {
+            "title": "Lines",
+            "type": "integer"
+          },
+          "open_blocking_findings": {
+            "title": "Open Blocking Findings",
+            "type": "integer"
+          },
+          "open_findings": {
+            "title": "Open Findings",
+            "type": "integer"
+          },
+          "po_no": {
+            "title": "Po No",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "status",
+          "customer_code",
+          "po_no",
+          "revision",
+          "received_at",
+          "assigned_to",
+          "lines",
+          "open_findings",
+          "open_blocking_findings"
+        ],
+        "title": "OrderSummaryView",
+        "type": "object"
+      },
+      "OrderedLineView": {
+        "properties": {
+          "currency": {
+            "enum": [
+              "USD",
+              "VND",
+              "JPY"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "order_date": {
+            "format": "date",
+            "title": "Order Date",
+            "type": "string"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "so_no": {
+            "title": "So No",
+            "type": "string"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        },
+        "required": [
+          "so_no",
+          "order_date",
+          "currency",
+          "quantity",
+          "unit_price"
+        ],
+        "title": "OrderedLineView",
+        "type": "object"
+      },
+      "OverviewView": {
+        "properties": {
+          "a3_shadow": {
+            "title": "A3 Shadow",
+            "type": "integer"
+          },
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "export": {
+            "items": {
+              "$ref": "#/components/schemas/ExportRow"
+            },
+            "title": "Export",
+            "type": "array"
+          },
+          "findings_by_code": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Findings By Code",
+            "type": "object"
+          },
+          "kpi_policy": {
+            "title": "Kpi Policy",
+            "type": "string"
+          },
+          "lines_printed": {
+            "title": "Lines Printed",
+            "type": "integer"
+          },
+          "lines_read": {
+            "title": "Lines Read",
+            "type": "integer"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/MappingCounts"
+          },
+          "messages": {
+            "$ref": "#/components/schemas/MessagesView"
+          },
+          "order_confirmation": {
+            "$ref": "#/components/schemas/TargetView"
+          },
+          "orders_prepared_without_correction": {
+            "title": "Orders Prepared Without Correction",
+            "type": "integer"
+          },
+          "quotation_time": {
+            "$ref": "#/components/schemas/TargetView"
+          },
+          "quotes_sent_as_first_drafted": {
+            "title": "Quotes Sent As First Drafted",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepCount"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "times": {
+            "$ref": "#/components/schemas/TimesView"
+          },
+          "worker": {
+            "$ref": "#/components/schemas/WorkerStateView"
+          }
+        },
+        "required": [
+          "as_of",
+          "kpi_policy",
+          "worker",
+          "steps",
+          "messages",
+          "times",
+          "order_confirmation",
+          "quotation_time",
+          "lines_printed",
+          "lines_read",
+          "mapping",
+          "findings_by_code",
+          "orders_prepared_without_correction",
+          "quotes_sent_as_first_drafted",
+          "a3_shadow",
+          "export"
+        ],
+        "title": "OverviewView",
+        "type": "object"
+      },
+      "PageBox": {
+        "additionalProperties": false,
+        "description": "A rectangle on a rendered page, as fractions of the page.\n\n``x`` and ``y`` are the top-left corner measured from the page's top-left,\nso the box draws the same at any zoom and on any renderer.",
+        "properties": {
+          "h": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "H",
+            "type": "number"
+          },
+          "w": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "W",
+            "type": "number"
+          },
+          "x": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "title": "PageBox",
         "type": "object"
       },
       "Page_ApprovalView_": {
@@ -1512,6 +4491,27 @@
         "title": "Page",
         "type": "object"
       },
+      "PauseBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "PauseBody",
+        "type": "object"
+      },
       "PermissionSetView": {
         "properties": {
           "key": {
@@ -1538,6 +4538,1044 @@
         "title": "PermissionSetView",
         "type": "object"
       },
+      "PriceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PriceLineBody"
+            },
+            "maxItems": 9999,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "lme_month": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lme Month"
+          },
+          "management_guidance": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Management Guidance"
+          }
+        },
+        "required": [
+          "case_version",
+          "lines"
+        ],
+        "title": "PriceBody",
+        "type": "object"
+      },
+      "PriceLineBody": {
+        "additionalProperties": false,
+        "properties": {
+          "copper_basis": {
+            "discriminator": {
+              "mapping": {
+                "fixed": "#/components/schemas/FixedCopper",
+                "lme_band": "#/components/schemas/LmeBand"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FixedCopper"
+              },
+              {
+                "$ref": "#/components/schemas/LmeBand"
+              }
+            ],
+            "title": "Copper Basis"
+          },
+          "lead_time_days": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 365.0,
+            "title": "Lead Time Days",
+            "type": "integer"
+          },
+          "line_no": {
+            "maximum": 9999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "moq": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Moq"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Unit Price"
+          }
+        },
+        "required": [
+          "line_no",
+          "unit_price",
+          "moq",
+          "lead_time_days",
+          "copper_basis"
+        ],
+        "title": "PriceLineBody",
+        "type": "object"
+      },
+      "PricedLineView": {
+        "properties": {
+          "copper_basis": {
+            "$ref": "#/components/schemas/CopperBasisView"
+          },
+          "lead_time_days": {
+            "title": "Lead Time Days",
+            "type": "integer"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "moq": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Moq",
+            "type": "string"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        },
+        "required": [
+          "line_no",
+          "unit_price",
+          "moq",
+          "lead_time_days",
+          "copper_basis"
+        ],
+        "title": "PricedLineView",
+        "type": "object"
+      },
+      "PricingView": {
+        "properties": {
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by": {
+            "format": "uuid",
+            "title": "Decided By",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PricedLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "lme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LmeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "management_guidance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "decided_by",
+          "decided_at",
+          "lme",
+          "lines",
+          "management_guidance"
+        ],
+        "title": "PricingView",
+        "type": "object"
+      },
+      "ProcessAllView": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/MessageDispositionView"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "ProcessAllView",
+        "type": "object"
+      },
+      "QuotationBasisView": {
+        "properties": {
+          "copper_basis": {
+            "$ref": "#/components/schemas/CopperBasisView"
+          },
+          "currency": {
+            "enum": [
+              "USD",
+              "VND",
+              "JPY"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "lead_time_days": {
+            "title": "Lead Time Days",
+            "type": "integer"
+          },
+          "moq": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Moq",
+            "type": "string"
+          },
+          "quote_no": {
+            "title": "Quote No",
+            "type": "string"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "uom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uom"
+          },
+          "valid_from": {
+            "format": "date",
+            "title": "Valid From",
+            "type": "string"
+          },
+          "valid_to": {
+            "format": "date",
+            "title": "Valid To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quote_no",
+          "unit_price",
+          "currency",
+          "uom",
+          "moq",
+          "lead_time_days",
+          "copper_basis",
+          "valid_from",
+          "valid_to"
+        ],
+        "title": "QuotationBasisView",
+        "type": "object"
+      },
+      "QuotationRowView": {
+        "description": "A quotation in the evidence or the master data.",
+        "properties": {
+          "copper_basis": {
+            "$ref": "#/components/schemas/CopperBasisView"
+          },
+          "currency": {
+            "enum": [
+              "USD",
+              "VND",
+              "JPY"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "lead_time_days": {
+            "title": "Lead Time Days",
+            "type": "integer"
+          },
+          "moq": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Moq",
+            "type": "string"
+          },
+          "prv_code": {
+            "title": "Prv Code",
+            "type": "string"
+          },
+          "quote_no": {
+            "title": "Quote No",
+            "type": "string"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "uom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uom"
+          },
+          "valid_from": {
+            "format": "date",
+            "title": "Valid From",
+            "type": "string"
+          },
+          "valid_to": {
+            "format": "date",
+            "title": "Valid To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quote_no",
+          "customer_code",
+          "prv_code",
+          "unit_price",
+          "currency",
+          "uom",
+          "moq",
+          "lead_time_days",
+          "copper_basis",
+          "valid_from",
+          "valid_to"
+        ],
+        "title": "QuotationRowView",
+        "type": "object"
+      },
+      "QuoteApprovalView": {
+        "properties": {
+          "approved_at": {
+            "format": "date-time",
+            "title": "Approved At",
+            "type": "string"
+          },
+          "approved_by": {
+            "format": "uuid",
+            "title": "Approved By",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "document_sha256": {
+            "title": "Document Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_by",
+          "approved_at",
+          "case_version",
+          "document_sha256"
+        ],
+        "title": "QuoteApprovalView",
+        "type": "object"
+      },
+      "QuoteCaseView": {
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteApprovalView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assigned_to": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "attachment_sha256": {
+            "title": "Attachment Sha256",
+            "type": "string"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "catalog_as_of": {
+            "format": "date-time",
+            "title": "Catalog As Of",
+            "type": "string"
+          },
+          "currency": {
+            "enum": [
+              "USD",
+              "VND",
+              "JPY"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "customer_from": {
+            "title": "Customer From",
+            "type": "string"
+          },
+          "decline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeclineView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "design_replies": {
+            "title": "Design Replies",
+            "type": "integer"
+          },
+          "design_reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DesignReplyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "earlier_pricing": {
+            "title": "Earlier Pricing",
+            "type": "integer"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EvidenceView"
+                },
+                "type": "array"
+              },
+              {
+                "$ref": "#/components/schemas/Hidden"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/QuoteFindingView"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/QuoteLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "master_list": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StampView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "parser_version": {
+            "title": "Parser Version",
+            "type": "string"
+          },
+          "pricing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quote_due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Due"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "release_manifest_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Manifest Ref"
+          },
+          "returns": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnView"
+            },
+            "title": "Returns",
+            "type": "array"
+          },
+          "rfq_date": {
+            "format": "date",
+            "title": "Rfq Date",
+            "type": "string"
+          },
+          "rfq_no": {
+            "title": "Rfq No",
+            "type": "string"
+          },
+          "rules_version": {
+            "title": "Rules Version",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "sent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StampView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "submission": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ycbg_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ycbg No"
+          },
+          "ycbg_recorded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ycbg Recorded At"
+          },
+          "ycbg_recorded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ycbg Recorded By"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "status",
+          "customer_code",
+          "customer_from",
+          "message_id",
+          "received_at",
+          "sender",
+          "assigned_to",
+          "rfq_no",
+          "rfq_date",
+          "quote_due",
+          "overdue",
+          "currency",
+          "attachment_id",
+          "attachment_sha256",
+          "rules_version",
+          "parser_version",
+          "catalog_as_of",
+          "release_manifest_ref",
+          "lines",
+          "findings",
+          "ycbg_no",
+          "ycbg_recorded_by",
+          "ycbg_recorded_at",
+          "design_reply",
+          "design_replies",
+          "pricing",
+          "earlier_pricing",
+          "returns",
+          "submission",
+          "approval",
+          "sent",
+          "master_list",
+          "decline",
+          "evidence"
+        ],
+        "title": "QuoteCaseView",
+        "type": "object"
+      },
+      "QuoteDispositionView": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "needed_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needed By"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "QuoteDispositionView",
+        "type": "object"
+      },
+      "QuoteFindingView": {
+        "properties": {
+          "actual": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/QuoteDispositionView"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "rule_versions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rule Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "code",
+          "blocking",
+          "line_no",
+          "missing",
+          "expected",
+          "actual",
+          "rule_versions",
+          "disposition"
+        ],
+        "title": "QuoteFindingView",
+        "type": "object"
+      },
+      "QuoteLineView": {
+        "properties": {
+          "anchors": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceAnchor"
+            },
+            "title": "Anchors",
+            "type": "object"
+          },
+          "customer_item_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Item Code"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "needed_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needed By"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uom": {
+            "title": "Uom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "customer_item_code",
+          "description",
+          "quantity",
+          "uom",
+          "target_price",
+          "needed_by",
+          "anchors"
+        ],
+        "title": "QuoteLineView",
+        "type": "object"
+      },
+      "QuoteSummaryView": {
+        "properties": {
+          "assigned_to": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "open_findings": {
+            "title": "Open Findings",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "quote_due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Due"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "rfq_no": {
+            "title": "Rfq No",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "ycbg_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ycbg No"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "status",
+          "customer_code",
+          "rfq_no",
+          "received_at",
+          "quote_due",
+          "overdue",
+          "assigned_to",
+          "ycbg_no",
+          "open_findings"
+        ],
+        "title": "QuoteSummaryView",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "properties": {
           "checks": {
@@ -1558,6 +5596,18 @@
         ],
         "title": "ReadinessResponse",
         "type": "object"
+      },
+      "RegionFlag": {
+        "description": "Why a value read from a file is not taken on trust (`value_uncertain`).\n\nEach is a place a person looking at the file would not see the value, or\nwould see something else than the reader read.",
+        "enum": [
+          "hidden_sheet",
+          "hidden_row",
+          "hidden_column",
+          "font_matches_fill",
+          "formula_without_cached_value"
+        ],
+        "title": "RegionFlag",
+        "type": "string"
       },
       "RenameTenantRequest": {
         "properties": {
@@ -1585,6 +5635,53 @@
           "name"
         ],
         "title": "RenameWorkspaceBody",
+        "type": "object"
+      },
+      "ResumeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ResumeBody",
+        "type": "object"
+      },
+      "ReturnView": {
+        "properties": {
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "returned_at": {
+            "format": "date-time",
+            "title": "Returned At",
+            "type": "string"
+          },
+          "returned_by": {
+            "format": "uuid",
+            "title": "Returned By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "returned_by",
+          "returned_at",
+          "reason",
+          "case_version"
+        ],
+        "title": "ReturnView",
         "type": "object"
       },
       "RoleView": {
@@ -1698,6 +5795,35 @@
         "title": "RunView",
         "type": "object"
       },
+      "ScreeningRow": {
+        "additionalProperties": false,
+        "description": "One customer's item quoted to them with no order of it in the window\n(WIV-03-023 step 12): for Sales to decide whether the quotation stays.",
+        "properties": {
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "prv_code": {
+            "title": "Prv Code",
+            "type": "string"
+          },
+          "quote_nos": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Quote Nos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "customer_code",
+          "prv_code",
+          "quote_nos"
+        ],
+        "title": "ScreeningRow",
+        "type": "object"
+      },
       "SetManagerBody": {
         "properties": {
           "manager_user_id": {
@@ -1730,6 +5856,118 @@
           "permission_set_keys"
         ],
         "title": "SetPermissionSetsBody",
+        "type": "object"
+      },
+      "SheetCell": {
+        "description": "One cell as the workbook holds it, with why a person might not see it.",
+        "properties": {
+          "column": {
+            "title": "Column",
+            "type": "integer"
+          },
+          "fill_rgb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fill Rgb"
+          },
+          "font_matches_fill": {
+            "default": false,
+            "title": "Font Matches Fill",
+            "type": "boolean"
+          },
+          "font_rgb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Font Rgb"
+          },
+          "formula_without_cached_value": {
+            "default": false,
+            "title": "Formula Without Cached Value",
+            "type": "boolean"
+          },
+          "hidden_column": {
+            "default": false,
+            "title": "Hidden Column",
+            "type": "boolean"
+          },
+          "hidden_row": {
+            "default": false,
+            "title": "Hidden Row",
+            "type": "boolean"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "row",
+          "column",
+          "text"
+        ],
+        "title": "SheetCell",
+        "type": "object"
+      },
+      "SheetGrid": {
+        "properties": {
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/SheetCell"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "columns": {
+            "title": "Columns",
+            "type": "integer"
+          },
+          "hidden_sheet": {
+            "title": "Hidden Sheet",
+            "type": "boolean"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sheet",
+          "hidden_sheet",
+          "rows",
+          "columns",
+          "truncated",
+          "cells"
+        ],
+        "title": "SheetGrid",
         "type": "object"
       },
       "SodRuleView": {
@@ -1805,6 +6043,400 @@
           "granted_at"
         ],
         "title": "SodWaiverView",
+        "type": "object"
+      },
+      "SourceAnchor": {
+        "additionalProperties": false,
+        "description": "The place in one attachment a value was read from.\n\nAt least one of: ``cell_ref`` (``Sheet!B10``), ``page`` with its\n``boxes``, or ``quote``, the words as the file prints them. More than one\nmay be given when the reader knows more than one.",
+        "properties": {
+          "attachment_id": {
+            "pattern": "^[A-Za-z0-9._-]{1,128}$",
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "attachment_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Attachment Sha256",
+            "type": "string"
+          },
+          "boxes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PageBox"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "cell_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Ref"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          }
+        },
+        "required": [
+          "attachment_id",
+          "attachment_sha256"
+        ],
+        "title": "SourceAnchor",
+        "type": "object"
+      },
+      "SourceView": {
+        "properties": {
+          "anchors": {
+            "items": {
+              "$ref": "#/components/schemas/LabelledAnchor"
+            },
+            "title": "Anchors",
+            "type": "array"
+          },
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "attachment_sha256": {
+            "title": "Attachment Sha256",
+            "type": "string"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_kind": {
+            "$ref": "#/components/schemas/CaseKind"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SheetGrid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "pdf",
+              "sheet"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "pdf_base64": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Base64"
+          },
+          "served_at": {
+            "format": "date-time",
+            "title": "Served At",
+            "type": "string"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet"
+          },
+          "sheets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sheets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_kind",
+          "case_id",
+          "case_version",
+          "attachment_id",
+          "attachment_sha256",
+          "kind",
+          "anchors",
+          "served_at"
+        ],
+        "title": "SourceView",
+        "type": "object"
+      },
+      "SpecBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "step": {
+            "enum": [
+              "start",
+              "settle",
+              "ask_design_again"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "step"
+        ],
+        "title": "SpecBody",
+        "type": "object"
+      },
+      "StampView": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at"
+        ],
+        "title": "StampView",
+        "type": "object"
+      },
+      "StepCount": {
+        "properties": {
+          "cases": {
+            "title": "Cases",
+            "type": "integer"
+          },
+          "coverage": {
+            "title": "Coverage",
+            "type": "string"
+          },
+          "procedure": {
+            "title": "Procedure",
+            "type": "string"
+          },
+          "states": {
+            "items": {
+              "type": "string"
+            },
+            "title": "States",
+            "type": "array"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "procedure",
+          "coverage",
+          "states",
+          "cases"
+        ],
+        "title": "StepCount",
+        "type": "object"
+      },
+      "SubmissionView": {
+        "properties": {
+          "document_sha256": {
+            "title": "Document Sha256",
+            "type": "string"
+          },
+          "issued_on": {
+            "format": "date",
+            "title": "Issued On",
+            "type": "string"
+          },
+          "priced_by": {
+            "format": "uuid",
+            "title": "Priced By",
+            "type": "string"
+          },
+          "quote_no": {
+            "title": "Quote No",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "submitted_by": {
+            "format": "uuid",
+            "title": "Submitted By",
+            "type": "string"
+          },
+          "valid_to": {
+            "format": "date",
+            "title": "Valid To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quote_no",
+          "issued_on",
+          "valid_to",
+          "document_sha256",
+          "priced_by",
+          "submitted_by",
+          "submitted_at",
+          "recipients"
+        ],
+        "title": "SubmissionView",
+        "type": "object"
+      },
+      "SubmitBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "quote_no": {
+            "pattern": "^[A-Z0-9][A-Z0-9/-]{1,31}$",
+            "title": "Quote No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "quote_no"
+        ],
+        "title": "SubmitBody",
+        "type": "object"
+      },
+      "SupersededView": {
+        "properties": {
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "value_state": {
+            "$ref": "#/components/schemas/ValueState",
+            "default": "superseded"
+          }
+        },
+        "required": [
+          "message_id",
+          "received_at",
+          "attachment_id",
+          "revision"
+        ],
+        "title": "SupersededView",
+        "type": "object"
+      },
+      "TargetView": {
+        "description": "A target beside what was measured end to end (waits included).",
+        "properties": {
+          "measured": {
+            "$ref": "#/components/schemas/TimeStat"
+          },
+          "target_seconds": {
+            "title": "Target Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "target_seconds",
+          "measured"
+        ],
+        "title": "TargetView",
         "type": "object"
       },
       "TenantSettingsView": {
@@ -1934,6 +6566,43 @@
         "title": "TenantView",
         "type": "object"
       },
+      "TimeStat": {
+        "properties": {
+          "cases": {
+            "title": "Cases",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Seconds"
+          },
+          "median_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Seconds"
+          }
+        },
+        "required": [
+          "cases",
+          "median_seconds",
+          "max_seconds"
+        ],
+        "title": "TimeStat",
+        "type": "object"
+      },
       "TimelineEvent": {
         "properties": {
           "action": {
@@ -1979,6 +6648,38 @@
           "details"
         ],
         "title": "TimelineEvent",
+        "type": "object"
+      },
+      "TimesView": {
+        "properties": {
+          "approver": {
+            "$ref": "#/components/schemas/TimeStat"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/TimeStat"
+          },
+          "design": {
+            "$ref": "#/components/schemas/TimeStat"
+          },
+          "dw": {
+            "$ref": "#/components/schemas/TimeStat"
+          },
+          "pc": {
+            "title": "Pc",
+            "type": "null"
+          },
+          "sales": {
+            "$ref": "#/components/schemas/TimeStat"
+          }
+        },
+        "required": [
+          "dw",
+          "sales",
+          "design",
+          "approver",
+          "customer"
+        ],
+        "title": "TimesView",
         "type": "object"
       },
       "UpdateTenantBody": {
@@ -2120,6 +6821,34 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "ValueState": {
+        "description": "How sure a value on a case is (CONTEXT.md \"Value states\").",
+        "enum": [
+          "dw",
+          "uncertain",
+          "confirmed",
+          "hand_entered",
+          "superseded"
+        ],
+        "title": "ValueState",
+        "type": "string"
+      },
+      "VersionBody": {
+        "additionalProperties": false,
+        "description": "The case version the decision was made on.",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_version"
+        ],
+        "title": "VersionBody",
+        "type": "object"
+      },
       "WaiverDecisionBody": {
         "properties": {
           "reason": {
@@ -2133,6 +6862,144 @@
           "reason"
         ],
         "title": "WaiverDecisionBody",
+        "type": "object"
+      },
+      "Words": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/components/schemas/Hidden"
+          }
+        ]
+      },
+      "WorkItem": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "assigned_to": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "order",
+              "quote",
+              "message"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "status",
+          "action",
+          "customer_code",
+          "received_at",
+          "due",
+          "assigned_to"
+        ],
+        "title": "WorkItem",
+        "type": "object"
+      },
+      "WorkerStateView": {
+        "properties": {
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "paused",
+          "changed_by",
+          "changed_at",
+          "reason"
+        ],
+        "title": "WorkerStateView",
         "type": "object"
       },
       "WorkspaceMemberView": {
@@ -2299,6 +7166,33 @@
           "archived"
         ],
         "title": "WorkspaceSummaryView",
+        "type": "object"
+      },
+      "YcbgBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "ycbg_no": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z0-9][A-Z0-9/-]{1,31}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ycbg No"
+          }
+        },
+        "required": [
+          "case_version"
+        ],
+        "title": "YcbgBody",
         "type": "object"
       }
     }
@@ -4502,6 +9396,2351 @@
         "summary": "Get Timeline",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox": {
+      "get": {
+        "operationId": "inbox_api_v1_sales_inbox_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InboxMessageView"
+                  },
+                  "title": "Response Inbox Api V1 Sales Inbox Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Inbox",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/process-all": {
+      "post": {
+        "operationId": "process_all_api_v1_sales_inbox_process_all_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessAllView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Process All",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/{message_id}/process": {
+      "post": {
+        "operationId": "process_api_v1_sales_inbox__message_id__process_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageDispositionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Process",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/bravo-orders": {
+      "get": {
+        "operationId": "bravo_orders_api_v1_sales_master_data_bravo_orders_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView_BravoOrderView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bravo Orders",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/convert-list": {
+      "get": {
+        "operationId": "convert_list_api_v1_sales_master_data_convert_list_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView_ConvertEntryView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Convert List",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/customers": {
+      "get": {
+        "operationId": "customers_api_v1_sales_master_data_customers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView_CustomerView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Customers",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/items": {
+      "get": {
+        "operationId": "items_api_v1_sales_master_data_items_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView_ItemView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Items",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/lme": {
+      "get": {
+        "operationId": "lme_api_v1_sales_master_data_lme_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView_LmeView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Lme",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/open-ycbg": {
+      "get": {
+        "operationId": "open_ycbg_api_v1_sales_master_data_open_ycbg_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView_OpenYcbgView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Open Ycbg",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/quotations": {
+      "get": {
+        "operationId": "quotations_api_v1_sales_master_data_quotations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView_QuotationRowView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Quotations",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/my-work": {
+      "get": {
+        "operationId": "my_work_api_v1_sales_my_work_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkItem"
+                  },
+                  "title": "Response My Work Api V1 Sales My Work Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "My Work",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders": {
+      "get": {
+        "operationId": "orders_api_v1_sales_orders_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrderSummaryView"
+                  },
+                  "title": "Response Orders Api V1 Sales Orders Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Orders",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}": {
+      "get": {
+        "operationId": "order_api_v1_sales_orders__case_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/artifacts/{artifact_id}": {
+      "get": {
+        "operationId": "order_artifact_api_v1_sales_orders__case_id__artifacts__artifact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Artifact",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/bravo-entry": {
+      "post": {
+        "operationId": "bravo_entry_api_v1_sales_orders__case_id__bravo_entry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BravoEntryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bravo Entry",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/close": {
+      "post": {
+        "operationId": "close_api_v1_sales_orders__case_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/confirm": {
+      "post": {
+        "operationId": "confirm_api_v1_sales_orders__case_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/correction-request": {
+      "post": {
+        "operationId": "correction_request_api_v1_sales_orders__case_id__correction_request_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Correction Request",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/cross-check": {
+      "post": {
+        "operationId": "cross_check_api_v1_sales_orders__case_id__cross_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossCheckBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cross Check",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/findings/{finding_key}/disposition": {
+      "post": {
+        "operationId": "dispose_api_v1_sales_orders__case_id__findings__finding_key__disposition_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "finding_key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$",
+              "title": "Finding Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispositionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dispose",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/delivery-date": {
+      "post": {
+        "description": "PC agreed the line's short lead time: recorded as who and when.",
+        "operationId": "delivery_date_api_v1_sales_orders__case_id__lines__line_no__delivery_date_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delivery Date",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/lines/{line_no}/mapping": {
+      "post": {
+        "operationId": "mapping_api_v1_sales_orders__case_id__lines__line_no__mapping_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line_no",
+            "required": true,
+            "schema": {
+              "maximum": 9999,
+              "minimum": 1,
+              "title": "Line No",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mapping",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/prepare": {
+      "post": {
+        "operationId": "prepare_api_v1_sales_orders__case_id__prepare_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prepare",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/source/{attachment_id}": {
+      "get": {
+        "operationId": "order_source_api_v1_sales_orders__case_id__source__attachment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9._-]{1,128}$",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9999,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sheet",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 31,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sheet"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Source",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/overview": {
+      "get": {
+        "operationId": "overview_api_v1_sales_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Overview",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes": {
+      "get": {
+        "operationId": "quotes_api_v1_sales_quotes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QuoteSummaryView"
+                  },
+                  "title": "Response Quotes Api V1 Sales Quotes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Quotes",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/screening": {
+      "get": {
+        "operationId": "screening_api_v1_sales_quotes_screening_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScreeningRow"
+                  },
+                  "title": "Response Screening Api V1 Sales Quotes Screening Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Screening",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}": {
+      "get": {
+        "operationId": "quote_api_v1_sales_quotes__case_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "incoterm",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "EXW",
+                    "FCA",
+                    "FOB",
+                    "CIF",
+                    "DAP",
+                    "DDP"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Incoterm"
+            }
+          },
+          {
+            "in": "query",
+            "name": "destination",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9_]{1,31}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Destination"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteCaseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/approval": {
+      "post": {
+        "operationId": "approval_api_v1_sales_quotes__case_id__approval_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approval",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/artifacts/{artifact_id}": {
+      "get": {
+        "operationId": "quote_artifact_api_v1_sales_quotes__case_id__artifacts__artifact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Artifact",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/decline": {
+      "post": {
+        "operationId": "decline_api_v1_sales_quotes__case_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decline",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/design-sent": {
+      "post": {
+        "operationId": "design_sent_api_v1_sales_quotes__case_id__design_sent_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Design Sent",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/findings/{finding_key}/answer": {
+      "post": {
+        "operationId": "answer_api_v1_sales_quotes__case_id__findings__finding_key__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "finding_key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$",
+              "title": "Finding Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/master-list": {
+      "post": {
+        "operationId": "master_list_api_v1_sales_quotes__case_id__master_list_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Master List",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/price": {
+      "post": {
+        "operationId": "price_api_v1_sales_quotes__case_id__price_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Price",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/sent": {
+      "post": {
+        "operationId": "sent_api_v1_sales_quotes__case_id__sent_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sent",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/source/{attachment_id}": {
+      "get": {
+        "operationId": "quote_source_api_v1_sales_quotes__case_id__source__attachment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9._-]{1,128}$",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9999,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sheet",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 31,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sheet"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Source",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/spec-discussion": {
+      "post": {
+        "operationId": "spec_discussion_api_v1_sales_quotes__case_id__spec_discussion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spec Discussion",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/submit": {
+      "post": {
+        "operationId": "submit_api_v1_sales_quotes__case_id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/ycbg": {
+      "post": {
+        "operationId": "ycbg_api_v1_sales_quotes__case_id__ycbg_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YcbgBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ycbg",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/worker/pause": {
+      "post": {
+        "operationId": "pause_api_v1_sales_worker_pause_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/worker/resume": {
+      "post": {
+        "operationId": "resume_api_v1_sales_worker_resume_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume",
+        "tags": [
+          "sales"
         ]
       }
     }

@@ -7,5 +7,10 @@
     "context's generated file. Example entry:",
     "  { \"name\": \"example-context\", \"pathPrefixes\": [\"/api/v1/example-context\"] }"
   ],
-  "contexts": []
+  "contexts": [
+    {
+      "name": "sales",
+      "pathPrefixes": ["/api/v1/sales"]
+    }
+  ]
 }

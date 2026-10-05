@@ -194,9 +194,8 @@ async def run_m10(
         reply_reader=ExcelDesignReplyReader(),
         cases=SqlQuoteCaseLookup(sessions),
         ledger=catalog,
-        rules=QuoteRules.model_validate(_policy("sales_quote_rules@1.0.0.yaml")),
+        rules=QuoteRules.model_validate(_policy("sales_quote_rules@1.1.0.yaml")),
         pricing=SalesPricing.model_validate(_policy("sales_pricing@1.0.0.yaml")),
-        design_mailboxes=frozenset({"design@seller.example"}),
     )
     steps: list[QuoteCase] = []
     clock = iter(T0 + timedelta(minutes=minute) for minute in range(100))
@@ -214,7 +213,7 @@ async def run_m10(
 
     at = T0
     case = await keep(
-        QuoteCase.open(uuid.uuid4(), await service.extract_request(scope, "M10")),
+        await service.open_case(scope, "M10", uuid.uuid4()),
         "quote.received",
         DW1,
     )

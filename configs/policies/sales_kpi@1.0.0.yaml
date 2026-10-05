@@ -1,0 +1,48 @@
+schema_version: "1.0"
+policy_id: sales_kpi
+policy_version: "1.0.0"
+
+# MOCK. What the DW1 overview (GET /api/v1/sales/overview) reports against.
+# Every number here is fictional and is no company's figure: the customer's
+# own targets and the time each step takes them by hand arrive as the
+# tenant's version of this policy, loaded at runtime, never as an edit to
+# this file. Validated by `dw_sales.domain.kpi.SalesKpi`.
+#
+# Results are reported beside these, without a pass/fail verdict: the mock
+# set is far below the sample a rate or a verdict would need.
+
+# From the moment the PO arrived to the order confirmed.
+order_confirmation_target_hours: 8
+
+# From the moment the request arrived to the quotation sent: under 1 day
+# (Đạt, 2026-10-05).
+quotation_target_days: 1
+
+# What one pass of each surveyed step takes by hand today, in minutes: the
+# column the per-step export carries beside what DW1 measured. Every step of
+# `dw_sales.domain.process.WIV_STEPS` is listed, the ones DW1 does not do
+# included (they are exported with no DW1 count).
+manual_baseline_minutes:
+  O1: 5
+  O2: 10
+  O3: 15
+  O4: 10
+  O5: 10
+  O6: 20
+  O7: 15
+  O8: 10
+  O9: 15
+  O10: 10
+  O11: 30
+  Q1: 10
+  Q2: 15
+  Q3: 10
+  Q4: 10
+  Q5: 10
+  Q6: 20
+  Q7: 30
+  Q8: 20
+  Q9: 15
+  Q10: 10
+  Q11: 10
+  Q12: 60

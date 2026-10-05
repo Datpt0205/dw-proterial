@@ -26,7 +26,7 @@ import hashlib
 import json
 import uuid
 from collections.abc import Iterable, Mapping
-from datetime import date
+from datetime import date, datetime
 from decimal import ROUND_DOWN, ROUND_HALF_UP, ROUND_UP, Decimal
 from enum import StrEnum
 from typing import Annotated, Final, Literal, Self
@@ -67,6 +67,8 @@ Reason = Annotated[str, Field(min_length=1, max_length=1000, pattern=r"\S")]
 Guidance = Annotated[str, Field(min_length=1, max_length=2000, pattern=r"\S")]
 CopperWeight = Annotated[Decimal, Field(gt=0)]
 MessageId = Annotated[str, Field(pattern=r"^[!-~]{1,512}$")]
+# ``<id>@<semver>``: a policy or a parser, as stamped on a case.
+VersionRef = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$")]
 
 # A requested value the customer may leave blank, and the case then asks for.
 RfqField = Literal["quantity", "needed_by"]
@@ -148,6 +150,10 @@ class RfqDocument(BaseModel):
     """What one request-for-quotation file states, every value with its anchor."""
 
     model_config = _FROZEN
+
+    # The reader that produced it: stamped on the case with what it read, as a
+    # PO's is (spec decision 11).
+    parser_version: VersionRef
 
     # The buyer the file names, as printed. Read for a request forwarded from
     # an internal address, whose sender names no customer.
@@ -724,6 +730,11 @@ class QuoteFindingCode(StrEnum):
     RFQ_INCOMPLETE = "rfq_incomplete"
     CUSTOMER_UNKNOWN = "customer_unknown"
     PRICE_BELOW_POLICY_FLOOR = "price_below_policy_floor"
+    # The floor cannot be computed: the copper weight, the LME month, the
+    # policy's adder for it or a USD rate is unknown. Fails closed, as an
+    # order line with no LME figure fails its band: blocking until the
+    # approver accepts it with a reason.
+    PRICE_FLOOR_UNKNOWN = "price_floor_unknown"
     PRICE_BASIS_MISMATCH = "price_basis_mismatch"
     ABOVE_TARGET_PRICE = "above_target_price"
 
@@ -736,6 +747,7 @@ INTAKE_FINDINGS: Final = frozenset(
 PRICE_FINDINGS: Final = frozenset(
     {
         QuoteFindingCode.PRICE_BELOW_POLICY_FLOOR,
+        QuoteFindingCode.PRICE_FLOOR_UNKNOWN,
         QuoteFindingCode.PRICE_BASIS_MISMATCH,
         QuoteFindingCode.ABOVE_TARGET_PRICE,
     }
@@ -885,6 +897,9 @@ def price_findings(
 
     - `price_below_policy_floor`: the price is under the copper component at
       the decision's LME month times (1 + the floor margin).
+    - `price_floor_unknown`: that floor cannot be computed, and the finding
+      names which factor is unknown (copper weight, LME month, the policy's
+      adder for it, a USD rate). An unknown floor is not a floor that holds.
     - `price_basis_mismatch`: the line's copper basis is not the prescribed
       kind; or, banded, its band is not the policy's band for the decision's
       LME, or that month is not the latest one published when it was decided.
@@ -904,7 +919,22 @@ def price_findings(
             copper_weight.value if copper_weight else None, decision.lme, item.uom.value, pricing
         )
         floor = policy_floor(copper, case.request.currency, pricing)
-        if floor is not None and line.unit_price < floor.price:
+        if floor is None:
+            findings.append(
+                QuoteFinding(
+                    code=QuoteFindingCode.PRICE_FLOOR_UNKNOWN,
+                    blocking=True,
+                    line_no=line.line_no,
+                    expected="floor",
+                    actual=",".join(
+                        _unknown_floor_factors(
+                            copper_weight is not None, decision.lme, case.request.currency, pricing
+                        )
+                    ),
+                    rule_versions=(pricing_version,),
+                )
+            )
+        elif line.unit_price < floor.price:
             findings.append(
                 QuoteFinding(
                     code=QuoteFindingCode.PRICE_BELOW_POLICY_FLOOR,
@@ -942,6 +972,22 @@ def price_findings(
                 )
             )
     return tuple(findings)
+
+
+def _unknown_floor_factors(
+    weight_known: bool, lme: LmeMonth | None, currency: Currency, pricing: SalesPricing
+) -> tuple[str, ...]:
+    """Why the floor cannot be computed, as factor names and never values."""
+    unknown: list[str] = []
+    if not weight_known:
+        unknown.append("copper_weight")
+    if lme is None:
+        unknown.append("lme")
+    elif pricing.copper_adder(lme) is None:
+        unknown.append("copper_adder")
+    if currency != _FLOOR_CURRENCY:
+        unknown.append("usd_rate")
+    return tuple(unknown)
 
 
 def _basis_mismatch(
@@ -1278,6 +1324,13 @@ class QuoteCase(BaseModel):
     case_id: uuid.UUID
     case_version: int = Field(default=1, ge=1)
     request: QuoteRequest
+    # Stamped when the case opens (spec decision 11), as an order case's are
+    # when it is checked: the quote rules it was opened under and the oldest
+    # master-data snapshot read to open it. The parser is the request's own
+    # (`parser_version`). A price finding names the policies it was raised
+    # under on itself.
+    rules_version: VersionRef
+    catalog_as_of: AwareDatetime
     status: QuoteStatus = QuoteStatus.RECEIVED
     findings: tuple[QuoteFinding, ...] = ()
     ycbg: YcbgRecord | None = None
@@ -1294,9 +1347,23 @@ class QuoteCase(BaseModel):
     decline: Decline | None = None
 
     @classmethod
-    def open(cls, case_id: uuid.UUID, request: QuoteRequest) -> QuoteCase:
-        """A new case, with what the request raises on its own."""
-        return cls(case_id=case_id, request=request, findings=intake_findings(request))
+    def open(
+        cls,
+        case_id: uuid.UUID,
+        request: QuoteRequest,
+        *,
+        rules_version: str,
+        catalog_as_of: datetime,
+    ) -> QuoteCase:
+        """A new case, with what the request raises on its own and the rules
+        and data it was opened with."""
+        return cls(
+            case_id=case_id,
+            request=request,
+            rules_version=rules_version,
+            catalog_as_of=catalog_as_of,
+            findings=intake_findings(request),
+        )
 
     # -------------------------------------------------------- invariants --
 
@@ -1312,6 +1379,8 @@ class QuoteCase(BaseModel):
             "master_list": self.master_list is not None,
             "return": bool(self.returns),
         }
+        if not self.rules_version.startswith("sales_quote_rules@"):
+            raise ValueError("a quote case is opened under the quote rules")
         if (self.status is QuoteStatus.DECLINED) != (self.decline is not None):
             raise ValueError("a decline goes with the declined status, and only with it")
         if self.status is not QuoteStatus.DECLINED:
@@ -1405,6 +1474,11 @@ class QuoteCase(BaseModel):
             if isinstance(disposition, FindingCorrected) and disposition.customer_code:
                 return disposition.customer_code
         return self.request.customer_code
+
+    @property
+    def parser_version(self) -> str:
+        """The reader the request was read with."""
+        return self.request.document.parser_version
 
     @property
     def design_reply(self) -> DesignReply | None:

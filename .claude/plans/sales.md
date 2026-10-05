@@ -43,13 +43,17 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   with the PO when recording the order number; NOC/ESF blocks confirmation,
   not preparation. The cross-checker must also differ from the Bravo
   recorder. The quotation approval matrix waits for Proterial (ticket 12).
-- Next: 05 → 06 → 08. Owed into 05: domain carries earlier makers
-  (the DB already refuses), QuoteCase gets rules/parser version and catalog
-  as_of, one actor id type for orders and quotes, worker events written to
-  platform.audit_events by handlers, the Design mailbox as a policy key.
-- Quote findings fail open when copper weight, LME or USD is unknown; the
-  orchestrator's default (fail closed: blocks approval without a reason, as
-  on the order side) lands with 05 unless Đạt objects.
+- 2026-10-05, ticket 05 built (uncommitted): 42 routes under
+  `/api/v1/sales`, each on the verified access context, scope before the
+  idempotency key, amounts left out by one mapper per resource, ids-only
+  mutation answers. The items owed into 05 landed: the case carries every
+  earlier maker and refuses the cross-check itself (409 "tách nhiệm"), quote
+  cases stamp rules version and catalog `as_of` (the parser is the
+  request's), one actor id type (principal uuid, migration `075dca5a6168`),
+  audit rows in the same transaction, the Design mailbox in
+  `sales_quote_rules@1.1.0`, and `price_floor_unknown` (fail closed, Đạt did
+  not object). `sales_kpi@1.0.0` shipped. Details in the ticket's "As built".
+- Next: 06 → 08.
 - Offboarding export reads a partitioned parent and its partitions, so audit
   and event rows come out twice (pre-existing; platform).
 - Open from the 02/03 pass: routing reasons (complaint, sample request,
@@ -74,10 +78,26 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | 02, 03 | `ad467dd`     | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32        |
 | review | `077d54b`     | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping              |
 | 04     | `5ed607b`     | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding              |
-| 11     | (uncommitted) | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
+| 11     | `87ab107`     | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
+| 05     | (uncommitted) | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
 
 ## Open
 
+- From ticket 05 (2026-10-05):
+    - The overview loads every case of the workspace; SQL aggregates before
+      real volume (ticket 12).
+    - The A3 shadow count uses interim conditions (no finding, every line
+      exact, an original) until Proterial defines A3.
+    - Ticket 08 must render a served PDF page with pdf.js scripting off and
+      a sheet grid's cell text as text; a download's file name needs
+      `Content-Disposition` in the CORS `expose_headers` if the browser is
+      to read it.
+    - A pause commits before its notification: a delivery failure answers
+      500 while DW1 is paused (a retry answers 409 "đã tạm dừng").
+    - `dw_sales.workflows.graph` is the scaffold's unused graph (not in the
+      ticket's delete list; ticket 10 replaces it).
+    - The committed OpenAPI snapshot was stale on `main` before 05 (the
+      contract test failed); 05 regenerated it, platform drift included.
 - Ticket 11 (2026-10-05): the full demo seed is
   `uv run python -m dw_sales.testing.seed_personas` (platform seed, then the
   Sales keys). The new personas sign in through Keycloak via

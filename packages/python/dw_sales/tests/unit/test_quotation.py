@@ -84,7 +84,7 @@ def _yaml(name: str) -> dict[str, Any]:
     return raw
 
 
-RULES = QuoteRules.model_validate(_yaml("sales_quote_rules@1.0.0.yaml"))
+RULES = QuoteRules.model_validate(_yaml("sales_quote_rules@1.1.0.yaml"))
 PRICING = SalesPricing.model_validate(_yaml("sales_pricing@1.0.0.yaml"))
 
 
@@ -120,8 +120,12 @@ def _service(
     cases: FakeCases | None = None,
     ledger: Any = None,
     rules: QuoteRules = RULES,
-    design_mailboxes: frozenset[str] = DESIGN,
+    design_mailboxes: frozenset[str] | None = None,
 ) -> QuotationService:
+    if design_mailboxes is not None:
+        rules = QuoteRules.model_validate(
+            rules.model_dump() | {"design_mailboxes": tuple(sorted(design_mailboxes))}
+        )
     catalog = catalog or MockSalesCatalog.load(SCOPE)
     return QuotationService(
         catalog=catalog,
@@ -132,12 +136,11 @@ def _service(
         ledger=ledger or catalog,
         rules=rules,
         pricing=PRICING,
-        design_mailboxes=design_mailboxes,
     )
 
 
 async def _awaiting_design(service: QuotationService, message_id: str, ycbg_no: str) -> QuoteCase:
-    case = QuoteCase.open(uuid.uuid4(), await service.extract_request(SCOPE, message_id))
+    case = await service.open_case(SCOPE, message_id, uuid.uuid4())
     return case.draft_ycbg().record_ycbg(ycbg_no, by=PRICER, at=AT).send_to_design()
 
 
@@ -176,7 +179,7 @@ def _decision(
 
 
 def test_the_shipped_policy_is_valid_and_named_for_its_version() -> None:
-    assert f"{RULES.version}.yaml" == "sales_quote_rules@1.0.0.yaml"
+    assert f"{RULES.version}.yaml" == "sales_quote_rules@1.1.0.yaml"
     assert RULES.copper_basis == "lme_band"
     assert RULES.reference_price is not None
 
@@ -192,11 +195,11 @@ def test_the_shipped_policy_is_valid_and_named_for_its_version() -> None:
 )
 def test_a_policy_with_an_impossible_or_unknown_rule_is_refused(change: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
-        QuoteRules.model_validate(_yaml("sales_quote_rules@1.0.0.yaml") | change)
+        QuoteRules.model_validate(_yaml("sales_quote_rules@1.1.0.yaml") | change)
 
 
 def test_a_policy_says_whether_it_offers_a_reference_rather_than_forgetting_to() -> None:
-    raw = _yaml("sales_quote_rules@1.0.0.yaml")
+    raw = _yaml("sales_quote_rules@1.1.0.yaml")
     assert QuoteRules.model_validate(raw | {"reference_price": None}).reference_price is None
     del raw["reference_price"]
     with pytest.raises(ValidationError):
@@ -236,14 +239,14 @@ async def test_every_quote_request_in_the_mailbox_reads_back_as_its_fixture_says
 
 async def test_m14_forwarded_by_the_sales_manager_names_its_buyer_and_waits_for_sales() -> None:
     request = await _service().extract_request(SCOPE, "M14")
-    case = QuoteCase.open(uuid.uuid4(), request)
+    case = QuoteCase.open(uuid.uuid4(), request, rules_version=RULES.version, catalog_as_of=AT)
 
     assert (request.customer_code, request.customer_from) == ("VLX", "named_buyer")
     assert [f.code for f in case.findings] == [QuoteFindingCode.CUSTOMER_UNKNOWN]
 
 
 async def test_m23_with_a_blank_quantity_opens_a_case_with_rfq_incomplete() -> None:
-    case = QuoteCase.open(uuid.uuid4(), await _service().extract_request(SCOPE, "M23"))
+    case = await _service().open_case(SCOPE, "M23", uuid.uuid4())
 
     (finding,) = case.findings
     assert (finding.code, finding.line_no, finding.missing) == (
@@ -375,7 +378,7 @@ async def test_a_message_with_two_request_files_is_left_to_a_person() -> None:
 
 async def test_the_design_request_names_the_known_item_and_no_price() -> None:
     service = _service()
-    case = QuoteCase.open(uuid.uuid4(), await service.extract_request(SCOPE, "M10"))
+    case = await service.open_case(SCOPE, "M10", uuid.uuid4())
     draft = await service.design_request(SCOPE, case)
 
     (line,) = draft.lines
@@ -386,7 +389,7 @@ async def test_the_design_request_names_the_known_item_and_no_price() -> None:
 
 async def test_a_code_the_convert_list_does_not_know_goes_to_design_as_new() -> None:
     service = _service()
-    case = QuoteCase.open(uuid.uuid4(), await service.extract_request(SCOPE, "M09"))
+    case = await service.open_case(SCOPE, "M09", uuid.uuid4())
 
     (line,) = (await service.design_request(SCOPE, case)).lines
     assert line.known_prv_code is None

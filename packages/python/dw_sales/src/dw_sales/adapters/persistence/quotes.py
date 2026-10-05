@@ -50,6 +50,13 @@ def _case(row: RowMapping) -> QuoteCase:
     )
 
 
+def _stored(row: RowMapping) -> Stored[QuoteCase]:
+    origin = CaseOrigin(
+        assigned_to=row["assigned_to"], release_manifest_ref=row["release_manifest_ref"]
+    )
+    return Stored(_case(row), origin)
+
+
 @dataclass(frozen=True)
 class SqlQuoteCaseRepository:
     """Implements `QuoteCaseStorePort` inside a unit of work's transaction."""
@@ -60,12 +67,15 @@ class SqlQuoteCaseRepository:
     async def get(self, case_id: uuid.UUID) -> Stored[QuoteCase] | None:
         result = await self.session.execute(sa.select(_Q).where(_Q.c.id == case_id))
         row = result.mappings().first()
-        if row is None:
-            return None
-        origin = CaseOrigin(
-            assigned_to=row["assigned_to"], release_manifest_ref=row["release_manifest_ref"]
-        )
-        return Stored(_case(row), origin)
+        return None if row is None else _stored(row)
+
+    async def list_all(self) -> Sequence[Stored[QuoteCase]]:
+        rows = (
+            await self.session.execute(
+                sa.select(_Q).order_by(_Q.c.created_at.desc(), _Q.c.id.desc())
+            )
+        ).mappings()
+        return [_stored(row) for row in rows]
 
     async def cases_for_ycbg(self, ycbg_no: str) -> Sequence[QuoteCase]:
         rows = (
