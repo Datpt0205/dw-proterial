@@ -4,11 +4,12 @@ This repository is a platform backbone plus bounded contexts that plug into it
 (`CLAUDE.md`, "Adding a bounded context"). Each context owns its own language
 and its own decisions; the platform's decisions apply to every context.
 
-| Context  | What it covers                                                                                            | Glossary                   | Decisions   |
-| -------- | --------------------------------------------------------------------------------------------------------- | -------------------------- | ----------- |
-| Platform | Tenancy and authorization, the agent runtime, model gateway, knowledge, memory, audit, notifications, ops | `docs/platform/CONTEXT.md` | `docs/adr/` |
+| Context  | What it covers                                                                                            | Glossary                              | Decisions                            |
+| -------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------ |
+| Platform | Tenancy and authorization, the agent runtime, model gateway, knowledge, memory, audit, notifications, ops | `docs/platform/CONTEXT.md`            | `docs/adr/`                          |
+| Sales    | DW1 Đơn hàng & Báo giá: order intake (WIV-03-012) and quotation (WIV-03-023), on mock data behind ports   | `packages/python/dw_sales/CONTEXT.md` | `packages/python/dw_sales/docs/adr/` |
 
-This checkout ships no business context. A product adds one with
+A product adds a context with
 `make new-context NAME=<name>` and gives it a row here, with its glossary at
 `packages/python/dw_<name>/CONTEXT.md` and its decisions at
 `packages/python/dw_<name>/docs/adr/`.
