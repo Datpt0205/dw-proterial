@@ -66,7 +66,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | ------ | --------- | ------------------------------------------------------------------------------------------------- |
 | 07     | `78af2bd` | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money           |
 | 01     | `b5f990b` | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12         |
-| 02, 03 | next      | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32 |
+| 02, 03 | `ad467dd` | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32 |
 
 ## Open
 
