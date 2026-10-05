@@ -7,6 +7,12 @@ demo) sẽ dùng mọi thứ ở đây, nhưng không chữ, không bảng nhãn
 nằm trong lát này. Bản thiết kế v3 chỉ có trên máy Đạt, nên mọi hành vi cần dùng được
 chép vào spec này; ticket dẫn về mục ở đây, không dẫn về tệp thiết kế.
 
+Dẫn chứng ngoài repo này, để một dự án khác dựng trên nền tảng đọc đúng: tên tệp
+`*.dc.html` (`EHSDT v3.dc.html`, `V3Catalog.dc.html`…) là tệp của bản bàn giao design
+v3 mà sản phẩm đầu tiên dùng, không nằm ở đây; "nhánh `bidding`" là repo của sản phẩm
+đó (`ui-quality.md`, ADR của context). Mọi hành vi lát này cần đã chép vào spec; một
+dự án khác thay bản vẽ của mình mà không phải đọc các tệp đó.
+
 ## Mục tiêu
 
 Trước khi có màn nghiệp vụ nào, web có một khung dùng chung đúng như design v3 và
