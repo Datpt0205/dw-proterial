@@ -1,6 +1,6 @@
 # 04 — Persistence: `sales` schema, RLS, repositories
 
-Status: ready-for-agent
+Status: done (2026-10-05)
 Blocked by: 02, 03 (amendments)
 
 ## What

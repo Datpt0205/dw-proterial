@@ -30,7 +30,7 @@ from sqlalchemy.pool import NullPool
 pytestmark = pytest.mark.integration
 
 # Schemas that hold tenant data. A new one belongs here the day it is created.
-_TENANT_SCHEMAS = ("platform", "knowledge", "memory")
+_TENANT_SCHEMAS = ("platform", "knowledge", "memory", "sales")
 
 _TENANT_TABLES = sa.text(
     """

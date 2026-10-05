@@ -170,8 +170,10 @@ async def test_catalog_discovery_sees_a_table_added_after_this_class_was_written
     to be current today."""
     offboarding = SqlTenantOffboarding(session_factory=sessions)
     async with sessions() as session, session.begin():
-        exportable = await offboarding._exportable_tables(session)
-        purgeable = await offboarding._purgeable_tables(session)
+        exportable_tables = await offboarding._exportable_tables(session)
+        purgeable = {t.key for t in await offboarding._purgeable_tables(session)}
+    exportable = {t.key for t in exportable_tables}
+    by_workspace = {t.key for t in exportable_tables if t.by_workspace}
     assert ("platform", "tenant_daily_spend_guard") in exportable
     assert ("platform", "tenant_daily_spend_guard") in purgeable
     assert ("platform", "tenant_offboarding_requests") not in exportable, (
@@ -185,6 +187,10 @@ async def test_catalog_discovery_sees_a_table_added_after_this_class_was_written
         "audit_events is append-only (dw_app has no DELETE); its own retention"
         " term governs it, not offboarding"
     )
+    # A policy that narrows by workspace too (the sales schema's) is read once
+    # per workspace; a tenant-wide one once.
+    assert ("sales", "order_cases") in by_workspace
+    assert ("platform", "audit_events") not in by_workspace
 
 
 async def test_export_rows_returns_only_this_tenants_data(
