@@ -54,9 +54,10 @@ TENANTS = [
     {"slug": "tenant-beta", "name": "Công ty Beta", "plan_id": "basic"},
 ]
 
-# Tenant Alpha carries one user per role so a tester can log in six times and see
-# six different workbenches; Beta stays at two, which is all the cross-tenant
-# isolation tests need.
+# Tenant Alpha carries one user per role so a tester can log in once per role and
+# see a different workbench each time; Beta stays at two, which is all the
+# cross-tenant isolation tests need. Platform roles only: a context attaches its
+# own roles to these memberships from its own package, never from here.
 USERS = [
     # (subject, email, display_name, tenant_slug, roles, department)
     (
@@ -107,6 +108,24 @@ USERS = [
         "Vũ Thanh Hà",
         "tenant-alpha",
         ["executive"],
+        "dieu-hanh",
+    ),
+    (
+        "dev|khoa.lam",
+        "khoa.lam@alpha.local",
+        "Lâm Minh Khoa",
+        "tenant-alpha",
+        ["member"],
+        "kinh-doanh",
+    ),
+    (
+        "dev|tam.ngo",
+        "tam.ngo@alpha.local",
+        "Ngô Minh Tâm",
+        "tenant-alpha",
+        # Tenant IT: administers members, and is the persona that proves an
+        # administrator holds no business data scope by default.
+        ["org_admin"],
         "dieu-hanh",
     ),
     (

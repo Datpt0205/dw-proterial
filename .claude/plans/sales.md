@@ -43,7 +43,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   with the PO when recording the order number; NOC/ESF blocks confirmation,
   not preparation. The cross-checker must also differ from the Bravo
   recorder. The quotation approval matrix waits for Proterial (ticket 12).
-- Next: 11 → 05 → 06 → 08. Owed into 05: domain carries earlier makers
+- Next: 05 → 06 → 08. Owed into 05: domain carries earlier makers
   (the DB already refuses), QuoteCase gets rules/parser version and catalog
   as_of, one actor id type for orders and quotes, worker events written to
   platform.audit_events by handlers, the Design mailbox as a policy key.
@@ -67,16 +67,27 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 
 ## Slice log
 
-| Ticket | Commit    | What                                                                                              |
-| ------ | --------- | ------------------------------------------------------------------------------------------------- |
-| 07     | `78af2bd` | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money           |
-| 01     | `b5f990b` | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12         |
-| 02, 03 | `ad467dd` | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32 |
-| review | `077d54b` | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping       |
-| 04     | `5ed607b` | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding       |
+| Ticket | Commit        | What                                                                                                     |
+| ------ | ------------- | -------------------------------------------------------------------------------------------------------- |
+| 07     | `78af2bd`     | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money                  |
+| 01     | `b5f990b`     | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12                |
+| 02, 03 | `ad467dd`     | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32        |
+| review | `077d54b`     | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping              |
+| 04     | `5ed607b`     | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding              |
+| 11     | (uncommitted) | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
 
 ## Open
 
+- Ticket 11 (2026-10-05): the full demo seed is
+  `uv run python -m dw_sales.testing.seed_personas` (platform seed, then the
+  Sales keys). The new personas sign in through Keycloak via
+  `scripts/keycloak_dev_users.py`, which links by email; the realm file was
+  not changed. The platform seed resets roles, so a full re-run rewrites the
+  Sales keys (same end state); the Sales seed alone writes nothing on a
+  re-run. Owed to ticket 10: `approver_boost` gives Diệu `approvals.decide`,
+  so once a quote approval goes through the platform's approval inbox it must
+  still require `sales.quote.approve`, or she could approve her own quote
+  there.
 - Spec decision 5: the Sales decision is recorded by the context, not yet a
   runtime interrupt (ticket 10).
 - Public repo: the repo name and these plan files name Proterial and its

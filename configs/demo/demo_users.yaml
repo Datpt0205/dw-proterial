@@ -2,74 +2,103 @@
 # không bao giờ được mount ở profile uat/production. UUID là uuid5 deterministic khớp seed
 # (dw_platform.testing.seed_env, SEED_NAMESPACE); backend vẫn xác minh membership
 # trong DB trên mọi request — roster này chỉ là tiện ích đăng nhập demo.
+#
+# Mỗi người ở đây có trong seed, cùng tên hiển thị và cùng vai trò: role nền tảng
+# từ dw_platform.testing.seed_env, role sales_* từ dw_sales.testing.seed_personas
+# (permission set nằm trong description). Người và tên đều là giả lập.
+# dw_sales/tests/unit/test_demo_roster.py kiểm tra điều này.
 schema_version: "1.0"
 users:
   - subject: dev|an.nguyen
     display_name: Nguyễn Văn An
-    description: Thành viên — chỉ thấy và sửa bản ghi của chính mình
-    roles: [sales]
+    description: >-
+      Sales PIC đơn hàng, kiêm PIC kiểm soát xuất khẩu (sales_export_control) —
+      chuẩn bị đơn, kiểm chéo đơn người khác chuẩn bị, xác nhận NOC/ESF; không
+      kiểm chéo đơn của chính mình, không xem giá khách khác, không duyệt báo
+      giá, không cho DW1 chạy lại
+    roles: [member, sales_pic]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
+    tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
   - subject: dev|dieu.hoang
     display_name: Hoàng Thị Diệu
-    description: Thành viên — cùng mức quyền, khác danh mục phụ trách
-    roles: [am]
+    description: >-
+      Sales PIC báo giá, xem được giá đã báo cho khách khác
+      (sales_price_evidence) — định giá và trình duyệt, kiểm chéo đơn của An;
+      không duyệt báo giá nào, kể cả báo giá của chính mình (approver_boost
+      không cho quyền sales.*)
+    roles: [member, sales_pic]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
-    workspace_id: 64764894-718d-5558-ba17-9a2949214063
-  - subject: dev|binh.tran
-    display_name: Trần Thanh Bình
-    description: Quản lý — phê duyệt và xem số liệu của đội mình
-    roles: [manager]
-    tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
+    tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
   - subject: dev|giang.do
     display_name: Đỗ Trường Giang
-    description: Giám đốc — như quản lý, phạm vi rộng hơn
-    roles: [director]
+    description: >-
+      Trưởng bộ phận Sales — mọi quyền của PIC, xem giá khách khác, duyệt báo
+      giá, cho DW1 chạy lại; không duyệt báo giá do chính mình định giá
+    roles: [director, sales_head]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
+    tenant_name: FDX
+    workspace_id: 64764894-718d-5558-ba17-9a2949214063
+  - subject: dev|khoa.lam
+    display_name: Lâm Minh Khoa
+    description: >-
+      Sales PIC, người duyệt báo giá thay (sales_quote_approver) — duyệt báo
+      giá người khác định giá; không duyệt báo giá do chính mình định giá,
+      không xem giá khách khác, không cho DW1 chạy lại
+    roles: [member, sales_pic]
+    tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
+    tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
   - subject: dev|ha.vu
     display_name: Vũ Thanh Hà
-    description: Lãnh đạo — chỉ đọc; đề xuất của AI vẫn phải qua quản lý duyệt
-    roles: [executive]
+    description: >-
+      Lãnh đạo (xem tổng hợp) — chỉ thấy số lượng và thời gian ở trang tổng
+      quan Sales; không thấy danh sách hồ sơ, không thấy số tiền
+    roles: [executive, sales_viewer]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
+    tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
-  - subject: dev|tung.pham.duc
-    display_name: Tung Pham Duc
-    description: AM trong bộ dữ liệu báo cáo — chỉ thấy khách hàng của mình
-    roles: [am]
+  - subject: dev|tam.ngo
+    display_name: Ngô Minh Tâm
+    description: >-
+      IT quản trị tenant (org_admin) — quản lý thành viên và vai trò; không có
+      quyền Sales nào và không xem được giá (tách nhiệm: IT không phải Sales)
+    roles: [org_admin]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
+    tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
-  - subject: dev|duong.do.ngan
-    display_name: Duong Do Ngan
-    description: Sales admin — mở tab Report và sửa được định nghĩa báo cáo
-    roles: [sales_admin]
+  - subject: dev|binh.tran
+    display_name: Trần Thị Bình
+    description: >-
+      Quản lý phòng Mua hàng, ngoài phòng Sales — phê duyệt việc của đội mình;
+      bị từ chối (403) ở mọi trang Sales
+    roles: [manager]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
+    tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
   - subject: dev|chi.le
-    display_name: Lê Kim Chi
-    description: Quản trị nền tảng — xem mọi trang, cấu hình
-    roles: [platform_admin, sales]
+    display_name: Lê Thị Chi
+    description: >-
+      Quản trị nền tảng — xem mọi trang, cấu hình; không dùng trong kịch bản
+      demo Sales, vì quyền này vượt qua mọi kiểm tra và che mất kiểm tra còn
+      thiếu
+    roles: [platform_admin, member]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
-    tenant_name: Công ty Alpha
+    tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
   - subject: dev|bao.pham
-    display_name: Phạm Gia Bảo
-    description: Tenant Beta (kiểm chứng cách ly dữ liệu giữa tenant)
-    roles: [sales]
+    display_name: Phạm Quốc Bảo
+    description: >-
+      Sales PIC ở tenant Beta (kiểm chứng cách ly dữ liệu giữa tenant) — chỉ
+      thấy dữ liệu của Beta; mã hồ sơ của Alpha trả về 404
+    roles: [member, sales_pic]
     tenant_id: 6634f09a-d1d7-54a6-aa23-f3f018f41f28
     tenant_name: Công ty Beta
     workspace_id: eda6af16-a0c4-55d3-be0b-163414390572
   - subject: dev|dung.vo
     display_name: Võ Thị Dung
-    description: Tenant Beta — quản lý, dùng để thử duyệt chéo tenant
+    description: Tenant Beta — quản lý, dùng để thử duyệt chéo tenant; không có quyền Sales
     roles: [manager]
     tenant_id: 6634f09a-d1d7-54a6-aa23-f3f018f41f28
     tenant_name: Công ty Beta
