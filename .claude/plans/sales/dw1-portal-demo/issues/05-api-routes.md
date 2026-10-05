@@ -70,8 +70,7 @@ sheet, served_at)`. `prepare` and `cross-check` answer 409 "chưa mở
     Targets come from `sales_kpi@1.0.0`, which this ticket ships in
     `configs/policies/` with a Pydantic schema in dw_sales and fictional
     values: the order-confirmation and quotation-time targets and the manual
-    baseline per surveyed step. Which quotation-time target the demo
-    measures is owed by Đạt; the key holds a fictional default and says so
+    baseline per surveyed step. The quotation-time target is 1 day (Đạt, 2026-10-05)
     in a comment. No key is added that the overview does not read. The
     response holds no amounts.
 
