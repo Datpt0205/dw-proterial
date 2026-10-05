@@ -1,10 +1,20 @@
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
+
+/**
+ * A nav icon: an `@ant-design/icons` component (the Sales nav, and every new
+ * one) or a lucide icon the platform pages still use. The bar draws it at
+ * 1rem with `className`, and hides it from assistive tech.
+ */
+export type NavIcon = ComponentType<{
+  className?: string;
+  "aria-hidden"?: boolean;
+}>;
 
 export interface NavItem {
   href: string;
   label: string;
   hint: string;
-  icon: LucideIcon;
+  icon: NavIcon;
   exact?: boolean;
   /** Scope required to see this item (omit = always visible). */
   scope?: string;
@@ -27,7 +37,7 @@ export interface NavItem {
 export interface NavGroup {
   key: string;
   label: string;
-  icon: LucideIcon;
+  icon: NavIcon;
   items: NavItem[];
 }
 

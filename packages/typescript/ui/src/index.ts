@@ -28,3 +28,10 @@ export { Input, Select, Textarea } from "./input";
 export { Switch, type SwitchProps } from "./switch";
 export { Label } from "./label";
 export { Separator } from "./separator";
+export {
+  MASKED_LABEL,
+  MaskedRegion,
+  MaskedValue,
+  type MaskedValueProps,
+} from "./masked-value";
+export { PageHeader, type PageHeaderProps } from "./page-header";

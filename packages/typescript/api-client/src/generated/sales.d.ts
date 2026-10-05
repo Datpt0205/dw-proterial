@@ -224,6 +224,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Artifacts */
+        get: operations["order_artifacts_api_v1_sales_orders__case_id__artifacts_get"];
+        put?: never;
+        /** Render Order Artifact */
+        post: operations["render_order_artifact_api_v1_sales_orders__case_id__artifacts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/artifacts/{artifact_id}": {
         parameters: {
             query?: never;
@@ -499,6 +517,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/{case_id}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote Artifacts */
+        get: operations["quote_artifacts_api_v1_sales_quotes__case_id__artifacts_get"];
+        put?: never;
+        /** Render Quote Artifact */
+        post: operations["render_quote_artifact_api_v1_sales_quotes__case_id__artifacts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}/artifacts/{artifact_id}": {
         parameters: {
             query?: never;
@@ -755,6 +791,53 @@ export interface components {
             reasons?: {
                 [key: string]: string;
             };
+        };
+        /** ArtifactListView */
+        ArtifactListView: {
+            /** Artifacts */
+            artifacts: components["schemas"]["ArtifactView"][];
+            /** Available */
+            available: string[];
+            /** Case Version */
+            case_version: number;
+        };
+        /**
+         * ArtifactView
+         * @description One stored file: what the approval view shows beside it (template,
+         *     case version, hash), and whether this caller may download it now.
+         */
+        ArtifactView: {
+            /**
+             * Artifact Id
+             * Format: uuid
+             */
+            artifact_id: string;
+            /** Case Version */
+            case_version: number;
+            /** Content Type */
+            content_type: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Downloadable */
+            downloadable: boolean;
+            /** File Name */
+            file_name: string;
+            /** Kind */
+            kind: string;
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Template Ref */
+            template_ref: string;
         };
         /** AttachmentView */
         AttachmentView: {
@@ -1986,6 +2069,25 @@ export interface components {
          * @enum {string}
          */
         RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value";
+        /**
+         * RenderBody
+         * @description An artifact kind to render from the case at the version the caller saw;
+         *     which kinds are open now is `GET .../artifacts`'s ``available``.
+         */
+        RenderBody: {
+            /** Case Version */
+            case_version: number;
+            /** Kind */
+            kind: string;
+        };
+        /**
+         * RenderedView
+         * @description The files one render stored: ids, template, version and hash only.
+         */
+        RenderedView: {
+            /** Artifacts */
+            artifacts: components["schemas"]["ArtifactView"][];
+        };
         /** ResumeBody */
         ResumeBody: {
             /** Reason */
@@ -2635,6 +2737,75 @@ export interface operations {
             };
         };
     };
+    order_artifacts_api_v1_sales_orders__case_id__artifacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactListView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_order_artifact_api_v1_sales_orders__case_id__artifacts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderedView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     order_artifact_api_v1_sales_orders__case_id__artifacts__artifact_id__get: {
         parameters: {
             query?: never;
@@ -3175,6 +3346,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_artifacts_api_v1_sales_quotes__case_id__artifacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactListView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    render_quote_artifact_api_v1_sales_quotes__case_id__artifacts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderedView"];
                 };
             };
             /** @description Validation Error */

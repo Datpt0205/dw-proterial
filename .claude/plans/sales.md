@@ -62,8 +62,11 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   `sales_bravo_upload@1.0.0` (MOCK) are pinned by the manifest. reportlab
   stays a runtime dependency (G38). The confirmation draft opens at
   `confirmed`, not `cross_checked`; details in the ticket's "As built".
-- Next: 08 (the TypeScript client needs regenerating for the artifact
-  routes), then 09.
+- Next: 09 (evals, security, demo script). Owed by the API to the pages:
+  role names and permission-set scopes in `/auth/bootstrap` (the web keeps
+  a stopgap roster in `app/sales/_lib/viewer.ts` with a test against the
+  migration), the PO-read attributes for the candidate picker, order due
+  dates in my-work, Vietnamese refusal messages, server time.
 - Offboarding export reads a partitioned parent and its partitions, so audit
   and event rows come out twice (pre-existing; platform).
 - Open from the 02/03 pass: routing reasons (complaint, sample request,
@@ -81,16 +84,17 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 
 ## Slice log
 
-| Ticket | Commit        | What                                                                                                     |
-| ------ | ------------- | -------------------------------------------------------------------------------------------------------- |
-| 07     | `78af2bd`     | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money                  |
-| 01     | `b5f990b`     | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12                |
-| 02, 03 | `ad467dd`     | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32        |
-| review | `077d54b`     | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping              |
-| 04     | `5ed607b`     | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding              |
-| 11     | `87ab107`     | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
-| 05     | `3557de8`     | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
-| 06     | (uncommitted) | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
+| Ticket | Commit    | What                                                                                                     |
+| ------ | --------- | -------------------------------------------------------------------------------------------------------- |
+| 07     | `78af2bd` | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money                  |
+| 01     | `b5f990b` | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12                |
+| 02, 03 | `ad467dd` | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32        |
+| review | `077d54b` | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping              |
+| 04     | `5ed607b` | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding              |
+| 11     | `87ab107` | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
+| 05     | `3557de8` | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
+| 06     | `2f737ca` | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
+| 08     | this one  | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown       |
 
 ## Open
 
