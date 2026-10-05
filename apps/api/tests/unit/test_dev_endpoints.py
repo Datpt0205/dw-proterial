@@ -79,7 +79,7 @@ async def test_session_issues_verifiable_token_with_context() -> None:
     assert response.status_code == 200
     session = response.json()
     assert session["display_name"] == "Nguyễn Văn An"
-    assert session["tenant_name"] == "Công ty Alpha"
+    assert session["tenant_name"] == "FDX"
     claims = await DevTokenVerifier(DEV_SECRET).verify(session["token"])
     assert claims.subject == "dev|an.nguyen"
 
