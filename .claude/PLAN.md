@@ -49,7 +49,6 @@ own file and a row here.
     - backfill ADRs with a status (`docs/agents/domain.md`): 46 citations of
       ADR-001..003 point at documents this repo never had.
 - **Sales:**
-    - alias Proterial and its procedure codes in the public repo, or not;
     - the interim defaults listed in `sales.md` Open.
 
 ## How a feature is checked here
