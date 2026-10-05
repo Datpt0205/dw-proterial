@@ -73,7 +73,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | 01     | `b5f990b` | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12         |
 | 02, 03 | `ad467dd` | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32 |
 | review | `077d54b` | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping       |
-| 04     | next      | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding       |
+| 04     | `5ed607b` | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding       |
 
 ## Open
 
