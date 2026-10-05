@@ -74,6 +74,19 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   accepted by the spec for the demo; ticket 03 added the ledger to the mock
   catalog; the sales policy files stayed at 1.0.0 (never released).
 
+- 2026-10-05, UI compared with the E-HSDT v3 prototype (screenshots in the
+  session scratchpad): the Sales pages are antd v6 but keep the platform's
+  navy theme and system font, the header shows the platform menus in
+  English, and lists are plain tables. The prototype uses Be Vietnam Pro
+  (JetBrains Mono for codes), a bright primary, a Sales-only header with
+  counts, a "Cần xử lý" panel, Segmented tabs with counts, search/sort and
+  two-line rows. Proposed next: a restyle pass (theme tokens in `@dw/ui`,
+  Sales-first header, list page pattern). Đạt owes the primary colour
+  (prototype `#0071e3` or the current navy `#0b3155`).
+- Dev: realm redirect URIs allow port 3300 only; `.env` sets
+  `DW_WEB_PORT=3300`, but `scripts/dev.sh` defaults to 3000, so a run
+  without the env var cannot sign in.
+
 ## Inputs owed by Proterial
 
 The requirements doc `DW1_Don-hang-Bao-gia_Nhung-gi-can-co_30-09-2026_v1.2.docx`
