@@ -14,7 +14,7 @@ import {
   StopOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
-import { Tag } from "antd";
+import { StatusTag, type StatusTone } from "@dw/ui";
 import {
   FINDING_DISPOSITION,
   label,
@@ -28,134 +28,117 @@ import {
 /**
  * The Sales status tags: one component per concept, so the same state looks
  * the same on every screen (ui-quality §1). Every tag carries its words and an
- * icon, never colour alone (§7), and the colours are antd's presets, which the
- * theme owns. Purple is kept for "Chưa chắc chắn" alone: the unknown state
- * has a colour that means nothing else here.
+ * icon, never colour alone (§7); the look is `@dw/ui`'s `StatusTag`, whose
+ * tones are the prototype's label table: `pri` for work moving, `geek` for
+ * waiting on someone outside Sales, `warn` for something to look at, `err`
+ * for what blocks, `ok` for done. The dashed purple `unk` is kept for
+ * "Chưa chắc chắn" alone: the unknown state has a look that means nothing else.
  */
-type Tone =
-  | "default"
-  | "processing"
-  | "success"
-  | "warning"
-  | "error"
-  | "purple"
-  | "gold";
+type Look = [StatusTone, ReactNode];
+
+const i = {
+  clock: <ClockCircleOutlined key="i" aria-hidden />,
+  sync: <SyncOutlined key="i" aria-hidden />,
+  check: <CheckCircleOutlined key="i" aria-hidden />,
+  close: <CloseCircleOutlined key="i" aria-hidden />,
+  warn: <ExclamationCircleOutlined key="i" aria-hidden />,
+  stop: <StopOutlined key="i" aria-hidden />,
+  edit: <EditOutlined key="i" aria-hidden />,
+  question: <QuestionCircleOutlined key="i" aria-hidden />,
+  robot: <RobotOutlined key="i" aria-hidden />,
+  history: <HistoryOutlined key="i" aria-hidden />,
+  minus: <MinusCircleOutlined key="i" aria-hidden />,
+};
 
 function Chip({
-  tone,
-  icon,
+  look,
   children,
 }: {
-  tone: Tone;
-  icon: ReactNode;
+  look: Look | undefined;
   children: ReactNode;
 }) {
+  const [tone, icon] = look ?? ["gray", null];
   return (
-    <Tag color={tone} icon={icon} className="me-0">
+    <StatusTag tone={tone} icon={icon}>
       {children}
-    </Tag>
+    </StatusTag>
   );
 }
 
-const ORDER_TONE: Record<string, [Tone, ReactNode]> = {
-  received: ["default", <ClockCircleOutlined key="i" aria-hidden />],
-  checked: ["default", <ClockCircleOutlined key="i" aria-hidden />],
-  in_review: ["processing", <SyncOutlined key="i" aria-hidden />],
-  correction_requested: [
-    "warning",
-    <ExclamationCircleOutlined key="i" aria-hidden />,
-  ],
-  prepared: ["processing", <SyncOutlined key="i" aria-hidden />],
-  uploaded_to_bravo: ["processing", <SyncOutlined key="i" aria-hidden />],
-  cross_checked: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  confirmed: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  change_review: ["warning", <ExclamationCircleOutlined key="i" aria-hidden />],
-  closed: ["default", <StopOutlined key="i" aria-hidden />],
+const ORDER_LOOK: Record<string, Look> = {
+  received: ["gray", i.clock],
+  checked: ["gray", i.clock],
+  in_review: ["pri", i.sync],
+  correction_requested: ["geek", i.clock],
+  prepared: ["pri", i.sync],
+  uploaded_to_bravo: ["pri", i.sync],
+  cross_checked: ["ok", i.check],
+  confirmed: ["ok", i.check],
+  change_review: ["warn", i.warn],
+  closed: ["gray", i.stop],
 };
 
 export function OrderStateTag({ status }: { status: string }) {
-  const [tone, icon] = ORDER_TONE[status] ?? ["default", null];
-  return (
-    <Chip tone={tone} icon={icon}>
-      {label(ORDER_STATE, status)}
-    </Chip>
-  );
+  return <Chip look={ORDER_LOOK[status]}>{label(ORDER_STATE, status)}</Chip>;
 }
 
-const QUOTE_TONE: Record<string, [Tone, ReactNode]> = {
-  received: ["default", <ClockCircleOutlined key="i" aria-hidden />],
-  ycbg_drafted: ["processing", <SyncOutlined key="i" aria-hidden />],
-  ycbg_recorded: ["processing", <SyncOutlined key="i" aria-hidden />],
-  sent_to_design: ["warning", <ClockCircleOutlined key="i" aria-hidden />],
-  design_replied: ["processing", <SyncOutlined key="i" aria-hidden />],
-  spec_discussion: ["warning", <ClockCircleOutlined key="i" aria-hidden />],
-  priced: ["processing", <SyncOutlined key="i" aria-hidden />],
-  pending_approval: ["warning", <ClockCircleOutlined key="i" aria-hidden />],
-  returned: ["error", <CloseCircleOutlined key="i" aria-hidden />],
-  approved: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  sent: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  master_list_recorded: [
-    "success",
-    <CheckCircleOutlined key="i" aria-hidden />,
-  ],
-  declined: ["default", <StopOutlined key="i" aria-hidden />],
+const QUOTE_LOOK: Record<string, Look> = {
+  received: ["gray", i.clock],
+  ycbg_drafted: ["pri", i.sync],
+  ycbg_recorded: ["pri", i.sync],
+  sent_to_design: ["geek", i.clock],
+  design_replied: ["pri", i.sync],
+  spec_discussion: ["geek", i.clock],
+  priced: ["pri", i.sync],
+  pending_approval: ["pri", i.clock],
+  returned: ["warn", i.close],
+  approved: ["ok", i.check],
+  sent: ["ok", i.check],
+  master_list_recorded: ["ok", i.check],
+  declined: ["gray", i.stop],
 };
 
 export function QuoteStateTag({ status }: { status: string }) {
-  const [tone, icon] = QUOTE_TONE[status] ?? ["default", null];
-  return (
-    <Chip tone={tone} icon={icon}>
-      {label(QUOTE_STATE, status)}
-    </Chip>
-  );
+  return <Chip look={QUOTE_LOOK[status]}>{label(QUOTE_STATE, status)}</Chip>;
 }
 
-const VALUE_TONE: Record<string, [Tone, ReactNode]> = {
-  dw: ["default", <RobotOutlined key="i" aria-hidden />],
-  uncertain: ["purple", <QuestionCircleOutlined key="i" aria-hidden />],
-  confirmed: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  hand_entered: ["gold", <EditOutlined key="i" aria-hidden />],
-  superseded: ["default", <HistoryOutlined key="i" aria-hidden />],
+const VALUE_LOOK: Record<string, Look> = {
+  dw: ["outline", i.robot],
+  uncertain: ["unk", i.question],
+  confirmed: ["ok", i.check],
+  hand_entered: ["gray", i.edit],
+  superseded: ["gray", i.history],
 };
 
 /** How sure a value is (CONTEXT.md "Value states"); every state is drawn. */
 export function ValueStateTag({ state }: { state: string }) {
-  const [tone, icon] = VALUE_TONE[state] ?? ["default", null];
-  return (
-    <Chip tone={tone} icon={icon}>
-      {label(VALUE_STATE, state)}
-    </Chip>
-  );
+  return <Chip look={VALUE_LOOK[state]}>{label(VALUE_STATE, state)}</Chip>;
 }
 
-const MAPPING_TONE: Record<string, [Tone, ReactNode]> = {
-  exact: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  candidate: ["warning", <QuestionCircleOutlined key="i" aria-hidden />],
-  ambiguous: ["warning", <QuestionCircleOutlined key="i" aria-hidden />],
-  unmapped: ["error", <CloseCircleOutlined key="i" aria-hidden />],
-  candidate_confirmed: ["success", <EditOutlined key="i" aria-hidden />],
+const MAPPING_LOOK: Record<string, Look> = {
+  exact: ["ok", i.check],
+  candidate: ["warn", i.question],
+  ambiguous: ["warn", i.question],
+  unmapped: ["err", i.close],
+  candidate_confirmed: ["ok", i.edit],
 };
 
 export function MappingTag({ status }: { status: string }) {
-  const [tone, icon] = MAPPING_TONE[status] ?? ["default", null];
   return (
-    <Chip tone={tone} icon={icon}>
-      {label(MAPPING_STATUS, status)}
-    </Chip>
+    <Chip look={MAPPING_LOOK[status]}>{label(MAPPING_STATUS, status)}</Chip>
   );
 }
 
-const DISPOSITION_TONE: Record<string, [Tone, ReactNode]> = {
-  open: ["warning", <ExclamationCircleOutlined key="i" aria-hidden />],
-  accepted: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  corrected_by_sales: ["gold", <EditOutlined key="i" aria-hidden />],
-  ask_customer: ["processing", <SyncOutlined key="i" aria-hidden />],
+const DISPOSITION_LOOK: Record<string, Look> = {
+  open: ["warn", i.warn],
+  accepted: ["ok", i.check],
+  corrected_by_sales: ["ok", i.edit],
+  ask_customer: ["geek", i.sync],
 };
 
 export function DispositionTag({ kind }: { kind: string }) {
-  const [tone, icon] = DISPOSITION_TONE[kind] ?? ["default", null];
   return (
-    <Chip tone={tone} icon={icon}>
+    <Chip look={DISPOSITION_LOOK[kind]}>
       {label(FINDING_DISPOSITION, kind)}
     </Chip>
   );
@@ -164,31 +147,21 @@ export function DispositionTag({ kind }: { kind: string }) {
 /** "Chặn" for a finding the step cannot pass; "Cảnh báo" for one it can. */
 export function SeverityTag({ blocking }: { blocking: boolean }) {
   return blocking ? (
-    <Chip tone="error" icon={<CloseCircleOutlined aria-hidden />}>
-      Chặn
-    </Chip>
+    <Chip look={["err", i.stop]}>Chặn</Chip>
   ) : (
-    <Chip tone="warning" icon={<ExclamationCircleOutlined aria-hidden />}>
-      Cảnh báo
-    </Chip>
+    <Chip look={["warn", i.warn]}>Cảnh báo</Chip>
   );
 }
 
-const MESSAGE_TONE: Record<string, [Tone, ReactNode]> = {
-  case_created: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  attached_to_case: ["success", <CheckCircleOutlined key="i" aria-hidden />],
-  routed_to_sales: [
-    "warning",
-    <ExclamationCircleOutlined key="i" aria-hidden />,
-  ],
-  not_yet_processed: ["default", <MinusCircleOutlined key="i" aria-hidden />],
+const MESSAGE_LOOK: Record<string, Look> = {
+  case_created: ["ok", i.check],
+  attached_to_case: ["ok", i.check],
+  routed_to_sales: ["warn", i.warn],
+  not_yet_processed: ["gray", i.minus],
 };
 
 export function MessageDispositionTag({ kind }: { kind: string }) {
-  const [tone, icon] = MESSAGE_TONE[kind] ?? ["default", null];
   return (
-    <Chip tone={tone} icon={icon}>
-      {label(MESSAGE_DISPOSITION, kind)}
-    </Chip>
+    <Chip look={MESSAGE_LOOK[kind]}>{label(MESSAGE_DISPOSITION, kind)}</Chip>
   );
 }

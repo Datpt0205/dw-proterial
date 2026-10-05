@@ -11,12 +11,11 @@ import {
   Descriptions,
   Space,
   Table,
-  Tag,
   Typography,
 } from "antd";
 import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
 import type { SalesSchemas, SourceRegion } from "@dw/api-client";
-import { PageHeader } from "@dw/ui";
+import { PageHeader, StatusTag } from "@dw/ui";
 import {
   RegionLoading,
   RegionState,
@@ -40,9 +39,12 @@ import {
 } from "../../_lib/served";
 import { coverageStatement } from "../../_lib/statements";
 import { useResource } from "../../_lib/use-resource";
+import { isOpen } from "../../_lib/order-actions";
 import { useSalesViewer } from "../../_lib/viewer";
 import { ArtifactsPanel } from "../../_components/artifacts-panel";
+import { CaseSummary } from "../../_components/case-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
+import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
@@ -165,19 +167,39 @@ function OrderDetail() {
     if (region) setSource({ region, field, lineNo });
   };
   const primary = anchorRegion(data.header_anchors.po_no);
+  const customer = customers.data?.items.find(
+    (c) => c.code === data.customer_code,
+  );
+  const openCount = data.findings.filter(isOpen).length;
+  const blocking = data.findings.filter((f) => isOpen(f) && f.blocking).length;
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title={`PO ${data.po_no}`}
-        tags={
+        breadcrumb={salesCrumbs(
+          { title: "Đơn hàng", href: "/sales/orders" },
+          `PO ${data.po_no}`,
+        )}
+        meta={
           <>
             <OrderStateTag status={data.status} />
-            {data.revision ? <Tag>Rev.{data.revision}</Tag> : null}
-            <Tag>Phiên bản {data.case_version}</Tag>
+            {data.revision ? (
+              <StatusTag tone="outline" mono>
+                Rev.{data.revision}
+              </StatusTag>
+            ) : null}
+            <StatusTag tone="outline" mono>
+              Phiên bản {data.case_version}
+            </StatusTag>
+            {data.rules_version ? (
+              <StatusTag tone="outline" mono>
+                Bộ quy tắc {data.rules_version}
+              </StatusTag>
+            ) : null}
           </>
         }
-        description={`Khách ${data.customer_code} · ngày PO ${formatDate(data.po_date)} · nhận ${formatDateTime(data.received_at)} (${formatAge(data.received_at, now)} trước) · phụ trách ${data.assigned_to ? name(data.assigned_to) : "chưa giao"}`}
+        title={`PO ${data.po_no}`}
+        description={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · ngày PO ${formatDate(data.po_date)}`}
         extra={
           primary ? (
             <Button
@@ -246,9 +268,43 @@ function OrderDetail() {
         />
       ) : null}
 
-      <Card size="small">
-        <CaseTimeline procedure="WIV-03-012" status={data.status} next={next} />
-      </Card>
+      <CaseSummary
+        cells={[
+          {
+            key: "customer",
+            label: "Khách hàng",
+            value: customer?.name ?? data.customer_code,
+            sub: `${data.lines.length} dòng · tiền tệ ${data.currency}`,
+          },
+          {
+            key: "received",
+            label: "Nhận lúc (giờ Việt Nam)",
+            value: formatDateTime(data.received_at, { zoneLabel: false }),
+            sub: `${formatAge(data.received_at, now)} trước`,
+          },
+          {
+            key: "check",
+            label: "Kiểm tra",
+            ...(blocking
+              ? { value: `Còn ${blocking} cờ chặn`, tone: "err" as const }
+              : openCount
+                ? {
+                    value: `Còn ${openCount} cờ, không chặn`,
+                    tone: "warn" as const,
+                  }
+                : { value: "Không còn cờ", tone: "ok" as const }),
+            sub: `${openCount} cờ chưa quyết định / ${data.findings.length} cờ`,
+          },
+          {
+            key: "owner",
+            label: "Phụ trách",
+            value: data.assigned_to ? name(data.assigned_to) : "Chưa giao",
+            sub: next,
+          },
+        ]}
+      />
+
+      <CaseTimeline procedure="WIV-03-012" status={data.status} next={next} />
 
       <Card size="small" title="Bước tiếp theo">
         <Space orientation="vertical" className="w-full">
@@ -323,10 +379,7 @@ function OrderDetail() {
         caseVersion={data.case_version}
         canRender={viewer.hasScope("sales.order.prepare")}
         renderReason="Bạn không có quyền soạn tệp của đơn hàng (cần vai Sales phụ trách)."
-        language={
-          customers.data?.items.find((c) => c.code === data.customer_code)
-            ?.language
-        }
+        language={customer?.language}
         refreshKey={data.case_version}
       />
 

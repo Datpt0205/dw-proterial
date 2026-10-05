@@ -9,6 +9,7 @@ import {
   SolutionOutlined,
 } from "@ant-design/icons";
 import type { NavEntry } from "../../../lib/nav/types";
+import { SALES_BADGE } from "./badge-keys";
 
 /**
  * The Sales context's pages (DW1 Đơn hàng & Báo giá), owned here and plugged
@@ -19,12 +20,18 @@ import type { NavEntry } from "../../../lib/nav/types";
  * viewer who reads aggregates only (`sales_viewer`) is shown the overview and
  * nothing else, and someone with no `sales.*` scope sees no Sales group.
  * Navigation, never authorization: every route checks its scope again.
+ *
+ * `context` makes the group the whole bar for someone whose work is Sales
+ * alone (`barNav`), and names the role prefix the Sales migration gives its
+ * keys, so the shell names their Sales role from the role catalogue. The two
+ * counts come from `badges.ts` beside this file.
  */
 export const salesNav: NavEntry[] = [
   {
     key: "sales",
     label: "Sales",
     icon: SolutionOutlined,
+    context: { product: "Sales", roleKeyPrefix: "sales_" },
     items: [
       {
         href: "/sales",
@@ -33,6 +40,7 @@ export const salesNav: NavEntry[] = [
         icon: ScheduleOutlined,
         scope: "sales.case.read",
         exact: true,
+        badgeKey: SALES_BADGE.myWork,
       },
       {
         href: "/sales/inbox",
@@ -40,6 +48,7 @@ export const salesNav: NavEntry[] = [
         hint: "Email mẫu kèm PO và yêu cầu báo giá: hướng xử lý, lý do và người phụ trách",
         icon: InboxOutlined,
         scope: "sales.case.read",
+        badgeKey: SALES_BADGE.inbox,
       },
       {
         href: "/sales/orders",

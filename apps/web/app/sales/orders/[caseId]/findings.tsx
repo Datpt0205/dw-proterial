@@ -5,11 +5,11 @@ import {
   Alert,
   Button,
   Card,
-  Descriptions,
   Form,
   Input,
   Radio,
   Space,
+  theme,
   Typography,
 } from "antd";
 import { EyeOutlined } from "@ant-design/icons";
@@ -154,6 +154,7 @@ function FindingCard({
   onPickCode: (lineNo: number) => void;
 }) {
   const name = usePeople();
+  const { token } = theme.useToken();
   const { run, pending } = useAction();
   const [error, setError] = useState<unknown>(null);
   const offer = dispositionOffer(order, finding, viewer);
@@ -196,13 +197,32 @@ function FindingCard({
   };
 
   const field = FINDING_FIELD[finding.code];
+  // The prototype's findings row: a bar in the severity's colour while the
+  // finding is open (the tags beside the title say it in words).
+  const bar = decided
+    ? token.colorBorderSecondary
+    : finding.blocking
+      ? token.colorError
+      : token.colorWarning;
   return (
-    <Card size="small" type="inner">
+    <div
+      className="rounded-lg border px-4 py-3"
+      style={{
+        background: token.colorBgContainer,
+        borderInlineStartWidth: 4,
+        borderInlineStartColor: bar,
+      }}
+    >
       <Space orientation="vertical" className="w-full" size="small">
         <Space wrap>
           <Typography.Text strong>
             {label(FINDING_CODE, finding.code)}
-            {finding.line_no ? ` · dòng ${finding.line_no}` : " · cả đơn"}
+          </Typography.Text>
+          <Typography.Text
+            type="secondary"
+            style={{ fontFamily: token.fontFamilyCode }}
+          >
+            {finding.line_no ? `dòng ${finding.line_no}` : "cả đơn"}
           </Typography.Text>
           <SeverityTag blocking={finding.blocking} />
           <DispositionTag kind={finding.disposition.kind} />
@@ -216,22 +236,16 @@ function FindingCard({
             </Button>
           ) : null}
         </Space>
-        <Descriptions
-          size="small"
-          column={{ xs: 1, md: 2 }}
-          items={[
-            {
-              key: "expected",
-              label: "Mong đợi",
-              children: <FindingWords value={finding.expected} />,
-            },
-            {
-              key: "actual",
-              label: "Trên PO",
-              children: <FindingWords value={finding.actual} />,
-            },
-          ]}
-        />
+        <Typography.Text type="secondary">
+          Mong đợi{" "}
+          <Typography.Text>
+            <FindingWords value={finding.expected} />
+          </Typography.Text>{" "}
+          · trên PO{" "}
+          <Typography.Text>
+            <FindingWords value={finding.actual} />
+          </Typography.Text>
+        </Typography.Text>
         {decided ? (
           <Typography.Text>
             {label(FINDING_DISPOSITION, finding.disposition.kind)}
@@ -364,6 +378,6 @@ function FindingCard({
         )}
         <ActionError error={error} />
       </Space>
-    </Card>
+    </div>
   );
 }

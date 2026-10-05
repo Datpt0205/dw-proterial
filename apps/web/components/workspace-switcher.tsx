@@ -1,88 +1,86 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Building2, Check, ChevronsUpDown, Layers } from "lucide-react";
-import { cn } from "@dw/ui";
+import { CheckOutlined, DownOutlined } from "@ant-design/icons";
+import { Button, Dropdown, theme, Typography } from "antd";
 import { useAuth } from "../lib/auth/auth-context";
 
 /**
- * The active company + workspace, in the top navbar. When the signed-in user
- * belongs to more than one workspace it becomes a picker to switch between them
- * (auth context re-activates the chosen membership). A single membership just
- * shows, no dropdown. Nothing renders for an operator with no workspace.
+ * The active workspace and its company, beside the brand (the prototype's
+ * workspace block: a small "Workspace" line, the workspace, the company).
+ * With more than one membership it opens a menu to switch (the auth context
+ * re-activates the chosen membership); with one it only shows. Nothing
+ * renders for an operator with no workspace.
  */
 export function WorkspaceSwitcher() {
   const { active, memberships, selectWorkspace } = useAuth();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onDocClick = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
+  const { token } = theme.useToken();
   if (!active) return null;
   const multiple = memberships.length > 1;
 
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        disabled={!multiple}
-        onClick={() => setOpen((v) => !v)}
-        title={`${active.tenantName} · ${active.workspaceName}`}
-        className={cn(
-          "flex w-full max-w-[15rem] items-center gap-2 rounded-lg border bg-white px-2.5 py-1.5 text-left",
-          multiple && "hover:bg-muted",
-        )}
+  const block = (
+    <span className="flex min-w-0 flex-col items-start leading-tight">
+      <Typography.Text
+        type="secondary"
+        className="uppercase leading-tight"
+        style={{ fontSize: token.fontSizeSM }}
       >
-        <Building2 className="size-4 shrink-0 text-slate-400" />
-        <span className="min-w-0 leading-tight">
-          <span className="block truncate text-xs font-semibold text-slate-700">
-            {active.tenantName}
-          </span>
-          <span className="block truncate text-[11px] text-slate-500">
-            {active.workspaceName}
-          </span>
+        Workspace
+      </Typography.Text>
+      <Typography.Text
+        strong
+        ellipsis
+        className="max-w-48 leading-tight"
+        style={{ fontSize: token.fontSizeSM + 1 }}
+      >
+        {active.workspaceName}
+      </Typography.Text>
+      <Typography.Text
+        type="secondary"
+        ellipsis
+        className="max-w-48 leading-tight"
+        style={{ fontSize: token.fontSizeSM }}
+      >
+        {active.tenantName}
+      </Typography.Text>
+    </span>
+  );
+
+  if (!multiple)
+    return (
+      <div
+        className="flex min-w-0 items-center px-2"
+        title={`${active.tenantName} · ${active.workspaceName}`}
+      >
+        {block}
+      </div>
+    );
+
+  return (
+    <Dropdown
+      trigger={["click"]}
+      menu={{
+        selectedKeys: [active.workspaceId],
+        items: memberships.map((m) => ({
+          key: m.workspaceId,
+          label: `${m.workspaceName} · ${m.tenantName}`,
+          extra:
+            m.workspaceId === active.workspaceId ? (
+              <CheckOutlined aria-hidden />
+            ) : null,
+        })),
+        onClick: ({ key }) => selectWorkspace(key),
+      }}
+    >
+      <Button
+        type="text"
+        className="h-auto py-1"
+        aria-label={`Workspace: ${active.workspaceName}, ${active.tenantName}. Chọn workspace khác`}
+      >
+        <span className="flex items-center gap-2">
+          {block}
+          <DownOutlined aria-hidden />
         </span>
-        {multiple && (
-          <ChevronsUpDown className="size-3.5 shrink-0 text-slate-400" />
-        )}
-      </button>
-      {open && multiple && (
-        <ul className="absolute left-0 z-50 mt-1 max-h-72 w-64 overflow-auto rounded-md border bg-card shadow-lg">
-          {memberships.map((m) => (
-            <li key={m.workspaceId}>
-              <button
-                type="button"
-                onClick={() => {
-                  selectWorkspace(m.workspaceId);
-                  setOpen(false);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
-              >
-                <Layers className="size-3.5 shrink-0 text-slate-400" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {m.tenantName}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {m.workspaceName}
-                  </span>
-                </span>
-                {m.workspaceId === active.workspaceId && (
-                  <Check className="size-4 shrink-0 text-primary" />
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+      </Button>
+    </Dropdown>
   );
 }

@@ -1,6 +1,6 @@
 export { cn } from "./cn";
-export { appTheme } from "./theme";
-export { THEME_ROOT_CLASS } from "./theme-class";
+export { appTheme, STATUS_TONES, type StatusTone } from "./theme";
+export { FONT_VARIABLE, THEME_ROOT_CLASS } from "./theme-class";
 export { UiProvider } from "./provider";
 export { AppShell, type AppShellProps } from "./app-shell";
 export { Button, buttonVariants, type ButtonProps } from "./button";
@@ -35,3 +35,4 @@ export {
   type MaskedValueProps,
 } from "./masked-value";
 export { PageHeader, type PageHeaderProps } from "./page-header";
+export { StatusTag, type StatusTagProps } from "./status-tag";

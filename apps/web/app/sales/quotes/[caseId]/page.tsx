@@ -10,16 +10,16 @@ import {
   Descriptions,
   Space,
   Table,
-  Tag,
   Typography,
 } from "antd";
 import {
   ClockCircleOutlined,
   EyeOutlined,
   FileSearchOutlined,
+  QuestionCircleOutlined,
 } from "@ant-design/icons";
 import type { SourceRegion } from "@dw/api-client";
-import { PageHeader } from "@dw/ui";
+import { PageHeader, StatusTag } from "@dw/ui";
 import {
   RegionLoading,
   RegionState,
@@ -50,7 +50,9 @@ import { anchorRegion } from "../../_lib/served";
 import { useResource } from "../../_lib/use-resource";
 import { useSalesViewer } from "../../_lib/viewer";
 import { ArtifactsPanel } from "../../_components/artifacts-panel";
+import { CaseSummary } from "../../_components/case-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
+import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money, Quantity } from "../../_components/money";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
@@ -63,6 +65,8 @@ import { QuoteActions } from "./actions";
 import { ApprovalPanel } from "./approval";
 import { EvidencePanel } from "./evidence";
 import { PricingForm } from "./pricing";
+
+const DAY = 86_400_000;
 
 export default function QuotePage() {
   return (
@@ -112,6 +116,13 @@ function QuoteDetail() {
     (c) => c.code === data.customer_code,
   );
   const deadline = dayDeadline(data.quote_due, now);
+  const done = ["sent", "master_list_recorded", "declined"].includes(
+    data.status,
+  );
+  const overdue = data.overdue && !done;
+  const openFindings = data.findings.filter(
+    (f) => f.disposition.kind === "open",
+  ).length;
   const mine = (work.data ?? []).find(
     (w) => w.kind === "quote" && w.id === data.case_id,
   );
@@ -147,22 +158,30 @@ function QuoteDetail() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={`RFQ ${data.rfq_no}`}
-        tags={
+        breadcrumb={salesCrumbs(
+          { title: "Báo giá", href: "/sales/quotes" },
+          `RFQ ${data.rfq_no}`,
+        )}
+        meta={
           <>
             <QuoteStateTag status={data.status} />
-            <Tag>Phiên bản {data.case_version}</Tag>
-            {data.overdue &&
-            !["sent", "master_list_recorded", "declined"].includes(
-              data.status,
-            ) ? (
-              <Tag color="error" icon={<ClockCircleOutlined aria-hidden />}>
+            <StatusTag tone="outline" mono>
+              Phiên bản {data.case_version}
+            </StatusTag>
+            {data.ycbg_no ? (
+              <StatusTag tone="outline" mono>
+                YCBG {data.ycbg_no}
+              </StatusTag>
+            ) : null}
+            {overdue ? (
+              <StatusTag tone="err" icon={<ClockCircleOutlined aria-hidden />}>
                 Quá hạn
-              </Tag>
+              </StatusTag>
             ) : null}
           </>
         }
-        description={`Khách ${data.customer_code}${customer ? ` · ${customer.name}` : ""} · gửi từ ${data.sender} · nhận ${formatDateTime(data.received_at)} (${formatAge(data.received_at, now)} trước) · phụ trách ${data.assigned_to ? name(data.assigned_to) : "chưa giao"}`}
+        title={`RFQ ${data.rfq_no}`}
+        description={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · gửi từ ${data.sender}`}
         extra={
           firstRegion ? (
             <Button
@@ -180,25 +199,66 @@ function QuoteDetail() {
         }
       />
 
+      <CaseSummary
+        cells={[
+          {
+            key: "due",
+            label: "Hạn báo giá (giờ Việt Nam)",
+            ...(deadline
+              ? {
+                  value: deadline.absolute,
+                  sub: done ? undefined : deadline.relative,
+                  tone: done
+                    ? undefined
+                    : deadline.overdue || deadline.leftMs < DAY
+                      ? ("err" as const)
+                      : deadline.leftMs < 2 * DAY
+                        ? ("warn" as const)
+                        : undefined,
+                }
+              : {
+                  value: (
+                    <StatusTag
+                      tone="unk"
+                      icon={<QuestionCircleOutlined aria-hidden />}
+                    >
+                      Chưa rõ hạn báo giá
+                    </StatusTag>
+                  ),
+                  sub: "DW1 không đọc được hạn trên yêu cầu",
+                }),
+          },
+          {
+            key: "received",
+            label: "Nhận lúc (giờ Việt Nam)",
+            value: formatDateTime(data.received_at, { zoneLabel: false }),
+            sub: `${formatAge(data.received_at, now)} trước`,
+          },
+          {
+            key: "flags",
+            label: "Cờ của báo giá",
+            ...(openFindings
+              ? {
+                  value: `Còn ${openFindings} cờ chưa quyết định`,
+                  tone: "warn" as const,
+                }
+              : { value: "Không còn cờ", tone: "ok" as const }),
+            sub: `${data.lines.length} dòng yêu cầu · tiền tệ ${data.currency}`,
+          },
+          {
+            key: "owner",
+            label: "Phụ trách",
+            value: data.assigned_to ? name(data.assigned_to) : "Chưa giao",
+            sub: next,
+          },
+        ]}
+      />
+
       <Descriptions
         size="small"
         bordered
-        column={{ xs: 1, md: 3 }}
+        column={{ xs: 1, md: 2 }}
         items={[
-          {
-            key: "due",
-            label: "Hạn báo giá",
-            children: deadline ? (
-              <Space orientation="vertical" size={0}>
-                <span>{deadline.withZone}</span>
-                <Typography.Text strong={deadline.overdue}>
-                  {deadline.relative}
-                </Typography.Text>
-              </Space>
-            ) : (
-              <Tag color="purple">Chưa rõ hạn báo giá</Tag>
-            ),
-          },
           {
             key: "ycbg",
             label: "YCBG",
@@ -242,9 +302,7 @@ function QuoteDetail() {
         />
       ) : null}
 
-      <Card size="small">
-        <CaseTimeline procedure="WIV-03-023" status={data.status} next={next} />
-      </Card>
+      <CaseTimeline procedure="WIV-03-023" status={data.status} next={next} />
 
       <Card size="small" title="Bước tiếp theo">
         <QuoteActions quote={data} viewer={viewer} onDone={reload} />
@@ -288,7 +346,7 @@ function QuoteDetail() {
                 l.quantity ? (
                   <Quantity value={l.quantity} uom={l.uom} />
                 ) : (
-                  <Tag color="purple">Chưa có</Tag>
+                  <StatusTag tone="unk">Chưa có</StatusTag>
                 ),
             },
             {
@@ -298,7 +356,7 @@ function QuoteDetail() {
                 l.needed_by ? (
                   formatDate(l.needed_by)
                 ) : (
-                  <Tag color="purple">Chưa có</Tag>
+                  <StatusTag tone="unk">Chưa có</StatusTag>
                 ),
             },
             {
@@ -404,11 +462,11 @@ function QuoteDetail() {
                     {f.line_no ? ` · dòng ${f.line_no}` : ""}
                   </Typography.Text>
                   <SeverityTag blocking={f.blocking} />
-                  <Tag>
+                  <StatusTag tone="gray">
                     {f.disposition.kind === "open"
                       ? "Chưa quyết định"
                       : "Đã ghi nhận khi duyệt"}
-                  </Tag>
+                  </StatusTag>
                 </Space>
                 <Descriptions
                   size="small"

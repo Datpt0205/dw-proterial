@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import { theme } from "antd";
 import postcss, { type AtRule, type Declaration } from "postcss";
 import { describe, expect, it } from "vitest";
-import { appTheme, THEME_ROOT_CLASS } from "@dw/ui";
+import {
+  appTheme,
+  FONT_VARIABLE,
+  STATUS_TONES,
+  THEME_ROOT_CLASS,
+} from "@dw/ui";
 import { compiledGlobals, GLOBALS } from "./globals-css";
 import { serverStyles } from "./server-styles";
 
@@ -90,6 +95,17 @@ type ColourToken = {
 
 const SURFACES: ColourToken[] = ["colorBgContainer", "colorBgLayout"];
 
+/** `colour` drawn over `back`, as one opaque hex: a translucent tint as rendered. */
+function over(colour: string, back: string): string {
+  const b = parseColour(back);
+  const [r, g, bl, alpha] = parseColour(colour);
+  const hex = [r, g, bl]
+    .map((c, i) => Math.round(c * alpha + b[i]! * (1 - alpha)))
+    .map((c) => c.toString(16).padStart(2, "0"))
+    .join("");
+  return `#${hex}`;
+}
+
 describe("theme contrast (ui-quality §12)", () => {
   const text: ColourToken[] = [
     "colorText",
@@ -135,6 +151,57 @@ describe("theme contrast (ui-quality §12)", () => {
     "%s on %s is a non-text boundary or icon: 3:1",
     (fore, back) => {
       expect(contrast(token[fore], token[back])).toBeGreaterThanOrEqual(3);
+    },
+  );
+});
+
+describe("status tags and the navbar, as rendered (ui-quality §12)", () => {
+  // A tag's text on its own tint is the trap §12 names: measured on both
+  // surfaces, a translucent tint composited onto each first.
+  const tones = Object.entries(STATUS_TONES).flatMap(([tone, { bg, fg }]) =>
+    SURFACES.map((surface) => [tone, surface, bg, fg] as const),
+  );
+  it.each(tones)("the %s tag's text on %s is text: 4.5:1", (_, surface, bg) => {
+    const back =
+      bg === "transparent" ? token[surface] : over(bg, token[surface]);
+    const fg = STATUS_TONES[_ as keyof typeof STATUS_TONES].fg;
+    expect(contrast(fg, back)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the unknown tone keeps a border of its own colour, dashed in the tag", () => {
+    expect(STATUS_TONES.unk.border).toBe(STATUS_TONES.unk.fg);
+    expect(
+      contrast(STATUS_TONES.unk.border!, token.colorBgContainer),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  // The bar is translucent white over the page: its links are measured on
+  // the colour that results, the page showing through.
+  const header = over(
+    String(appTheme.components?.Layout?.headerBg),
+    token.colorBgLayout,
+  );
+  it.each([
+    ["the menu's text", String(appTheme.components?.Menu?.itemColor)],
+    ["the selected item", token.colorPrimary],
+    ["the page's own text", token.colorText],
+  ])("%s on the navbar is text: 4.5:1", (_, fore) => {
+    expect(contrast(fore, header)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("the theme's type is the type the root layout loads", () => {
+  const layout = readFileSync(
+    new URL("../../app/layout.tsx", import.meta.url),
+    "utf8",
+  );
+
+  it.each(Object.entries(FONT_VARIABLE))(
+    "%s: next/font declares %s and the theme reads it",
+    (kind, name) => {
+      expect(layout).toContain(`variable: "${name}"`);
+      const family = kind === "sans" ? token.fontFamily : token.fontFamilyCode;
+      expect(family.startsWith(`var(${name})`)).toBe(true);
     },
   );
 });

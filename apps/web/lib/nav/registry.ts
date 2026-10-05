@@ -73,6 +73,7 @@ const platformNav: NavEntry[] = [
     key: "admin",
     label: "Admin",
     icon: UserCog,
+    administration: true,
     items: [
       {
         href: "/admin",
@@ -125,6 +126,7 @@ const platformNav: NavEntry[] = [
     hint: "Tenants, org admins and operators",
     icon: Building,
     operatorOnly: true,
+    administration: true,
   },
 ];
 

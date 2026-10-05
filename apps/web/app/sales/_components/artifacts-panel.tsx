@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Card, Space, Table, Tag, Typography } from "antd";
+import { Card, Space, Table, Typography } from "antd";
+import { StatusTag } from "@dw/ui";
 import { DownloadOutlined, FileAddOutlined } from "@ant-design/icons";
 import type { Artifact } from "@dw/api-client";
 import { RegionState } from "../../../components/region-state";
@@ -157,7 +158,7 @@ export function ArtifactsPanel({
                   a.case_version === caseVersion ? (
                     `${a.case_version} (hiện tại)`
                   ) : (
-                    <Tag color="warning">{`${a.case_version}: đã có phiên bản mới hơn`}</Tag>
+                    <StatusTag tone="warn">{`${a.case_version}: đã có phiên bản mới hơn`}</StatusTag>
                   ),
               },
               {

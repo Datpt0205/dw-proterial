@@ -17,6 +17,7 @@ import { PRICER_APPROVER } from "../_lib/quote-actions";
 import { useResource } from "../_lib/use-resource";
 import { useSalesViewer } from "../_lib/viewer";
 import { SCOPE } from "../_components/sales-frame";
+import { salesCrumbs } from "../_components/crumbs";
 import { ScopeGate } from "../_components/scope-gate";
 import { OrderStateTag, QuoteStateTag } from "../_components/tags";
 
@@ -93,6 +94,7 @@ function Review() {
   return (
     <div className="space-y-4">
       <PageHeader
+        breadcrumb={salesCrumbs("Kiểm chéo & duyệt")}
         title="Kiểm chéo & duyệt"
         description="Người làm hồ sơ không tự kiểm: đơn được một Sales khác kiểm chéo với Bravo, báo giá được người không định giá duyệt."
       />

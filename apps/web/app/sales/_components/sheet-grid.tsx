@@ -1,6 +1,7 @@
 "use client";
 
-import { Alert, Tag, theme } from "antd";
+import { Alert, theme } from "antd";
+import { StatusTag } from "@dw/ui";
 import type { SalesSchemas } from "@dw/api-client";
 import { label, REGION_FLAG } from "../_lib/labels";
 
@@ -144,9 +145,9 @@ export function SheetGrid({
                         {cell?.text ?? ""}
                       </span>
                       {flags.map((flag) => (
-                        <Tag key={flag} color="purple" className="ms-1">
-                          {flag}
-                        </Tag>
+                        <span key={flag} className="ms-1">
+                          <StatusTag tone="unk">{flag}</StatusTag>
+                        </span>
                       ))}
                     </td>
                   );

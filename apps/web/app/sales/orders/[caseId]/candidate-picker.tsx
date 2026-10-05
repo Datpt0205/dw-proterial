@@ -10,9 +10,9 @@ import {
   Radio,
   Space,
   Table,
-  Tag,
   Typography,
 } from "antd";
+import { StatusTag } from "@dw/ui";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -44,13 +44,13 @@ interface Row {
 function fit(fits: boolean | null) {
   if (fits === null) return null;
   return fits ? (
-    <Tag color="success" icon={<CheckCircleOutlined aria-hidden />}>
+    <StatusTag tone="ok" icon={<CheckCircleOutlined aria-hidden />}>
       khớp
-    </Tag>
+    </StatusTag>
   ) : (
-    <Tag color="error" icon={<CloseCircleOutlined aria-hidden />}>
+    <StatusTag tone="err" icon={<CloseCircleOutlined aria-hidden />}>
       lệch
-    </Tag>
+    </StatusTag>
   );
 }
 

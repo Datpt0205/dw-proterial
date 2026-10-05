@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { NAV, NAV_ITEMS } from "../nav/registry";
 import { isNavGroup, type NavEntry } from "../nav/types";
 import {
+  barNav,
   currentPage,
   navPages,
   visibleNav,
@@ -190,5 +191,39 @@ describe("currentPage", () => {
   it("does not stretch an exact page over the pages under it", () => {
     expect(currentPage(NAV_ITEMS, "/sales/unknown")).toBeUndefined();
     expect(currentPage(NAV_ITEMS, "/nowhere")).toBeUndefined();
+  });
+});
+
+describe("barNav", () => {
+  function bar(persona: string) {
+    const { roles, scopes } = PERSONAS[persona]!;
+    return barNav(visibleNav(NAV, viewer(scopes, roles)));
+  }
+
+  it.each([
+    ["an.nguyen (sales_pic)", SALES_PAGES],
+    ["giang.do (sales_head)", SALES_PAGES],
+    ["ha.vu (sales_viewer)", ["/sales/overview"]],
+  ])("is the Sales pages alone for %s", (persona, pages) => {
+    const { entries, context } = bar(persona);
+    expect(context?.key).toBe("sales");
+    expect(entries.map((entry) => (entry as { href: string }).href)).toEqual(
+      pages,
+    );
+  });
+
+  it("keeps the platform's nav for someone without a context", () => {
+    const { entries, context } = bar("binh.tran (no sales.*)");
+    expect(context).toBeNull();
+    expect(navPages(entries).map((item) => item.href)).toContain("/approvals");
+  });
+
+  it("keeps every entry for someone who administers the tenant", () => {
+    const admin = viewer([...PIC, "platform.members.read"], ["org_admin"]);
+    const { entries, context } = barNav(visibleNav(NAV, admin));
+    expect(context).toBeNull();
+    expect(labels(entries)).toEqual(
+      expect.arrayContaining(["Sales", "Admin", "Home"]),
+    );
   });
 });

@@ -11,7 +11,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dw_api.bootstrap import ApiContainer
 from dw_api.dependencies.auth import RequireVerifiedIdentity, get_container
@@ -26,7 +26,11 @@ class WorkspaceMembershipModel(BaseModel):
     workspace_slug: str
     workspace_name: str
     roles: list[str]
+    # What the membership may do: its roles' scopes and its permission sets'.
+    # A screen reads it to decide what to offer; the API checks again.
     scopes: list[str]
+    # Each role key's name from the role catalogue, for the screen to show.
+    role_names: dict[str, str] = Field(default_factory=dict)
 
 
 class BootstrapResponse(BaseModel):
@@ -67,6 +71,7 @@ async def bootstrap(
                 workspace_name=m.workspace_name,
                 roles=list(m.roles),
                 scopes=list(m.scopes),
+                role_names=dict(m.role_names),
             )
             for m in view.memberships
         ],

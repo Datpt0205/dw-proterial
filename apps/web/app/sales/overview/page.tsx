@@ -8,11 +8,10 @@ import {
   Row,
   Statistic,
   Table,
-  Tag,
   Typography,
 } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
-import { PageHeader } from "@dw/ui";
+import { PageHeader, StatusTag } from "@dw/ui";
 import { RegionLoading, RegionState } from "../../../components/region-state";
 import {
   formatDateTime,
@@ -31,6 +30,7 @@ import {
   TIME_BUCKET,
 } from "../_lib/labels";
 import { SCOPE, useSalesFrame } from "../_components/sales-frame";
+import { salesCrumbs } from "../_components/crumbs";
 import { ScopeGate } from "../_components/scope-gate";
 
 type Overview = SalesSchemas["OverviewView"];
@@ -65,10 +65,13 @@ function OverviewBody() {
   return (
     <div className="space-y-4">
       <PageHeader
+        breadcrumb={salesCrumbs("Tổng quan quy trình")}
         title="Tổng quan quy trình"
         description={`Số hồ sơ ở mỗi bước của hai quy trình, và thời gian DW1 và Sales bỏ ra, ${MOCK_SET}. Không có số tiền nào ở trang này.`}
         tags={
-          data ? <Tag>{`Cập nhật ${formatDateTime(data.as_of)}`}</Tag> : null
+          data ? (
+            <StatusTag tone="gray">{`Cập nhật ${formatDateTime(data.as_of)}`}</StatusTag>
+          ) : null
         }
       />
       {overview.loading ? (

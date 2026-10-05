@@ -12,7 +12,8 @@ have; they are never re-provisioned.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Protocol
 from uuid import UUID
 
@@ -21,7 +22,14 @@ from dw_platform.application.ports import VerifiedIdentity
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceMembershipView:
-    """One workspace the caller may enter, with resolved roles/scopes."""
+    """One workspace the caller may enter, with resolved roles/scopes.
+
+    ``scopes`` is what the membership may do: its roles' scopes and its
+    permission sets', the same union the access context resolves, so a screen
+    never offers less than the API allows. ``role_names`` is each role's name
+    as the role catalogue (``platform.roles.name``) writes it, the one owner
+    of what a role is called.
+    """
 
     tenant_id: UUID
     tenant_slug: str
@@ -31,6 +39,7 @@ class WorkspaceMembershipView:
     workspace_name: str
     roles: tuple[str, ...]
     scopes: tuple[str, ...]
+    role_names: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

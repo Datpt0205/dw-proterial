@@ -28,7 +28,10 @@ export interface Membership {
   workspaceSlug: string;
   workspaceName: string;
   roles: string[];
+  /** What the membership may do: its roles' and its permission sets' scopes. */
   scopes: string[];
+  /** Each role key's name in the role catalogue (`platform.roles.name`). */
+  roleNames: Record<string, string>;
 }
 
 export type AuthStatus =
@@ -67,6 +70,7 @@ interface BootstrapMembership {
   workspace_name: string;
   roles: string[];
   scopes: string[];
+  role_names?: Record<string, string>;
 }
 
 interface BootstrapResponse {
@@ -90,6 +94,7 @@ function mapMembership(m: BootstrapMembership): Membership {
     workspaceName: m.workspace_name,
     roles: m.roles,
     scopes: m.scopes,
+    roleNames: m.role_names ?? {},
   };
 }
 
