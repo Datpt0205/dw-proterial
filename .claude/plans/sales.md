@@ -86,8 +86,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
     - only the quotation PIC and the head see other customers' prices;
     - NOC/ESF warns, and the export-control PIC must acknowledge it;
     - quotation steps 11–12 are built on mock data.
-- The proposal states two different quotation-time targets; Đạt picks the
-  one the demo measures.
+- Quotation-time target: under 1 day (Đạt, 2026-10-05).
 - UI reference (2026-10-05): Đạt's E-HSDT v3 prototype in `docs/design/`
   (untracked, another product's handoff) is the visual language for ticket
   08; the screen mapping is in ticket 08. `docs/design/` is in `.gitignore` (Đạt, 2026-10-05)

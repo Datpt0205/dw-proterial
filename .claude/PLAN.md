@@ -50,7 +50,6 @@ own file and a row here.
       ADR-001..003 point at documents this repo never had.
 - **Sales:**
     - alias Proterial and its procedure codes in the public repo, or not;
-    - the quotation-time target the demo measures;
     - the interim defaults listed in `sales.md` Open.
 
 ## How a feature is checked here

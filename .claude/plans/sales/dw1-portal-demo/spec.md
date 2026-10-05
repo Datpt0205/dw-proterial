@@ -321,9 +321,9 @@ Price-bearing codes are `price_mismatch`, `currency_mismatch`,
 What the proposal promises, what is measured on the mock set, and what is not
 claimed. Targets and the manual baseline come from `sales_kpi@1.0.0`, whose
 committed values are fictional. Proterial's own figures exist only as tenant
-data loaded at runtime. The proposal states two different quotation-time
-targets; which one the demo measures is owed by Đạt, and until then it is a
-policy key with a fictional default.
+data loaded at runtime. The quotation-time target
+the demo measures is under 1 day from request to quotation sent (Đạt,
+2026-10-05).
 
 | Promise (paraphrased)                      | Measured on the mock set                                                                                                        | Not claimed                                                                             |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
