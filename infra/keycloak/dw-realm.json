@@ -21,18 +21,18 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
-        "http://localhost:3000/*",
+        "http://localhost:3300/*",
         "http://sales-dev.dxrank.vn:23000/*",
-        "http://127.0.0.1:3000/*"
+        "http://127.0.0.1:3300/*"
       ],
       "webOrigins": [
-        "http://localhost:3000",
+        "http://localhost:3300",
         "http://sales-dev.dxrank.vn:23000",
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3300"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:3000/*"
+        "post.logout.redirect.uris": "http://localhost:3300/*"
       },
       "protocolMappers": [
         {
