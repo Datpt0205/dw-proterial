@@ -49,7 +49,8 @@ own file and a row here.
       ADR-001..003 point at documents this repo never had.
 - **Sales:**
     - the interim defaults listed in `sales.md` Open;
-    - whether pausing DW1 also stops rendering drafts and files.
+    - whether pausing DW1 also stops rendering drafts and files;
+    - the primary colour for the Sales restyle (prototype blue or navy).
 
 ## How a feature is checked here
 
