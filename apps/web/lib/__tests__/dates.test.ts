@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  dayDeadline,
+  daysSince,
+  formatAge,
   formatDate,
   formatDateTime,
+  formatDuration,
+  formatInstant,
+  formatMonth,
+  fromPickerDay,
+  toPickerDay,
   TIME_ZONE_LABEL,
   UNKNOWN_TIME,
 } from "../dates";
@@ -45,12 +53,61 @@ describe.each(BROWSER_ZONES)("in a browser set to %s", (zone) => {
     expect(formatDateTime("2026-10-14")).toBe("14/10/2026");
   });
 
+  it("runs a date-only deadline to the end of its day in Vietnam", () => {
+    process.env.TZ = zone;
+    // 23:30 on the 7th in Vietnam: the 7th is still due, with 30 minutes left.
+    const late = Date.parse("2026-10-07T16:30:00Z");
+    const deadline = dayDeadline("2026-10-07", late)!;
+    expect(deadline.absolute).toBe("hết ngày 07/10/2026");
+    expect(deadline.withZone).toBe("hết ngày 07/10/2026 (giờ Việt Nam)");
+    expect(deadline.overdue).toBe(false);
+    expect(deadline.relative).toBe("còn 30 phút");
+    // 00:30 on the 8th in Vietnam: thirty minutes overdue.
+    const next = dayDeadline("2026-10-07", Date.parse("2026-10-07T17:30:00Z"))!;
+    expect(next.overdue).toBe(true);
+    expect(next.relative).toBe("quá hạn 30 phút");
+  });
+
+  it("counts calendar days in Vietnam and keeps a picked day on its own date", () => {
+    process.env.TZ = zone;
+    expect(daysSince("2026-10-01", Date.parse("2026-10-05T01:00:00Z"))).toBe(4);
+    expect(fromPickerDay(toPickerDay("2026-11-16"))).toBe("2026-11-16");
+    expect(formatInstant(Date.parse("2026-10-14T02:00:00Z"))).toBe(
+      "09:00 14/10/2026 (giờ Việt Nam)",
+    );
+  });
+
   it("refuses a date and time with no offset instead of reading it in this zone", () => {
     process.env.TZ = zone;
     for (const value of ["2026-10-14T09:00:00", "2026-10-14 09:00"]) {
       expect(formatDateTime(value)).toBe(UNKNOWN_TIME);
       expect(formatDate(value)).toBe(UNKNOWN_TIME);
     }
+  });
+});
+
+describe("durations", () => {
+  it("names the two largest units", () => {
+    expect(formatDuration(30_000)).toBe("dưới 1 phút");
+    expect(formatDuration(12 * 60_000)).toBe("12 phút");
+    expect(formatDuration((5 * 60 + 12) * 60_000)).toBe("5 giờ 12 phút");
+    expect(formatDuration((3 * 24 + 4) * 3_600_000 + 5 * 60_000)).toBe(
+      "3 ngày 4 giờ",
+    );
+    expect(formatDuration(2 * 24 * 3_600_000)).toBe("2 ngày");
+  });
+
+  it("reads an unknown or negative span as unknown, never as zero", () => {
+    expect(formatDuration(null)).toBe(UNKNOWN_TIME);
+    expect(formatDuration(-1)).toBe(UNKNOWN_TIME);
+    expect(formatAge("not a date", Date.now())).toBe(UNKNOWN_TIME);
+    expect(dayDeadline(null, Date.now())).toBeNull();
+    expect(dayDeadline("2026-02-30", Date.now())).toBeNull();
+  });
+
+  it("writes the API's month as mm/yyyy", () => {
+    expect(formatMonth("2026-09")).toBe("09/2026");
+    expect(formatMonth("2026-13")).toBe(UNKNOWN_TIME);
   });
 });
 

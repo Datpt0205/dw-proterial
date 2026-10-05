@@ -41,7 +41,7 @@ function pageItem(
   const count = page.badgeKey ? badges[page.badgeKey] : undefined;
   return {
     key: page.href,
-    icon: <Icon size={16} aria-hidden />,
+    icon: <Icon className="size-4" aria-hidden />,
     label: (
       <Link
         href={page.href}
@@ -64,7 +64,7 @@ function menuItems(
     const Icon = entry.icon;
     return {
       key: `group:${entry.key}`,
-      icon: <Icon size={16} aria-hidden />,
+      icon: <Icon className="size-4" aria-hidden />,
       label: entry.label,
       children: entry.items.map((page) => pageItem(page, current, badges)),
     };

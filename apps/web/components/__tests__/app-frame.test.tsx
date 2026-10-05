@@ -57,6 +57,18 @@ function signIn(scopes: string[], roles: string[] = ["sales"]) {
   };
 }
 
+/** A Sales PIC's role scopes, as the sales migration grants them. */
+const PIC = [
+  "sales.overview.read",
+  "sales.case.read",
+  "sales.price.read",
+  "sales.inbox.process",
+  "sales.order.prepare",
+  "sales.order.cross_check",
+  "sales.quote.prepare",
+  "sales.worker.pause",
+];
+
 function renderShell() {
   return render(
     <UiProvider>
@@ -79,7 +91,7 @@ afterEach(() => {
 
 describe("the shell's navbar", () => {
   it("shows the Sales group, whose pages the drawer lists as links", () => {
-    signIn(["sales.read"]);
+    signIn(PIC);
     renderShell();
 
     expect(screen.getByText("Nội dung trang")).toBeTruthy();
@@ -87,11 +99,13 @@ describe("the shell's navbar", () => {
 
     const drawer = openDrawer();
     const pages = [
-      ["Tổng quan quy trình", "/sales"],
+      ["Việc cần làm", "/sales"],
       ["Hộp thư", "/sales/inbox"],
       ["Đơn hàng", "/sales/orders"],
       ["Báo giá", "/sales/quotes"],
+      ["Kiểm chéo & duyệt", "/sales/review"],
       ["Dữ liệu giả lập", "/sales/master-data"],
+      ["Tổng quan quy trình", "/sales/overview"],
     ];
     for (const [name, href] of pages) {
       expect(
@@ -101,7 +115,7 @@ describe("the shell's navbar", () => {
   });
 
   it("marks the page on screen as the current one", () => {
-    signIn(["sales.read"]);
+    signIn(PIC);
     renderShell();
     const drawer = openDrawer();
     expect(
@@ -111,7 +125,7 @@ describe("the shell's navbar", () => {
     ).toBe("page");
     expect(
       within(drawer)
-        .getByRole("link", { name: "Tổng quan quy trình" })
+        .getByRole("link", { name: "Việc cần làm" })
         .getAttribute("aria-current"),
     ).toBeNull();
   });
@@ -132,7 +146,7 @@ describe("the shell's navbar", () => {
   });
 
   it("points the brand at the first page the person can open", () => {
-    signIn(["sales.read"]);
+    signIn(PIC);
     renderShell();
     expect(
       screen.getByRole("link", { name: "Digital Worker" }).getAttribute("href"),

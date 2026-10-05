@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
     cpus: 1,
   },
   transpilePackages: ["@dw/ui", "@dw/contracts", "@dw/api-client"],
+  // `app/pdfjs/[kind]/[file]` reads these at run time; a path read from fs
+  // is not traced, so the standalone build is told to keep them.
+  outputFileTracingIncludes: {
+    "/pdfjs/[kind]/[file]": [
+      "./node_modules/pdfjs-dist/cmaps/**",
+      "./node_modules/pdfjs-dist/standard_fonts/**",
+    ],
+  },
 };
 
 export default nextConfig;
