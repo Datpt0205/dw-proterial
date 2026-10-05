@@ -62,8 +62,10 @@ PrintedText = Annotated[
         pattern=rf"^{_PRINTED_END}(?:[^\x00-\x1f\x7f]*{_PRINTED_END})?$",
     ),
 ]
-# Who acted: the verified principal's id, never a display name.
-ActorId = Annotated[str, Field(pattern=r"^[!-~]{1,254}$")]
+# Who acted: the verified principal's id (`AccessContext.principal_id`), never
+# a subject or a display name. One type for orders and quotes alike, so a maker
+# on one side and a checker on the other are compared as the same kind of id.
+ActorId = uuid.UUID
 # A person's words on a decision: a reason, a source note.
 Note = Annotated[str, Field(min_length=1, max_length=500, pattern=r"\S")]
 # ``<id>@<semver>``: a policy or a parser, as stamped on a case.
@@ -910,6 +912,27 @@ class OrderCase(BaseModel):
     closed_at: AwareDatetime | None = None
     # The case that replaced this one: the link `closed(superseded)` carries.
     superseded_by_case: uuid.UUID | None = None
+    # Whoever prepared the order or recorded its Bravo entry in an earlier
+    # round, whose stamp was since cleared (a return from the cross-check, a
+    # revision before upload, a reopened self-check) or replaced (a change
+    # applied in Bravo). They stay makers of the case (spec decision 7). The
+    # store's `makers` column accumulates the same names by trigger, and a
+    # stored case is read back with them here.
+    earlier_makers: frozenset[ActorId] = frozenset()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _earlier_makers_are_not_the_current_ones(cls, data: object) -> object:
+        """A name stamped in this round is a current maker, not an earlier one.
+
+        One normal form whoever builds the case: the domain clearing a round
+        and the store reading back its accumulated `makers` agree on it.
+        """
+        if not isinstance(data, Mapping) or not data.get("earlier_makers"):
+            return data
+        current = {str(data.get(stamp)) for stamp in ("prepared_by", "bravo_recorded_by")}
+        earlier = [name for name in data["earlier_makers"] if str(name) not in current]
+        return {**data, "earlier_makers": frozenset(earlier)}
 
     @model_validator(mode="after")
     def _case_is_consistent(self) -> Self:
@@ -943,9 +966,9 @@ class OrderCase(BaseModel):
         if (self.superseded_by_case is not None) != (self.close_reason is CloseReason.SUPERSEDED):
             raise ValueError("a case closed as superseded names its successor, and only it does")
         self._stamps_fit_the_status()
-        if self.cross_checked_by is not None and self.cross_checked_by in (
-            self.prepared_by,
-            self.bravo_recorded_by,
+        if self.cross_checked_by is not None and (
+            self.cross_checked_by in (self.prepared_by, self.bravo_recorded_by)
+            or self.cross_checked_by in self.earlier_makers
         ):
             raise ValueError(f"the cross-checker is a maker of the case ({MAKER_CHECKER_RULE})")
         return self
@@ -996,14 +1019,15 @@ class OrderCase(BaseModel):
         return tuple(f for f in self.findings if f.blocking)
 
     @property
-    def makers(self) -> frozenset[str]:
+    def makers(self) -> frozenset[ActorId]:
         """Everyone the cross-checker must not be (spec decision 7).
 
-        The preparer, whoever recorded the Bravo entry, and whoever typed a
-        value still on the case: a corrected value, or a PRV code typed for an
-        unmapped line.
+        The preparer, whoever recorded the Bravo entry, in this round or an
+        earlier one (`earlier_makers`), and whoever typed a value still on the
+        case: a corrected value, or a PRV code typed for an unmapped line.
         """
-        names = {self.prepared_by, self.bravo_recorded_by}
+        names: set[ActorId | None] = {self.prepared_by, self.bravo_recorded_by}
+        names |= self.earlier_makers
         names |= {
             f.disposition.by for f in self.findings if isinstance(f.disposition, CorrectedBySales)
         }
@@ -1255,7 +1279,7 @@ class OrderCase(BaseModel):
             returned_reason=reason,
             returned_by=actor.user_id,
             returned_at=at,
-            **_CLEARED_FROM_PREPARED,
+            **self._cleared_from_prepared(),
         )
 
     def record_pc_confirmation(self, line_no: int, actor: Actor, at: datetime) -> OrderCase:
@@ -1346,7 +1370,7 @@ class OrderCase(BaseModel):
             }
         else:
             status = transition(self.status, _S.CHECKED)
-            cleared = dict(_CLEARED_FROM_PREPARED)
+            cleared = self._cleared_from_prepared()
         return self._next(
             status,
             message_id=revision.message_id,
@@ -1388,6 +1412,7 @@ class OrderCase(BaseModel):
             transition(self.status, _S.UPLOADED_TO_BRAVO),
             bravo_recorded_by=actor.user_id,
             bravo_recorded_at=at,
+            earlier_makers=self._retired_makers(),
         )
 
     def close(
@@ -1453,9 +1478,18 @@ class OrderCase(BaseModel):
             )
         if self.status is _S.PREPARED:
             return self._next(
-                transition(self.status, _S.IN_REVIEW), **changes, **_CLEARED_FROM_PREPARED
+                transition(self.status, _S.IN_REVIEW), **changes, **self._cleared_from_prepared()
             )
         return self._next(self.status, **changes)
+
+    def _retired_makers(self) -> frozenset[ActorId]:
+        """The makers so far, as the earlier ones of the next round."""
+        current = (self.prepared_by, self.bravo_recorded_by)
+        return self.earlier_makers | {name for name in current if name is not None}
+
+    def _cleared_from_prepared(self) -> dict[str, object]:
+        """The preparation and the Bravo entry cleared, their makers kept."""
+        return {**_CLEARED_FROM_PREPARED, "earlier_makers": self._retired_makers()}
 
     def _next(self, status: OrderStatus, **changes: object) -> OrderCase:
         # Validated again: `model_copy(update=...)` would skip the invariants.

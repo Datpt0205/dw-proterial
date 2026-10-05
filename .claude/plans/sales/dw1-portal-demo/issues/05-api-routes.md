@@ -1,6 +1,6 @@
 # 05 — API routes and scopes
 
-Status: ready-for-agent
+Status: done (2026-10-05, uncommitted)
 Blocked by: 04, 11
 
 ## What
@@ -125,3 +125,45 @@ each one a persona from ticket 11:
       in `GET /audit/events` after M04 is decided and M10 approved;
     - a PIC without `sales_price_evidence` sees no other customer's price on
       M10.
+
+## As built (2026-10-05)
+
+Code: `dw_sales.application` (`*_service.py`, `views.py`, `access.py`,
+`source.py`, `support.py`), `dw_sales.presentation.routes`, wired at the
+seam by `dw_api.bootstrap.wiring.build_sales`. Tests: `apps/api/tests/unit/
+test_sales_routes.py` (route inventory, gating), `apps/api/tests/integration/
+test_sales_api_*.py` (every persona), and `dw_sales` unit tests for the
+mappers, the source gate, the services' own scope checks and the policies.
+
+Decisions taken here, beyond the table:
+
+- **Routes the table did not list:** `POST /orders/{id}/correction-request`
+  (decision 9's move to `correction_requested` is explicit in the domain, so
+  several findings can be sent back before the request goes), and
+  `POST /quotes/{id}/findings/{key}/answer` (`rfq_incomplete` and
+  `customer_unknown` are answered before the YCBG is drafted).
+  `delivery-date` records PC's agreement to a short lead time (who, when);
+  the confirmed date per line goes with `confirm`.
+- **A mutation answers with ids only** (`case_kind`, `case_id`,
+  `case_version`, `status`): the platform's idempotency store keeps the
+  response, so it must hold no amount. The screen reads the case again.
+- **A route's scope is checked before the `Idempotency-Key` is claimed**, so
+  a replayed key never answers a caller who may not make the request; each
+  service checks its scope again where the change happens.
+- **DW1 hands a checked order to the PIC's self-check** at intake
+  (`checked → in_review`, its own event), so `checked` is transient.
+- **Artifact gates** are ticket 06's table, landed with the route; rendering,
+  storing and the `case_version` binding of a file stay 06's.
+- **Every actor is the principal's uuid** (migration `075dca5a6168`);
+  `case_events.actor_id` stays text (a person's uuid or DW1's service id).
+- **Quote cases stamp** `rules_version` and `catalog_as_of` when opened; the
+  parser is the request's (`RfqDocument.parser_version`). The quote body is
+  the record, so no column was added.
+- **Fail closed on the floor:** `price_floor_unknown` (copper weight, LME
+  month, adder or a USD rate unknown) blocks approval without a reason.
+- **Design's mailboxes** are `sales_quote_rules@1.1.0.design_mailboxes`.
+- **Overview** loads every case of the workspace: right for the mock set, owed
+  to SQL aggregates before real volume (ticket 12). PC's wait is not
+  measured (outside the portal). The A3 shadow count uses DW1's interim
+  conditions (no finding, every line exact, an original) until Proterial
+  defines A3.

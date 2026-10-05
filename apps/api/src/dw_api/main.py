@@ -146,12 +146,20 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     # ---- BOUNDED CONTEXT ROUTERS MOUNT HERE ------------------------------
     # Guarded on the dependency it needs: a context whose wiring is absent
     # mounts nothing rather than mounting a route that 500s on every call.
-    if container.sales_handler is not None:
-        from dw_sales.application.handlers import HandleSales
+    if container.sales is not None:
+        from dw_api.dependencies.auth import get_access_context
+        from dw_api.dependencies.idempotency import get_idempotent_operation
+        from dw_sales.presentation.routes import SalesMount
         from dw_sales.presentation.routes import build_router as build_sales_router
 
-        assert isinstance(container.sales_handler, HandleSales)
-        app.include_router(build_sales_router(container.sales_handler))
+        assert isinstance(container.sales, SalesMount)
+        app.include_router(
+            build_sales_router(
+                container.sales.services,
+                access_context=get_access_context,
+                idempotency=get_idempotent_operation,
+            )
+        )
 
     # Guard each on the dependency it needs, as the platform routers above do:
     # a router that 500s on every call is worse than an absent one.

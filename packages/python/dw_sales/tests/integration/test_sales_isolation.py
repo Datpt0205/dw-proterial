@@ -108,7 +108,10 @@ async def test_an_outsider_cannot_change_a_case(
             await work.orders.save(reviewing, expected_version=case.case_version, event=event)
     async with bound(app_sessions, outsider) as session:
         changed = await session.execute(
-            sa.text("UPDATE sales.order_cases SET assigned_to = 'dev|bao.pham' WHERE id = :id"),
+            sa.text(
+                "UPDATE sales.order_cases"
+                " SET assigned_to = '00000000-0000-0000-0000-0000000000b9' WHERE id = :id"
+            ),
             {"id": case.case_id},
         )
         deleted = await session.execute(
@@ -134,7 +137,7 @@ async def test_an_outsider_cannot_write_a_row_into_the_owners_scope(
                 sa.text(
                     "INSERT INTO sales.worker_state"
                     " (tenant_id, workspace_id, paused, changed_by, changed_at)"
-                    " VALUES (:t, :w, true, 'dev|bao.pham', now())"
+                    " VALUES (:t, :w, true, '00000000-0000-0000-0000-0000000000b9', now())"
                 ),
                 {"t": owner.tenant_id.value, "w": owner.workspace_id.value},
             )

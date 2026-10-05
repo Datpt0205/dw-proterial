@@ -34,10 +34,11 @@ from dw_sales.domain.orders import (
 
 pytestmark = pytest.mark.integration
 
-AN = Actor(user_id="dev|an.nguyen")
-BINH = Actor(user_id="dev|binh.tran")
-CHI = Actor(user_id="dev|chi.le")
-DIEU = Actor(user_id="dev|dieu.hoang")
+# Principal ids, as the verified access context carries them (fictional).
+AN = Actor(user_id=uuid.UUID(int=0xA1))
+BINH = Actor(user_id=uuid.UUID(int=0xB1))
+CHI = Actor(user_id=uuid.UUID(int=0xC1))
+DIEU = Actor(user_id=uuid.UUID(int=0xD1))
 
 
 @asynccontextmanager
@@ -163,7 +164,7 @@ async def test_someone_else_may_cross_check(
     async with uow(small_run.scope) as work:
         stored = await work.orders.get(crossed.case_id)
     assert stored is not None and stored.case.cross_checked_by == DIEU.user_id
-    assert stored.makers == {AN.user_id, BINH.user_id}
+    assert stored.case.makers == {AN.user_id, BINH.user_id}
 
 
 async def test_an_earlier_bravo_recorder_cannot_cross_check_a_revised_order(
@@ -171,9 +172,10 @@ async def test_an_earlier_bravo_recorder_cannot_cross_check_a_revised_order(
     uow: SqlSalesUnitOfWorkFactory,
     app_sessions: async_sessionmaker[AsyncSession],
 ) -> None:
-    """After a revision, `apply_change` replaces `bravo_recorded_by`. The
-    domain's makers are the current stamps, so it lets Bình, who keyed the
-    first entry, check the revised one; the stored makers do not."""
+    """After a revision, `apply_change` replaces `bravo_recorded_by`. Bình,
+    who keyed the first entry, stays a maker: the case read back carries him
+    among its earlier makers and refuses him itself (409, ticket 05), and a
+    writer that dropped him still meets the CHECK on the stored makers."""
     uploaded = await _uploaded(small_run, uow)
     review = uploaded.revise(_revision_of(uploaded))
     decided = review.dispose(
@@ -194,9 +196,25 @@ async def test_an_earlier_bravo_recorder_cannot_cross_check_a_revised_order(
         stored = await work.orders.get(applied.case_id)
     assert stored is not None
     assert stored.case == stored_applied
-    assert stored.makers == {AN.user_id, BINH.user_id, CHI.user_id}
+    assert stored.case.makers == {AN.user_id, BINH.user_id, CHI.user_id}
 
-    crossed = applied.cross_check(BINH, T0)  # the domain allows it today
+    with pytest.raises(ConflictError) as by_the_case:
+        stored.case.cross_check(BINH, T0)
+    assert by_the_case.value.details["rule"] == "maker_checker"
+
+    # A writer that lost the history: the case it holds names no earlier
+    # maker, so nothing in it refuses Bình. The store still does.
+    forgetful = OrderCase.model_validate(
+        {
+            **dict(applied),
+            "earlier_makers": frozenset(),
+            "status": OrderStatus.CROSS_CHECKED,
+            "cross_checked_by": BINH.user_id,
+            "cross_checked_at": T0,
+            "case_version": applied.case_version + 1,
+        }
+    )
+    crossed = forgetful
     async with uow(small_run.scope) as work:
         with pytest.raises(ConflictError) as refused:
             await work.orders.save(
@@ -317,7 +335,8 @@ async def test_an_artifact_key_always_carries_its_tenant_and_workspace(
         "INSERT INTO sales.artifacts (id, tenant_id, workspace_id, order_case_id, case_version,"
         " kind, template_ref, object_key, sha256, content_type, size_bytes, created_by)"
         " VALUES (gen_random_uuid(), :t, :w, :c, 1, 'bravo_upload', 'sales_bravo_upload@1.0.0',"
-        " 'shared/bravo.xlsx', repeat('a', 64), 'application/pdf', 10, 'dev|an.nguyen')",
+        " 'shared/bravo.xlsx', repeat('a', 64), 'application/pdf', 10,"
+        " '00000000-0000-0000-0000-0000000000a1')",
         t=scope.tenant_id.value,
         w=scope.workspace_id.value,
         c=case.case_id,

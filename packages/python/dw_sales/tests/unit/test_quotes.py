@@ -25,6 +25,7 @@ from dw_sales.domain.quotes import (
     CustomerQuoteDocument,
     DeclineReason,
     DesignReply,
+    FindingAccepted,
     LinePrice,
     PolicyFloor,
     PricingDecision,
@@ -32,6 +33,7 @@ from dw_sales.domain.quotes import (
     QuoteAddressee,
     QuoteCapability,
     QuoteCase,
+    QuoteFinding,
     QuoteFindingCode,
     QuoteRequest,
     QuoteStatus,
@@ -51,6 +53,14 @@ APPROVER = uuid.UUID(int=102)
 SALES = uuid.UUID(int=103)
 HEAD = QuoteActor(user_id=APPROVER, capabilities=frozenset({QuoteCapability.APPROVE}))
 AT = datetime(2026, 10, 2, 2, 0, tzinfo=UTC)
+QUOTE_RULES = "sales_quote_rules@1.1.0"
+AS_OF = datetime(2026, 10, 2, 11, 0, tzinfo=UTC)
+
+
+def _open_case(case_id: uuid.UUID, request: QuoteRequest) -> QuoteCase:
+    return QuoteCase.open(case_id, request, rules_version=QUOTE_RULES, catalog_as_of=AS_OF)
+
+
 LME_SEP = LmeMonth(month="2026-09", usd_per_tonne=Decimal(10870))
 LME_AUG = LmeMonth(month="2026-08", usd_per_tonne=Decimal(10610))
 BAND_SEP = LmeBand(low_usd_per_tonne=Decimal(10500), high_usd_per_tonne=Decimal(11000))
@@ -122,6 +132,7 @@ def _request(*items: dict[str, Any], **overrides: Any) -> QuoteRequest:
             "customer_code": "KMH",
             "customer_from": "sender_domain",
             "document": {
+                "parser_version": "excel_rfq_reader@1.0.0",
                 "rfq_no": _sourced("KMH-RFQ-260930-02", "B4"),
                 "rfq_date": _sourced("2026-09-30", "E4"),
                 "quote_due": _sourced("2026-10-07", "B5"),
@@ -255,7 +266,7 @@ _MAIN_PATH = list(_STEPS)
 
 def _case(status: QuoteStatus, request: QuoteRequest | None = None) -> QuoteCase:
     """A case walked along the main path to ``status``, or to its side states."""
-    case = QuoteCase.open(uuid.UUID(int=7), request or _request())
+    case = _open_case(uuid.UUID(int=7), request or _request())
     if status is QuoteStatus.RECEIVED:
         return case
     if status is QuoteStatus.SPEC_DISCUSSION:
@@ -304,7 +315,7 @@ def test_a_request_numbers_its_lines_once() -> None:
 
 
 def test_a_value_left_blank_raises_rfq_incomplete_on_its_line_not_a_refusal() -> None:
-    case = QuoteCase.open(uuid.UUID(int=7), _request(_item(quantity=_sourced(None, "D10"))))
+    case = _open_case(uuid.UUID(int=7), _request(_item(quantity=_sourced(None, "D10"))))
 
     (finding,) = case.findings
     assert (finding.code, finding.line_no, finding.missing) == (
@@ -316,7 +327,7 @@ def test_a_value_left_blank_raises_rfq_incomplete_on_its_line_not_a_refusal() ->
 
 
 def test_an_incomplete_request_leaves_received_only_by_decline_or_sales_answer() -> None:
-    case = QuoteCase.open(uuid.UUID(int=7), _request(_item(quantity=_sourced(None, "D10"))))
+    case = _open_case(uuid.UUID(int=7), _request(_item(quantity=_sourced(None, "D10"))))
 
     with pytest.raises(ValidationError, match="answered its findings"):
         case.draft_ycbg()
@@ -329,7 +340,7 @@ def test_an_incomplete_request_leaves_received_only_by_decline_or_sales_answer()
 
 
 def test_sales_types_exactly_the_missing_values() -> None:
-    case = QuoteCase.open(uuid.UUID(int=7), _request(_item(quantity=_sourced(None, "D10"))))
+    case = _open_case(uuid.UUID(int=7), _request(_item(quantity=_sourced(None, "D10"))))
 
     with pytest.raises(ValidationError, match="exactly the missing values"):
         case.complete_line(1, by=SALES, at=AT, needed_by=date(2026, 12, 1))
@@ -339,7 +350,7 @@ def test_a_forwarded_request_waits_for_sales_to_confirm_the_customer() -> None:
     raw = _request().model_dump(mode="json")
     raw["customer_from"] = "named_buyer"
     raw["document"]["buyer"] = _sourced("KUMOHANA ELECTRONICS VIETNAM CO., LTD.", "A1")
-    case = QuoteCase.open(uuid.UUID(int=7), QuoteRequest.model_validate(raw))
+    case = _open_case(uuid.UUID(int=7), QuoteRequest.model_validate(raw))
 
     assert [f.code for f in case.findings] == [QuoteFindingCode.CUSTOMER_UNKNOWN]
     confirmed = case.confirm_customer("KMH", by=SALES, at=AT)
@@ -440,6 +451,53 @@ def test_a_price_inside_every_rule_raises_nothing() -> None:
     assert _priced(_case(QuoteStatus.DESIGN_REPLIED), _decision(price="0.6400")).findings == ()
 
 
+def _floor_unknown(case: QuoteCase) -> QuoteFinding:
+    (finding,) = [f for f in case.findings if f.code is QuoteFindingCode.PRICE_FLOOR_UNKNOWN]
+    return finding
+
+
+def test_a_reply_without_the_copper_weight_fails_closed_on_the_floor() -> None:
+    replied = _case(QuoteStatus.SENT_TO_DESIGN).record_design_reply(_reply(copper=None))
+    case = _priced(replied, _decision(price="0.6400"))
+
+    finding = _floor_unknown(case)
+    # Blocking, as an order line with no LME figure fails its band: nothing
+    # holds a price to a floor nobody could compute.
+    assert finding.blocking
+    assert (finding.expected, finding.actual) == ("floor", "copper_weight")
+    assert finding.rule_versions == ("sales_pricing@1.0.0",)
+
+
+def test_a_decision_with_no_lme_month_fails_closed_on_the_floor() -> None:
+    case = _priced(_case(QuoteStatus.DESIGN_REPLIED), _decision(basis=FixedCopper(), lme=None))
+
+    assert _floor_unknown(case).actual == "lme"
+
+
+def test_a_price_in_another_currency_than_usd_fails_closed_on_the_floor() -> None:
+    raw = _request().model_dump(mode="json")
+    raw["document"]["currency"]["value"] = "JPY"
+    case = _priced(_case(QuoteStatus.DESIGN_REPLIED, QuoteRequest.model_validate(raw)))
+
+    # No exchange-rate rule exists yet: an amount in yen is never compared
+    # with a floor in dollars, and never passes for one.
+    assert _floor_unknown(case).actual == "usd_rate"
+
+
+def test_an_unknown_floor_blocks_approval_until_the_approver_gives_a_reason() -> None:
+    replied = _case(QuoteStatus.SENT_TO_DESIGN).record_design_reply(_reply(copper=None))
+    submitted = _submitted(_priced(replied, _decision(price="0.6400")))
+    key = (QuoteFindingCode.PRICE_FLOOR_UNKNOWN, 1)
+
+    with pytest.raises(ConflictError, match="accepted with a reason"):
+        _approve(submitted)
+    approved = _approve(submitted, reasons={key: "Design xác nhận lại trọng lượng đồng"})
+
+    finding = _floor_unknown(approved)
+    assert isinstance(finding.disposition, FindingAccepted)
+    assert finding.disposition.by == HEAD.user_id
+
+
 # ------------------------------------------------------------- transitions --
 
 EXPECTED_MOVES = {
@@ -477,7 +535,7 @@ def test_a_quotation_makes_exactly_the_moves_the_process_allows(current: QuoteSt
 
 
 def test_a_case_walks_the_whole_way_and_every_change_bumps_its_version() -> None:
-    case = QuoteCase.open(uuid.UUID(int=7), _request())
+    case = _open_case(uuid.UUID(int=7), _request())
     versions = [case.case_version]
     for step in _MAIN_PATH:
         case = _STEPS[step](case)

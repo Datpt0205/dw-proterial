@@ -41,6 +41,10 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
+- **CI gitleaks** failed on run 36979355944 (2026-10-02): `.gitleaksignore`'s
+  own comment quoted the phrase it ignores. Fixed 2026-10-05; a local full-
+  history scan finds no leaks. Not yet confirmed in CI (nothing pushed).
+
 - **CI: three run-state announcement tests time out** (2026-09-29, run
   36526991963). The tests are in
   `dw_agent_runtime/tests/integration/test_run_state_announcements.py`: the
@@ -65,10 +69,10 @@ Mốc 6 (running many customers) is half done:
       tenant's own copy of a policy document;
     - `SqlPendingApprovalQuery`: a context counting its own pending
       approvals by type prefix;
-    - `scope_holders.py`: who holds a scope, for routing work to people;
-    - `platform.deliver_notification()`: the one way into a member's inbox.
-      The bell, the API and retention are wired, but nothing sends yet.
-      A context that adopts one wires it in `bootstrap/wiring.py` and names it
+    - `scope_holders.py` and `platform.deliver_notification()`: **taken by
+      Sales (ticket 05, 2026-10-05)**: pausing DW1 tells every holder of
+      `sales.worker.resume`, wired in `bootstrap/wiring.py`.
+      A context that adopts one of the others wires it there and names it
       here as taken.
 - **Nothing emits `memory.candidate_proposed`.** A bounded context has to
   decide what is worth remembering; the platform ships only the consumer.

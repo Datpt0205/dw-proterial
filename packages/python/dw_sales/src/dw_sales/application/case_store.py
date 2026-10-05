@@ -22,6 +22,7 @@ Three rules shape these ports:
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
@@ -43,8 +44,9 @@ _PRINCIPAL = r"^[!-~]{1,254}$"
 class EventActor(BaseModel):
     """Who acted: DW1 (a worker, with its id and version) or a person.
 
-    ``initiated_by`` is the person whose request started a worker's action
-    ("DW xử lý"), when one did.
+    A person's ``actor_id`` is their principal id (a uuid, as text in the
+    event row); a worker's is its own service id. ``initiated_by`` is the
+    person whose request started a worker's action ("DW xử lý"), when one did.
     """
 
     model_config = _FROZEN
@@ -53,7 +55,7 @@ class EventActor(BaseModel):
     actor_id: str = Field(pattern=_PRINCIPAL)
     worker_id: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
     worker_version: str | None = Field(default=None, pattern=r"^\d+\.\d+\.\d+$")
-    initiated_by: str | None = Field(default=None, pattern=_PRINCIPAL)
+    initiated_by: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _a_worker_names_itself(self) -> Self:
@@ -61,7 +63,28 @@ class EventActor(BaseModel):
         anonymous = self.worker_id is None and self.worker_version is None
         if (self.kind == "worker" and not named) or (self.kind == "user" and not anonymous):
             raise ValueError("a worker names its id and version, and a person neither")
+        if self.kind == "user":
+            try:
+                uuid.UUID(self.actor_id)
+            except ValueError:
+                raise ValueError("a person is named by their principal id") from None
         return self
+
+    @classmethod
+    def person(cls, principal_id: uuid.UUID) -> EventActor:
+        return cls(kind="user", actor_id=str(principal_id))
+
+    @classmethod
+    def worker(
+        cls, worker_id: str, worker_version: str, *, initiated_by: uuid.UUID | None
+    ) -> EventActor:
+        return cls(
+            kind="worker",
+            actor_id=f"svc|{worker_id}",
+            worker_id=worker_id,
+            worker_version=worker_version,
+            initiated_by=initiated_by,
+        )
 
 
 class CaseEvent(BaseModel):
@@ -92,7 +115,7 @@ class CaseOrigin:
     was opened under.
     """
 
-    assigned_to: str | None
+    assigned_to: uuid.UUID | None
     release_manifest_ref: str | None
 
 
@@ -100,15 +123,14 @@ class CaseOrigin:
 class Stored[CaseT]:
     """A case as stored, with what was stamped on it when it was opened.
 
-    ``makers`` (orders): everyone who prepared the order or recorded its Bravo
-    entry, in this revision or an earlier one, as the database accumulated
-    them. The cross-checker is none of them; the store refuses a save that
-    says otherwise (`ck_order_cases_checker_not_maker`).
+    An order case is read back with every earlier maker the database
+    accumulated (`OrderCase.earlier_makers`), so the case refuses a checker
+    among them itself; `ck_order_cases_checker_not_maker` refuses the same
+    whatever writes the row.
     """
 
     case: CaseT
     origin: CaseOrigin
-    makers: frozenset[str] = frozenset()
 
 
 class ServedSource(BaseModel):
@@ -117,7 +139,7 @@ class ServedSource(BaseModel):
 
     model_config = _FROZEN
 
-    principal_id: str = Field(pattern=_PRINCIPAL)
+    principal_id: uuid.UUID
     case_kind: CaseKind
     case_id: uuid.UUID
     case_version: int = Field(ge=1)
@@ -159,7 +181,7 @@ class ArtifactRecord(BaseModel):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     content_type: str = Field(pattern=r"^[a-z]+/[A-Za-z0-9.+-]{1,100}$")
     size_bytes: int = Field(gt=0)
-    created_by: str = Field(pattern=_PRINCIPAL)
+    created_by: uuid.UUID
     created_at: AwareDatetime
 
     def object_key(self, scope: SalesScope) -> str:
@@ -174,13 +196,39 @@ class WorkerState:
     """
 
     paused: bool
-    changed_by: str | None = None
+    changed_by: uuid.UUID | None = None
     changed_at: datetime | None = None
     reason: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class LoggedMessage:
+    """A message's disposition and when DW1 processed it (its ingest)."""
+
+    disposition: MessageDisposition
+    processed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class LoggedEvent:
+    """One case event as the overview reads it: a status move, when, by whom."""
+
+    case_kind: CaseKind
+    case_id: uuid.UUID
+    case_version: int
+    action: str
+    from_status: str | None
+    to_status: str
+    actor_kind: Literal["worker", "user"]
+    occurred_at: datetime
+
+
 class OrderCaseStorePort(Protocol):
     async def get(self, case_id: uuid.UUID) -> Stored[OrderCase] | None: ...
+
+    async def list_all(self) -> Sequence[Stored[OrderCase]]:
+        """Every case of the workspace, newest first."""
+        ...
 
     async def add(self, case: OrderCase, origin: CaseOrigin, event: CaseEvent) -> None:
         """A case just opened. Refused with a conflict when the case, its
@@ -199,6 +247,10 @@ class OrderCaseStorePort(Protocol):
 class QuoteCaseStorePort(Protocol):
     async def get(self, case_id: uuid.UUID) -> Stored[QuoteCase] | None: ...
 
+    async def list_all(self) -> Sequence[Stored[QuoteCase]]:
+        """Every case of the workspace, newest first."""
+        ...
+
     async def add(self, case: QuoteCase, origin: CaseOrigin, event: CaseEvent) -> None: ...
 
     async def save(self, case: QuoteCase, *, expected_version: int, event: CaseEvent) -> None: ...
@@ -213,6 +265,16 @@ class MessageLogPort(Protocol):
 
     async def get(self, message_id: str) -> MessageDisposition | None: ...
 
+    async def list_all(self) -> Sequence[LoggedMessage]:
+        """Every message with a disposition, newest processed first."""
+        ...
+
+
+class CaseEventLogPort(Protocol):
+    async def list_all(self) -> Sequence[LoggedEvent]:
+        """Every event of the workspace's cases, oldest first."""
+        ...
+
 
 class SourceServedPort(Protocol):
     async def record(self, served: ServedSource) -> None:
@@ -220,7 +282,7 @@ class SourceServedPort(Protocol):
         ...
 
     async def served(
-        self, principal_id: str, case_kind: CaseKind, case_id: uuid.UUID, case_version: int
+        self, principal_id: uuid.UUID, case_kind: CaseKind, case_id: uuid.UUID, case_version: int
     ) -> frozenset[SourceRegion]:
         """The regions ``principal_id`` was served of this case version."""
         ...
@@ -242,13 +304,30 @@ class SalesUnitOfWork(Protocol):
     """One transaction in one tenant's workspace. Leaving it without `commit`
     rolls everything back."""
 
-    orders: OrderCaseStorePort
-    quotes: QuoteCaseStorePort
-    messages: MessageLogPort
-    served: SourceServedPort
-    artifacts: ArtifactLogPort
-    worker: WorkerSwitchPort
-    audit: AuditRepositoryPort
+    # Read-only members, so an implementation may hold its concrete stores.
+    @property
+    def orders(self) -> OrderCaseStorePort: ...
+
+    @property
+    def quotes(self) -> QuoteCaseStorePort: ...
+
+    @property
+    def messages(self) -> MessageLogPort: ...
+
+    @property
+    def events(self) -> CaseEventLogPort: ...
+
+    @property
+    def served(self) -> SourceServedPort: ...
+
+    @property
+    def artifacts(self) -> ArtifactLogPort: ...
+
+    @property
+    def worker(self) -> WorkerSwitchPort: ...
+
+    @property
+    def audit(self) -> AuditRepositoryPort: ...
 
     async def commit(self) -> None: ...
 

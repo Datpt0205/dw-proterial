@@ -41,7 +41,7 @@ from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
 from dw_api.bootstrap.container import ApiContainer
 from dw_api.bootstrap.identity import build_token_verifier
-from dw_api.bootstrap.paths import WORKER_RUN_POLICY
+from dw_api.bootstrap.paths import POLICIES_DIR, WORKER_RUN_POLICY, release_manifest_ref
 from dw_api.bootstrap.runtime import build_runtime
 from dw_api.bootstrap.storage import (
     build_attachment_storage,
@@ -51,7 +51,8 @@ from dw_api.bootstrap.storage import (
 from dw_api.bootstrap.telemetry import build_telemetry
 from dw_api.health import HealthService, database_probe, qdrant_probe, redis_probe
 from dw_api.settings import ApiSettings
-from dw_kernel.ports import SystemClock, Uuid7Generator
+from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
+from dw_knowledge.ports import ObjectStoragePort
 from dw_platform.adapters.cache import NullCache, ValkeyCache
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
@@ -63,6 +64,7 @@ from dw_platform.adapters.persistence.membership_admin import SqlMembershipAdmin
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
 from dw_platform.adapters.persistence.provisioning_repo import SqlProvisioningRepository
+from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.separation_of_duties_repo import (
     SqlSeparationOfDutiesRepository,
 )
@@ -78,6 +80,7 @@ from dw_platform.application.membership_admin import (
     RevokeMembershipHandler,
 )
 from dw_platform.application.notifications import NotificationService
+from dw_platform.application.ports import WorkspaceDirectoryPort
 from dw_platform.application.provisioning import ProvisioningService
 from dw_platform.application.separation_of_duties import SeparationOfDutiesService
 
@@ -249,17 +252,109 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     # ---- BOUNDED CONTEXTS PLUG IN HERE -----------------------------------
     # Sales: built from the seam, never from a global. `container.runtime`
     # carries the session factory, clock, ids, registries and gateways; anything
-    # this context needs beyond them is its own adapter.
-    from dw_sales.adapters.sink import InMemorySalesSink
-    from dw_sales.application.handlers import HandleSales
-
-    container.sales_handler = HandleSales(InMemorySalesSink())
+    # this context needs beyond them is its own adapter (`build_sales` below).
+    assert container.workspace_directory is not None  # wired with the database
+    container.sales = build_sales(
+        settings,
+        session_factory=wiring.seam.session_factory,
+        clock=wiring.seam.clock,
+        ids=wiring.seam.ids,
+        authorization=authorization,
+        directory=container.workspace_directory,
+        holders=SqlScopeHolders(session_factory),
+        notifications=SqlNotificationRepository(session_factory),
+        artifact_bytes=object_storage,
+        release_manifest_ref=release_manifest_ref(),
+    )
 
     # Build your context from `container.runtime` (the RuntimeSeam) and attach
     # its handlers, then mount its router in `main.create_app`. Nothing above
     # this line may import a business package.
 
     return container
+
+
+def build_sales(
+    settings: ApiSettings,
+    *,
+    session_factory: async_sessionmaker[AsyncSession],
+    clock: UtcClock,
+    ids: IdGenerator,
+    authorization: ScopeAuthorizationService,
+    directory: WorkspaceDirectoryPort,
+    holders: SqlScopeHolders,
+    notifications: SqlNotificationRepository,
+    artifact_bytes: ObjectStoragePort,
+    release_manifest_ref: str | None,
+) -> object:
+    """The Sales context's mount, part of the seam above.
+
+    DW1's master data and mailbox are fictional mocks bound to one demo
+    (tenant, workspace) (`ApiSettings.sales_demo_scope`); every other scope
+    reads them empty. In a deployed profile without that pair nothing is
+    wired, and the Sales routes answer that no data source is configured.
+    """
+    from dw_kernel.ids import TenantId, WorkspaceId
+    from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+    from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
+    from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
+    from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
+    from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
+    from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
+    from dw_sales.adapters.policy_files import load_kpi, load_pricing, load_quote_rules
+    from dw_sales.adapters.readers import mock_po_readers
+    from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+    from dw_sales.adapters.source_view import FileSourceView
+    from dw_sales.application.order_intake import OrderIntake
+    from dw_sales.application.ports import SalesScope
+    from dw_sales.application.quotation import QuotationService
+    from dw_sales.application.services import assemble
+    from dw_sales.presentation.routes import SalesMount
+
+    demo = settings.sales_demo_scope()
+    if demo is None:
+        _LOG.warning("sales: no data source configured; /api/v1/sales answers 503")
+        return SalesMount(services=None)
+    scope = SalesScope(TenantId(demo[0]), WorkspaceId(demo[1]))
+    catalog = MockSalesCatalog.load(scope)
+    inbox = MockInbox.load(scope)
+    order_rules = load_order_rules(POLICIES_DIR / "sales_order_rules@1.0.0.yaml")
+    quotation = QuotationService(
+        catalog=catalog,
+        inbox=inbox,
+        rfq_reader=ExcelRfqReader(),
+        reply_reader=ExcelDesignReplyReader(),
+        cases=SqlQuoteCaseLookup(session_factory),
+        ledger=catalog,
+        rules=load_quote_rules(POLICIES_DIR / "sales_quote_rules@1.1.0.yaml"),
+        pricing=load_pricing(POLICIES_DIR / "sales_pricing@1.0.0.yaml"),
+    )
+    intake = OrderIntake(
+        catalog=catalog,
+        inbox=inbox,
+        reader=mock_po_readers(),
+        rules=PlatformOrderRules(order_rules),
+        cases=SqlOrderCaseLookup(session_factory),
+        new_case_id=ids.new_uuid,
+    )
+    services = assemble(
+        uow=SqlSalesUnitOfWorkFactory(session_factory, audit=SqlAuditRepository),
+        authorization=authorization,
+        clock=clock,
+        ids=ids,
+        catalog=catalog,
+        inbox=inbox,
+        intake=intake,
+        quotation=quotation,
+        files=FileSourceView(order_rules.intake),
+        kpi=load_kpi(POLICIES_DIR / "sales_kpi@1.0.0.yaml"),
+        directory=directory,
+        holders=holders,
+        notifications=notifications,
+        artifact_bytes=artifact_bytes,
+        release_manifest_ref=release_manifest_ref,
+    )
+    return SalesMount(services=services)
 
 
 def build_engine(url: str, *, pool_pre_ping: bool = True) -> AsyncEngine:

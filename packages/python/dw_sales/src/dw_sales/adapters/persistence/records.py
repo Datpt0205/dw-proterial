@@ -1,10 +1,11 @@
-"""The sales records that are not cases: message dispositions, served sources,
-artifacts and the pause switch. Each implements its port inside a unit of
-work's transaction."""
+"""The sales records that are not cases: message dispositions, the case event
+log, served sources, artifacts and the pause switch. Each implements its port
+inside a unit of work's transaction."""
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -17,6 +18,8 @@ from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import refusals_named, scope_values
 from dw_sales.application.case_store import (
     ArtifactRecord,
+    LoggedEvent,
+    LoggedMessage,
     ServedSource,
     SourceRegion,
     WorkerState,
@@ -28,6 +31,7 @@ _M = tables.messages
 _S = tables.source_served
 _A = tables.artifacts
 _W = tables.worker_state
+_E = tables.case_events
 
 
 def _case_columns(kind: CaseKind | None, case_id: uuid.UUID | None) -> dict[str, uuid.UUID | None]:
@@ -86,22 +90,69 @@ class SqlMessageLog:
             .mappings()
             .first()
         )
-        if row is None:
-            return None
-        case = _case_of(row)
-        return MessageDisposition.model_validate(
-            {
-                "message_id": row["message_id"],
-                "kind": row["disposition"],
-                "case_kind": case[0] if case else None,
-                "case_id": case[1] if case else None,
-                "reason": row["routing_reason"],
-                "detail": row["detail"],
-                "owner": row["owner"],
-                "customer_code": row["customer_code"],
-                "compliance": row["compliance"],
-            }
+        return None if row is None else _disposition(row)
+
+    async def list_all(self) -> Sequence[LoggedMessage]:
+        rows = (
+            await self.session.execute(
+                sa.select(_M).order_by(_M.c.processed_at.desc(), _M.c.id.desc())
+            )
+        ).mappings()
+        return [LoggedMessage(_disposition(row), row["processed_at"]) for row in rows]
+
+
+def _disposition(row: RowMapping) -> MessageDisposition:
+    case = _case_of(row)
+    return MessageDisposition.model_validate(
+        {
+            "message_id": row["message_id"],
+            "kind": row["disposition"],
+            "case_kind": case[0] if case else None,
+            "case_id": case[1] if case else None,
+            "reason": row["routing_reason"],
+            "detail": row["detail"],
+            "owner": row["owner"],
+            "customer_code": row["customer_code"],
+            "compliance": row["compliance"],
+        }
+    )
+
+
+@dataclass(frozen=True)
+class SqlCaseEventLog:
+    """Implements `CaseEventLogPort`: the workspace's case events, read only.
+
+    Written beside each case by the case repositories (`record_event`)."""
+
+    session: AsyncSession
+    scope: SalesScope
+
+    async def list_all(self) -> Sequence[LoggedEvent]:
+        rows = await self.session.execute(
+            sa.select(
+                _E.c.case_kind,
+                _E.c.case_id,
+                _E.c.case_version,
+                _E.c.action,
+                _E.c.from_status,
+                _E.c.to_status,
+                _E.c.actor_kind,
+                _E.c.occurred_at,
+            ).order_by(_E.c.occurred_at, _E.c.case_version, _E.c.id)
         )
+        return [
+            LoggedEvent(
+                case_kind=CaseKind(r.case_kind),
+                case_id=r.case_id,
+                case_version=r.case_version,
+                action=r.action,
+                from_status=r.from_status,
+                to_status=r.to_status,
+                actor_kind=r.actor_kind,
+                occurred_at=r.occurred_at,
+            )
+            for r in rows
+        ]
 
 
 @dataclass(frozen=True)
@@ -131,7 +182,7 @@ class SqlSourceServed:
             )
 
     async def served(
-        self, principal_id: str, case_kind: CaseKind, case_id: uuid.UUID, case_version: int
+        self, principal_id: uuid.UUID, case_kind: CaseKind, case_id: uuid.UUID, case_version: int
     ) -> frozenset[SourceRegion]:
         column = _S.c.order_case_id if case_kind is CaseKind.ORDER else _S.c.quote_case_id
         rows = await self.session.execute(

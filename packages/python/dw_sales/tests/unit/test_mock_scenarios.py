@@ -70,6 +70,7 @@ NOT_RAISED_BY_A_MESSAGE = {
     "revision_without_base",
     # Raised by Sales' price decision; ticket 03's tests script one.
     "price_below_policy_floor",
+    "price_floor_unknown",
     "price_basis_mismatch",
     "above_target_price",
 }

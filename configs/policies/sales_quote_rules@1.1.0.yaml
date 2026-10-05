@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: sales_quote_rules
-policy_version: "1.0.0"
+policy_version: "1.1.0"
 
 # The quotation policy of the fictional seller in the DW1 demo
 # (`packages/python/dw_sales`). Every number here is invented for the demo and
@@ -35,3 +35,14 @@ copper_basis: lme_band
 # How long a quotation's prices hold, counting the quotation's own date: a
 # quotation issued on 1 October 2026 holds to 29 December 2026.
 validity_days: 90
+
+# The mailboxes Design replies from (WIV-03-023 step 4). A reply sets the
+# specification a customer is quoted and the copper weight the price floor is
+# computed from, so a message is read as Design's only when it comes from one
+# of these AND the mail system verified the sender (SPF, DKIM and DMARC all
+# pass); anything else goes to Sales unread. An empty list takes no reply at
+# all. Fictional, like every address in the demo: the customer's own arrives
+# as a tenant version of this policy. Added in 1.1.0; it was deployment
+# configuration before.
+design_mailboxes:
+  - design@seller.example

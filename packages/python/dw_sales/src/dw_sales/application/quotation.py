@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Final, Literal, Protocol
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
@@ -34,7 +34,12 @@ from dw_sales.domain.dispositions import (
     MessageDisposition,
     RoutingReason,
 )
-from dw_sales.domain.messages import Attachment, AttachmentContent, InboundMessage
+from dw_sales.domain.messages import (
+    Attachment,
+    AttachmentContent,
+    InboundMessage,
+    is_email_address,
+)
 from dw_sales.domain.pricing import Incoterm, SalesPricing
 from dw_sales.domain.quotes import (
     INTAKE_FINDINGS,
@@ -83,6 +88,24 @@ class QuoteRules(BaseModel):
     copper_basis: CopperBasisKind
     # Counting the quotation's own date: 90 days from 1 October ends 29 December.
     validity_days: int = Field(ge=1, le=366)
+    # The addresses Design replies from. A reply sets the specification a
+    # customer is quoted and the copper weight the floor is computed from, so
+    # only mail from one of these, with every sender check passed, is taken
+    # as Design's. Empty takes no reply at all. No default: a file that
+    # forgets the key fails here instead of trusting nobody by accident or
+    # everybody by a later default.
+    design_mailboxes: tuple[str, ...] = Field(max_length=20)
+
+    @field_validator("design_mailboxes")
+    @classmethod
+    def _mailboxes_are_addresses(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for index, address in enumerate(value):
+            if not is_email_address(address):
+                raise ValueError(f"design_mailboxes[{index}] is not an email address")
+        lowered = [address.lower() for address in value]
+        if len(lowered) != len(set(lowered)):
+            raise ValueError("a Design mailbox is listed twice")
+        return value
 
     @property
     def version(self) -> str:
@@ -189,11 +212,9 @@ class ScreeningRow(BaseModel):
 class QuotationService:
     """What DW1 prepares for a request for quotation; Sales decides on the case.
 
-    ``design_mailboxes``: the addresses Design replies from, supplied by the
-    composition root from the deployment's configuration. A reply sets the
-    specification a customer is quoted and the copper weight the price floor
-    is computed from, so only mail from one of them, with every sender check
-    passed, is taken as Design's. Empty takes no reply at all.
+    Design's mailboxes are a key of the quote rules (`QuoteRules.design_mailboxes`),
+    versioned with them: a reply sets the specification a customer is quoted
+    and the copper weight the price floor is computed from.
     """
 
     catalog: SalesCatalogPort
@@ -204,7 +225,6 @@ class QuotationService:
     ledger: QuotationLedgerPort
     rules: QuoteRules
     pricing: SalesPricing
-    design_mailboxes: frozenset[str]
 
     # ---------------------------------------------------------- step 1 --
 
@@ -217,6 +237,18 @@ class QuotationService:
         file prints, and the case raises `customer_unknown` until Sales
         confirms it. With neither, no case is opened.
         """
+        request, _ = await self._extract(scope, message_id)
+        return request
+
+    async def open_case(self, scope: SalesScope, message_id: str, case_id: uuid.UUID) -> QuoteCase:
+        """A new case for the message's request, stamped with the quote rules
+        and the oldest master-data snapshot read to open it (decision 11)."""
+        request, as_of = await self._extract(scope, message_id)
+        return QuoteCase.open(
+            case_id, request, rules_version=self.rules.version, catalog_as_of=as_of
+        )
+
+    async def _extract(self, scope: SalesScope, message_id: str) -> tuple[QuoteRequest, datetime]:
         message = await self._message(scope, message_id)
         found = await self._files(scope, message, self.rfq_reader.read)
         if not found:
@@ -224,8 +256,8 @@ class QuotationService:
         if len(found) > 1:
             raise RequestNotExtractedError(message_id, "several_request_files")
         ((attachment, document),) = found
-        customer, found_by = await self._requester(scope, message, document)
-        return QuoteRequest(
+        customer, found_by, as_of = await self._requester(scope, message, document)
+        request = QuoteRequest(
             message_id=message_id,
             received_at=message.received_at,
             sender=message.sender,
@@ -234,6 +266,7 @@ class QuotationService:
             customer_from=found_by,
             document=document,
         )
+        return request, as_of
 
     # ------------------------------------------------------- steps 2-3 --
 
@@ -530,7 +563,7 @@ class QuotationService:
     # --------------------------------------------------------- helpers --
 
     def _from_design(self, message: InboundMessage) -> bool:
-        mailboxes = {address.lower() for address in self.design_mailboxes}
+        mailboxes = {address.lower() for address in self.rules.design_mailboxes}
         return message.authentication.verified and message.sender.address.lower() in mailboxes
 
     async def _message(self, scope: SalesScope, message_id: str) -> InboundMessage:
@@ -564,16 +597,16 @@ class QuotationService:
 
     async def _requester(
         self, scope: SalesScope, message: InboundMessage, document: RfqDocument
-    ) -> tuple[Customer, CustomerSource]:
-        by_domain = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
-        if by_domain is not None:
-            return by_domain, "sender_domain"
+    ) -> tuple[Customer, CustomerSource, datetime]:
+        """The requester, how it was found, and the ``as_of`` of what was read."""
+        by_domain = await self.catalog.customer_by_email_domain(scope, message.sender.domain)
+        if by_domain.data is not None:
+            return by_domain.data, "sender_domain", by_domain.as_of
         if document.buyer is not None:
-            named = customers_named(
-                (await self.catalog.customers(scope)).data, document.buyer.value
-            )
+            customers = await self.catalog.customers(scope)
+            named = customers_named(customers.data, document.buyer.value)
             if len(named) == 1:
-                return named[0], "named_buyer"
+                return named[0], "named_buyer", min(by_domain.as_of, customers.as_of)
         raise RequestNotExtractedError(message.message_id, "customer_unknown")
 
     async def _customer(self, scope: SalesScope, code: str) -> Customer:

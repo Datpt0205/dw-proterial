@@ -52,11 +52,12 @@ pytestmark = pytest.mark.unit
 RULES = "sales_order_rules@1.0.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
-AN = Actor(user_id="dev|an.nguyen")
-DIEU = Actor(user_id="dev|dieu.hoang")
-GIANG = Actor(user_id="dev|giang.do")
+# Principal ids, as `AccessContext.principal_id` carries them (fictional).
+AN = Actor(user_id=uuid.UUID(int=0xA1))
+DIEU = Actor(user_id=uuid.UUID(int=0xD1))
+GIANG = Actor(user_id=uuid.UUID(int=0x61))
 EXPORT_PIC = Actor(
-    user_id="dev|an.nguyen", capabilities=frozenset({Capability.ACKNOWLEDGE_EXPORT_CONTROL})
+    user_id=uuid.UUID(int=0xA1), capabilities=frozenset({Capability.ACKNOWLEDGE_EXPORT_CONTROL})
 )
 S = OrderStatus
 
@@ -559,6 +560,58 @@ def test_returning_from_the_cross_check_clears_the_preparation_and_the_bravo_ent
     assert (returned.returned_by, returned.returned_reason) == (DIEU.user_id, "sai số lượng dòng 2")
     again = returned.prepare(AN, T0).record_bravo_entry("SO26-1001", AN, T0, entry_compared=True)
     assert again.cross_check(DIEU, T0).status is S.CROSS_CHECKED
+
+
+def test_an_earlier_round_s_preparer_stays_a_maker_after_a_return() -> None:
+    # An prepared and keyed round one; Giang re-prepares and re-keys round two.
+    returned = _uploaded().return_from_cross_check("sai số lượng dòng 2", DIEU, T0)
+    again = returned.prepare(GIANG, T0).record_bravo_entry(
+        "SO26-1001", GIANG, T0, entry_compared=True
+    )
+
+    assert again.earlier_makers == {AN.user_id}
+    assert again.makers == {AN.user_id, GIANG.user_id}
+    # Refused by the case itself, with the rule named, before any store sees it.
+    with pytest.raises(ConflictError, match="tách nhiệm") as refused:
+        again.cross_check(AN, T0)
+    assert refused.value.details["rule"] == "maker_checker"
+    assert again.cross_check(DIEU, T0).cross_checked_by == DIEU.user_id
+
+
+def test_the_bravo_recorder_a_change_replaced_stays_a_maker() -> None:
+    # An prepared, Giang keyed the first entry, Diệu cross-checked it.
+    keyed = _prepared().record_bravo_entry("SO26-1001", GIANG, T0, entry_compared=True)
+    crossed = keyed.cross_check(DIEU, T0)
+    review = _accept(
+        crossed.revise(_revision(crossed, _line(1), _line(2, quantity=Decimal(12200)))),
+        "revised_po:-",
+    )
+
+    applied = review.apply_change(AN, T0, entry_compared=True)
+
+    assert applied.bravo_recorded_by == AN.user_id
+    assert applied.earlier_makers == {GIANG.user_id}
+    with pytest.raises(ConflictError, match="tách nhiệm"):
+        applied.cross_check(GIANG, T0)
+    assert applied.cross_check(DIEU, T0).status is S.CROSS_CHECKED
+
+
+def test_a_reopened_self_check_keeps_its_first_preparer_as_a_maker() -> None:
+    prepared = _prepared(
+        _accept(_review(_finding(FindingCode.PRICE_MISMATCH, 2)), "price_mismatch:2")
+    )
+
+    reopened = prepared.dispose("price_mismatch:2", Open(), AN)
+
+    assert (reopened.status, reopened.prepared_by) == (S.IN_REVIEW, None)
+    assert reopened.earlier_makers == {AN.user_id}
+
+
+def test_a_case_whose_cross_checker_made_an_earlier_round_cannot_exist() -> None:
+    crossed = _uploaded().cross_check(DIEU, T0)
+
+    with pytest.raises(ValidationError, match="maker of the case"):
+        OrderCase.model_validate({**dict(crossed), "earlier_makers": {DIEU.user_id}})
 
 
 # --------------------------------------------------------------- revisions --

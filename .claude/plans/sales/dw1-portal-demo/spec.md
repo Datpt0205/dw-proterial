@@ -199,10 +199,14 @@ on an overlapping step is counted in the "Promises" figures.
    `sales.order.cross_check` and is none of the case's makers: not the
    preparer, not whoever recorded the Bravo entry, and not anyone whose
    hand-entered value is still on the case (ADR 0009 decision 2: a typed
-   value needs a second person). The dw_sales handler enforces this per
-   case, and a CHECK on `order_cases` backs the first two
-   (`cross_checked_by` distinct from `prepared_by` and from
-   `bravo_recorded_by`). Platform `sod_rules` cannot
+   value needs a second person). The case refuses it itself (409 "tách
+   nhiệm"), and it carries every earlier maker: a preparer or Bravo recorder
+   of an earlier round (a return, a revision, a change applied in Bravo)
+   stays a maker. A CHECK on `order_cases` backs the first two whoever
+   writes (`cross_checked_by` distinct from `prepared_by`, from
+   `bravo_recorded_by` and from every accumulated `makers` entry). Every
+   actor is the principal's uuid, on orders and quotes alike (ticket 05).
+   Platform `sod_rules` cannot
    express it, because every PIC both prepares and checks. The same applies
    to quotations: `approved_by <> priced_by`, by handler and CHECK. The
    policy key `cross_check_required: true` in `sales_order_rules` holds until
@@ -305,15 +309,16 @@ is an acknowledgement.
 
 Quotation findings (ticket 03), computed from `sales_pricing` and the decision:
 
-| Code                       | Blocking | Rule                                                                                                                                                              | Dispositions allowed                                                                |
-| -------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `rfq_incomplete`           | yes      | A requested line lacks its quantity or required date. The case cannot leave `received` except by decline                                                          | `corrected_by_sales` (Sales types the customer's answer; asking is Sales' own mail) |
-| `price_below_policy_floor` | yes      | Decided price < copper component + the policy's floor margin                                                                                                      | `accepted` with a reason, only by the approver (decision 7: not the pricer)         |
-| `price_basis_mismatch`     | yes      | The decision's copper basis (fixed or banded; the LME month used) is not what the policy prescribes, or not the latest published month when the price was decided | re-decide, or `accepted` with a reason by the approver                              |
-| `above_target_price`       | no       | Decided price > the customer's target price                                                                                                                       | acknowledged by the approval itself                                                 |
+| Code                       | Blocking | Rule                                                                                                                                                                                                               | Dispositions allowed                                                                |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `rfq_incomplete`           | yes      | A requested line lacks its quantity or required date. The case cannot leave `received` except by decline                                                                                                           | `corrected_by_sales` (Sales types the customer's answer; asking is Sales' own mail) |
+| `price_below_policy_floor` | yes      | Decided price < copper component + the policy's floor margin                                                                                                                                                       | `accepted` with a reason, only by the approver (decision 7: not the pricer)         |
+| `price_floor_unknown`      | yes      | The floor cannot be computed: the copper weight, the LME month, the policy's adder for it or a USD rate (a price in another currency) is unknown. Fails closed, as an order line with no LME figure fails its band | `accepted` with a reason, only by the approver                                      |
+| `price_basis_mismatch`     | yes      | The decision's copper basis (fixed or banded; the LME month used) is not what the policy prescribes, or not the latest published month when the price was decided                                                  | re-decide, or `accepted` with a reason by the approver                              |
+| `above_target_price`       | no       | Decided price > the customer's target price                                                                                                                                                                        | acknowledged by the approval itself                                                 |
 
 Price-bearing codes are `price_mismatch`, `currency_mismatch`,
-`lme_band_mismatch`, `line_total_mismatch` and all four quotation codes. Their
+`lme_band_mismatch`, `line_total_mismatch` and all five quotation codes. Their
 `expected`/`actual` values reach only holders of `sales.price.read`.
 
 ## Promises and what this demo shows
@@ -395,9 +400,10 @@ question. An answer changes a policy key or a role assignment, never code.
           ids.
         - Each download is refused before its state.
 - Each finding in both tables is triggered by at least one mock message or
-  fixture; the three quotation codes raised at decision time
-  (`price_below_policy_floor`, `price_basis_mismatch`,
-  `above_target_price`) by a scripted price decision in ticket 03's tests.
+  fixture; the four quotation codes raised at decision time
+  (`price_below_policy_floor`, `price_floor_unknown`, `price_basis_mismatch`,
+  `above_target_price`) by a scripted price decision in tickets 03 and 05's
+  tests.
 - An eval dataset `sales@1.0.0` with prompt_injection, cross_tenant_attack
   and missing_evidence cases passes, scored by `sales.extraction_accuracy`
   and `sales.findings_recall`.

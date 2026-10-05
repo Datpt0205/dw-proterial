@@ -337,6 +337,9 @@ def _rebuild(
                 for r in revisions
                 if r["superseded_at"] is not None
             ],
+            # Every preparer and Bravo recorder the trigger accumulated: the
+            # case refuses a checker among them before the CHECK has to.
+            "earlier_makers": frozenset(row["makers"]),
         }
     )
     if case.header.po_no != row["po_no"]:
@@ -350,7 +353,6 @@ def _rebuild(
         origin=CaseOrigin(
             assigned_to=row["assigned_to"], release_manifest_ref=row["release_manifest_ref"]
         ),
-        makers=frozenset(row["makers"]),
     )
 
 
@@ -404,6 +406,9 @@ class SqlOrderCaseRepository:
     async def get(self, case_id: uuid.UUID) -> Stored[OrderCase] | None:
         loaded = await _load(self.session, _C.c.id == case_id)
         return loaded[0] if loaded else None
+
+    async def list_all(self) -> Sequence[Stored[OrderCase]]:
+        return list(reversed(await _load(self.session, sa.true())))
 
     async def cases_for_po(self, customer_code: str, po_no: str) -> Sequence[OrderCase]:
         return [found.case for found in await _load(self.session, _for_po(customer_code, po_no))]

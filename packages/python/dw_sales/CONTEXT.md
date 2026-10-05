@@ -14,9 +14,14 @@ API and the plan use the English terms. The spec is
 - **Quote case** (Hồ sơ báo giá): one request for quotation, through to a
   sent quotation or a decline.
 - **Maker / checker** (Người làm / người kiểm): on an order, the makers are
-  the preparer, whoever recorded the Bravo entry and whoever typed a value
-  still on the case; the checker is the cross-checker. On a quote, the
-  pricer and the approver. A checker is never a maker of the same case.
+  the preparer and whoever recorded the Bravo entry, in this round or an
+  earlier one (a return, a revision, a change applied in Bravo), and whoever
+  typed a value still on the case; the checker is the cross-checker. On a
+  quote, the pricer and the approver. A checker is never a maker of the same
+  case. Every one of them is named by their principal id.
+- **Served source** (Đã mở nguồn): a page or sheet of a case's original that
+  a person was shown, for one case version. Prepare and cross-check need the
+  person's own record for the current version ("chưa mở nguồn" otherwise).
 - **YCBG** (Phiếu yêu cầu báo giá): the quote-request form Sales enters in
   Bravo and sends to Design. Design's reply is matched by the YCBG number
   only.
@@ -165,5 +170,6 @@ YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác
 | `sender_unverified`        | Chưa xác thực người gửi              |
 | `rfq_incomplete`           | Yêu cầu báo giá thiếu thông tin      |
 | `price_below_policy_floor` | Giá dưới mức sàn                     |
+| `price_floor_unknown`      | Không tính được giá sàn              |
 | `price_basis_mismatch`     | Căn cứ giá đồng không đúng           |
 | `above_target_price`       | Cao hơn giá khách mong muốn          |

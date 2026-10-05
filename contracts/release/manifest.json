@@ -25,7 +25,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "a45a4317dc7b0064d02a2f440a254dc0f89eb4f3",
+  "git_sha": "87ab1076dcdf8aaf36435028b0340a34feec5c10",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "1.0.0",
   "platform_version": "0.1.0",
@@ -41,6 +41,11 @@
       "version": "1.4.0"
     },
     {
+      "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
+      "policy_id": "sales_kpi",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "f314c9825e2330fd097a7d3181b19fed33e4f2b6370ca5eaa73c95e7727de3e6",
       "policy_id": "sales_order_rules",
       "version": "1.0.0"
@@ -51,9 +56,9 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "bc0133244d3da8da0501a2b1d94a284257be921877c43d8e6e2a3abfe785d96e",
+      "checksum": "2cfb95e54ff95e5f4e2ab3fa726f56a7e857d72a6c43f5ed7291bd6b377af4c5",
       "policy_id": "sales_quote_rules",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",
