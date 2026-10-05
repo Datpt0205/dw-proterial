@@ -73,10 +73,9 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 - Spec decision 5: the Sales decision is recorded by the context, not yet a
   runtime interrupt (ticket 10).
 - Public repo: the repo name and these plan files name Proterial and its
-  procedure codes (WIV-03-0xx), and this file carries a commercial estimate.
-  Mock data, people and figures are fictional, and Proterial's documents
-  stay outside git. Đạt decides whether to alias the customer and the
-  procedure codes in git.
+  procedure codes (WIV-03-0xx). Đạt decided on 2026-10-05 to keep the repo
+  public and not alias them. Mock data, people and figures stay fictional,
+  and Proterial's documents stay outside git.
 - Defaults adopted until Proterial answers, taken from the requirements
   doc's own interim answers (Đạt may overrule); the spec's "Interim
   behaviour" table names the policy key or role each answer changes:
