@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: retention
-policy_version: "1.5.0"
+policy_version: "1.6.0"
 
 # Dữ liệu sống bao lâu trước khi bị xoá hẳn.
 #
@@ -120,6 +120,28 @@ audit:
     audit_events:
       days: 1095
       description: Nhật ký kiểm toán — ai làm gì, lúc nào
+
+# Checkpoint của run (`platform.run_checkpoints`, `run_checkpoint_writes`). Từ
+# 1.6.0.
+#
+# Mỗi checkpoint giữ NGUYÊN VĂN toàn bộ danh sách message của thread tại bước
+# đó, nên mỗi checkpoint cũ là một bản sao cũ của hội thoại — kể cả phần mà
+# compaction đã gỡ khỏi trạng thái sống. Trước bản này không gì xoá chúng ngoài
+# offboarding: một thread dài giữ mọi phiên bản của nó, mãi mãi.
+#
+# Hai thời hạn, vì hai thứ khác nhau hết cần:
+# - `superseded_days`: checkpoint KHÔNG phải mới nhất của thread. Tiếp tục một
+#   thread chỉ cần cái mới nhất; các cái cũ là lịch sử.
+# - `idle_thread_days`: cả thread, kể cả cái mới nhất, khi không có gì ghi vào
+#   nó lâu như vậy. Bằng lớp memory `default`: một hội thoại không ai đụng hai
+#   năm là một hội thoại đã khép.
+#
+# Chỉ thread mà mọi run đã kết thúc (`completed`, `failed`, `cancelled`) mới bị
+# chạm, số nào cũng vậy: một run đang chờ người duyệt resume từ chính các dòng
+# này. 7 và 730 là số đề xuất của ticket compaction; đổi ở đây là đủ.
+checkpoints:
+  superseded_days: 7
+  idle_thread_days: 730
 
 # Trần mỗi lượt quét. Retention là kiểm soát dung lượng chứ không phải kiểm soát
 # tính đúng: một dòng sống quá hạn thêm một giờ không hại ai, còn một lệnh DELETE

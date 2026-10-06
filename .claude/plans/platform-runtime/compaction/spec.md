@@ -1,6 +1,6 @@
 # Compaction thật sự nén; checkpoint không phình vô hạn
 
-Status: ready-for-agent
+Status: resolved
 Area: platform-runtime · Nhánh: `feat/platform-hardening` · Viết: 6/10/2026
 
 Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2026 (khu
@@ -114,10 +114,11 @@ Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2
 
 ## Câu hỏi còn mở
 
-1. N và M (đề xuất 7 và 730 ngày).
+1. ~~N và M (đề xuất 7 và 730 ngày).~~ Ship 7 và 730 trong `retention@1.6.0.yaml`
+   (2026-10-06, theo ủy quyền tự quyết); đổi một dòng là đủ.
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                                             | Status          | Blocked by |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
-| 01  | [Compaction nén được vòng tool dài và giữ mỏ neo; checkpoint có thời hạn](issues/01-compaction-anchor-and-checkpoint-retention.md) | ready-for-agent | —          |
+| #   | Ticket                                                                                                                             | Status   | Blocked by |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
+| 01  | [Compaction nén được vòng tool dài và giữ mỏ neo; checkpoint có thời hạn](issues/01-compaction-anchor-and-checkpoint-retention.md) | resolved | —          |

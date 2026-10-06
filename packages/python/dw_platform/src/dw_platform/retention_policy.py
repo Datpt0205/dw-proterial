@@ -34,10 +34,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 __all__ = [
     "AuditRetention",
+    "CheckpointRetention",
     "KnowledgeRetention",
     "RetentionClass",
     "RetentionPolicy",
@@ -110,6 +111,39 @@ class AuditRetention(BaseModel):
         return now - timedelta(days=found.days)
 
 
+class CheckpointRetention(BaseModel):
+    """How long a finished thread's run checkpoints are kept.
+
+    Every checkpoint holds the thread's whole message list, so each superseded
+    one is an older verbatim copy of the conversation — including what context
+    compaction removed from the live state. Two terms, because two different
+    things stop being needed:
+
+    `superseded_days`: a checkpoint that is not its thread's newest. Only the
+    newest is needed to continue the thread; the older ones are history.
+
+    `idle_thread_days`: the whole thread, newest included, once nothing has been
+    written to it for this long.
+
+    Only threads whose runs have all finished are touched, whatever the terms
+    say — a run waiting for a person resumes from these rows.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    superseded_days: int = Field(ge=1)
+    idle_thread_days: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _idle_is_the_longer_term(self) -> CheckpointRetention:
+        # The sweep reads candidates by the shorter term and decides by the
+        # longer one; the other way round, a thread would be emptied sooner than
+        # its own superseded checkpoints expire.
+        if self.idle_thread_days < self.superseded_days:
+            raise ValueError("idle_thread_days must be at least superseded_days")
+        return self
+
+
 class RetentionPolicy(BaseModel):
     """The versioned answer to "how long do you keep our data"."""
 
@@ -121,6 +155,7 @@ class RetentionPolicy(BaseModel):
     classes: dict[str, RetentionClass]
     knowledge: KnowledgeRetention
     audit: AuditRetention
+    checkpoints: CheckpointRetention
     batch_limit: int = Field(gt=0, le=10_000)
 
     def cutoff_for(self, name: str, *, now: datetime) -> datetime | None:

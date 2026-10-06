@@ -54,6 +54,20 @@ Mốc 6 (running many customers) is half done:
   `GET /memory/candidates/{id}` under `memory.read` and clearance. The fixed-set columns have CHECKs
   pinned to the enums by a catalog test; memory retention has one class,
   `default`.
+- **Compaction and checkpoints** (2026-10-06, `compaction`): what compaction
+  removes is summarised whole, in chunks no larger than the summary route's
+  `max_input_tokens` (a route used as summariser must declare it; build
+  refuses otherwise), a tool call never split from its result, the previous
+  summary (`dw_system_generated`) handed to the first call as the anchor it
+  updates (`context_summary_update_prompt`, runtime copy 1.6.0) and each
+  chunk's summary to the next. `_budget.check`/`record` per call; any chunk
+  failing, or one message larger than the budget, compacts nothing. Run
+  checkpoints are pruned by the worker's `checkpoint_retention` lane
+  (`SqlCheckpointRetention`, `retention@1.6.0.yaml` `checkpoints`: 7 days for
+  a thread's non-newest checkpoints, 730 for an idle thread), only on threads
+  with a finished run visible and no unfinished one, so a missing
+  `worker_drain_worker_runs` policy stops the sweep instead of emptying a
+  paused run. A thread with no run row is left for offboarding.
 - **Run-less `.decided` events with no handler (found 2026-10-06, not fixed):**
   every run-less approval now writes `<type>.decided`; the worker claims only
   the types it has handlers for, and nothing deletes outbox rows. A product
@@ -115,7 +129,8 @@ Mốc 6 (running many customers) is half done:
   the workspace narrowing of `decide` stay with `approval-audit-and-workspace`
   01–02, still open),
   `compaction` (long tool loops and multi-turn threads really compact, budget
-  from the profile, checkpoint retention), `retrieval-correctness`
+  from the profile, checkpoint retention; **resolved 2026-10-06**),
+  `retrieval-correctness`
   (`document_ids` inside the Qdrant filter, one embedding builder, a pinned
   agent-loop prompt), `dev-harness` (commit gate for PowerShell and
   `git -C`/`-c`, per-session Stop hook, plugin wording, `ui-quality.md`).

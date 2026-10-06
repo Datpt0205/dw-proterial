@@ -57,6 +57,7 @@ def _policy(**overrides: object) -> RetentionPolicy:
         },
         "knowledge": KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
         "audit": AuditRetention(months_ahead=1, enforced=False, tables={}),
+        "checkpoints": {"superseded_days": 7, "idle_thread_days": 730},
         "batch_limit": 1000,
     }
     fields.update(overrides)

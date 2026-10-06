@@ -46,7 +46,7 @@ pytestmark = pytest.mark.unit
 WORKER_PROMPT = "Bạn là trợ lý bán hàng của FDX."
 # Compaction needs the 1.4.0 text; everything else here still runs on 1.3.0.
 COMPACTING_COPY = load_runtime_copy(
-    Path(__file__).resolve().parents[5] / "configs" / "copy" / "runtime@1.4.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "copy" / "runtime@1.6.0.yaml"
 )
 THREAD: RunnableConfig = {"configurable": {"thread_id": "t-1"}}
 
@@ -114,9 +114,15 @@ PROFILE_ID = "agent_test"
 LOOP_CEILING_TOKENS = 60
 
 
-def _profiles(ceiling_tokens: int = LOOP_CEILING_TOKENS) -> ModelProfileRegistry:
+def _profiles(
+    ceiling_tokens: int = LOOP_CEILING_TOKENS, summary_input_tokens: int | None = 8000
+) -> ModelProfileRegistry:
     profiles = ModelProfileRegistry()
-    route = {"provider": "mock", "model": "mock-1"}
+    route: dict[str, object] = {"provider": "mock", "model": "mock-1"}
+    if summary_input_tokens is not None:
+        # The chat route doubles as the summariser's in these tests, and
+        # compaction refuses a summary route without an input budget.
+        route["max_input_tokens"] = summary_input_tokens
     profiles.register(
         ModelProfile.model_validate(
             {

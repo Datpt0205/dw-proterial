@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from dw_agent_runtime.adapters.checkpoint_retention import SqlCheckpointRetention
 from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardRetention
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
@@ -70,7 +71,7 @@ logger = logging.getLogger("dw_worker")
 
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
-RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.5.0.yaml"
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.6.0.yaml"
 
 
 def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
@@ -133,6 +134,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     retention: RetentionPrunePort | None = None
     knowledge_retention: RetentionPrunePort | None = None
     partitions: RetentionPrunePort | None = None
+    # Run checkpoints of finished threads, on the same policy file's
+    # `checkpoints` terms. Its own lane for the same reason memory and knowledge
+    # have theirs: a failing pass must not take the others down with it.
+    checkpoint_retention: RetentionPrunePort | None = None
     # The spend guard's own housekeeping (Ops hardening Phase 3) — a technical
     # constant, not a legal term, so it is not on retention_policy's cadence
     # or file; see SqlSpendGuardRetention's docstring.
@@ -200,6 +205,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             # deleted document in the only store that can still return it.
             vector_index=build_vector_index(settings),
         )
+        checkpoint_retention = SqlCheckpointRetention(
+            session_factory=sessions, policy=retention_policy, clock=clock
+        )
         spend_guard_retention = SqlSpendGuardRetention(session_factory=sessions, clock=clock)
         notifications_retention = SqlNotificationRetention(session_factory=sessions)
         if settings.s3_endpoint_url:
@@ -265,6 +273,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "partitions",
             build_retention_consumer(partitions),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if checkpoint_retention is not None:
+        registry.register(
+            "checkpoint_retention",
+            build_retention_consumer(checkpoint_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     if spend_guard_retention is not None:
