@@ -19,19 +19,28 @@ a partition added months from now, which Postgres will not police on its own.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
 from pg_harness import DatabaseUrls
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
 pytestmark = pytest.mark.integration
 
-# Schemas that hold tenant data. A new one belongs here the day it is created.
-_TENANT_SCHEMAS = ("platform", "knowledge", "memory", "sales")
-
+# Every table with a `tenant_id` column, in whatever schema it lives. No schema
+# is named: a hand-kept list of schemas is blind to the one added after it, the
+# same blindness as the text checker above, one level up. `pg_*` is dropped
+# whole because Postgres refuses to create a schema with that prefix, so the
+# exclusion hides nothing a migration can make — it removes `pg_catalog`,
+# `pg_toast*` and other sessions' `pg_temp_*`.
 _TENANT_TABLES = sa.text(
     """
     SELECT n.nspname AS schema, c.relname AS name,
@@ -39,7 +48,8 @@ _TENANT_TABLES = sa.text(
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relkind IN ('r', 'p')
-      AND n.nspname = ANY(:schemas)
+      AND NOT starts_with(n.nspname, 'pg_')
+      AND n.nspname <> 'information_schema'
       AND EXISTS (
           SELECT 1 FROM pg_attribute a
           WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped
@@ -47,6 +57,26 @@ _TENANT_TABLES = sa.text(
     ORDER BY 1, 2
     """
 )
+
+# The floor discovery must clear, not the list: the schemas the platform itself
+# ships. A discovery query gone wrong fails here instead of returning nothing
+# and passing every check built on top of it.
+_PLATFORM_SCHEMAS = frozenset({"platform", "knowledge", "memory"})
+
+
+async def tenant_tables(conn: AsyncConnection | AsyncSession) -> Sequence[sa.Row[Any]]:
+    """Every tenant table the catalog holds — the one answer to "which tables,
+    in which schemas", shared with `test_privileges.py`."""
+    rows = (await conn.execute(_TENANT_TABLES)).all()
+    assert rows, "found no tenant tables at all — the query is wrong, not the schema"
+    missed = _PLATFORM_SCHEMAS - {r.schema for r in rows}
+    assert not missed, f"schema discovery missed {sorted(missed)} — the query is wrong"
+    return rows
+
+
+async def tenant_schemas(conn: AsyncConnection | AsyncSession) -> list[str]:
+    return sorted({r.schema for r in await tenant_tables(conn)})
+
 
 _POLICIES = sa.text(
     "SELECT schemaname, tablename, policyname, qual, with_check"
@@ -89,9 +119,12 @@ async def session(db_urls: DatabaseUrls) -> AsyncIterator[AsyncSession]:
 
 
 async def test_rls_covers_every_tenant_table(session: AsyncSession) -> None:
-    """Including partitions, which the text-based checker cannot see."""
-    rows = (await session.execute(_TENANT_TABLES, {"schemas": list(_TENANT_SCHEMAS)})).all()
-    assert rows, "found no tenant tables at all — the query is wrong, not the schema"
+    """Including partitions, which the text-based checker cannot see — and
+    including schemas nobody listed. The tables come from the catalog, every
+    non-system schema with a `tenant_id` column, because a hand-kept tuple of
+    schema names goes blind to the next schema exactly the way the text checker
+    went blind to partitions: a table there without RLS would stay green."""
+    rows = await tenant_tables(session)
 
     missing = [f"{r.schema}.{r.name}" for r in rows if not r.enabled]
     forced_off = [f"{r.schema}.{r.name}" for r in rows if r.enabled and not r.forced]
@@ -105,10 +138,11 @@ async def test_rls_covers_every_tenant_table(session: AsyncSession) -> None:
 async def test_every_tenant_table_actually_has_a_policy(session: AsyncSession) -> None:
     """RLS with no policy denies everything, which is safe and unusable — and
     RLS with a policy on the parent only is what this suite exists to catch."""
-    rows = (await session.execute(_TENANT_TABLES, {"schemas": list(_TENANT_SCHEMAS)})).all()
+    rows = await tenant_tables(session)
+    schemas = sorted({r.schema for r in rows})
     policed = {
         (r.schemaname, r.tablename)
-        for r in (await session.execute(_POLICIES, {"schemas": list(_TENANT_SCHEMAS)})).all()
+        for r in (await session.execute(_POLICIES, {"schemas": schemas})).all()
     }
 
     without = [f"{r.schema}.{r.name}" for r in rows if (r.schema, r.name) not in policed]
@@ -171,7 +205,7 @@ async def test_every_policy_actually_consults_the_tenant_setting(
     because no tenant is resolved yet, and the background drain narrows by its
     own flag. Anything narrowing by none of them needs a written reason.
     """
-    rows = (await session.execute(_POLICIES, {"schemas": list(_TENANT_SCHEMAS)})).all()
+    rows = (await session.execute(_POLICIES, {"schemas": await tenant_schemas(session)})).all()
     assert rows, "no policies at all — the query is wrong, not the schema"
 
     def narrows(predicate: str | None) -> bool:
@@ -239,3 +273,190 @@ async def test_a_connection_that_never_scopes_itself_reads_nothing(
         )
     ).scalar_one()
     assert still_there == 1, "the probe row vanished, so the zero above proved nothing"
+
+
+# --- The workspace scope: a setting that widens, so it is never trusted alone --
+#
+# A context may narrow its tables by workspace as well as tenant. The offboarding
+# lane sets `app.workspace_scope = 'tenant'` to read every workspace of the one
+# tenant it is working on, and nothing else sets it. A policy may read the scope
+# only as the alternative to its workspace clause, inside an AND whose other side
+# is the tenant clause:
+#
+#     tenant_id = <app.tenant_id> AND (workspace_id = <app.workspace_id>
+#                                      OR <app.workspace_scope> = 'tenant')
+#
+# Read anywhere else, it opens a tenant's rows to any transaction that sets it.
+# The rules below apply to every schema `tenant_schemas` discovers.
+_TENANT_SETTING = "current_setting('app.tenant_id'"
+_WORKSPACE_SETTING = "current_setting('app.workspace_id'"
+_SCOPE_SETTING = "current_setting('app.workspace_scope'"
+
+
+def _closing(expr: str, opening: int) -> int:
+    """Index of the parenthesis closing the one at `opening`, skipping quoted
+    literals (Postgres doubles a quote inside one)."""
+    depth, i, quoted = 0, opening, False
+    while i < len(expr):
+        c = expr[i]
+        if quoted:
+            if c == "'" and expr[i + 1 : i + 2] == "'":
+                i += 1
+            elif c == "'":
+                quoted = False
+        elif c == "'":
+            quoted = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    raise AssertionError(f"unbalanced policy expression: {expr}")
+
+
+def _top_level(expr: str) -> tuple[str | None, list[str]]:
+    """The outermost operator of a policy expression and its operands.
+
+    Postgres prints a policy fully parenthesised (measured on 16: `a AND b OR c`
+    comes back as `((a AND b) OR c)`), so once the parentheses wrapping the whole
+    expression come off, the operators left at depth zero are all one operator.
+    The operator is None for a single term.
+    """
+    s = expr.strip()
+    while s.startswith("(") and _closing(s, 0) == len(s) - 1:
+        s = s[1:-1].strip()
+    operator: str | None = None
+    parts: list[str] = []
+    depth, start, i, quoted = 0, 0, 0, False
+    while i < len(s):
+        c = s[i]
+        if quoted:
+            if c == "'" and s[i + 1 : i + 2] == "'":
+                i += 1
+            elif c == "'":
+                quoted = False
+        elif c == "'":
+            quoted = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        elif depth == 0:
+            word = next((w for w in (" AND ", " OR ") if s.startswith(w, i)), None)
+            if word is not None:
+                found = word.strip()
+                assert operator in (None, found), f"mixed operators at one level: {expr}"
+                operator = found
+                parts.append(s[start:i].strip())
+                i += len(word)
+                start = i
+                continue
+        i += 1
+    parts.append(s[start:].strip())
+    return operator, parts
+
+
+def scope_outside_a_tenant_clause(policies: Sequence[sa.Row[Any]]) -> list[str]:
+    """Policies that read the scope anywhere but beside a pure tenant clause."""
+    bad = []
+    for r in policies:
+        for expr in (r.qual, r.with_check):
+            if expr is None or _SCOPE_SETTING not in expr:
+                continue
+            operator, parts = _top_level(expr)
+            tenant_clause = [
+                p
+                for p in parts
+                if _TENANT_SETTING in p and _SCOPE_SETTING not in p and _top_level(p)[0] != "OR"
+            ]
+            if operator != "AND" or not tenant_clause:
+                bad.append(f"{r.schemaname}.{r.tablename}.{r.policyname}")
+                break
+    return bad
+
+
+def workspace_tables_blind_to_scope(policies: Sequence[sa.Row[Any]]) -> list[str]:
+    """Tables narrowed by workspace with no policy reading the scope: the
+    offboarding lane would export none of their rows, delete none, and the purge
+    of the tenant's workspaces would then CASCADE them away unexported."""
+
+    def reads(r: sa.Row[Any], setting: str) -> bool:
+        return any(e is not None and setting in e for e in (r.qual, r.with_check))
+
+    narrowed = {f"{r.schemaname}.{r.tablename}" for r in policies if reads(r, _WORKSPACE_SETTING)}
+    scoped = {f"{r.schemaname}.{r.tablename}" for r in policies if reads(r, _SCOPE_SETTING)}
+    return sorted(narrowed - scoped)
+
+
+async def test_the_workspace_scope_only_ever_sits_beside_a_tenant_clause(
+    session: AsyncSession,
+) -> None:
+    rows = (await session.execute(_POLICIES, {"schemas": await tenant_schemas(session)})).all()
+    assert scope_outside_a_tenant_clause(rows) == [], (
+        "policies reading app.workspace_scope outside `tenant AND (workspace OR scope)`"
+    )
+
+
+async def test_a_workspace_narrowed_table_lets_offboarding_read_every_workspace(
+    session: AsyncSession,
+) -> None:
+    rows = (await session.execute(_POLICIES, {"schemas": await tenant_schemas(session)})).all()
+    assert workspace_tables_blind_to_scope(rows) == [], (
+        "tables narrowed by app.workspace_id with no policy reading app.workspace_scope"
+    )
+
+
+_TENANT = "tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid"
+_WORKSPACE = "workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid"
+_SCOPE = "current_setting('app.workspace_scope', true) = 'tenant'"
+
+
+async def test_the_scope_rules_catch_the_wrong_shapes(session: AsyncSession) -> None:
+    """The two rules above pass on today's schema because no table is narrowed
+    by workspace yet, which proves nothing about them. These are real
+    Postgres-printed policies of each shape, made and rolled back in one
+    transaction."""
+    shapes = {
+        "spec": f"{_TENANT} AND ({_WORKSPACE} OR {_SCOPE})",
+        "tenant_or_scope": f"{_TENANT} OR {_SCOPE}",
+        "unparenthesised": f"{_TENANT} AND {_WORKSPACE} OR {_SCOPE}",
+        "weak_tenant": f"({_TENANT} OR {_SCOPE}) AND ({_WORKSPACE} OR {_SCOPE})",
+        "scope_alone": _SCOPE,
+        # A tenant clause widened by something other than the scope.
+        "loose_tenant": f"({_TENANT} OR workspace_id IS NULL) AND ({_WORKSPACE} OR {_SCOPE})",
+    }
+    probe, blind = "public.scope_rules_probe", "public.scope_rules_blind"
+    try:
+        for table in (probe, blind):
+            await session.execute(
+                sa.text(f"CREATE TABLE {table} (tenant_id uuid, workspace_id uuid)")
+            )
+        for name, using in shapes.items():
+            await session.execute(sa.text(f"CREATE POLICY {name} ON {probe} USING ({using})"))
+        await session.execute(
+            sa.text(
+                f"CREATE POLICY write_side ON {probe} FOR INSERT WITH CHECK ({_TENANT} OR {_SCOPE})"
+            )
+        )
+        await session.execute(
+            sa.text(f"CREATE POLICY ws_only ON {blind} USING ({_TENANT} AND {_WORKSPACE})")
+        )
+        rows = [
+            r
+            for r in (await session.execute(_POLICIES, {"schemas": ["public"]})).all()
+            if r.tablename.startswith("scope_rules_")
+        ]
+
+        assert sorted(scope_outside_a_tenant_clause(rows)) == [
+            "public.scope_rules_probe.loose_tenant",
+            "public.scope_rules_probe.scope_alone",
+            "public.scope_rules_probe.tenant_or_scope",
+            "public.scope_rules_probe.unparenthesised",
+            "public.scope_rules_probe.weak_tenant",
+            "public.scope_rules_probe.write_side",
+        ]
+        assert workspace_tables_blind_to_scope(rows) == ["public.scope_rules_blind"]
+    finally:
+        await session.rollback()

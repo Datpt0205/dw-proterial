@@ -9,6 +9,12 @@ the scope its raiser stamped on it, else the platform's `approvals.decide`.
 A context checks a decision on its own approvals before it is recorded,
 through an `ApprovalDecisionGuard` it registers here, so a decision the run
 could not apply is refused while it can still be refused.
+
+An approval with no run has nothing to resume, so its decision is announced
+instead: one outbox event, `decided_event_type(approval_type)`, written in the
+decision's own transaction. A context that wants a consequence registers a
+handler for its type where the worker is composed; this service never learns
+which types exist.
 """
 
 from __future__ import annotations
@@ -36,11 +42,16 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 from dw_platform.domain.approval import (
     ApprovalAudience,
+    ApprovalDecision,
     ApprovalRequest,
     ApprovalStatus,
     DecisionOutcome,
+    decided_event_type,
 )
 from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.outbox import OutboxEvent
+
+DECIDED_EVENT_SCHEMA = "1.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +234,8 @@ class ApproveAndResumeService:
             )
             await uow.approvals.save(request)
             await uow.approvals.add_decision(decision)
+            if request.run_id is None:
+                await uow.outbox.add(self._decided_event(request, decision))
             await uow.commit()
 
         if record is not None and request.run_id is not None:
@@ -333,6 +346,27 @@ class ApproveAndResumeService:
     def _guard_for(self, approval_type: str) -> ApprovalDecisionGuard | None:
         matches = [prefix for prefix in self.decision_guards if approval_type.startswith(prefix)]
         return self.decision_guards[max(matches, key=len)] if matches else None
+
+    def _decided_event(self, request: ApprovalRequest, decision: ApprovalDecision) -> OutboxEvent:
+        """Identifiers and the outcome only. The comment and the request's payload
+        stay where their readers are authorized: the outbox is read by a
+        dispatcher that serves every tenant, not by a person with a scope."""
+        return OutboxEvent(
+            id=self.id_generator.new_uuid(),
+            tenant_id=request.tenant_id,
+            workspace_id=request.workspace_id,
+            event_type=decided_event_type(request.approval_type),
+            schema_version=DECIDED_EVENT_SCHEMA,
+            aggregate_id=request.id,
+            occurred_at=decision.decided_at,
+            payload={
+                "approval_id": str(request.id),
+                "decision_id": str(decision.id),
+                "outcome": decision.outcome.value,
+                "decided_by": str(decision.decided_by.value),
+            },
+            actor_id=decision.decided_by.value,
+        )
 
     def _run_context_for(
         self,

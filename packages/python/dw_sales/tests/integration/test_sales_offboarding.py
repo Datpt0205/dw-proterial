@@ -1,10 +1,11 @@
 """Offboarding a tenant exports and purges its sales cases, every workspace.
 
-`SqlTenantOffboarding` binds only `app.tenant_id` for the platform's tables.
-The `sales` policies also narrow by workspace, so a tenant-only session sees
-none of these rows; the offboarding pass binds each of the tenant's
-workspaces in turn for them. Without that, export would hand over no sales
-data and purge would leave it all in place, with both reporting success.
+The `sales` policies also narrow by workspace, so a session bound to the
+tenant alone sees none of these rows. `SqlTenantOffboarding` sets
+`app.workspace_scope = 'tenant'` for its transaction, and every `sales` policy
+reads it beside its tenant clause (`0d9e3f85d814`). Without that, export would
+hand over no sales data and purge would leave it all in place, with both
+reporting success.
 """
 
 from __future__ import annotations

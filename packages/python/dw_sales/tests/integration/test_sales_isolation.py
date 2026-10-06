@@ -229,6 +229,8 @@ async def test_a_month_made_at_runtime_narrows_by_workspace_too(
             sa.text("SELECT relforcerowsecurity FROM pg_class WHERE relname = :p"), {"p": part}
         )
     assert policy is not None and "app.workspace_id" in policy and "app.tenant_id" in policy
+    # Born in the shape the offboarding lane reads through (0d9e3f85d814).
+    assert "app.workspace_scope" in policy
     assert forced is True
 
     owner = small_run.scope

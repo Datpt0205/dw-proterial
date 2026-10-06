@@ -52,8 +52,9 @@ chọn đích theo tên mô hình. Chat, embedding OpenAI-compatible và parser 
 liệu đã đi qua proxy này (`configs/models/gateway.yaml:4-6`;
 `apps/api/src/dw_api/bootstrap/models.py:51, 91`;
 `apps/worker/src/dw_worker/composition.py:115, 177`). Nhưng request tới proxy
-không mang nhãn, Deepgram và TEI đi vòng qua nó, và ứng dụng không tự chứng
-minh được `SEC11`.
+không mang nhãn, Deepgram và reranker hosted (`DW_API_RERANK_*`, gửi nội dung
+chunk tới FPT Cloud) đi vòng qua nó, và ứng dụng không tự chứng minh được
+`SEC11`.
 Chọn cách này thì cấu hình proxy thành artifact quyết định an ninh, phải có
 phiên bản và nằm trong release manifest (MODEL-01, MODEL-16).
 

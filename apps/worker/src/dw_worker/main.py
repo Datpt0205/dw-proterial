@@ -23,9 +23,11 @@ import contextlib
 import logging
 import signal
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from dw_agent_runtime.adapters.checkpoint_retention import SqlCheckpointRetention
 from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardRetention
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
@@ -51,7 +53,7 @@ from dw_worker.composition import (
 )
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.ingest import build_ingest_consumer
-from dw_worker.consumers.memory import MemoryIndexPort, memory_handlers
+from dw_worker.consumers.memory import memory_handlers
 from dw_worker.consumers.offboarding import INTERVAL_SECONDS as OFFBOARDING_INTERVAL_SECONDS
 from dw_worker.consumers.offboarding import TenantOffboardingLane, build_offboarding_consumer
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
@@ -62,7 +64,14 @@ from dw_worker.consumers.retention import RetentionPrunePort, build_retention_co
 from dw_worker.health import beat
 from dw_worker.settings import WorkerSettings
 
+if TYPE_CHECKING:
+    from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker
+
 logger = logging.getLogger("dw_worker")
+
+# A module constant so the test holding this file to the classes code can
+# assign reads the file the sweeps below read, not a copy of its name.
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.6.0.yaml"
 
 
 def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
@@ -76,8 +85,12 @@ def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
     )
 
 
-def _build_memory_index(settings: WorkerSettings) -> MemoryIndexPort | None:
-    """Imported inside the function so a deployment without Qdrant need not have
+def _build_memory_vectors(settings: WorkerSettings) -> QdrantMemoryRanker | None:
+    """The memory ranker's store: written by the outbox handler, purged by
+    supersession, retention and offboarding. One instance for all four, so
+    the collection that is written is the collection that is purged.
+
+    Imported inside the function so a deployment without Qdrant need not have
     the client installed to boot — the same rule the knowledge index follows."""
     if not settings.qdrant_url:
         return None
@@ -121,6 +134,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     retention: RetentionPrunePort | None = None
     knowledge_retention: RetentionPrunePort | None = None
     partitions: RetentionPrunePort | None = None
+    # Run checkpoints of finished threads, on the same policy file's
+    # `checkpoints` terms. Its own lane for the same reason memory and knowledge
+    # have theirs: a failing pass must not take the others down with it.
+    checkpoint_retention: RetentionPrunePort | None = None
     # The spend guard's own housekeeping (Ops hardening Phase 3) — a technical
     # constant, not a legal term, so it is not on retention_policy's cadence
     # or file; see SqlSpendGuardRetention's docstring.
@@ -142,6 +159,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # fact: a run that stops to decide what is worth keeping is a run someone
         # is waiting on. The handler is idempotent because the outbox delivers at
         # least once — see `dw_worker.consumers.memory`.
+        # Absent without Qdrant, and absent is survivable: the memory is stored
+        # and recalled either way, it simply sorts with the ones nothing has an
+        # opinion about — and there are no points to purge.
+        memory_vectors = _build_memory_vectors(settings)
         handlers: dict[str, EventHandler] = dict(
             memory_handlers(
                 MemoryService(
@@ -150,12 +171,11 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     clock=clock,
                     id_generator=ids,
                     evidence_store=SqlEvidenceStore(clock=clock),
+                    # A superseded memory's point goes with it.
+                    vector_purge=memory_vectors,
                 ),
                 # Writes the vector that lets a later recall order a long list.
-                # Absent without Qdrant, and absent is survivable: the memory is
-                # stored and recalled either way, it simply sorts with the ones
-                # nothing has an opinion about.
-                _build_memory_index(settings),
+                memory_vectors,
             )
         )
         # Pinned by filename, like every other versioned artifact here: the
@@ -163,11 +183,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # One file read once — the two sweeps are two halves of one commitment,
         # and a build where they disagreed would be a build that answers the
         # compliance question two ways.
-        retention_policy = load_retention_policy(
-            REPO_ROOT / "configs" / "policies" / "retention@1.4.0.yaml"
-        )
+        retention_policy = load_retention_policy(RETENTION_POLICY_PATH)
         retention = SqlMemoryRetention(
-            session_factory=sessions, policy=retention_policy, clock=clock
+            session_factory=sessions,
+            policy=retention_policy,
+            clock=clock,
+            vector_index=memory_vectors,
         )
         # Not retention in the sense of deleting: mostly it CREATES next
         # month's partitions, which is what keeps rows out of the DEFAULT one.
@@ -184,6 +205,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             # deleted document in the only store that can still return it.
             vector_index=build_vector_index(settings),
         )
+        checkpoint_retention = SqlCheckpointRetention(
+            session_factory=sessions, policy=retention_policy, clock=clock
+        )
         spend_guard_retention = SqlSpendGuardRetention(session_factory=sessions, clock=clock)
         notifications_retention = SqlNotificationRetention(session_factory=sessions)
         if settings.s3_endpoint_url:
@@ -194,6 +218,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     exports=build_export_bucket(settings),
                     attachments=build_feedback_bucket(settings),
                     vector_index=build_vector_index(settings),
+                    memory_vectors=memory_vectors,
                     clock=clock,
                 )
             )
@@ -264,6 +289,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "partitions",
             build_retention_consumer(partitions),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if checkpoint_retention is not None:
+        registry.register(
+            "checkpoint_retention",
+            build_retention_consumer(checkpoint_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     if spend_guard_retention is not None:

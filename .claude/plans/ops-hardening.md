@@ -52,6 +52,15 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **Offboarding loses in-app notifications unexported** (measured 2026-10-03,
+  `workspace-scope-offboarding/01` step 4). `platform.notifications` is read
+  only by its recipient (`app.user_id`), so the lane's export lists the table
+  with 0 rows and its purge deletes none; the purge of `platform.workspaces`
+  then CASCADEs them away. Measured on the test database: a tenant with one
+  notification exported `[0]` rows and kept none after purge. The workspace
+  scope does not help, since the policy narrows by user, not workspace. Needs
+  an export path that reads them (a scope the lane sets, like the workspace
+  one, under the same tenant-clause rule) before a real offboarding.
 - **Spend guard quotas are unset.** Every plan's `spend_usd_per_day` is `None`,
   so nothing is metered until Đạt gives dollar thresholds.
 - **Offboarding export bundles in `dw-exports` are never deleted.** They hold a
