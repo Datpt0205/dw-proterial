@@ -1,16 +1,19 @@
+import logging
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_kernel.errors import InfrastructureError
 from dw_kernel.ports import FixedClock, SequentialIdGenerator
 from dw_knowledge.chunking import chunk_text
 from dw_knowledge.contracts import SearchQuery
 from dw_knowledge.gateway import KnowledgeGateway, build_trusted_filter
-from dw_knowledge.ports import TrustedSearchFilter, VectorHit
+from dw_knowledge.ports import RerankCandidate, RerankResult, TrustedSearchFilter, VectorHit
 from dw_platform.application.access_context import AccessContext
 
 pytestmark = pytest.mark.unit
@@ -195,3 +198,78 @@ async def test_search_applies_min_relevance_and_document_filter() -> None:
     assert len(results) == 1
     assert results[0].evidence.source_document_id == doc_a
     assert results[0].evidence.relevance_score == 0.9
+
+
+# --- reranking: a precision step, never a reason for search to fail ----------
+
+
+def _hit(content: str, score: float) -> VectorHit:
+    return VectorHit(
+        chunk_id=uuid.uuid4(),
+        document_id=uuid.uuid4(),
+        score=score,
+        content=content,
+        classification="internal",
+        source_version="1",
+        provenance_hash="a" * 64,
+    )
+
+
+@dataclass
+class ReversingReranker:
+    """Ranks the vector order backwards, so its effect is visible."""
+
+    async def rerank(
+        self, query: str, candidates: Sequence[RerankCandidate], top_k: int
+    ) -> list[RerankResult]:
+        return [RerankResult(id=c.id, score=0.8) for c in reversed(candidates)][:top_k]
+
+
+@dataclass
+class DownReranker:
+    calls: int = 0
+
+    async def rerank(
+        self, query: str, candidates: Sequence[RerankCandidate], top_k: int
+    ) -> list[RerankResult]:
+        self.calls += 1
+        raise InfrastructureError(
+            "rerank request failed", details={"error": "ConnectTimeout", "model": "m"}
+        )
+
+
+async def test_search_uses_the_reranker_order_and_scores() -> None:
+    hits = [_hit("first", 0.9), _hit("second", 0.7), _hit("third", 0.5)]
+    index = CapturingIndex(hits=hits)
+    gateway = replace(make_gateway(index), reranker=ReversingReranker())
+
+    results = await gateway.search(SearchQuery(text="q", top_k=2), make_context())
+
+    assert [r.content for r in results] == ["third", "second"]
+    assert [r.evidence.relevance_score for r in results] == [0.8, 0.8]
+
+
+async def test_a_reranker_that_is_down_keeps_the_vector_order(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    hits = [_hit("first", 0.9), _hit("second", 0.7), _hit("third", 0.5)]
+    index = CapturingIndex(hits=hits)
+    reranker = DownReranker()
+    gateway = replace(make_gateway(index), reranker=reranker)
+    context = make_context()
+
+    with caplog.at_level(logging.WARNING, logger="dw_knowledge.gateway"):
+        results = await gateway.search(SearchQuery(text="q", top_k=2), context)
+
+    assert reranker.calls == 1
+    assert [r.content for r in results] == ["first", "second"]
+    assert [r.evidence.relevance_score for r in results] == [0.9, 0.7]
+    (record,) = [r for r in caplog.records if getattr(r, "rerank_skipped", False)]
+    assert record.levelno == logging.WARNING
+    assert record.__dict__["error_type"] == "InfrastructureError"
+    assert record.__dict__["error_cause"] == "ConnectTimeout"
+    # The fallback sits after the filtered search; the trusted filter is the
+    # one the context dictated, whatever the reranker did.
+    (trusted,) = index.captured
+    assert trusted.tenant_id == context.tenant_id
+    assert trusted.workspace_id == context.workspace_id

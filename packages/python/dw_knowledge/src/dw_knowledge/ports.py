@@ -104,7 +104,7 @@ class RerankResult:
 
 
 class RerankPort(Protocol):
-    """Cross-encoder reranker seam (Phase B: BGE-reranker via TEI). No-op default."""
+    """Cross-encoder reranker seam: a hosted rerank API, or none (vector order)."""
 
     async def rerank(
         self, query: str, candidates: Sequence[RerankCandidate], top_k: int

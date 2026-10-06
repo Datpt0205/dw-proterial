@@ -38,23 +38,41 @@ def build_embeddings(settings: ApiSettings, profiles: ModelProfileRegistry) -> E
             _dimension=route.dimensions,
             timeout=float(route.timeout_seconds),
         )
-    if settings.embedding_provider == "tei" and settings.embed_url:
-        from dw_knowledge.adapters.tei_embedding import TeiEmbeddingAdapter
+    if settings.embedding_provider == "hash":
+        # Deterministic hashing. Retrieval "works" and returns stable neighbours,
+        # so the plumbing is testable, but the vectors carry no meaning.
+        from dw_knowledge.adapters.hash_embedding import HashEmbeddingAdapter
 
-        return TeiEmbeddingAdapter(base_url=settings.embed_url, _dimension=settings.embed_dimension)
-    # Deterministic hashing. Retrieval "works" and returns stable neighbours, so
-    # the plumbing is testable, but the vectors carry no meaning.
-    from dw_knowledge.adapters.hash_embedding import HashEmbeddingAdapter
-
-    return HashEmbeddingAdapter()
+        return HashEmbeddingAdapter()
+    # A provider this build does not know (a retired one, a typo) must not
+    # quietly become the meaningless hash vectors.
+    raise ConfigError(
+        "unknown embedding provider; use 'openai_compatible' or 'hash'",
+        details={"embedding_provider": settings.embedding_provider},
+    )
 
 
 def build_reranker(settings: ApiSettings) -> RerankPort | None:
-    if settings.embedding_provider == "tei" and settings.rerank_url:
-        from dw_knowledge.adapters.tei_rerank import TeiRerankAdapter
+    """None means the vector order stands, which is what "none" asks for."""
+    if settings.rerank_provider == "none":
+        return None
+    if settings.rerank_provider == "cohere_compatible":
+        if not settings.rerank_base_url or not settings.rerank_api_key:
+            raise ConfigError(
+                "cohere_compatible reranking needs DW_API_RERANK_BASE_URL and DW_API_RERANK_API_KEY"
+            )
+        from dw_knowledge.adapters.cohere_rerank import CohereCompatibleRerankAdapter
 
-        return TeiRerankAdapter(base_url=settings.rerank_url)
-    return None
+        return CohereCompatibleRerankAdapter(
+            base_url=settings.rerank_base_url,
+            api_key=settings.rerank_api_key,
+            model=settings.rerank_model,
+            timeout=settings.rerank_timeout_seconds,
+        )
+    raise ConfigError(
+        "unknown rerank provider; use 'cohere_compatible' or 'none'",
+        details={"rerank_provider": settings.rerank_provider},
+    )
 
 
 def build_vector_index(settings: ApiSettings) -> VectorIndexPort:

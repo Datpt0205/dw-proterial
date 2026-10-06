@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from dw_agent_runtime.model.profiles import ModelProfileRegistry, ModelRoute
+from dw_agent_runtime.registry import ConfigError
 from dw_kernel.errors import InfrastructureError
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_knowledge.adapters.api_parsers import (
@@ -118,13 +119,16 @@ def build_embeddings(settings: WorkerSettings) -> EmbeddingPort:
             _dimension=route.dimensions,
             timeout=float(route.timeout_seconds),
         )
-    if settings.embedding_provider == "tei" and settings.embed_url:
-        from dw_knowledge.adapters.tei_embedding import TeiEmbeddingAdapter
+    if settings.embedding_provider == "hash":
+        from dw_knowledge.adapters.hash_embedding import HashEmbeddingAdapter
 
-        return TeiEmbeddingAdapter(base_url=settings.embed_url, _dimension=settings.embed_dimension)
-    from dw_knowledge.adapters.hash_embedding import HashEmbeddingAdapter
-
-    return HashEmbeddingAdapter()
+        return HashEmbeddingAdapter()
+    # A provider this build does not know (a retired one, a typo) must not
+    # quietly become the meaningless hash vectors.
+    raise ConfigError(
+        "unknown embedding provider; use 'openai_compatible' or 'hash'",
+        details={"embedding_provider": settings.embedding_provider},
+    )
 
 
 def _embedding_route(settings: WorkerSettings) -> ModelRoute:

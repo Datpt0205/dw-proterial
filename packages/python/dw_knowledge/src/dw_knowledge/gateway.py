@@ -7,7 +7,9 @@ search → evidence pack with provenance.
 
 from __future__ import annotations
 
+import logging
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -17,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from dw_kernel.errors import PermissionDeniedError
+from dw_kernel.errors import InfrastructureError, PermissionDeniedError
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_knowledge import tables
@@ -36,13 +38,17 @@ from dw_knowledge.ports import (
     ObjectStoragePort,
     RerankCandidate,
     RerankPort,
+    RerankResult,
     TrustedSearchFilter,
+    VectorHit,
     VectorIndexPort,
 )
 from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.application.access_context import AccessContext
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
+
+logger = logging.getLogger("dw_knowledge.gateway")
 
 
 # Bumped for structure-aware chunking + contextual embedding (Phase A).
@@ -573,14 +579,15 @@ class KnowledgeGateway:
             hits = [h for h in hits if h.document_id in query.document_ids]
 
         rerank_scores: dict[str, float] = {}
-        if self.reranker and hits:
-            candidates = [RerankCandidate(id=str(h.chunk_id), text=h.content) for h in hits]
-            ranked = await self.reranker.rerank(query.text, candidates, query.top_k)
+        ranked = (
+            await _rerank_or_none(self.reranker, query, hits) if self.reranker and hits else None
+        )
+        if ranked is None:
+            hits = hits[: query.top_k]
+        else:
             by_id = {str(h.chunk_id): h for h in hits}
             hits = [by_id[r.id] for r in ranked if r.id in by_id]
             rerank_scores = {r.id: r.score for r in ranked}
-        else:
-            hits = hits[: query.top_k]
 
         evidence: list[EvidenceChunk] = []
         for hit in hits:
@@ -603,3 +610,31 @@ class KnowledgeGateway:
                 )
             )
         return evidence
+
+
+async def _rerank_or_none(
+    reranker: RerankPort, query: SearchQuery, hits: Sequence[VectorHit]
+) -> list[RerankResult] | None:
+    """The reranker's order, or None to keep the vector order.
+
+    Reranking buys precision; it is not what makes retrieval correct. A hosted
+    reranker that is down or answers nonsense therefore costs ranking quality,
+    not the search that asked. The hits were already narrowed by the trusted
+    filter before they got here, so falling back widens nothing.
+    """
+    candidates = [RerankCandidate(id=str(h.chunk_id), text=h.content) for h in hits]
+    try:
+        return await reranker.rerank(query.text, candidates, query.top_k)
+    except InfrastructureError as exc:
+        logger.warning(
+            "rerank skipped, keeping vector order: %s (%s)",
+            type(exc).__name__,
+            exc.details.get("error"),
+            extra={
+                "rerank_skipped": True,
+                "error_type": type(exc).__name__,
+                "error_cause": exc.details.get("error"),
+                "status": exc.details.get("status"),
+            },
+        )
+        return None

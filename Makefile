@@ -16,7 +16,7 @@ endif
 
 COMPOSE := docker compose --env-file .env -f infra/compose/docker-compose.yml
 
-.PHONY: help bootstrap infra-up infra-down dev docker-up docker-up-models docker-down \
+.PHONY: help bootstrap infra-up infra-down dev docker-up docker-down \
         db-migrate migrate lint format typecheck \
         test-unit coverage test-integration test-architecture test-contract \
         test-e2e test-web test-all eval-smoke test-eval-smoke \
@@ -44,7 +44,6 @@ INFRA_SERVICES = postgres qdrant valkey s3 keycloak docgen docgen-gateway
 # Same reason for the full stack: migrate, seed and s3-setup all run once and
 # exit, so `--wait` on the whole profile reports a healthy stack as a failure.
 FULL_SERVICES = $(INFRA_SERVICES) api worker web
-MODEL_SERVICES = tei-embed tei-rerank
 
 infra-up: ## Start data plane (Postgres/Qdrant/Valkey/S3/Keycloak) in Docker
 	$(COMPOSE) --profile infra up -d
@@ -57,14 +56,8 @@ docker-up: ## Build and start the FULL stack (infra + api + worker + web)
 	$(COMPOSE) --profile full up --build -d
 	$(COMPOSE) --profile full up -d --wait $(FULL_SERVICES)
 
-docker-up-models: ## Full stack PLUS the BGE-M3 embed/rerank servers (~5GB more RAM)
-	# Needs DW_API_EMBEDDING_PROVIDER=tei in .env, and a QDRANT_COLLECTION that
-	# was created at width 1024 - a collection's width is fixed when it is made.
-	$(COMPOSE) --profile full --profile models up --build -d
-	$(COMPOSE) --profile full --profile models up -d --wait $(FULL_SERVICES) $(MODEL_SERVICES)
-
 docker-down: ## Stop the full stack
-	$(COMPOSE) --profile full --profile models down
+	$(COMPOSE) --profile full down
 
 # ----------------------------------------------------------------- database --
 db-migrate: ## Run database migrations (alias: migrate)
@@ -121,6 +114,9 @@ test-web: ## Browser tests for the web app (requires the stack; not in CI)
 
 check-model: ## Probe the configured LLM gateway (live call, needs OPENAI_* in .env)
 	uv run python scripts/check_model_gateway.py
+
+check-rerank: ## Probe the configured reranker (live call, needs DW_API_RERANK_* in .env)
+	uv run python scripts/check_rerank.py
 
 check-deepgram: ## Probe Deepgram transcription (live call, needs DEEPGRAM_API_KEY in .env)
 	python scripts/check_deepgram.py

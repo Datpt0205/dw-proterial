@@ -113,6 +113,15 @@ Mốc 6 (running many customers) is half done:
 - **`make check-deepgram` and `make check-search` run scripts that do not
   exist**, left over from the product this was extracted from.
   `make check-model` was the third, and works since 2026-09-28.
+- **Reranking is a hosted API, and self-hosted TEI is gone** (2026-10-06).
+  `DW_API_RERANK_PROVIDER=cohere_compatible` calls `POST {base_url}/rerank`
+  (FPT Cloud AI Marketplace, `bge-reranker-v2-m3`); `make check-rerank`
+  probes it live. A reranker that fails costs ranking, not the search: the
+  gateway keeps the vector order and logs `rerank_skipped`. The gateway
+  records no retrieval metadata yet, so that log line is the only marker.
+  An unknown `embedding_provider` (the retired `tei` included) now stops
+  startup instead of quietly becoming hash vectors. The key is only in local
+  `.env`; uat/production have none yet.
 
 ## Deliberately not taken
 
