@@ -31,8 +31,9 @@ own file and a row here.
   for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
   plans and research live there, not here.
 - **Next:** on `feat/platform-hardening`, the six harness-audit slices in
-  `platform-runtime.md` (memory vectors and write trust done; the review
-  queue waits on approval-audit 01–02; dev harness last); then the
+  `platform-runtime.md` (memory vectors, write trust and the review queue
+  done; approval-audit 01–02 still owed, and they cover `memory.review` the
+  day they land; dev harness last); then the
   rest of the antd shell tickets (`web-ui/antd-shell/` 03–09).
 
 ## Decisions Đạt owes

@@ -42,10 +42,23 @@ Mốc 6 (running many customers) is half done:
   the policy's, from how many distinct documents are cited (two to auto-write;
   payload `1.1` cannot carry one). Evidence must come from the caller's
   workspace or a global document, and the item may not claim a lower
-  classification than its documents. REVIEW candidates are not verified until
-  `memory-review-queue` promotes them. The fixed-set columns have CHECKs
+  classification than its documents.
+- **Held for review** (2026-10-06, `memory-review-queue`): a REVIEW candidate
+  has its evidence and label verified (savepoint, rolled back) and opens a
+  `memory.review` approval, run-less, payload identifiers and label only.
+  `decide` writes `memory.review.decided` to the outbox; the worker's handler
+  calls `settle_review`, which writes the item through the same
+  `_store_item` as an auto-write (evidence recorded and re-checked then) or
+  records the refusal. `memory.` is strict, and a decider's clearance must
+  cover the stamped label (`decision_guards`). Content is read at
+  `GET /memory/candidates/{id}` under `memory.read` and clearance. The fixed-set columns have CHECKs
   pinned to the enums by a catalog test; memory retention has one class,
   `default`.
+- **Run-less `.decided` events with no handler (found 2026-10-06, not fixed):**
+  every run-less approval now writes `<type>.decided`; the worker claims only
+  the types it has handlers for, and nothing deletes outbox rows. A product
+  whose run-less approval type registers no handler leaves one unclaimed row
+  per decision, invisible to the backlog metric (which counts handled types).
 - **Outbox (found on the way, not fixed):** `_deliver` treats
   `UndeliverableEventError` like any other error (retried to `max_attempts`),
   so the class records a reason but does not stop retries, which its
@@ -98,7 +111,9 @@ Mốc 6 (running many customers) is half done:
   `memory-write-trust` (classification from the cited documents,
   workspace-checked evidence, confidence computed by code, CHECKs, retention
   classes nothing can assign removed; **resolved 2026-10-06**), `memory-review-queue` (REVIEW becomes a
-  `memory.review` approval; needs `approval-audit-and-workspace` 01–02),
+  `memory.review` approval; **resolved 2026-10-06**; the decision audit and
+  the workspace narrowing of `decide` stay with `approval-audit-and-workspace`
+  01–02, still open),
   `compaction` (long tool loops and multi-turn threads really compact, budget
   from the profile, checkpoint retention), `retrieval-correctness`
   (`document_ids` inside the Qdrant filter, one embedding builder, a pinned

@@ -1,6 +1,6 @@
 # Memory chờ duyệt tới tay người: `memory.review` trong hộp approval
 
-Status: ready-for-agent
+Status: resolved
 Area: platform-runtime · Nhánh: `feat/platform-hardening` · Viết: 6/10/2026
 
 Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2026 (khu
@@ -115,11 +115,12 @@ lý do "chưa có hàng đợi duyệt" cho tới khi đường này có.
 
 ## Câu hỏi còn mở
 
-1. `memory.` có vào `strict_approval_prefixes` không (người có run sinh ra fact không tự
-   duyệt, phải có ghi chú)? Đề xuất: có, nối ở composition root bằng `|=`.
+1. ~~`memory.` có vào `strict_approval_prefixes` không?~~ Làm theo đề xuất: có (6/10/2026;
+   Đạt vẫn có thể đổi): nối ở `dw_api/bootstrap/runtime.py`, ghim bằng
+   `test_memory_review_wiring.py`. Đổi lại thì đổi một dòng ở đó.
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                                              | Status          | Blocked by                                                 |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------- |
-| 01  | [Candidate REVIEW thành approval `memory.review`; quyết định ghi hay bỏ qua đường ghi đã kiểm](issues/01-memory-review-approval.md) | ready-for-agent | approval-audit-and-workspace 01, 02; memory-write-trust 01 |
+| #   | Ticket                                                                                                                              | Status   | Blocked by                                                 |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------- |
+| 01  | [Candidate REVIEW thành approval `memory.review`; quyết định ghi hay bỏ qua đường ghi đã kiểm](issues/01-memory-review-approval.md) | resolved | approval-audit-and-workspace 01, 02; memory-write-trust 01 |

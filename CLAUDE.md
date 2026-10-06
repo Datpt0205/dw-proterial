@@ -213,7 +213,12 @@ kind of change nobody makes and everybody works around.
   provider's own features takes that provider's client and says so in its type.
   A provider adapter that does not fit gets an anti-corruption layer, not a
   widened port.
-- Approval pauses and resumes a durable, checkpointed run.
+- Approval pauses and resumes a durable, checkpointed run. An approval with no
+  run announces its decision instead: `ApproveAndResumeService.decide` writes one
+  outbox event `<approval_type>.decided` in the decision's transaction, and the
+  context that opened it registers the handler. A condition one type puts on
+  who may decide it is a `decision_guards` entry at the composition root, like
+  `strict_approval_prefixes`, never a branch in `decide`.
 
 ## Data model rules
 

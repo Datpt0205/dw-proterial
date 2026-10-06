@@ -22,7 +22,9 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.outbox import OutboxEvent
 from dw_worker.consumers.memory import (
     MEMORY_CANDIDATE_PROPOSED,
+    MEMORY_REVIEW_DECIDED,
     build_memory_handler,
+    build_review_handler,
     memory_handlers,
 )
 from dw_worker.consumers.outbox import UndeliverableEventError
@@ -64,6 +66,20 @@ class _Recorder:
             outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="ok", confidence=0.75),
             item=None,
         )
+
+    async def settle_review(
+        self, approval_id: uuid.UUID, context: AccessContext
+    ) -> MemoryItem | None:
+        self.calls.append(
+            {
+                "approval_id": approval_id,
+                "tenant_id": context.tenant_id,
+                "workspace_id": context.workspace_id,
+                "principal_id": context.principal_id,
+                "scopes": context.scopes,
+            }
+        )
+        return None
 
 
 def _payload(**overrides: Any) -> dict[str, Any]:
@@ -195,8 +211,12 @@ def test_the_worker_wires_this_event_and_only_this_one() -> None:
     """Pins what the composition root turned on. An effect that reacts to an
     ambient record event — "an account was created" — is the shape that bought a
     paid model call per row of a bulk import; this one reacts to an event a run
-    emits deliberately when it has something to remember."""
-    assert sorted(memory_handlers(_Recorder())) == [MEMORY_CANDIDATE_PROPOSED]
+    emits deliberately when it has something to remember, and to a person's
+    decision on a memory that was held for them."""
+    assert sorted(memory_handlers(_Recorder())) == [
+        MEMORY_CANDIDATE_PROPOSED,
+        MEMORY_REVIEW_DECIDED,
+    ]
 
 
 # ------------------------------------------------------------- ranking ----
@@ -298,3 +318,102 @@ async def test_the_index_is_optional() -> None:
     result = await build_memory_handler(_Stores())(_event())
 
     assert "auto_write" in result
+
+
+# ------------------------------------------------------- reviewed memory --
+
+APPROVAL = uuid.UUID(int=0xB1)
+DECIDER = uuid.UUID(int=0xB2)
+
+
+def _decided(payload: dict[str, Any] | None = None) -> OutboxEvent:
+    return OutboxEvent(
+        id=uuid.uuid4(),
+        tenant_id=TenantId(TENANT),
+        workspace_id=WorkspaceId(WORKSPACE),
+        event_type=MEMORY_REVIEW_DECIDED,
+        schema_version="1.0",
+        aggregate_id=APPROVAL,
+        occurred_at=datetime(2026, 10, 6, tzinfo=UTC),
+        payload=payload
+        if payload is not None
+        else {
+            "approval_id": str(APPROVAL),
+            "decision_id": str(uuid.uuid4()),
+            "outcome": "approved",
+            "decided_by": str(DECIDER),
+        },
+    )
+
+
+async def test_a_review_is_settled_in_the_envelopes_tenancy_by_the_decider() -> None:
+    """The decider is who the trail names; the tenancy is the envelope's, which
+    the approval flow copied from the approval row. The context carries no
+    scope: the decision was authorized where it was made."""
+    recorder = _Recorder()
+
+    result = await build_review_handler(recorder)(_decided())
+
+    assert result == "memory review settled without a write"
+    [call] = recorder.calls
+    assert call == {
+        "approval_id": APPROVAL,
+        "tenant_id": TENANT,
+        "workspace_id": WORKSPACE,
+        "principal_id": DECIDER,
+        "scopes": frozenset(),
+    }
+
+
+async def test_a_review_payload_naming_a_tenant_is_refused() -> None:
+    body = dict(_decided().payload, tenant_id=str(uuid.uuid4()))
+    recorder = _Recorder()
+
+    with pytest.raises(UndeliverableEventError):
+        await build_review_handler(recorder)(_decided(body))
+    assert recorder.calls == []
+
+
+async def test_a_review_whose_evidence_no_longer_verifies_is_undeliverable() -> None:
+    from dw_kernel.errors import DomainError
+
+    class _Refuses(_Recorder):
+        async def settle_review(self, *args: Any, **kwargs: Any) -> MemoryItem | None:
+            raise DomainError("evidence chunk no longer exists")
+
+    with pytest.raises(UndeliverableEventError, match="no longer exists"):
+        await build_review_handler(_Refuses())(_decided())
+
+
+async def test_a_review_storage_failure_stays_retryable() -> None:
+    class _Broken(_Recorder):
+        async def settle_review(self, *args: Any, **kwargs: Any) -> MemoryItem | None:
+            raise TimeoutError("database gone")
+
+    with pytest.raises(TimeoutError):
+        await build_review_handler(_Broken())(_decided())
+
+
+async def test_an_approved_memory_is_indexed_and_a_rejected_one_is_not() -> None:
+    item = MemoryItem(
+        memory_id=uuid.uuid4(),
+        tenant_id=TENANT,
+        workspace_id=WORKSPACE,
+        worker_id="demo",
+        memory_type=MemoryType.COMMITMENT,
+        content="Anh An cam kết gửi hợp đồng.",
+        confidence=0.6,
+        valid_from=datetime(2026, 10, 6, tzinfo=UTC),
+        created_by_run_id=RUN,
+    )
+
+    class _Writes(_Recorder):
+        async def settle_review(self, *args: Any, **kwargs: Any) -> MemoryItem | None:
+            return item
+
+    written, rejected = _Index(), _Index()
+    assert await build_review_handler(_Writes(), written)(_decided()) == "memory review written"
+    await build_review_handler(_Recorder(), rejected)(_decided())
+
+    assert [entry["memory_id"] for entry in written.indexed] == [item.memory_id]
+    assert rejected.indexed == []
