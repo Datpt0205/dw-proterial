@@ -41,103 +41,20 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
-- **CI gitleaks**: confirmed green in CI on run 37398677606 (2026-10-06,
-  "no leaks found", 88 commits). Close this entry once that run's other
-  failures (below) are confirmed fixed by a push.
+- **CI is green** on run 37427518778 (2026-10-06, commit 46b7e2c), all seven
+  jobs, for the first time since 2026-10-02. What it took (detail in the
+  commits): gitleaks quoting its own ignored phrase (7daa617); pip-audit,
+  scaffold-smoke and the run-state announcement timeouts (2284d3c: tests
+  marked `anyio` ran under two async runners, so on Linux the LISTEN
+  fixture sat on a loop nobody ran; `-p no:anyio` now); pnpm audit and
+  trivy (46b7e2c). Still owed:
+    - `braces` <=3.0.3 is audit-ignored for GHSA-vfj7-8cjw-p6xm only (no
+      fixed release; dev-only lint dependency). Remove the ignore and add a
+      capped override when 3.0.4 ships.
+    - `KeycloakTokenVerifier` (RS256/JWKS) has no test; pyjwt 2.15.1 was
+      checked by hand only.
+    - CI does not run the web vitest suite or the Sales browser walk.
 
-- **CI: three run-state announcement tests time out** (2026-09-29, still red
-  on run 37398677606, 2026-10-06). Cause found 2026-10-06, fixed locally; not
-  yet confirmed in CI (nothing pushed).
-    - **Cause:** two async test runners claimed the same tests. The tests
-      were marked `pytest.mark.anyio` while `asyncio_mode = "auto"` makes
-      pytest-asyncio run every async test too. Which plugin ran an async
-      FIXTURE depended on plugin registration order, and that order is
-      reversed between the two venvs (`--trace-config`: Windows registers
-      anyio first, Linux registers pytest-asyncio first). On Linux, anyio ran
-      the `heard` fixture on its own loop and pytest-asyncio ran the test on
-      another. The asyncpg LISTEN connection belonged to a loop that was not
-      running during the test, so its socket was never read. A probe test
-      printed `same_loop=False fixture_loop_running=False` on Linux and
-      `same_loop=True` on Windows. Test order had nothing to do with it: on
-      Linux the file fails alone too (3 failed, 1 passed). The silence test
-      passed because hearing nothing was the expected result.
-    - **Why only these tests:** the other anyio-marked fixtures open
-      connections lazily, through a NullPool engine, on whichever loop is
-      running when they are used. `heard` is the only one that opens its
-      connection while the fixture is being set up.
-    - **Reproduced** in a `python:3.12-slim` container on the compose
-      network, running `uv run pytest -m integration` over the
-      `dw_agent_runtime` suite, which is CI's first 48 tests in CI's order:
-      3 failed and 45 passed, the same three tests as CI. After the fix:
-      48 passed.
-    - **Fix:** one runner. The `anyio` marks and `anyio_backend` fixtures
-      are removed from the five files that had them, and `-p no:anyio` is in
-      `addopts`. If someone adds the marker back, `--strict-markers` refuses
-      it at collection (checked).
-- **CI pip-audit** (run 37398677606) flagged pyjwt 2.14.0
-  (PYSEC-2026-4141 / GHSA-x33g-cr3x-6449) and virtualenv 21.7.10
-  (PYSEC-2026-4011..4014). The lock now has pyjwt 2.15.1 and virtualenv
-  21.14.5, and dw_platform's floor is raised to `pyjwt>=2.15`. The same
-  pip-audit command CI runs finds no known vulnerabilities. Not yet
-  confirmed in CI.
-    - **Gap:** `KeycloakTokenVerifier`, the production RS256/JWKS path, has
-      no test at all. The unit suite covers only the dev HS256 verifier. A
-      scratch run against a local JWKS server on pyjwt 2.15.1 accepted a
-      valid token and refused each of: wrong audience, wrong issuer,
-      expired, missing `sub`, missing `exp`, a foreign key, HS256 and
-      `alg: none`. That run was not committed as a test, so the next pyjwt
-      bump has nothing that checks this path.
-- **CI scaffold-smoke** (run 37398677606): `lint-imports` failed with
-  "Module 'dw_smoke_ctx' does not exist". The generator found its place in
-  `root_packages` by the lines `"dw_observability", "dw_evals", ]`. Once
-  `dw_sales` was appended to `root_packages`, those lines matched only the
-  "Kernel is pure" list, so the new package was written there. A second
-  failure was hidden behind it: the template's `tests/unit/__init__.py`
-  makes a top-level package named `unit`, so a second context's slice test
-  failed to import (`No module named 'unit.test_smoke_ctx_slice'`).
-    - **Fix:** `scripts/new_context.py` now finds each list inside its own
-      table. It adds the context to "Platform does not import contexts" and
-      to the domain-purity contract, and gives it a layers contract. From the
-      second context on, it adds an independence contract between contexts.
-      It reads the file back and refuses to write if any of these entries
-      did not land where intended. The template no longer ships
-      `tests/unit/__init__.py`.
-    - **Verified** by walking the job's exact steps in a scratch worktree:
-      red at HEAD, green with the fix. With two contexts generated,
-      `dw_sales`'s contracts are unchanged. Not yet confirmed in CI.
-- **CI pnpm audit + trivy** (run 37422042077, commit 2284d3c): both red, and
-  they share a cause. The audit found 8 high advisories: brace-expansion in
-  all three of its lines, braces, and source-map-js. Trivy found one row:
-  `source-map-js@1.2.1` in `dw-web:local` (CVE-2026-93749). api, worker and
-  docgen scanned 0. Fixed locally in `pnpm-workspace.yaml`, not yet
-  confirmed in CI:
-    - **Overrides:** the three brace-expansion lines now have floors of
-      1.1.20, 2.1.6 and 5.0.11, each capped below its next major (5.x was an
-      exact `5.0.9` pin). A new `source-map-js` override has a floor of
-      1.2.2. The lockfile changes 4 packages. pnpm 11 rewrites the lockfile
-      in single quotes, so it was run back through prettier to keep the
-      committed double-quote style and a small diff.
-    - **braces has no fix to take.** GitHub lists no first patched version,
-      npm's latest is 3.0.3, and micromatch/braces#70 is open. Every
-      `@next/eslint-plugin-next` release through 16.3.8 pins
-      `fast-glob 3.3.1`, which pulls in micromatch and braces, so no override
-      or upgrade removes it. `auditConfig.ignoreGhsas` lists only
-      GHSA-vfj7-8cjw-p6xm, so a new advisory on braces still fails the
-      audit. Why that is safe: the path is dev-only, it is absent from every
-      image, and its only input is `settings.next.rootDir` from our own
-      ESLint config. **Owed:** remove the ignore and add a capped override
-      once braces 3.0.4 ships.
-    - **Measured:** `pnpm audit --audit-level high` was 11 vulns (8 high)
-      with exit 1. It is now exit 0, reporting "1 high (1 ignored)", and the
-      moderates are gone too. Trivy 0.74.0 with CI's flags (`fs`, HIGH and
-      CRITICAL, `--ignore-unfixed`) is red on HEAD's lockfile with the same
-      CVE row as CI, and exit 0 on the fixed lockfile. The image itself was
-      not rescanned locally: Docker Desktop's BuildKit was failing
-      (`context deadline exceeded`) under other sessions' stacks.
-      These are green: frozen install, generate:api-types (no diff),
-      format:check, lint, typecheck, and web vitest (215/215). `next build`
-      compiles, typechecks and generates 26/26 pages; its only failure is
-      the known Windows standalone-symlink EPERM.
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).
