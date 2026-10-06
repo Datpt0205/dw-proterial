@@ -435,10 +435,7 @@ class KnowledgeGateway:
                 .where(
                     # Own workspace OR any global (legal) doc — RLS permits the
                     # cross-tenant read only for scope='global' rows.
-                    sa.or_(
-                        tables.documents.c.workspace_id == context.workspace_id,
-                        tables.documents.c.scope == "global",
-                    ),
+                    tables.visible_from_workspace(context.workspace_id),
                     tables.documents.c.status == "active",
                     tables.documents.c.classification.in_(allowed),
                     sa.or_(
@@ -513,10 +510,7 @@ class KnowledgeGateway:
                     ).where(
                         tables.documents.c.id == document_id,
                         tables.documents.c.status == "active",
-                        sa.or_(
-                            tables.documents.c.workspace_id == context.workspace_id,
-                            tables.documents.c.scope == "global",
-                        ),
+                        tables.visible_from_workspace(context.workspace_id),
                         tables.documents.c.classification.in_(allowed),
                         sa.or_(
                             *[

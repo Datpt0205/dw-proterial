@@ -61,21 +61,20 @@ class _Recorder:
         )
         return ProposalResult(
             candidate_id=uuid.uuid4(),
-            outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="ok"),
+            outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="ok", confidence=0.75),
             item=None,
         )
 
 
 def _payload(**overrides: Any) -> dict[str, Any]:
     body: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "run_id": str(RUN),
         "actor_id": str(ACTOR),
         "candidate": {
             "worker_id": "demo",
             "memory_type": MemoryType.COMMITMENT.value,
             "content": "Anh An cam kết gửi hợp đồng.",
-            "confidence": 0.9,
             "provenance_refs": [],
         },
     }
@@ -138,7 +137,43 @@ async def test_a_malformed_payload_is_undeliverable_rather_than_retried() -> Non
     handler = build_memory_handler(_Recorder())
 
     with pytest.raises(UndeliverableEventError):
-        await handler(_event({"schema_version": "1.0"}))
+        await handler(_event({"schema_version": "1.1"}))
+
+
+async def test_a_payload_carrying_its_own_confidence_is_refused_not_obeyed() -> None:
+    """The model-injected shape: a producer copying a confidence out of model
+    output. The number that decides AUTO_WRITE is the policy's, so this is not
+    an input at all — refused at parse, and nothing reaches the service."""
+    recorder = _Recorder()
+    body = _payload()
+    body["candidate"] = {**body["candidate"], "confidence": 1.0}
+
+    with pytest.raises(UndeliverableEventError, match="confidence"):
+        await build_memory_handler(recorder)(_event(body))
+    assert recorder.calls == []
+
+
+async def test_a_schema_1_0_payload_is_refused_rather_than_guessed_at() -> None:
+    """1.0 carried a raw confidence. Reading one as 1.1 by dropping the field
+    would be a guess about what the sender meant; fail closed."""
+    recorder = _Recorder()
+
+    with pytest.raises(UndeliverableEventError, match="schema_version"):
+        await build_memory_handler(recorder)(_event(_payload(schema_version="1.0")))
+    assert recorder.calls == []
+
+
+async def test_evidence_the_service_refuses_is_undeliverable_not_retried() -> None:
+    """A citation that failed verification does not become true on the next
+    attempt. Reported as undeliverable, with the service's reason."""
+    from dw_kernel.errors import DomainError
+
+    class _Refuses(_Recorder):
+        async def propose(self, *args: Any, **kwargs: Any) -> ProposalResult:
+            raise DomainError("evidence cites a chunk from another workspace")
+
+    with pytest.raises(UndeliverableEventError, match="another workspace"):
+        await build_memory_handler(_Refuses())(_event())
 
 
 async def test_a_storage_failure_stays_retryable() -> None:
@@ -185,7 +220,7 @@ class _Stores(_Recorder):
         await super().propose(candidate, context, **kwargs)
         return ProposalResult(
             candidate_id=uuid.uuid4(),
-            outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="ok"),
+            outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="ok", confidence=0.75),
             item=MemoryItem(
                 memory_id=uuid.uuid4(),
                 tenant_id=TENANT,
@@ -230,7 +265,9 @@ class _AlreadySuperseded(_Recorder):
         await super().propose(candidate, context, **kwargs)
         return ProposalResult(
             candidate_id=uuid.uuid4(),
-            outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="already decided"),
+            outcome=PolicyOutcome(
+                decision=WriteDecision.AUTO_WRITE, reason="already decided", confidence=0.75
+            ),
             item=MemoryItem(
                 memory_id=uuid.uuid4(),
                 tenant_id=TENANT,

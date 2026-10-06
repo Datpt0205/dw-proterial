@@ -1,6 +1,6 @@
 # Ghi memory chỉ tin điều code đã kiểm: phân loại theo bằng chứng, độ tin do workflow tính
 
-Status: ready-for-agent
+Status: resolved
 Area: platform-runtime · Nhánh: `feat/platform-hardening` · Viết: 6/10/2026
 
 Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2026 (khu
@@ -122,6 +122,6 @@ Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                                 | Status          | Blocked by        |
-| --- | ---------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------- |
-| 01  | [Phân loại theo bằng chứng, độ tin do workflow tính, CHECK, lớp retention trung thực](issues/01-memory-write-trust.md) | ready-for-agent | memory-vectors 01 |
+| #   | Ticket                                                                                                                 | Status   | Blocked by        |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | -------- | ----------------- |
+| 01  | [Phân loại theo bằng chứng, độ tin do workflow tính, CHECK, lớp retention trung thực](issues/01-memory-write-trust.md) | resolved | memory-vectors 01 |

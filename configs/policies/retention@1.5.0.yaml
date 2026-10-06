@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: retention
-policy_version: "1.4.0"
+policy_version: "1.5.0"
 
 # Dữ liệu sống bao lâu trước khi bị xoá hẳn.
 #
@@ -28,23 +28,21 @@ classes:
     days: 730
     description: Ký ức nghiệp vụ thông thường
 
-  # Thứ nhạy hơn mức thường: ghi chú về cá nhân, điều kiện thương lượng. Giữ
-  # đúng một chu kỳ bán hàng rồi thôi.
-  sensitive:
-    days: 365
-    description: Ký ức chạm dữ liệu cá nhân hoặc điều khoản nhạy cảm
-
-  # Thứ hết giá trị nhanh: trạng thái tạm, suy đoán trong một phiên.
-  ephemeral:
-    days: 30
-    description: Ký ức ngắn hạn, hết giá trị sau một tháng
-
-  # Cửa thoát có chủ ý, KHÔNG phải mặc định. Dùng khi một nghĩa vụ pháp lý bắt
-  # giữ lâu hơn lịch thường — và phải là quyết định của người, ghi lại được.
-  # Không có `days`, nên nó không bao giờ bị quét.
-  legal_hold:
-    days: null
-    description: Giữ vô thời hạn do nghĩa vụ pháp lý
+  # Từ 1.5.0 chỉ còn `default`, vì đó là lớp duy nhất code gán được
+  # (`dw_memory.service.RETENTION_CLASS`). Bản 1.4.0 còn khai `sensitive`
+  # (365 ngày), `ephemeral` (30) và `legal_hold` (không hết hạn), nhưng không
+  # đường ghi nào mang được chúng lên một dòng: một cam kết tuân thủ code không
+  # giữ. Gán được thì phải có người quyết một ánh xạ (loại hay phân loại ký ức
+  # → lớp) cho một đường ghi chưa có producer, nên gỡ là thay đổi trung thực.
+  #
+  # Một lớp quay lại CÙNG đường gán nó. `legal_hold` là quyết định của người,
+  # nên nó quay lại cùng route để người đặt một lệnh giữ — không trước.
+  # `test_the_pinned_retention_policy_promises_only_classes_code_can_assign`
+  # đỏ nếu một lớp được khai ở đây mà code không gán.
+  #
+  # Dòng mang lớp không có ở đây vẫn được giữ và đếm, không bị đoán
+  # (`dw_platform.retention_policy`): một dòng cũ mang `legal_hold` không bao
+  # giờ bị quét. Không có CHECK cho cột này: tập giá trị thuộc file này.
 
 # Vòng đời phía knowledge: tài liệu đã xoá, và trích dẫn đã mồ côi.
 #
@@ -82,7 +80,7 @@ knowledge:
 # Cho nên mặc định là `days: null` — quét vẫn TẠO partition trước (thuần lợi,
 # không rủi ro) nhưng KHÔNG xoá gì cả. Muốn bật thì phải có người viết một con
 # số vào đây, và con số đó là nghĩa vụ pháp lý của từng triển khai chứ không
-# phải mặc định kỹ thuật ai đó đoán hộ. Cùng hình dạng với `legal_hold` ở trên:
+# phải mặc định kỹ thuật ai đó đoán hộ. Cùng hình dạng với một lớp `days: null`:
 # không có `days` nghĩa là không bao giờ bị quét.
 #
 # `months_ahead` là số tháng tạo sẵn. Phải lớn hơn khoảng cách giữa hai lượt

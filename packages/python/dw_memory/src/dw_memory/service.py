@@ -5,6 +5,8 @@ written with it, in one transaction, and checked first:
 
 - the evidence it cites is verified against the chunks it names and recorded in
   `knowledge.evidence`, so `evidence_id` resolves to something;
+- it is stored at a classification no lower than the documents it cites, so
+  recall's clearance filter reads the sources' label and not the producer's;
 - `memory.item_evidence` ties the item to that evidence with foreign keys, so the
   citation cannot name a row that was never written;
 - the write is audited, because a fact appearing in a customer's system with
@@ -26,10 +28,11 @@ import sqlalchemy as sa
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_kernel.errors import DomainError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
-from dw_knowledge.contracts import classifications_for_clearance
+from dw_knowledge.contracts import classification_rank, classifications_for_clearance
 from dw_memory import tables
 from dw_memory.contracts import MEMORY_SCHEMA_VERSION, MemoryItem, WriteDecision
 from dw_memory.policy import MemoryCandidate, MemoryWritePolicy, PolicyOutcome
@@ -53,6 +56,12 @@ DEFAULT_RECALL_LIMIT = 12
 # ranker has something to choose from, bounded so one account with years of
 # history does not load its whole past to pick twelve rows.
 RANKING_POOL = 100
+
+# The one retention class a memory is written with, and so the only one the
+# pinned retention policy may name for memory: a class nothing assigns is a
+# term in a compliance file the code does not keep. A second class arrives with
+# the decision that assigns it — a legal hold with the route that sets one.
+RETENTION_CLASS = "default"
 
 # One action per outcome, so "what did this worker learn, and what did it decline
 # to learn" are both answerable from the trail rather than only the first.
@@ -121,10 +130,10 @@ class MemoryService:
                 content=candidate.content,
                 structured_facts=dict(candidate.structured_facts),
                 provenance_refs=candidate.provenance_refs,
-                confidence=candidate.confidence,
+                confidence=outcome.confidence,
                 classification=candidate.classification,
                 valid_from=now,
-                retention_policy="default",
+                retention_policy=RETENTION_CLASS,
                 memory_schema_version=MEMORY_SCHEMA_VERSION,
                 created_by_run_id=created_by_run_id,
                 fact_key=candidate.fact_key,
@@ -151,7 +160,7 @@ class MemoryService:
                     provenance_refs=[
                         ref.model_dump(mode="json") for ref in candidate.provenance_refs
                     ],
-                    confidence=candidate.confidence,
+                    confidence=outcome.confidence,
                     classification=candidate.classification,
                     decision=outcome.decision.value,
                     memory_id=item.memory_id if item else None,
@@ -163,12 +172,22 @@ class MemoryService:
                 # Before the item: a reference that fails verification must not
                 # leave a memory behind, and raising here rolls back the candidate
                 # row with it.
-                await self.evidence_store.record(
+                cited = await self.evidence_store.record(
                     session,
                     item.provenance_refs,
                     tenant_id=context.tenant_id,
                     workspace_id=context.workspace_id,
                 )
+                # Refused, not raised to `cited`: the policy has already decided
+                # on the claimed label, and raising it now would auto-write a
+                # fact the "restricted always needs review" rule never saw at
+                # its real level. A claim ABOVE the sources stands — the more
+                # restrictive label is the producer's to choose.
+                if classification_rank(item.classification) < classification_rank(cited):
+                    raise DomainError(
+                        "memory claims a lower classification than the evidence it cites",
+                        details={"claimed": item.classification, "evidence": cited},
+                    )
                 await session.execute(
                     sa.insert(tables.items).values(
                         memory_id=item.memory_id,
@@ -257,6 +276,7 @@ class MemoryService:
                 sa.select(
                     tables.write_candidates.c.decision,
                     tables.write_candidates.c.memory_id,
+                    tables.write_candidates.c.confidence,
                 ).where(tables.write_candidates.c.id == candidate_id)
             )
         ).first()
@@ -283,7 +303,9 @@ class MemoryService:
             # The reason is not stored on the candidate row, and inventing one
             # here would put words in the first decision's mouth. The decision
             # itself is what a caller acts on.
-            outcome=PolicyOutcome(decision=decision, reason="already decided"),
+            outcome=PolicyOutcome(
+                decision=decision, reason="already decided", confidence=row.confidence
+            ),
             item=item,
         )
 
@@ -357,7 +379,7 @@ class MemoryService:
             details={
                 "worker_id": candidate.worker_id,
                 "memory_type": candidate.memory_type.value,
-                "confidence": candidate.confidence,
+                "confidence": outcome.confidence,
                 "classification": candidate.classification,
                 "reason": outcome.reason,
                 "policy_version": self.policy.policy_version,

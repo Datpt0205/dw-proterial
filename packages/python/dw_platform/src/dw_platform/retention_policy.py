@@ -16,10 +16,11 @@ explained. Retention answers a different question: "we are no longer allowed to
 hold this." The two must not share a mechanism, because the second one is what
 goes in a contract.
 
-**A class with no `days` never expires.** `legal_hold` is that, deliberately: an
-obligation to keep can outlive the ordinary schedule, and the safe way to express
-it is a class the sweep cannot touch rather than a flag the sweep must remember
-to honour.
+**A class with no `days` never expires.** A legal hold is that shape, deliberately:
+an obligation to keep can outlive the ordinary schedule, and the safe way to
+express it is a class the sweep cannot touch rather than a flag the sweep must
+remember to honour. (`legal_hold` left the policy in 1.5.0 because nothing could
+assign it; it returns with the route that sets one.)
 
 **An unknown class is kept, not guessed.** A row naming a class this build does
 not have is more likely a newer config than a mistake, and deleting on that

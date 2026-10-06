@@ -38,6 +38,18 @@ Mốc 6 (running many customers) is half done:
 - **Writes are asynchronous:** the outbox handler for
   `memory.candidate_proposed` calls `propose` with the event id as the
   idempotency key, and tenancy comes from the envelope, not the payload.
+- **What a write trusts** (2026-10-06, `memory-write-trust`): confidence is
+  the policy's, from how many distinct documents are cited (two to auto-write;
+  payload `1.1` cannot carry one). Evidence must come from the caller's
+  workspace or a global document, and the item may not claim a lower
+  classification than its documents. REVIEW candidates are not verified until
+  `memory-review-queue` promotes them. The fixed-set columns have CHECKs
+  pinned to the enums by a catalog test; memory retention has one class,
+  `default`.
+- **Outbox (found on the way, not fixed):** `_deliver` treats
+  `UndeliverableEventError` like any other error (retried to `max_attempts`),
+  so the class records a reason but does not stop retries, which its
+  docstring says it does.
 
 ## Open
 
@@ -85,7 +97,7 @@ Mốc 6 (running many customers) is half done:
   SQL recalled; **resolved 2026-10-06** in `55bd789`),
   `memory-write-trust` (classification from the cited documents,
   workspace-checked evidence, confidence computed by code, CHECKs, retention
-  classes nothing can assign removed), `memory-review-queue` (REVIEW becomes a
+  classes nothing can assign removed; **resolved 2026-10-06**), `memory-review-queue` (REVIEW becomes a
   `memory.review` approval; needs `approval-audit-and-workspace` 01–02),
   `compaction` (long tool loops and multi-turn threads really compact, budget
   from the profile, checkpoint retention), `retrieval-correctness`

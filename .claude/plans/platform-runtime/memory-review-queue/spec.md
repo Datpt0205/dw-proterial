@@ -106,6 +106,12 @@ lý do "chưa có hàng đợi duyệt" cho tới khi đường này có.
 ## Phụ thuộc
 
 - `approval-audit-and-workspace` 01 và 02; `memory-write-trust` 01.
+- Từ `memory-write-trust` 01 (đã xong): candidate REVIEW **chưa** qua
+  `EvidenceStorePort.record` lúc đề xuất, nên `promote` là lần đầu bằng chứng, workspace
+  và phân loại của nó được kiểm; phép so phân loại sau `record` phải nằm trong phần ghi
+  item dùng chung. `MemoryCandidate` không còn `confidence`; độ tin là
+  `PolicyOutcome.confidence` (đã lưu ở `write_candidates.confidence`). Thêm giá trị cho
+  `decision` thì sửa cả CHECK `ck_write_candidates_decision` (test so catalog sẽ đỏ).
 
 ## Câu hỏi còn mở
 

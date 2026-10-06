@@ -68,6 +68,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("dw_worker")
 
+# A module constant so the test holding this file to the classes code can
+# assign reads the file the sweeps below read, not a copy of its name.
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.5.0.yaml"
+
 
 def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
     return build_telemetry(
@@ -174,9 +178,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # One file read once — the two sweeps are two halves of one commitment,
         # and a build where they disagreed would be a build that answers the
         # compliance question two ways.
-        retention_policy = load_retention_policy(
-            REPO_ROOT / "configs" / "policies" / "retention@1.4.0.yaml"
-        )
+        retention_policy = load_retention_policy(RETENTION_POLICY_PATH)
         retention = SqlMemoryRetention(
             session_factory=sessions,
             policy=retention_policy,

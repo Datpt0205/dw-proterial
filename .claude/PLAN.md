@@ -31,8 +31,8 @@ own file and a row here.
   for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
   plans and research live there, not here.
 - **Next:** on `feat/platform-hardening`, the six harness-audit slices in
-  `platform-runtime.md` (memory vectors done, memory-write-trust next, dev
-  harness last); then the
+  `platform-runtime.md` (memory vectors and write trust done; the review
+  queue waits on approval-audit 01–02; dev harness last); then the
   rest of the antd shell tickets (`web-ui/antd-shell/` 03–09).
 
 ## Decisions Đạt owes
@@ -46,6 +46,8 @@ own file and a row here.
       `make check-rerank`; the key is only in local `.env`);
     - whether CI runs the web vitest suite and the Playwright specs, the
       antd layer-order spec among them (`web-ui/antd-shell` ticket 10).
+    - how many independent documents a memory needs to be written without
+      review (`MemoryWritePolicy.auto_write_sources`, 2 since 2026-10-06).
 - **Ops:**
     - spend guard dollar thresholds per plan;
     - a retention term for offboarding export bundles;

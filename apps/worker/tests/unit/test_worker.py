@@ -118,7 +118,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
     `spend_guard_retention` is the fifth, and reads no policy file at all —
     unlike audit/memory/knowledge, its window answers no compliance question,
     so it is a technical constant in code, not a term in
-    `retention@1.4.0.yaml` (see `SqlSpendGuardRetention`'s docstring).
+    `retention@1.5.0.yaml` (see `SqlSpendGuardRetention`'s docstring).
     `notifications_retention` is the sixth, on the same footing: the in-app
     inbox's 90 days live in `platform.prune_notifications()` itself.
 
@@ -149,3 +149,19 @@ def test_the_offboarding_lane_needs_object_storage_too_not_just_a_database() -> 
         s3_endpoint_url="http://localhost:9000",
     )
     assert "offboarding" in build_registry(db_and_s3).all()
+
+
+def test_the_pinned_retention_policy_promises_only_classes_code_can_assign() -> None:
+    """A memory class nothing can put on a row is a promise in a compliance
+    file that the code does not keep (`failure-modes.md` #1). `sensitive`,
+    `ephemeral` and `legal_hold` were exactly that until 1.5.0; a class comes
+    back together with the path that assigns it, and this goes red until then.
+
+    Equality, so the other direction holds too: the class the service writes
+    has a term in the file the sweep reads.
+    """
+    from dw_memory.service import RETENTION_CLASS
+    from dw_platform.retention_policy import load_retention_policy
+    from dw_worker.main import RETENTION_POLICY_PATH
+
+    assert set(load_retention_policy(RETENTION_POLICY_PATH).classes) == {RETENTION_CLASS}
