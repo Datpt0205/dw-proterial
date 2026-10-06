@@ -14,44 +14,22 @@ from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.registry import ConfigError
 from dw_api.bootstrap.models import checked_base_url
 from dw_api.settings import ApiSettings
+from dw_knowledge.adapters.embedding_factory import build_embeddings as shared_build_embeddings
 from dw_knowledge.ports import EmbeddingPort, RerankPort, VectorIndexPort
 
 
 def build_embeddings(settings: ApiSettings, profiles: ModelProfileRegistry) -> EmbeddingPort:
-    if settings.embedding_provider == "openai_compatible":
-        from dw_knowledge.adapters.openai_embedding import OpenAICompatibleEmbeddingAdapter
+    """The question is embedded by the same builder the worker embeds chunks with.
 
-        # Retrieval must embed the query exactly as ingestion embedded the
-        # chunks, so both sides read the same profile route rather than two
-        # settings that can drift apart.
-        route = profiles.resolve(settings.model_profile).embedding
-        if route is None or route.dimensions is None:
-            raise ConfigError(
-                "model profile declares no embedding route",
-                details={"profile_id": settings.model_profile},
-            )
-        if not settings.openai_base_url or not settings.openai_api_key:
-            raise ConfigError(
-                "openai_compatible embeddings need OPENAI_BASE_URL and OPENAI_API_KEY"
-            )
-        return OpenAICompatibleEmbeddingAdapter(
-            base_url=settings.openai_base_url,
-            api_key=settings.openai_api_key,
-            model=route.model,
-            _dimension=route.dimensions,
-            timeout=float(route.timeout_seconds),
-        )
-    if settings.embedding_provider == "hash":
-        # Deterministic hashing. Retrieval "works" and returns stable neighbours,
-        # so the plumbing is testable, but the vectors carry no meaning.
-        from dw_knowledge.adapters.hash_embedding import HashEmbeddingAdapter
-
-        return HashEmbeddingAdapter()
-    # A provider this build does not know (a retired one, a typo) must not
-    # quietly become the meaningless hash vectors.
-    raise ConfigError(
-        "unknown embedding provider; use 'openai_compatible' or 'hash'",
-        details={"embedding_provider": settings.embedding_provider},
+    Retrieval must embed the query exactly as ingestion embedded the chunks, so
+    both read the profile's route through `dw_knowledge`'s one builder.
+    """
+    return shared_build_embeddings(
+        settings.embedding_provider,
+        profiles.resolve(settings.model_profile).embedding,
+        base_url=settings.openai_base_url,
+        api_key=settings.openai_api_key,
+        profile_id=settings.model_profile,
     )
 
 

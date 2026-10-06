@@ -94,6 +94,7 @@ class _RecordingIndex:
         trusted_filter: TrustedSearchFilter,
         top_k: int,
         extra_filters: Sequence[tuple[str, str]] = (),
+        document_ids: Sequence[uuid.UUID] = (),
     ) -> list[VectorHit]:
         return []
 

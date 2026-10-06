@@ -68,6 +68,18 @@ Mốc 6 (running many customers) is half done:
   with a finished run visible and no unfinished one, so a missing
   `worker_drain_worker_runs` policy stops the sweep instead of emptying a
   paused run. A thread with no run row is left for offboarding.
+- **Retrieval and the agent prompt** (2026-10-06, `retrieval-correctness`):
+  `SearchQuery.document_ids` is a `MatchAny` on `source_document_id` in the
+  same `must` as the trusted conditions, so it narrows before top-k (payload
+  index added). One embedding builder,
+  `dw_knowledge.adapters.embedding_factory`, used by API and worker;
+  `ConfigError` lives in `dw_kernel.errors` (re-exported by the registry). The
+  agent-loop prompt is a registry artifact pinned on `WorkerDefinition`
+  (`agent_prompt_id`/`_version`), rendered per call for the run's tenant, and
+  the loop's spend is billed under that pin (a plain graph under
+  `graph:<worker_id>@<graph_version>`); `0.0.0` is gone. Open: the pin is not
+  on the `worker_runs` row, and `AgentSpec` restates it rather than reading
+  the definition.
 - **Run-less `.decided` events with no handler (found 2026-10-06, not fixed):**
   every run-less approval now writes `<type>.decided`; the worker claims only
   the types it has handlers for, and nothing deletes outbox rows. A product
@@ -132,7 +144,7 @@ Mốc 6 (running many customers) is half done:
   from the profile, checkpoint retention; **resolved 2026-10-06**),
   `retrieval-correctness`
   (`document_ids` inside the Qdrant filter, one embedding builder, a pinned
-  agent-loop prompt), `dev-harness` (commit gate for PowerShell and
+  agent-loop prompt; **resolved 2026-10-06**), `dev-harness` (commit gate for PowerShell and
   `git -C`/`-c`, per-session Stop hook, plugin wording, `ui-quality.md`).
   Dropped as already true here: the rerank outage fallback (`4cb45dc`), and
   offboarding purging run checkpoints (catalog discovery already does; the

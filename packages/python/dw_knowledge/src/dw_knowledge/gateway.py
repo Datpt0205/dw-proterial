@@ -571,9 +571,11 @@ class KnowledgeGateway:
         vector = (await self.embeddings.embed([query.text]))[0]
         # Over-fetch when a reranker is present: dense recall then cross-encoder precision.
         fetch_k = query.top_k * self.rerank_fetch_multiplier if self.reranker else query.top_k
-        hits = await self.vector_index.search(vector, trusted_filter, fetch_k, query.filters)
-        if query.document_ids:
-            hits = [h for h in hits if h.document_id in query.document_ids]
+        # The document narrowing goes to the index with the trusted filter, so
+        # it is applied before top-k and only ever intersects with it.
+        hits = await self.vector_index.search(
+            vector, trusted_filter, fetch_k, query.filters, query.document_ids
+        )
 
         rerank_scores: dict[str, float] = {}
         ranked = (

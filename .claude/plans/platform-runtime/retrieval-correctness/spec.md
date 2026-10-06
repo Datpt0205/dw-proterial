@@ -1,6 +1,6 @@
 # Tìm theo tài liệu lọc trước top-k; một chủ cho model embedding; prompt agent loop có version
 
-Status: ready-for-agent
+Status: resolved
 Area: platform-runtime · Nhánh: `feat/platform-hardening` · Viết: 6/10/2026
 
 Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2026 (khu `retrieval`,
@@ -103,6 +103,6 @@ repo này.
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                                                        | Status          | Blocked by |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
-| 01  | [Lọc tài liệu trong Qdrant, một builder embedding, prompt agent loop có version](issues/01-document-filter-embedding-builder-agent-prompt.md) | ready-for-agent | —          |
+| #   | Ticket                                                                                                                                        | Status   | Blocked by |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
+| 01  | [Lọc tài liệu trong Qdrant, một builder embedding, prompt agent loop có version](issues/01-document-filter-embedding-builder-agent-prompt.md) | resolved | —          |

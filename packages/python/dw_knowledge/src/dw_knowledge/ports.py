@@ -150,11 +150,16 @@ class VectorIndexPort(Protocol):
         trusted_filter: TrustedSearchFilter,
         top_k: int,
         extra_filters: Sequence[tuple[str, str]] = (),
+        document_ids: Sequence[UUID] = (),
     ) -> list[VectorHit]:
-        """``extra_filters`` narrow further; they never relax ``trusted_filter``.
+        """``extra_filters`` and ``document_ids`` narrow further; they never
+        relax ``trusted_filter``.
 
-        Adapters must apply both as conjunctions. A key here has already been
-        whitelisted by ``SearchQuery``, so it can never name a security field.
+        Adapters must apply all of them as conjunctions, and before ``top_k``:
+        a document narrowing applied to the top-k a wider search returned
+        loses every chunk of that document that ranked below it. A key in
+        ``extra_filters`` has already been whitelisted by ``SearchQuery``, so
+        it can never name a security field.
         """
         ...
 
