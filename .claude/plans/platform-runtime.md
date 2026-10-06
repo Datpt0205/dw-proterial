@@ -92,6 +92,11 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
+- **Decided 2026-10-06 (Đạt delegated the calls):** run checkpoints keep 7 days
+  of a thread's older checkpoints and 730 days for an idle thread; `memory.`
+  approvals are strict (a second person and a comment); a memory auto-writes
+  only on two distinct cited documents. All three are the shipped defaults.
+
 - **CI: the three run-state announcement timeouts were a plugin race**
   (fixed 2026-10-02). pytest-asyncio (auto mode) and anyio's pytest plugin both
   wrap async fixtures; the one registered last wins, and registration follows
