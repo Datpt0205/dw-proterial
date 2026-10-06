@@ -27,9 +27,14 @@ from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.ids import UserId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.authorization import (
+    ScopeAuthorizationService,
+    holds_stamped_scope,
+    permission_denied,
+)
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 from dw_platform.domain.approval import (
+    APPROVALS_DECIDE,
     ApprovalDecision,
     ApprovalRequest,
     DecisionOutcome,
@@ -69,6 +74,20 @@ class ApproveAndResumeService:
         the one it had let approvers submit decisions the server always refused.
         """
         return approval_type.startswith(tuple(self.strict_approval_prefixes))
+
+    @staticmethod
+    def may_decide(
+        request: ApprovalRequest,
+        context: AccessContext,
+        authorization: ScopeAuthorizationService,
+    ) -> bool:
+        """Whether the caller's scopes let them decide this request: the same two
+        checks `decide` runs (`approvals.decide`, then the stamp), for the inbox
+        to lock what the server would refuse. Withdrawing your own request,
+        separation of duties and per-type guards are not in it."""
+        return authorization.is_allowed(context, APPROVALS_DECIDE) and holds_stamped_scope(
+            context, request.required_scope
+        )
 
     def _enforce_strict_rules(
         self, request: ApprovalRequest, comment: str, context: AccessContext
@@ -131,7 +150,10 @@ class ApproveAndResumeService:
         approved_action_ids: list[str] | None = None,
     ) -> ApprovalRequest:
         async with self.uow_factory(context) as uow:
-            request = await uow.approvals.get(approval_id)
+            # Narrowed to the caller's workspace by the repository: RLS on
+            # approval_requests narrows by tenant only. Another workspace's
+            # request is not found, before any scope check, write or resume.
+            request = await uow.approvals.get(approval_id, workspace_id=context.workspace_id)
             if request is None:
                 raise NotFoundError(
                     "approval request not found", details={"approval_id": str(approval_id)}
@@ -143,14 +165,27 @@ class ApproveAndResumeService:
             # forever and its run stays parked (measured 2026-09-08: a sales
             # role got `permission_denied` on Reject as well as Approve).
             # The read moves above the gate so we know whose request it is;
-            # it is already tenant/workspace-scoped by RLS.
+            # it is tenant-scoped by RLS and workspace-scoped by the read above.
             if approve or request.requested_by.value != context.principal_id:
                 await authorization.require(
                     context=context,
-                    action="approvals.decide",
+                    action=APPROVALS_DECIDE,
                     resource_type="approval_request",
                     resource_id=str(approval_id),
                 )
+                # Who may decide THIS request, stamped when it was raised
+                # (ADR 0004) and read from the row, never from today's policy.
+                # NOT through `require`: its admin rule would let a platform
+                # operator decide a business approval (2026-10-06). The inbox
+                # reads the same `holds_stamped_scope`; and this sits before any
+                # write or resume, so a refusal leaves the request pending and
+                # the run parked.
+                if not holds_stamped_scope(context, request.required_scope):
+                    raise permission_denied(
+                        action=str(request.required_scope),
+                        resource_type="approval_request",
+                        resource_id=str(approval_id),
+                    )
             if self.is_strict(request.approval_type):
                 self._enforce_strict_rules(request, comment, context)
             guard = self.decision_guards.get(request.approval_type)
@@ -172,7 +207,16 @@ class ApproveAndResumeService:
             await uow.commit()
 
         if record is not None and request.run_id is not None:
-            resume_payload: dict[str, Any] = {"approved": approve, "comment": comment}
+            resume_payload: dict[str, Any] = {
+                "approved": approve,
+                "comment": comment,
+                # Who decided, from the decider's verified context. The run
+                # resumes with the requester's authority (below), so a graph
+                # that records the decider has no other way to learn it; built
+                # here, never copied from the approval's payload, which is the
+                # graph's own interrupt value.
+                "decided_by": str(context.principal_id),
+            }
             if approved_action_ids is not None:
                 resume_payload["approved_action_ids"] = approved_action_ids
             await self.runner.resume(
@@ -180,7 +224,9 @@ class ApproveAndResumeService:
                     run_id=request.run_id,
                     thread_id=record.thread_id,
                     tenant_id=context.tenant_id,
-                    workspace_id=context.workspace_id,
+                    # The run's workspace, from its row, never the decider's:
+                    # what the resumed graph reads and writes is the run's.
+                    workspace_id=record.workspace_id,
                     actor_id=record.requested_by,
                     worker_id=record.worker_id,
                     worker_version=record.worker_version,

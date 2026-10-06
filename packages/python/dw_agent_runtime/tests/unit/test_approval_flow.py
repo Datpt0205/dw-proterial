@@ -9,7 +9,7 @@ from dw_agent_runtime.adapters.run_store import RunRecord, RunStatus
 from dw_agent_runtime.approval_flow import ApproveAndResumeService, DecisionGuard
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.autonomy import AutonomyLevel
-from dw_kernel.errors import ConflictError, PermissionDeniedError
+from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import FixedClock, SequentialIdGenerator
 from dw_platform.application.access_context import AccessContext
@@ -23,15 +23,21 @@ pytestmark = pytest.mark.unit
 NOW = datetime(2026, 8, 10, 9, 0, tzinfo=UTC)
 REQUESTER = uuid.UUID(int=1)
 APPROVER = uuid.UUID(int=2)
+WORKSPACE = uuid.UUID(int=101)
 
 
 @dataclass
 class FakeApprovalRepo:
+    """Honours the port: another workspace's request is not found."""
+
     request: ApprovalRequest
     decisions: list[ApprovalDecision] = field(default_factory=list)
 
-    async def get(self, approval_id: uuid.UUID) -> ApprovalRequest | None:
-        return self.request if approval_id == self.request.id else None
+    async def get(
+        self, approval_id: uuid.UUID, *, workspace_id: uuid.UUID
+    ) -> ApprovalRequest | None:
+        found = approval_id == self.request.id and workspace_id == self.request.workspace_id.value
+        return self.request if found else None
 
     async def save(self, request: ApprovalRequest) -> None: ...
 
@@ -89,7 +95,10 @@ REQUESTER_AUTONOMY: AutonomyLevel = "A3"
 
 @dataclass
 class FakeRunStore:
+    """Honours `SqlWorkerRunStore.get`: a run is read in its own workspace only."""
+
     status: RunStatus = RunStatus.WAITING_APPROVAL
+    workspace_id: uuid.UUID = WORKSPACE
     worker_version: str = "1.0.0"
     actor_scopes: frozenset[str] = REQUESTER_SCOPES
     actor_clearance: str = "confidential"
@@ -97,9 +106,12 @@ class FakeRunStore:
     actor_visible_owners: frozenset[uuid.UUID] | None = REQUESTER_OWNERS
 
     async def get(self, run_context: RunContext, run_id: uuid.UUID) -> RunRecord:
+        if run_context.workspace_id != self.workspace_id:
+            raise NotFoundError("run not found", details={"run_id": str(run_id)})
         return RunRecord(
             id=run_id,
             thread_id=uuid.UUID(int=21),
+            workspace_id=self.workspace_id,
             status=self.status,
             worker_id="sales_chat",
             worker_version=self.worker_version,
@@ -131,6 +143,7 @@ class FakeRunner:
     asked: list[tuple[str, str, str]] = field(default_factory=list)
     resumed: list[uuid.UUID] = field(default_factory=list)
     contexts: list[RunContext] = field(default_factory=list)
+    payloads: list[dict[str, Any]] = field(default_factory=list)
 
     def hosts(self, *, worker_id: str, worker_version: str, graph_version: str) -> bool:
         self.asked.append((worker_id, worker_version, graph_version))
@@ -141,17 +154,22 @@ class FakeRunner:
     ) -> None:
         self.resumed.append(run_id)
         self.contexts.append(run_context)
+        self.payloads.append(resume_payload)
 
 
-def make_request(approval_type: str, run_id: uuid.UUID | None = None) -> ApprovalRequest:
+def make_request(
+    approval_type: str,
+    run_id: uuid.UUID | None = None,
+    payload: dict[str, Any] | None = None,
+) -> ApprovalRequest:
     return ApprovalRequest(
         id=uuid.UUID(int=10),
         tenant_id=TenantId(uuid.UUID(int=100)),
-        workspace_id=WorkspaceId(uuid.UUID(int=101)),
+        workspace_id=WorkspaceId(WORKSPACE),
         approval_type=approval_type,
         requested_by=UserId(REQUESTER),
         reason="cần duyệt",
-        payload={},
+        payload=payload or {},
         run_id=run_id,
     )
 
@@ -162,6 +180,7 @@ def make_service(
     runner: Any = None,
     repo: FakeApprovalRepo | None = None,
     run_status: RunStatus = RunStatus.WAITING_APPROVAL,
+    run_workspace: uuid.UUID = WORKSPACE,
     outbox: FakeOutbox | None = None,
     guards: dict[str, DecisionGuard] | None = None,
 ) -> ApproveAndResumeService:
@@ -174,7 +193,7 @@ def make_service(
     return ApproveAndResumeService(
         uow_factory=uow_factory,
         runner=cast(Any, runner),
-        run_store=cast(Any, FakeRunStore(status=run_status)),
+        run_store=cast(Any, FakeRunStore(status=run_status, workspace_id=run_workspace)),
         clock=FixedClock(NOW),
         id_generator=SequentialIdGenerator(),
         strict_approval_prefixes=prefixes,
@@ -326,6 +345,88 @@ async def test_the_resumed_run_carries_the_requesters_authority() -> None:
     approver = make_context(APPROVER)
     assert not (resumed.scopes & approver.scopes)
     assert not (resumed.roles & approver.roles)
+    # And the workspace, from the run's row: what the resumed graph reads and
+    # writes is the run's workspace (approval-audit-and-workspace/02).
+    assert resumed.workspace_id == WORKSPACE
+
+
+@pytest.mark.parametrize("approve", [True, False])
+async def test_the_resume_names_the_decider_from_their_verified_context(approve: bool) -> None:
+    """A graph that records who decided reads it from here: the run resumes
+    with the REQUESTER's authority, so the decider's identity has no other
+    way in."""
+    request = make_request("demo.dispatch", run_id=RUN_ID)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner)
+
+    await service.decide(
+        approval_id=uuid.UUID(int=10),
+        approve=approve,
+        comment="đã xem",
+        context=make_context(APPROVER),
+        authorization=ScopeAuthorizationService(),
+    )
+
+    (payload,) = runner.payloads
+    assert payload["decided_by"] == str(APPROVER)
+    assert (payload["approved"], payload["comment"]) == (approve, "đã xem")
+    # The run itself still resumes as the requester's.
+    assert runner.contexts[0].actor_id == REQUESTER
+
+
+async def test_an_interrupt_payload_naming_a_decider_cannot_override_the_real_one() -> None:
+    """The approval's payload is the graph's interrupt value. A key named
+    `decided_by` there is not where the decider comes from."""
+    request = make_request("demo.dispatch", run_id=RUN_ID, payload={"decided_by": str(REQUESTER)})
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner)
+
+    await decide(service, APPROVER, "")
+
+    assert runner.payloads[0]["decided_by"] == str(APPROVER)
+
+
+async def test_another_workspaces_approval_is_not_found_and_nothing_moves() -> None:
+    """RLS narrows approvals by tenant only; the read narrows the workspace, and
+    refuses before any scope check, write or resume."""
+    request = make_request("demo.dispatch", run_id=RUN_ID)
+    repo = FakeApprovalRepo(request=request)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner, repo=repo)
+    elsewhere = AccessContext(
+        tenant_id=uuid.UUID(int=100),
+        workspace_id=uuid.UUID(int=102),
+        principal_id=APPROVER,
+        roles=frozenset({"approver"}),
+        scopes=frozenset({"approvals.decide"}),
+        plan_id="professional",
+    )
+
+    with pytest.raises(NotFoundError, match="approval request not found"):
+        await _decide_as(service, elsewhere, approve=True)
+
+    assert request.status is ApprovalStatus.PENDING
+    assert repo.decisions == []
+    assert runner.asked == []
+    assert runner.resumed == []
+
+
+async def test_a_run_in_another_workspace_than_its_approval_is_not_resumed() -> None:
+    """Fails closed if the two ever disagree: the run is read in the decider's
+    (and so the approval's) workspace, and is not found there."""
+    request = make_request("demo.dispatch", run_id=RUN_ID)
+    repo = FakeApprovalRepo(request=request)
+    runner = FakeRunner(hosted=True)
+    service = make_service(
+        request, frozenset(), runner=runner, repo=repo, run_workspace=uuid.UUID(int=102)
+    )
+
+    with pytest.raises(NotFoundError, match="run not found"):
+        await decide(service, APPROVER, "")
+
+    assert request.status is ApprovalStatus.PENDING
+    assert repo.decisions == []
+    assert runner.resumed == []
 
 
 def context_without_the_right(principal: uuid.UUID) -> AccessContext:
@@ -363,6 +464,209 @@ async def test_the_requester_still_cannot_approve_their_own_request() -> None:
             context=context_without_the_right(REQUESTER),
             authorization=ScopeAuthorizationService(),
         )
+
+
+BOARD_SCOPE = "demo.approve.board"
+
+
+def make_stamped_request(required_scope: str | None) -> ApprovalRequest:
+    request = make_request("demo.dispatch", run_id=RUN_ID)
+    request.required_scope = required_scope
+    return request
+
+
+def decider(principal: uuid.UUID, *extra_scopes: str) -> AccessContext:
+    return AccessContext(
+        tenant_id=uuid.UUID(int=100),
+        workspace_id=uuid.UUID(int=101),
+        principal_id=principal,
+        roles=frozenset({"approver"}),
+        scopes=frozenset({"approvals.decide", *extra_scopes}),
+        plan_id="professional",
+    )
+
+
+async def _decide_as(
+    service: ApproveAndResumeService, context: AccessContext, *, approve: bool
+) -> ApprovalRequest:
+    return await service.decide(
+        approval_id=uuid.UUID(int=10),
+        approve=approve,
+        comment="",
+        context=context,
+        authorization=ScopeAuthorizationService(),
+    )
+
+
+@pytest.mark.parametrize("approve", [True, False], ids=["approve", "reject"])
+async def test_the_decide_right_alone_cannot_decide_a_stamped_request(approve: bool) -> None:
+    """ADR 0004: `approvals.decide` is necessary, and for a stamped request not
+    sufficient. Refused before anything is written and before the run resumes."""
+    request = make_stamped_request(BOARD_SCOPE)
+    repo = FakeApprovalRepo(request=request)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner, repo=repo)
+
+    with pytest.raises(PermissionDeniedError) as refused:
+        await _decide_as(service, decider(APPROVER), approve=approve)
+
+    assert refused.value.details["action"] == BOARD_SCOPE
+    assert request.status is ApprovalStatus.PENDING
+    assert request.version == 1
+    assert repo.decisions == []
+    assert runner.resumed == []
+    # Refused before the run was even looked at: nothing past the gate ran.
+    assert runner.asked == []
+
+
+async def test_the_stamped_scope_without_the_decide_right_is_not_enough() -> None:
+    """Both, not either: the stamp narrows `approvals.decide`, never replaces it."""
+    request = make_stamped_request(BOARD_SCOPE)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner)
+    context = AccessContext(
+        tenant_id=uuid.UUID(int=100),
+        workspace_id=uuid.UUID(int=101),
+        principal_id=APPROVER,
+        roles=frozenset({"board"}),
+        scopes=frozenset({BOARD_SCOPE}),
+        plan_id="professional",
+    )
+
+    with pytest.raises(PermissionDeniedError) as refused:
+        await _decide_as(service, context, approve=True)
+
+    assert refused.value.details["action"] == "approvals.decide"
+    assert runner.resumed == []
+
+
+async def test_a_holder_of_the_stamped_scope_decides_and_resumes() -> None:
+    request = make_stamped_request(BOARD_SCOPE)
+    repo = FakeApprovalRepo(request=request)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner, repo=repo)
+
+    decided = await _decide_as(service, decider(APPROVER, BOARD_SCOPE), approve=True)
+
+    assert decided.status is ApprovalStatus.APPROVED
+    assert len(repo.decisions) == 1
+    assert runner.resumed == [RUN_ID]
+
+
+def platform_admin(principal: uuid.UUID, *extra_scopes: str) -> AccessContext:
+    """`platform_admin` as the seed grants it: the role and `platform.admin`, so
+    `approvals.decide` reaches it only through `ScopeAuthorizationService`'s
+    admin rule."""
+    return AccessContext(
+        tenant_id=uuid.UUID(int=100),
+        workspace_id=uuid.UUID(int=101),
+        principal_id=principal,
+        roles=frozenset({"platform_admin"}),
+        scopes=frozenset({"platform.admin", *extra_scopes}),
+        plan_id="professional",
+    )
+
+
+@pytest.mark.parametrize("approve", [True, False], ids=["approve", "reject"])
+async def test_platform_admin_does_not_pass_the_stamped_scope(approve: bool) -> None:
+    """ADR 0004 (2026-10-06): a platform operator is not the business's board. The
+    admin rule still grants `approvals.decide`; the stamp needs the scope itself.
+    Refused before anything is written and before the run is looked at."""
+    request = make_stamped_request(BOARD_SCOPE)
+    repo = FakeApprovalRepo(request=request)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner, repo=repo)
+
+    with pytest.raises(PermissionDeniedError) as refused:
+        await _decide_as(service, platform_admin(APPROVER), approve=approve)
+
+    assert refused.value.message == "action not permitted"
+    assert refused.value.details == {
+        "action": BOARD_SCOPE,
+        "resource_type": "approval_request",
+        "resource_id": str(uuid.UUID(int=10)),
+    }
+    assert request.status is ApprovalStatus.PENDING
+    assert request.version == 1
+    assert repo.decisions == []
+    assert runner.asked == []
+    assert runner.resumed == []
+
+
+async def test_platform_admin_holding_the_stamped_scope_decides() -> None:
+    request = make_stamped_request(BOARD_SCOPE)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner)
+
+    decided = await _decide_as(service, platform_admin(APPROVER, BOARD_SCOPE), approve=True)
+
+    assert decided.status is ApprovalStatus.APPROVED
+    assert runner.resumed == [RUN_ID]
+
+
+async def test_platform_admin_still_decides_an_unstamped_request() -> None:
+    """No stamp, today's rule: the admin rule answers `approvals.decide`."""
+    request = make_stamped_request(None)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner)
+
+    decided = await _decide_as(service, platform_admin(APPROVER), approve=True)
+
+    assert decided.status is ApprovalStatus.APPROVED
+    assert runner.resumed == [RUN_ID]
+
+
+@pytest.mark.parametrize(
+    ("required_scope", "context", "expected"),
+    [
+        (BOARD_SCOPE, decider(APPROVER, BOARD_SCOPE), True),
+        (BOARD_SCOPE, decider(APPROVER), False),
+        (BOARD_SCOPE, platform_admin(APPROVER), False),
+        (BOARD_SCOPE, platform_admin(APPROVER, BOARD_SCOPE), True),
+        (None, platform_admin(APPROVER), True),
+        (None, decider(APPROVER), True),
+        (None, context_without_the_right(APPROVER), False),
+    ],
+    ids=[
+        "holder",
+        "decide-right-only",
+        "admin-without-stamp",
+        "admin-with-stamp",
+        "admin-unstamped",
+        "decider-unstamped",
+        "no-decide-right",
+    ],
+)
+def test_may_decide_answers_as_decide_does(
+    required_scope: str | None, context: AccessContext, expected: bool
+) -> None:
+    """The inbox's answer, from the same two checks the decision runs."""
+    request = make_stamped_request(required_scope)
+    service = make_service(request, frozenset())
+
+    assert service.may_decide(request, context, ScopeAuthorizationService()) is expected
+
+
+async def test_the_requester_withdraws_a_stamped_request_without_the_scope() -> None:
+    """Taking back your own request is not deciding it (ADR 0004), stamped or not."""
+    request = make_stamped_request(BOARD_SCOPE)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner)
+
+    withdrawn = await _decide_as(service, context_without_the_right(REQUESTER), approve=False)
+
+    assert withdrawn.status is ApprovalStatus.REJECTED
+    assert runner.resumed == [RUN_ID]
+
+
+async def test_the_requester_cannot_approve_their_own_stamped_request_without_the_scope() -> None:
+    request = make_stamped_request(BOARD_SCOPE)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset(), runner=runner)
+
+    with pytest.raises(PermissionDeniedError):
+        await _decide_as(service, decider(REQUESTER), approve=True)
+    assert runner.resumed == []
 
 
 async def test_a_bystander_without_the_right_cannot_reject_someone_elses() -> None:
