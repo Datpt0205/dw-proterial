@@ -78,6 +78,22 @@ Mốc 6 (running many customers) is half done:
   menu item shown for any of several scopes), `support-access` (support access
   the customer grants, ADR 0008), `tenant-members-and-invitations` (tenant-wide
   users, per-workspace roles, invitations).
+- **Harness hardening, from the 2026-10-06 harness audit** (all
+  `ready-for-agent`, product-neutral, in this order), each under
+  `platform-runtime/<folder>/`: `memory-vectors` (Qdrant memory points deleted
+  by retention, supersession and offboarding; the ranker reorders only the ids
+  SQL recalled), `memory-write-trust` (classification from the cited documents,
+  workspace-checked evidence, confidence computed by code, CHECKs, retention
+  classes nothing can assign removed), `memory-review-queue` (REVIEW becomes a
+  `memory.review` approval; needs `approval-audit-and-workspace` 01–02),
+  `compaction` (long tool loops and multi-turn threads really compact, budget
+  from the profile, checkpoint retention), `retrieval-correctness`
+  (`document_ids` inside the Qdrant filter, one embedding builder, a pinned
+  agent-loop prompt), `dev-harness` (commit gate for PowerShell and
+  `git -C`/`-c`, per-session Stop hook, plugin wording, `ui-quality.md`).
+  Dropped as already true here: the rerank outage fallback (`4cb45dc`), and
+  offboarding purging run checkpoints (catalog discovery already does; the
+  `compaction` ticket only pins it with a test).
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).
