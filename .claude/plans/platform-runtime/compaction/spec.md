@@ -91,15 +91,15 @@ Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2
 
 ## Quy tắc và kiểm soát
 
-| Chốt | Test đỏ khi gỡ |
-| --- | --- |
-| Vòng tool dài được nén | Khôi phục trim `start_on='human'` / 4000 → test "một lượt, 12 tool call, vượt trigger, có summary" đỏ |
-| Summary cũ là mỏ neo | Bỏ bước đưa summary cũ vào → test "nội dung chỉ có ở summary cũ còn trong đầu vào bộ tóm tắt" đỏ |
-| Ngân sách từ profile | Đổi ngân sách trong profile → số token đầu vào mỗi lần gọi đổi theo; route thiếu trường → ConfigError |
-| Không đổi lịch sử lấy placeholder | test hiện có giữ xanh, đổi sang điều kiện thật (bộ tóm tắt lỗi), không còn `trim_tokens_to_summarize = 1` |
-| Trần chi tiêu tính mọi khúc | Bỏ `record` cho khúc → test ledger đỏ |
-| Tỉa checkpoint | Bỏ lane → checkpoint cũ của thread đã xong còn, test đỏ; thread có run `waiting_approval` không mất checkpoint nào |
-| Offboarding xóa checkpoint | Thu DELETE của `dw_app` trên `run_checkpoints` trong test → test offboarding đỏ |
+| Chốt                              | Test đỏ khi gỡ                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Vòng tool dài được nén            | Khôi phục trim `start_on='human'` / 4000 → test "một lượt, 12 tool call, vượt trigger, có summary" đỏ              |
+| Summary cũ là mỏ neo              | Bỏ bước đưa summary cũ vào → test "nội dung chỉ có ở summary cũ còn trong đầu vào bộ tóm tắt" đỏ                   |
+| Ngân sách từ profile              | Đổi ngân sách trong profile → số token đầu vào mỗi lần gọi đổi theo; route thiếu trường → ConfigError              |
+| Không đổi lịch sử lấy placeholder | test hiện có giữ xanh, đổi sang điều kiện thật (bộ tóm tắt lỗi), không còn `trim_tokens_to_summarize = 1`          |
+| Trần chi tiêu tính mọi khúc       | Bỏ `record` cho khúc → test ledger đỏ                                                                              |
+| Tỉa checkpoint                    | Bỏ lane → checkpoint cũ của thread đã xong còn, test đỏ; thread có run `waiting_approval` không mất checkpoint nào |
+| Offboarding xóa checkpoint        | Thu DELETE của `dw_app` trên `run_checkpoints` trong test → test offboarding đỏ                                    |
 
 ## Tiêu chí xong của slice
 
@@ -118,6 +118,6 @@ Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2
 
 ## Danh sách ticket
 
-| # | Ticket | Status | Blocked by |
-| --- | --- | --- | --- |
-| 01 | [Compaction nén được vòng tool dài và giữ mỏ neo; checkpoint có thời hạn](issues/01-compaction-anchor-and-checkpoint-retention.md) | ready-for-agent | — |
+| #   | Ticket                                                                                                                             | Status          | Blocked by |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
+| 01  | [Compaction nén được vòng tool dài và giữ mỏ neo; checkpoint có thời hạn](issues/01-compaction-anchor-and-checkpoint-retention.md) | ready-for-agent | —          |

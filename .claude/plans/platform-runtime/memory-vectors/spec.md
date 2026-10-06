@@ -62,13 +62,13 @@ phải có trước producer đầu tiên.
 
 ## Quy tắc và kiểm soát
 
-| Chốt | Test đỏ khi gỡ |
-| --- | --- |
-| Offboarding xóa point memory của tenant | Bỏ lời gọi xóa memory trong `TenantOffboardingLane.run` → test "A mất hết point, B còn nguyên" đỏ |
-| Retention xóa point | Bỏ lời gọi xóa trong `SqlMemoryRetention` → point của memory hết hạn còn trong Qdrant, test đỏ |
-| Supersession xóa point | Bỏ lời gọi xóa trên đường supersession → memory bị thay vẫn còn point, test đỏ |
-| Ranker chỉ xếp id SQL đã chọn | Bỏ `HasIdCondition` → test "worker có nhiều memory subject khác hơn tập found" đỏ (ranker trả id ngoài tập, thứ tự không theo câu hỏi) |
-| Id lạ từ ranker không thêm dòng | `test_an_id_the_ranker_invents_cannot_add_a_row` giữ xanh |
+| Chốt                                    | Test đỏ khi gỡ                                                                                                                         |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Offboarding xóa point memory của tenant | Bỏ lời gọi xóa memory trong `TenantOffboardingLane.run` → test "A mất hết point, B còn nguyên" đỏ                                      |
+| Retention xóa point                     | Bỏ lời gọi xóa trong `SqlMemoryRetention` → point của memory hết hạn còn trong Qdrant, test đỏ                                         |
+| Supersession xóa point                  | Bỏ lời gọi xóa trên đường supersession → memory bị thay vẫn còn point, test đỏ                                                         |
+| Ranker chỉ xếp id SQL đã chọn           | Bỏ `HasIdCondition` → test "worker có nhiều memory subject khác hơn tập found" đỏ (ranker trả id ngoài tập, thứ tự không theo câu hỏi) |
+| Id lạ từ ranker không thêm dòng         | `test_an_id_the_ranker_invents_cannot_add_a_row` giữ xanh                                                                              |
 
 ## Tiêu chí xong của slice
 
@@ -90,6 +90,6 @@ phải có trước producer đầu tiên.
 
 ## Danh sách ticket
 
-| # | Ticket | Status | Blocked by |
-| --- | --- | --- | --- |
-| 01 | [Xóa vector memory theo id và theo tenant; ranker lọc theo id đã gọi lên](issues/01-delete-and-scope-memory-vectors.md) | ready-for-agent | — |
+| #   | Ticket                                                                                                                  | Status          | Blocked by |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
+| 01  | [Xóa vector memory theo id và theo tenant; ranker lọc theo id đã gọi lên](issues/01-delete-and-scope-memory-vectors.md) | ready-for-agent | —          |

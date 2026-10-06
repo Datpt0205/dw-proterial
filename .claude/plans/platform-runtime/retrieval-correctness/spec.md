@@ -75,13 +75,13 @@ repo này.
 
 ## Quy tắc và kiểm soát
 
-| Chốt | Test đỏ khi gỡ |
-| --- | --- |
-| Tài liệu được hỏi lọc trước top-k | Quay về lọc sau → test "tài liệu hỏi xếp dưới top_k toàn cục vẫn trả đủ top_k" đỏ (Qdrant thật) |
+| Chốt                                      | Test đỏ khi gỡ                                                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tài liệu được hỏi lọc trước top-k         | Quay về lọc sau → test "tài liệu hỏi xếp dưới top_k toàn cục vẫn trả đủ top_k" đỏ (Qdrant thật)                                                  |
 | Bộ lọc tài liệu không thay bộ lọc tin cậy | Thay `must` tin cậy bằng điều kiện tài liệu → test hỏi `document_ids` của tenant B từ tenant A đỏ (`test_qdrant_tenant_filter.py` thêm biến thể) |
-| Một builder embedding | Thêm lại builder riêng ở một app → test (hoặc kiểm kiến trúc) "chỉ một định nghĩa dựng embedding" đỏ |
-| Prompt agent có version | Gọi `track` không prompt → test ledger ghi `prompt_version` của registry đỏ; prompt thiếu trong registry → lỗi build |
-| Prompt theo tenant từ run | Render với tenant từ request/khác run → test overlay (tenant A có bản riêng, B rơi về platform) đỏ |
+| Một builder embedding                     | Thêm lại builder riêng ở một app → test (hoặc kiểm kiến trúc) "chỉ một định nghĩa dựng embedding" đỏ                                             |
+| Prompt agent có version                   | Gọi `track` không prompt → test ledger ghi `prompt_version` của registry đỏ; prompt thiếu trong registry → lỗi build                             |
+| Prompt theo tenant từ run                 | Render với tenant từ request/khác run → test overlay (tenant A có bản riêng, B rơi về platform) đỏ                                               |
 
 ## Tiêu chí xong của slice
 
@@ -103,6 +103,6 @@ repo này.
 
 ## Danh sách ticket
 
-| # | Ticket | Status | Blocked by |
-| --- | --- | --- | --- |
-| 01 | [Lọc tài liệu trong Qdrant, một builder embedding, prompt agent loop có version](issues/01-document-filter-embedding-builder-agent-prompt.md) | ready-for-agent | — |
+| #   | Ticket                                                                                                                                        | Status          | Blocked by |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
+| 01  | [Lọc tài liệu trong Qdrant, một builder embedding, prompt agent loop có version](issues/01-document-filter-embedding-builder-agent-prompt.md) | ready-for-agent | —          |

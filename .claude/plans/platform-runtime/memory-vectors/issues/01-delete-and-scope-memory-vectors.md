@@ -35,8 +35,8 @@ Spec, mục "Hiện trạng" và "Quy tắc và kiểm soát".
       `propose` (memory đã commit; point thừa chỉ tốn chỗ vì ranker giờ chỉ xếp id SQL
       chọn). Thêm field `vector_purge: MemoryVectorPurgePort | None = None` vào
       `MemoryService`, nối ở worker.
-4. `dw_memory/retention.py`: `SqlMemoryRetention` nhận `vector_index:
-   MemoryVectorPurgePort | None`, theo đúng mẫu `SqlKnowledgeRetention`. `_delete_batch`
+4. `dw_memory/retention.py`: `SqlMemoryRetention` nhận
+   `vector_index: MemoryVectorPurgePort | None`, theo đúng mẫu `SqlKnowledgeRetention`. `_delete_batch`
    trả về id đã xóa (`RETURNING memory_id`), rồi xóa point của các id đó sau commit.
    Nếu Qdrant lỗi: ghi log và đếm, dòng đã xóa không khôi phục; ghi trong docstring rằng
    lượt quét sau không thấy lại các id đó, và vì vậy offboarding vẫn là lưới cuối.

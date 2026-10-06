@@ -91,15 +91,15 @@ Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2
 
 ## Quy tắc và kiểm soát
 
-| Chốt | Test đỏ khi gỡ |
-| --- | --- |
-| Từ chối candidate khai phân loại thấp hơn tài liệu | Bỏ phép so → candidate `internal` trích tài liệu `confidential` ghi được item, test đỏ |
-| Phân loại evidence lấy từ tài liệu | Ghi lại `ref.classification` → test đọc `knowledge.evidence.classification` đỏ |
-| Từ chối chunk của workspace khác | Bỏ phép kiểm → chunk workspace W2 làm bằng chứng cho memory ở W1, test đỏ |
-| Tài liệu global vẫn trích được | Kiểm workspace quá chặt (bỏ nhánh global) → test trích tài liệu global đỏ |
-| Độ tin từ model không quyết AUTO_WRITE | Cho payload mang lại `confidence` thô → test "confidence 1.0 bị tiêm không auto-write" đỏ |
-| CHECK cột tập cố định | Bỏ CHECK → test chèn `memory_type='bogus'` (vai migrator) đỏ; thêm một giá trị vào enum mà không vào CHECK → test so catalog đỏ |
-| Retention chỉ hứa lớp gán được | Khôi phục `sensitive` → test "mọi lớp memory trong chính sách đều có đường gán" đỏ |
+| Chốt                                               | Test đỏ khi gỡ                                                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Từ chối candidate khai phân loại thấp hơn tài liệu | Bỏ phép so → candidate `internal` trích tài liệu `confidential` ghi được item, test đỏ                                          |
+| Phân loại evidence lấy từ tài liệu                 | Ghi lại `ref.classification` → test đọc `knowledge.evidence.classification` đỏ                                                  |
+| Từ chối chunk của workspace khác                   | Bỏ phép kiểm → chunk workspace W2 làm bằng chứng cho memory ở W1, test đỏ                                                       |
+| Tài liệu global vẫn trích được                     | Kiểm workspace quá chặt (bỏ nhánh global) → test trích tài liệu global đỏ                                                       |
+| Độ tin từ model không quyết AUTO_WRITE             | Cho payload mang lại `confidence` thô → test "confidence 1.0 bị tiêm không auto-write" đỏ                                       |
+| CHECK cột tập cố định                              | Bỏ CHECK → test chèn `memory_type='bogus'` (vai migrator) đỏ; thêm một giá trị vào enum mà không vào CHECK → test so catalog đỏ |
+| Retention chỉ hứa lớp gán được                     | Khôi phục `sensitive` → test "mọi lớp memory trong chính sách đều có đường gán" đỏ                                              |
 
 ## Tiêu chí xong của slice
 
@@ -122,6 +122,6 @@ Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2
 
 ## Danh sách ticket
 
-| # | Ticket | Status | Blocked by |
-| --- | --- | --- | --- |
-| 01 | [Phân loại theo bằng chứng, độ tin do workflow tính, CHECK, lớp retention trung thực](issues/01-memory-write-trust.md) | ready-for-agent | memory-vectors 01 |
+| #   | Ticket                                                                                                                 | Status          | Blocked by        |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------- |
+| 01  | [Phân loại theo bằng chứng, độ tin do workflow tính, CHECK, lớp retention trung thực](issues/01-memory-write-trust.md) | ready-for-agent | memory-vectors 01 |

@@ -83,16 +83,16 @@ lý do "chưa có hàng đợi duyệt" cho tới khi đường này có.
 
 ## Quy tắc và kiểm soát
 
-| Chốt | Test đỏ khi gỡ |
-| --- | --- |
-| REVIEW tạo đúng một approval `memory.review` | Bỏ phần chèn approval → test "candidate REVIEW có approval chờ" đỏ |
-| Duyệt ghi đúng một item | Bỏ handler hay `promote` → 0 item, test đỏ; giao event hai lần → vẫn 1 item |
-| Từ chối không ghi item | `promote` gọi cả khi từ chối → test đỏ |
-| Duyệt vẫn kiểm bằng chứng | `promote` bỏ `evidence_store.record` → candidate với chunk đã xóa vẫn ghi, test đỏ |
-| Tenant khác không quyết được | Bỏ RLS hay đọc approval không qua tenant → người của tenant B quyết approval của A, test đỏ |
-| Clearance đủ mới quyết được | Bỏ kiểm clearance → người clearance `internal` duyệt candidate `restricted`, test đỏ |
-| Payload approval không mang nội dung | Chép `content` vào payload → test đọc `/approvals` dưới clearance thấp đỏ |
-| Quyết định có audit | (ticket 01 của `approval-audit-and-workspace`) + audit `memory.*` của hậu quả |
+| Chốt                                         | Test đỏ khi gỡ                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| REVIEW tạo đúng một approval `memory.review` | Bỏ phần chèn approval → test "candidate REVIEW có approval chờ" đỏ                          |
+| Duyệt ghi đúng một item                      | Bỏ handler hay `promote` → 0 item, test đỏ; giao event hai lần → vẫn 1 item                 |
+| Từ chối không ghi item                       | `promote` gọi cả khi từ chối → test đỏ                                                      |
+| Duyệt vẫn kiểm bằng chứng                    | `promote` bỏ `evidence_store.record` → candidate với chunk đã xóa vẫn ghi, test đỏ          |
+| Tenant khác không quyết được                 | Bỏ RLS hay đọc approval không qua tenant → người của tenant B quyết approval của A, test đỏ |
+| Clearance đủ mới quyết được                  | Bỏ kiểm clearance → người clearance `internal` duyệt candidate `restricted`, test đỏ        |
+| Payload approval không mang nội dung         | Chép `content` vào payload → test đọc `/approvals` dưới clearance thấp đỏ                   |
+| Quyết định có audit                          | (ticket 01 của `approval-audit-and-workspace`) + audit `memory.*` của hậu quả               |
 
 ## Tiêu chí xong của slice
 
@@ -114,6 +114,6 @@ lý do "chưa có hàng đợi duyệt" cho tới khi đường này có.
 
 ## Danh sách ticket
 
-| # | Ticket | Status | Blocked by |
-| --- | --- | --- | --- |
-| 01 | [Candidate REVIEW thành approval `memory.review`; quyết định ghi hay bỏ qua đường ghi đã kiểm](issues/01-memory-review-approval.md) | ready-for-agent | approval-audit-and-workspace 01, 02; memory-write-trust 01 |
+| #   | Ticket                                                                                                                              | Status          | Blocked by                                                 |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------- |
+| 01  | [Candidate REVIEW thành approval `memory.review`; quyết định ghi hay bỏ qua đường ghi đã kiểm](issues/01-memory-review-approval.md) | ready-for-agent | approval-audit-and-workspace 01, 02; memory-write-trust 01 |

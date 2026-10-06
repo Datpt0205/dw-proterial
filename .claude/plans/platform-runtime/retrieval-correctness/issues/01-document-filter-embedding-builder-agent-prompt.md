@@ -16,8 +16,8 @@ Qdrant), model nào embed (một builder), prompt nào agent loop dùng (registr
     - `dw_knowledge/gateway.py` `search`: truyền `query.document_ids` xuống index;
       gỡ dòng lọc sau (`gateway.py:581-582`).
     - `adapters/qdrant_index.py` `search`: tham số `document_ids: Sequence[UUID] = ()`;
-      không rỗng thì thêm `FieldCondition(key="source_document_id",
-      match=MatchAny(any=[...]))` vào `must`, cạnh các điều kiện của `trusted_filter`.
+      không rỗng thì thêm
+      `FieldCondition(key="source_document_id", match=MatchAny(any=[...]))` vào `must`, cạnh các điều kiện của `trusted_filter`.
       Cập nhật `VectorIndexPort` và mọi fake.
     - Test tích hợp (Qdrant thật): 30 chunk của tài liệu khác giống câu hỏi hơn 5 chunk
       của tài liệu D; hỏi `document_ids=[D]`, `top_k=5` → đủ 5 chunk, đều của D.
@@ -35,10 +35,10 @@ Qdrant), model nào embed (một builder), prompt nào agent loop dùng (registr
 3. **Prompt agent loop có version** (chỉ khi gọn như spec mô tả; nếu không, theo Câu hỏi 1
    của spec)
     - `AgentSpec`: bỏ `render_prompt`; thêm `prompt_id`, `prompt_version`,
-      `prompts: PromptRegistry`, `prompt_variables: Callable[[ModelRequest], dict[str,
-      str]]` (biến theo từng lần gọi: ngày, màn hình đang xem).
-    - `WorkerSystemPrompt`: render bằng `prompts.render(id, version, variables,
-      tenant_id=<RunContext của request>)`.
+      `prompts: PromptRegistry`,
+      `prompt_variables: Callable[[ModelRequest], dict[str, str]]` (biến theo từng lần gọi: ngày, màn hình đang xem).
+    - `WorkerSystemPrompt`: render bằng
+      `prompts.render(id, version, variables, tenant_id=<RunContext của request>)`.
     - Runner: ghi chi phí agent loop bằng prompt id/version đã pin (từ
       `WorkerDefinition` nếu chọn phương án đề xuất); xóa `AGENT_LOOP_PROMPT_VERSION`.
     - `scripts/release_manifest.py`: prompt đó vào manifest như mọi prompt khác.

@@ -88,14 +88,14 @@ trên `main` (`4cb45dc`) của repo này.
 
 ## Quy tắc và kiểm soát
 
-| Chốt | Test đỏ khi gỡ |
-| --- | --- |
-| PowerShell qua cổng | Matcher về `"Bash"` → script test (kiểm `settings.json`, chạy hook với JSON của tool PowerShell) đỏ |
-| `git -C`/`git -c` qua cổng | Khôi phục `case *"git commit"*` → ca `git -C . commit`, `git -c user.name=x commit` không bị chặn, đỏ |
-| Không chặn nhầm | Regex quá rộng → ca `git commit-tree`, `echo "git commit"` trong chuỗi, `git log --grep commit` bị chặn, đỏ |
-| Tệp tắt cổng không vào git | Gỡ dòng gitignore → `git check-ignore .claude/no-commit-gate` trong script đỏ |
-| Stop hook chỉ tính việc của phiên | Quay về đếm `git status` toàn cây → ca "bẩn có sẵn từ trước phiên, phiên không đổi gì" bị nhắc, đỏ |
-| Mốc theo phiên, không bị ghi đè | SessionStart `source=compact` ghi đè mốc → ca "commit trước compact vẫn được thấy" đỏ |
+| Chốt                              | Test đỏ khi gỡ                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| PowerShell qua cổng               | Matcher về `"Bash"` → script test (kiểm `settings.json`, chạy hook với JSON của tool PowerShell) đỏ         |
+| `git -C`/`git -c` qua cổng        | Khôi phục `case *"git commit"*` → ca `git -C . commit`, `git -c user.name=x commit` không bị chặn, đỏ       |
+| Không chặn nhầm                   | Regex quá rộng → ca `git commit-tree`, `echo "git commit"` trong chuỗi, `git log --grep commit` bị chặn, đỏ |
+| Tệp tắt cổng không vào git        | Gỡ dòng gitignore → `git check-ignore .claude/no-commit-gate` trong script đỏ                               |
+| Stop hook chỉ tính việc của phiên | Quay về đếm `git status` toàn cây → ca "bẩn có sẵn từ trước phiên, phiên không đổi gì" bị nhắc, đỏ          |
+| Mốc theo phiên, không bị ghi đè   | SessionStart `source=compact` ghi đè mốc → ca "commit trước compact vẫn được thấy" đỏ                       |
 
 ## Tiêu chí xong của slice
 
@@ -116,6 +116,6 @@ trên `main` (`4cb45dc`) của repo này.
 
 ## Danh sách ticket
 
-| # | Ticket | Status | Blocked by |
-| --- | --- | --- | --- |
-| 01 | [Cổng commit cho mọi dạng commit, Stop hook theo phiên, plugin và rules nói đúng](issues/01-harness-gates-and-rules.md) | ready-for-agent | — |
+| #   | Ticket                                                                                                                  | Status          | Blocked by |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
+| 01  | [Cổng commit cho mọi dạng commit, Stop hook theo phiên, plugin và rules nói đúng](issues/01-harness-gates-and-rules.md) | ready-for-agent | —          |
