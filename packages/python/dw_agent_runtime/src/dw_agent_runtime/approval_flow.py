@@ -207,7 +207,16 @@ class ApproveAndResumeService:
             await uow.commit()
 
         if record is not None and request.run_id is not None:
-            resume_payload: dict[str, Any] = {"approved": approve, "comment": comment}
+            resume_payload: dict[str, Any] = {
+                "approved": approve,
+                "comment": comment,
+                # Who decided, from the decider's verified context. The run
+                # resumes with the requester's authority (below), so a graph
+                # that records the decider has no other way to learn it; built
+                # here, never copied from the approval's payload, which is the
+                # graph's own interrupt value.
+                "decided_by": str(context.principal_id),
+            }
             if approved_action_ids is not None:
                 resume_payload["approved_action_ids"] = approved_action_ids
             await self.runner.resume(
