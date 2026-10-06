@@ -31,10 +31,10 @@ own file and a row here.
   smoke, runbook `sales/dw1-portal-demo/demo.md`, `make demo-reset`,
   `make test-web-sales`. All committed and pushed (`2284d3c`).
 - Platform pieces still waiting for a first caller: `platform-runtime.md`.
-- Sales ticket 10 built 2026-10-06, not committed: DW1 runs on the runtime,
+- Sales ticket 10 committed 2026-10-06 (`8d098b3`): DW1 runs on the runtime,
   quotation approval and cross-check are platform approvals (dw_sales ADR
   0004 Proposed, Đạt to review).
-- **Next:** commit ticket 10, then sales 12 (production hardening,
+- **Next:** sales 12 (production hardening,
   needs-triage).
 
 ## Decisions Đạt owes

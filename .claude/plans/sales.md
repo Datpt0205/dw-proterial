@@ -77,7 +77,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   production-only exists. What remains is ticket 12 (production hardening:
   sandboxed parsing, support access, tenant overrides, rules approval, DW1's
   service principal, Proterial's real inputs).
-- 2026-10-06, ticket 10 built (not committed): DW1 runs on the agent runtime
+- 2026-10-06, ticket 10 committed (`8d098b3`): DW1 runs on the agent runtime
   (dw_sales ADR 0004, Proposed, supersedes ADR 0001; spec decision 5
   amended). "DW xử lý", submit and the Bravo entry are each a DW1 run
   (`configs/workers/sales.yaml`, graph 1.0.0, pinned), counted by the
