@@ -34,10 +34,17 @@ command_line=$(hook_string '.tool_input.command' command)
 # `git -C x commit` is gated, and `git commit-tree`, `git log --grep commit` and
 # `echo "git commit"` are not. An alias (`git ci`) is not seen: this is a
 # reminder at the commit, not a sandbox.
+#
+# Matched without regard to case, because Windows resolves `Git` and `GIT.EXE`
+# to git in both shells; and a line ending in a continuation (`\` in bash, a
+# backtick in PowerShell) is joined to the next first, because `git \` + newline
+# + `commit` is one command to the shell and two lines to grep.
 value='("[^"]*"|'"'[^']*'"'|[^[:space:];&|]+)'
 global_option="(-C|-c|--git-dir|--work-tree|--namespace|--config-env|--exec-path)[[:space:]]+$value|--?[A-Za-z][-A-Za-z]*(=$value)?"
 commit_pattern="(^|[[:space:];&|(\`{/\\\"'])git(\.exe)?[\"']?([[:space:]]+($global_option))*[[:space:]]+commit([[:space:];&|)]|\$)"
-printf '%s\n' "$command_line" | grep -qE "$commit_pattern" || exit 0
+printf '%s\n' "$command_line" \
+  | awk '{ if (sub(/[\\`]$/, "")) printf "%s ", $0; else print }' \
+  | grep -qiE "$commit_pattern" || exit 0
 
 # --- the mechanical half: invariants this repository has actually broken ------
 if ! invariants=$(uv run python scripts/verify_invariants.py 2>&1); then

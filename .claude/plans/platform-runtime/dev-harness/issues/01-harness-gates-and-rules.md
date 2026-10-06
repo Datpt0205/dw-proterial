@@ -128,3 +128,11 @@ soát".
 - **Còn mở:** bước CI mới (`ci.yml`, "Coding-agent harness hooks") chưa được xem chạy
   thật trên GitHub. Alias (`git ci`) và `Start-Process git` không bị cổng thấy; đây là
   lời nhắc lúc commit, không phải sandbox.
+
+**6/10/2026, kiểm độc lập.** Hai dạng vẫn lọt cổng, đo trên máy này (Git Bash và
+PowerShell đều chạy cả hai): `Git commit` / `GIT.EXE commit` (Windows không phân biệt hoa
+thường) và `git \` hay ``git -C . ` `` xuống dòng rồi `commit` (grep đọc từng dòng). Sửa: so
+khớp `-i`, và nối dòng kết thúc bằng `\` hoặc backtick trước khi so. Thêm 4 ca (76/76 xanh);
+mutation: bỏ `-i` → 4 đỏ, bỏ bước nối dòng → 4 đỏ. Mutation lại ba chốt của slice (vòng
+tùy chọn toàn cục → 14 đỏ, đường fail-closed → 1, lọc theo mốc trong Stop → 6, mốc ghi một
+lần → 2): khớp số đã ghi.

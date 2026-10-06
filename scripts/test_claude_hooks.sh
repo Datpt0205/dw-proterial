@@ -77,6 +77,12 @@ first line
   'git add a.txt
 git commit -F msg.txt'
   'git commit'
+  'Git commit -m x'
+  'GIT.EXE commit -m x'
+  'git \
+  commit -m x'
+  'git -C . `
+  commit -m x'
 )
 not_gated=(
   'git commit-tree HEAD^{tree}'
