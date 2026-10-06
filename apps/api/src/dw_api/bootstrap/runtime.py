@@ -163,6 +163,7 @@ def build_runtime(
         clock=clock,
         id_generator=ids,
         reranker=build_reranker(settings),
+        telemetry=telemetry,
     )
     # Upload path: the API stages the raw file and enqueues; the worker ingests.
     ingest_jobs = IngestJobStore(session_factory=session_factory, clock=clock, id_generator=ids)

@@ -14,6 +14,8 @@ from dw_knowledge.chunking import chunk_text
 from dw_knowledge.contracts import SearchQuery
 from dw_knowledge.gateway import KnowledgeGateway, build_trusted_filter
 from dw_knowledge.ports import RerankCandidate, RerankResult, TrustedSearchFilter, VectorHit
+from dw_observability.metrics import DW_RETRIEVAL_RERANK_SKIPPED_TOTAL
+from dw_observability.telemetry import RecordingTelemetry
 from dw_platform.application.access_context import AccessContext
 
 pytestmark = pytest.mark.unit
@@ -241,12 +243,15 @@ class DownReranker:
 async def test_search_uses_the_reranker_order_and_scores() -> None:
     hits = [_hit("first", 0.9), _hit("second", 0.7), _hit("third", 0.5)]
     index = CapturingIndex(hits=hits)
-    gateway = replace(make_gateway(index), reranker=ReversingReranker())
+    telemetry = RecordingTelemetry()
+    gateway = replace(make_gateway(index), reranker=ReversingReranker(), telemetry=telemetry)
 
     results = await gateway.search(SearchQuery(text="q", top_k=2), make_context())
 
     assert [r.content for r in results] == ["third", "second"]
     assert [r.evidence.relevance_score for r in results] == [0.8, 0.8]
+    assert telemetry.spans == [("dw.knowledge.rerank", {"candidates": 3, "top_k": 2})]
+    assert telemetry.metrics == []
 
 
 async def test_a_reranker_that_is_down_keeps_the_vector_order(
@@ -255,7 +260,8 @@ async def test_a_reranker_that_is_down_keeps_the_vector_order(
     hits = [_hit("first", 0.9), _hit("second", 0.7), _hit("third", 0.5)]
     index = CapturingIndex(hits=hits)
     reranker = DownReranker()
-    gateway = replace(make_gateway(index), reranker=reranker)
+    telemetry = RecordingTelemetry()
+    gateway = replace(make_gateway(index), reranker=reranker, telemetry=telemetry)
     context = make_context()
 
     with caplog.at_level(logging.WARNING, logger="dw_knowledge.gateway"):
@@ -268,6 +274,11 @@ async def test_a_reranker_that_is_down_keeps_the_vector_order(
     assert record.levelno == logging.WARNING
     assert record.__dict__["error_type"] == "InfrastructureError"
     assert record.__dict__["error_cause"] == "ConnectTimeout"
+    # Not only a log line: the trace has the call and the dashboard the skip.
+    assert [name for name, _ in telemetry.spans] == ["dw.knowledge.rerank"]
+    assert telemetry.metrics == [
+        (DW_RETRIEVAL_RERANK_SKIPPED_TOTAL, 1, {"error": "ConnectTimeout"})
+    ]
     # The fallback sits after the filtered search; the trusted filter is the
     # one the context dictated, whatever the reranker did.
     (trusted,) = index.captured

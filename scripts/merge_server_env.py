@@ -85,6 +85,7 @@ PRESERVE_LOCAL = frozenset(
         "DW_API_RERANK_BASE_URL",
         "DW_API_RERANK_API_KEY",
         "DW_API_RERANK_MODEL",
+        "DW_API_RERANK_TIMEOUT_SECONDS",
         "SERPER_API_KEY",
         "TAVILY_API_KEY",
         "EXA_API_KEY",

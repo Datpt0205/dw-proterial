@@ -43,6 +43,8 @@ from dw_knowledge.ports import (
     VectorHit,
     VectorIndexPort,
 )
+from dw_observability.metrics import DW_RETRIEVAL_RERANK_SKIPPED_TOTAL
+from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.application.access_context import AccessContext
 
@@ -202,6 +204,7 @@ class KnowledgeGateway:
     reranker: RerankPort | None = None
     # Over-fetch this many x top_k for the reranker to reorder (recall->precision).
     rerank_fetch_multiplier: int = 4
+    telemetry: TelemetryPort = field(default_factory=NullTelemetry)
     _ready: bool = field(default=False, init=False)
 
     async def ensure_ready(self) -> None:
@@ -580,7 +583,9 @@ class KnowledgeGateway:
 
         rerank_scores: dict[str, float] = {}
         ranked = (
-            await _rerank_or_none(self.reranker, query, hits) if self.reranker and hits else None
+            await _rerank_or_none(self.reranker, self.telemetry, query, hits)
+            if self.reranker and hits
+            else None
         )
         if ranked is None:
             hits = hits[: query.top_k]
@@ -591,6 +596,9 @@ class KnowledgeGateway:
 
         evidence: list[EvidenceChunk] = []
         for hit in hits:
+            # The reranker's score when it ranked, the vector's when it was
+            # skipped: two scales, both in [0, 1]. A min_relevance above zero
+            # would filter the two differently.
             score = rerank_scores.get(str(hit.chunk_id), hit.score)
             if score < query.min_relevance:
                 continue
@@ -613,7 +621,7 @@ class KnowledgeGateway:
 
 
 async def _rerank_or_none(
-    reranker: RerankPort, query: SearchQuery, hits: Sequence[VectorHit]
+    reranker: RerankPort, telemetry: TelemetryPort, query: SearchQuery, hits: Sequence[VectorHit]
 ) -> list[RerankResult] | None:
     """The reranker's order, or None to keep the vector order.
 
@@ -621,11 +629,23 @@ async def _rerank_or_none(
     reranker that is down or answers nonsense therefore costs ranking quality,
     not the search that asked. The hits were already narrowed by the trusted
     filter before they got here, so falling back widens nothing.
+
+    The call is a span of its own (its latency is the provider's), and a
+    failure leaves that span in error and counts a skipped rerank, so an
+    unranked search shows on the trace and the dashboard, not only in a log.
     """
     candidates = [RerankCandidate(id=str(h.chunk_id), text=h.content) for h in hits]
     try:
-        return await reranker.rerank(query.text, candidates, query.top_k)
+        with telemetry.span(
+            "dw.knowledge.rerank", {"candidates": len(candidates), "top_k": query.top_k}
+        ):
+            return await reranker.rerank(query.text, candidates, query.top_k)
     except InfrastructureError as exc:
+        telemetry.add_metric(
+            DW_RETRIEVAL_RERANK_SKIPPED_TOTAL,
+            1,
+            {"error": exc.details.get("error", type(exc).__name__)},
+        )
         logger.warning(
             "rerank skipped, keeping vector order: %s (%s)",
             type(exc).__name__,

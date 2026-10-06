@@ -13,6 +13,7 @@ Vietnamese text ranks correctly when sent as UTF-8 JSON, and a body that names
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -29,25 +30,37 @@ class CohereCompatibleRerankAdapter:
     base_url: str
     api_key: str
     model: str
+    # The whole call's deadline, not httpx's per-phase one: a search waits on it.
     timeout: float = 10.0
+    # None is httpx's own network transport; a probe or a test passes its own.
+    # Each call's client closes it, so a passed one serves a single call.
+    transport: httpx.AsyncBaseTransport | None = None
 
     async def rerank(
         self, query: str, candidates: Sequence[RerankCandidate], top_k: int
     ) -> list[RerankResult]:
         if not candidates or top_k <= 0:
             return []
+        top_n = min(top_k, len(candidates))
         payload = {
             "model": self.model,
             "query": query,
             "documents": [c.text for c in candidates],
-            "top_n": min(top_k, len(candidates)),
+            "top_n": top_n,
         }
         try:
-            async with httpx.AsyncClient(
-                base_url=self.base_url.rstrip("/"),
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=self.timeout,
-            ) as client:
+            # httpx's timeout bounds each phase (connect, write, every read)
+            # on its own; a provider that drips bytes could hold a search far
+            # past it. This bounds the call as a whole.
+            async with (
+                asyncio.timeout(self.timeout),
+                httpx.AsyncClient(
+                    base_url=self.base_url.rstrip("/"),
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=self.timeout,
+                    transport=self.transport,
+                ) as client,
+            ):
                 response = await client.post("/rerank", json=payload)
                 response.raise_for_status()
                 rows = response.json()["results"]
@@ -63,7 +76,7 @@ class CohereCompatibleRerankAdapter:
                     "status": exc.response.status_code,
                 },
             ) from exc
-        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        except (httpx.HTTPError, TimeoutError, ValueError, KeyError, TypeError) as exc:
             raise InfrastructureError(
                 "rerank request failed",
                 details={"model": self.model, "error": type(exc).__name__},
@@ -76,9 +89,27 @@ class CohereCompatibleRerankAdapter:
             if not 0 <= index < len(candidates) or index in seen:
                 raise InfrastructureError(
                     "rerank response named a document that was not sent",
-                    details={"model": self.model, "index": index, "sent": len(candidates)},
+                    details={
+                        "model": self.model,
+                        "error": "unexpected_index",
+                        "index": index,
+                        "sent": len(candidates),
+                    },
                 )
             seen.add(index)
+        if len(seen) < top_n:
+            # Asked for top_n and given fewer: taken as an answer, the chunks it
+            # left out would vanish from the search instead of keeping their
+            # vector order, so it is a failed rerank, not a short one.
+            raise InfrastructureError(
+                "rerank response ranked fewer documents than asked",
+                details={
+                    "model": self.model,
+                    "error": "missing_results",
+                    "ranked": len(seen),
+                    "asked": top_n,
+                },
+            )
         scored.sort(key=lambda pair: pair[1], reverse=True)
         return [
             RerankResult(id=candidates[index].id, score=score) for index, score in scored[:top_k]

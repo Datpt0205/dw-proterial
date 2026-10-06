@@ -8,8 +8,11 @@ of failure it was without carrying the key or the provider's body.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from collections.abc import Callable
+from dataclasses import replace
 
 import httpx
 import pytest
@@ -169,3 +172,35 @@ async def test_nothing_to_rerank_means_no_request(monkeypatch: pytest.MonkeyPatc
     _patch_client(monkeypatch, handler)
 
     assert await _adapter().rerank("q", [], top_k=5) == []
+
+
+@pytest.mark.parametrize("rows", [(), ((1, 0.9),)])
+async def test_fewer_results_than_asked_is_a_failed_rerank(
+    monkeypatch: pytest.MonkeyPatch, rows: tuple[tuple[int, float], ...]
+) -> None:
+    # Taken as an answer, the chunks it left out would drop out of the search
+    # rather than keep their vector order.
+    _patch_client(monkeypatch, lambda _r: httpx.Response(200, json=_results(*rows)))
+
+    with pytest.raises(InfrastructureError) as raised:
+        await _adapter().rerank("q", CANDIDATES, top_k=2)
+    assert raised.value.details["error"] == "missing_results"
+    assert raised.value.details["asked"] == 2
+
+
+async def test_the_timeout_bounds_the_whole_call() -> None:
+    # A provider that answers slower than the deadline. MockTransport applies
+    # none of httpx's per-phase timeouts, so only a deadline on the call as a
+    # whole can stop this one.
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(5)
+        return httpx.Response(200, json=_results((0, 0.9), (1, 0.5), (2, 0.1)))
+
+    adapter = replace(_adapter(), timeout=0.05, transport=httpx.MockTransport(slow))
+    started = time.perf_counter()
+
+    with pytest.raises(InfrastructureError) as raised:
+        await adapter.rerank("q", CANDIDATES, top_k=3)
+
+    assert raised.value.details["error"] == "TimeoutError"
+    assert time.perf_counter() - started < 2

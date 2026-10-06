@@ -117,8 +117,14 @@ Mốc 6 (running many customers) is half done:
   `DW_API_RERANK_PROVIDER=cohere_compatible` calls `POST {base_url}/rerank`
   (FPT Cloud AI Marketplace, `bge-reranker-v2-m3`); `make check-rerank`
   probes it live. A reranker that fails costs ranking, not the search: the
-  gateway keeps the vector order and logs `rerank_skipped`. The gateway
-  records no retrieval metadata yet, so that log line is the only marker.
+  gateway keeps the vector order, logs `rerank_skipped`, leaves the
+  `dw.knowledge.rerank` span in error and counts
+  `dw_retrieval_rerank_skipped_total{error}`. A short or empty answer, a URL
+  the client cannot use (no scheme, credentials, plain http when deployed)
+  and a call past `DW_API_RERANK_TIMEOUT_SECONDS` as a whole are each refused
+  rather than taken as a ranking. Open: a skipped rerank stores the vector
+  score as `relevance_score`, a different scale from the reranker's; harmless
+  while every caller asks `min_relevance=0`, not once one asks more.
   An unknown `embedding_provider` (the retired `tei` included) now stops
   startup instead of quietly becoming hash vectors. The key is only in local
   `.env`; uat/production have none yet.
