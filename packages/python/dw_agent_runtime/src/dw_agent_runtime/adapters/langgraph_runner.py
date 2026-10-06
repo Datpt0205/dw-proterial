@@ -599,6 +599,20 @@ class LangGraphWorkflowRunner:
                 raise
         await self._handle_outcome(run_context, run_id, state)
 
+    async def withdraw(self, *, run_context: RunContext, run_id: uuid.UUID) -> None:
+        record = await self.run_store.get(run_context, run_id)
+        if record.status is not RunStatus.WAITING_APPROVAL:
+            raise ConflictError(
+                "run is not waiting for approval",
+                details={"run_id": str(run_id), "status": record.status.value},
+            )
+        await self.run_store.set_status(run_context, run_id, RunStatus.CANCELLED)
+        await self._audit(run_context, "run.withdrawn", str(run_id))
+        self.telemetry.add_metric(
+            DW_RUN_TOTAL, 1, {"worker": run_context.worker_id, "status": "cancelled"}
+        )
+        self.budget.forget(run_id)
+
     async def _settle_stream(
         self, run_context: RunContext, graph: Any, config: dict[str, Any]
     ) -> None:

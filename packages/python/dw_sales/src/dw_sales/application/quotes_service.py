@@ -1,16 +1,16 @@
-"""Quote cases through the API: reading them, each Sales step, and the approval.
+"""Quote cases through the API: reading them and each Sales step.
 
 The same path as an order's decision: the scope first, the case in the
 caller's workspace, the version decided on, then the case decides
 (`QuoteCase`) and the next case is stored with its event and audit row in
 one transaction.
 
-**The approval is this context's, and only this context's.** It needs
-`sales.quote.approve` here, at this route; the platform's generic approvals
-inbox never holds a Sales case (dw_sales ADR 0001), so `approvals.decide`,
-which a permission set like `approver_boost` grants, decides nothing here.
-The approver is not the pricer: the case refuses it (409), and the store's
-CHECK refuses it again whoever writes the row.
+**Submitting and the approval are DW1's run** (`dw_sales.application.runs`,
+dw_sales ADR 0004): the quotation is submitted inside a run that pauses on a
+`sales.quote` approval in the platform's approvals, decided by
+`sales.quote.approve` and never by the pricer, and applied to the case when
+the run resumes (`CaseDecisions`). A step here that moves a quotation out of
+`pending_approval` (priced again, declined) withdraws that approval.
 
 A price is the caller's own decision, stamped with their principal id and
 the server's time; its LME month is named by the caller and its figure read
@@ -34,6 +34,12 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesCatalogPort
 from dw_sales.application.quotation import QuotationService, ScreeningRow
+from dw_sales.application.runs import (
+    PendingDecisionsPort,
+    awaiting,
+    subject_of,
+    withdraw_if_left,
+)
 from dw_sales.application.support import (
     decided,
     person_event,
@@ -43,6 +49,7 @@ from dw_sales.application.support import (
 )
 from dw_sales.application.views import (
     CaseChangeView,
+    PendingDecisionView,
     QuoteCaseView,
     QuoteSummaryView,
     quote_case,
@@ -50,6 +57,7 @@ from dw_sales.application.views import (
     quote_summary,
 )
 from dw_sales.domain.catalog import CopperBasis
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import (
     DeclineReason,
@@ -67,7 +75,6 @@ _QUOTE = "sales_quote_case"
 _LOCAL = ZoneInfo("Asia/Ho_Chi_Minh")
 
 SpecStep = Literal["start", "settle", "ask_design_again"]
-ApprovalDecision = Literal["approve", "return"]
 
 
 def local_day(at: datetime) -> date:
@@ -111,6 +118,7 @@ class QuoteQueries:
     gate: Gate
     clock: UtcClock
     service: QuotationService
+    decisions: PendingDecisionsPort
 
     async def summaries(self, context: AccessContext) -> list[QuoteSummaryView]:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_QUOTE)
@@ -143,6 +151,13 @@ class QuoteQueries:
             evidence = await self.service.price_evidence(
                 scope, case, as_of=today, incoterm=incoterm, destination=destination
             )
+        decision = None
+        if (waits_on := awaiting(case)) is not None:
+            approval_id = await self.decisions.pending(
+                context, subject_of(CaseKind.QUOTE, case.case_id)
+            )
+            if approval_id is not None:
+                decision = PendingDecisionView(approval_id=approval_id, approval_type=waits_on)
         return quote_case(
             case,
             assigned_to=stored.origin.assigned_to,
@@ -150,6 +165,7 @@ class QuoteQueries:
             today=today,
             prices=prices,
             evidence_rows=evidence,
+            decision=decision,
         )
 
     async def screening(self, context: AccessContext, as_of: date | None) -> list[ScreeningRow]:
@@ -167,6 +183,7 @@ class QuoteCommands:
     ids: IdGenerator
     service: QuotationService
     catalog: SalesCatalogPort
+    decisions: PendingDecisionsPort
 
     async def answer_finding(
         self,
@@ -312,67 +329,10 @@ class QuoteCommands:
             event = person_event("quote.priced", context, now)
             await save_quote(work, context, self.ids, case, priced, event)
             await work.commit()
+        # Priced again while pending: the document the approver was asked
+        # about is withdrawn, and so is the approval.
+        await withdraw_if_left(self.decisions, context, case, priced)
         return quote_change(priced)
-
-    async def submit(
-        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int, quote_no: str
-    ) -> CaseChangeView:
-        """Step 8: the quotation document written from the decided terms,
-        stamped with its hash, issued today; the case waits for an approver."""
-        await self._require(context, case_id, SalesScopes.QUOTE_PREPARE)
-        now, scope = self.clock.now(), sales_scope(context)
-        async with self.uow(scope) as work:
-            case = (await stored_quote(work, case_id)).case
-            same_version(case_id, case.case_version, case_version)
-            submitted = await self.service.submit(
-                scope,
-                case,
-                quote_no=quote_no,
-                issued_on=local_day(now),
-                by=context.principal_id,
-                at=now,
-            )
-            event = person_event("quote.submitted", context, now)
-            await save_quote(work, context, self.ids, case, submitted, event)
-            await work.commit()
-        return quote_change(submitted)
-
-    async def approval(
-        self,
-        context: AccessContext,
-        case_id: uuid.UUID,
-        *,
-        case_version: int,
-        decision: ApprovalDecision,
-        comment: str | None,
-        document_sha256: str | None,
-        reasons: Mapping[str, str],
-    ) -> CaseChangeView:
-        """Step 9, by `sales.quote.approve` and never by the pricer: approved,
-        bound to the document hash the approver was shown, each blocking price
-        finding accepted with its reason; or returned to the pricer."""
-        given = {parse_finding_key(key): reason for key, reason in reasons.items()}
-
-        def step(case: QuoteCase, actor: QuoteActor, at: datetime) -> QuoteCase:
-            if decision == "return":
-                if comment is None:
-                    raise DomainError("a return names its reason", details={"field": "comment"})
-                return case.return_to_pricer(actor, at=at, reason=comment)
-            if document_sha256 is None:
-                raise DomainError(
-                    "an approval names the document it approves",
-                    details={"field": "document_sha256"},
-                )
-            return case.approve(actor, at=at, document_sha256=document_sha256, reasons=given)
-
-        return await self._decide(
-            context,
-            case_id,
-            case_version,
-            "quote.approved" if decision == "approve" else "quote.returned",
-            step,
-            scope=SalesScopes.QUOTE_APPROVE,
-        )
 
     async def sent(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
@@ -440,12 +400,11 @@ class QuoteCommands:
         action: str,
         step: Callable[[QuoteCase, QuoteActor, datetime], QuoteCase],
         *,
-        scope: SalesScopes = SalesScopes.QUOTE_PREPARE,
         finding_key: str | None = None,
         field: str | None = None,
         reason_code: str | None = None,
     ) -> CaseChangeView:
-        await self._require(context, case_id, scope)
+        await self._require(context, case_id, SalesScopes.QUOTE_PREPARE)
         actor, now = quote_actor(context, self.gate), self.clock.now()
         async with self.uow(sales_scope(context)) as work:
             case = (await stored_quote(work, case_id)).case
@@ -461,4 +420,5 @@ class QuoteCommands:
             )
             await save_quote(work, context, self.ids, case, after, event)
             await work.commit()
+        await withdraw_if_left(self.decisions, context, case, after)
         return quote_change(after)

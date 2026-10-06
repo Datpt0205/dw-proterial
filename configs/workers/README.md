@@ -16,6 +16,8 @@ decided per tool, so a worker at A4 pauses exactly as often as one at A0. Set it
 truthfully anyway; the value is what the approval policy will read when it
 learns to.
 
-Empty because a worker is a property of a bounded context, not of the platform.
-A process loads only the workers it hosts — `configs/` is shared, and loading a
+A worker is a property of a bounded context, not of the platform: the files
+here are the contexts' (`sales.yaml`, DW1, loaded by
+`dw_sales.workflows.graph.register` from the API's composition root). A
+process loads only the workers it hosts — `configs/` is shared, and loading a
 file whose graph lives in another process would fail fast for the wrong reason.

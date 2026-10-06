@@ -15,8 +15,7 @@ from typing import Any
 
 import pytest
 from sales_api_harness import AN, BINH, DIEU, GIANG, HA, TAM, Api, Persona, known_price_strings
-from sales_flow import decide, open_sources, order_of
-from test_sales_api_quotes import _approve, replied, submitted
+from sales_flow import approve, decide, open_sources, order_of, replied, submitted
 
 pytestmark = pytest.mark.integration
 
@@ -76,7 +75,7 @@ async def _decided_world(api: Api) -> dict[str, Any]:
     await open_sources(an, m04)
     m04 = await decide(an, m04, "prepare")
     m10 = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
-    assert (await _approve(giang, m10)).status_code == 200
+    assert (await approve(giang, m10)).status_code == 200
     return {"m04": m04, "m10": m10}
 
 

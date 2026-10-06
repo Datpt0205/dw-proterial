@@ -22,8 +22,16 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_agent_runtime.adapters.checkpoint import SqlAlchemyCheckpointSaver
+from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
+from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
+from dw_agent_runtime.approval_flow import ApproveAndResumeService
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
+from dw_agent_runtime.model.budget import RunBudgetLedger
+from dw_agent_runtime.ports import RunAllowancePort
+from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_api.bootstrap import ApiContainer
-from dw_api.bootstrap.wiring import build_sales
+from dw_api.bootstrap.wiring import SalesRuntime, build_sales
 from dw_api.health import HealthService
 from dw_api.main import create_app
 from dw_api.settings import ApiSettings
@@ -123,6 +131,21 @@ class Persona:
         self.calls.append(response)
         return response
 
+    async def decide(
+        self, approval_id: str, body: dict[str, Any], *, key: str | None = None
+    ) -> httpx.Response:
+        """A decision on a platform approval, as the Sales pages post it."""
+        response = await self.client.post(
+            f"/api/v1/approvals/{approval_id}/decisions",
+            content=json.dumps(body, default=str),
+            headers={
+                **self.headers(key or str(uuid.uuid4())),
+                "Content-Type": "application/json",
+            },
+        )
+        self.calls.append(response)
+        return response
+
 
 @dataclass
 class Api:
@@ -130,14 +153,22 @@ class Api:
     artifacts: MemoryArtifacts
     sessions: async_sessionmaker[AsyncSession]
     app: FastAPI
+    runner: LangGraphWorkflowRunner
 
     def as_(self, subject: str, tenant: str = ALPHA) -> Persona:
         return Persona(self.client, subject, tenant)
 
 
 @asynccontextmanager
-async def build_app(app_url: str) -> AsyncIterator[Api]:
-    """The API with the Sales mount the seam builds, over the app role."""
+async def build_app(
+    app_url: str, *, allowance: RunAllowancePort | None = None
+) -> AsyncIterator[Api]:
+    """The API with the Sales mount the seam builds, over the app role.
+
+    With the runtime DW1 runs on, as `build_container` wires it: the runner
+    over the run store and checkpoints, the approval flow behind
+    `/api/v1/approvals`, and the plans' run allowance (``allowance`` replaces
+    it for a test that spends a plan's runs)."""
     engine = create_async_engine(app_url, poolclass=NullPool)
     sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     settings = ApiSettings(profile="test", dev_secret=SECRET, database_url=app_url)
@@ -157,6 +188,29 @@ async def build_app(app_url: str) -> AsyncIterator[Api]:
     container.idempotency = HttpIdempotency(SqlIdempotencyStore(sessions), clock)
     container.workspace_directory = SqlWorkspaceDirectory(sessions)
     container.notifications = NotificationService(SqlNotificationRepository(sessions))
+    platform_uow = SqlPlatformUnitOfWorkFactory(sessions)
+    run_store = SqlWorkerRunStore(sessions, stale_run_after_seconds=300)
+    graphs = GraphRegistry()
+    workers = WorkerRegistry(graph_registry=graphs)
+    runner = LangGraphWorkflowRunner(
+        worker_registry=workers,
+        graph_registry=graphs,
+        checkpoint_saver=SqlAlchemyCheckpointSaver(sessions),
+        run_store=run_store,
+        uow_factory=platform_uow,
+        clock=clock,
+        id_generator=ids,
+        allowance=allowance or container.entitlement,
+        budget=RunBudgetLedger(),
+        approval_policy=AutonomyApprovalPolicy(),
+        release_manifest_ref="sha256:" + "0" * 64,
+    )
+    approval_flow = ApproveAndResumeService(
+        uow_factory=platform_uow, runner=runner, run_store=run_store, clock=clock, id_generator=ids
+    )
+    container.run_store = run_store
+    container.runner = runner
+    container.approval_flow = approval_flow
     container.sales = build_sales(
         settings,
         session_factory=sessions,
@@ -168,6 +222,9 @@ async def build_app(app_url: str) -> AsyncIterator[Api]:
         notifications=SqlNotificationRepository(sessions),
         artifact_bytes=artifacts,  # type: ignore[arg-type]
         release_manifest_ref="sha256:" + "0" * 64,
+        runtime=SalesRuntime(
+            graphs=graphs, workers=workers, runner=runner, approval_flow=approval_flow
+        ),
     )
     app = create_app(container)
     try:
@@ -177,7 +234,7 @@ async def build_app(app_url: str) -> AsyncIterator[Api]:
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client,
         ):
-            yield Api(client, artifacts, sessions, app)
+            yield Api(client, artifacts, sessions, app, runner)
     finally:
         await engine.dispose()
 

@@ -1060,6 +1060,12 @@ export interface components {
              * @default
              */
             comment: string;
+            /** Reasons */
+            reasons?: {
+                [key: string]: string;
+            };
+            /** Subject Version */
+            subject_version?: number | null;
         };
         /** DemoUser */
         DemoUser: {

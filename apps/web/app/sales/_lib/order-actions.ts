@@ -111,6 +111,13 @@ export function makerReason(order: Order, viewer: Viewer): string | null {
 const NOT_SERVED =
   "Chưa mở nguồn: mở bản gốc của phiên bản hồ sơ này trước khi quyết định.";
 
+/**
+ * The cross-check is decided on the platform approval DW1's run paused on
+ * (`order.decision`); with none open there is nothing to decide yet.
+ */
+export const NO_CROSS_CHECK_REQUEST =
+  "Chưa có yêu cầu kiểm chéo đang chờ cho đơn này: tải lại trang; nếu vẫn chưa có, báo bộ phận hỗ trợ.";
+
 export function orderOffers(
   order: Order,
   viewer: Viewer,
@@ -167,7 +174,12 @@ export function orderOffers(
   if (status === "uploaded_to_bravo" && order.cross_check_required !== false) {
     const reason = !viewer.hasScope("sales.order.cross_check")
       ? `Bạn không có quyền kiểm chéo đơn (cần vai ${PIC}).`
-      : (makerReason(order, viewer) ?? (sourceOpened ? null : NOT_SERVED));
+      : (makerReason(order, viewer) ??
+        (!sourceOpened
+          ? NOT_SERVED
+          : order.decision
+            ? null
+            : NO_CROSS_CHECK_REQUEST));
     offers.crossCheck = { reason };
     offers.returnOrder = { reason };
   }

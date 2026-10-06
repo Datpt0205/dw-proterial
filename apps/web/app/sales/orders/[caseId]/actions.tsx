@@ -25,6 +25,7 @@ import {
   fromPickerDay,
   toPickerDay,
 } from "../../../../lib/dates";
+import { approvalClient } from "../../../../lib/approvals/registry";
 import { salesApi } from "../../_lib/api";
 import { ActionError, findingKeyLabel } from "../../_lib/errors";
 import { CLOSE_REASON, label } from "../../_lib/labels";
@@ -331,6 +332,12 @@ function BravoDialog({
   );
 }
 
+/**
+ * The cross-check (WIV-03-012 step 9) is decided on the platform approval
+ * DW1's run paused on when the Bravo entry was recorded: approve is "đạt",
+ * reject is "trả lại". Either way the server wants a written comment (the
+ * approval is strict) and the case version the checker was shown.
+ */
 function CrossCheckDialog({
   open,
   decision,
@@ -341,8 +348,9 @@ function CrossCheckDialog({
   pending,
 }: DialogProps & { decision: "accept" | "return" }) {
   const name = usePeople();
-  const [form] = Form.useForm<{ reason?: string }>();
+  const [form] = Form.useForm<{ comment?: string }>();
   const id = decision === "accept" ? "crossCheck" : "returnOrder";
+  const waiting = order.decision;
   return (
     <Modal
       open={open}
@@ -392,16 +400,22 @@ function CrossCheckDialog({
         layout="vertical"
         validateTrigger="onBlur"
         onFinish={async (values) => {
+          if (!waiting) return;
           const body = {
-            case_version: order.case_version,
-            decision,
-            reason: values.reason?.trim() || null,
+            approve: decision === "accept",
+            comment: values.comment?.trim() ?? "",
+            subject_version: order.case_version,
           };
           done(
             await run(
               id,
               body,
-              (key) => salesApi().crossCheck(order.case_id, body, key),
+              (key) =>
+                approvalClient(waiting.approval_type).decideApproval(
+                  waiting.approval_id,
+                  body,
+                  key,
+                ),
               decision === "accept" ? "Đã ghi kiểm chéo đạt" : "Đã trả lại đơn",
             ),
           );
@@ -412,21 +426,24 @@ function CrossCheckDialog({
             Bạn đã đối chiếu đơn trên Bravo với PO và với các quyết định trên hồ
             sơ này (WIV-03-012 bước 9).
           </Typography.Paragraph>
-        ) : (
-          <Form.Item
-            name="reason"
-            label="Lý do trả lại"
-            rules={[
-              {
-                required: true,
-                message: "Lý do là bắt buộc",
-                validateTrigger: "onSubmit",
-              },
-            ]}
-          >
-            <Input.TextArea rows={3} maxLength={500} showCount />
-          </Form.Item>
-        )}
+        ) : null}
+        <Form.Item
+          name="comment"
+          label={decision === "accept" ? "Ghi chú kiểm chéo" : "Lý do trả lại"}
+          rules={[
+            {
+              required: true,
+              whitespace: true,
+              message:
+                decision === "accept"
+                  ? "Ghi chú là bắt buộc: bạn đã đối chiếu những gì"
+                  : "Lý do là bắt buộc",
+              validateTrigger: "onSubmit",
+            },
+          ]}
+        >
+          <Input.TextArea rows={3} maxLength={500} showCount />
+        </Form.Item>
       </Form>
     </Modal>
   );

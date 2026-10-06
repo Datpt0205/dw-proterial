@@ -471,12 +471,12 @@ async def grade_scope_binding(
     if await world.services.inbox.messages(beta):
         breaches.append("inbox lists another tenant's mail")
     try:
-        if await world.services.inbox.process_all(beta):
+        if await world.services.dw1.process_all(beta):
             breaches.append("process-all processed another tenant's mail")
     except NotFoundError:
         breaches.append("process-all listed another tenant's mail")
     for message_id in input_data["messages"]:
-        if not await _refused(world.services.inbox.process(beta, message_id), NotFoundError):
+        if not await _refused(world.services.dw1.process(beta, message_id), NotFoundError):
             breaches.append(f"{message_id} processed for another tenant")
         message = await world.inbox.get_message(BETA, message_id)
         if message is not None:
@@ -581,23 +581,13 @@ async def _order_duties(world: World, input_data: dict[str, Any]) -> dict[str, s
     assert case_id is not None
     up = await world.walk_to_uploaded(AN, case_id, recorder=KHOA)
     outcomes: dict[str, str] = {}
-    for label, checker in (("preparer", AN), ("bravo_recorder", KHOA)):
+    for label, checker in (("preparer", AN), ("bravo_recorder", KHOA), ("other_pic", DIEU)):
         await world.open_sources(checker, case_id)
         outcomes[label] = await _rule(
-            world.services.order_commands.cross_check(
-                checker.context(),
-                case_id,
-                case_version=up.case_version,
-                decision="accept",
-                reason=None,
-            )
+            world.decide(checker, CaseKind.ORDER, case_id, approve=True, comment="Đã đối chiếu")
         )
-    await world.open_sources(DIEU, case_id)
-    outcomes["other_pic"] = await _rule(
-        world.services.order_commands.cross_check(
-            DIEU.context(), case_id, case_version=up.case_version, decision="accept", reason=None
-        )
-    )
+    if world.order(case_id).case_version <= up.case_version:
+        outcomes["applied"] = "no"
     return outcomes
 
 
@@ -637,21 +627,13 @@ async def _quote_duties(
         lines=lines,
         management_guidance=None,
     )
-    await commands.submit(
+    await world.services.dw1.submit_quote(
         pricer.context(), case_id, case_version=version(), quote_no=decision["quote_no"]
     )
-    submitted = world.quote(case_id)
-    sha = submitted.submission.document_sha256 if submitted.submission else None
 
-    def approve(caller: Caller) -> Awaitable[object]:
-        return commands.approval(
-            caller.context(),
-            case_id,
-            case_version=version(),
-            decision="approve",
-            comment=None,
-            document_sha256=sha,
-            reasons={},
+    def approve(caller: Caller) -> Awaitable[None]:
+        return world.decide(
+            caller, CaseKind.QUOTE, case_id, approve=True, comment="Đã xem tài liệu báo giá"
         )
 
     outcomes = {"pricer": await _rule(approve(pricer))}
@@ -800,10 +782,18 @@ async def grade_price_confidentiality(
         ]
 
     hidden = _leaks(await answers(READER), prices)
+    # DW1's runs too: what each was asked (its input), what it paused on (the
+    # approval's payload) and how it ended (its result).
+    runtime = world.runtime
+    runs = [{"input": r.input, "result": r.result} for r in runtime.runs.rows.values()]
+    approvals = [r.payload for r in runtime.approvals.rows.values()]
     trail = _leaks(
         [asdict(e) for e in world.audit()]
         + [asdict(e) for e in world.store.state(ALPHA).events]
-        + [asdict(n) for n in world.notifications.sent],
+        + [asdict(n) for n in world.notifications.sent]
+        + [asdict(e) for e in runtime.audit.events]
+        + runs
+        + approvals,
         prices,
     )
     shown = _leaks(await answers(AN), prices)
@@ -811,7 +801,11 @@ async def grade_price_confidentiality(
         "reader_answers": 9,
         "audit_rows": len(world.audit()),
         "notifications": len(world.notifications.sent),
+        "runs": len(runs),
+        "approvals": len(approvals),
     }
+    if not approvals:
+        return GradeResult.fail("no approval was raised, so none was searched", **details)
     if hidden:
         return GradeResult.fail(
             "a price reached a reader without the price scope", count=len(hidden), **details

@@ -34,6 +34,14 @@ API and the plan use the English terms. The spec is
   attachment's sha256.
 - **Case version** (Phiên bản hồ sơ): bumped by every change. Every decision
   names the version it was made on.
+- **Checker's decision** (Quyết định của người kiểm): approving or returning
+  a quotation (WIV-03-023 step 9), cross-checking or returning an order
+  (WIV-03-012 step 9). Made on the platform approval DW1's run pauses on
+  (`sales.quote`, `sales.order.cross_check`), never on a Sales route; a
+  maker's own steps are not checker's decisions (dw_sales ADR 0004).
+- **DW1 run** (Lượt chạy DW1): one thing DW1 is asked to do ("DW xử lý", a
+  quotation submitted, a Bravo entry recorded), on the agent runtime,
+  counted against the tenant's plan.
 
 ## Roles and permission sets
 

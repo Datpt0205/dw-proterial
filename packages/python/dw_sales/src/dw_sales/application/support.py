@@ -35,10 +35,12 @@ from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 
-# DW1's own identity on the events it writes (spec "Actors", decision 5). A
-# production service principal holding `sales.inbox.process` only is ticket
-# 10's; until then the worker is named on its events and the person who asked
-# is `initiated_by`.
+# DW1's own identity on the events it writes (spec "Actors", decision 5), and
+# the worker its runs are recorded under: `configs/workers/sales.yaml` declares
+# the same id and version, and `test_dw1_worker.py` holds the two together. A
+# production service principal holding `sales.inbox.process` only is still
+# owed (ticket 12); until then a run's actor is the person who started it and
+# DW1's events name them as `initiated_by`.
 DW1_WORKER_ID = "sales-dw1"
 DW1_WORKER_VERSION = "1.0.0"
 
@@ -96,8 +98,13 @@ def audit_row(
     from_status: str | None,
     to_status: str,
     event: CaseEvent,
+    run_id: uuid.UUID | None = None,
 ) -> AuditEvent:
-    """The platform audit row for one case event, in the event's own terms."""
+    """The platform audit row for one case event, in the event's own terms.
+
+    ``run_id`` is the DW1 run the event happened in, when it did: a decision
+    applied when the run resumed names the run, and through it the approval.
+    """
     actor = event.actor
     details: dict[str, object] = {
         "case_kind": case_kind.value,
@@ -120,6 +127,7 @@ def audit_row(
         action=f"sales.{event.action}",
         resource_type=f"sales_{case_kind.value}_case",
         resource_id=str(case_id),
+        run_id=run_id,
         occurred_at=event.occurred_at,
         details=details,
     )
@@ -155,6 +163,8 @@ async def save_order(
     before: OrderCase,
     after: OrderCase,
     event: CaseEvent,
+    *,
+    run_id: uuid.UUID | None = None,
 ) -> None:
     """The order's next state, its event and its audit row, in the open
     transaction; the caller commits."""
@@ -169,6 +179,7 @@ async def save_order(
             from_status=before.status.value,
             to_status=after.status.value,
             event=event,
+            run_id=run_id,
         )
     )
 
@@ -180,6 +191,8 @@ async def save_quote(
     before: QuoteCase,
     after: QuoteCase,
     event: CaseEvent,
+    *,
+    run_id: uuid.UUID | None = None,
 ) -> None:
     await work.quotes.save(after, expected_version=before.case_version, event=event)
     await work.audit.append(
@@ -192,5 +205,6 @@ async def save_quote(
             from_status=before.status.value,
             to_status=after.status.value,
             event=event,
+            run_id=run_id,
         )
     )

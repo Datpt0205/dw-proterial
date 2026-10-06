@@ -45,6 +45,14 @@ class ScopeAuthorizationService:
         )
 
     def is_allowed(self, context: AccessContext, action: str) -> bool:
-        if self.admin_role in context.roles:
+        if self.is_unrestricted(context):
             return True
         return action in context.scopes
+
+    def is_unrestricted(self, context: AccessContext) -> bool:
+        """Whether every action is allowed, whatever the scopes say.
+
+        For a filter that cannot ask `is_allowed` once per row (the approvals
+        inbox, in SQL): it filters by the scopes, unless this is true.
+        """
+        return self.admin_role in context.roles

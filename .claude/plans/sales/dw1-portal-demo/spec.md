@@ -185,14 +185,22 @@ on an overlapping step is counted in the "Promises" figures.
    context under tenant/workspace keys.
 4. **Code decides.** Code does the mapping, price/LME/MOQ checks, dates and
    the numbers in every file and email. Templates render the emails.
-5. **Approval in this slice is a case decision recorded by the context with
-   an audit event, not yet a runtime interrupt.** This deviates from
-   CLAUDE.md ("Approval pauses and resumes a durable, checkpointed run").
-   `packages/python/dw_sales/docs/adr/0001-case-decision-before-runtime.md`
-   records it, with every runtime guarantee it bypasses and the substitute
-   used meanwhile. Ticket 10 is the exit. Nothing in this slice writes
-   outside the platform; a person uploads or sends each artifact, and the
-   download gates (ticket 06) stand in for the runtime's approval.
+5. **A checker's decision is an approval DW1's run pauses on** (amended
+   2026-10-06, ticket 10; dw_sales ADR 0004, which supersedes ADR 0001).
+   "DW xử lý", submitting a quotation and recording a Bravo entry each start
+   a DW1 run (`configs/workers/sales.yaml`, graph pinned in the release
+   manifest), counted against the plan's daily runs where every run begins.
+   Submitting pauses the run on a `sales.quote` approval, the Bravo entry on
+   a `sales.order.cross_check` one; the decision is made on the platform's
+   approvals and applied by the run when it resumes. Each approval is
+   stamped with the scope that decides it (`sales.quote.approve`,
+   `sales.order.cross_check`, never `approvals.decide`) and names every maker
+   of the case, whom the platform refuses (`sales.` is strict: a second
+   person and a written comment). A maker's own steps (prepare, price,
+   confirm, decline) stay case transitions with their audit event. Was: the
+   interim deviation of ADR 0001, every decision a case transition. Nothing
+   in this slice writes outside the platform; a person uploads or sends each
+   artifact, and the download gates (ticket 06) stay.
 6. **Web UI uses antd v6** as CLAUDE.md requires. The shell slice (ticket 07)
    is platform work and lands first.
 7. **Maker/checker per WIV-03-012 step 9.** The cross-checker holds
@@ -268,8 +276,10 @@ on an overlapping step is counted in the "Promises" figures.
     type from the bytes, refuse encrypted and macro-enabled files, and
     enforce byte/sheet/page/cell caps from `sales_order_rules`. Production
     parses in the worker sandbox after a malware scan (ticket 12). No model
-    turn reads document content in this slice, so ADR 0007's toolset rule is
-    not triggered yet. Ticket 10 must hold to it when a model step arrives.
+    turn reads document content in this slice: DW1's worker declares no
+    toolset and its graph takes no model, so ADR 0007's rule holds by
+    construction, and `test_dw1_runtime.py` turns red the day either changes
+    (ticket 10).
 14. **Proterial's rules, templates and wording arrive only as tenant
     overrides in storage.** Nothing of theirs is committed. `configs/`
     carries the platform layer with fictional defaults, read through

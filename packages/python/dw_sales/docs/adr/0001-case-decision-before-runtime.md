@@ -1,7 +1,13 @@
 ---
-status: Proposed
+status: Superseded
 date: 2026-10-03
+superseded_by: 0004-checker-decisions-on-the-runtime.md
 ---
+
+> **Superseded 2026-10-06 by [ADR 0004](0004-checker-decisions-on-the-runtime.md)**
+> (ticket 10). The quotation approval and the cross-check are approvals DW1's
+> run pauses on; the context-side decide routes are gone. ADR 0004 lists what
+> each substitute below became. Kept as the record of the interim.
 
 # Sales decisions are case transitions until the runtime carries them
 

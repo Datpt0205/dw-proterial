@@ -679,15 +679,28 @@ export class ApiClient {
     );
   }
 
+  /**
+   * Decide an approval. A context's approval may need more than yes/no: a
+   * reason per item it names (`reasons`, a quote's blocking price findings by
+   * finding key) and the version of its subject the decider was shown
+   * (`subject_version`), which the context's guard checks before anything is
+   * recorded. The key makes a retry decide once.
+   */
   decideApproval(
     approvalId: string,
-    decision: { approve: boolean; comment?: string },
+    decision: {
+      approve: boolean;
+      comment?: string;
+      reasons?: Record<string, string>;
+      subject_version?: number;
+    },
+    idempotencyKey?: string,
   ): Promise<Approval> {
     return this.request(
       "POST",
       `/api/v1/approvals/${approvalId}/decisions`,
       approvalSchema,
-      { body: decision },
+      { body: decision, idempotencyKey },
     );
   }
 

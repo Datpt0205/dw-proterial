@@ -80,6 +80,16 @@ def test_every_case_mutation_names_the_version_it_was_decided_on() -> None:
         assert "case_version" in body.field_info.annotation.model_fields  # type: ignore[union-attr]
 
 
+def test_no_sales_route_decides_what_a_checker_decides() -> None:
+    """The quotation approval and the cross-check are decided on the platform
+    approval DW1's run pauses on (ticket 10, dw_sales ADR 0004): the routes
+    that decided them on the case are gone, and none has taken their place."""
+    paths = {route.path for route in _routes()}
+    assert "/api/v1/sales/quotes/{case_id}/approval" not in paths
+    assert "/api/v1/sales/orders/{case_id}/cross-check" not in paths
+    assert not [p for p in paths if p.endswith(("/approval", "/approve", "/cross-check"))]
+
+
 # ------------------------------------------------------------- the gating --
 
 
@@ -116,6 +126,7 @@ def test_build_sales_in_a_deployed_profile_without_the_demo_tenant_mounts_nothin
         notifications=unused,
         artifact_bytes=unused,
         release_manifest_ref=None,
+        runtime=unused,
     )
     assert mount == SalesMount(services=None)
 

@@ -22,10 +22,12 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_sales.application.access import Gate
 from dw_sales.application.artifacts_service import ArtifactService
+from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
+from dw_sales.application.runs import Dw1Runs
 from dw_sales.application.source import SourceService
 from dw_sales.application.worker_service import WorkerService
 from dw_sales.domain.orders import CloseReason
@@ -63,10 +65,14 @@ STORE: Any = _Untouchable()
 CLOCK = FixedClock(datetime(2026, 10, 2, tzinfo=UTC))
 IDS = Uuid4Generator()
 
-order_queries = OrderQueries(STORE, GATE)
-order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE)
-quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE)
-quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE)
+order_queries = OrderQueries(STORE, GATE, STORE)
+order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE, STORE)
+quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE)
+quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
+# The routes' way to start DW1, and the steps the run takes: both check.
+dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
+steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE)
+RUN = uuid.UUID(int=10)
 sources = SourceService(STORE, GATE, CLOCK, STORE, STORE)
 artifacts = ArtifactService(STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE)
 master = MasterDataService(GATE, STORE)
@@ -92,11 +98,27 @@ CALLS: dict[str, tuple[str, Call]] = {
         "sales.order.prepare",
         lambda c: order_commands.confirm_mapping(c, CASE, 1, case_version=1, prv_code="CB-2001"),
     ),
-    "orders.cross_check": (
-        "sales.order.cross_check",
-        lambda c: order_commands.cross_check(
-            c, CASE, case_version=1, decision="accept", reason=None
+    "dw1.process": ("sales.inbox.process", lambda c: dw1.process(c, "M01")),
+    "dw1.process_all": ("sales.inbox.process", dw1.process_all),
+    "dw1.record_bravo_entry": (
+        "sales.order.prepare",
+        lambda c: dw1.record_bravo_entry(
+            c, CASE, case_version=1, so_no="SO26-1001", entry_compared=True
         ),
+    ),
+    "dw1.submit_quote": (
+        "sales.quote.prepare",
+        lambda c: dw1.submit_quote(c, CASE, case_version=1, quote_no="Q26-0301"),
+    ),
+    "steps.record_bravo_entry": (
+        "sales.order.prepare",
+        lambda c: steps.record_bravo_entry(
+            c, CASE, case_version=1, so_no="SO26-1001", entry_compared=True, run_id=RUN
+        ),
+    ),
+    "steps.submit_quote": (
+        "sales.quote.prepare",
+        lambda c: steps.submit_quote(c, CASE, case_version=1, quote_no="Q26-0301", run_id=RUN),
     ),
     "orders.close": (
         "sales.order.prepare",
@@ -109,18 +131,6 @@ CALLS: dict[str, tuple[str, Call]] = {
         "sales.quote.prepare",
         lambda c: quote_commands.price(
             c, CASE, case_version=1, lme_month=None, lines=[], management_guidance=None
-        ),
-    ),
-    "quotes.approval": (
-        "sales.quote.approve",
-        lambda c: quote_commands.approval(
-            c,
-            CASE,
-            case_version=1,
-            decision="approve",
-            comment=None,
-            document_sha256="a" * 64,
-            reasons={},
         ),
     ),
     "quotes.decline": (
@@ -157,17 +167,6 @@ async def test_a_service_refuses_a_caller_without_its_scope_before_reading(name:
         await call(_context())
 
     assert refused.value.details["action"] == scope
-
-
-async def test_the_platforms_approvals_decide_approves_no_sales_quote() -> None:
-    """Diệu's `approver_boost` grants `approvals.decide`: it is not
-    `sales.quote.approve`, and the service says which one it needed."""
-    _, approve = CALLS["quotes.approval"]
-
-    with pytest.raises(PermissionDeniedError) as refused:
-        await approve(_context("sales.quote.prepare", "sales.case.read", "sales.price.read"))
-
-    assert refused.value.details["action"] == "sales.quote.approve"
 
 
 async def test_the_source_of_a_case_needs_the_price_scope_besides_reading_it() -> None:

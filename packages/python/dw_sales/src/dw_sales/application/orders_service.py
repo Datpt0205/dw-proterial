@@ -1,12 +1,17 @@
 """Order cases through the API: reading them, and each Sales decision on one.
 
 Every decision follows one path (`_decide`): the scope it needs, the case in
-the caller's workspace, the version the caller decided on, for `prepare` and
-the cross-check the served source (`require_served`), then the case decides
-(`OrderCase`), and the next case is stored with its event and audit row in
-one transaction. The case refuses what the process does not allow (409), a
-scope the caller lacks is refused before anything is read (403), and a case
-of another workspace is not found (404).
+the caller's workspace, the version the caller decided on, for `prepare` the
+served source (`require_served`), then the case decides (`OrderCase`), and
+the next case is stored with its event and audit row in one transaction. The
+case refuses what the process does not allow (409), a scope the caller lacks
+is refused before anything is read (403), and a case of another workspace is
+not found (404).
+
+The Bravo entry and the cross-check are DW1's run (`dw_sales.application.runs`,
+dw_sales ADR 0004): the entry is recorded inside a run that pauses on a
+`sales.order.cross_check` approval, decided through the platform's approvals
+by someone who made none of the case, and applied by the run (`CaseDecisions`).
 
 Who acted is the verified principal, and when is the server's clock: nothing
 in a request names either.
@@ -26,6 +31,12 @@ from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.runs import (
+    PendingDecisionsPort,
+    awaiting,
+    subject_of,
+    withdraw_if_left,
+)
 from dw_sales.application.source import require_served
 from dw_sales.application.support import (
     decided,
@@ -38,10 +49,12 @@ from dw_sales.application.views import (
     CaseChangeView,
     OrderCaseView,
     OrderSummaryView,
+    PendingDecisionView,
     order_case,
     order_change,
     order_summary,
 )
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
     Accepted,
     Actor,
@@ -52,11 +65,9 @@ from dw_sales.domain.orders import (
     FindingDisposition,
     Open,
     OrderCase,
-    OrderStatus,
 )
 
 DispositionChoice = Literal["open", "accepted", "corrected_by_sales", "ask_customer"]
-CrossCheckDecision = Literal["accept", "return"]
 
 _ORDER = "sales_order_case"
 
@@ -76,6 +87,7 @@ def order_actor(context: AccessContext, gate: Gate) -> Actor:
 class OrderQueries:
     uow: SalesUnitOfWorkFactory
     gate: Gate
+    decisions: PendingDecisionsPort
 
     async def summaries(self, context: AccessContext) -> list[OrderSummaryView]:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_ORDER)
@@ -89,11 +101,17 @@ class OrderQueries:
         )
         async with self.uow(sales_scope(context)) as work:
             stored = await stored_order(work, case_id)
+        decision = None
+        if (waits_on := awaiting(stored.case)) is not None:
+            approval_id = await self.decisions.pending(context, subject_of(CaseKind.ORDER, case_id))
+            if approval_id is not None:
+                decision = PendingDecisionView(approval_id=approval_id, approval_type=waits_on)
         return order_case(
             stored.case,
             assigned_to=stored.origin.assigned_to,
             release_manifest_ref=stored.origin.release_manifest_ref,
             prices=self.gate.prices(context),
+            decision=decision,
         )
 
 
@@ -104,6 +122,7 @@ class OrderCommands:
     clock: UtcClock
     ids: IdGenerator
     intake: OrderIntake
+    decisions: PendingDecisionsPort
 
     async def dispose(
         self,
@@ -198,64 +217,6 @@ class OrderCommands:
             served_gate=True,
         )
 
-    async def record_bravo_entry(
-        self,
-        context: AccessContext,
-        case_id: uuid.UUID,
-        *,
-        case_version: int,
-        so_no: str | None,
-        entry_compared: bool,
-    ) -> CaseChangeView:
-        """The sales-order number and the statement that the Bravo entry was
-        compared with the PO. On a revised order in Bravo, the change applied."""
-
-        def step(case: OrderCase, actor: Actor, at: datetime) -> OrderCase:
-            if case.status is OrderStatus.CHANGE_REVIEW:
-                return case.apply_change(actor, at, entry_compared=entry_compared)
-            if so_no is None:
-                raise DomainError(
-                    "a Bravo entry names its sales-order number",
-                    details={"case_id": str(case.case_id), "field": "so_no"},
-                )
-            return case.record_bravo_entry(so_no, actor, at, entry_compared=entry_compared)
-
-        return await self._decide(
-            context, case_id, case_version, "order.bravo_recorded", step, field="bravo_so_no"
-        )
-
-    async def cross_check(
-        self,
-        context: AccessContext,
-        case_id: uuid.UUID,
-        *,
-        case_version: int,
-        decision: CrossCheckDecision,
-        reason: str | None,
-    ) -> CaseChangeView:
-        """Step 9, by a Sales member who made none of the case: accepted, or
-        returned with the reason. Their own served record is required."""
-
-        def step(case: OrderCase, actor: Actor, at: datetime) -> OrderCase:
-            if decision == "accept":
-                return case.cross_check(actor, at)
-            if reason is None:
-                raise DomainError(
-                    "a return names its reason",
-                    details={"case_id": str(case.case_id), "field": "reason"},
-                )
-            return case.return_from_cross_check(reason, actor, at)
-
-        return await self._decide(
-            context,
-            case_id,
-            case_version,
-            "order.cross_checked" if decision == "accept" else "order.returned",
-            step,
-            scope=SalesScopes.ORDER_CROSS_CHECK,
-            served_gate=True,
-        )
-
     async def confirm(
         self,
         context: AccessContext,
@@ -306,13 +267,12 @@ class OrderCommands:
         action: str,
         step: Callable[[OrderCase, Actor, datetime], OrderCase],
         *,
-        scope: SalesScopes = SalesScopes.ORDER_PREPARE,
         served_gate: bool = False,
         finding_key: str | None = None,
         field: str | None = None,
         reason_code: str | None = None,
     ) -> CaseChangeView:
-        await self._require(context, case_id, scope)
+        await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
         actor, now = order_actor(context, self.gate), self.clock.now()
         async with self.uow(sales_scope(context)) as work:
             case = (await stored_order(work, case_id)).case
@@ -330,6 +290,7 @@ class OrderCommands:
             )
             await save_order(work, context, self.ids, case, after, event)
             await work.commit()
+        await withdraw_if_left(self.decisions, context, case, after)
         return order_change(after)
 
 

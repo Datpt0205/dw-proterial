@@ -4,8 +4,11 @@ mailbox, DW1 running, and the personas seeded.
 What it removes, in the tenants the personas belong to (and nowhere else):
 every order and quote case with its revisions, lines and findings, the case
 events, the message log, the sources served, the artifact records and the
-pause switch. It writes nothing to the audit log, which is append-only: the
-trail of earlier rehearsals stays, as it would in a real tenant.
+pause switch; and DW1's runs, their checkpoints and the `sales.` approvals
+they paused on with their decisions, so the approvals inbox starts empty and
+a rehearsal does not spend the next one's daily runs. It writes nothing to
+the audit log, which is append-only: the trail of earlier rehearsals stays,
+as it would in a real tenant.
 
 Artifact bytes already in object storage are not deleted. Their records are
 gone, so nothing serves them; tenant offboarding purges them by prefix.
@@ -29,11 +32,19 @@ import os
 import sys
 
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_agent_runtime.adapters.runtime_tables import (
+    run_checkpoint_writes,
+    run_checkpoints,
+    worker_runs,
+)
+from dw_platform.adapters.persistence.tables import approval_decisions, approval_requests
 from dw_platform.testing.seed_env import sid
 from dw_sales.adapters.persistence import tables
+from dw_sales.application.runs import APPROVAL_PREFIX
+from dw_sales.application.support import DW1_WORKER_ID
 from dw_sales.testing.seed_personas import PERSONAS, seed_demo
 
 # Children first is not needed (every child cascades from its case), but the
@@ -64,8 +75,50 @@ async def clear_sales_cases(database_url: str) -> dict[str, int]:
             for table in _CLEARED:
                 result = await conn.execute(sa.delete(table).where(table.c.tenant_id.in_(tenants)))
                 removed[table.name] = result.rowcount
+            removed |= await _clear_dw1_runs(conn, tenants)
     finally:
         await engine.dispose()
+    return removed
+
+
+async def _clear_dw1_runs(conn: AsyncConnection, tenants: list[object]) -> dict[str, int]:
+    """DW1's runs in the demo tenants, their checkpoints, and the Sales
+    approvals they paused on with their decisions; nothing else's."""
+    runs = sa.select(worker_runs.c.thread_id).where(
+        worker_runs.c.tenant_id.in_(tenants), worker_runs.c.worker_id == DW1_WORKER_ID
+    )
+    sales_approvals = sa.select(approval_requests.c.id).where(
+        approval_requests.c.tenant_id.in_(tenants),
+        approval_requests.c.approval_type.startswith(APPROVAL_PREFIX, autoescape=True),
+    )
+    removed: dict[str, int] = {}
+    for name, statement in (
+        (
+            "run_checkpoint_writes",
+            sa.delete(run_checkpoint_writes).where(run_checkpoint_writes.c.thread_id.in_(runs)),
+        ),
+        (
+            "run_checkpoints",
+            sa.delete(run_checkpoints).where(run_checkpoints.c.thread_id.in_(runs)),
+        ),
+        (
+            "approval_decisions",
+            sa.delete(approval_decisions).where(
+                approval_decisions.c.request_id.in_(sales_approvals)
+            ),
+        ),
+        (
+            "approval_requests",
+            sa.delete(approval_requests).where(approval_requests.c.id.in_(sales_approvals)),
+        ),
+        (
+            "worker_runs",
+            sa.delete(worker_runs).where(
+                worker_runs.c.tenant_id.in_(tenants), worker_runs.c.worker_id == DW1_WORKER_ID
+            ),
+        ),
+    ):
+        removed[name] = (await conn.execute(statement)).rowcount
     return removed
 
 

@@ -154,3 +154,12 @@ class WorkflowRunnerPort(Protocol):
         run_id: UUID,
         resume_payload: dict[str, object],
     ) -> None: ...
+
+    async def withdraw(self, *, run_context: RunContext, run_id: UUID) -> None:
+        """End a run parked on an approval nobody will decide any more.
+
+        Its subject moved on without the decision (a quote priced again while
+        it waited, an order revised): the run is settled as cancelled, never
+        resumed, and its per-run spend entry is freed as any ending frees it.
+        """
+        ...
