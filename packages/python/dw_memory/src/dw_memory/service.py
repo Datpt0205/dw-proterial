@@ -399,7 +399,9 @@ class MemoryService:
         item: MemoryItem | None = None
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
-            request = await SqlApprovalRepository(session).get(approval_id)
+            request = await SqlApprovalRepository(session).get(
+                approval_id, workspace_id=context.workspace_id
+            )
             if (
                 request is None
                 or request.approval_type != MEMORY_REVIEW
