@@ -145,7 +145,13 @@ Mốc 6 (running many customers) is half done:
   `retrieval-correctness`
   (`document_ids` inside the Qdrant filter, one embedding builder, a pinned
   agent-loop prompt; **resolved 2026-10-06**), `dev-harness` (commit gate for PowerShell and
-  `git -C`/`-c`, per-session Stop hook, plugin wording, `ui-quality.md`).
+  `git -C`/`-c`, per-session Stop hook, plugin wording, `ui-quality.md`;
+  **resolved 2026-10-06**: `scripts/test_claude_hooks.sh` in `make ci` and the
+  CI python job, green on Git Bash without jq and on Alpine with jq; a real
+  PowerShell-tool commit was blocked in a nested session. Not done: no
+  `permissions.deny` on the gate switches, because a shell `touch` gets past it,
+  so it is gitignore plus a human-only note; the new CI step has not been
+  watched on GitHub; the Stop hook cannot tell which session made a commit).
   Dropped as already true here: the rerank outage fallback (`4cb45dc`), and
   offboarding purging run checkpoints (catalog discovery already does; the
   `compaction` ticket only pins it with a test).

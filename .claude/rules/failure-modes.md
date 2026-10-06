@@ -1,5 +1,10 @@
 # Failure modes this repository actually has
 
+**Scope: every session, on purpose.** This file has no `paths:` frontmatter, so it
+loads whatever part of the tree a session touches. That is deliberate: it applies to
+every change, not to one directory (`CLAUDE.md` "Work style" item 3). A rule that
+only applies to part of the tree carries `paths:`, as `ui-quality.md` does.
+
 Not general advice. Every entry below is a shape that has bitten this codebase,
 with the count of distinct times it was found. They are written as questions to
 ask **while writing the line**, because each one was cheap to prevent and

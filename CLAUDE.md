@@ -314,6 +314,14 @@ security/dependency scan, eval smoke, container build and a compose smoke test.
 Matt Pocock's engineering skills are installed as a project plugin
 (`mattpocock-skills@claude-plugins-official`, pinned by the marketplace to one
 commit). `/ask-matt` routes to the right one.
+The install is per checkout: `.claude/settings.json` only enables the plugin, so
+a fresh clone, or a product merged from this platform, has none of its commands
+until someone runs
+`claude plugin install mattpocock-skills@claude-plugins-official --scope project`
+there. `claude plugin list` says which: "✔ enabled" is installed, "✘ failed to
+load" is enabled but not installed, and then `/ask-matt`, `/implement` and the
+plugin's `code-review` do not exist while the repository's own hooks and skills
+still run.
 
 ### Issue tracker
 

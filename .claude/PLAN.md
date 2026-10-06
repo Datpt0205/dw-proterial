@@ -32,8 +32,8 @@ own file and a row here.
   plans and research live there, not here.
 - **Next:** on `feat/platform-hardening`, the six harness-audit slices in
   `platform-runtime.md` (memory vectors, write trust, the review queue,
-  compaction and retrieval done; approval-audit 01–02 still owed, and they cover `memory.review` the
-  day they land; dev harness last); then the
+  compaction, retrieval and dev harness done; approval-audit 01–02 still owed, and they cover `memory.review` the
+  day they land); then the
   rest of the antd shell tickets (`web-ui/antd-shell/` 03–09).
 
 ## Decisions Đạt owes
@@ -71,7 +71,8 @@ own file and a row here.
    secrets, CORS, outbound URLs, and a scan of every new image.
 5. `mattpocock-skills` (`/ask-matt` routes): the flow from grilling to
    `/implement` and `/code-review`; `CLAUDE.md` "Agent skills" places
-   layers 1–4 inside it.
+   layers 1–4 inside it. Installed per checkout, not by the repo: check
+   with `claude plugin list`.
 
 `.claude/rules/failure-modes.md` holds the counts behind layers 1–3. Layer 2
 guarantees the questions get raised, not that they get answered truthfully.

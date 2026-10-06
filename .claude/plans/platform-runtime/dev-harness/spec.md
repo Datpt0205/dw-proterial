@@ -1,6 +1,6 @@
 # Harness của coding agent: cổng commit không bị vòng qua, Stop hook đếm đúng việc của phiên
 
-Status: ready-for-agent
+Status: resolved
 Area: platform-runtime · Nhánh: `feat/platform-hardening` · Viết: 6/10/2026
 
 Lát nền tảng, trung tính với sản phẩm: các sản phẩm nhận nó qua `git merge`. Nguồn: audit
@@ -116,6 +116,6 @@ trên `main` (`4cb45dc`) của repo này.
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                                  | Status          | Blocked by |
-| --- | ----------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
-| 01  | [Cổng commit cho mọi dạng commit, Stop hook theo phiên, plugin và rules nói đúng](issues/01-harness-gates-and-rules.md) | ready-for-agent | —          |
+| #   | Ticket                                                                                                                  | Status   | Blocked by |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
+| 01  | [Cổng commit cho mọi dạng commit, Stop hook theo phiên, plugin và rules nói đúng](issues/01-harness-gates-and-rules.md) | resolved | —          |
