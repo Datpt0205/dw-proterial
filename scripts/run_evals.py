@@ -28,7 +28,13 @@ def main() -> int:
     parser.add_argument("--dataset", type=Path, help="run a single dataset file")
     args = parser.parse_args()
 
+    from dw_evals.graders import GRADERS, compose_graders
     from dw_evals.runner import load_dataset, run_dataset, write_report
+    from dw_sales.evals import GRADERS as SALES_GRADERS
+
+    # The eval runner's composition root: the platform's graders and each
+    # context's, which the platform package may not import itself.
+    graders = compose_graders(GRADERS, SALES_GRADERS)
 
     if args.dataset:
         paths = [args.dataset]
@@ -43,7 +49,7 @@ def main() -> int:
     exit_code = 0
     for path in paths:
         dataset = load_dataset(path)
-        report = run_dataset(dataset, REPO_ROOT)
+        report = run_dataset(dataset, REPO_ROOT, graders)
         report_path = write_report(report, REPORTS_DIR)
         status = "PASS" if report.ok else "FAIL"
         print(

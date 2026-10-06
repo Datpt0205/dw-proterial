@@ -38,16 +38,11 @@ from dw_agent_runtime.testing.demo_graph import DEMO_WORKER
 STALE_AFTER_SECONDS_LOCAL = 3600
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.anyio]
+pytestmark = pytest.mark.integration
 
 # Generous: the point is that delivery happens at all, not how fast a loaded
 # CI box gets there. A real delivery takes single-digit milliseconds.
 _DELIVERY_TIMEOUT_SECONDS = 5.0
-
-
-@pytest.fixture
-def anyio_backend() -> str:
-    return "asyncio"
 
 
 @pytest.fixture

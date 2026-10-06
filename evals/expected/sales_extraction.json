@@ -1,0 +1,8 @@
+{
+  "truth": "packages/python/dw_sales/src/dw_sales/adapters/mock/data/purchase_orders.json",
+  "min_accuracy": 1.0,
+  "routed": {
+    "M15": "customer_unknown",
+    "M16": "attachment_unreadable"
+  }
+}

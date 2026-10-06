@@ -1,0 +1,19 @@
+{
+  "flow": "quote",
+  "pricer": "dieu",
+  "rfq": "M10",
+  "ycbg": "YCBG-2609-030",
+  "reply": "M25",
+  "price": {
+    "unit_price": "0.6890",
+    "moq": "3000",
+    "lead_time_days": 45,
+    "lme_month": "2026-09",
+    "quote_no": "Q26-0301",
+    "copper_basis": {
+      "kind": "lme_band",
+      "low_usd_per_tonne": "10500",
+      "high_usd_per_tonne": "11000"
+    }
+  }
+}

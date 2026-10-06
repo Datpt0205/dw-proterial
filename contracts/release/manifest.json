@@ -33,9 +33,14 @@
       "checksum": "ce36d6b3e5531666e296c86cd5b907f91734079ddfe99d3924b72a601d9c00e6",
       "dataset_id": "platform_smoke",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "371fe5c19f09669a6b304966e7c2c880bdb8f1a0b7e869580b860227084a5ee8",
+      "dataset_id": "sales",
+      "version": "1.0.0"
     }
   ],
-  "git_sha": "3557de88964701162e8e5ef498afdfebf18ae170",
+  "git_sha": "92b155acd90bd4a148a5ae43a45d49a156164799",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "1.0.0",
   "platform_version": "0.1.0",

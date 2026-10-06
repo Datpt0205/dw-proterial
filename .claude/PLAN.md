@@ -14,23 +14,25 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed              |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps         |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Prototype theme; Sales restyled |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Spec + tickets; building        |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 10, 12 left          |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-10-03)
+## Now (2026-10-06)
 
 - **This repo is now the Proterial product repo** (`origin`
   `Datpt0205/dw-proterial`; the platform seed stays in `Datpt0205/codebase`).
   Context `dw_sales` is scaffolded; DW1 (Đơn hàng & Báo giá) is being built
   end to end on mock data: `sales.md`, spec and tickets under
   `sales/dw1-portal-demo/`.
-- A conformance review found the plan missed process steps (cross-check,
-  revised PO, quotation steps) and roles; the spec and tickets are amended.
+- DW1's demo is built (tickets 01–09, 11): eval `sales@1.0.0` in the eval
+  smoke, runbook `sales/dw1-portal-demo/demo.md`, `make demo-reset`,
+  `make test-web-sales`. Ticket 09 is uncommitted.
 - Platform pieces still waiting for a first caller: `platform-runtime.md`.
-- **Next:** sales ticket 08, then 09 (01–07 and 11 are done; 06 uncommitted).
+- **Next:** sales ticket 10 (approval on the runtime), then 12 (production
+  hardening, needs-triage).
 
 ## Decisions Đạt owes
 

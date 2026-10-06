@@ -41,7 +41,6 @@ async def _get(app: FastAPI, path: str, token: str | None = None) -> httpx.Respo
         return await client.get(path, headers=headers)
 
 
-@pytest.mark.anyio
 async def test_limits_per_caller_and_recovers_after_window() -> None:
     clock = FakeClock()
     app = build_app(limit=3, clock=clock)
@@ -60,7 +59,6 @@ async def test_limits_per_caller_and_recovers_after_window() -> None:
     assert (await _get(app, "/api/v1/things", token="alice")).status_code == 200
 
 
-@pytest.mark.anyio
 async def test_health_is_exempt_and_zero_disables() -> None:
     clock = FakeClock()
     app = build_app(limit=1, clock=clock)

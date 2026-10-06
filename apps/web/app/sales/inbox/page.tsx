@@ -442,7 +442,7 @@ function Inbox() {
                       DW xử lý
                     </GuardedButton>
                   ) : m.disposition.processed_at ? (
-                    <span className="flex flex-col">
+                    <span className="flex flex-col items-start">
                       <Typography.Text type="secondary">
                         đã xử lý
                       </Typography.Text>
@@ -451,6 +451,21 @@ function Inbox() {
                           zoneLabel: false,
                         })}
                       </Typography.Text>
+                      {/* A Design reply processed before its YCBG went to
+                          Design is matched once it has: the API takes a
+                          routed message again (InboxService.process). */}
+                      {m.disposition.reason === "design_reply_unmatched" ? (
+                        <GuardedButton
+                          size="small"
+                          inlineReason={false}
+                          reason={processReason}
+                          loading={pending === `inbox/${m.message_id}`}
+                          onClick={() => processOne(m)}
+                          aria-label={`DW xử lý lại thư ${m.message_id}`}
+                        >
+                          DW xử lý lại
+                        </GuardedButton>
+                      ) : null}
                     </span>
                   ) : null,
               },

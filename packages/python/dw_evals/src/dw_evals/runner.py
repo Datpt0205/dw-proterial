@@ -2,18 +2,24 @@
 
 The runner is deliberately framework-free so `make eval-smoke` and CI can call
 it directly. Reports are plain JSON under evals/reports.
+
+The graders a dataset may name are handed in. The platform's own are the
+default; a bounded context's graders live in the context and a composition
+root (`scripts/run_evals.py`) adds them with `compose_graders`, so this
+package never imports a context.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from dw_evals.dataset import CaseCategory, EvalCase, EvalDataset
-from dw_evals.graders import GRADERS, GraderContext, GradeResult
+from dw_evals.graders import GRADERS, Grader, GraderContext, GradeResult
 
 
 class CaseResult(BaseModel):
@@ -57,8 +63,10 @@ def _load_ref(repo_root: Path, ref: str) -> dict[str, Any]:
     return data
 
 
-def _grade(ctx: GraderContext, repo_root: Path, case: EvalCase) -> GradeResult:
-    grader = GRADERS.get(case.grader)
+def _grade(
+    ctx: GraderContext, repo_root: Path, case: EvalCase, graders: Mapping[str, Grader]
+) -> GradeResult:
+    grader = graders.get(case.grader)
     if grader is None:
         return GradeResult.fail("unknown grader", grader=case.grader)
     try:
@@ -69,14 +77,17 @@ def _grade(ctx: GraderContext, repo_root: Path, case: EvalCase) -> GradeResult:
         return GradeResult.fail("grader raised", error=f"{type(exc).__name__}: {exc}")
 
 
-def run_dataset(dataset: EvalDataset, repo_root: Path) -> EvalReport:
+def run_dataset(
+    dataset: EvalDataset, repo_root: Path, graders: Mapping[str, Grader] = GRADERS
+) -> EvalReport:
+    """Grade every case; a case naming a grader not in ``graders`` fails."""
     ctx = GraderContext(repo_root=repo_root)
     results = tuple(
         CaseResult(
             case_id=case.case_id,
             category=case.category,
             grader=case.grader,
-            passed=(result := _grade(ctx, repo_root, case)).passed,
+            passed=(result := _grade(ctx, repo_root, case, graders)).passed,
             details=result.details,
         )
         for case in dataset.cases

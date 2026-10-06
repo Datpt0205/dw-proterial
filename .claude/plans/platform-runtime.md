@@ -41,22 +41,70 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
-- **CI gitleaks** failed on run 36979355944 (2026-10-02): `.gitleaksignore`'s
-  own comment quoted the phrase it ignores. Fixed 2026-10-05; a local full-
-  history scan finds no leaks. Not yet confirmed in CI (nothing pushed).
+- **CI gitleaks**: confirmed green in CI on run 37398677606 (2026-10-06,
+  "no leaks found", 88 commits). Close this entry once that run's other
+  failures (below) are confirmed fixed by a push.
 
-- **CI: three run-state announcement tests time out** (2026-09-29, run
-  36526991963). The tests are in
-  `dw_agent_runtime/tests/integration/test_run_state_announcements.py`: the
-  LISTEN side never hears the NOTIFY within 5 s, and the fourth test, which
-  expects silence, passes.
-    - This is the first CI integration run since 2026-09-21, when it was
-      green, so twelve ops commits and the platform commit were never run
-      there.
-    - Locally they pass alone (4/4) and with the rest of `dw_agent_runtime`
-      (48/48).
-    - A full-suite local run, in CI's order, is testing whether other tests
-      running first in the session cause it.
+- **CI: three run-state announcement tests time out** (2026-09-29, still red
+  on run 37398677606, 2026-10-06). Cause found 2026-10-06, fixed locally; not
+  yet confirmed in CI (nothing pushed).
+    - **Cause:** two async test runners claimed the same tests. The tests
+      were marked `pytest.mark.anyio` while `asyncio_mode = "auto"` makes
+      pytest-asyncio run every async test too. Which plugin ran an async
+      FIXTURE depended on plugin registration order, and that order is
+      reversed between the two venvs (`--trace-config`: Windows registers
+      anyio first, Linux registers pytest-asyncio first). On Linux, anyio ran
+      the `heard` fixture on its own loop and pytest-asyncio ran the test on
+      another. The asyncpg LISTEN connection belonged to a loop that was not
+      running during the test, so its socket was never read. A probe test
+      printed `same_loop=False fixture_loop_running=False` on Linux and
+      `same_loop=True` on Windows. Test order had nothing to do with it: on
+      Linux the file fails alone too (3 failed, 1 passed). The silence test
+      passed because hearing nothing was the expected result.
+    - **Why only these tests:** the other anyio-marked fixtures open
+      connections lazily, through a NullPool engine, on whichever loop is
+      running when they are used. `heard` is the only one that opens its
+      connection while the fixture is being set up.
+    - **Reproduced** in a `python:3.12-slim` container on the compose
+      network, running `uv run pytest -m integration` over the
+      `dw_agent_runtime` suite, which is CI's first 48 tests in CI's order:
+      3 failed and 45 passed, the same three tests as CI. After the fix:
+      48 passed.
+    - **Fix:** one runner. The `anyio` marks and `anyio_backend` fixtures
+      are removed from the five files that had them, and `-p no:anyio` is in
+      `addopts`. If someone adds the marker back, `--strict-markers` refuses
+      it at collection (checked).
+- **CI pip-audit** (run 37398677606) flagged pyjwt 2.14.0
+  (PYSEC-2026-4141 / GHSA-x33g-cr3x-6449) and virtualenv 21.7.10
+  (PYSEC-2026-4011..4014). The lock now has pyjwt 2.15.1 and virtualenv
+  21.14.5, and dw_platform's floor is raised to `pyjwt>=2.15`. The same
+  pip-audit command CI runs finds no known vulnerabilities. Not yet
+  confirmed in CI.
+    - **Gap:** `KeycloakTokenVerifier`, the production RS256/JWKS path, has
+      no test at all. The unit suite covers only the dev HS256 verifier. A
+      scratch run against a local JWKS server on pyjwt 2.15.1 accepted a
+      valid token and refused each of: wrong audience, wrong issuer,
+      expired, missing `sub`, missing `exp`, a foreign key, HS256 and
+      `alg: none`. That run was not committed as a test, so the next pyjwt
+      bump has nothing that checks this path.
+- **CI scaffold-smoke** (run 37398677606): `lint-imports` failed with
+  "Module 'dw_smoke_ctx' does not exist". The generator found its place in
+  `root_packages` by the lines `"dw_observability", "dw_evals", ]`. Once
+  `dw_sales` was appended to `root_packages`, those lines matched only the
+  "Kernel is pure" list, so the new package was written there. A second
+  failure was hidden behind it: the template's `tests/unit/__init__.py`
+  makes a top-level package named `unit`, so a second context's slice test
+  failed to import (`No module named 'unit.test_smoke_ctx_slice'`).
+    - **Fix:** `scripts/new_context.py` now finds each list inside its own
+      table. It adds the context to "Platform does not import contexts" and
+      to the domain-purity contract, and gives it a layers contract. From the
+      second context on, it adds an independence contract between contexts.
+      It reads the file back and refuses to write if any of these entries
+      did not land where intended. The template no longer ships
+      `tests/unit/__init__.py`.
+    - **Verified** by walking the job's exact steps in a scratch worktree:
+      red at HEAD, green with the fix. With two contexts generated,
+      `dw_sales`'s contracts are unchanged. Not yet confirmed in CI.
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).
