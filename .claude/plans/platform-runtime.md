@@ -123,8 +123,15 @@ Mốc 6 (running many customers) is half done:
   context narrows its tables by workspace. Found on the way: offboarding loses
   in-app notifications unexported (`ops-hardening.md` Open).
 - **Approval decisions audited; approvals, runs and audit read by workspace**
-  (`platform-runtime/approval-audit-and-workspace/`, tickets 01–02 open):
-  HITL-11 and the rest of TEN-04. Ticket 01 comes before the first product gate.
+  (`platform-runtime/approval-audit-and-workspace/`): HITL-11 and the rest of
+  TEN-04. Ticket 01 open, and comes before the first product gate. Ticket 02
+  **resolved 2026-10-06**, upstreamed from the first product's repo: the
+  repository narrows approval, run and audit reads to the caller's workspace
+  (RLS unchanged, still tenant-only), `decide` resumes in the run's own
+  workspace, `GET /runs/{id}` checks `runs.read`, the audit route checks
+  `audit.events`, cursors carry the workspace, keyset indexes carry
+  `workspace_id` (`6d4aed20ccf2`). Open: whether the UoW should own the
+  workspace instead of a required read argument.
 - **Tickets written for the first product, platform side** (2026-10-03, all
   `ready-for-agent`, product-neutral), each under `platform-runtime/<folder>/`:
   `scope-holder-check` (ask whether a user holds a scope without an
@@ -144,7 +151,7 @@ Mốc 6 (running many customers) is half done:
   classes nothing can assign removed; **resolved 2026-10-06**), `memory-review-queue` (REVIEW becomes a
   `memory.review` approval; **resolved 2026-10-06**; the decision audit and
   the workspace narrowing of `decide` stay with `approval-audit-and-workspace`
-  01–02, still open),
+  01 (open) and 02 (resolved 2026-10-06)),
   `compaction` (long tool loops and multi-turn threads really compact, budget
   from the profile, checkpoint retention; **resolved 2026-10-06**),
   `retrieval-correctness`
@@ -160,6 +167,15 @@ Mốc 6 (running many customers) is half done:
   Dropped as already true here: the rerank outage fallback (`4cb45dc`), and
   offboarding purging run checkpoints (catalog discovery already does; the
   `compaction` ticket only pins it with a test).
+- **Upstreamed from the first product's repo** (2026-10-06, branch
+  `feat/upstream-elmich-platform`): who may decide an approval is stamped on
+  it as `required_scope` and enforced in `decide`; `platform_admin` does not
+  pass a stamp (`docs/adr/0004`, migration `36dabf47619c`); the inbox reads
+  `can_decide` from the same checks. The resume payload carries `decided_by`
+  from the decider's verified context. A multipart route claims its
+  idempotency key from parsed fields (`get_form_idempotent_operation`,
+  `claim_fields`); `PAYLOAD_TOO_LARGE`→413, `UNSUPPORTED_MEDIA_TYPE`→415.
+  Not taken: the product's contexts, migrations, channel code and web look.
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).
@@ -173,6 +189,12 @@ Mốc 6 (running many customers) is half done:
     - `SqlPendingApprovalQuery`: a context counting its own pending
       approvals by type prefix;
     - `scope_holders.py`: who holds a scope, for routing work to people;
+    - `required_scope` on an approval: no platform node stamps one; a
+      context's graph puts it in its interrupt payload;
+    - `decided_by` in the resume payload: no platform graph reads it;
+    - `get_form_idempotent_operation` / `claim_fields`, and
+      `PayloadTooLargeError` / `UnsupportedMediaTypeError`: no platform
+      route takes a form or raises them (a unit test mounts a probe route);
     - `platform.deliver_notification()`: the one way into a member's inbox.
       The bell, the API and retention are wired, but nothing sends yet.
       A context that adopts one wires it in `bootstrap/wiring.py` and names it
