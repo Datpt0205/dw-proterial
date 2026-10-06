@@ -43,7 +43,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   with the PO when recording the order number; NOC/ESF blocks confirmation,
   not preparation. The cross-checker must also differ from the Bravo
   recorder. The quotation approval matrix waits for Proterial (ticket 12).
-- 2026-10-05, ticket 05 built (uncommitted): 42 routes under
+- 2026-10-05, ticket 05 built (`3557de8`): 42 routes under
   `/api/v1/sales`, each on the verified access context, scope before the
   idempotency key, amounts left out by one mapper per resource, ids-only
   mutation answers. The items owed into 05 landed: the case carries every
@@ -53,7 +53,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   audit rows in the same transaction, the Design mailbox in
   `sales_quote_rules@1.1.0`, and `price_floor_unknown` (fail closed, Đạt did
   not object). `sales_kpi@1.0.0` shipped. Details in the ticket's "As built".
-- 2026-10-05, ticket 06 built (uncommitted): every artifact in the table
+- 2026-10-05, ticket 06 built (`2f737ca`): every artifact in the table
   rendered from the case by `POST /orders|quotes/{id}/artifacts`, listed by
   `GET .../artifacts`, stored under `{tenant}/{workspace}/sales/{case}/{id}`
   with template `id@version`, case version and sha256, downloaded only in its
@@ -62,7 +62,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   `sales_bravo_upload@1.0.0` (MOCK) are pinned by the manifest. reportlab
   stays a runtime dependency (G38). The confirmation draft opens at
   `confirmed`, not `cross_checked`; details in the ticket's "As built".
-- 2026-10-06, ticket 09 built (uncommitted): eval dataset `sales@1.0.0`
+- 2026-10-06, ticket 09 built (`2284d3c`): eval dataset `sales@1.0.0`
   (10 cases, full security coverage) graded by seven `sales.*` graders that
   live in `dw_sales.evals` and run the real Sales services in one process
   over an in-memory store; `scripts/run_evals.py` is the composition root
@@ -98,7 +98,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   (JetBrains Mono for codes), a bright primary, a Sales-only header with
   counts, a "Cần xử lý" panel, Segmented tabs with counts, search/sort and
   two-line rows. Primary decided `#0071e3` by Đạt 2026-10-05.
-- 2026-10-05, restyle built (uncommitted): theme from the prototype
+- 2026-10-05, restyle built (`92b155a`): theme from the prototype
   (`web-ui.md` has the mapping and the nearest-passing values); Sales-only
   bar for a PIC/head/viewer with counts (my-work, unprocessed mail) and the
   Vietnamese role name; the four lists on the prototype's list pattern

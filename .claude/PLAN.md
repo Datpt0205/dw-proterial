@@ -29,7 +29,7 @@ own file and a row here.
   `sales/dw1-portal-demo/`.
 - DW1's demo is built (tickets 01–09, 11): eval `sales@1.0.0` in the eval
   smoke, runbook `sales/dw1-portal-demo/demo.md`, `make demo-reset`,
-  `make test-web-sales`. Ticket 09 is uncommitted.
+  `make test-web-sales`. All committed and pushed (`2284d3c`).
 - Platform pieces still waiting for a first caller: `platform-runtime.md`.
 - **Next:** sales ticket 10 (approval on the runtime), then 12 (production
   hardening, needs-triage).
