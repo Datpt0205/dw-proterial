@@ -78,7 +78,7 @@ Spec, mục "Hiện trạng" và "Quy tắc và kiểm soát".
 
 ## Comments
 
-### 2026-10-06: xong trên `feat/platform-hardening` (commit ghi ở area file)
+### 2026-10-06: xong trên `feat/platform-hardening`, commit `55bd789`
 
 Đã làm đủ sáu mục. Ba chỗ khác ticket, có lý do:
 
