@@ -231,3 +231,57 @@ async def test_a_table_added_later_is_readable_without_a_new_grant(
             await conn.execute(sa.text("DROP TABLE platform.grant_probe"))
     finally:
         await migrator.dispose()
+
+
+async def test_the_application_may_only_record_a_decision_on_an_approval(
+    db_urls: DatabaseUrls,
+) -> None:
+    """`platform.approval_requests` (migration 36dabf47619c): a decision writes
+    `status`, `decided_at` and `version`, and nothing else may move. Above all
+    `required_scope`, the stamp of who may decide (ADR 0004). Asked of the
+    catalog, so a later blanket GRANT that restored table-wide UPDATE goes red."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+
+            async def table(verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text(
+                            "SELECT has_table_privilege('dw_app',"
+                            " 'platform.approval_requests', :verb)"
+                        ),
+                        {"verb": verb},
+                    )
+                )
+
+            async def column(name: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text(
+                            "SELECT has_column_privilege('dw_app',"
+                            " 'platform.approval_requests', :col, :verb)"
+                        ),
+                        {"col": name, "verb": verb},
+                    )
+                )
+
+            assert await table("SELECT")
+            assert await table("INSERT")
+            # The offboarding lane deletes every table dw_app may DELETE.
+            assert await table("DELETE")
+            assert not await table("UPDATE")  # no table-wide UPDATE
+            for name in ("status", "decided_at", "version"):
+                assert await column(name, "UPDATE"), name
+            for name in (
+                "required_scope",
+                "approval_type",
+                "requested_by",
+                "payload",
+                "tenant_id",
+                "workspace_id",
+                "run_id",
+            ):
+                assert not await column(name, "UPDATE"), name
+    finally:
+        await migrator.dispose()

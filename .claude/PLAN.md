@@ -34,7 +34,8 @@ own file and a row here.
 - Sales ticket 10 committed 2026-10-06 (`8d098b3`): DW1 runs on the runtime,
   quotation approval and cross-check are platform approvals (dw_sales ADR
   0004 Proposed, Đạt to review).
-- Platform `92a1571` merged 2026-10-06: FCI rerank, six hardening slices.
+- Platform `96f95ad` merged 2026-10-07: Sales approvals on the platform
+  model (`required_scope`, `approvals.decide`, `ac31ff0f2087`; `docs/adr/0011`).
 - **Next:** sales 12 (production hardening, needs-triage).
 
 ## Decisions Đạt owes

@@ -1,6 +1,6 @@
 # 02 — Approval, run và audit đọc theo workspace; route nào cũng kiểm scope
 
-Status: ready-for-agent
+Status: resolved
 Blocked by: —
 Area: platform-runtime
 
@@ -33,21 +33,25 @@ kết quả run hay chi tiết audit sẽ lộ nó cho cả tenant.
 ## Tiêu chí chấp nhận
 
 Integration (`apps/api`, DB thật; một tenant, hai workspace W1, W2; A là thành viên W1, B là
-thành viên W2):
+thành viên W2): _(`apps/api` không có suite integration; test DB thật nằm ở
+`dw_platform/tests/integration/test_workspace_reads.py` và
+`dw_agent_runtime/tests/integration/test_approval_workspace.py`; 403/404 của route ở test unit
+`apps/api/tests/unit/test_run_and_audit_reads.py` và `test_approvals_endpoint.py`.)_
 
-- [ ] B gọi `GET /approvals`: không có approval nào của W1. `GET /approvals/{id}` với id của
+- [x] B gọi `GET /approvals`: không có approval nào của W1. `GET /approvals/{id}` với id của
       W1: 404.
-- [ ] B giữ `approvals.decide` ở W2 quyết approval của W1: 404; approval vẫn `pending`,
+- [x] B giữ `approvals.decide` ở W2 quyết approval của W1: 404; approval vẫn `pending`,
       không có dòng `approval_decisions`, run của W1 không chạy tiếp.
-- [ ] A quyết approval của W1: run chạy tiếp với `workspace_id = W1` (khẳng định trên
+- [x] A quyết approval của W1: run chạy tiếp với `workspace_id = W1` (khẳng định trên
       `RunContext` mà runner giả nhận).
-- [ ] B gọi `GET /runs/{id}` với run của W1: 404. Người không có `runs.read`: 403.
-- [ ] B gọi `GET /audit/events`: không có dòng nào của W1. Người chỉ có `approvals.read`
+- [x] B gọi `GET /runs/{id}` với run của W1: 404. Người không có `runs.read`: 403.
+- [x] B gọi `GET /audit/events`: không có dòng nào của W1. Người chỉ có `approvals.read`
       (vai `member`): 403; người có `audit.events` (vai `director`): 200.
-- [ ] Mutation, ghi vào Comments: bỏ điều kiện workspace ở `list_pending` thì ca đầu đỏ; bỏ
+- [x] Mutation, ghi vào Comments: bỏ điều kiện workspace ở `list_pending` thì ca đầu đỏ; bỏ
       `require` ở `GET /runs/{id}` thì ca 403 đỏ.
-- [ ] Trang `/approvals` và `/audit` của web vẫn chạy với người có scope.
-- [ ] `make ci` xanh; hợp đồng OpenAPI và client sinh lại nếu đổi.
+- [x] Trang `/approvals` và `/audit` của web vẫn chạy với người có scope. _(Xem trong trình duyệt ở repo sản phẩm, 6/10/2026; ở đây chỉ vitest:
+      `home-page`, `session-chip`, `approvals-page`.)_
+- [x] `make ci` xanh; hợp đồng OpenAPI và client sinh lại nếu đổi.
 
 ## Nguồn
 
@@ -61,3 +65,36 @@ thành viên W2):
   buộc; ẩn nút không phải phân quyền).
 
 ## Comments
+
+### 2026-10-06: đã làm (đưa ngược từ repo sản phẩm đầu tiên)
+
+Làm ở repo sản phẩm (commit `7b411df` ở đó, cùng hai vòng review), đưa về đây nguyên hành
+vi, bỏ phần của sản phẩm. Nhánh `feat/upstream-elmich-platform`.
+
+- Lọc ở repository, RLS không đổi (vẫn chỉ tenant). `workspace_id` là tham số keyword
+  BẮT BUỘC, không mặc định: `ApprovalRepositoryPort.get/list_pending`,
+  `AuditRepositoryPort.list_page/list_for_run`, `SqlPendingApprovalQuery`,
+  `SqlWorkerRunStore.get` (workspace của `RunContext`), `thread_belongs_to(tenant,
+workspace, thread)`. Người gọi truyền `context.workspace_id` của `AccessContext`.
+  Workspace khác trả như không tồn tại (404 ở route).
+- `decide` đọc approval và run trong workspace người quyết; resume với
+  `RunRecord.workspace_id` (đọc từ dòng `worker_runs`). `settle_review` của `dw_memory`
+  (`memory.review`) đọc approval với workspace của context đến từ event, như đã so
+  `request.workspace_id` sau đó.
+- `GET /runs/{id}` kiểm `runs.read`; `GET /audit/events` kiểm `audit.events`. Fingerprint
+  cursor của `approvals.pending` và `audit.events` mang `workspace`.
+- Migration `6d4aed20ccf2`: `ix_approval_requests_page` thành `(tenant_id, workspace_id,
+status, created_at DESC, id DESC)`; `ix_audit_events_page (tenant_id, workspace_id,
+occurred_at DESC, id DESC)` trên bảng cha phân vùng. Docstring ghi khóa SHARE lúc dựng
+  và cách làm không chặn ghi khi đã có trail lớn.
+- Web: mục `/audit` của nav registry và link trong menu tài khoản đọc cùng scope
+  `audit.events` (một chủ). Vitest `home-page.test.tsx`, `session-chip.test.tsx`.
+- Test và mutation (ở repo này): bỏ điều kiện workspace ở `list_pending` thì 2 test đỏ, ở
+  `approvals.get` thì 3 test đỏ, ở `run_store.get` thì đỏ, bỏ `require(runs.read)` thì đỏ, route audit về
+  `approvals.read` thì đỏ, fingerprint không workspace thì đỏ. `decide` resume với
+  `context.workspace_id` thay vì của run **vẫn xanh**, như ở repo sản phẩm: sau hai lần
+  đọc đã lọc, hai giá trị luôn bằng nhau; đọc từ run là để giá trị có một nguồn, lệch được
+  chặn trước đó (`test_a_run_in_another_workspace_than_its_approval_is_not_resumed`).
+- Còn mở: liệu UoW nên giữ workspace (một chủ) thay vì tham số đọc (review vòng 1 ở repo
+  sản phẩm, phát hiện 4); trang `/audit` thiếu scope vẫn hiện lỗi API của trang shadcn,
+  chưa phải `Result 403`.

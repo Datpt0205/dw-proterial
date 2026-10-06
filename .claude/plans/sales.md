@@ -91,6 +91,18 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   guard, inbox audience filter, withdraw by subject, an in-memory runtime
   the eval world uses. Walk: 11/11 passed on the third run (`make demo-reset`, `make test-web-sales`); the two before timed out at different steps under machine load (a draft render at stage 1; M29's reprocess at stage 8, whose run row shows 107 s against 0.2 s measured idle). Details and open items in the ticket's
   "As built".
+- 2026-10-07, platform `96f95ad` merged (`chore/platform-merge-2`): Sales
+  approvals moved onto the platform's approval model (dw_sales ADR 0004
+  amendment). The stamp is the `required_scope` column (migration
+  `ac31ff0f2087` copies a payload `decide_scope` into it and renames the
+  key; `DecisionAsked` still reads `decide_scope` from runs paused before);
+  deciding asks `approvals.decide` AND the stamp, so `sales_pic`,
+  `sales_head` and `sales_quote_approver` gained `approvals.decide`; seeing
+  is the platform's `ApprovalAudience` (the product's own filter and its
+  `test_approval_audience.py` are gone). The purchasing manager now gets
+  404, not 403, on a Sales request. Kept: makers, `CaseDecisions.check`
+  (async guard, longest-prefix keyed), withdrawal (reads the approval as
+  the run's requester). Platform ADR 0004 is `docs/adr/0011` here.
 - Next: 12 (needs-triage). Owed by the API to the pages:
   the PO-read attributes for the candidate picker, order due dates in
   my-work, Vietnamese refusal messages, server time. (Role names and

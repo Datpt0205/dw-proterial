@@ -5,7 +5,14 @@ import { LogoutOutlined, ProfileOutlined } from "@ant-design/icons";
 import { Avatar, Button, Dropdown, theme, Typography } from "antd";
 import { useAuth } from "../lib/auth/auth-context";
 import { initials } from "../lib/initials";
+import { NAV_ITEMS } from "../lib/nav/registry";
 import { displayRole } from "../lib/nav/roles";
+
+// The menu's second door to the audit trail reads its scope from the nav
+// registry's entry, the one owner of "who is offered /audit": hard-coding a
+// scope here kept offering every member a page the API refuses
+// (approval-audit-and-workspace/02).
+const AUDIT_LOG = NAV_ITEMS.find((item) => item.href === "/audit");
 
 /**
  * The account at the end of the navbar: initials, and on a wide screen the
@@ -66,7 +73,7 @@ export function SessionChip({
       )}
       menu={{
         items: [
-          ...(hasScope("approvals.read")
+          ...(AUDIT_LOG && (!AUDIT_LOG.scope || hasScope(AUDIT_LOG.scope))
             ? [
                 {
                   key: "audit",

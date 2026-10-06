@@ -39,10 +39,11 @@ DW1 is a worker on the runtime (`configs/workers/sales.yaml`, graph
   run resumes and applies it to the case as the decider, linked to the run.
   `POST /quotes/{id}/approval` and `POST /orders/{id}/cross-check` are gone.
 - **The approval names who may decide it.** The interrupt stamps
-  `decide_scope` (`sales.quote.approve`, `sales.order.cross_check`, from the
+  `required_scope` (`sales.quote.approve`, `sales.order.cross_check`, from the
   one map `DECIDE_SCOPES`) on the request, and the platform requires that
-  scope instead of `approvals.decide`. The inbox and a single request are
-  served only to holders of it and to the requester.
+  scope as well as `approvals.decide`. The inbox and a single request are
+  served only to who may decide it and to the requester. _Amended
+  2026-10-07, see below._
 - **The approval names every maker.** `makers`: the pricer and the
   submitter of a quotation; the preparer, the Bravo recorders of this round
   and earlier ones, and whoever typed a value still on an order. `sales.` is
@@ -93,3 +94,33 @@ DW1 is a worker on the runtime (`configs/workers/sales.yaml`, graph
   (open, ticket 12).
 - Ticket 10 had to land before DW1 reads a real document or an adapter
   writes outside the platform; both remain ticket 12's.
+
+## Amendment 2026-10-07: on the platform's approval model
+
+Decided by the lead under Đạt's delegation ("fail closed"): the platform's
+model takes the stricter rule from each side, and this context moves onto it
+in the platform merge of 2026-10-07 (`chore/platform-merge-2`).
+
+- **Deciding is the platform's rule** (platform ADR 0004, `docs/adr/0011`
+  here): `approvals.decide` AND the stamp, which now lives in the
+  `required_scope` column, not the payload's `decide_scope`. Roles
+  `sales_pic`, `sales_head` and permission set `sales_quote_approver` gained
+  `approvals.decide` (migration `ac31ff0f2087`), so DW1's deciders still
+  decide; they can now also decide unstamped approvals in their workspace,
+  as any approver can. The purchasing manager (`approvals.decide`, no Sales
+  scope) still decides no Sales request.
+- **Seeing is this context's rule, taken by the platform:** a stamped request
+  is shown only to who may decide it and to its requester. The product's own
+  filter (`ApprovalAudience` in the domain, `_visible_to` on the payload) is
+  gone; the platform's (`ApprovalAudience` in `authorization.py`,
+  `visible_to` on the column) replaces it. Two differences follow: a decider
+  of a Sales request needs `approvals.decide` to see it, and an unstamped
+  request is shown to every member, not only to `approvals.decide` holders.
+  Whoever may not see a Sales request now gets 404 on a decision, not 403.
+- **Kept from ticket 10:** `makers` on the request (separation of duties
+  refuses every maker), the pre-decision check (`CaseDecisions.check`, an
+  `ApprovalDecisionGuard`, async and with the proposed decision, which the
+  platform's synchronous `DecisionGuard` cannot carry; registered on the same
+  `decision_guards` and called at the same point, after the scope and the
+  strict rules and before the run is looked at), and the withdrawal of
+  waiting approvals, which now reads the approval as the run's requester.

@@ -67,7 +67,9 @@ const platformNav: NavEntry[] = [
     label: "Audit log",
     hint: "Every run, decision and side effect, in order",
     icon: ScrollText,
-    scope: "approvals.read",
+    // The scope `GET /audit/events` enforces; `approvals.read` (every member
+    // has it) offered a link to a page the API refuses.
+    scope: "audit.events",
   },
   {
     key: "admin",

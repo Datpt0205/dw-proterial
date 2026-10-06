@@ -19,9 +19,14 @@ import yaml
 
 from dw_agent_runtime.adapters.run_store import RunStatus
 from dw_agent_runtime.registry import parse_worker_file
-from dw_kernel.errors import ConflictError, PermissionDeniedError, QuotaExceededError
+from dw_kernel.errors import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    QuotaExceededError,
+)
 from dw_kernel.pagination import PageQuery, page_request
-from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalStatus
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.runs import DECIDE_SCOPES, DecisionType, subject_of
@@ -113,7 +118,8 @@ async def test_a_submitted_quote_waits_on_an_approval_stamped_with_its_scope() -
     case_id = await _pending_quote(world)
 
     (request,) = world.runtime.approvals.rows.values()
-    assert (request.approval_type, request.decide_scope) == ("sales.quote", "sales.quote.approve")
+    # In the column the platform's decision reads (docs/adr/0011), not the payload.
+    assert (request.approval_type, request.required_scope) == ("sales.quote", "sales.quote.approve")
     # Requested by the maker who submitted it, and naming the pricer.
     assert request.requested_by.value == DIEU.user_id
     assert request.makers == {DIEU.user_id}
@@ -121,13 +127,14 @@ async def test_a_submitted_quote_waits_on_an_approval_stamped_with_its_scope() -
 
 
 async def test_the_purchasing_manager_cannot_decide_a_sales_quote() -> None:
+    """`approvals.decide` without the stamp: the quote is not found at all (the
+    platform's visibility rule, ADR 0004 amendment), so nothing names its scope."""
     world = _world()
     case_id = await _pending_quote(world)
 
-    with pytest.raises(PermissionDeniedError) as refused:
+    with pytest.raises(NotFoundError):
         await _approve(world, BINH, case_id)
 
-    assert refused.value.details["action"] == "sales.quote.approve"
     assert world.quote(case_id).status.value == "pending_approval"
 
 
@@ -150,8 +157,12 @@ async def test_a_viewer_sees_no_sales_approval_and_the_approver_does() -> None:
     inbox = world.runtime.approvals.scoped(READER.context().tenant_id)
 
     async def listed(caller: Caller) -> int:
-        audience = world.runtime.approval_flow.audience(caller.context(), authz)
-        return len((await inbox.list_pending(request, audience)).items)
+        context = caller.context()
+        audience = ApprovalAudience.of(context, authz)
+        page = await inbox.list_pending(
+            request, workspace_id=context.workspace_id, audience=audience
+        )
+        return len(page.items)
 
     # The viewer and the purchasing manager see none; the approver and the
     # requester see it.
@@ -212,7 +223,7 @@ async def test_approvals_runs_and_audit_carry_no_amount() -> None:
     (request,) = world.runtime.approvals.rows.values()
     assert set(request.payload) == {
         "approval_type",
-        "decide_scope",
+        "required_scope",
         "reason",
         "case_kind",
         "case_id",
@@ -310,21 +321,18 @@ async def test_a_quote_priced_again_withdraws_the_approval_it_waited_on() -> Non
 
 @pytest.mark.parametrize(
     ("stamp", "refusal"),
-    [(None, ConflictError), ("approvals.decide", PermissionDeniedError)],
+    [(None, PermissionDeniedError), ("approvals.decide", PermissionDeniedError)],
 )
 async def test_an_approval_not_stamped_with_dw1s_scope_is_refused_by_the_guard(
     stamp: str | None, refusal: type[Exception]
 ) -> None:
-    """A `sales.` approval stamped with no decide scope, or with the
-    platform's, would be decided by `approvals.decide`; the context's guard
-    refuses it (fails closed)."""
+    """A `sales.` approval whose `required_scope` column is empty, or the
+    platform's own, would be decided by `approvals.decide` alone; the
+    context's guard refuses it (fails closed)."""
     world = _world()
     case_id = await _pending_quote(world)
     (request,) = world.runtime.approvals.rows.values()
-    if stamp is None:
-        del request.payload["decide_scope"]
-    else:
-        request.payload["decide_scope"] = stamp
+    request.required_scope = stamp
 
     with pytest.raises(refusal):
         await _approve(world, BINH, case_id)

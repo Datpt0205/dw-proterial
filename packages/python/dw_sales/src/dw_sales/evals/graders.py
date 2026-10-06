@@ -51,8 +51,12 @@ from dw_sales.evals.world import ALPHA, BETA, Between, Caller, SampleSet, World,
 # ------------------------------------------------------------- callers --
 
 _S = SalesScopes
+# The `sales_pic` role. `approvals.decide` since the platform merge of
+# 2026-10-07 (ac31ff0f2087): the platform asks every decider for it besides
+# the request's own stamp, so a cross-checker needs both.
 _PIC = frozenset(
     {
+        "approvals.decide",
         _S.OVERVIEW_READ,
         _S.CASE_READ,
         _S.PRICE_READ,
@@ -71,8 +75,8 @@ DIEU = Caller(
     uuid.UUID(int=0xD1),
     "Hoàng Thị Diệu",
     "dieu.hoang@alpha.local",
-    # `approvals.decide` is the platform's approver_boost: it approves no quote.
-    _PIC | {_S.PRICE_OTHER_CUSTOMERS_READ, "approvals.decide"},
+    # `approvals.decide` without `sales.quote.approve`: it approves no quote.
+    _PIC | {_S.PRICE_OTHER_CUSTOMERS_READ},
 )
 GIANG = Caller(
     uuid.UUID(int=0x61),
@@ -562,9 +566,14 @@ async def grade_never_clean(
 
 
 async def _rule(call: Awaitable[object]) -> str:
-    """What the call ended in: "ok", "403", "422", or the 409's rule."""
+    """What the call ended in: "ok", "403", "404", "422", or the 409's rule.
+
+    "404" is a request the caller may neither decide nor asked for: the
+    platform does not show it to them at all (ADR 0004 amendment)."""
     try:
         await call
+    except NotFoundError:
+        return "404"
     except PermissionDeniedError:
         return "403"
     except ConflictError as refused:

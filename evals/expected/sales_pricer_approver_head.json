@@ -1,7 +1,7 @@
 {
   "outcomes": {
     "pricer": "409:maker_checker",
-    "boost_without_scope": "403",
+    "boost_without_scope": "404",
     "other_approver": "ok"
   }
 }

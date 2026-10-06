@@ -1,9 +1,8 @@
 """Approvals API: inbox + decisions (decision resumes the paused run).
 
-The inbox and a single request are served only to the people who may decide
-them and to the one who asked (`ApprovalAudience`): a request's payload is
-the decider's working material, not every member's reading. Holding
-`approvals.read` opens the inbox; what is in it is the audience's.
+The inbox and a single request are filtered by the caller's `ApprovalAudience`
+in the repository (ADR 0004, amendment 2026-10-07): a stamped request is served
+only to who may decide it and to its requester, and is not found by anyone else.
 """
 
 from __future__ import annotations
@@ -15,11 +14,15 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.idempotency import RequireIdempotency
 from dw_api.dependencies.services import RequireContainer
 from dw_kernel.errors import InfrastructureError, NotFoundError
 from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
+from dw_platform.application.access_context import AccessContext
+from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
+from dw_platform.domain.approval import ApprovalRequest
 
 
 class ApprovalView(BaseModel):
@@ -34,6 +37,41 @@ class ApprovalView(BaseModel):
     # The server refuses a blank comment for a strict type; without this the
     # form would have to keep its own copy of the prefix list.
     requires_comment: bool
+    # The scope a decider must hold besides `approvals.decide`, stamped when the
+    # request was raised (ADR 0004). Shown as the reason when `can_decide` is
+    # false; the page never compares it with the session's scopes itself.
+    required_scope: str | None
+    # Whether the caller's scopes let them decide this request, by the same
+    # checks `ApproveAndResumeService.decide` runs (`may_decide`). Computed here
+    # because the session's `hasScope` lets `platform_admin` pass any scope and
+    # a stamped scope is not passed by that role (2026-10-06).
+    can_decide: bool
+    # Whether the caller raised this request. Withdrawing your own needs no
+    # scope at all, and the page cannot tell which requests are the viewer's
+    # without it; a boolean, so no other member's id reaches the browser.
+    requested_by_me: bool
+
+
+def _view(
+    request: ApprovalRequest,
+    context: AccessContext,
+    approval_flow: ApproveAndResumeService,
+    authorization: ScopeAuthorizationService,
+) -> ApprovalView:
+    return ApprovalView(
+        id=request.id,
+        approval_type=request.approval_type,
+        reason=request.reason,
+        status=request.status.value,
+        run_id=request.run_id,
+        payload=dict(request.payload),
+        created_at=request.created_at,
+        decided_at=request.decided_at,
+        requires_comment=approval_flow.is_strict(request.approval_type),
+        required_scope=request.required_scope,
+        can_decide=approval_flow.may_decide(request, context, authorization),
+        requested_by_me=request.requested_by.value == context.principal_id,
+    )
 
 
 _ReasonKey = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_:.-]+$")]
@@ -69,28 +107,24 @@ async def list_pending(
     await container.authorization.require(
         context=context, action="approvals.read", resource_type="approval_request"
     )
+    # The workspace is in the fingerprint as the tenant is: a cursor taken in
+    # one workspace is refused in another rather than answered from its window.
     request = page_request(
         limit=limit,
         cursor=cursor,
-        query=PageQuery(key="approvals.pending", filters={"tenant": context.tenant_id}),
+        query=PageQuery(
+            key="approvals.pending",
+            filters={"tenant": context.tenant_id, "workspace": context.workspace_id},
+        ),
     )
     approval_flow = container.approval_flow
-    audience = approval_flow.audience(context, container.authorization)
+    authorization = container.authorization
+    audience = ApprovalAudience.of(context, authorization)
     async with container.uow_factory(context) as uow:
-        page = await uow.approvals.list_pending(request, audience)
-    return page.map_items(
-        lambda p: ApprovalView(
-            id=p.id,
-            approval_type=p.approval_type,
-            reason=p.reason,
-            status=p.status.value,
-            run_id=p.run_id,
-            payload=dict(p.payload),
-            created_at=p.created_at,
-            decided_at=p.decided_at,
-            requires_comment=approval_flow.is_strict(p.approval_type),
+        page = await uow.approvals.list_pending(
+            request, workspace_id=context.workspace_id, audience=audience
         )
-    )
+    return page.map_items(lambda p: _view(p, context, approval_flow, authorization))
 
 
 @router.get("/{approval_id}", response_model=ApprovalView)
@@ -105,24 +139,16 @@ async def get_approval(
         resource_type="approval_request",
         resource_id=str(approval_id),
     )
+    audience = ApprovalAudience.of(context, container.authorization)
     async with container.uow_factory(context) as uow:
-        request = await uow.approvals.get(approval_id)
-    # Not the caller's to decide and not theirs to have asked: not found,
-    # the same answer as a request that does not exist.
-    audience = container.approval_flow.audience(context, container.authorization)
-    if request is None or not audience.may_see(request):
+        request = await uow.approvals.get(
+            approval_id, workspace_id=context.workspace_id, audience=audience
+        )
+    # Another workspace's request, or a stamped one the caller may neither
+    # decide nor asked for, is the same answer as one that never existed.
+    if request is None:
         raise NotFoundError("approval request not found")
-    return ApprovalView(
-        id=request.id,
-        approval_type=request.approval_type,
-        reason=request.reason,
-        status=request.status.value,
-        run_id=request.run_id,
-        payload=dict(request.payload),
-        created_at=request.created_at,
-        decided_at=request.decided_at,
-        requires_comment=container.approval_flow.is_strict(request.approval_type),
-    )
+    return _view(request, context, container.approval_flow, container.authorization)
 
 
 # A decision resumes a checkpointed run, and the run is where the side effects
@@ -150,15 +176,5 @@ async def decide(
         subject_version=body.subject_version,
     )
     return await idempotency.record(
-        ApprovalView(
-            id=request.id,
-            approval_type=request.approval_type,
-            reason=request.reason,
-            status=request.status.value,
-            run_id=request.run_id,
-            payload=dict(request.payload),
-            created_at=request.created_at,
-            decided_at=request.decided_at,
-            requires_comment=container.approval_flow.is_strict(request.approval_type),
-        )
+        _view(request, context, container.approval_flow, container.authorization)
     )

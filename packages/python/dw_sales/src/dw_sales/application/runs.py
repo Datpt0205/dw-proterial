@@ -27,7 +27,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
@@ -105,7 +105,12 @@ class DecisionAsked(BaseModel):
     model_config = _FROZEN
 
     approval_type: DecisionType
-    decide_scope: str
+    # The scope that decides it (`DECIDE_SCOPES`), at the payload's top level
+    # where the runner reads it into the approval's `required_scope` column
+    # (platform ADR 0004; docs/adr/0011 here). Runs paused before the platform
+    # merge of 2026-10-07 hold it as `decide_scope` in their checkpoint, read
+    # here on resume; it is written back under the new name only.
+    required_scope: str = Field(validation_alias=AliasChoices("required_scope", "decide_scope"))
     reason: str
     case_kind: CaseKind
     case_id: uuid.UUID
@@ -152,7 +157,7 @@ class DecisionAsked(BaseModel):
     ) -> DecisionAsked:
         return cls(
             approval_type=kind,
-            decide_scope=DECIDE_SCOPES[kind].value,
+            required_scope=DECIDE_SCOPES[kind].value,
             reason=_REASONS[kind],
             case_kind=case_kind,
             case_id=case_id,
