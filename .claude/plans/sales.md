@@ -73,13 +73,25 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 - **What "done" means for the demo:** the personas walk the spec's Done-when
   on the local stack from `make demo-reset`, the walk is automated
   (`make test-web-sales`), and `make eval-smoke` scores extraction and
-  findings on the mock set. It is a demo on fictional data: approval is a
-  case decision, not a runtime interrupt, and nothing production-only
-  exists. What remains is ticket 10 (approval on the runtime, DW1's service
-  principal, a model step if any) and ticket 12 (production hardening:
-  sandboxed parsing, support access, tenant overrides, rules approval,
-  Proterial's real inputs).
-- Next: ticket 10, then 12 (needs-triage). Owed by the API to the pages:
+  findings on the mock set. It is a demo on fictional data, and nothing
+  production-only exists. What remains is ticket 12 (production hardening:
+  sandboxed parsing, support access, tenant overrides, rules approval, DW1's
+  service principal, Proterial's real inputs).
+- 2026-10-06, ticket 10 built (not committed): DW1 runs on the agent runtime
+  (dw_sales ADR 0004, Proposed, supersedes ADR 0001; spec decision 5
+  amended). "DW xử lý", submit and the Bravo entry are each a DW1 run
+  (`configs/workers/sales.yaml`, graph 1.0.0, pinned), counted by the
+  runner's `RunAllowancePort` check. Submit and the Bravo entry pause on a
+  platform approval (`sales.quote`, `sales.order.cross_check`) stamped with
+  its decide scope (`sales.quote.approve`, `sales.order.cross_check`, never
+  `approvals.decide`) and naming every maker; `sales.` is strict and has a
+  Sales decision guard; the run applies the decision. The context decide
+  routes are gone; the pages decide on `decision.approval_id` with a
+  required comment. Platform gained: stamped decide scope, makers, decision
+  guard, inbox audience filter, withdraw by subject, an in-memory runtime
+  the eval world uses. Walk: 11/11 passed on the third run (`make demo-reset`, `make test-web-sales`); the two before timed out at different steps under machine load (a draft render at stage 1; M29's reprocess at stage 8, whose run row shows 107 s against 0.2 s measured idle). Details and open items in the ticket's
+  "As built".
+- Next: 12 (needs-triage). Owed by the API to the pages:
   the PO-read attributes for the candidate picker, order due dates in
   my-work, Vietnamese refusal messages, server time. (Role names and
   permission-set scopes landed in `/auth/bootstrap` on 2026-10-05; the web
@@ -137,7 +149,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | 05     | `3557de8` | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
 | 06     | `2f737ca` | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
 | 08     | `88fb7b6` | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown       |
-| 09     | (pending) | Evals `sales@1.0.0` + graders injected; security reviews; demo runbook, `demo-reset`, Playwright walk    |
+| 09     | `2284d3c` | Evals `sales@1.0.0` + graders injected; security reviews; demo runbook, `demo-reset`, Playwright walk    |
+| 10     | (pending) | DW1 on the runtime: checker decisions are platform approvals, decide scope stamped, makers refused       |
 
 ## Open
 
@@ -167,8 +180,6 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
       to read it.
     - A pause commits before its notification: a delivery failure answers
       500 while DW1 is paused (a retry answers 409 "đã tạm dừng").
-    - `dw_sales.workflows.graph` is the scaffold's unused graph (not in the
-      ticket's delete list; ticket 10 replaces it).
     - The committed OpenAPI snapshot was stale on `main` before 05 (the
       contract test failed); 05 regenerated it, platform drift included.
 - Ticket 11 (2026-10-05): the full demo seed is
@@ -177,12 +188,17 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
   `scripts/keycloak_dev_users.py`, which links by email; the realm file was
   not changed. The platform seed resets roles, so a full re-run rewrites the
   Sales keys (same end state); the Sales seed alone writes nothing on a
-  re-run. Owed to ticket 10: `approver_boost` gives Diệu `approvals.decide`,
-  so once a quote approval goes through the platform's approval inbox it must
-  still require `sales.quote.approve`, or she could approve her own quote
-  there.
-- Spec decision 5: the Sales decision is recorded by the context, not yet a
-  runtime interrupt (ticket 10).
+  re-run. (The `approver_boost` item owed to ticket 10 is closed: a Sales
+  approval requires its stamped `sales.quote.approve`, so Diệu's
+  `approvals.decide` decides none; tested in the API suite, the unit suite,
+  the eval and the walk.)
+- From ticket 10 (2026-10-06): the platform's generic Approvals page lists
+  Sales approvals to their deciders but sends no case version, so deciding
+  there is refused (the page is shadcn and moves to antd first); an order
+  whose decision passed the guard and then failed in its run (a one-request
+  race) has no step that raises its cross-check again; processing's audit
+  rows do not name the run (decision rows do); no mailbox consumer exists, and
+  one must start a DW1 run to be counted.
 - Public repo: the repo name and these plan files name Proterial and its
   procedure codes (WIV-03-0xx). Đạt decided on 2026-10-05 to keep the repo
   public and not alias them. Mock data, people and figures stay fictional,

@@ -65,6 +65,9 @@ interface Persona {
     params?: Record<string, string | number>,
   ) => Promise<APIResponse>;
   post: (path: string, data?: unknown) => Promise<APIResponse>;
+  /** `/api/v1/approvals*`: where a checker's decision is made (ticket 10). */
+  approvals: (path?: string) => Promise<APIResponse>;
+  decide: (approvalId: string, data: unknown) => Promise<APIResponse>;
 }
 
 /** A dev session for `subject`, calling `/api/v1/sales/*` as that person. */
@@ -82,15 +85,20 @@ async function persona(
     "X-Tenant-Id": session.tenant_id,
     "X-Workspace-Id": session.workspace_id,
   };
+  const write = () => ({
+    ...headers,
+    "Content-Type": "application/json",
+    "Idempotency-Key": randomUUID(),
+  });
   return {
     get: (p, params) => request.get(`${SALES}${p}`, { headers, params }),
     post: (p, data = {}) =>
-      request.post(`${SALES}${p}`, {
-        headers: {
-          ...headers,
-          "Content-Type": "application/json",
-          "Idempotency-Key": randomUUID(),
-        },
+      request.post(`${SALES}${p}`, { headers: write(), data }),
+    approvals: (p = "") =>
+      request.get(`${API_URL}/api/v1/approvals${p}`, { headers }),
+    decide: (approvalId, data) =>
+      request.post(`${API_URL}/api/v1/approvals/${approvalId}/decisions`, {
+        headers: write(),
         data,
       }),
   };
@@ -557,12 +565,22 @@ test("3. An takes M03 from the source to the Bravo number; Diệu may not acknow
       })
     ).status(),
   ).toBe(200);
-  const own = await an.post(`/orders/${ids.m03}/cross-check`, {
-    case_version: m03.case_version,
-    decision: "accept",
+  // The cross-check is a platform approval DW1's run paused on: An is a
+  // maker of the case, and the platform refuses him whatever the screen says.
+  expect(m03.decision.approval_type).toBe("sales.order.cross_check");
+  const own = await an.decide(m03.decision.approval_id, {
+    approve: true,
+    comment: "Tự kiểm chéo",
+    subject_version: m03.case_version,
   });
   expect(own.status()).toBe(409);
   expect((await own.json()).message).toContain("tách nhiệm");
+  // The context-side decide route is gone.
+  const gone = await an.post(`/orders/${ids.m03}/cross-check`, {
+    case_version: m03.case_version,
+    decision: "accept",
+  });
+  expect([404, 405]).toContain(gone.status());
 
   // Refusal: a file before its state (the confirmation needs `confirmed`).
   const early = await an.post(`/orders/${ids.m03}/artifacts`, {
@@ -592,6 +610,10 @@ test("4. Diệu opens the source, then cross-checks An's order", async ({
     .click();
   const check = dialog(page, "Kiểm chéo đạt");
   await expect(check.getByText("SO26-1001")).toBeVisible();
+  // The approval is strict: the checker writes what they compared.
+  await check
+    .getByLabel("Ghi chú kiểm chéo")
+    .fill("Đã đối chiếu các dòng trên Bravo với PO");
   await check
     .getByRole("button", { name: "Ghi kiểm chéo đạt", exact: true })
     .click();
@@ -665,12 +687,28 @@ test("6. Diệu takes M10 from the YCBG to Design, prices it from the evidence a
     "Duyệt báo giá",
     "Bạn không có quyền duyệt báo giá",
   );
-  const own = await dieu.post(`/quotes/${ids.m10}/approval`, {
-    case_version: pending.case_version,
-    decision: "approve",
-    document_sha256: pending.submission.document_sha256,
+  const own = await dieu.decide(pending.decision.approval_id, {
+    approve: true,
+    comment: "Tự duyệt",
+    subject_version: pending.case_version,
   });
   expect(own.status()).toBe(403);
+  // Nor may the purchasing manager, whose approvals.decide is not
+  // sales.quote.approve; and the request is not in his inbox at all.
+  const binh = await persona(request, BINH);
+  const outsider = await binh.decide(pending.decision.approval_id, {
+    approve: true,
+    comment: "Duyệt hộ",
+    subject_version: pending.case_version,
+  });
+  expect(outsider.status()).toBe(403);
+  expect((await (await binh.approvals()).json()).items).toEqual([]);
+  // The context-side decide route is gone.
+  const gone = await dieu.post(`/quotes/${ids.m10}/approval`, {
+    case_version: pending.case_version,
+    decision: "approve",
+  });
+  expect([404, 405]).toContain(gone.status());
 });
 
 test("6b. An sees other customers' prices for M10 as 'Đã ẩn'", async ({
@@ -731,6 +769,9 @@ test("7. Giang approves M10 with the document preview shown; the send draft is r
   await preview.click();
   await expect(page.getByLabel("Trang 1 của bản gốc")).toBeVisible();
   await page
+    .getByLabel("Nhận xét khi duyệt")
+    .fill("Đã xem tài liệu và căn cứ giá");
+  await page
     .getByRole("button", { name: "Duyệt báo giá", exact: true })
     .click();
   await expectQuoteStatus(giang, ids.m10, "approved");
@@ -782,12 +823,13 @@ test("8. Giang prices M14 and may not approve it; Khoa approves it", async ({
     "Bạn đã định giá báo giá này nên không tự duyệt được (tách nhiệm, WIV-03-023 bước 9).",
   );
   const pending = await quote(giang, ids.m14);
-  const own = await giang.post(`/quotes/${ids.m14}/approval`, {
-    case_version: pending.case_version,
-    decision: "approve",
-    document_sha256: pending.submission.document_sha256,
+  const own = await giang.decide(pending.decision.approval_id, {
+    approve: true,
+    comment: "Tự duyệt",
+    subject_version: pending.case_version,
   });
   expect(own.status()).toBe(409);
+  expect((await own.json()).message).toContain("tách nhiệm");
 
   const khoa = await persona(request, KHOA);
   await signIn(page, request, KHOA);
@@ -797,6 +839,7 @@ test("8. Giang prices M14 and may not approve it; Khoa approves it", async ({
   ).toBeVisible();
   for (const reason of await page.getByLabel("Lý do chấp nhận khi duyệt").all())
     await reason.fill("Đã xem căn cứ giá");
+  await page.getByLabel("Nhận xét khi duyệt").fill("Đồng ý giá đã định");
   await page
     .getByRole("button", { name: "Duyệt báo giá", exact: true })
     .click();
@@ -826,6 +869,14 @@ test("9. Who sees what: Hà the overview only, Bình and Tâm nothing, Bảo non
 
   // Hà (Lãnh đạo): the overview, with no price in it; every other URL is 403.
   const ha = await persona(request, HA);
+  // Nor any Sales approval: her inbox holds none of DW1's requests.
+  const inbox = await ha.approvals();
+  expect(inbox.status()).toBe(200);
+  expect(
+    (await inbox.json()).items.filter((a: { approval_type: string }) =>
+      a.approval_type.startsWith("sales."),
+    ),
+  ).toEqual([]);
   const overview = await ha.get("/overview");
   expect(overview.status()).toBe(200);
   expect(leaked(await overview.text(), API_PRICES)).toEqual([]);

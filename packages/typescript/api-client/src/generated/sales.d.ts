@@ -327,23 +327,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/orders/{case_id}/cross-check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cross Check */
-        post: operations["cross_check_api_v1_sales_orders__case_id__cross_check_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sales/orders/{case_id}/findings/{finding_key}/disposition": {
         parameters: {
             query?: never;
@@ -494,23 +477,6 @@ export interface paths {
         get: operations["quote_api_v1_sales_quotes__case_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/quotes/{case_id}/approval": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Approval */
-        post: operations["approval_api_v1_sales_quotes__case_id__approval_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -774,24 +740,6 @@ export interface components {
             /** Quantity */
             quantity?: number | string | null;
         };
-        /** ApprovalBody */
-        ApprovalBody: {
-            /** Case Version */
-            case_version: number;
-            /** Comment */
-            comment?: string | null;
-            /**
-             * Decision
-             * @enum {string}
-             */
-            decision: "approve" | "return";
-            /** Document Sha256 */
-            document_sha256?: string | null;
-            /** Reasons */
-            reasons?: {
-                [key: string]: string;
-            };
-        };
         /** ArtifactListView */
         ArtifactListView: {
             /** Artifacts */
@@ -974,18 +922,6 @@ export interface components {
             regions: string[];
             /** Unchecked Regions */
             unchecked_regions: string[];
-        };
-        /** CrossCheckBody */
-        CrossCheckBody: {
-            /** Case Version */
-            case_version: number;
-            /**
-             * Decision
-             * @enum {string}
-             */
-            decision: "accept" | "return";
-            /** Reason */
-            reason?: string | null;
         };
         /** CustomerView */
         CustomerView: {
@@ -1526,6 +1462,7 @@ export interface components {
             currency: "USD" | "VND" | "JPY";
             /** Customer Code */
             customer_code: string;
+            decision?: components["schemas"]["PendingDecisionView"] | null;
             /** Duplicate Of Case */
             duplicate_of_case: string | null;
             /** Duplicate Of So */
@@ -1752,6 +1689,21 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /**
+         * PendingDecisionView
+         * @description The platform approval a case waits on: the decision is made there
+         *     (`POST /api/v1/approvals/{approval_id}/decisions`), never on a Sales
+         *     route. Present only while the case is in the state that waits on it.
+         */
+        PendingDecisionView: {
+            /**
+             * Approval Id
+             * Format: uuid
+             */
+            approval_id: string;
+            /** Approval Type */
+            approval_type: string;
+        };
         /** PriceBody */
         PriceBody: {
             /** Case Version */
@@ -1919,6 +1871,7 @@ export interface components {
             customer_code: string;
             /** Customer From */
             customer_from: string;
+            decision?: components["schemas"]["PendingDecisionView"] | null;
             decline: components["schemas"]["DeclineView"] | null;
             /** Design Replies */
             design_replies: number;
@@ -2988,44 +2941,6 @@ export interface operations {
             };
         };
     };
-    cross_check_api_v1_sales_orders__case_id__cross_check_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                case_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CrossCheckBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseChangeView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     dispose_api_v1_sales_orders__case_id__findings__finding_key__disposition_post: {
         parameters: {
             query?: never;
@@ -3308,44 +3223,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuoteCaseView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    approval_api_v1_sales_quotes__case_id__approval_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                case_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApprovalBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CaseChangeView"];
                 };
             };
             /** @description Validation Error */

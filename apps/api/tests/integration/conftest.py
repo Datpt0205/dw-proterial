@@ -30,11 +30,14 @@ from dw_sales.testing.seed_personas import seed_sales_personas
 
 TEST_DB = "dw_test_sales_api"
 
-# Everything a test writes: Sales state, notifications and spent keys. The
-# audit log is append-only and stays; every test reads its own rows by id.
+# Everything a test writes: Sales state, DW1's runs, their checkpoints and the
+# approvals they paused on, notifications and spent keys. The audit log is
+# append-only and stays; every test reads its own rows by id.
 _CLEAR = (
     "TRUNCATE sales.order_cases, sales.quote_cases, sales.messages, sales.artifacts,"
     " sales.source_served, sales.worker_state, sales.case_events,"
+    " platform.approval_decisions, platform.approval_requests, platform.worker_runs,"
+    " platform.run_checkpoint_writes, platform.run_checkpoints,"
     " platform.notifications, platform.idempotency_keys CASCADE"
 )
 

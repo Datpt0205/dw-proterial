@@ -166,6 +166,11 @@ export function orderInBravo(): Order {
     bravo_recorded_at: "2026-10-05T03:10:00Z",
     bravo_entry_compared: true,
     makers: [AN],
+    // The cross-check approval DW1's run paused on.
+    decision: {
+      approval_id: "01a10aa0-fe9a-7000-a7de-ed21190d4c0c",
+      approval_type: "sales.order.cross_check",
+    },
   });
 }
 
@@ -231,5 +236,10 @@ export function pendingQuote(): Quote {
     master_list: null,
     decline: null,
     evidence: null,
+    // The approval DW1's run paused on at submit.
+    decision: {
+      approval_id: "01a10aa0-fe9a-7000-a7de-ed21190d4a99",
+      approval_type: "sales.quote",
+    },
   };
 }

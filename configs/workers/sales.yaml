@@ -1,0 +1,28 @@
+schema_version: "1.0"
+# DW1, Đơn hàng & Báo giá (Proterial Sales): dw_sales.workflows.graph.
+# The id and version are the ones DW1's events carry
+# (dw_sales.application.support.DW1_WORKER_ID / DW1_WORKER_VERSION);
+# test_dw1_worker.py holds them together.
+worker_id: sales-dw1
+worker_version: "1.0.0"
+domain: sales
+graph_version: "1.0.0"
+# DW1 renders no prompt: it reads documents with deterministic parsers and
+# calls no model (spec decision 13). The bundle version is declared because
+# every worker pins one; there is nothing in it yet.
+prompt_bundle_version: "1.0.0"
+# No toolset: DW1 offers a model no tool at all, outbound or otherwise. That
+# is how ADR 0007 (SEC02, a turn that reads a document gets no outbound tool)
+# holds for a worker whose every run reads customer mail. A toolset added here
+# must carry no tool with an external or critical side effect
+# (test_dw1_worker.py turns red otherwise).
+toolset_version: null
+policy_version: "1.0.0"
+memory_policy_version: "1.0.0"
+# Unused while DW1 calls no model; declared because every worker names one.
+default_model_profile: balanced
+supported_channels: [web]
+# A person makes every decision: the quotation approval and the cross-check
+# pause the run whatever the level (the graph interrupts unconditionally), and
+# auto-confirmation (A3) is out of this slice.
+autonomy_level: A1

@@ -146,6 +146,17 @@ class CaseChangeView(BaseModel):
     status: str
 
 
+class PendingDecisionView(BaseModel):
+    """The platform approval a case waits on: the decision is made there
+    (`POST /api/v1/approvals/{approval_id}/decisions`), never on a Sales
+    route. Present only while the case is in the state that waits on it."""
+
+    model_config = _VIEW
+
+    approval_id: uuid.UUID
+    approval_type: str
+
+
 def order_change(case: OrderCase) -> CaseChangeView:
     return CaseChangeView(
         case_kind=CaseKind.ORDER,
@@ -536,6 +547,8 @@ class OrderCaseView(BaseModel):
     # Everyone the cross-checker must not be (spec decision 7): the screen
     # disables the control with the reason, the server refuses anyway.
     makers: list[uuid.UUID]
+    # The cross-check approval this order waits on, while it does.
+    decision: PendingDecisionView | None = None
 
 
 def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummaryView:
@@ -561,6 +574,7 @@ def order_case(
     assigned_to: uuid.UUID | None,
     release_manifest_ref: str | None,
     prices: PriceView,
+    decision: PendingDecisionView | None = None,
 ) -> OrderCaseView:
     document = case.document
     total = document.total
@@ -632,6 +646,7 @@ def order_case(
         closed_at=case.closed_at,
         superseded_by_case=case.superseded_by_case,
         makers=sorted(case.makers),
+        decision=decision,
     )
 
 
@@ -970,6 +985,8 @@ class QuoteCaseView(BaseModel):
     master_list: StampView | None
     decline: DeclineView | None
     evidence: list[EvidenceView] | Hidden | None
+    # The approval this quotation waits on, while it does.
+    decision: PendingDecisionView | None = None
 
 
 def _anchors(**named: SourceAnchor | None) -> dict[str, SourceAnchor]:
@@ -1001,6 +1018,7 @@ def quote_case(
     today: date,
     prices: PriceView,
     evidence_rows: Sequence[PriceEvidence] | None,
+    decision: PendingDecisionView | None = None,
 ) -> QuoteCaseView:
     request = case.request
     document = request.document
@@ -1140,6 +1158,7 @@ def quote_case(
             else None
         ),
         evidence=evidence(evidence_rows, prices) if evidence_rows is not None else None,
+        decision=decision,
     )
 
 

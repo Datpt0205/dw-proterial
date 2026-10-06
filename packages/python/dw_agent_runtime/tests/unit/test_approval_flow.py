@@ -6,10 +6,10 @@ from typing import Any, cast
 import pytest
 
 from dw_agent_runtime.adapters.run_store import RunRecord, RunStatus
-from dw_agent_runtime.approval_flow import ApproveAndResumeService
+from dw_agent_runtime.approval_flow import ApproveAndResumeService, ProposedDecision
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.autonomy import AutonomyLevel
-from dw_kernel.errors import ConflictError, PermissionDeniedError
+from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import FixedClock, SequentialIdGenerator
 from dw_platform.application.access_context import AccessContext
@@ -349,3 +349,189 @@ async def test_a_bystander_without_the_right_cannot_reject_someone_elses() -> No
             context=context_without_the_right(APPROVER),
             authorization=ScopeAuthorizationService(),
         )
+
+
+# ------------------------------------------- the stamped decide scope (ticket 10) --
+
+MAKER = uuid.UUID(int=3)
+
+
+def stamped(
+    approval_type: str, *, scope: str, makers: tuple[uuid.UUID, ...] = ()
+) -> ApprovalRequest:
+    request = make_request(approval_type, run_id=RUN_ID)
+    request.payload = {"decide_scope": scope, "makers": [str(m) for m in makers]}
+    return request
+
+
+def holding(principal: uuid.UUID, *scopes: str) -> AccessContext:
+    return AccessContext(
+        tenant_id=uuid.UUID(int=100),
+        workspace_id=uuid.UUID(int=101),
+        principal_id=principal,
+        roles=frozenset({"member"}),
+        scopes=frozenset(scopes),
+        plan_id="professional",
+    )
+
+
+async def _decide_as(
+    service: ApproveAndResumeService, context: AccessContext, **extra: Any
+) -> ApprovalRequest:
+    return await service.decide(
+        approval_id=uuid.UUID(int=10),
+        approve=True,
+        comment="đã xem",
+        context=context,
+        authorization=ScopeAuthorizationService(),
+        **extra,
+    )
+
+
+async def test_a_stamped_decide_scope_is_required_and_approvals_decide_is_not_it() -> None:
+    """A Sales quote is decided with `sales.quote.approve`: the platform's
+    approver authority (a manager, `approver_boost`) decides nothing there."""
+    request = stamped("sales.quote", scope="sales.quote.approve")
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset({"sales."}), runner=runner)
+
+    with pytest.raises(PermissionDeniedError) as refused:
+        await _decide_as(service, holding(APPROVER, "approvals.decide"))
+    assert refused.value.details["action"] == "sales.quote.approve"
+    assert request.status is ApprovalStatus.PENDING and runner.resumed == []
+
+    decided = await _decide_as(service, holding(APPROVER, "sales.quote.approve"))
+    assert decided.status is ApprovalStatus.APPROVED
+
+
+async def test_every_maker_the_request_names_is_refused_not_only_the_requester() -> None:
+    request = stamped("sales.order.cross_check", scope="sales.order.cross_check", makers=(MAKER,))
+    service = make_service(request, frozenset({"sales."}), runner=FakeRunner(hosted=True))
+
+    for maker in (REQUESTER, MAKER):
+        with pytest.raises(ConflictError, match="tách nhiệm") as refused:
+            await _decide_as(service, holding(maker, "sales.order.cross_check"))
+        assert refused.value.details["rule"] == "maker_checker"
+    assert request.status is ApprovalStatus.PENDING
+
+    decided = await _decide_as(service, holding(APPROVER, "sales.order.cross_check"))
+    assert decided.status is ApprovalStatus.APPROVED
+
+
+async def test_unreadable_makers_fail_closed() -> None:
+    request = stamped("sales.quote", scope="sales.quote.approve")
+    request.payload["makers"] = "not a list"
+    service = make_service(request, frozenset({"sales."}), runner=FakeRunner(hosted=True))
+
+    with pytest.raises(ConflictError, match="makers"):
+        await _decide_as(service, holding(APPROVER, "sales.quote.approve"))
+
+
+@dataclass
+class FakeGuard:
+    refuse: bool
+    seen: list[ProposedDecision] = field(default_factory=list)
+
+    async def check(
+        self, request: ApprovalRequest, decision: ProposedDecision, context: AccessContext
+    ) -> None:
+        self.seen.append(decision)
+        if self.refuse:
+            raise ConflictError("the subject moved on")
+
+
+async def test_a_contexts_guard_refuses_before_anything_is_recorded() -> None:
+    request = stamped("sales.quote", scope="sales.quote.approve")
+    repo = FakeApprovalRepo(request=request)
+    runner = FakeRunner(hosted=True)
+    service = make_service(request, frozenset({"sales."}), runner=runner, repo=repo)
+    guard = FakeGuard(refuse=True)
+    service.decision_guards["sales."] = guard
+
+    with pytest.raises(ConflictError, match="moved on"):
+        await _decide_as(
+            service,
+            holding(APPROVER, "sales.quote.approve"),
+            reasons={"price_below_policy_floor:1": "đã xem"},
+            subject_version=7,
+        )
+
+    assert guard.seen == [
+        ProposedDecision(
+            approve=True,
+            comment="đã xem",
+            reasons={"price_below_policy_floor:1": "đã xem"},
+            subject_version=7,
+        )
+    ]
+    assert request.status is ApprovalStatus.PENDING
+    assert repo.decisions == [] and runner.resumed == []
+
+
+async def test_a_guard_is_asked_only_about_its_own_prefix() -> None:
+    service = make_service(
+        make_request("demo.dispatch", run_id=RUN_ID), frozenset(), runner=FakeRunner(hosted=True)
+    )
+    service.decision_guards["sales."] = FakeGuard(refuse=True)
+
+    decided = await decide(service, APPROVER, "")
+
+    assert decided.status is ApprovalStatus.APPROVED
+
+
+@dataclass
+class PayloadRunner(FakeRunner):
+    payloads: list[dict[str, Any]] = field(default_factory=list)
+
+    async def resume(
+        self, *, run_context: RunContext, run_id: uuid.UUID, resume_payload: dict[str, Any]
+    ) -> None:
+        await super().resume(run_context=run_context, run_id=run_id, resume_payload=resume_payload)
+        self.payloads.append(resume_payload)
+
+
+async def test_the_run_resumes_knowing_who_decided_on_which_version() -> None:
+    """The run resumes as its requester; the decider is named in the payload,
+    with the reasons and the version they decided on."""
+    request = stamped("sales.quote", scope="sales.quote.approve")
+    runner = PayloadRunner(hosted=True)
+    service = make_service(request, frozenset({"sales."}), runner=runner)
+
+    await _decide_as(
+        service,
+        holding(APPROVER, "sales.quote.approve"),
+        reasons={"above_target_price:-": "khách đồng ý"},
+        subject_version=4,
+    )
+
+    (payload,) = runner.payloads
+    assert payload["decided_by"] == str(APPROVER)
+    assert payload["reasons"] == {"above_target_price:-": "khách đồng ý"}
+    assert payload["subject_version"] == 4
+    assert runner.contexts[0].actor_id == REQUESTER
+
+
+async def test_another_workspaces_request_is_not_found() -> None:
+    request = stamped("sales.quote", scope="sales.quote.approve")
+    request.workspace_id = WorkspaceId(uuid.UUID(int=999))
+    service = make_service(request, frozenset({"sales."}), runner=FakeRunner(hosted=True))
+
+    with pytest.raises(NotFoundError):
+        await _decide_as(service, holding(APPROVER, "sales.quote.approve"))
+
+
+def test_the_audience_sees_what_it_may_decide_and_what_it_asked_for() -> None:
+    quote = stamped("sales.quote", scope="sales.quote.approve")
+    plain = make_request("demo.dispatch")
+    service = make_service(quote, frozenset())
+    authz = ScopeAuthorizationService()
+
+    manager = service.audience(holding(APPROVER, "approvals.decide"), authz)
+    head = service.audience(holding(APPROVER, "sales.quote.approve"), authz)
+    requester = service.audience(holding(REQUESTER), authz)
+    viewer = service.audience(holding(uuid.UUID(int=77), "approvals.read"), authz)
+
+    assert (manager.may_see(quote), manager.may_see(plain)) == (False, True)
+    assert (head.may_see(quote), head.may_decide(plain)) == (True, False)
+    assert (requester.may_see(quote), requester.may_decide(quote)) == (True, False)
+    assert (viewer.may_see(quote), viewer.may_see(plain)) == (False, False)

@@ -13,6 +13,7 @@ import {
   Typography,
 } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
+import { approvalClient } from "../../../../lib/approvals/registry";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
 import type { Currency } from "../../../../lib/money";
 import { salesApi } from "../../_lib/api";
@@ -45,9 +46,11 @@ const PRICE_CODES = [
  * The approval pack beside the decision (Q9, V3Approvals re-cut): exactly
  * what is being approved (the document's hash, its number and validity, the
  * case version, who priced it, the decided terms and the price findings), so
- * the decision binds to what was seen. No typing ritual: a blocking price
- * finding needs its reason, nothing else does. The pricer is never the
- * approver; the button says so in words.
+ * the decision binds to what was seen. A blocking price finding needs its
+ * reason, and the decision a comment: it is made on the platform approval
+ * DW1's run paused on at submit (`quote.decision`), which is strict (a second
+ * person, in writing). The pricer is never the approver; the button says so
+ * in words.
  */
 export function ApprovalPanel({
   quote,
@@ -63,6 +66,7 @@ export function ApprovalPanel({
   const [error, setError] = useState<unknown>(null);
   const [returning, setReturning] = useState(false);
   const [form] = Form.useForm<Record<string, string>>();
+  const waiting = quote.decision;
   const [returnForm] = Form.useForm<{ comment: string }>();
   const submission = quote.submission;
   const reason = approvalReason(quote, viewer);
@@ -99,19 +103,43 @@ export function ApprovalPanel({
   );
   const needReason = priceFindings.filter((f) => f.blocking);
 
+  // The approval binds to the document hash it was raised with; the version
+  // is the one this screen showed.
+  const decide = (
+    id: "approve" | "return",
+    body: {
+      approve: boolean;
+      comment: string;
+      reasons?: Record<string, string>;
+    },
+    success: string,
+  ) => {
+    const sent = { ...body, subject_version: quote.case_version };
+    return run(
+      id,
+      sent,
+      (key) =>
+        waiting
+          ? approvalClient(waiting.approval_type).decideApproval(
+              waiting.approval_id,
+              sent,
+              key,
+            )
+          : Promise.reject(new Error("Chưa có yêu cầu duyệt đang chờ.")),
+      success,
+    );
+  };
+
   const approve = async (values: Record<string, string>) => {
-    const body = {
-      case_version: quote.case_version,
-      decision: "approve" as const,
-      document_sha256: submission.document_sha256,
-      reasons: Object.fromEntries(
-        needReason.map((f) => [f.key, (values[f.key] ?? "").trim()]),
-      ),
-    };
-    const result = await run(
+    const result = await decide(
       "approve",
-      body,
-      (key) => salesApi().approval(quote.case_id, body, key),
+      {
+        approve: true,
+        comment: (values.__comment ?? "").trim(),
+        reasons: Object.fromEntries(
+          needReason.map((f) => [f.key, (values[f.key] ?? "").trim()]),
+        ),
+      },
       `Đã duyệt báo giá ${submission.quote_no}`,
     );
     if (result.ok) {
@@ -121,15 +149,9 @@ export function ApprovalPanel({
   };
 
   const sendBack = async ({ comment }: { comment: string }) => {
-    const body = {
-      case_version: quote.case_version,
-      decision: "return" as const,
-      comment: comment.trim(),
-    };
-    const result = await run(
+    const result = await decide(
       "return",
-      body,
-      (key) => salesApi().approval(quote.case_id, body, key),
+      { approve: false, comment: comment.trim() },
       "Đã trả lại định giá",
     );
     if (result.ok) {
@@ -327,6 +349,24 @@ export function ApprovalPanel({
           ) : (
             <Typography.Paragraph>Không có cờ nào về giá.</Typography.Paragraph>
           )}
+          <Form.Item
+            name="__comment"
+            label="Nhận xét khi duyệt"
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: "Nhận xét là bắt buộc: bạn đã kiểm những gì",
+                validateTrigger: "onSubmit",
+              },
+            ]}
+          >
+            <Input.TextArea
+              rows={2}
+              maxLength={1000}
+              disabled={reason !== null}
+            />
+          </Form.Item>
           <Space wrap align="start" className="mt-2">
             <GuardedButton
               type="primary"

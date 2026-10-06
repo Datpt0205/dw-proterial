@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import (
@@ -36,15 +37,19 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_events import RunStateListener
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
+from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
+from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry, parse_worker_file
 from dw_api.bootstrap.container import ApiContainer
 from dw_api.bootstrap.identity import build_token_verifier
 from dw_api.bootstrap.paths import (
     COPY_DIR,
     POLICIES_DIR,
     WORKER_RUN_POLICY,
+    WORKERS_DIR,
     release_manifest_ref,
 )
 from dw_api.bootstrap.runtime import build_runtime
@@ -270,6 +275,12 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
         notifications=SqlNotificationRepository(session_factory),
         artifact_bytes=object_storage,
         release_manifest_ref=release_manifest_ref(),
+        runtime=SalesRuntime(
+            graphs=wiring.seam.graphs,
+            workers=wiring.seam.workers,
+            runner=wiring.runner,
+            approval_flow=wiring.approval_flow,
+        ),
     )
 
     # Build your context from `container.runtime` (the RuntimeSeam) and attach
@@ -277,6 +288,17 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     # this line may import a business package.
 
     return container
+
+
+@dataclass(frozen=True)
+class SalesRuntime:
+    """The runtime pieces DW1 plugs into: where its graph and worker are
+    registered, what starts its runs, and the approvals its runs pause on."""
+
+    graphs: GraphRegistry
+    workers: WorkerRegistry
+    runner: LangGraphWorkflowRunner
+    approval_flow: ApproveAndResumeService
 
 
 def build_sales(
@@ -291,6 +313,7 @@ def build_sales(
     notifications: SqlNotificationRepository,
     artifact_bytes: ObjectStoragePort,
     release_manifest_ref: str | None,
+    runtime: SalesRuntime,
 ) -> object:
     """The Sales context's mount, part of the seam above.
 
@@ -298,6 +321,12 @@ def build_sales(
     (tenant, workspace) (`ApiSettings.sales_demo_scope`); every other scope
     reads them empty. In a deployed profile without that pair nothing is
     wired, and the Sales routes answer that no data source is configured.
+
+    DW1 runs on the runtime (dw_sales ADR 0004): its graph and worker
+    (`configs/workers/sales.yaml`) are registered here, every `sales.`
+    approval is made strict and checked by the context before it is recorded
+    (`dw_sales.workflows.graph.register`), and "DW xử lý", a submitted
+    quotation and a recorded Bravo entry each start a run.
     """
     from dw_kernel.ids import TenantId, WorkspaceId
     from dw_platform.adapters.persistence.repositories import SqlAuditRepository
@@ -310,12 +339,14 @@ def build_sales(
     from dw_sales.adapters.policy_files import load_sales_policies
     from dw_sales.adapters.readers import mock_po_readers
     from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+    from dw_sales.adapters.runtime import RuntimeDw1Runs
     from dw_sales.adapters.source_view import FileSourceView
     from dw_sales.application.order_intake import OrderIntake
     from dw_sales.application.ports import SalesScope
     from dw_sales.application.quotation import QuotationService
     from dw_sales.application.services import assemble
     from dw_sales.presentation.routes import SalesMount
+    from dw_sales.workflows.graph import register
 
     demo = settings.sales_demo_scope()
     if demo is None:
@@ -343,7 +374,16 @@ def build_sales(
         cases=SqlOrderCaseLookup(session_factory),
         new_case_id=ids.new_uuid,
     )
-    services = assemble(
+    worker_file = WORKERS_DIR / "sales.yaml"
+    worker, _ = parse_worker_file(worker_file)
+    runs = RuntimeDw1Runs(
+        runtime.runner,
+        runtime.approval_flow,
+        ids,
+        worker_id=worker.worker_id,
+        worker_version=worker.worker_version,
+    )
+    assembly = assemble(
         uow=SqlSalesUnitOfWorkFactory(session_factory, audit=SqlAuditRepository),
         authorization=authorization,
         clock=clock,
@@ -361,8 +401,17 @@ def build_sales(
         artifact_writer=ArtifactFiles(),
         artifact_copy=policies.artifact_copy,
         release_manifest_ref=release_manifest_ref,
+        runs=runs,
+        pending=runs,
     )
-    return SalesMount(services=services)
+    register(
+        graphs=runtime.graphs,
+        workers=runtime.workers,
+        approvals=runtime.approval_flow,
+        steps=assembly.decisions,
+        worker_file=worker_file,
+    )
+    return SalesMount(services=assembly.services)
 
 
 def build_engine(url: str, *, pool_pre_ping: bool = True) -> AsyncEngine:

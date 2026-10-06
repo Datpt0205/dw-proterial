@@ -16,8 +16,17 @@ from typing import Any
 import pytest
 from openpyxl import load_workbook
 from sales_api_harness import AN, BAO, DIEU, GIANG, HA, Api, Persona, user_id
-from sales_flow import decide, order_of, prepared, process, quote, uploaded
-from test_sales_api_quotes import _approve, replied, submitted
+from sales_flow import (
+    approve,
+    decide,
+    order_of,
+    prepared,
+    process,
+    quote,
+    replied,
+    submitted,
+    uploaded,
+)
 
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
@@ -236,7 +245,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
     pending = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
     previews = await _render(giang, "quotes", pending, "quotation_preview")
     assert {p["content_type"] for p in previews} == {XLSX, "application/pdf"}
-    approved = await _approve(giang, pending)
+    approved = await approve(giang, pending)
     assert approved.status_code == 200, approved.text
     final = await quote(giang, pending["case_id"])
 

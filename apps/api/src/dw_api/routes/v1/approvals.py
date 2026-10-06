@@ -1,13 +1,19 @@
-"""Approvals API: inbox + decisions (decision resumes the paused run)."""
+"""Approvals API: inbox + decisions (decision resumes the paused run).
+
+The inbox and a single request are served only to the people who may decide
+them and to the one who asked (`ApprovalAudience`): a request's payload is
+the decider's working material, not every member's reading. Holding
+`approvals.read` opens the inbox; what is in it is the audience's.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.idempotency import RequireIdempotency
@@ -30,12 +36,22 @@ class ApprovalView(BaseModel):
     requires_comment: bool
 
 
+_ReasonKey = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_:.-]+$")]
+_Reason = Annotated[str, Field(min_length=1, max_length=1000, pattern=r"\S")]
+
+
 class DecisionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     approve: bool
-    comment: str = ""
+    comment: str = Field(default="", max_length=2000)
     approved_action_ids: list[str] | None = None
+    # A reason per item the approval names (a quote's blocking price
+    # findings, by finding key); the approval type's guard says which.
+    reasons: dict[_ReasonKey, _Reason] = Field(default_factory=dict, max_length=100)
+    # The version of the subject the decider was shown; the type's guard
+    # refuses a decision on a version the subject has since left behind.
+    subject_version: int | None = Field(default=None, ge=1)
 
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
@@ -59,8 +75,9 @@ async def list_pending(
         query=PageQuery(key="approvals.pending", filters={"tenant": context.tenant_id}),
     )
     approval_flow = container.approval_flow
+    audience = approval_flow.audience(context, container.authorization)
     async with container.uow_factory(context) as uow:
-        page = await uow.approvals.list_pending(request)
+        page = await uow.approvals.list_pending(request, audience)
     return page.map_items(
         lambda p: ApprovalView(
             id=p.id,
@@ -90,7 +107,10 @@ async def get_approval(
     )
     async with container.uow_factory(context) as uow:
         request = await uow.approvals.get(approval_id)
-    if request is None:
+    # Not the caller's to decide and not theirs to have asked: not found,
+    # the same answer as a request that does not exist.
+    audience = container.approval_flow.audience(context, container.authorization)
+    if request is None or not audience.may_see(request):
         raise NotFoundError("approval request not found")
     return ApprovalView(
         id=request.id,
@@ -126,6 +146,8 @@ async def decide(
         context=context,
         authorization=container.authorization,
         approved_action_ids=body.approved_action_ids,
+        reasons=body.reasons,
+        subject_version=body.subject_version,
     )
     return await idempotency.record(
         ApprovalView(

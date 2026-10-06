@@ -17,7 +17,7 @@ from dw_platform.application.access_context import AccessContext
 
 if TYPE_CHECKING:
     from dw_platform.application.directory import IdentityRef, WorkspaceMember
-    from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
+    from dw_platform.domain.approval import ApprovalAudience, ApprovalDecision, ApprovalRequest
     from dw_platform.domain.audit import AuditEvent
     from dw_platform.domain.feedback import Feedback, FeedbackAttachment
     from dw_platform.domain.outbox import OutboxBacklog, OutboxEvent
@@ -148,9 +148,15 @@ class ApprovalRepositoryPort(Protocol):
 
     async def add_decision(self, decision: ApprovalDecision) -> None: ...
 
-    async def list_pending(self, request: PageRequest) -> Page[ApprovalRequest]:
+    async def list_pending(
+        self, request: PageRequest, audience: ApprovalAudience
+    ) -> Page[ApprovalRequest]:
         """The inbox, newest first and resumable. Pending work is bounded by how
-        fast humans clear it, which on a stalled tenant is not bounded at all."""
+        fast humans clear it, which on a stalled tenant is not bounded at all.
+
+        Only what ``audience`` may see (`ApprovalAudience.may_see`): filtered
+        in the query, so a page is a page of the caller's inbox and never a
+        page of everyone's with holes in it."""
         ...
 
 

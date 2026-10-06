@@ -55,6 +55,15 @@ export function approvalReason(quote: Quote, viewer: Viewer): string | null {
     return `Bạn không có quyền duyệt báo giá (cần vai ${HEAD} hoặc quyền "${DEPUTY}").`;
   if (viewer.principalId && pricer(quote) === viewer.principalId)
     return `Bạn đã định giá báo giá này nên không tự duyệt được (${PRICER_APPROVER}).`;
+  // Whoever submitted it asked for the approval: a maker too.
+  if (
+    viewer.principalId &&
+    quote.submission?.submitted_by === viewer.principalId
+  )
+    return `Bạn đã trình báo giá này nên không tự duyệt được (${PRICER_APPROVER}).`;
+  // The decision is made on the platform approval DW1's run paused on.
+  if (!quote.decision)
+    return "Chưa có yêu cầu duyệt đang chờ cho báo giá này: tải lại trang; nếu vẫn chưa có, người định giá ghi giá rồi trình lại.";
   return null;
 }
 

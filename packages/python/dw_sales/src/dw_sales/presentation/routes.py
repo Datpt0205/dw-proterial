@@ -16,6 +16,11 @@ names neither implementation (it may not import the app).
   response the idempotency store keeps holds no amount.
 - **No data source configured** (a deployed profile without the demo tenant):
   every route answers 503 "chưa cấu hình nguồn dữ liệu".
+- **No decision of a checker is made here.** Approving or returning a
+  quotation and cross-checking or returning an order are decisions on a
+  platform approval (`POST /api/v1/approvals/{id}/decisions`), which DW1's
+  run pauses on and applies (dw_sales ADR 0004). The routes that raise them
+  (`submit`, `bravo-entry`) and "DW xử lý" start a DW1 run (`svc.dw1`).
 """
 
 # No `from __future__ import annotations` here: the routes annotate their
@@ -69,7 +74,6 @@ from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu"
 
 _BODY = ConfigDict(extra="forbid", hide_input_in_errors=True)
-_Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 _FindingKey = Annotated[str, Field(pattern=r"^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$")]
 _MessageId = Annotated[str, Field(pattern=r"^[!-~]{1,512}$")]
 _AttachmentId = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,128}$")]
@@ -105,11 +109,6 @@ class BravoEntryBody(VersionBody):
     # Absent only when applying a revision's change to an order already in Bravo.
     so_no: DocumentNo | None = None
     entry_compared: bool
-
-
-class CrossCheckBody(VersionBody):
-    decision: Literal["accept", "return"]
-    reason: Note | None = None
 
 
 class LineDate(BaseModel):
@@ -164,15 +163,6 @@ class PriceBody(VersionBody):
 
 class SubmitBody(VersionBody):
     quote_no: DocumentNo
-
-
-class ApprovalBody(VersionBody):
-    decision: Literal["approve", "return"]
-    comment: Reason | None = None
-    # The hash of the document the approver was shown (ui-quality §10).
-    document_sha256: _Sha256 | None = None
-    # A reason per blocking price finding, by finding key.
-    reasons: dict[_FindingKey, Reason] = Field(default_factory=dict, max_length=100)
 
 
 class DeclineBody(VersionBody):
@@ -274,7 +264,7 @@ def build_router(
         dependencies=[scopes(SalesScopes.INBOX_PROCESS)],
     )
     async def process_all(context: Ctx, svc: Svc, idem: Idem) -> ProcessAllView:
-        results = await svc.inbox.process_all(context)
+        results = await svc.dw1.process_all(context)
         return await idem.record(ProcessAllView(results=results))
 
     @router.post(
@@ -285,7 +275,7 @@ def build_router(
     async def process(
         message_id: _MessageId, context: Ctx, svc: Svc, idem: Idem
     ) -> MessageDispositionView:
-        return await idem.record(await svc.inbox.process(context, message_id))
+        return await idem.record(await svc.dw1.process(context, message_id))
 
     # -------------------------------------------------------------- orders --
 
@@ -425,29 +415,12 @@ def build_router(
     async def bravo_entry(
         case_id: uuid.UUID, body: BravoEntryBody, context: Ctx, svc: Svc, idem: Idem
     ) -> CaseChangeView:
-        change = await svc.order_commands.record_bravo_entry(
+        change = await svc.dw1.record_bravo_entry(
             context,
             case_id,
             case_version=body.case_version,
             so_no=body.so_no,
             entry_compared=body.entry_compared,
-        )
-        return await idem.record(change)
-
-    @router.post(
-        "/orders/{case_id}/cross-check",
-        response_model=CaseChangeView,
-        dependencies=[scopes(SalesScopes.ORDER_CROSS_CHECK)],
-    )
-    async def cross_check(
-        case_id: uuid.UUID, body: CrossCheckBody, context: Ctx, svc: Svc, idem: Idem
-    ) -> CaseChangeView:
-        change = await svc.order_commands.cross_check(
-            context,
-            case_id,
-            case_version=body.case_version,
-            decision=body.decision,
-            reason=body.reason,
         )
         return await idem.record(change)
 
@@ -627,27 +600,8 @@ def build_router(
     async def submit(
         case_id: uuid.UUID, body: SubmitBody, context: Ctx, svc: Svc, idem: Idem
     ) -> CaseChangeView:
-        change = await svc.quote_commands.submit(
+        change = await svc.dw1.submit_quote(
             context, case_id, case_version=body.case_version, quote_no=body.quote_no
-        )
-        return await idem.record(change)
-
-    @router.post(
-        "/quotes/{case_id}/approval",
-        response_model=CaseChangeView,
-        dependencies=[scopes(SalesScopes.QUOTE_APPROVE)],
-    )
-    async def approval(
-        case_id: uuid.UUID, body: ApprovalBody, context: Ctx, svc: Svc, idem: Idem
-    ) -> CaseChangeView:
-        change = await svc.quote_commands.approval(
-            context,
-            case_id,
-            case_version=body.case_version,
-            decision=body.decision,
-            comment=body.comment,
-            document_sha256=body.document_sha256,
-            reasons=body.reasons,
         )
         return await idem.record(change)
 

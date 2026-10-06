@@ -7,11 +7,17 @@ the policies the API loads (`load_sales_policies`). Only the case store is
 replaced, by `MemoryStore` below, which keeps each scope's cases in memory,
 one transaction at a time.
 
+DW1's runs go through the agent runtime as in the API: the real runner and
+approval flow over in-memory stores (`dw_agent_runtime.testing.memory_runtime`),
+with DW1's graph, worker config and approval rules registered by the same
+call the API makes (`dw_sales.workflows.graph.register`). A quotation approval
+or a cross-check is decided on the platform approval the run paused on.
+
 What this world does not show, and where it is shown instead: row-level
 security, the store's own CHECK constraints (checker not a maker, approver
 not the pricer) and grants are PostgreSQL's, tested by the `dw_sales` and
-`apps/api` integration suites. A guard the domain or a service holds is the
-same code here as in the API.
+`apps/api` integration suites. A guard the domain, a service or the approval
+flow holds is the same code here as in the API.
 
 A **sample set** is a directory of master data and a mailbox in the mock
 adapters' format (`adapters/mock/README.md`). The fictional set in git is the
@@ -29,6 +35,9 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+from dw_agent_runtime.ports import RunAllowancePort
+from dw_agent_runtime.registry import parse_worker_file
+from dw_agent_runtime.testing.memory_runtime import MemoryRuntime
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.pagination import Page, PageRequest
@@ -44,6 +53,7 @@ from dw_sales.adapters.order_rules import PlatformOrderRules
 from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies
 from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.case_store import (
     ArtifactRecord,
@@ -60,12 +70,14 @@ from dw_sales.application.case_store import (
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService
+from dw_sales.application.runs import subject_of
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.source import required_regions
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
+from dw_sales.workflows.graph import register
 
 ALPHA = SalesScope(TenantId(uuid.UUID(int=0xA1FA)), WorkspaceId(uuid.UUID(int=0xA1FB)))
 BETA = SalesScope(TenantId(uuid.UUID(int=0xBE7A)), WorkspaceId(uuid.UUID(int=0xBE7B)))
@@ -461,6 +473,8 @@ class World:
     objects: Objects
     policies: SalesPolicies
     sample: SampleSet
+    runtime: MemoryRuntime
+    runs: RuntimeDw1Runs
 
     async def process_each(
         self,
@@ -482,7 +496,7 @@ class World:
             message_ids = [m.message_id for m in await self.inbox.list_messages(scope)]
         seen: dict[str, tuple[MessageDispositionView, OrderCase | QuoteCase | None]] = {}
         for message_id in message_ids:
-            disposition = await self.services.inbox.process(context, message_id)
+            disposition = await self.services.dw1.process(context, message_id)
             seen[message_id] = (disposition, self.case(disposition, scope))
             if between is not None:
                 await between(message_id, disposition)
@@ -523,12 +537,11 @@ class World:
         self, preparer: Caller, case_id: uuid.UUID, *, recorder: Caller | None = None
     ) -> OrderCase:
         """Prepared by ``preparer``, its Bravo entry recorded by ``recorder``."""
-        commands = self.services.order_commands
         await self.open_sources(preparer, case_id)
-        await commands.prepare(
+        await self.services.order_commands.prepare(
             preparer.context(), case_id, case_version=self.order(case_id).case_version
         )
-        await commands.record_bravo_entry(
+        await self.services.dw1.record_bravo_entry(
             (recorder or preparer).context(),
             case_id,
             case_version=self.order(case_id).case_version,
@@ -539,14 +552,34 @@ class World:
 
     async def cross_check(self, checker: Caller, case_id: uuid.UUID) -> OrderCase:
         await self.open_sources(checker, case_id)
-        await self.services.order_commands.cross_check(
-            checker.context(),
-            case_id,
-            case_version=self.order(case_id).case_version,
-            decision="accept",
-            reason=None,
-        )
+        await self.decide(checker, CaseKind.ORDER, case_id, approve=True, comment="Đã đối chiếu")
         return self.order(case_id)
+
+    async def decide(
+        self,
+        caller: Caller,
+        kind: CaseKind,
+        case_id: uuid.UUID,
+        *,
+        approve: bool,
+        comment: str,
+        reasons: dict[str, str] | None = None,
+    ) -> None:
+        """A decision on the approval the case's run waits on, as the API's
+        `POST /approvals/{id}/decisions` makes it, on the version shown."""
+        approval_id = await self.runs.pending(caller.context(), subject_of(kind, case_id))
+        if approval_id is None:
+            raise ConflictError("the case waits on no decision", details={"rule": "no_decision"})
+        case = self.order(case_id) if kind is CaseKind.ORDER else self.quote(case_id)
+        await self.runtime.approval_flow.decide(
+            approval_id=approval_id,
+            approve=approve,
+            comment=comment,
+            context=caller.context(),
+            authorization=ScopeAuthorizationService(),
+            reasons=reasons,
+            subject_version=case.case_version,
+        )
 
     async def confirm(self, pic: Caller, case_id: uuid.UUID, day: date) -> OrderCase:
         case = self.order(case_id)
@@ -565,9 +598,11 @@ def open_world(
     callers: Sequence[Caller],
     *,
     bound_to: SalesScope = ALPHA,
+    allowance: RunAllowancePort | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
-    the mocks bound to ``bound_to``."""
+    the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
+    names a plan's limits."""
     policies = load_sales_policies(
         repo_root / "configs" / "policies", repo_root / "configs" / "copy"
     )
@@ -597,7 +632,13 @@ def open_world(
     directory = Directory(tuple(callers))
     notifications = Notifications()
     objects = Objects()
-    services = assemble(
+    runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance)
+    worker_file = repo_root / "configs" / "workers" / "sales.yaml"
+    worker, _ = parse_worker_file(worker_file)
+    runs = RuntimeDw1Runs(
+        runtime.runner, runtime.approval_flow, ids, worker.worker_id, worker.worker_version
+    )
+    assembly = assemble(
         uow=store,
         authorization=ScopeAuthorizationService(),
         clock=clock,
@@ -615,8 +656,28 @@ def open_world(
         artifact_writer=ArtifactFiles(),
         artifact_copy=policies.artifact_copy,
         release_manifest_ref="sha256:eval",
+        runs=runs,
+        pending=runs,
     )
-    return World(services, store, catalog, inbox, notifications, objects, policies, sample)
+    register(
+        graphs=runtime.graphs,
+        workers=runtime.workers,
+        approvals=runtime.approval_flow,
+        steps=assembly.decisions,
+        worker_file=worker_file,
+    )
+    return World(
+        assembly.services,
+        store,
+        catalog,
+        inbox,
+        notifications,
+        objects,
+        policies,
+        sample,
+        runtime,
+        runs,
+    )
 
 
 __all__ = [

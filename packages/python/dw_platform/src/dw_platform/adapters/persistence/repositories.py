@@ -20,6 +20,8 @@ from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.domain.approval import (
+    DEFAULT_DECIDE_SCOPE,
+    ApprovalAudience,
     ApprovalDecision,
     ApprovalRequest,
     ApprovalStatus,
@@ -43,6 +45,22 @@ def _approval_from_row(row: Row[tuple]) -> ApprovalRequest:  # type: ignore[type
         created_at=row.created_at,
         decided_at=row.decided_at,
         version=row.version,
+    )
+
+
+def _visible_to(audience: ApprovalAudience) -> sa.ColumnElement[bool]:
+    """`ApprovalAudience.may_see`, as a WHERE clause.
+
+    A request the caller asked for, or one whose required scope they hold:
+    the stamped `decide_scope` when the raiser named one, else the platform's
+    default. In the caller's workspace only, as their scopes are.
+    """
+    approvals = tables.approval_requests
+    required = sa.func.coalesce(approvals.c.payload["decide_scope"].astext, DEFAULT_DECIDE_SCOPE)
+    decidable = sa.true() if audience.unrestricted else required.in_(sorted(audience.scopes))
+    return sa.and_(
+        approvals.c.workspace_id == audience.workspace_id,
+        sa.or_(approvals.c.requested_by == audience.principal_id, decidable),
     )
 
 
@@ -122,11 +140,14 @@ class SqlApprovalRepository:
                 details={"request_id": str(request.id)},
             )
 
-    async def list_pending(self, request: PageRequest) -> Page[ApprovalRequest]:
+    async def list_pending(
+        self, request: PageRequest, audience: ApprovalAudience
+    ) -> Page[ApprovalRequest]:
         result = await self.session.execute(
             sa.select(tables.approval_requests)
             .where(
                 tables.approval_requests.c.status == "pending",
+                _visible_to(audience),
                 after_position(
                     tables.approval_requests.c.created_at,
                     tables.approval_requests.c.id,

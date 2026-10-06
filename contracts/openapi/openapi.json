@@ -105,69 +105,6 @@
         "title": "AnswerBody",
         "type": "object"
       },
-      "ApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "case_version": {
-            "minimum": 1.0,
-            "title": "Case Version",
-            "type": "integer"
-          },
-          "comment": {
-            "anyOf": [
-              {
-                "maxLength": 1000,
-                "minLength": 1,
-                "pattern": "\\S",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comment"
-          },
-          "decision": {
-            "enum": [
-              "approve",
-              "return"
-            ],
-            "title": "Decision",
-            "type": "string"
-          },
-          "document_sha256": {
-            "anyOf": [
-              {
-                "pattern": "^[0-9a-f]{64}$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Document Sha256"
-          },
-          "reasons": {
-            "maxProperties": 100,
-            "patternProperties": {
-              "^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$": {
-                "maxLength": 1000,
-                "minLength": 1,
-                "pattern": "\\S",
-                "type": "string"
-              }
-            },
-            "title": "Reasons",
-            "type": "object"
-          }
-        },
-        "required": [
-          "case_version",
-          "decision"
-        ],
-        "title": "ApprovalBody",
-        "type": "object"
-      },
       "ApprovalView": {
         "properties": {
           "approval_type": {
@@ -977,44 +914,6 @@
         "title": "CreateWorkspaceBody",
         "type": "object"
       },
-      "CrossCheckBody": {
-        "additionalProperties": false,
-        "properties": {
-          "case_version": {
-            "minimum": 1.0,
-            "title": "Case Version",
-            "type": "integer"
-          },
-          "decision": {
-            "enum": [
-              "accept",
-              "return"
-            ],
-            "title": "Decision",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "minLength": 1,
-                "pattern": "\\S",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          }
-        },
-        "required": [
-          "case_version",
-          "decision"
-        ],
-        "title": "CrossCheckBody",
-        "type": "object"
-      },
       "CustomerView": {
         "properties": {
           "code": {
@@ -1126,8 +1025,38 @@
           },
           "comment": {
             "default": "",
+            "maxLength": 2000,
             "title": "Comment",
             "type": "string"
+          },
+          "reasons": {
+            "maxProperties": 100,
+            "patternProperties": {
+              "^[a-z0-9_:.-]+$": {
+                "maxLength": 1000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Reasons",
+            "type": "object"
+          },
+          "subject_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Version"
           }
         },
         "required": [
@@ -3712,6 +3641,16 @@
             "title": "Customer Code",
             "type": "string"
           },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingDecisionView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "duplicate_of_case": {
             "anyOf": [
               {
@@ -4608,6 +4547,26 @@
         "title": "PauseBody",
         "type": "object"
       },
+      "PendingDecisionView": {
+        "description": "The platform approval a case waits on: the decision is made there\n(`POST /api/v1/approvals/{approval_id}/decisions`), never on a Sales\nroute. Present only while the case is in the state that waits on it.",
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "approval_type": {
+            "title": "Approval Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "approval_type"
+        ],
+        "title": "PendingDecisionView",
+        "type": "object"
+      },
       "PermissionSetView": {
         "properties": {
           "key": {
@@ -5088,6 +5047,16 @@
           "customer_from": {
             "title": "Customer From",
             "type": "string"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingDecisionView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "decline": {
             "anyOf": [
@@ -10360,77 +10329,6 @@
         ]
       }
     },
-    "/api/v1/sales/orders/{case_id}/cross-check": {
-      "post": {
-        "operationId": "cross_check_api_v1_sales_orders__case_id__cross_check_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "case_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CrossCheckBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CaseChangeView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Cross Check",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
     "/api/v1/sales/orders/{case_id}/findings/{finding_key}/disposition": {
       "post": {
         "operationId": "dispose_api_v1_sales_orders__case_id__findings__finding_key__disposition_post",
@@ -11016,77 +10914,6 @@
           }
         },
         "summary": "Quote",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/quotes/{case_id}/approval": {
-      "post": {
-        "operationId": "approval_api_v1_sales_quotes__case_id__approval_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "case_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CaseChangeView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Approval",
         "tags": [
           "sales"
         ]

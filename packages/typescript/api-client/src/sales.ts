@@ -47,6 +47,11 @@ export type Words = SalesSchemas["Words"];
 /** Every currency the Sales API names (one enum in OpenAPI). */
 export type SalesCurrency = SalesSchemas["OrderCaseView"]["currency"];
 export type Artifact = SalesSchemas["ArtifactView"];
+/**
+ * The platform approval a case waits on. The decision is made there
+ * (`ApiClient.decideApproval`), never on a Sales route.
+ */
+export type PendingDecision = SalesSchemas["PendingDecisionView"];
 
 export class SalesApi {
   constructor(private readonly client: ApiClient) {}
@@ -184,18 +189,6 @@ export class SalesApi {
     );
   }
 
-  crossCheck(
-    caseId: string,
-    body: Body<"/api/v1/sales/orders/{case_id}/cross-check">,
-    key: string,
-  ) {
-    return this.post<"/api/v1/sales/orders/{case_id}/cross-check">(
-      `/api/v1/sales/orders/${enc(caseId)}/cross-check`,
-      body,
-      key,
-    );
-  }
-
   confirm(
     caseId: string,
     body: Body<"/api/v1/sales/orders/{case_id}/confirm">,
@@ -308,18 +301,6 @@ export class SalesApi {
   ) {
     return this.post<"/api/v1/sales/quotes/{case_id}/submit">(
       `/api/v1/sales/quotes/${enc(caseId)}/submit`,
-      body,
-      key,
-    );
-  }
-
-  approval(
-    caseId: string,
-    body: Body<"/api/v1/sales/quotes/{case_id}/approval">,
-    key: string,
-  ) {
-    return this.post<"/api/v1/sales/quotes/{case_id}/approval">(
-      `/api/v1/sales/quotes/${enc(caseId)}/approval`,
       body,
       key,
     );

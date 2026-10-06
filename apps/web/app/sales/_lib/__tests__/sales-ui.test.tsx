@@ -40,11 +40,16 @@ import {
   OTHER_CUSTOMERS_SENTENCE,
   PRICE_SENTENCE,
 } from "../../_components/money";
-import { MAKER_CHECKER, orderOffers } from "../order-actions";
+import {
+  MAKER_CHECKER,
+  NO_CROSS_CHECK_REQUEST,
+  orderOffers,
+} from "../order-actions";
 import { approvalReason } from "../quote-actions";
 import {
   AN,
   DIEU,
+  GIANG,
   finding,
   order,
   orderInBravo,
@@ -175,6 +180,14 @@ describe("the maker/checker rule on an order", () => {
     ).toBe(false);
   });
 
+  it("says so when no cross-check request is waiting", () => {
+    const viewer = as(DIEU, PIC);
+    const none = { ...orderInBravo(), decision: null };
+    expect(
+      orderOffers(none, viewer, { sourceOpened: true }).crossCheck?.reason,
+    ).toBe(NO_CROSS_CHECK_REQUEST);
+  });
+
   it("says 'Chưa mở nguồn' to a checker who has not opened the original", () => {
     const viewer = as(DIEU, PIC);
     const offers = orderOffers(orderInBravo(), viewer, { sourceOpened: false });
@@ -201,6 +214,19 @@ describe("the pricer/approver rule on a quote", () => {
     expect(approvalReason(pendingQuote(), head)).toBe(
       "Bạn đã định giá báo giá này nên không tự duyệt được (tách nhiệm, WIV-03-023 bước 9).",
     );
+  });
+
+  it("refuses whoever submitted it, and says when no request is waiting", () => {
+    const head = as(GIANG, [...PIC, "sales.quote.approve"]);
+    const theirs = pendingQuote();
+    theirs.submission = { ...theirs.submission!, submitted_by: GIANG };
+    expect(approvalReason(theirs, head)).toBe(
+      "Bạn đã trình báo giá này nên không tự duyệt được (tách nhiệm, WIV-03-023 bước 9).",
+    );
+    expect(approvalReason({ ...pendingQuote(), decision: null }, head)).toMatch(
+      /^Chưa có yêu cầu duyệt đang chờ/,
+    );
+    expect(approvalReason(pendingQuote(), head)).toBeNull();
   });
 
   it("refuses someone without the approve scope before anything else", () => {

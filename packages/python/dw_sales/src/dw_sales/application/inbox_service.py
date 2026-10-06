@@ -42,6 +42,7 @@ from dw_sales.application.quotation import (
     RequestNotExtractedError,
 )
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
+from dw_sales.application.runs import PendingDecisionsPort, withdraw_if_left
 from dw_sales.application.support import (
     DW1_WORKER_ID,
     DW1_WORKER_VERSION,
@@ -71,17 +72,12 @@ _ON_A_CASE = frozenset({DispositionKind.CASE_CREATED, DispositionKind.ATTACHED_T
 
 
 @dataclass(frozen=True)
-class InboxService:
+class InboxQueries:
+    """What arrived, and each message's disposition."""
+
     uow: SalesUnitOfWorkFactory
     gate: Gate
-    clock: UtcClock
-    ids: IdGenerator
     inbox: InboxPort
-    catalog: SalesCatalogPort
-    intake: OrderIntake
-    quotes: QuotationService
-    directory: MemberDirectoryPort
-    release_manifest_ref: str | None
 
     async def messages(self, context: AccessContext) -> list[InboxMessageView]:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type="sales_message")
@@ -98,6 +94,28 @@ class InboxService:
             )
             views.append(inbox_message(message, disposition))
         return views
+
+
+@dataclass(frozen=True)
+class InboxProcessing:
+    """DW1's processing of the mailbox: the step a DW1 run takes.
+
+    Not mounted on a route: "DW xử lý" starts a run (`Dw1Runs.process`), and
+    the run calls this, so every message DW1 processes is counted against the
+    tenant's plan where a run begins, whatever door started it.
+    """
+
+    uow: SalesUnitOfWorkFactory
+    gate: Gate
+    clock: UtcClock
+    ids: IdGenerator
+    inbox: InboxPort
+    catalog: SalesCatalogPort
+    intake: OrderIntake
+    quotes: QuotationService
+    directory: MemberDirectoryPort
+    decisions: PendingDecisionsPort
+    release_manifest_ref: str | None
 
     async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
         """One message processed by DW1, at the caller's request."""
@@ -160,6 +178,7 @@ class InboxService:
         disposition = outcome.disposition
         assert disposition is not None  # quotation kinds are handled above
         case = outcome.case
+        before: OrderCase | None = None
         async with self.uow(scope) as work:
             await _running(work)
             if case is not None:
@@ -167,11 +186,16 @@ class InboxService:
                 if stored is None:
                     await self._open_order(work, context, case)
                 else:
+                    before = stored.case
                     revised = worker_event("order.revised", context, self.clock.now())
                     await save_order(work, context, self.ids, stored.case, case, revised)
                     await self._start_review(work, context, case)
             await self._record(work, context, disposition, ingest)
             await work.commit()
+        if before is not None and case is not None:
+            # A revision of an order awaiting its cross-check: that check
+            # was of the revision it replaced.
+            await withdraw_if_left(self.decisions, context, before, case)
         return disposition
 
     async def _open_order(

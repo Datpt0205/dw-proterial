@@ -103,6 +103,14 @@ class RunRecord:
     actor_visible_owners: frozenset[uuid.UUID] | None
 
 
+@dataclass(frozen=True, slots=True)
+class WaitingRun:
+    """A run parked on an approval, and the approval it waits for."""
+
+    run_id: uuid.UUID
+    approval_request_id: uuid.UUID
+
+
 @dataclass(frozen=True)
 class SqlWorkerRunStore:
     session_factory: async_sessionmaker[AsyncSession]
@@ -263,6 +271,35 @@ class SqlWorkerRunStore:
         )
         row = result.first()
         return None if row is None else row.approval_request_id
+
+    async def waiting_for_subject(
+        self,
+        tenant_id: uuid.UUID,
+        *,
+        workspace_id: uuid.UUID,
+        worker_id: str,
+        subject_ref: str,
+    ) -> list[WaitingRun]:
+        """The runs about one subject parked on an approval, oldest first.
+
+        How a page showing a record finds the decision that record waits on,
+        and how the record's owner withdraws it once the record has moved on
+        without one: neither knows a run id, both know the record. Matched on
+        the run's declared subject, as `active_since` is.
+        """
+        result = await self._execute_for_tenant(
+            tenant_id,
+            sa.select(worker_runs.c.id, worker_runs.c.approval_request_id)
+            .where(
+                worker_runs.c.workspace_id == workspace_id,
+                worker_runs.c.worker_id == worker_id,
+                worker_runs.c.subject_ref == subject_ref,
+                worker_runs.c.status == RunStatus.WAITING_APPROVAL.value,
+                worker_runs.c.approval_request_id.is_not(None),
+            )
+            .order_by(worker_runs.c.created_at, worker_runs.c.id),
+        )
+        return [WaitingRun(row.id, row.approval_request_id) for row in result]
 
     async def thread_belongs_to(self, tenant_id: uuid.UUID, thread_id: uuid.UUID) -> bool:
         """Whether this tenant has ever run anything on this thread.

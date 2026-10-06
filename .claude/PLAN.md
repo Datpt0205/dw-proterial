@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed              |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps         |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Prototype theme; Sales restyled |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 10, 12 left          |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 10 built; 12 left    |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -31,8 +31,11 @@ own file and a row here.
   smoke, runbook `sales/dw1-portal-demo/demo.md`, `make demo-reset`,
   `make test-web-sales`. All committed and pushed (`2284d3c`).
 - Platform pieces still waiting for a first caller: `platform-runtime.md`.
-- **Next:** sales ticket 10 (approval on the runtime), then 12 (production
-  hardening, needs-triage).
+- Sales ticket 10 built 2026-10-06, not committed: DW1 runs on the runtime,
+  quotation approval and cross-check are platform approvals (dw_sales ADR
+  0004 Proposed, Đạt to review).
+- **Next:** commit ticket 10, then sales 12 (production hardening,
+  needs-triage).
 
 ## Decisions Đạt owes
 

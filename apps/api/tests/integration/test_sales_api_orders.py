@@ -11,7 +11,18 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 from sales_api_harness import AN, DIEU, GIANG, KHOA, Api, user_id
-from sales_flow import dates, decide, open_sources, order, order_of, prepared, process, uploaded
+from sales_flow import (
+    cross_check,
+    cross_checked,
+    dates,
+    decide,
+    open_sources,
+    order,
+    order_of,
+    prepared,
+    process,
+    uploaded,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 pytestmark = pytest.mark.integration
@@ -21,7 +32,7 @@ async def _audit(migrator: AsyncEngine, case_id: str) -> list[dict[str, object]]
     async with migrator.connect() as conn:
         rows = await conn.execute(
             sa.text(
-                "SELECT action, actor_id, details FROM platform.audit_events"
+                "SELECT action, actor_id, details, run_id FROM platform.audit_events"
                 " WHERE resource_id = :id ORDER BY occurred_at, id"
             ),
             {"id": case_id},
@@ -45,8 +56,7 @@ async def test_an_and_dieu_walk_m01_from_the_mailbox_to_confirmed(
         str(user_id(AN)),
         str(user_id(AN)),
     )
-    await open_sources(dieu, up)
-    crossed = await decide(dieu, up, "cross-check", {"decision": "accept"})
+    crossed = await cross_checked(dieu, up)
     assert crossed["cross_checked_by"] == str(user_id(DIEU))
     confirmed = await decide(an, crossed, "confirm", {"delivery_dates": dates(crossed)})
     assert confirmed["status"] == "confirmed"
@@ -65,6 +75,9 @@ async def test_an_and_dieu_walk_m01_from_the_mailbox_to_confirmed(
     assert rows[0]["details"]["actor_kind"] == "worker"  # type: ignore[index]
     assert rows[0]["actor_id"] == user_id(AN)
     assert rows[4]["actor_id"] == user_id(DIEU)
+    # The Bravo entry and the cross-check happened in DW1's run, which the
+    # cross-check row names: the run paused on the approval Diệu decided.
+    assert rows[3]["run_id"] is not None and rows[4]["run_id"] == rows[3]["run_id"]
     # Ids, codes, transitions and versions: nothing else travels.
     allowed = {
         "case_kind",
@@ -105,15 +118,13 @@ async def test_the_preparer_cannot_cross_check_their_own_order(api: Api) -> None
     up = await uploaded(an, await order_of(an, "M01"))
     await open_sources(an, up)
 
-    refused = await an.post(
-        f"/orders/{up['case_id']}/cross-check",
-        {"case_version": up["case_version"], "decision": "accept"},
-    )
+    refused = await cross_check(an, up)
 
-    # The case refuses it itself, naming the rule, before the store's CHECK.
+    # The platform refuses a maker the approval names, before the case does.
     assert refused.status_code == 409
     assert "tách nhiệm" in refused.json()["message"]
     assert refused.json()["details"]["rule"] == "maker_checker"
+    assert (await order(an, up["case_id"]))["status"] == "uploaded_to_bravo"
 
 
 async def test_whoever_recorded_the_bravo_entry_cannot_cross_check(api: Api) -> None:
@@ -121,10 +132,7 @@ async def test_whoever_recorded_the_bravo_entry_cannot_cross_check(api: Api) -> 
     up = await uploaded(an, await order_of(an, "M01"), recorder=khoa)
     await open_sources(khoa, up)
 
-    refused = await khoa.post(
-        f"/orders/{up['case_id']}/cross-check",
-        {"case_version": up["case_version"], "decision": "accept"},
-    )
+    refused = await cross_check(khoa, up)
 
     assert refused.status_code == 409 and "tách nhiệm" in refused.json()["message"]
 
@@ -133,15 +141,15 @@ async def test_a_round_one_preparer_stays_a_maker_after_a_return(api: Api) -> No
     an, dieu, giang = api.as_(AN), api.as_(DIEU), api.as_(GIANG)
     up = await uploaded(an, await order_of(an, "M01"))
     await open_sources(dieu, up)
-    returned = await decide(dieu, up, "cross-check", {"decision": "return", "reason": "sai SO"})
+    back = await cross_check(dieu, up, approve=False, comment="sai SO")
+    assert back.status_code == 200, back.text
+    returned = await order(dieu, up["case_id"])
+    assert (returned["status"], returned["returned_reason"]) == ("in_review", "sai SO")
     again = await uploaded(giang, returned)
     assert str(user_id(AN)) in again["makers"]
     await open_sources(an, again)
 
-    refused = await an.post(
-        f"/orders/{again['case_id']}/cross-check",
-        {"case_version": again["case_version"], "decision": "accept"},
-    )
+    refused = await cross_check(an, again)
 
     assert refused.status_code == 409 and "tách nhiệm" in refused.json()["message"]
 
@@ -159,19 +167,15 @@ async def test_prepare_and_cross_check_need_the_callers_own_served_source(api: A
     assert "chưa mở nguồn" in unopened.json()["message"]
 
     up = await uploaded(an, case)
-    # An's record is his, and Diệu's is for a version the case has left.
-    refused = await dieu.post(
-        f"/orders/{up['case_id']}/cross-check",
-        {"case_version": up["case_version"], "decision": "accept"},
-    )
+    # An's record is his, and Diệu's is for a version the case has left: the
+    # decision is refused before it is recorded, and the approval stays open.
+    refused = await cross_check(dieu, up)
     assert refused.status_code == 409 and "chưa mở nguồn" in refused.json()["message"]
 
     await open_sources(dieu, up)
-    accepted = await dieu.post(
-        f"/orders/{up['case_id']}/cross-check",
-        {"case_version": up["case_version"], "decision": "accept"},
-    )
+    accepted = await cross_check(dieu, up)
     assert accepted.status_code == 200, accepted.text
+    assert (await order(an, up["case_id"]))["status"] == "cross_checked"
 
 
 async def test_a_decision_on_a_stale_version_is_refused(api: Api) -> None:

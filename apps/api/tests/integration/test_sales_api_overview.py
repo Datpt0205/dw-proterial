@@ -6,8 +6,7 @@ from typing import Any
 
 import pytest
 from sales_api_harness import AN, DIEU, GIANG, HA, KHOA, Api, user_id
-from sales_flow import order_of, uploaded
-from test_sales_api_quotes import replied, submitted
+from sales_flow import order_of, replied, submitted, uploaded
 
 pytestmark = pytest.mark.integration
 
