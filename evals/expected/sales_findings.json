@@ -1,0 +1,5 @@
+{
+  "readme": "packages/python/dw_sales/src/dw_sales/adapters/mock/README.md",
+  "min_recall": 1.0,
+  "min_precision": 1.0
+}

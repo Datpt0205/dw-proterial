@@ -62,7 +62,24 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   `sales_bravo_upload@1.0.0` (MOCK) are pinned by the manifest. reportlab
   stays a runtime dependency (G38). The confirmation draft opens at
   `confirmed`, not `cross_checked`; details in the ticket's "As built".
-- Next: 09 (evals, security, demo script). Owed by the API to the pages:
+- 2026-10-06, ticket 09 built (uncommitted): eval dataset `sales@1.0.0`
+  (10 cases, full security coverage) graded by seven `sales.*` graders that
+  live in `dw_sales.evals` and run the real Sales services in one process
+  over an in-memory store; `scripts/run_evals.py` is the composition root
+  that injects them, so `dw_evals` imports no context. Pinned in the release
+  manifest. Demo runbook `sales/dw1-portal-demo/demo.md` (Vietnamese),
+  `make demo-reset` (start state), `make test-web-sales` (Playwright walk).
+  Security reviews (feature and deployment) recorded in ticket 09.
+- **What "done" means for the demo:** the personas walk the spec's Done-when
+  on the local stack from `make demo-reset`, the walk is automated
+  (`make test-web-sales`), and `make eval-smoke` scores extraction and
+  findings on the mock set. It is a demo on fictional data: approval is a
+  case decision, not a runtime interrupt, and nothing production-only
+  exists. What remains is ticket 10 (approval on the runtime, DW1's service
+  principal, a model step if any) and ticket 12 (production hardening:
+  sandboxed parsing, support access, tenant overrides, rules approval,
+  Proterial's real inputs).
+- Next: ticket 10, then 12 (needs-triage). Owed by the API to the pages:
   the PO-read attributes for the candidate picker, order due dates in
   my-work, Vietnamese refusal messages, server time. (Role names and
   permission-set scopes landed in `/auth/bootstrap` on 2026-10-05; the web
@@ -120,8 +137,18 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 | 05     | `3557de8` | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
 | 06     | `2f737ca` | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
 | 08     | `88fb7b6` | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown       |
+| 09     | (pending) | Evals `sales@1.0.0` + graders injected; security reviews; demo runbook, `demo-reset`, Playwright walk    |
 
 ## Open
+
+- From ticket 09 (2026-10-06): the approval panel needs a page reload after
+  the approver renders the preview; whether submit should render the preview
+  itself (Đạt); the release manifest pins an eval dataset file but not the
+  fixtures and truth files it names (platform); the mock README's
+  Design-reply dispositions assume Sales recorded the YCBG first (the eval
+  states those steps); CI does not run `make test-web-sales`; the walk passed
+  11/11 once, then a re-run timed out on Hà's overview ("Loading…", 60 s)
+  under heavy machine load: unexplained until a green run on an idle machine.
 
 - From ticket 06 (2026-10-05): a `value_uncertain` correction is one value
   for a whole region, so the upload file carries the values as read (domain

@@ -1,0 +1,32 @@
+{
+  "messages": [
+    "M16",
+    "M21",
+    "M22",
+    "M27"
+  ],
+  "sales_steps": {
+    "M09": {
+      "ycbg": "YCBG-2609-028"
+    },
+    "M10": {
+      "ycbg": "YCBG-2609-030"
+    },
+    "M14": {
+      "answers": {
+        "customer_unknown:-": {
+          "customer_code": "VLX"
+        }
+      },
+      "ycbg": "YCBG-2609-029"
+    },
+    "M23": {
+      "answers": {
+        "rfq_incomplete:1": {
+          "quantity": "3050"
+        }
+      },
+      "ycbg": "YCBG-2610-001"
+    }
+  }
+}

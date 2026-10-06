@@ -30,17 +30,12 @@ from dw_agent_runtime.testing.demo_graph import DEMO_WORKER
 STALE_AFTER_SECONDS_LOCAL = 3600
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.anyio]
+pytestmark = pytest.mark.integration
 
 # The harness stamps every run with this worker; the scorer's own id is
 # irrelevant here, what matters is that the filter discriminates at all.
 WORKER = "demo_approval"
 OTHER_WORKER = "sales_chat"
-
-
-@pytest.fixture
-def anyio_backend() -> str:
-    return "asyncio"
 
 
 def _about(context: RunContext, lead_id: str) -> RunContext:

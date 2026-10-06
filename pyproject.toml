@@ -185,7 +185,15 @@ ignore_missing_imports = true
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-q --strict-markers"
+# `-p no:anyio`: one async test runner, pytest-asyncio (`asyncio_mode` below).
+# anyio installs a pytest plugin of its own, and a test marked `anyio` was run
+# by BOTH: which one ran an async fixture and which ran the test depended on
+# plugin registration order, which differs between the Windows and the Linux
+# venv. On Linux the fixture got anyio's loop and the test pytest-asyncio's,
+# so a LISTEN connection opened in a fixture sat on a loop that was not
+# running and heard nothing — three announcement tests red in CI only.
+# Disabled, the `anyio` marker is unknown and `--strict-markers` refuses it.
+addopts = "-q --strict-markers -p no:anyio"
 testpaths = [
     "packages/python",
     "apps/api/tests",

@@ -25,7 +25,7 @@ from sqlalchemy.pool import NullPool
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER
 
-pytestmark = [pytest.mark.integration, pytest.mark.anyio]
+pytestmark = pytest.mark.integration
 
 STALE_AFTER_SECONDS_LOCAL = 3600
 

@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // The browser suite starts its own dev server (`playwright.config.ts`) beside
+  // a developer's; each needs its own build directory, or the two corrupt it.
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // Hide the Next.js dev-mode indicator (the floating "N" badge). It only ever
   // shows under `next dev`; production (`next start`) never renders it.
   devIndicators: false,

@@ -20,16 +20,11 @@ from qdrant_client import AsyncQdrantClient
 from dw_knowledge.adapters.hash_embedding import HashEmbeddingAdapter
 from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker
 
-pytestmark = [pytest.mark.integration, pytest.mark.anyio]
+pytestmark = pytest.mark.integration
 
 TENANT = uuid.UUID(int=0xDD00)
 OTHER_TENANT = uuid.UUID(int=0xDD01)
 WORKSPACE = uuid.UUID(int=0xDD02)
-
-
-@pytest.fixture
-def anyio_backend() -> str:
-    return "asyncio"
 
 
 @pytest.fixture

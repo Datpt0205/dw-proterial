@@ -14,7 +14,8 @@ of them are configuration:
     pyproject.toml                        mypy mypy_path
     pyproject.toml                        coverage source
     pyproject.toml                        import-linter root_packages
-    pyproject.toml                        the independence contract
+    pyproject.toml                        import-linter contracts (its own,
+                                          the platform's, independence)
     apps/api/.../bootstrap/wiring.py      build from the RuntimeSeam
     apps/api/.../main.py                  mount the router
     apps/api/pyproject.toml               declare the dependency
@@ -59,8 +60,10 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -332,7 +335,12 @@ def build_router(handler: Handle{cls}) -> APIRouter:
     return router
 '''
         ),
-        "tests/unit/__init__.py": "",
+        # No `tests/unit/__init__.py`. With one and no `tests/__init__.py` above
+        # it, pytest imports the directory as a top-level package named `unit`,
+        # and the second context to have one finds the first's `unit` already
+        # in `sys.modules`: "No module named 'unit.test_<name>_slice'". The
+        # platform packages ship none; the file name carries the context name
+        # instead, which is what keeps it unique.
         f"tests/unit/test_{ctx.name}_slice.py": (
             f'''"""The generated slice, end to end, no infrastructure.
 
@@ -415,11 +423,92 @@ def _patch_root_pyproject(ctx: Context) -> None:
         f'    "packages/python/{ctx.package}/src",\n',
         what="coverage source",
     )
-    before = text
-    text = text.replace(
-        '    "dw_observability",\n    "dw_evals",\n]\n\n[[tool.importlinter.contracts]]',
-        f'    "dw_observability",\n    "dw_evals",\n    "{ctx.package}",\n]\n\n'
-        f"""[[tool.importlinter.contracts]]
+    text = _patch_import_linter(text, ctx)
+    _write(path, text)
+
+
+# The contract whose `forbidden_modules` IS the list of bounded contexts. Read,
+# not restated: the scaffold learns which contexts exist from the one place that
+# already has to know.
+_PLATFORM_CONTRACT = "Platform does not import contexts"
+_DOMAIN_CONTRACT = "Domain layers never import frameworks or providers"
+_INDEPENDENCE_CONTRACT = "Contexts are independent of each other"
+_CONTRACTS_HEADER = "[[tool.importlinter.contracts]]\n"
+
+
+def _contract(config: dict[str, Any], name: str) -> dict[str, Any] | None:
+    contracts: list[dict[str, Any]] = config["tool"]["importlinter"]["contracts"]
+    return next((c for c in contracts if c.get("name") == name), None)
+
+
+def _append_to_list(text: str, *, within: str, key: str, item: str, what: str) -> str:
+    """Append `item` to the `key = [...]` array of the table that `within` opens.
+
+    Located by the table, not by the lines around the array. The anchor this
+    replaced was the tail of `root_packages`, and when a context was added to
+    that list the same lines still ended a DIFFERENT list — "Kernel is pure" —
+    so the scaffold wrote the new package there and `lint-imports` died with
+    "Module ... does not exist". Searching only up to the next table header is
+    what keeps an edit inside the table it was meant for.
+    """
+    start = text.find(within)
+    if start < 0:
+        raise ScaffoldError(f"{what}: {within.strip()!r} not found; the file has moved on")
+    end = text.find("\n[", start + len(within))
+    found = re.compile(rf"^{re.escape(key)} = \[(.*?)\]", re.M | re.S).search(
+        text, start, len(text) if end < 0 else end
+    )
+    if found is None:
+        raise ScaffoldError(f"{what}: no `{key}` in {within.strip()!r}")
+    body = found.group(1)
+    if f'"{item}"' in body:
+        raise ScaffoldError(f"{what} already lists {item} — is it half-created?")
+    if "\n" in body:
+        addition = f'    "{item}",\n'
+    else:
+        addition = f', "{item}"' if body.strip() else f'"{item}"'
+    return text[: found.end(1)] + addition + text[found.end(1) :]
+
+
+def _patch_import_linter(text: str, ctx: Context) -> str:
+    """Every import-linter entry a context needs, the same set `dw_sales` has.
+
+    - a root package, without which every contract naming it fails to load;
+    - the platform may not import it;
+    - its domain imports no framework or provider (the platform's own list);
+    - its layers point inwards;
+    - it imports no composition root;
+    - once there are two contexts, neither imports the other.
+    """
+    config = tomllib.loads(text)
+    platform = _contract(config, _PLATFORM_CONTRACT)
+    if platform is None:
+        raise ScaffoldError(f"import-linter: no {_PLATFORM_CONTRACT!r} contract")
+    existing: list[str] = platform["forbidden_modules"]
+
+    text = _append_to_list(
+        text,
+        within="[tool.importlinter]\n",
+        key="root_packages",
+        item=ctx.package,
+        what="import-linter root_packages",
+    )
+    text = _append_to_list(
+        text,
+        within=f'name = "{_PLATFORM_CONTRACT}"\n',
+        key="forbidden_modules",
+        item=ctx.package,
+        what=_PLATFORM_CONTRACT,
+    )
+    text = _append_to_list(
+        text,
+        within=f'name = "{_DOMAIN_CONTRACT}"\n',
+        key="source_modules",
+        item=f"{ctx.package}.domain",
+        what=_DOMAIN_CONTRACT,
+    )
+
+    contracts = f"""[[tool.importlinter.contracts]]
 # Contexts are independent: one importing another is a super-agent forming, and
 # the second one is always where it starts. The platform may not import a
 # context either — that direction is what keeps the skeleton reusable.
@@ -428,12 +517,74 @@ type = "forbidden"
 source_modules = ["{ctx.package}"]
 forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]
 
-[[tool.importlinter.contracts]]""",
-        1,
-    )
-    if text == before:
-        raise ScaffoldError("import-linter root_packages: anchor not found")
-    _write(path, text)
+[[tool.importlinter.contracts]]
+# Clean/Hexagonal direction inside the context: adapters and presentation
+# depend on application ports, application on the domain, never the reverse.
+name = "{ctx.package} layers"
+type = "layers"
+containers = ["{ctx.package}"]
+layers = [
+    "presentation | adapters",
+    "workflows",
+    "application",
+    "domain",
+]
+
+"""
+    if existing and _contract(config, _INDEPENDENCE_CONTRACT) is None:
+        modules = ", ".join(f'"{m}"' for m in [*existing, ctx.package])
+        contracts += f"""[[tool.importlinter.contracts]]
+# No context imports another. Where one needs another's data, the consumer
+# declares a Protocol and a composition root satisfies it.
+name = "{_INDEPENDENCE_CONTRACT}"
+type = "independence"
+modules = [{modules}]
+
+"""
+    elif existing:
+        text = _append_to_list(
+            text,
+            within=f'name = "{_INDEPENDENCE_CONTRACT}"\n',
+            key="modules",
+            item=ctx.package,
+            what=_INDEPENDENCE_CONTRACT,
+        )
+    if _CONTRACTS_HEADER not in text:
+        raise ScaffoldError("import-linter: no contracts table to insert before")
+    text = text.replace(_CONTRACTS_HEADER, contracts + _CONTRACTS_HEADER, 1)
+
+    _check_import_linter(tomllib.loads(text), ctx, existing)
+    return text
+
+
+def _check_import_linter(config: dict[str, Any], ctx: Context, existing: list[str]) -> None:
+    """Read the result back and refuse it unless every entry landed where meant.
+
+    The edits above are text edits, and a text edit that lands in the wrong
+    list still parses. Asking the parsed file is what turns that from a CI
+    failure three steps later into a refusal here, before anything is written.
+    """
+    p = ctx.package
+
+    def listed(contract: str, key: str) -> set[str]:
+        return set((_contract(config, contract) or {}).get(key, []))
+
+    expected = {
+        "root_packages": p in config["tool"]["importlinter"]["root_packages"],
+        _PLATFORM_CONTRACT: p in listed(_PLATFORM_CONTRACT, "forbidden_modules"),
+        _DOMAIN_CONTRACT: f"{p}.domain" in listed(_DOMAIN_CONTRACT, "source_modules"),
+        f"{p} layers": listed(f"{p} layers", "containers") == {p},
+        f"{ctx.title} is independent": listed(f"{ctx.title} is independent", "source_modules")
+        == {p},
+    }
+    if existing:
+        expected[_INDEPENDENCE_CONTRACT] = listed(_INDEPENDENCE_CONTRACT, "modules") == {
+            *existing,
+            p,
+        }
+    missing = [name for name, ok in expected.items() if not ok]
+    if missing:
+        raise ScaffoldError(f"import-linter: {', '.join(missing)} did not come out as intended")
 
 
 def _patch_api(ctx: Context) -> None:

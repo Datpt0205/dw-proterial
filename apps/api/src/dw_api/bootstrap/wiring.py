@@ -303,16 +303,11 @@ def build_sales(
     from dw_platform.adapters.persistence.repositories import SqlAuditRepository
     from dw_sales.adapters.artifact_files import ArtifactFiles
     from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
-    from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
+    from dw_sales.adapters.order_rules import PlatformOrderRules
     from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
     from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
     from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
-    from dw_sales.adapters.policy_files import (
-        load_artifact_copy,
-        load_kpi,
-        load_pricing,
-        load_quote_rules,
-    )
+    from dw_sales.adapters.policy_files import load_sales_policies
     from dw_sales.adapters.readers import mock_po_readers
     from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
     from dw_sales.adapters.source_view import FileSourceView
@@ -329,8 +324,7 @@ def build_sales(
     scope = SalesScope(TenantId(demo[0]), WorkspaceId(demo[1]))
     catalog = MockSalesCatalog.load(scope)
     inbox = MockInbox.load(scope)
-    order_rules = load_order_rules(POLICIES_DIR / "sales_order_rules@1.0.0.yaml")
-    quote_rules = load_quote_rules(POLICIES_DIR / "sales_quote_rules@1.1.0.yaml")
+    policies = load_sales_policies(POLICIES_DIR, COPY_DIR)
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
@@ -338,14 +332,14 @@ def build_sales(
         reply_reader=ExcelDesignReplyReader(),
         cases=SqlQuoteCaseLookup(session_factory),
         ledger=catalog,
-        rules=quote_rules,
-        pricing=load_pricing(POLICIES_DIR / "sales_pricing@1.0.0.yaml"),
+        rules=policies.quote_rules,
+        pricing=policies.pricing,
     )
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(order_rules),
+        rules=PlatformOrderRules(policies.order_rules),
         cases=SqlOrderCaseLookup(session_factory),
         new_case_id=ids.new_uuid,
     )
@@ -358,19 +352,14 @@ def build_sales(
         inbox=inbox,
         intake=intake,
         quotation=quotation,
-        files=FileSourceView(order_rules.intake),
-        kpi=load_kpi(POLICIES_DIR / "sales_kpi@1.0.0.yaml"),
+        files=FileSourceView(policies.order_rules.intake),
+        kpi=policies.kpi,
         directory=directory,
         holders=holders,
         notifications=notifications,
         artifact_bytes=artifact_bytes,
         artifact_writer=ArtifactFiles(),
-        artifact_copy=load_artifact_copy(
-            emails=COPY_DIR / "sales_emails@1.0.0.yaml",
-            documents=COPY_DIR / "sales_documents@1.0.0.yaml",
-            upload=POLICIES_DIR / "sales_bravo_upload@1.0.0.yaml",
-            quote_rules=quote_rules,
-        ),
+        artifact_copy=policies.artifact_copy,
         release_manifest_ref=release_manifest_ref,
     )
     return SalesMount(services=services)

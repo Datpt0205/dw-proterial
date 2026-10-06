@@ -1,0 +1,19 @@
+{
+  "blocking": {
+    "M21": [
+      "line_total_mismatch:-"
+    ],
+    "M22": [
+      "line_total_mismatch:-"
+    ],
+    "M27": [
+      "value_uncertain:2",
+      "value_uncertain:4",
+      "value_uncertain:5",
+      "value_uncertain:6"
+    ]
+  },
+  "routed": {
+    "M16": "attachment_unreadable"
+  }
+}

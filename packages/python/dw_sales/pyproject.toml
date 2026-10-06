@@ -32,6 +32,13 @@ dependencies = [
     "pyyaml>=6,<7",
 ]
 
+[project.optional-dependencies]
+# `dw_sales.evals`: the `sales.*` graders speak the eval runner's types. An
+# extra, not a dependency: the API and worker images never import the graders,
+# and the eval runner's composition root (`scripts/run_evals.py`) runs from
+# the workspace, where every member is installed.
+evals = ["dw-evals"]
+
 [build-system]
 requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"

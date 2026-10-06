@@ -145,7 +145,7 @@ async def seed_sales_personas(database_url: str, personas: Sequence[Persona] = P
     return written
 
 
-async def _seed_demo(database_url: str) -> None:
+async def seed_demo(database_url: str) -> None:
     await seed_test_env(database_url)
     written = await seed_sales_personas(database_url)
     print(f"platform seed done; {written} Sales persona membership(s) written")
@@ -158,7 +158,7 @@ def main() -> None:
     database_url = os.environ.get("DW_DATABASE_URL")
     if not database_url:
         sys.exit("DW_DATABASE_URL is not set (source .env): the migrator's URL")
-    asyncio.run(_seed_demo(database_url))
+    asyncio.run(seed_demo(database_url))
 
 
 if __name__ == "__main__":

@@ -8,11 +8,13 @@ without bumping one of the two, refused when it loads.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel
 
+from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.application.artifact_content import (
     BravoUploadLayout,
     SalesDocumentCopy,
@@ -21,6 +23,7 @@ from dw_sales.application.artifact_content import (
 from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.domain.kpi import SalesKpi
+from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.pricing import SalesPricing
 
 
@@ -68,4 +71,37 @@ def load_artifact_copy(
         documents=load_copy(documents, SalesDocumentCopy),
         upload=load_bravo_upload(upload),
         design_mailboxes=quote_rules.design_mailboxes,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SalesPolicies:
+    """The platform layer DW1 runs: every policy and copy file, loaded."""
+
+    order_rules: OrderRules
+    quote_rules: QuoteRules
+    pricing: SalesPricing
+    kpi: SalesKpi
+    artifact_copy: ArtifactCopy
+
+
+def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
+    """The one place that names which version of each file DW1 runs.
+
+    The API's composition root and the eval world both load through here, so
+    an eval grades the rules the API serves, not a version a second list of
+    file names still points at.
+    """
+    quote_rules = load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml")
+    return SalesPolicies(
+        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.0.0.yaml"),
+        quote_rules=quote_rules,
+        pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
+        kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
+        artifact_copy=load_artifact_copy(
+            emails=copy_dir / "sales_emails@1.0.0.yaml",
+            documents=copy_dir / "sales_documents@1.0.0.yaml",
+            upload=policies_dir / "sales_bravo_upload@1.0.0.yaml",
+            quote_rules=quote_rules,
+        ),
     )
