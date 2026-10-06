@@ -16,18 +16,23 @@
       "checksum": "dcfeed6e919c29bac34362aea015040597fcec5657dbc8fe82a86866fc9ec1db",
       "copy_id": "platform.runtime",
       "version": "1.5.0"
+    },
+    {
+      "checksum": "f7cd2b502af52c5a650162e7392e1ee3b3b841387f44e6726afaf7bad67fe5f7",
+      "copy_id": "platform.runtime",
+      "version": "1.6.0"
     }
   ],
   "eval_datasets": [
     {
-      "checksum": "ce36d6b3e5531666e296c86cd5b907f91734079ddfe99d3924b72a601d9c00e6",
+      "checksum": "4504460eb6160e093df4edba7e8a1e955f16a8e9916af80b35a36c22ac86dd5d",
       "dataset_id": "platform_smoke",
-      "version": "1.0.0"
+      "version": "1.1.0"
     }
   ],
-  "git_sha": "5d24c25c2884625cef3c580a25d65288460c28b9",
+  "git_sha": "485c12e2c4225bdbf22d92c81481289d042bf827",
   "knowledge_index_version": "2026-07-25.structure-1",
-  "memory_policy_version": "1.0.0",
+  "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",
   "policies": [
     {
@@ -36,9 +41,9 @@
       "version": "1.1.0"
     },
     {
-      "checksum": "5eefabcbed58080bf1cfeb524bbe9d8ce395b4adee9bbb9de4e357534d04a03e",
+      "checksum": "fde5e39c166b55b2616311be8e132555def7c4e2e634d938ed4b58d28a961bf8",
       "policy_id": "retention",
-      "version": "1.4.0"
+      "version": "1.6.0"
     },
     {
       "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",

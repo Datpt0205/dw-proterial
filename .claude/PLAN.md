@@ -30,8 +30,11 @@ own file and a row here.
 - **Products live in their own repos.** The first is E-HSDT bid preparation
   for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
   plans and research live there, not here.
-- **Next:** the rest of the antd shell tickets (`web-ui/antd-shell/`
-  03–09: dates, money, UI test projects, feedback, theme and shared pieces).
+- **Next:** on `feat/platform-hardening`, the six harness-audit slices in
+  `platform-runtime.md` (memory vectors, write trust, the review queue,
+  compaction, retrieval and dev harness done; approval-audit 01–02 still owed, and they cover `memory.review` the
+  day they land); then the
+  rest of the antd shell tickets (`web-ui/antd-shell/` 03–09).
 
 ## Decisions Đạt owes
 
@@ -44,6 +47,8 @@ own file and a row here.
       `make check-rerank`; the key is only in local `.env`);
     - whether CI runs the web vitest suite and the Playwright specs, the
       antd layer-order spec among them (`web-ui/antd-shell` ticket 10).
+    - how many independent documents a memory needs to be written without
+      review (`MemoryWritePolicy.auto_write_sources`, 2 since 2026-10-06).
 - **Ops:**
     - spend guard dollar thresholds per plan;
     - a retention term for offboarding export bundles;
@@ -66,7 +71,8 @@ own file and a row here.
    secrets, CORS, outbound URLs, and a scan of every new image.
 5. `mattpocock-skills` (`/ask-matt` routes): the flow from grilling to
    `/implement` and `/code-review`; `CLAUDE.md` "Agent skills" places
-   layers 1–4 inside it.
+   layers 1–4 inside it. Installed per checkout, not by the repo: check
+   with `claude plugin list`.
 
 `.claude/rules/failure-modes.md` holds the counts behind layers 1–3. Layer 2
 guarantees the questions get raised, not that they get answered truthfully.

@@ -18,7 +18,7 @@ COMPOSE := docker compose --env-file .env -f infra/compose/docker-compose.yml
 
 .PHONY: help bootstrap infra-up infra-down dev docker-up docker-down \
         db-migrate migrate lint format typecheck \
-        test-unit coverage test-integration test-architecture test-contract \
+        test-unit coverage test-integration test-architecture test-contract test-hooks \
         test-e2e test-web test-all eval-smoke test-eval-smoke \
         generate-contracts new-context release-manifest release-manifest-check ci
 
@@ -103,6 +103,9 @@ test-architecture: ## Import-boundary + declared-dependency checks
 test-contract: ## API/event/tool contract tests
 	uv run pytest -m contract || test $$? -eq 5  # exit 5 = no tests collected yet
 
+test-hooks: ## Coding-agent harness hooks (.claude/hooks) against throwaway repos
+	bash scripts/test_claude_hooks.sh
+
 test-e2e: ## End-to-end vertical slice tests (requires full stack)
 	uv run pytest -m e2e || test $$? -eq 5
 
@@ -148,5 +151,5 @@ release-manifest-check: ## Verify the committed manifest matches the repo
 	uv run python scripts/release_manifest.py --check
 
 # ----------------------------------------------------------------------- ci --
-ci: lint typecheck test-unit test-architecture test-contract eval-smoke release-manifest-check ## Local CI gate
+ci: lint typecheck test-unit test-architecture test-contract test-hooks eval-smoke release-manifest-check ## Local CI gate
 	@echo ">> local CI gate passed"
