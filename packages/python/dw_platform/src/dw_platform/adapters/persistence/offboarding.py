@@ -11,13 +11,22 @@ found while building this).
 
 `export_rows`/`purge_rows` run entirely under `app.tenant_id` for the one
 tenant they target — the ordinary RLS mechanism every tenant-scoped query
-already uses. `claim_requested` is the one exception: nothing tells the
-worker which tenant has a request waiting until it asks, and asking is
+already uses — plus `app.workspace_scope = 'tenant'`. A context may narrow its
+tables by workspace as well (`tenant AND (workspace OR app.workspace_scope =
+'tenant')`); under `app.tenant_id` alone such a table reads zero rows, so the
+export would miss them silently, the purge would delete none, and the purge of
+`platform.workspaces` would then CASCADE them away unexported. This class is the
+only place that sets the scope, per transaction; `test_rls_coverage.py` keeps
+every policy that reads it inside a tenant clause.
+
+`claim_requested` is the one exception to running under one tenant: nothing
+tells the worker which tenant has a request waiting until it asks, and asking is
 itself the cross-tenant read `app.tenant_id` scoping exists to prevent — so
 it runs under `app.worker_drain`, like the retention sweep, but only for that
 one query. Migration `dd1db8ca43a2`.
 
-What this does NOT do: touch Qdrant or object storage. Both live behind ports
+What this does NOT do: touch Qdrant (either collection: knowledge chunks or
+memory vectors) or object storage. Both live behind ports
 this package may not import (import-linter's "Vector/object-storage SDKs only
 inside knowledge adapters"). The worker's offboarding lane — the composition
 root, which may import every concrete adapter — orchestrates those
@@ -27,20 +36,23 @@ separately, calling `export_rows`/`purge_rows` here for the Postgres half.
 from __future__ import annotations
 
 import re
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import TextClause, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 __all__ = ["ExportedTable", "SqlTenantOffboarding"]
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
-_SET_WORKSPACE = text("SELECT set_config('app.workspace_id', :workspace_id, true)")
+# Every workspace of the one tenant, for this transaction only (`true`): a pooled
+# connection must not carry the scope into whoever borrows it next.
+_SET_TENANT_ALL_WORKSPACES = text(
+    "SELECT set_config('app.tenant_id', :tenant_id, true),"
+    "       set_config('app.workspace_scope', 'tenant', true)"
+)
 _SET_DRAIN = text("SELECT set_config('app.worker_drain', 'on', true)")
-_WORKSPACES = text("SELECT id FROM platform.workspaces WHERE tenant_id = :t ORDER BY id")
 
 # How long an in-progress request goes untouched before `claim_requested`
 # treats it as abandoned by a dead worker rather than owned by a live one.
@@ -54,13 +66,7 @@ _STALE_CLAIM_MINUTES = 30
 # dw_app. Measured: adding three tables changed the plan and this query
 # failed on every call. An oid needs no schema lookup.
 _CATALOG_COLUMNS = (
-    "SELECT n.nspname AS schemaname, c.relname AS tablename,"
-    # A policy that also narrows by workspace (the `sales` schema's) shows a
-    # session bound to the tenant alone no row at all. Such a table is read
-    # and purged once per workspace of the tenant, with `app.workspace_id`
-    # bound, or offboarding would export and delete nothing from it.
-    "       bool_or(pg_get_expr(pol.polqual, pol.polrelid) LIKE '%app.workspace_id%')"
-    "         AS by_workspace"
+    "SELECT DISTINCT n.nspname AS schemaname, c.relname AS tablename"
     " FROM pg_policy pol"
     " JOIN pg_class c ON c.oid = pol.polrelid"
     " JOIN pg_namespace n ON n.oid = c.relnamespace"
@@ -80,18 +86,18 @@ _CATALOG_COLUMNS = (
 )
 
 # Every table this class may SELECT from a tenant to export it.
-_BY_TABLE = " GROUP BY n.nspname, c.relname ORDER BY schemaname, tablename"
-_CATALOG_EXPORTABLE = text(_CATALOG_COLUMNS + _BY_TABLE)
+_CATALOG_EXPORTABLE = text(_CATALOG_COLUMNS + " ORDER BY schemaname, tablename")
 
 # Only the ones `dw_app` may also DELETE from. `platform.audit_events` is
 # exportable but not this: `0001_platform_grants.sql` revokes UPDATE/DELETE
 # from `dw_app` there on purpose (append-only; the audit term is
-# `retention@1.4.0.yaml`'s own decision, not offboarding's to shorten). Found
+# `retention@1.6.0.yaml`'s own decision, not offboarding's to shorten). Found
 # by running this against a real database rather than assumed — the same
 # revoke could apply to a table added later, and asking `has_table_privilege`
 # instead of hand-naming `audit_events` catches that one too.
 _CATALOG_PURGEABLE = text(
-    _CATALOG_COLUMNS + "   AND has_table_privilege('dw_app', c.oid, 'DELETE')" + _BY_TABLE
+    _CATALOG_COLUMNS + "   AND has_table_privilege('dw_app', c.oid, 'DELETE')"
+    " ORDER BY schemaname, tablename"
 )
 
 # FK RESTRICT edges among tenant-scoped tables, checked against the catalog
@@ -134,92 +140,58 @@ class ExportedTable:
 
 
 @dataclass(frozen=True)
-class _Table:
-    schema: str
-    table: str
-    by_workspace: bool
-
-    @property
-    def key(self) -> tuple[str, str]:
-        return (self.schema, self.table)
-
-    @property
-    def quoted(self) -> str:
-        return _quoted(self.schema, self.table)
-
-
-async def _tables(session: AsyncSession, catalog: TextClause) -> list[_Table]:
-    rows = (await session.execute(catalog)).all()
-    return [
-        _Table(row.schemaname, row.tablename, bool(row.by_workspace))
-        for row in rows
-        if (row.schemaname, row.tablename) not in _NEVER_PURGE
-    ]
-
-
-async def _passes(
-    session: AsyncSession, table: _Table, workspaces: list[UUID]
-) -> AsyncIterator[None]:
-    """Once for a tenant-wide table; once per workspace, bound, for a table
-    whose policy narrows by workspace too. The binding is cleared after."""
-    if not table.by_workspace:
-        yield
-        return
-    for workspace_id in workspaces:
-        await session.execute(_SET_WORKSPACE, {"workspace_id": str(workspace_id)})
-        yield
-    await session.execute(_SET_WORKSPACE, {"workspace_id": ""})
-
-
-@dataclass(frozen=True)
 class SqlTenantOffboarding:
     session_factory: async_sessionmaker[AsyncSession]
 
-    async def _exportable_tables(self, session: AsyncSession) -> list[_Table]:
-        return await _tables(session, _CATALOG_EXPORTABLE)
+    async def _exportable_tables(self, session: AsyncSession) -> list[tuple[str, str]]:
+        rows = (await session.execute(_CATALOG_EXPORTABLE)).all()
+        return [
+            (row.schemaname, row.tablename)
+            for row in rows
+            if (row.schemaname, row.tablename) not in _NEVER_PURGE
+        ]
 
-    async def _purgeable_tables(self, session: AsyncSession) -> list[_Table]:
-        return await _tables(session, _CATALOG_PURGEABLE)
+    async def _purgeable_tables(self, session: AsyncSession) -> list[tuple[str, str]]:
+        rows = (await session.execute(_CATALOG_PURGEABLE)).all()
+        return [
+            (row.schemaname, row.tablename)
+            for row in rows
+            if (row.schemaname, row.tablename) not in _NEVER_PURGE
+        ]
 
     async def export_rows(self, tenant_id: UUID) -> list[ExportedTable]:
         exported: list[ExportedTable] = []
         async with self.session_factory() as session, session.begin():
-            await session.execute(_SET_TENANT, {"tenant_id": str(tenant_id)})
-            workspaces = list((await session.scalars(_WORKSPACES, {"t": str(tenant_id)})).all())
-            for table in await self._exportable_tables(session):
-                rows: list[dict[str, Any]] = []
-                async for _ in _passes(session, table, workspaces):
-                    result = await session.execute(
-                        # B608 is a false positive here: the identifiers come from the catalog
-                        # (`_CATALOG_*`), never from a caller, and `_quoted` quotes them; the
-                        # tenant is a bind parameter. Same for the DELETE in `purge_rows`.
-                        text(f"SELECT * FROM {table.quoted} WHERE tenant_id = :t"),  # nosec B608
-                        {"t": str(tenant_id)},
+            await session.execute(_SET_TENANT_ALL_WORKSPACES, {"tenant_id": str(tenant_id)})
+            for schema, table in await self._exportable_tables(session):
+                result = await session.execute(
+                    # B608 is a false positive here: the identifiers come from the catalog
+                    # (`_CATALOG_*`), never from a caller, and `_quoted` quotes them; the
+                    # tenant is a bind parameter. Same for the DELETE in `purge_rows`.
+                    text(f"SELECT * FROM {_quoted(schema, table)} WHERE tenant_id = :t"),  # nosec B608
+                    {"t": str(tenant_id)},
+                )
+                exported.append(
+                    ExportedTable(
+                        schema=schema,
+                        table=table,
+                        rows=[dict(row._mapping) for row in result],
                     )
-                    rows.extend(dict(row._mapping) for row in result)
-                exported.append(ExportedTable(schema=table.schema, table=table.table, rows=rows))
+                )
         return exported
 
     async def purge_rows(self, tenant_id: UUID) -> None:
         async with self.session_factory() as session, session.begin():
-            await session.execute(_SET_TENANT, {"tenant_id": str(tenant_id)})
-            # Read before anything goes: the workspaces are purged too.
-            workspaces = list((await session.scalars(_WORKSPACES, {"t": str(tenant_id)})).all())
+            await session.execute(_SET_TENANT_ALL_WORKSPACES, {"tenant_id": str(tenant_id)})
             await self._record_purge_audit(session, tenant_id)
             tables = await self._purgeable_tables(session)
-            by_key = {table.key: table for table in tables}
-            ordered = [
-                # A workspace-scoped table hangs off its workspace: first.
-                *(t for t in tables if t.by_workspace),
-                *(by_key[key] for key in _ORDERED_FIRST if key in by_key),
-                *(t for t in tables if not t.by_workspace and t.key not in _ORDERED_FIRST),
-            ]
-            for table in ordered:
-                async for _ in _passes(session, table, workspaces):
-                    await session.execute(
-                        text(f"DELETE FROM {table.quoted} WHERE tenant_id = :t"),  # nosec B608
-                        {"t": str(tenant_id)},
-                    )
+            ordered_first = [t for t in _ORDERED_FIRST if t in tables]
+            rest = [t for t in tables if t not in _ORDERED_FIRST]
+            for schema, table in [*ordered_first, *rest]:
+                await session.execute(
+                    text(f"DELETE FROM {_quoted(schema, table)} WHERE tenant_id = :t"),  # nosec B608
+                    {"t": str(tenant_id)},
+                )
 
     async def _record_purge_audit(self, session: AsyncSession, tenant_id: UUID) -> None:
         """A row in `platform.audit_events` for the one action here that
@@ -228,7 +200,7 @@ class SqlTenantOffboarding:
         after. Safe to be the first delete-adjacent write: `audit_events`
         is exportable but never purgeable (`dw_app` has no DELETE there — see
         `_CATALOG_PURGEABLE`), so this row outlives every other table this
-        pass empties, for as long as `retention@1.4.0.yaml`'s own term says.
+        pass empties, for as long as `retention@1.6.0.yaml`'s own term says.
 
         `workspace_id`/`actor_id` are NOT NULL on `audit_events` and this
         pass has neither on hand directly, so both are looked up: any one of

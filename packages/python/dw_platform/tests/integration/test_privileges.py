@@ -23,6 +23,7 @@ import sqlalchemy as sa
 from pg_harness import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
+from test_rls_coverage import tenant_schemas
 
 pytestmark = pytest.mark.integration
 
@@ -108,6 +109,34 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {"case_events", "case_events_default"} <= event_tables
     for table in event_tables:
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
+
+
+async def test_the_application_can_enter_every_tenant_schema(db_urls: DatabaseUrls) -> None:
+    """Without USAGE on its schema no table grant is reachable: the first real
+    query fails with "permission denied for schema" while `SELECT 1` stays green.
+
+    The schemas come from the catalog — `tenant_schemas`, the same discovery the
+    RLS coverage test uses — not from a list here. `0001_platform_grants.sql`
+    grants USAGE on the schemas that existed when it was written; a schema added
+    later needs its own grant, and a hand-kept list would be blind to exactly
+    that schema.
+    """
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            schemas = await tenant_schemas(conn)
+            result = await conn.execute(
+                sa.text(
+                    "SELECT s FROM unnest(CAST(:schemas AS text[])) AS s"
+                    " WHERE NOT has_schema_privilege('dw_app', s, 'USAGE')"
+                    " ORDER BY s"
+                ),
+                {"schemas": schemas},
+            )
+            unreachable = result.scalars().all()
+    finally:
+        await migrator.dispose()
+    assert unreachable == [], f"dw_app has no USAGE on tenant schemas: {unreachable}"
 
 
 async def test_the_application_cannot_rewrite_the_audit_log(app_engine: AsyncEngine) -> None:

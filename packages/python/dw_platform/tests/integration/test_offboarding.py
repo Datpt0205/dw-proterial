@@ -170,10 +170,8 @@ async def test_catalog_discovery_sees_a_table_added_after_this_class_was_written
     to be current today."""
     offboarding = SqlTenantOffboarding(session_factory=sessions)
     async with sessions() as session, session.begin():
-        exportable_tables = await offboarding._exportable_tables(session)
-        purgeable = {t.key for t in await offboarding._purgeable_tables(session)}
-    exportable = {t.key for t in exportable_tables}
-    by_workspace = {t.key for t in exportable_tables if t.by_workspace}
+        exportable = await offboarding._exportable_tables(session)
+        purgeable = await offboarding._purgeable_tables(session)
     assert ("platform", "tenant_daily_spend_guard") in exportable
     assert ("platform", "tenant_daily_spend_guard") in purgeable
     assert ("platform", "tenant_offboarding_requests") not in exportable, (
@@ -187,10 +185,10 @@ async def test_catalog_discovery_sees_a_table_added_after_this_class_was_written
         "audit_events is append-only (dw_app has no DELETE); its own retention"
         " term governs it, not offboarding"
     )
-    # A policy that narrows by workspace too (the sales schema's) is read once
-    # per workspace; a tenant-wide one once.
-    assert ("sales", "order_cases") in by_workspace
-    assert ("platform", "audit_events") not in by_workspace
+    # A table whose policy narrows by workspace too (the sales schema's) is
+    # discovered like any other; the workspace scope is what lets the lane read it.
+    assert ("sales", "order_cases") in exportable
+    assert ("sales", "order_cases") in purgeable
 
 
 async def test_export_rows_returns_only_this_tenants_data(
@@ -238,6 +236,56 @@ async def test_purge_rows_respects_fk_order_and_leaves_the_other_tenant_alone(
     assert await _count(sessions, mine.tenant_id, "platform", "audit_events") == 1, (
         "audit_events is append-only; purge must not touch it even for the tenant being offboarded"
     )
+
+
+async def _seed_checkpoint(sessions: async_sessionmaker[AsyncSession], t: _Tenant) -> None:
+    """One run checkpoint and one pending write: the verbatim conversation a
+    thread leaves behind, which must go with the tenant."""
+    thread = uuid.uuid4()
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(t.tenant_id)}
+        )
+        await session.execute(
+            sa.text(
+                "INSERT INTO platform.run_checkpoints"
+                " (thread_id, checkpoint_ns, checkpoint_id, tenant_id, workspace_id,"
+                "  type, checkpoint, metadata)"
+                " VALUES (:th, '', 'c1', :t, :w, 'msgpack', '\\x00', '\\x00')"
+            ),
+            {"th": thread, "t": t.tenant_id, "w": t.workspace_id},
+        )
+        await session.execute(
+            sa.text(
+                "INSERT INTO platform.run_checkpoint_writes"
+                " (thread_id, checkpoint_ns, checkpoint_id, task_id, idx, tenant_id,"
+                "  workspace_id, channel, type, value)"
+                " VALUES (:th, '', 'c1', 'task', 0, :t, :w, 'messages', 'msgpack', '\\x00')"
+            ),
+            {"th": thread, "t": t.tenant_id, "w": t.workspace_id},
+        )
+
+
+async def test_purge_deletes_the_tenants_run_checkpoints(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """Pinned, not built: the lane finds both checkpoint tables from the catalog
+    (a `tenant_isolation_%` policy and `dw_app` holding DELETE), so nothing here
+    names them. This is what goes red if either stops being true."""
+    mine, theirs = _new_tenant(), _new_tenant()
+    for t in (mine, theirs):
+        await _seed_tenant(sessions, t)
+        await _seed_checkpoint(sessions, t)
+
+    await SqlTenantOffboarding(session_factory=sessions).purge_rows(mine.tenant_id)
+
+    for table in ("run_checkpoints", "run_checkpoint_writes"):
+        assert await _count(sessions, mine.tenant_id, "platform", table) == 0, (
+            f"platform.{table} kept the offboarded tenant's conversation"
+        )
+        assert await _count(sessions, theirs.tenant_id, "platform", table) == 1, (
+            f"platform.{table} lost the other tenant's row too"
+        )
 
 
 async def test_purge_records_an_audit_event_before_deleting_anything(
@@ -455,3 +503,133 @@ async def test_mark_status_reports_progress_on_the_tenants_own_row(
         ).one()
     assert row.status == "completed"
     assert row.export_key == "x/exports/y.zip"
+
+
+# --- A table narrowed by workspace as well as tenant -------------------------
+#
+# No platform table is narrowed by workspace; a context's may be, with the policy
+# shape `test_rls_coverage.py` holds them to. The probe below is that shape, made
+# by the migrator for one test and dropped after it. While it exists it passes
+# every guard of `test_rls_coverage.py` and `test_privileges.py` (RLS enabled and
+# FORCEd, a `tenant_isolation_` policy on both sides, USAGE for dw_app), because
+# `db_urls` is one database for the whole session.
+
+_PROBE_SCHEMA = "offboarding_ws_probe"
+_PROBE = f"{_PROBE_SCHEMA}.rows"
+_PROBE_POLICY = (
+    "tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid"
+    " AND (workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid"
+    "      OR current_setting('app.workspace_scope', true) = 'tenant')"
+)
+
+
+@dataclass(frozen=True)
+class _Probe:
+    a: uuid.UUID  # two workspaces, one row in each
+    b: uuid.UUID  # one workspace, one row
+
+
+@pytest.fixture
+async def ws_probe(db_urls: DatabaseUrls) -> AsyncIterator[_Probe]:
+    a, b = uuid.uuid4(), uuid.uuid4()
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.begin() as conn:
+            for statement in (
+                f"CREATE SCHEMA {_PROBE_SCHEMA}",
+                f"CREATE TABLE {_PROBE} (tenant_id uuid NOT NULL, workspace_id uuid NOT NULL,"
+                " label text NOT NULL)",
+                f"ALTER TABLE {_PROBE} ENABLE ROW LEVEL SECURITY",
+                f"ALTER TABLE {_PROBE} FORCE ROW LEVEL SECURITY",
+                f"CREATE POLICY tenant_isolation_rows ON {_PROBE}"
+                f" USING ({_PROBE_POLICY}) WITH CHECK ({_PROBE_POLICY})",
+                f"GRANT USAGE ON SCHEMA {_PROBE_SCHEMA} TO dw_app",
+                f"GRANT SELECT, DELETE ON {_PROBE} TO dw_app",
+            ):
+                await conn.execute(sa.text(statement))
+            await conn.execute(
+                sa.text(
+                    f"INSERT INTO {_PROBE} VALUES"
+                    " (:a, gen_random_uuid(), 'a1'), (:a, gen_random_uuid(), 'a2'),"
+                    " (:b, gen_random_uuid(), 'b1')"
+                ),
+                {"a": a, "b": b},
+            )
+        yield _Probe(a=a, b=b)
+    finally:
+        async with migrator.begin() as conn:
+            await conn.execute(sa.text(f"DROP SCHEMA IF EXISTS {_PROBE_SCHEMA} CASCADE"))
+        await migrator.dispose()
+
+
+async def _probe_labels(db_urls: DatabaseUrls, tenant_id: uuid.UUID) -> set[str]:
+    """Through the migrator, which bypasses RLS: what is really in the table."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            rows = await conn.execute(
+                sa.text(f"SELECT label FROM {_PROBE} WHERE tenant_id = :t"), {"t": tenant_id}
+            )
+            return {row.label for row in rows}
+    finally:
+        await migrator.dispose()
+
+
+async def test_export_reads_every_workspace_of_the_tenant(
+    sessions: async_sessionmaker[AsyncSession], ws_probe: _Probe
+) -> None:
+    exported = await SqlTenantOffboarding(sessions).export_rows(ws_probe.a)
+
+    (probe,) = [t for t in exported if (t.schema, t.table) == (_PROBE_SCHEMA, "rows")]
+    assert {row["label"] for row in probe.rows} == {"a1", "a2"}
+
+
+async def test_purge_deletes_in_every_workspace_and_leaves_the_other_tenant(
+    db_urls: DatabaseUrls, sessions: async_sessionmaker[AsyncSession], ws_probe: _Probe
+) -> None:
+    await SqlTenantOffboarding(sessions).purge_rows(ws_probe.a)
+
+    assert await _probe_labels(db_urls, ws_probe.a) == set()
+    assert await _probe_labels(db_urls, ws_probe.b) == {"b1"}
+
+
+async def test_the_workspace_scope_never_crosses_tenants(
+    sessions: async_sessionmaker[AsyncSession], ws_probe: _Probe
+) -> None:
+    """Tenant B with the scope set sees all of its own rows and none of A's."""
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text(
+                "SELECT set_config('app.tenant_id', :t, true),"
+                "       set_config('app.workspace_scope', 'tenant', true)"
+            ),
+            {"t": str(ws_probe.b)},
+        )
+        labels = {
+            row.label for row in await session.execute(sa.text(f"SELECT label FROM {_PROBE}"))
+        }
+    assert labels == {"b1"}
+
+
+async def test_the_workspace_scope_ends_with_the_transaction(
+    db_urls: DatabaseUrls, ws_probe: _Probe
+) -> None:
+    """One pooled connection: the next borrower must not inherit the scope."""
+    engine = create_async_engine(db_urls.app, pool_size=1, max_overflow=0)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            before = (await session.execute(sa.text("SELECT pg_backend_pid()"))).scalar_one()
+        await SqlTenantOffboarding(factory).export_rows(ws_probe.a)
+        async with factory() as session:
+            after = (await session.execute(sa.text("SELECT pg_backend_pid()"))).scalar_one()
+            scope = (
+                await session.execute(
+                    sa.text("SELECT current_setting('app.workspace_scope', true)")
+                )
+            ).scalar_one()
+    finally:
+        await engine.dispose()
+
+    assert after == before, "a second connection was used, so this proves nothing"
+    assert scope in (None, ""), f"the next transaction inherited app.workspace_scope={scope!r}"
