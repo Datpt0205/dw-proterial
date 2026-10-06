@@ -3,7 +3,9 @@ one, what an approval and a run carry, the plan's run allowance, and the
 context-side decide routes gone.
 
 The negatives the ticket names: the purchasing manager deciding a quote
-(403), the maker deciding (409), Diệu with `approver_boost` approving a quote
+(404 since the platform merge of 2026-10-07: a stamped request is not shown
+to whoever may not decide it, platform ADR 0004 amendment, docs/adr/0011
+here), the maker deciding (409), Diệu with `approver_boost` approving a quote
 she priced (403), and a viewer seeing no Sales approval payload.
 """
 
@@ -59,14 +61,16 @@ async def test_the_purchasing_manager_cannot_decide_a_sales_quote(api: Api) -> N
     pending = await _pending_quote(api)
     approval_id = await approval_of(giang, pending)
 
-    # Bình holds approvals.decide (manager), not sales.quote.approve.
+    # Bình holds approvals.decide (manager), not sales.quote.approve: the
+    # quote is not his to decide, so it is not found, and the answer names
+    # no scope a 403 would have confirmed.
     refused = await binh.decide(
         approval_id,
         {"approve": True, "comment": "ok", "subject_version": pending["case_version"]},
     )
 
-    assert refused.status_code == 403
-    assert refused.json()["details"]["action"] == "sales.quote.approve"
+    assert refused.status_code == 404
+    assert "sales.quote.approve" not in refused.text
     # Nor is it in his inbox, nor readable by id.
     assert (await binh.platform("/approvals")).json()["items"] == []
     assert (await binh.platform(f"/approvals/{approval_id}")).status_code == 404
@@ -157,7 +161,10 @@ async def test_approvals_and_runs_carry_ids_a_version_and_a_hash_never_an_amount
     async with migrator.connect() as conn:
         approvals = (
             await conn.execute(
-                sa.text("SELECT payload FROM platform.approval_requests WHERE tenant_id = :t"),
+                sa.text(
+                    "SELECT payload, required_scope FROM platform.approval_requests"
+                    " WHERE tenant_id = :t"
+                ),
                 {"t": ALPHA_TENANT},
             )
         ).all()
@@ -181,9 +188,11 @@ async def test_approvals_and_runs_carry_ids_a_version_and_a_hash_never_an_amount
         ).all()
 
     (approval,) = approvals
+    # The stamp is in the column the platform's decision reads.
+    assert approval.required_scope == "sales.quote.approve"
     assert set(approval.payload) == {
         "approval_type",
-        "decide_scope",
+        "required_scope",
         "reason",
         "case_kind",
         "case_id",

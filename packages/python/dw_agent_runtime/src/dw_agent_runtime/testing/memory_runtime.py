@@ -42,9 +42,9 @@ from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.ports import PlatformUnitOfWork
 from dw_platform.domain.approval import (
-    ApprovalAudience,
     ApprovalDecision,
     ApprovalRequest,
     ApprovalStatus,
@@ -120,6 +120,7 @@ class MemoryRuns:
         return RunRecord(
             id=run_id,
             thread_id=started.thread_id or run_id,
+            workspace_id=started.workspace_id,
             status=row.status,
             worker_id=started.worker_id,
             worker_version=started.worker_version,
@@ -160,7 +161,7 @@ class MemoryRuns:
         subject_ref: str,
     ) -> list[WaitingRun]:
         return [
-            WaitingRun(run_id, row.approval_request_id)
+            WaitingRun(run_id, row.approval_request_id, row.context.actor_id)
             for run_id, row in sorted(self.rows.items(), key=lambda item: item[1].created_at)
             if (row.context.tenant_id, row.context.workspace_id) == (tenant_id, workspace_id)
             and row.context.worker_id == worker_id
@@ -192,9 +193,16 @@ class MemoryApprovals:
         request.created_at = request.created_at or self.clock.now()
         self.rows[request.id] = request
 
-    async def get(self, request_id: uuid.UUID) -> ApprovalRequest | None:
+    async def get(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalRequest | None:
         request = self.rows.get(request_id)
-        if request is None or request.tenant_id.value != self.tenant_id:
+        if (
+            request is None
+            or request.tenant_id.value != self.tenant_id
+            or request.workspace_id.value != workspace_id
+            or not audience.may_see(request)
+        ):
             return None
         return request
 
@@ -208,13 +216,14 @@ class MemoryApprovals:
         self.decisions.append(decision)
 
     async def list_pending(
-        self, request: PageRequest, audience: ApprovalAudience
+        self, request: PageRequest, *, workspace_id: uuid.UUID, audience: ApprovalAudience
     ) -> Page[ApprovalRequest]:
         pending = sorted(
             (
                 r
                 for r in self.rows.values()
                 if r.tenant_id.value == self.tenant_id
+                and r.workspace_id.value == workspace_id
                 and r.status is ApprovalStatus.PENDING
                 and audience.may_see(r)
             ),
@@ -236,11 +245,15 @@ class MemoryAudit:
     async def append(self, event: AuditEvent) -> None:
         self.events.append(event)
 
-    async def list_page(self, request: PageRequest) -> Page[AuditEvent]:
+    async def list_page(self, request: PageRequest, *, workspace_id: uuid.UUID) -> Page[AuditEvent]:
         raise NotImplementedError("not exercised by the runner or the approval flow")
 
-    async def list_for_run(self, run_id: uuid.UUID, limit: int = 100) -> list[AuditEvent]:
-        return [e for e in self.events if e.run_id == run_id][:limit]
+    async def list_for_run(
+        self, run_id: uuid.UUID, *, workspace_id: uuid.UUID, limit: int = 100
+    ) -> list[AuditEvent]:
+        return [
+            e for e in self.events if e.run_id == run_id and e.workspace_id.value == workspace_id
+        ][:limit]
 
 
 class _Work:

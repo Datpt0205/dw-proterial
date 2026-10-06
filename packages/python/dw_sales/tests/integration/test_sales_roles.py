@@ -51,10 +51,15 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         "sales.worker.resume",
     }
     assert pic <= head
+    # Both decide a Sales request (cross-check, quote approval), so both carry
+    # the platform's decide right (ac31ff0f2087).
+    assert "approvals.decide" in pic and "approvals.decide" in head
     assert "sales.quote.approve" not in pic and "sales.worker.resume" not in pic
     assert roles["sales_viewer"] == {"sales.overview.read"}
     assert permission_sets["sales_price_evidence"] == {"sales.price.other_customers.read"}
-    assert permission_sets["sales_quote_approver"] == {"sales.quote.approve"}
+    # `approvals.decide` too since ac31ff0f2087: the platform asks every
+    # decider for it besides the request's stamp (docs/adr/0011).
+    assert permission_sets["sales_quote_approver"] == {"sales.quote.approve", "approvals.decide"}
     assert permission_sets["sales_export_control"] == {"sales.compliance.ack"}
     async with migrator.connect() as conn:
         name = await conn.scalar(

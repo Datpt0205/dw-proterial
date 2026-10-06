@@ -324,10 +324,12 @@ class _Audit:
     async def append(self, event: AuditEvent) -> None:
         self._held.append(event)
 
-    async def list_page(self, request: PageRequest) -> Page[AuditEvent]:
+    async def list_page(self, request: PageRequest, *, workspace_id: uuid.UUID) -> Page[AuditEvent]:
         raise NotImplementedError("not exercised by the Sales services")
 
-    async def list_for_run(self, run_id: uuid.UUID, limit: int = 100) -> list[AuditEvent]:
+    async def list_for_run(
+        self, run_id: uuid.UUID, *, workspace_id: uuid.UUID, limit: int = 100
+    ) -> list[AuditEvent]:
         raise NotImplementedError("not exercised by the Sales services")
 
 

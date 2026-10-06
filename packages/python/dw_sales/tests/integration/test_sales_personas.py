@@ -107,10 +107,16 @@ async def test_each_persona_holds_the_spec_scopes_and_nothing_else_changes(
 ) -> None:
     access = personas[subject, tenant]
     assert _sales(access.scopes) == SPEC[subject, tenant]
-    # The Sales seed touches no platform scope: what the platform seed gave
-    # (Diệu's approver_boost included) is all still there.
-    before = platform_only[subject, tenant].scopes
-    assert access.scopes - _sales(access.scopes) == before - _sales(before)
+    # What the platform seed gave (Diệu's approver_boost included) is all
+    # still there. The one platform scope the Sales roles add is
+    # `approvals.decide` (ac31ff0f2087: the platform asks every decider for it
+    # besides the request's stamp), and only to someone who decides a Sales
+    # request.
+    before = platform_only[subject, tenant].scopes - _sales(platform_only[subject, tenant].scopes)
+    after = access.scopes - _sales(access.scopes)
+    decides_sales = bool(_sales(access.scopes) & {"sales.order.cross_check", "sales.quote.approve"})
+    assert before <= after
+    assert after - before <= ({"approvals.decide"} if decides_sales else set())
 
 
 async def test_the_quote_pic_cannot_approve_whatever_approver_boost_gives_her(

@@ -914,6 +914,8 @@ export interface components {
         ApprovalView: {
             /** Approval Type */
             approval_type: string;
+            /** Can Decide */
+            can_decide: boolean;
             /** Created At */
             created_at: string | null;
             /** Decided At */
@@ -929,6 +931,10 @@ export interface components {
             };
             /** Reason */
             reason: string;
+            /** Requested By Me */
+            requested_by_me: boolean;
+            /** Required Scope */
+            required_scope: string | null;
             /** Requires Comment */
             requires_comment: boolean;
             /** Run Id */

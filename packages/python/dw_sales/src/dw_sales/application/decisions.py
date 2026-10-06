@@ -17,8 +17,9 @@ same code (`_decide`):
 - **when the run resumes** (`apply`): the same transition, written, as the
   decider, linked to the run.
 
-The decide scope is not asked for here: the platform requires the scope the
-approval was stamped with (`DECIDE_SCOPES`), and the guard refuses an approval
+The decide scope is not asked for here: the platform requires
+`approvals.decide` and the scope the approval was stamped with in its
+`required_scope` column (`DECIDE_SCOPES`), and the guard refuses an approval
 stamped with any other. That is what lets `apply` hand the approver the
 approve capability without their access context: nobody reaches `apply` but
 through `ApproveAndResumeService.decide`, which checked it.
@@ -326,7 +327,9 @@ def _asked(request: ApprovalRequest) -> DecisionAsked:
         raise ConflictError(
             "the approval is not one DW1 raised", details={"approval_id": str(request.id)}
         )
-    if request.decide_scope != DECIDE_SCOPES[asked.approval_type].value:
+    # The column, not the payload: the column is what the platform's decision
+    # enforced, and the two must name the same scope.
+    if request.required_scope != DECIDE_SCOPES[asked.approval_type].value:
         raise PermissionDeniedError(
             "this approval is decided with the scope DW1 names for it",
             details={"approval_type": request.approval_type},

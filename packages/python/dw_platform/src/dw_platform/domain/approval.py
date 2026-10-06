@@ -9,14 +9,14 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Final
 
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 
-# Who decides an approval whose raiser named no scope of its own: the
-# platform's approver authority (the `approver` ladder and `approver_boost`).
-DEFAULT_DECIDE_SCOPE: Final = "approvals.decide"
+# The scope every decision needs (`ApproveAndResumeService.decide`), besides a
+# request's own `required_scope`. Named once: whoever asks "who could decide
+# this?" (the inbox's `can_decide`) must ask the question decide enforces.
+APPROVALS_DECIDE = "approvals.decide"
 
 
 def decided_event_type(approval_type: str) -> str:
@@ -67,38 +67,15 @@ class ApprovalRequest:
     reason: str
     payload: dict[str, object] = field(default_factory=dict)
     run_id: uuid.UUID | None = None
+    # The scope a decider must hold besides `approvals.decide` (ADR 0004).
+    # Stamped once, when the request is raised, from what the node read in
+    # policy then; never re-derived, so a policy changed while the request
+    # waits does not change who may decide it. None: `approvals.decide` alone.
+    required_scope: str | None = None
     status: ApprovalStatus = ApprovalStatus.PENDING
     created_at: datetime | None = None
     decided_at: datetime | None = None
     version: int = 1
-
-    @property
-    def decide_scope(self) -> str | None:
-        """The scope the raiser stamped on this request, if it named one.
-
-        Stamped at creation, in the payload the graph interrupted with, and
-        read from there by every later reader (the decision, the inbox): a
-        request's authority is the one it was raised under, not whatever a
-        registry says on the day it is decided. A context whose approvals are
-        not the platform approver's to decide (a Sales quote is decided by
-        `sales.quote.approve`, never by `approvals.decide`) names its scope
-        here. Code writes the payload's top level; a model's arguments travel
-        nested under it (`langchain_tools._ask_human`), never beside it.
-        """
-        scope = self.payload.get("decide_scope")
-        if scope is None:
-            return None
-        if not isinstance(scope, str) or not scope.strip():
-            raise ConflictError(
-                "approval request names an unreadable decide scope",
-                details={"request_id": str(self.id)},
-            )
-        return scope
-
-    @property
-    def required_scope(self) -> str:
-        """The scope a person needs to decide this request."""
-        return self.decide_scope or DEFAULT_DECIDE_SCOPE
 
     @property
     def makers(self) -> frozenset[uuid.UUID]:
@@ -164,34 +141,3 @@ class ApprovalRequest:
         self._require_pending()
         self.status = ApprovalStatus.CANCELLED
         self.version += 1
-
-
-@dataclass(frozen=True, slots=True)
-class ApprovalAudience:
-    """Who is asking about approvals, as far as deciding and seeing them goes.
-
-    One answer for the decision and the inbox: a request is listed to the
-    people who may decide it and to the one who asked, and to nobody else.
-    A Sales quote's payload is not a purchasing manager's to read just because
-    `approvals.decide` would have let them decide a different approval type.
-    The inbox's SQL filter (`SqlApprovalRepository.list_pending`) is this rule
-    in another language; `test_approval_audience.py` holds the two together.
-    """
-
-    principal_id: uuid.UUID
-    workspace_id: uuid.UUID
-    # The caller's scopes in this workspace, from the verified access context.
-    scopes: frozenset[str]
-    # The platform admin, whom the authorization service allows everything.
-    unrestricted: bool = False
-
-    def may_decide(self, request: ApprovalRequest) -> bool:
-        return request.workspace_id.value == self.workspace_id and (
-            self.unrestricted or request.required_scope in self.scopes
-        )
-
-    def may_see(self, request: ApprovalRequest) -> bool:
-        return self.may_decide(request) or (
-            request.workspace_id.value == self.workspace_id
-            and request.requested_by.value == self.principal_id
-        )
