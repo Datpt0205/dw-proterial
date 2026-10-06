@@ -13,6 +13,21 @@ export const approvalSchema = z.object({
   decided_at: z.string().nullable(),
   /** The server refuses a blank comment for these; the form must require one. */
   requires_comment: z.boolean(),
+  /**
+   * The scope a decider must hold besides `approvals.decide`, stamped when the
+   * request was raised (ADR 0004). The server enforces it; a page reads it to
+   * say why a decision is locked, never to infer one from `approval_type`.
+   */
+  required_scope: z.string().nullable(),
+  /**
+   * The server's answer to "may the viewer decide this": `approvals.decide`
+   * and the stamped scope, by the checks the decision itself runs. A page locks
+   * on this, never on the session's `hasScope`, which lets `platform_admin`
+   * pass a scope a stamped approval does not let it pass.
+   */
+  can_decide: z.boolean(),
+  /** The viewer raised this request, so may withdraw it without any scope. */
+  requested_by_me: z.boolean(),
 });
 export type Approval = z.infer<typeof approvalSchema>;
 

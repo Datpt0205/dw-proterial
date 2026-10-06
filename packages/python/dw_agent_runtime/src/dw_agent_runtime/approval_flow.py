@@ -27,9 +27,14 @@ from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.ids import UserId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.authorization import (
+    ScopeAuthorizationService,
+    holds_stamped_scope,
+    permission_denied,
+)
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 from dw_platform.domain.approval import (
+    APPROVALS_DECIDE,
     ApprovalDecision,
     ApprovalRequest,
     DecisionOutcome,
@@ -69,6 +74,20 @@ class ApproveAndResumeService:
         the one it had let approvers submit decisions the server always refused.
         """
         return approval_type.startswith(tuple(self.strict_approval_prefixes))
+
+    @staticmethod
+    def may_decide(
+        request: ApprovalRequest,
+        context: AccessContext,
+        authorization: ScopeAuthorizationService,
+    ) -> bool:
+        """Whether the caller's scopes let them decide this request: the same two
+        checks `decide` runs (`approvals.decide`, then the stamp), for the inbox
+        to lock what the server would refuse. Withdrawing your own request,
+        separation of duties and per-type guards are not in it."""
+        return authorization.is_allowed(context, APPROVALS_DECIDE) and holds_stamped_scope(
+            context, request.required_scope
+        )
 
     def _enforce_strict_rules(
         self, request: ApprovalRequest, comment: str, context: AccessContext
@@ -147,10 +166,23 @@ class ApproveAndResumeService:
             if approve or request.requested_by.value != context.principal_id:
                 await authorization.require(
                     context=context,
-                    action="approvals.decide",
+                    action=APPROVALS_DECIDE,
                     resource_type="approval_request",
                     resource_id=str(approval_id),
                 )
+                # Who may decide THIS request, stamped when it was raised
+                # (ADR 0004) and read from the row, never from today's policy.
+                # NOT through `require`: its admin rule would let a platform
+                # operator decide a business approval (2026-10-06). The inbox
+                # reads the same `holds_stamped_scope`; and this sits before any
+                # write or resume, so a refusal leaves the request pending and
+                # the run parked.
+                if not holds_stamped_scope(context, request.required_scope):
+                    raise permission_denied(
+                        action=str(request.required_scope),
+                        resource_type="approval_request",
+                        resource_id=str(approval_id),
+                    )
             if self.is_strict(request.approval_type):
                 self._enforce_strict_rules(request, comment, context)
             guard = self.decision_guards.get(request.approval_type)
