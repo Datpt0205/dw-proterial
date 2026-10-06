@@ -25,7 +25,8 @@ itself the cross-tenant read `app.tenant_id` scoping exists to prevent — so
 it runs under `app.worker_drain`, like the retention sweep, but only for that
 one query. Migration `dd1db8ca43a2`.
 
-What this does NOT do: touch Qdrant or object storage. Both live behind ports
+What this does NOT do: touch Qdrant (either collection: knowledge chunks or
+memory vectors) or object storage. Both live behind ports
 this package may not import (import-linter's "Vector/object-storage SDKs only
 inside knowledge adapters"). The worker's offboarding lane — the composition
 root, which may import every concrete adapter — orchestrates those

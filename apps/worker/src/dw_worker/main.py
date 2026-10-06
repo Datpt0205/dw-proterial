@@ -23,6 +23,7 @@ import contextlib
 import logging
 import signal
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -51,7 +52,7 @@ from dw_worker.composition import (
 )
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.ingest import build_ingest_consumer
-from dw_worker.consumers.memory import MemoryIndexPort, memory_handlers
+from dw_worker.consumers.memory import memory_handlers
 from dw_worker.consumers.offboarding import INTERVAL_SECONDS as OFFBOARDING_INTERVAL_SECONDS
 from dw_worker.consumers.offboarding import TenantOffboardingLane, build_offboarding_consumer
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
@@ -61,6 +62,9 @@ from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
 from dw_worker.health import beat
 from dw_worker.settings import WorkerSettings
+
+if TYPE_CHECKING:
+    from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker
 
 logger = logging.getLogger("dw_worker")
 
@@ -76,8 +80,12 @@ def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
     )
 
 
-def _build_memory_index(settings: WorkerSettings) -> MemoryIndexPort | None:
-    """Imported inside the function so a deployment without Qdrant need not have
+def _build_memory_vectors(settings: WorkerSettings) -> QdrantMemoryRanker | None:
+    """The memory ranker's store: written by the outbox handler, purged by
+    supersession, retention and offboarding. One instance for all four, so
+    the collection that is written is the collection that is purged.
+
+    Imported inside the function so a deployment without Qdrant need not have
     the client installed to boot — the same rule the knowledge index follows."""
     if not settings.qdrant_url:
         return None
@@ -142,6 +150,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # fact: a run that stops to decide what is worth keeping is a run someone
         # is waiting on. The handler is idempotent because the outbox delivers at
         # least once — see `dw_worker.consumers.memory`.
+        # Absent without Qdrant, and absent is survivable: the memory is stored
+        # and recalled either way, it simply sorts with the ones nothing has an
+        # opinion about — and there are no points to purge.
+        memory_vectors = _build_memory_vectors(settings)
         handlers: dict[str, EventHandler] = dict(
             memory_handlers(
                 MemoryService(
@@ -150,12 +162,11 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     clock=clock,
                     id_generator=ids,
                     evidence_store=SqlEvidenceStore(clock=clock),
+                    # A superseded memory's point goes with it.
+                    vector_purge=memory_vectors,
                 ),
                 # Writes the vector that lets a later recall order a long list.
-                # Absent without Qdrant, and absent is survivable: the memory is
-                # stored and recalled either way, it simply sorts with the ones
-                # nothing has an opinion about.
-                _build_memory_index(settings),
+                memory_vectors,
             )
         )
         # Pinned by filename, like every other versioned artifact here: the
@@ -167,7 +178,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             REPO_ROOT / "configs" / "policies" / "retention@1.4.0.yaml"
         )
         retention = SqlMemoryRetention(
-            session_factory=sessions, policy=retention_policy, clock=clock
+            session_factory=sessions,
+            policy=retention_policy,
+            clock=clock,
+            vector_index=memory_vectors,
         )
         # Not retention in the sense of deleting: mostly it CREATES next
         # month's partitions, which is what keeps rows out of the DEFAULT one.
@@ -194,6 +208,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     exports=build_export_bucket(settings),
                     attachments=build_feedback_bucket(settings),
                     vector_index=build_vector_index(settings),
+                    memory_vectors=memory_vectors,
                     clock=clock,
                 )
             )

@@ -31,7 +31,8 @@ own file and a row here.
   for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
   plans and research live there, not here.
 - **Next:** on `feat/platform-hardening`, the six harness-audit slices in
-  `platform-runtime.md` (memory vectors first, dev harness last); then the
+  `platform-runtime.md` (memory vectors done, memory-write-trust next, dev
+  harness last); then the
   rest of the antd shell tickets (`web-ui/antd-shell/` 03–09).
 
 ## Decisions Đạt owes

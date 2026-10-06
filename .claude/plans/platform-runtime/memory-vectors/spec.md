@@ -1,6 +1,6 @@
 # Vector của memory bị xóa cùng dòng của nó; ranker chỉ xếp lại id SQL đã chọn
 
-Status: ready-for-agent
+Status: resolved
 Area: platform-runtime · Nhánh: `feat/platform-hardening` · Viết: 6/10/2026
 
 Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2026 (khu
@@ -83,13 +83,13 @@ phải có trước producer đầu tiên.
 
 ## Câu hỏi còn mở
 
-1. Xóa point khi supersession hay giữ đến retention? Đề xuất: xóa ngay. Dòng đóng vẫn
+1. Xóa point khi supersession hay giữ đến retention? Đã làm theo đề xuất (ticket 01): xóa ngay. Dòng đóng vẫn
    giữ để giải thích quyết định cũ, nhưng recall không bao giờ đọc memory đã đóng
    (`valid_until` lọc trong SQL), nên point của nó không có người đọc
    (`failure-modes.md` #1, #6).
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                                  | Status          | Blocked by |
-| --- | ----------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
-| 01  | [Xóa vector memory theo id và theo tenant; ranker lọc theo id đã gọi lên](issues/01-delete-and-scope-memory-vectors.md) | ready-for-agent | —          |
+| #   | Ticket                                                                                                                  | Status   | Blocked by |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
+| 01  | [Xóa vector memory theo id và theo tenant; ranker lọc theo id đã gọi lên](issues/01-delete-and-scope-memory-vectors.md) | resolved | —          |

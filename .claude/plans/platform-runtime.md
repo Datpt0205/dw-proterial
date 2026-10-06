@@ -82,7 +82,8 @@ Mốc 6 (running many customers) is half done:
   `ready-for-agent`, product-neutral, in this order), each under
   `platform-runtime/<folder>/`: `memory-vectors` (Qdrant memory points deleted
   by retention, supersession and offboarding; the ranker reorders only the ids
-  SQL recalled), `memory-write-trust` (classification from the cited documents,
+  SQL recalled; **resolved 2026-10-06**, commit in the ticket's Comments),
+  `memory-write-trust` (classification from the cited documents,
   workspace-checked evidence, confidence computed by code, CHECKs, retention
   classes nothing can assign removed), `memory-review-queue` (REVIEW becomes a
   `memory.review` approval; needs `approval-audit-and-workspace` 01–02),

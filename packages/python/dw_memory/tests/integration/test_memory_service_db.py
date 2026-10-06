@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -35,6 +35,7 @@ from dw_kernel.ports import SystemClock, Uuid4Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_knowledge.contracts import EvidenceRef
 from dw_memory import tables
+from dw_memory.adapters.qdrant_ranker import QdrantMemoryRanker
 from dw_memory.contracts import MemoryType, WriteDecision
 from dw_memory.policy import MemoryCandidate, MemoryWritePolicy
 from dw_memory.service import MemoryService
@@ -684,6 +685,69 @@ async def test_the_same_question_about_another_customer_is_untouched(
     assert [item.content for item in live] == ["Của khách kia."]
 
 
+async def test_the_superseded_memory_loses_its_vector_and_the_new_one_keeps_it(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]],
+    seeded: Seeded,
+    ranker: QdrantMemoryRanker,
+    indexed: Callable[..., Awaitable[uuid.UUID]],
+) -> None:
+    """Recall never reads a closed memory, so its point has no reader: it is an
+    embedding of an answer the system no longer gives, kept for nobody."""
+    svc, _ = service
+    svc = replace(svc, vector_purge=ranker)
+    context = make_context()
+    subject = a_subject()
+    older = await svc.propose(
+        candidate(seeded, subject_refs=(subject,), fact_key="contract_date"),
+        context,
+        created_by_run_id=seeded.run_id,
+    )
+    assert older.item is not None
+    await indexed("Ký 10/10.", tenant=TENANT, workspace=WORKSPACE, memory_id=older.item.memory_id)
+    newer = await svc.propose(
+        candidate(seeded, subject_refs=(subject,), fact_key="contract_date", content="Ký 20/10."),
+        context,
+        created_by_run_id=seeded.run_id,
+    )
+    assert newer.item is not None
+    await indexed("Ký 20/10.", tenant=TENANT, workspace=WORKSPACE, memory_id=newer.item.memory_id)
+
+    stored = await ranker.client.retrieve(
+        ranker.collection, ids=[str(older.item.memory_id), str(newer.item.memory_id)]
+    )
+
+    assert {uuid.UUID(str(point.id)) for point in stored} == {newer.item.memory_id}
+
+
+async def test_a_vector_store_that_is_down_does_not_fail_a_supersession(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """The memory is committed before the point is touched; a stray point costs
+    space, a failed proposal would send a stored fact back round the retry loop."""
+    svc, _ = service
+
+    @dataclass
+    class _Down:
+        async def delete(self, memory_ids: Sequence[uuid.UUID]) -> None:
+            raise RuntimeError("qdrant xuống")
+
+        async def delete_by_tenant(self, tenant_id: uuid.UUID) -> None:
+            raise RuntimeError("qdrant xuống")
+
+    svc = replace(svc, vector_purge=_Down())
+    context = make_context()
+    subject = a_subject()
+    await _remember(svc, seeded, context=context, subject_refs=(subject,), fact_key="contract_date")
+    await _remember(
+        svc, seeded, context=context, subject_refs=(subject,), fact_key="contract_date", content="2"
+    )
+
+    live = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+    assert [item.content for item in live] == ["2"]
+
+
 async def test_supersession_names_what_it_closed_on_the_audit_trail(
     service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
 ) -> None:
@@ -830,10 +894,15 @@ class _Ranker:
         tenant_id: uuid.UUID,
         workspace_id: uuid.UUID,
         worker_id: str,
-        limit: int,
+        candidate_ids: Sequence[uuid.UUID],
     ) -> tuple[uuid.UUID, ...]:
         self.asked.append(
-            {"query": query, "tenant_id": tenant_id, "worker_id": worker_id, "limit": limit}
+            {
+                "query": query,
+                "tenant_id": tenant_id,
+                "worker_id": worker_id,
+                "candidate_ids": tuple(candidate_ids),
+            }
         )
         if self.raises is not None:
             raise self.raises
@@ -955,6 +1024,26 @@ async def test_the_ranker_is_asked_under_the_runs_own_tenant_and_worker(
     assert ranker.asked[0]["tenant_id"] == TENANT
     assert ranker.asked[0]["worker_id"] == "demo"
     assert ranker.asked[0]["query"] == "câu hỏi"
+
+
+async def test_the_ranker_is_handed_exactly_the_rows_recall_found(
+    service: tuple[MemoryService, async_sessionmaker[AsyncSession]], seeded: Seeded
+) -> None:
+    """The store orders these ids and no others; it never chooses its own."""
+    svc, _ = service
+    context = make_context()
+    subject = a_subject()
+    await _three(svc, seeded, context, subject)
+    found = await svc.recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC)
+    )
+    ranker = _Ranker()
+
+    await replace(svc, ranker=ranker).recall(
+        context, worker_id="demo", subject_refs=(subject,), now=datetime.now(UTC), query="x"
+    )
+
+    assert set(ranker.asked[0]["candidate_ids"]) == {item.memory_id for item in found}
 
 
 async def test_no_query_means_the_ranker_is_not_even_asked(

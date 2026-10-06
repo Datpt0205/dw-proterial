@@ -34,7 +34,7 @@ from dw_memory import tables
 from dw_memory.contracts import MEMORY_SCHEMA_VERSION, MemoryItem, WriteDecision
 from dw_memory.policy import MemoryCandidate, MemoryWritePolicy, PolicyOutcome
 from dw_memory.ports import EvidenceStorePort
-from dw_memory.ranking import MemoryRankerPort, rank_by
+from dw_memory.ranking import MemoryRankerPort, MemoryVectorPurgePort, rank_by
 from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.application.access_context import AccessContext
@@ -83,6 +83,9 @@ class MemoryService:
     # Orders what recall found when there is more of it than fits. Optional, and
     # it can only ever change the ORDER — see `dw_memory.ranking`.
     ranker: MemoryRankerPort | None = None
+    # Deletes the vector of a memory this proposal superseded. Optional because
+    # a deployment without a vector store has no points to delete.
+    vector_purge: MemoryVectorPurgePort | None = None
 
     async def propose(
         self,
@@ -214,7 +217,28 @@ class MemoryService:
                     superseded=superseded,
                 )
             )
+        await self._purge_vectors(superseded)
         return ProposalResult(candidate_id=candidate_id, outcome=outcome, item=item)
+
+    async def _purge_vectors(self, superseded: tuple[uuid.UUID, ...]) -> None:
+        """Delete the points of memories this proposal closed, after the commit.
+
+        Recall never reads a closed memory, so its point has no reader left. A
+        store that is down is logged, not raised: the new memory is committed,
+        failing here would send it back round the outbox's retry loop, and the
+        stray point can no longer reach an answer because `nearest` only orders
+        ids recall chose. Offboarding still removes it with the tenant.
+        """
+        if not superseded or self.vector_purge is None:
+            return
+        try:
+            await self.vector_purge.delete(superseded)
+        except Exception:
+            logger.warning(
+                "could not delete superseded memory vectors; they stay until offboarding",
+                extra={"superseded": [str(memory_id) for memory_id in superseded]},
+                exc_info=True,
+            )
 
     async def _already_decided(
         self, session: AsyncSession, candidate_id: uuid.UUID
@@ -510,7 +534,7 @@ class MemoryService:
                 tenant_id=context.tenant_id,
                 workspace_id=context.workspace_id,
                 worker_id=worker_id,
-                limit=len(found),
+                candidate_ids=[item.memory_id for item in found],
             )
         except Exception:
             logger.warning(
