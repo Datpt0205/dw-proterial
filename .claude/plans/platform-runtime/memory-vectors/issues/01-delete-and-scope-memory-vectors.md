@@ -136,3 +136,19 @@ cái có test. Không đụng Dockerfile, lockfile hay compose.
 
 Còn lại, đúng như docstring: point mà retention hoặc supersession không xóa được (Qdrant
 xuống) ở lại đến khi tenant offboard; lượt quét sau không thấy lại id đó.
+
+### 2026-10-06: kiểm chứng độc lập, sửa một lỗ hổng
+
+- Outbox giao lại (at-least-once) một event mà memory của nó đã bị memory sau thay:
+  `_already_decided` trả dòng đã lưu (có `valid_until`), handler `index` lại nó và
+  point vừa bị supersession xóa quay về. Handler giờ chỉ index memory còn mở
+  (`valid_until is None`); test đơn vị
+  `test_a_redelivered_memory_that_was_since_superseded_is_not_indexed_again` đỏ khi gỡ
+  chốt. Còn lại: hai worker cùng lúc (A index sau khi B đã thay và xóa A) vẫn có thể để
+  lại point; offboarding là lưới cuối.
+- `test_an_expired_memory_loses_its_vector_and_a_live_one_keeps_it` index với
+  `wait=False` rồi không chờ, nên khi gỡ purge, "điểm hết hạn không còn" có thể xanh vì
+  upsert chưa áp. Giờ dùng fixture `indexed` (chờ point hiện ra).
+- Đột biến lại, mỗi cái đỏ rồi hoàn nguyên: `HasIdCondition`, lời gọi
+  `memory_vectors.delete_by_tenant`, `_purge_vectors` của retention, chốt mới ở handler.
+  Tích hợp 76 passed (hai lượt), `make ci` exit 0.

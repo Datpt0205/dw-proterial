@@ -148,7 +148,10 @@ def build_memory_handler(
             # The event id, so a redelivery decides once. See the module docstring.
             idempotency_key=event.id,
         )
-        if index is not None and result.item is not None:
+        # A redelivery answers with the stored row, and a later proposal may
+        # have closed it and deleted its point since. Indexing it again would
+        # put that point back for nobody: recall never reads a closed memory.
+        if index is not None and result.item is not None and result.item.valid_until is None:
             await index.index(
                 memory_id=result.item.memory_id,
                 content=result.item.content,

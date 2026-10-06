@@ -11,7 +11,7 @@ that GUC actually opens the rows is a question only the policy engine answers.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -356,16 +356,6 @@ async def test_expiring_a_memory_frees_the_evidence_it_cited(
 # nobody sweeps.
 
 
-async def _indexed(ranker: QdrantMemoryRanker, memory_id: uuid.UUID) -> None:
-    await ranker.index(
-        memory_id=memory_id,
-        content="Ký ngày 10/10.",
-        tenant_id=TENANT,
-        workspace_id=WORKSPACE,
-        worker_id="demo",
-    )
-
-
 async def _has_point(ranker: QdrantMemoryRanker, memory_id: uuid.UUID) -> bool:
     found = await ranker.client.retrieve(ranker.collection, ids=[str(memory_id)])
     return bool(found)
@@ -374,12 +364,16 @@ async def _has_point(ranker: QdrantMemoryRanker, memory_id: uuid.UUID) -> bool:
 async def test_an_expired_memory_loses_its_vector_and_a_live_one_keeps_it(
     sweep: tuple[SqlMemoryRetention, async_sessionmaker[AsyncSession]],
     ranker: QdrantMemoryRanker,
+    indexed: Callable[..., Awaitable[uuid.UUID]],
 ) -> None:
     _pruner, sessions = sweep
     expired = await _memory(sessions, retention="ephemeral", age_days=40)
     live = await _memory(sessions, retention="ephemeral", age_days=10)
-    await _indexed(ranker, expired)
-    await _indexed(ranker, live)
+    # Waits until each point is visible: `index` upserts with wait=False, and a
+    # point not yet applied would let "the expired one has no point" pass with
+    # the purge removed.
+    for memory_id in (expired, live):
+        await indexed("Ký ngày 10/10.", tenant=TENANT, workspace=WORKSPACE, memory_id=memory_id)
     pruner = SqlMemoryRetention(sessions, _policy(), _Clock(), vector_index=ranker)
 
     await pruner.prune()

@@ -219,6 +219,43 @@ async def test_nothing_is_indexed_when_nothing_was_stored() -> None:
     assert index.indexed == []
 
 
+class _AlreadySuperseded(_Recorder):
+    """A redelivery whose memory a later proposal has since closed.
+
+    `propose` answers a seen event id with the stored row, `valid_until`
+    included, and supersession has already deleted that row's point.
+    """
+
+    async def propose(self, candidate: Any, context: Any, **kwargs: Any) -> ProposalResult:
+        await super().propose(candidate, context, **kwargs)
+        return ProposalResult(
+            candidate_id=uuid.uuid4(),
+            outcome=PolicyOutcome(decision=WriteDecision.AUTO_WRITE, reason="already decided"),
+            item=MemoryItem(
+                memory_id=uuid.uuid4(),
+                tenant_id=TENANT,
+                workspace_id=WORKSPACE,
+                worker_id="demo",
+                memory_type=MemoryType.COMMITMENT,
+                content="Anh An cam kết gửi hợp đồng.",
+                confidence=0.9,
+                valid_from=datetime(2026, 9, 18, tzinfo=UTC),
+                valid_until=datetime(2026, 9, 19, tzinfo=UTC),
+                created_by_run_id=RUN,
+            ),
+        )
+
+
+async def test_a_redelivered_memory_that_was_since_superseded_is_not_indexed_again() -> None:
+    """Re-indexing it would put back the point supersession deleted, an
+    embedding of an answer the system no longer gives, kept until offboarding."""
+    index = _Index()
+
+    await build_memory_handler(_AlreadySuperseded(), index)(_event())
+
+    assert index.indexed == []
+
+
 async def test_the_index_is_optional() -> None:
     """A deployment with no vector store still remembers."""
     result = await build_memory_handler(_Stores())(_event())
