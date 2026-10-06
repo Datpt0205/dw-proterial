@@ -105,6 +105,39 @@ Mốc 6 (running many customers) is half done:
     - **Verified** by walking the job's exact steps in a scratch worktree:
       red at HEAD, green with the fix. With two contexts generated,
       `dw_sales`'s contracts are unchanged. Not yet confirmed in CI.
+- **CI pnpm audit + trivy** (run 37422042077, commit 2284d3c): both red, and
+  they share a cause. The audit found 8 high advisories: brace-expansion in
+  all three of its lines, braces, and source-map-js. Trivy found one row:
+  `source-map-js@1.2.1` in `dw-web:local` (CVE-2026-93749). api, worker and
+  docgen scanned 0. Fixed locally in `pnpm-workspace.yaml`, not yet
+  confirmed in CI:
+    - **Overrides:** the three brace-expansion lines now have floors of
+      1.1.20, 2.1.6 and 5.0.11, each capped below its next major (5.x was an
+      exact `5.0.9` pin). A new `source-map-js` override has a floor of
+      1.2.2. The lockfile changes 4 packages. pnpm 11 rewrites the lockfile
+      in single quotes, so it was run back through prettier to keep the
+      committed double-quote style and a small diff.
+    - **braces has no fix to take.** GitHub lists no first patched version,
+      npm's latest is 3.0.3, and micromatch/braces#70 is open. Every
+      `@next/eslint-plugin-next` release through 16.3.8 pins
+      `fast-glob 3.3.1`, which pulls in micromatch and braces, so no override
+      or upgrade removes it. `auditConfig.ignoreGhsas` lists only
+      GHSA-vfj7-8cjw-p6xm, so a new advisory on braces still fails the
+      audit. Why that is safe: the path is dev-only, it is absent from every
+      image, and its only input is `settings.next.rootDir` from our own
+      ESLint config. **Owed:** remove the ignore and add a capped override
+      once braces 3.0.4 ships.
+    - **Measured:** `pnpm audit --audit-level high` was 11 vulns (8 high)
+      with exit 1. It is now exit 0, reporting "1 high (1 ignored)", and the
+      moderates are gone too. Trivy 0.74.0 with CI's flags (`fs`, HIGH and
+      CRITICAL, `--ignore-unfixed`) is red on HEAD's lockfile with the same
+      CVE row as CI, and exit 0 on the fixed lockfile. The image itself was
+      not rescanned locally: Docker Desktop's BuildKit was failing
+      (`context deadline exceeded`) under other sessions' stacks.
+      These are green: frozen install, generate:api-types (no diff),
+      format:check, lint, typecheck, and web vitest (215/215). `next build`
+      compiles, typechecks and generates 26/26 pages; its only failure is
+      the known Windows standalone-symlink EPERM.
 - **`build_agent` has no production caller** (checked 2026-09-29): this
   checkout ships no bounded context.
 - **Platform pieces waiting for their first context** (failure-modes #1).
