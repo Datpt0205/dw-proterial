@@ -6,14 +6,15 @@ even when the model misbehaves. They run without infrastructure so CI can
 gate every commit.
 
 Bounded-context graders (scoring engines, parsers, ...) live with their
-context: when a new context ships, add its graders here keyed
-"<context>.<gate>" and give its dataset full security coverage.
+context, keyed "<context>.<gate>", and are registered in the eval composition
+root (`scripts/run_evals.py`); this package never imports a context. Give the
+context's dataset full security coverage.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -218,3 +219,19 @@ GRADERS: dict[str, Grader] = {
     "knowledge.cross_tenant_rejected": grade_cross_tenant_rejected,
     "memory.write_policy": grade_memory_policy,
 }
+"""The platform's own graders. A bounded context's live in its own package and
+join these in the eval composition root (`scripts/run_evals.py`), through
+`merge_graders`: this package imports no context."""
+
+
+def merge_graders(*tables: Mapping[str, Grader]) -> dict[str, Grader]:
+    """One grader table from several. A name two tables both claim is refused,
+    naming it: which one a dataset meant cannot be guessed, and letting the
+    later table win would silently regrade every case of the earlier one."""
+    merged: dict[str, Grader] = {}
+    for table in tables:
+        clash = sorted(merged.keys() & table.keys())
+        if clash:
+            raise ValueError(f"grader names registered twice: {clash}")
+        merged.update(table)
+    return merged
