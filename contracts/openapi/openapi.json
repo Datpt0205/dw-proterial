@@ -206,6 +206,85 @@
         "title": "ApprovalView",
         "type": "object"
       },
+      "ApprovalViewOutcome": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "command_approve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command Approve"
+          },
+          "command_reject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command Reject"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "requires_comment": {
+            "title": "Requires Comment",
+            "type": "boolean"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CodeUnavailable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "viewed_at": {
+            "format": "date-time",
+            "title": "Viewed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "viewed_at",
+          "requires_comment",
+          "code",
+          "expires_at",
+          "command_approve",
+          "command_reject",
+          "unavailable_reason"
+        ],
+        "title": "ApprovalViewOutcome",
+        "type": "object"
+      },
       "ArtifactListView": {
         "properties": {
           "artifacts": {
@@ -759,6 +838,20 @@
           "cannot_supply"
         ],
         "title": "CloseReason",
+        "type": "string"
+      },
+      "CodeUnavailable": {
+        "description": "Why the portal offers no code. Each one is a sentence on the page.",
+        "enum": [
+          "not_pending",
+          "cannot_decide",
+          "requester",
+          "web_only",
+          "not_linked",
+          "comment_required",
+          "channel_off"
+        ],
+        "title": "CodeUnavailable",
         "type": "string"
       },
       "ConfirmBody": {
@@ -7079,6 +7172,24 @@
         "title": "VersionBody",
         "type": "object"
       },
+      "ViewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Comment",
+            "type": "string"
+          },
+          "issue_code": {
+            "default": false,
+            "title": "Issue Code",
+            "type": "boolean"
+          }
+        },
+        "title": "ViewRequest",
+        "type": "object"
+      },
       "WaiverDecisionBody": {
         "properties": {
           "reason": {
@@ -7430,6 +7541,105 @@
           "case_version"
         ],
         "title": "YcbgBody",
+        "type": "object"
+      },
+      "ZaloConnectView": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "deep_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deep Link"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "deep_link",
+          "expires_at"
+        ],
+        "title": "ZaloConnectView",
+        "type": "object"
+      },
+      "ZaloStatusView": {
+        "properties": {
+          "linked": {
+            "title": "Linked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "linked"
+        ],
+        "title": "ZaloStatusView",
+        "type": "object"
+      },
+      "ZaloWorkspaceChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "workspace_id"
+        ],
+        "title": "ZaloWorkspaceChoice",
+        "type": "object"
+      },
+      "ZaloWorkspaceView": {
+        "properties": {
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "workspace_id"
+        ],
+        "title": "ZaloWorkspaceView",
         "type": "object"
       }
     }
@@ -8233,6 +8443,59 @@
           }
         },
         "summary": "Decide",
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
+    "/api/v1/approvals/{approval_id}/view": {
+      "post": {
+        "operationId": "view_approval_api_v1_approvals__approval_id__view_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalViewOutcome"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "View Approval",
         "tags": [
           "approvals"
         ]
@@ -12103,6 +12366,122 @@
         "summary": "Resume",
         "tags": [
           "sales"
+        ]
+      }
+    },
+    "/api/v1/zalo/connect": {
+      "post": {
+        "operationId": "zalo_connect_api_v1_zalo_connect_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZaloConnectView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Zalo Connect",
+        "tags": [
+          "zalo"
+        ]
+      }
+    },
+    "/api/v1/zalo/disconnect": {
+      "post": {
+        "operationId": "zalo_disconnect_api_v1_zalo_disconnect_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Zalo Disconnect",
+        "tags": [
+          "zalo"
+        ]
+      }
+    },
+    "/api/v1/zalo/status": {
+      "get": {
+        "operationId": "zalo_status_api_v1_zalo_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZaloStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Zalo Status",
+        "tags": [
+          "zalo"
+        ]
+      }
+    },
+    "/api/v1/zalo/workspace": {
+      "get": {
+        "operationId": "zalo_workspace_api_v1_zalo_workspace_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZaloWorkspaceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Zalo Workspace",
+        "tags": [
+          "zalo"
+        ]
+      },
+      "put": {
+        "operationId": "zalo_choose_workspace_api_v1_zalo_workspace_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZaloWorkspaceChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZaloWorkspaceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zalo Choose Workspace",
+        "tags": [
+          "zalo"
         ]
       }
     }

@@ -233,6 +233,173 @@ async def test_a_table_added_later_is_readable_without_a_new_grant(
         await migrator.dispose()
 
 
+async def test_the_application_may_only_mark_a_link_nonce_used(db_urls: DatabaseUrls) -> None:
+    """`platform.channel_link_nonces` (migration 02930a73bbdf): `dw_app` issues,
+    consumes and prunes nonces, and the consume may set `used_at` and nothing
+    else — never move a nonce to another user or stretch its expiry. Asked of the
+    catalog, so a migration that dropped the column-level grant goes red here."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+
+            async def table(verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text(
+                            "SELECT has_table_privilege('dw_app',"
+                            " 'platform.channel_link_nonces', :verb)"
+                        ),
+                        {"verb": verb},
+                    )
+                )
+
+            async def column(name: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text(
+                            "SELECT has_column_privilege('dw_app',"
+                            " 'platform.channel_link_nonces', :col, :verb)"
+                        ),
+                        {"col": name, "verb": verb},
+                    )
+                )
+
+            assert await table("SELECT")
+            assert await table("INSERT")
+            assert await table("DELETE")
+            assert not await table("UPDATE")  # no table-wide UPDATE
+            assert not await table("TRUNCATE")
+            assert await column("used_at", "UPDATE")
+            for name in ("jti", "channel", "user_id", "expires_at", "created_at"):
+                assert not await column(name, "UPDATE"), name
+    finally:
+        await migrator.dispose()
+
+
+async def test_the_application_may_only_settle_an_inbound_message_and_choose_a_workspace(
+    db_urls: DatabaseUrls,
+) -> None:
+    """Migration 9f2becb1bf80. `channel_inbound_messages`: `dw_app` claims
+    (INSERT), reads, settles (UPDATE of `outcome` only) and prunes (DELETE) —
+    it can never move a claimed id to another user or re-date it.
+    `channel_preferences`: `dw_app` reads, inserts and updates the chosen
+    tenant/workspace, never the owning `user_id`, and never deletes (the row
+    goes with the membership, by cascade). Asked of the catalog."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+
+            async def table(name: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_table_privilege('dw_app', :t, :verb)"),
+                        {"t": f"platform.{name}", "verb": verb},
+                    )
+                )
+
+            async def column(name: str, col: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_column_privilege('dw_app', :t, :col, :verb)"),
+                        {"t": f"platform.{name}", "col": col, "verb": verb},
+                    )
+                )
+
+            inbound = "channel_inbound_messages"
+            for verb in ("SELECT", "INSERT", "DELETE"):
+                assert await table(inbound, verb), verb
+            assert not await table(inbound, "UPDATE")
+            assert not await table(inbound, "TRUNCATE")
+            assert await column(inbound, "outcome", "UPDATE")
+            for col in ("channel", "external_message_id", "user_id", "received_at"):
+                assert not await column(inbound, col, "UPDATE"), col
+
+            chosen = "channel_preferences"
+            assert await table(chosen, "SELECT")
+            assert await table(chosen, "INSERT")
+            for verb in ("UPDATE", "DELETE", "TRUNCATE"):
+                assert not await table(chosen, verb), verb
+            assert await column(chosen, "tenant_id", "UPDATE")
+            assert await column(chosen, "workspace_id", "UPDATE")
+            assert not await column(chosen, "user_id", "UPDATE")
+
+            # Migration of channels Z3: the API queues a webhook
+            # update, the worker's drain takes (deletes) it; nothing edits one.
+            queued = "channel_inbound_updates"
+            for verb in ("SELECT", "INSERT", "DELETE"):
+                assert await table(queued, verb), verb
+            for verb in ("UPDATE", "TRUNCATE"):
+                assert not await table(queued, verb), verb
+    finally:
+        await migrator.dispose()
+
+
+async def test_the_application_may_only_record_views_and_spend_or_revoke_codes(
+    db_urls: DatabaseUrls,
+) -> None:
+    """Migration e399be8c0a2d. `approval_view_receipts`: `dw_app` reads and
+    inserts, never edits or deletes a receipt. `approval_decision_codes`: reads,
+    inserts, and updates only `used_at`, `revoked_at`, `revoked_reason` and
+    `failed_attempts` — never the hash, the comment, the owner, the approval or
+    the expiry — and deletes nothing; the sweep runs through
+    `prune_approval_decision_codes()`, which it may execute. Asked of the
+    catalog."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+
+            async def table(name: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_table_privilege('dw_app', :t, :verb)"),
+                        {"t": f"platform.{name}", "verb": verb},
+                    )
+                )
+
+            async def column(name: str, col: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_column_privilege('dw_app', :t, :col, :verb)"),
+                        {"t": f"platform.{name}", "col": col, "verb": verb},
+                    )
+                )
+
+            receipts = "approval_view_receipts"
+            assert await table(receipts, "SELECT")
+            assert await table(receipts, "INSERT")
+            for verb in ("UPDATE", "DELETE", "TRUNCATE"):
+                assert not await table(receipts, verb), verb
+
+            codes = "approval_decision_codes"
+            assert await table(codes, "SELECT")
+            assert await table(codes, "INSERT")
+            for verb in ("UPDATE", "DELETE", "TRUNCATE"):
+                assert not await table(codes, verb), verb
+            for col in ("used_at", "revoked_at", "revoked_reason", "failed_attempts"):
+                assert await column(codes, col, "UPDATE"), col
+            for col in (
+                "id",
+                "tenant_id",
+                "workspace_id",
+                "approval_id",
+                "user_id",
+                "receipt_id",
+                "code_hash",
+                "comment",
+                "expires_at",
+                "created_at",
+            ):
+                assert not await column(codes, col, "UPDATE"), col
+            assert await conn.scalar(
+                sa.text(
+                    "SELECT has_function_privilege("
+                    "'dw_app', 'platform.prune_approval_decision_codes()', 'EXECUTE')"
+                )
+            )
+    finally:
+        await migrator.dispose()
+
+
 async def test_the_application_may_only_record_a_decision_on_an_approval(
     db_urls: DatabaseUrls,
 ) -> None:

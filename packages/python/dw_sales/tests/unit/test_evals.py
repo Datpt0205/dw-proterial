@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from dw_evals.graders import GRADERS as PLATFORM_GRADERS
-from dw_evals.graders import GraderContext, compose_graders
+from dw_evals.graders import GraderContext, merge_graders
 from dw_evals.runner import load_dataset, run_dataset
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, MOCK_ROOT
@@ -44,7 +44,7 @@ def _case(name: str) -> tuple[dict[str, Any], dict[str, Any]]:
 
 def test_the_sales_dataset_passes_with_full_security_coverage() -> None:
     dataset = load_dataset(DATASET)
-    report = run_dataset(dataset, REPO, compose_graders(PLATFORM_GRADERS, GRADERS))
+    report = run_dataset(dataset, REPO, merge_graders(PLATFORM_GRADERS, GRADERS))
 
     failures = [(r.case_id, r.details) for r in report.results if not r.passed]
     assert not failures

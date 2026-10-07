@@ -6,10 +6,9 @@ even when the model misbehaves. They run without infrastructure so CI can
 gate every commit.
 
 Bounded-context graders (scoring engines, parsers, ...) live with their
-context, keyed "<context>.<gate>", and a composition root hands them to the
-runner through `compose_graders`: this package may not import a context
-(import-linter "Platform does not import contexts"). Give the context's
-dataset full security coverage.
+context, keyed "<context>.<gate>", and are registered in the eval composition
+root (`scripts/run_evals.py`); this package never imports a context. Give the
+context's dataset full security coverage.
 """
 
 from __future__ import annotations
@@ -220,19 +219,19 @@ GRADERS: dict[str, Grader] = {
     "knowledge.cross_tenant_rejected": grade_cross_tenant_rejected,
     "memory.write_policy": grade_memory_policy,
 }
+"""The platform's own graders. A bounded context's live in its own package and
+join these in the eval composition root (`scripts/run_evals.py`), through
+`merge_graders`: this package imports no context."""
 
 
-def compose_graders(*bundles: Mapping[str, Grader]) -> dict[str, Grader]:
-    """The graders of several owners as one table, for the runner.
-
-    A key named twice is refused: a context that shadowed a platform grader,
-    or another context's, would grade a dataset with code its author never
-    wrote, and the report would not say so.
-    """
-    composed: dict[str, Grader] = {}
-    for bundle in bundles:
-        for key, grader in bundle.items():
-            if key in composed:
-                raise ValueError(f"grader {key!r} is registered twice")
-            composed[key] = grader
-    return composed
+def merge_graders(*tables: Mapping[str, Grader]) -> dict[str, Grader]:
+    """One grader table from several. A name two tables both claim is refused,
+    naming it: which one a dataset meant cannot be guessed, and letting the
+    later table win would silently regrade every case of the earlier one."""
+    merged: dict[str, Grader] = {}
+    for table in tables:
+        clash = sorted(merged.keys() & table.keys())
+        if clash:
+            raise ValueError(f"grader names registered twice: {clash}")
+        merged.update(table)
+    return merged
