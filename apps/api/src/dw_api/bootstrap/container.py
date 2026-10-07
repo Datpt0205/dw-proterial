@@ -27,6 +27,7 @@ from dw_agent_runtime.adapters.langchain_usage import LangchainUsageMeter
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_events import RunStateListener
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
+from dw_agent_runtime.approval_codes import ApprovalViewService
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.executor import ToolExecutor
@@ -41,6 +42,8 @@ from dw_agent_runtime.tools import ToolRegistry
 from dw_agent_runtime.toolsets import ToolsetRegistry
 from dw_api.health import HealthService
 from dw_api.settings import ApiSettings
+from dw_connectors.adapters.zalo_link import ZaloLinking
+from dw_connectors.inbound import InboundUpdateInboxPort
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_knowledge.gateway import KnowledgeGateway
 from dw_knowledge.ingest_jobs import IngestJobStore
@@ -51,6 +54,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.cache import CachePort
+from dw_platform.application.channel_access import ChannelPreferencesPort
 from dw_platform.application.entitlement import PlanEntitlementService
 from dw_platform.application.hierarchy import HierarchyService
 from dw_platform.application.idempotency import HttpIdempotency
@@ -132,6 +136,9 @@ class ApiContainer:
     run_events: RunStateListener | None = None
     runner: LangGraphWorkflowRunner | None = None
     approval_flow: ApproveAndResumeService | None = None
+    # Opening an approval: the view receipt and, when asked, the code a
+    # decision on Zalo needs (ADR 0007). Wired with `approval_flow`.
+    approval_views: ApprovalViewService | None = None
 
     knowledge_gateway: KnowledgeGateway | None = None
     ingest_job_store: IngestJobStore | None = None
@@ -147,6 +154,15 @@ class ApiContainer:
     hierarchy: HierarchyService | None = None
     separation_of_duties: SeparationOfDutiesService | None = None
     notifications: NotificationService | None = None
+    # The signed-in user's own Zalo link. ``None`` unless the bot token and the
+    # link secret are both set, and then /api/v1/zalo/* is not mounted.
+    zalo_linking: ZaloLinking | None = None
+    # The workspace the signed-in user's Zalo commands act in. Wired with
+    # ``zalo_linking`` and ``None`` without it, like the routes that read it.
+    channel_preferences: ChannelPreferencesPort | None = None
+    # Where the Zalo webhook queues an accepted update for the worker. ``None``
+    # unless ``settings.zalo_webhook_enabled``, and then the route is not mounted.
+    zalo_webhook_inbox: InboundUpdateInboxPort | None = None
     cache: CachePort | None = None
     # Dedicated to the readiness probe — the runtime's own retrieval/memory
     # clients are built (and disposed) deeper inside `build_runtime`, only

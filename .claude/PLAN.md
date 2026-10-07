@@ -15,6 +15,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps         |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Prototype theme; Sales restyled |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 10 built; 12 left    |
+| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed       |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -34,8 +35,8 @@ own file and a row here.
 - Sales ticket 10 committed 2026-10-06 (`8d098b3`): DW1 runs on the runtime,
   quotation approval and cross-check are platform approvals (dw_sales ADR
   0004 Proposed, Đạt to review).
-- Platform `96f95ad` merged 2026-10-07: Sales approvals on the platform
-  model (`required_scope`, `approvals.decide`, `ac31ff0f2087`; `docs/adr/0011`).
+- Platform `96f95ad` merged 2026-10-07 (Sales approvals on the platform model,
+  `docs/adr/0011`); `2ebd50f` 2026-10-08 (Zalo channel, model stack, Caddy).
 - **Next:** sales 12 (production hardening, needs-triage).
 
 ## Decisions Đạt owes
@@ -45,8 +46,7 @@ own file and a row here.
       are enforced only in the runner);
     - the model profile and key for uat/production (local runs on `luna`,
       gpt-5.6-luna, `make check-model`; the key is only in local `.env`);
-    - the rerank key for uat/production (local reranks through FPT Cloud,
-      `make check-rerank`; the key is only in local `.env`);
+    - the rerank key for uat/production (FPT Cloud locally, `make check-rerank`);
     - whether CI runs the web vitest suite.
 - **Ops:**
     - spend guard dollar thresholds per plan;

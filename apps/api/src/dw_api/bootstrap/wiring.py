@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import (
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_events import RunStateListener
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
+from dw_agent_runtime.approval_codes import ApprovalViewService
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry, parse_worker_file
@@ -61,11 +62,15 @@ from dw_api.bootstrap.storage import (
 from dw_api.bootstrap.telemetry import build_telemetry
 from dw_api.health import HealthService, database_probe, qdrant_probe, redis_probe
 from dw_api.settings import ApiSettings
+from dw_connectors.adapters.zalo_link import ZaloLinking
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.ports import ObjectStoragePort
 from dw_platform.adapters.cache import NullCache, ValkeyCache
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
+from dw_platform.adapters.persistence.approval_codes import SqlApprovalCodeStore
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
+from dw_platform.adapters.persistence.channel_inbound import SqlChannelUpdateQueue
+from dw_platform.adapters.persistence.channel_preferences import SqlChannelPreferences
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.hierarchy_repo import SqlHierarchyRepository
 from dw_platform.adapters.persistence.idempotency_store import SqlIdempotencyStore
@@ -79,7 +84,9 @@ from dw_platform.adapters.persistence.separation_of_duties_repo import (
     SqlSeparationOfDutiesRepository,
 )
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
+from dw_platform.adapters.persistence.zalo_link_repo import SqlZaloLink
 from dw_platform.application.admin_console import AdminConsoleService
+from dw_platform.application.approval_codes import ApprovalSubjectVersions, DecisionCodeKey
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.hierarchy import HierarchyService
@@ -203,6 +210,20 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
         SqlSeparationOfDutiesRepository(session_factory), authorization, clock, ids
     )
     container.notifications = NotificationService(SqlNotificationRepository(session_factory))
+    # The user's own Zalo link, on the request pool (`dw_app`), which holds the
+    # identity-plane grants it needs; never the provisioner engine.
+    if settings.zalo_link_enabled:
+        container.zalo_linking = ZaloLinking(
+            store=SqlZaloLink(session_factory),
+            link_secret=settings.zalo_link_secret.get_secret_value(),
+            clock=clock,
+            bot_link=settings.zalo_bot_link,
+        )
+        container.channel_preferences = SqlChannelPreferences(session_factory)
+    # The hosted way updates arrive (ADR 0008): queued here, handled by the
+    # worker's drain through the same entry the poll lane uses.
+    if settings.zalo_webhook_enabled:
+        container.zalo_webhook_inbox = SqlChannelUpdateQueue(session_factory)
 
     # ---- provisioning ----------------------------------------------------
     # A second engine as the provisioner role: writes across tenants but holds
@@ -254,6 +275,23 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     container.runtime = wiring.seam
     container.runner = wiring.runner
     container.approval_flow = wiring.approval_flow
+    # The portal half of a decision on Zalo (ADR 0007, channels Z5): the view
+    # receipt and the single-use code. A context registers who answers for its
+    # approval types' subject version on `approval_subjects` at the seam below
+    # (`approval_subjects.register(prefix, port)`); a type nobody answers for
+    # is decided on the web only.
+    approval_subjects = ApprovalSubjectVersions()
+    code_secret = settings.approval_code_secret.get_secret_value()
+    container.approval_views = ApprovalViewService(
+        uow_factory=uow_factory,
+        approval_flow=wiring.approval_flow,
+        store=SqlApprovalCodeStore(session_factory),
+        subjects=approval_subjects,
+        chats=SqlZaloLink(session_factory),
+        key=DecisionCodeKey(code_secret.encode()) if code_secret else None,
+        clock=clock,
+        ids=ids,
+    )
     container.knowledge_gateway = wiring.knowledge_gateway
     container.ingest_job_store = wiring.ingest_jobs
     container.memory_service = wiring.memory_service

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   approvalSchema,
+  approvalViewOutcomeSchema,
   auditEventSchema,
   demoUserSchema,
   devSessionSchema,
@@ -30,6 +31,7 @@ import {
   type Inbox,
   type HierarchyMember,
   type Approval,
+  type ApprovalViewOutcome,
   type AuditEvent,
   type DemoUser,
   type DevSessionInfo,
@@ -81,20 +83,26 @@ const feedbackItemSchema = z.object({
 });
 export type FeedbackItem = z.infer<typeof feedbackItemSchema>;
 
-/** Whether the caller has linked their own Zalo for notifications. */
+/** Whether the caller has linked their own Zalo. No chat id: the browser has no use for it. */
 const zaloStatusSchema = z.object({
   linked: z.boolean(),
-  zalo_subject: z.string().nullable().optional(),
 });
 export type ZaloStatus = z.infer<typeof zaloStatusSchema>;
 
-/** A one-time connect token + how to redeem it in the bot. */
+/** A one-time `/start <code>` for the bot: redeemable once, until `expires_at`. */
 const zaloConnectSchema = z.object({
   code: z.string(),
   deep_link: z.string().nullable(),
-  instructions: z.string(),
+  expires_at: z.string(),
 });
 export type ZaloConnect = z.infer<typeof zaloConnectSchema>;
+
+/** The workspace the caller's Zalo commands act in; both null until chosen. */
+const zaloWorkspaceSchema = z.object({
+  tenant_id: z.string().nullable(),
+  workspace_id: z.string().nullable(),
+});
+export type ZaloWorkspace = z.infer<typeof zaloWorkspaceSchema>;
 
 export class ApiError extends Error {
   constructor(
@@ -174,6 +182,20 @@ const _inboxMirrorsTheRoute: [
   SameType<keyof Inbox["items"][number], keyof Generated["NotificationView"]>,
 ] = [true, true, true];
 void _inboxMirrorsTheRoute;
+
+// The view route's answer, field for field: a reason added on the server and
+// not here would fail the zod parse at runtime instead of this compile.
+const _approvalViewMirrorsTheRoute: [
+  SameType<ApprovalViewOutcome, Generated["ApprovalViewOutcome"]>,
+] = [true];
+void _approvalViewMirrorsTheRoute;
+
+const _zaloMirrorsTheRoute: [
+  SameType<ZaloStatus, Generated["ZaloStatusView"]>,
+  SameType<keyof ZaloConnect, keyof Generated["ZaloConnectView"]>,
+  SameType<ZaloWorkspace, Generated["ZaloWorkspaceView"]>,
+] = [true, true, true];
+void _zaloMirrorsTheRoute;
 
 export class ApiClient {
   constructor(private readonly options: ApiClientOptions) {}
@@ -679,6 +701,31 @@ export class ApiClient {
     );
   }
 
+  getApproval(approvalId: string): Promise<Approval> {
+    return this.request(
+      "GET",
+      `/api/v1/approvals/${approvalId}`,
+      approvalSchema,
+    );
+  }
+
+  /**
+   * Record that the viewer opened this approval and, with `issue_code`, get a
+   * single-use code to decide it on Zalo (ADR 0007). The comment is the one
+   * the decision will carry; a strict type requires it.
+   */
+  viewApproval(
+    approvalId: string,
+    body: { comment?: string; issue_code?: boolean } = {},
+  ): Promise<ApprovalViewOutcome> {
+    return this.request(
+      "POST",
+      `/api/v1/approvals/${approvalId}/view`,
+      approvalViewOutcomeSchema,
+      { body },
+    );
+  }
+
   /**
    * Decide an approval. A context's approval may need more than yes/no: a
    * reason per item it names (`reasons`, a quote's blocking price findings by
@@ -839,13 +886,14 @@ export class ApiClient {
     );
   }
 
-  // ---- zalo notifications -------------------------------------------------
+  // ---- the caller's own Zalo link --------------------------------------
+  // 404 `not_found` from all three = the deployment has no bot configured.
 
   getZaloStatus(): Promise<ZaloStatus> {
     return this.request("GET", "/api/v1/zalo/status", zaloStatusSchema);
   }
 
-  /** Mint a fresh connect token for the signed-in user to send to the bot. */
+  /** Mint a one-time `/start <code>` for the signed-in user to send to the bot. */
   connectZalo(): Promise<ZaloConnect> {
     return this.request("POST", "/api/v1/zalo/connect", zaloConnectSchema);
   }
@@ -853,10 +901,25 @@ export class ApiClient {
   disconnectZalo(): Promise<void> {
     return this.requestNoContent("POST", "/api/v1/zalo/disconnect");
   }
+
+  getZaloWorkspace(): Promise<ZaloWorkspace> {
+    return this.request("GET", "/api/v1/zalo/workspace", zaloWorkspaceSchema);
+  }
+
+  /** 404 `not_found` when the pair is not one of the caller's own memberships. */
+  setZaloWorkspace(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<ZaloWorkspace> {
+    return this.request("PUT", "/api/v1/zalo/workspace", zaloWorkspaceSchema, {
+      body: { tenant_id: tenantId, workspace_id: workspaceId },
+    });
+  }
 }
 
 export type {
   Approval,
+  ApprovalViewOutcome,
   AuditEvent,
   Page,
   PageParams,

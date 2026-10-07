@@ -5,7 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AliasChoices, Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dw_knowledge.contracts import DEFAULT_COLLECTION
@@ -45,6 +52,10 @@ class WorkerSettings(BaseSettings):
     heartbeat_file: Path = Path("/tmp/dw-worker-heartbeat")  # nosec B108  # container liveness probe path
     heartbeat_interval_seconds: float = Field(default=5.0, gt=0, le=60)
     poll_interval_seconds: float = Field(default=1.0, gt=0, le=60)
+    # How often the `channel_delivery` lane looks for notifications to send
+    # through a linked chat (channels Z2). Thirty seconds: a Zalo
+    # message trails its in-app notification by at most that.
+    channel_delivery_interval_seconds: float = Field(default=30.0, ge=5, le=3600)
 
     # Prometheus scrape target for this process (Ops hardening Phase 5). 9464
     # is the OTel/Prometheus exporter's own convention default; dw-api has no
@@ -142,6 +153,35 @@ class WorkerSettings(BaseSettings):
     openai_api_key: str = Field(
         default="", validation_alias=AliasChoices("DW_WORKER_OPENAI_API_KEY", "OPENAI_API_KEY")
     )
+    # The structured-output model a chat command reads a message with. Same
+    # names and defaults the API reads, mapped onto the one builder both
+    # processes use (`dw_agent_runtime.adapters.model_stack`, through
+    # `dw_worker.composition.build_model_stack_for`), which refuses "mock" in
+    # a deployed profile.
+    model_provider: str = Field(
+        default="mock",
+        validation_alias=AliasChoices(
+            "DW_WORKER_MODEL_PROVIDER", "DW_API_MODEL_PROVIDER", "DW_MODEL_PROVIDER"
+        ),
+    )
+    openai_structured_mode: str = Field(
+        default="json_schema",
+        validation_alias=AliasChoices(
+            "DW_WORKER_OPENAI_STRUCTURED_MODE", "DW_API_OPENAI_STRUCTURED_MODE"
+        ),
+    )
+    openai_strict_schema: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "DW_WORKER_OPENAI_STRICT_SCHEMA", "DW_API_OPENAI_STRICT_SCHEMA"
+        ),
+    )
+    outbound_allowed_hosts: list[str] = Field(
+        default=[],
+        validation_alias=AliasChoices(
+            "DW_WORKER_OUTBOUND_ALLOWED_HOSTS", "DW_API_OUTBOUND_ALLOWED_HOSTS"
+        ),
+    )
     # Reads uploaded documents and images. Verified per modality, not chosen by
     # tier: gpt-4.1-mini reads a PDF correctly through this gateway but does NOT
     # receive images - asked the colour of a solid blue square it answered
@@ -186,6 +226,70 @@ class WorkerSettings(BaseSettings):
         if value == "" and info.field_name is not None:
             return cls.model_fields[info.field_name].default
         return value
+
+    # --- Zalo self-link (channels Z1) ---
+    # The bot token is a credential (it rides in every Bot API URL) and the link
+    # secret must equal the API's: it verifies the ``/start`` token the API
+    # signed. ``SecretStr`` so neither prints in a repr, a log or an error.
+    zalo_bot_token: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DW_WORKER_ZALO_BOT_TOKEN", "ZALO_BOT_TOKEN"),
+    )
+    zalo_link_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DW_WORKER_ZALO_LINK_SECRET", "ZALO_LINK_SECRET"),
+    )
+    # The key decision codes are hashed under; must equal the API's, which
+    # issued them (ADR 0007, channels Z5). Empty = a decision sent from Zalo is
+    # answered "not enabled" and nothing is decided.
+    approval_code_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DW_WORKER_APPROVAL_CODE_SECRET", "DW_APPROVAL_CODE_SECRET"),
+    )
+    # poll = this process long-polls getUpdates (no public URL needed);
+    # webhook = Zalo POSTs to the API and nothing here polls. One bot answers
+    # one reader: two processes polling the same bot steal each other's updates.
+    zalo_updates_mode: Literal["poll", "webhook"] = Field(
+        default="poll",
+        validation_alias=AliasChoices("DW_WORKER_ZALO_UPDATES_MODE", "ZALO_UPDATES_MODE"),
+    )
+    # What the bot calls this deployment in its replies ("tài khoản <name>").
+    product_name: str = Field(
+        default="Digital Worker",
+        min_length=1,
+        validation_alias=AliasChoices("DW_WORKER_PRODUCT_NAME", "DW_PRODUCT_NAME"),
+    )
+    # The web app's public URL, the API's value: the bot links a person with
+    # several workspaces to `<this>/settings` to choose the one for Zalo.
+    public_web_url: str = Field(
+        default="http://localhost:3000",
+        validation_alias=AliasChoices("DW_WORKER_PUBLIC_WEB_URL", "DW_PUBLIC_WEB_URL"),
+    )
+
+    @property
+    def zalo_poll_enabled(self) -> bool:
+        """Poll only with a token to poll with and a secret to verify with."""
+        return (
+            self.zalo_updates_mode == "poll"
+            and bool(self.zalo_bot_token.get_secret_value())
+            and bool(self.zalo_link_secret.get_secret_value())
+        )
+
+    @property
+    def zalo_webhook_drain_enabled(self) -> bool:
+        """Drain what the API's webhook queued: webhook mode, never with the
+        poll lane, and with the same token and secret the poll lane needs."""
+        return (
+            self.zalo_updates_mode == "webhook"
+            and bool(self.zalo_bot_token.get_secret_value())
+            and bool(self.zalo_link_secret.get_secret_value())
+        )
+
+    @property
+    def zalo_send_enabled(self) -> bool:
+        """Send through the bot whenever there is a token to send with, polled
+        or webhooked: a webhook host's notifications go out the same way."""
+        return bool(self.zalo_bot_token.get_secret_value())
 
     @model_validator(mode="after")
     def _the_heartbeat_outruns_the_lease(self) -> WorkerSettings:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from pydantic import AliasChoices, Field, ValidationInfo, field_validator
+from pydantic import AliasChoices, Field, SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dw_knowledge.contracts import DEFAULT_COLLECTION
@@ -245,6 +245,68 @@ class ApiSettings(BaseSettings):
         ),
     )
 
+    # --- Zalo self-link (channels Z1) ---
+    # One bot per deployment. The token is a credential (it rides in every Bot
+    # API URL); the link secret signs the one-time ``/start`` token and must be
+    # the worker's value too. Both unset = the /zalo routes are not mounted.
+    # ``SecretStr`` so neither prints in a repr, a log line or a validation error.
+    zalo_bot_token: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DW_API_ZALO_BOT_TOKEN", "ZALO_BOT_TOKEN"),
+    )
+    zalo_link_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DW_API_ZALO_LINK_SECRET", "ZALO_LINK_SECRET"),
+    )
+    # The server key a decision code is hashed under (ADR 0007, channels Z5):
+    # HMAC-SHA256, so whoever reads the codes table cannot recover a code. The
+    # worker holds the same value to check a code sent from Zalo. Empty = no
+    # code is ever issued and approvals are decided on the web only.
+    approval_code_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DW_API_APPROVAL_CODE_SECRET", "DW_APPROVAL_CODE_SECRET"),
+    )
+    # Deep link to the bot's chat shown on the settings page; empty = none.
+    zalo_bot_link: str = Field(
+        default="", validation_alias=AliasChoices("DW_API_ZALO_BOT_LINK", "ZALO_BOT_LINK")
+    )
+
+    # poll = the worker long-polls getUpdates and the webhook route answers 404;
+    # webhook = Zalo POSTs to /api/v1/zalo/webhook and the worker drains what
+    # the API queued (ADR 0008). The worker reads the same
+    # variable, so one value decides both processes: one bot, one reader.
+    zalo_updates_mode: Literal["poll", "webhook"] = Field(
+        default="poll",
+        validation_alias=AliasChoices("DW_API_ZALO_UPDATES_MODE", "ZALO_UPDATES_MODE"),
+    )
+    # Sent by Zalo in ``X-Bot-Api-Secret-Token`` on every webhook call (given to
+    # ``setWebhook`` as ``secret_token`` by scripts/zalo_webhook.py). Empty =
+    # no webhook, whatever the mode. At least 32 characters when deployed.
+    zalo_webhook_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DW_API_ZALO_WEBHOOK_SECRET", "ZALO_WEBHOOK_SECRET"),
+    )
+    # The API as the internet reaches it (the api hostname): the
+    # webhook URL registered with Zalo is built from it. https when deployed.
+    public_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("DW_API_PUBLIC_BASE_URL"),
+    )
+
+    @property
+    def zalo_webhook_enabled(self) -> bool:
+        """The webhook exists only in webhook mode and only with a secret to check."""
+        return self.zalo_updates_mode == "webhook" and bool(
+            self.zalo_webhook_secret.get_secret_value()
+        )
+
+    @property
+    def zalo_link_enabled(self) -> bool:
+        """Linking needs both: a token to reply with and a secret to sign with."""
+        return bool(
+            self.zalo_bot_token.get_secret_value() and self.zalo_link_secret.get_secret_value()
+        )
+
     # --- observability (Langfuse optional behind configuration) ---
     otel_endpoint: str | None = Field(
         default=None,
@@ -337,6 +399,36 @@ class ApiSettings(BaseSettings):
             if not self.cors_origins:
                 raise RuntimeError(
                     f"CORS origins must be listed explicitly in the {self.profile} profile"
+                )
+            # Real people sign in here (ADR 0009): a token, a cookie or a
+            # cross-origin response over plain http is readable on the path.
+            # The issuer is the URL the browser logs in through, so it must be
+            # the TLS host too; the JWKS fetch stays internal and is not checked.
+            plain = [
+                name
+                for name, url in (
+                    ("DW_API_OIDC_ISSUER_URL", self.oidc_issuer_url or ""),
+                    ("DW_API_PUBLIC_BASE_URL", self.public_base_url),
+                    *(("DW_API_CORS_ORIGINS", origin) for origin in self.cors_origins),
+                )
+                if not url.startswith("https://")
+            ]
+            if plain:
+                raise RuntimeError(
+                    f"{', '.join(dict.fromkeys(plain))} must start with https:// "
+                    f"in the {self.profile} profile"
+                )
+            # Zalo reaches the webhook over the internet; a guessable secret
+            # would hand chat traffic to anyone who tries (ADR 0008). The https
+            # base URL it is registered under is checked above for every
+            # deployment, webhook or not.
+            if (
+                self.zalo_updates_mode == "webhook"
+                and len(self.zalo_webhook_secret.get_secret_value()) < 32
+            ):
+                raise RuntimeError(
+                    "ZALO_UPDATES_MODE=webhook needs a ZALO_WEBHOOK_SECRET of at least "
+                    f"32 characters in the {self.profile} profile"
                 )
         # Fails at startup, not on the first Sales request.
         self.sales_demo_scope()

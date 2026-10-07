@@ -2,11 +2,6 @@
 
 The runner is deliberately framework-free so `make eval-smoke` and CI can call
 it directly. Reports are plain JSON under evals/reports.
-
-The graders a dataset may name are handed in. The platform's own are the
-default; a bounded context's graders live in the context and a composition
-root (`scripts/run_evals.py`) adds them with `compose_graders`, so this
-package never imports a context.
 """
 
 from __future__ import annotations
@@ -19,7 +14,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from dw_evals.dataset import CaseCategory, EvalCase, EvalDataset
-from dw_evals.graders import GRADERS, Grader, GraderContext, GradeResult
+from dw_evals.graders import Grader, GraderContext, GradeResult
 
 
 class CaseResult(BaseModel):
@@ -77,10 +72,10 @@ def _grade(
         return GradeResult.fail("grader raised", error=f"{type(exc).__name__}: {exc}")
 
 
-def run_dataset(
-    dataset: EvalDataset, repo_root: Path, graders: Mapping[str, Grader] = GRADERS
-) -> EvalReport:
-    """Grade every case; a case naming a grader not in ``graders`` fails."""
+def run_dataset(dataset: EvalDataset, repo_root: Path, graders: Mapping[str, Grader]) -> EvalReport:
+    """Grade every case with `graders`, the ONLY table consulted: the caller
+    (the eval composition root) decides which graders exist. No default, so a
+    caller that forgets the table is a type error, not an empty table."""
     ctx = GraderContext(repo_root=repo_root)
     results = tuple(
         CaseResult(
