@@ -101,7 +101,7 @@ def test_a_host_with_no_infrastructure_wires_no_lane() -> None:
 
 
 def test_only_the_platform_lanes_are_wired() -> None:
-    """Ten lanes a database alone is enough for, and no more.
+    """Eleven lanes a database alone is enough for, and no more.
 
     The outbox, and retention twice. Retention joined the platform set the day
     memory got a lifecycle: `memory.items` is a platform table, so the platform
@@ -135,6 +135,9 @@ def test_only_the_platform_lanes_are_wired() -> None:
     through a linked chat, 90 days and never a pending one, the database's
     constant (`platform.prune_channel_deliveries()`). Wired without a bot
     token too: rows are queued for anyone linked whether or not this host sends.
+    `approval_codes_retention` is the eleventh: single-use decision codes
+    (channels Z5) a day old, the database's constant
+    (`platform.prune_approval_decision_codes()`), whether or not this host polls.
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
@@ -151,6 +154,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "channel_link_nonces_retention",
         "channel_inbound_messages_retention",
         "channel_deliveries_retention",
+        "approval_codes_retention",
     }
 
 

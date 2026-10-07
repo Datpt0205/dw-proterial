@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   approvalSchema,
+  approvalViewOutcomeSchema,
   auditEventSchema,
   demoUserSchema,
   devSessionSchema,
@@ -30,6 +31,7 @@ import {
   type Inbox,
   type HierarchyMember,
   type Approval,
+  type ApprovalViewOutcome,
   type AuditEvent,
   type DemoUser,
   type DevSessionInfo,
@@ -180,6 +182,13 @@ const _inboxMirrorsTheRoute: [
   SameType<keyof Inbox["items"][number], keyof Generated["NotificationView"]>,
 ] = [true, true, true];
 void _inboxMirrorsTheRoute;
+
+// The view route's answer, field for field: a reason added on the server and
+// not here would fail the zod parse at runtime instead of this compile.
+const _approvalViewMirrorsTheRoute: [
+  SameType<ApprovalViewOutcome, Generated["ApprovalViewOutcome"]>,
+] = [true];
+void _approvalViewMirrorsTheRoute;
 
 const _zaloMirrorsTheRoute: [
   SameType<ZaloStatus, Generated["ZaloStatusView"]>,
@@ -692,6 +701,31 @@ export class ApiClient {
     );
   }
 
+  getApproval(approvalId: string): Promise<Approval> {
+    return this.request(
+      "GET",
+      `/api/v1/approvals/${approvalId}`,
+      approvalSchema,
+    );
+  }
+
+  /**
+   * Record that the viewer opened this approval and, with `issue_code`, get a
+   * single-use code to decide it on Zalo (ADR 0007). The comment is the one
+   * the decision will carry; a strict type requires it.
+   */
+  viewApproval(
+    approvalId: string,
+    body: { comment?: string; issue_code?: boolean } = {},
+  ): Promise<ApprovalViewOutcome> {
+    return this.request(
+      "POST",
+      `/api/v1/approvals/${approvalId}/view`,
+      approvalViewOutcomeSchema,
+      { body },
+    );
+  }
+
   decideApproval(
     approvalId: string,
     decision: { approve: boolean; comment?: string },
@@ -872,6 +906,7 @@ export class ApiClient {
 
 export type {
   Approval,
+  ApprovalViewOutcome,
   AuditEvent,
   Page,
   PageParams,

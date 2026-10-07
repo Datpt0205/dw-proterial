@@ -31,6 +31,7 @@ import {
 import { approvalClient } from "../../lib/approvals/registry";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
+import Link from "next/link";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
 
@@ -162,7 +163,9 @@ export default function ApprovalsPage() {
           <Card key={approval.id} className="overflow-hidden">
             <CardHeader className="border-b bg-muted/40">
               <CardTitle className="flex flex-col items-start gap-3 text-base sm:flex-row sm:items-center sm:justify-between">
-                <span>{approvalTitle(approval.approval_type)}</span>
+                <Link href={`/approvals/${approval.id}`}>
+                  {approvalTitle(approval.approval_type)}
+                </Link>
                 <Badge variant={STATUS_BADGE[approval.status].variant}>
                   {STATUS_BADGE[approval.status].label}
                 </Badge>
