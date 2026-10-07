@@ -247,6 +247,16 @@ class WorkerSettings(BaseSettings):
         )
 
     @property
+    def zalo_webhook_drain_enabled(self) -> bool:
+        """Drain what the API's webhook queued: webhook mode, never with the
+        poll lane, and with the same token and secret the poll lane needs."""
+        return (
+            self.zalo_updates_mode == "webhook"
+            and bool(self.zalo_bot_token.get_secret_value())
+            and bool(self.zalo_link_secret.get_secret_value())
+        )
+
+    @property
     def zalo_send_enabled(self) -> bool:
         """Send through the bot whenever there is a token to send with, polled
         or webhooked: a webhook host's notifications go out the same way."""
