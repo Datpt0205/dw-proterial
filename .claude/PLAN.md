@@ -9,11 +9,12 @@ git: every slice's commit message, and the pre-split narrative at
 
 ## Areas
 
-| Area                               | File                                | State                   |
-| ---------------------------------- | ----------------------------------- | ----------------------- |
-| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed      |
-| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Shell done; 03–09 next  |
+| Area                               | File                                | State                     |
+| ---------------------------------- | ----------------------------------- | ------------------------- |
+| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed        |
+| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps   |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Shell done; 03–09 next    |
+| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its

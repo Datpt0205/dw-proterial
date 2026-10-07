@@ -93,6 +93,67 @@ external_identities = sa.Table(
     sa.UniqueConstraint("issuer", "subject", name="uq_external_identities_issuer_subject"),
 )
 
+# Providers whose `external_identities` rows are a delivery address (a chat to
+# send to), not a login. A row of one of these never resolves a verified token
+# to a user: whoever controls that chat proved nothing to an identity provider.
+CHANNEL_LINK_PROVIDERS: tuple[str, ...] = ("zalo",)
+
+# One-time nonces behind a channel link token (migration 02930a73bbdf). Identity
+# plane like `external_identities`: keyed by user, no tenant, no RLS — a link
+# belongs to the person, not to one of their workspaces (ADR 0005).
+channel_link_nonces = sa.Table(
+    "channel_link_nonces",
+    metadata,
+    sa.Column("jti", sa.Text, primary_key=True),
+    sa.Column("channel", sa.Text, nullable=False),
+    sa.Column(
+        "user_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    sa.Column("expires_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("used_at", sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.Column(
+        "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+)
+
+# One row per inbound chat message id, claimed before the message is acted on
+# (migration 9f2becb1bf80). Identity plane like the nonces above: the dedupe runs
+# before a tenant is known, so there is no tenant to narrow by.
+channel_inbound_messages = sa.Table(
+    "channel_inbound_messages",
+    metadata,
+    sa.Column("channel", sa.Text, primary_key=True),
+    sa.Column("external_message_id", sa.Text, primary_key=True),
+    sa.Column(
+        "user_id",
+        UUID(as_uuid=True),
+        sa.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    sa.Column(
+        "received_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+    sa.Column("outcome", sa.Text, nullable=False, server_default="processing"),
+)
+
+# A webhook update the API accepted and the worker has not taken yet (channels
+# Z3). Identity plane like the table above: no tenant, no RLS.
+channel_inbound_updates = sa.Table(
+    "channel_inbound_updates",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("channel", sa.Text, nullable=False),
+    sa.Column("payload", JSONB, nullable=False),
+    sa.Column(
+        "received_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+)
+
 plans = sa.Table(
     "plans",
     metadata,
@@ -123,6 +184,23 @@ memberships = sa.Table(
         "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
     ),
     sa.UniqueConstraint("tenant_id", "workspace_id", "user_id", name="uq_memberships_scope_user"),
+)
+
+# The workspace a person chose for their chat commands (migration 9f2becb1bf80).
+# RLS by `app.principal_id`, not by tenant: the row is the person's, and the bot
+# reads it before a tenant is known. The FK to the membership keeps it naming a
+# workspace the person belongs to, and removes it with the membership.
+channel_preferences = sa.Table(
+    "channel_preferences",
+    metadata,
+    sa.Column("user_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
+    sa.ForeignKeyConstraint(
+        ["tenant_id", "workspace_id", "user_id"],
+        ["memberships.tenant_id", "memberships.workspace_id", "memberships.user_id"],
+        ondelete="CASCADE",
+    ),
 )
 
 entitlements = sa.Table(
@@ -170,6 +248,47 @@ approval_decisions = sa.Table(
     sa.Column("outcome", sa.Text, nullable=False),
     sa.Column("comment", sa.Text, nullable=False, server_default=""),
     sa.Column("decided_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    # `web` or `zalo` (CHECK, migration e399be8c0a2d): where the decision came from.
+    sa.Column("channel", sa.Text, nullable=False, server_default="web"),
+)
+
+# A person opened an approval on the portal (channels Z5, ADR 0007):
+# the approval's version and its subject's version at that moment.
+approval_view_receipts = sa.Table(
+    "approval_view_receipts",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("approval_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("user_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("approval_version", sa.Integer, nullable=False),
+    sa.Column("subject_version", sa.Text, nullable=True),
+    sa.Column(
+        "viewed_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+)
+
+# The single-use code a view issued; only its HMAC is stored.
+approval_decision_codes = sa.Table(
+    "approval_decision_codes",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("approval_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("user_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("receipt_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("code_hash", sa.LargeBinary, nullable=False),
+    sa.Column("comment", sa.Text, nullable=False, server_default=""),
+    sa.Column("failed_attempts", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("expires_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("used_at", sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.Column("revoked_at", sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.Column("revoked_reason", sa.Text, nullable=True),
+    sa.Column(
+        "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
 )
 
 audit_events = sa.Table(
@@ -398,6 +517,38 @@ notifications = sa.Table(
         "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
     ),
     sa.Column("read_at", sa.TIMESTAMP(timezone=True), nullable=True),
+)
+
+# A notification on its way out through a linked chat (migration 5a25154e0296,
+# ADR 0006). Rows are created only by `platform.deliver_notification`; the
+# application updates the delivery's own state and nothing else.
+channel_deliveries = sa.Table(
+    "channel_deliveries",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), sa.ForeignKey("workspaces.id"), nullable=False),
+    sa.Column("recipient_user_id", UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=False),
+    sa.Column("channel", sa.Text, nullable=False),
+    sa.Column("source_key", sa.Text, nullable=False),
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("link", sa.Text, nullable=True),
+    sa.Column("status", sa.Text, nullable=False, server_default="pending"),
+    sa.Column("attempts", sa.Integer, nullable=False, server_default=sa.text("0")),
+    sa.Column(
+        "next_attempt_at",
+        sa.TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=sa.text("now()"),
+    ),
+    sa.Column("external_message_id", sa.Text, nullable=True),
+    sa.Column("last_error", sa.Text, nullable=True),
+    sa.Column(
+        "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+    sa.Column(
+        "updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
 )
 
 # Tables whose rows belong to exactly one tenant → RLS enabled + forced.
