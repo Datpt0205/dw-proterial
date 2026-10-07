@@ -9,10 +9,11 @@ are the product's, so its commit messages and this file name the same work.
 Decisions: ADR 0005 (the channel, the link, inbound commands), and the ADRs
 each slice below names.
 
-| Slice | What it is                                                                                                                                                                         | Platform commit |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| Z1    | Link with a single-use `/start` token (`channel_link_nonces`), `/zalo/status`, `/connect`, `/disconnect`, the `zalo_link_poll` lane, link changes audited and announced in the app | item 1          |
-| Z4a   | Inbound foundation: `InboundRouter`, `ChannelCommandRegistry` (empty), message-id dedupe and its retention lane, `find_linked_access` (no role, ceiling), `/zalo/workspace`        | item 1          |
+| Slice | What it is                                                                                                                                                                                                                      | Platform commit |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Z1    | Link with a single-use `/start` token (`channel_link_nonces`), `/zalo/status`, `/connect`, `/disconnect`, the `zalo_link_poll` lane, link changes audited and announced in the app                                              | item 1          |
+| Z4a   | Inbound foundation: `InboundRouter`, `ChannelCommandRegistry` (empty), message-id dedupe and its retention lane, `find_linked_access` (no role, ceiling), `/zalo/workspace`                                                     | item 1          |
+| Z2    | Notifications out through a linked chat: `channel_deliveries` queued by `deliver_notification`, the `channel_delivery` lane (SKIP LOCKED, link and membership re-checked, 1/2/4/8 min backoff, fail at 5), prune lane; ADR 0006 | item 2          |
 
 ## Not here, and why
 
