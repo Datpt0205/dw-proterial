@@ -92,3 +92,23 @@ table that carries `tenant_id`; not built.
   the stranger's chat can run whatever commands the owner's ceiling allows.
   Free text decides no approval: the link flow cannot reach the approval
   service (import contract above).
+
+## Amendment 2026-10-07: a model call in the worker goes through the shared builder
+
+Accepted in the first product (its ADR 0012 amendment for Z4b) and upstreamed
+here. A chat command that reads a message with a model runs in the worker,
+which had no `ModelGateway`.
+
+- **One builder, two composition roots.** `dw_agent_runtime.adapters.model_stack`
+  (`build_model_stack`, `ModelStack`) builds the provider adapters (SSRF guard,
+  no mock in a deployed profile), one `RunBudgetLedger` per process and the
+  usage recorders (daily spend guard, telemetry). The API
+  (`bootstrap/runtime.py`) and the worker
+  (`dw_worker.composition.build_model_stack_for`) both call it; each maps only
+  its own settings onto `ModelProviderConfig`. `apps/worker` does not import
+  `dw_api`.
+- **A one-call gateway checks the plan.** `DailyAllowance`
+  (`dw_agent_runtime.allowance`) is the check the runner made at a run's start
+  (runs per day, spend per day), extracted so the runner and
+  `SingleCallModelGateway` share it. `ModelStack.one_call(allowance)` checks it
+  before every call no run surrounds, then frees that call's ledger entry.
