@@ -29,7 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from dw_agent_runtime.adapters.checkpoint_retention import SqlCheckpointRetention
 from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardRetention
-from dw_kernel.ports import SystemClock, Uuid7Generator
+from dw_connectors.adapters.zalo_bot import ZaloBotClient
+from dw_connectors.adapters.zalo_inbound import ZaloInbound
+from dw_connectors.adapters.zalo_link import link_help
+from dw_connectors.inbound import ChannelCommandRegistry, InboundRouter
+from dw_connectors.ports import ChatSenderPort
+from dw_kernel.ports import SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_knowledge.retention import SqlKnowledgeRetention
 from dw_memory.policy import MemoryWritePolicy
@@ -37,10 +42,22 @@ from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
+from dw_platform.adapters.persistence.channel_inbound import (
+    SqlChannelInboundLedger,
+    SqlChannelInboundRetention,
+)
+from dw_platform.adapters.persistence.channel_preferences import SqlChannelPreferences
+from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.notifications import SqlNotificationRetention
 from dw_platform.adapters.persistence.offboarding import SqlTenantOffboarding
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
+from dw_platform.adapters.persistence.zalo_link_repo import (
+    SqlChannelLinkNonceRetention,
+    SqlZaloLink,
+)
+from dw_platform.application.access_context import AccessContext
+from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.retention_policy import load_retention_policy
 from dw_worker.composition import (
     REPO_ROOT,
@@ -61,6 +78,7 @@ from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
+from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.health import beat
 from dw_worker.settings import WorkerSettings
 
@@ -104,6 +122,56 @@ def _build_memory_vectors(settings: WorkerSettings) -> QdrantMemoryRanker | None
     )
 
 
+def build_channel_commands() -> ChannelCommandRegistry[AccessContext]:
+    """What a linked person can ask for through a chat, in the order it is asked.
+
+    The seam a context plugs its chat commands into. Order is policy, not
+    convenience: a decide command first (a reply to a pending decision is
+    never re-read as a new request), then an open conversation (a product's
+    draft), then intent classification. Empty in the platform, and empty is a
+    working state: a linked person is told "Mình chưa xử lý được tin này".
+    Each command declares its own scope ceiling; the router builds its context
+    from the person's membership cut to that ceiling.
+    """
+    return ChannelCommandRegistry[AccessContext]()
+
+
+def build_zalo_inbound(
+    settings: WorkerSettings,
+    sessions: async_sessionmaker[AsyncSession],
+    bot: ChatSenderPort,
+    clock: UtcClock,
+    commands: ChannelCommandRegistry[AccessContext],
+) -> ZaloInbound:
+    """The Zalo update entry over this deployment's database: the link flow for
+    ``/start``/``/stop``, the inbound router for everything else.
+
+    One construction, so the poll lane here and any test of it run the same
+    wiring; the webhook (Z3) builds the same object in the API and calls
+    ``handle`` with what it was POSTed.
+    """
+    zalo_link = SqlZaloLink(sessions)
+    return ZaloInbound(
+        link_secret=settings.zalo_link_secret.get_secret_value(),
+        store=zalo_link,
+        sender=bot,
+        clock=clock,
+        product_name=settings.product_name,
+        router=InboundRouter(
+            identities=zalo_link,
+            ledger=SqlChannelInboundLedger(sessions),
+            access=LinkedUserAccess(
+                preferences=SqlChannelPreferences(sessions),
+                lookup=SqlMembershipLookup(sessions),
+            ),
+            commands=commands,
+            sender=bot,
+            unlinked_reply=link_help(settings.product_name),
+            settings_url=f"{settings.public_web_url.rstrip('/')}/settings",
+        ),
+    )
+
+
 def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     """Wire the lanes this process hosts, skipping any whose infra is absent."""
     registry = ConsumerRegistry()
@@ -144,6 +212,13 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     spend_guard_retention: RetentionPrunePort | None = None
     # The in-app inbox's own bound: 90 days, the database's constant.
     notifications_retention: RetentionPrunePort | None = None
+    # One-time channel link nonces: a day past expiry, then gone.
+    channel_link_nonces_retention: RetentionPrunePort | None = None
+    # Inbound chat message ids: seven days, then gone (INBOUND_MESSAGE_RETENTION).
+    channel_inbound_messages_retention: RetentionPrunePort | None = None
+    # The Zalo self-link poll: only with a database, a bot token, a link secret
+    # and ZALO_UPDATES_MODE=poll.
+    zalo_poll_consumer: Callable[[], Awaitable[None]] | None = None
     # Ops hardening Phase 4. Needs object storage too, not just a database -
     # export/purge touch three buckets and the vector index alongside Postgres.
     offboarding_consumer: Callable[[], Awaitable[None]] | None = None
@@ -210,6 +285,13 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         )
         spend_guard_retention = SqlSpendGuardRetention(session_factory=sessions, clock=clock)
         notifications_retention = SqlNotificationRetention(session_factory=sessions)
+        channel_link_nonces_retention = SqlChannelLinkNonceRetention(session_factory=sessions)
+        channel_inbound_messages_retention = SqlChannelInboundRetention(session_factory=sessions)
+        if settings.zalo_poll_enabled:
+            bot = ZaloBotClient(bot_token=settings.zalo_bot_token.get_secret_value())
+            zalo_poll_consumer = build_zalo_poll_consumer(
+                bot, build_zalo_inbound(settings, sessions, bot, clock, build_channel_commands())
+            )
         if settings.s3_endpoint_url:
             offboarding_consumer = build_offboarding_consumer(
                 TenantOffboardingLane(
@@ -247,6 +329,13 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # ---- BOUNDED CONTEXT LANES REGISTER HERE -----------------------------
     # build_<context>_components(settings) → registry.register(...), and append
     # a ReapTarget per job queue the context owns.
+
+    # ---- channels ----------------------------------------------------------
+    # The Zalo self-link poll. Its own long-poll paces it; the interval only
+    # spaces retries after a failed tick.
+    if zalo_poll_consumer is not None:
+        registry.register("zalo_link_poll", zalo_poll_consumer)
+        logger.info("zalo link poll registered")
 
     # ---- periodic repair --------------------------------------------------
     # Registered last because both sweeps act on what everything above created,
@@ -291,6 +380,18 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "notifications_retention",
             build_retention_consumer(notifications_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if channel_link_nonces_retention is not None:
+        registry.register(
+            "channel_link_nonces_retention",
+            build_retention_consumer(channel_link_nonces_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if channel_inbound_messages_retention is not None:
+        registry.register(
+            "channel_inbound_messages_retention",
+            build_retention_consumer(channel_inbound_messages_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     if offboarding_consumer is not None:

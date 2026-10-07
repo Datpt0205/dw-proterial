@@ -51,10 +51,12 @@ from dw_api.bootstrap.storage import (
 from dw_api.bootstrap.telemetry import build_telemetry
 from dw_api.health import HealthService, database_probe, qdrant_probe, redis_probe
 from dw_api.settings import ApiSettings
+from dw_connectors.adapters.zalo_link import ZaloLinking
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_platform.adapters.cache import NullCache, ValkeyCache
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
+from dw_platform.adapters.persistence.channel_preferences import SqlChannelPreferences
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.hierarchy_repo import SqlHierarchyRepository
 from dw_platform.adapters.persistence.idempotency_store import SqlIdempotencyStore
@@ -67,6 +69,7 @@ from dw_platform.adapters.persistence.separation_of_duties_repo import (
     SqlSeparationOfDutiesRepository,
 )
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
+from dw_platform.adapters.persistence.zalo_link_repo import SqlZaloLink
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
@@ -190,6 +193,16 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
         SqlSeparationOfDutiesRepository(session_factory), authorization, clock, ids
     )
     container.notifications = NotificationService(SqlNotificationRepository(session_factory))
+    # The user's own Zalo link, on the request pool (`dw_app`), which holds the
+    # identity-plane grants it needs; never the provisioner engine.
+    if settings.zalo_link_enabled:
+        container.zalo_linking = ZaloLinking(
+            store=SqlZaloLink(session_factory),
+            link_secret=settings.zalo_link_secret.get_secret_value(),
+            clock=clock,
+            bot_link=settings.zalo_bot_link,
+        )
+        container.channel_preferences = SqlChannelPreferences(session_factory)
 
     # ---- provisioning ----------------------------------------------------
     # A second engine as the provisioner role: writes across tenants but holds

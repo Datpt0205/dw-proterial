@@ -88,6 +88,8 @@ def bare_settings(**overrides: object) -> WorkerSettings:
         "qdrant_url": None,
         "langfuse_enabled": False,
         "otel_endpoint": None,
+        "zalo_bot_token": "",
+        "zalo_link_secret": "",
     }
     absent.update(overrides)
     return WorkerSettings(**absent)  # type: ignore[arg-type]
@@ -99,7 +101,7 @@ def test_a_host_with_no_infrastructure_wires_no_lane() -> None:
 
 
 def test_only_the_platform_lanes_are_wired() -> None:
-    """Seven lanes a database alone is enough for, and no more.
+    """Nine lanes a database alone is enough for, and no more.
 
     The outbox, and retention twice. Retention joined the platform set the day
     memory got a lifecycle: `memory.items` is a platform table, so the platform
@@ -124,6 +126,11 @@ def test_only_the_platform_lanes_are_wired() -> None:
     `checkpoint_retention` is the seventh, and reads the policy file again:
     a checkpoint holds a conversation verbatim, so how long it stays is a
     compliance answer like memory's (`checkpoints` in the same file).
+    `channel_link_nonces_retention` is the eighth: one-time link tokens a day
+    past their expiry, a technical bound like the spend guard's.
+    `channel_inbound_messages_retention` is the ninth: inbound chat message ids
+    kept seven days for the dedupe (`INBOUND_MESSAGE_RETENTION`), its own lane
+    because each pruner is.
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
@@ -137,6 +144,8 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "spend_guard_retention",
         "notifications_retention",
         "checkpoint_retention",
+        "channel_link_nonces_retention",
+        "channel_inbound_messages_retention",
     }
 
 

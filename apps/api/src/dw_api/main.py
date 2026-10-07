@@ -40,6 +40,7 @@ from dw_api.routes.v1.memory import router as memory_router
 from dw_api.routes.v1.notifications import router as notifications_router
 from dw_api.routes.v1.platform import router as platform_router
 from dw_api.routes.v1.runs import router as runs_router
+from dw_api.routes.v1.zalo import router as zalo_router
 
 _LOG = logging.getLogger(__name__)
 
@@ -137,6 +138,11 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
         integrations_router,
     ):
         app.include_router(router, prefix="/api/v1")
+
+    # The user's own Zalo link: mounted only when the bot token and the link
+    # secret are both configured, so an unconfigured deployment answers 404.
+    if container.zalo_linking is not None:
+        app.include_router(zalo_router, prefix="/api/v1")
 
     # Platform provisioning: mounted only when the provisioner connection is
     # configured, so environments that never provision stay lean.
