@@ -73,6 +73,7 @@ from dw_platform.adapters.persistence.separation_of_duties_repo import (
     SqlSeparationOfDutiesRepository,
 )
 from dw_platform.adapters.persistence.support_grants import SqlSupportGrantRepository
+from dw_platform.adapters.persistence.tenant_members import SqlTenantMembersRepository
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.adapters.persistence.zalo_link_repo import SqlZaloLink
 from dw_platform.application.admin_console import AdminConsoleService
@@ -90,6 +91,7 @@ from dw_platform.application.notifications import NotificationService
 from dw_platform.application.provisioning import ProvisioningService
 from dw_platform.application.separation_of_duties import SeparationOfDutiesService
 from dw_platform.application.support_access import SupportGrantService
+from dw_platform.application.tenant_members import TenantMembersService
 
 _LOG = logging.getLogger("dw_api.bootstrap")
 
@@ -197,6 +199,9 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     container.grant_membership = GrantMembershipHandler(membership_repo, authorization, clock, ids)
     container.revoke_membership = RevokeMembershipHandler(
         membership_repo, authorization, clock, ids
+    )
+    container.tenant_members = TenantMembersService(
+        SqlTenantMembersRepository(session_factory), authorization, clock, ids
     )
     container.admin_console = AdminConsoleService(
         SqlAdminConsoleRepository(session_factory), authorization, clock, ids

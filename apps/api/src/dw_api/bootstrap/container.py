@@ -74,6 +74,7 @@ from dw_platform.application.ports import (
 from dw_platform.application.provisioning import ProvisioningService
 from dw_platform.application.separation_of_duties import SeparationOfDutiesService
 from dw_platform.application.support_access import SupportGrantService, SupportScopeCatalog
+from dw_platform.application.tenant_members import TenantMembersService
 
 
 @dataclass(frozen=True)
@@ -148,6 +149,7 @@ class ApiContainer:
     workspace_directory: WorkspaceDirectoryPort | None = None
     grant_membership: GrantMembershipHandler | None = None
     revoke_membership: RevokeMembershipHandler | None = None
+    tenant_members: TenantMembersService | None = None
     admin_console: AdminConsoleService | None = None
     hierarchy: HierarchyService | None = None
     separation_of_duties: SeparationOfDutiesService | None = None

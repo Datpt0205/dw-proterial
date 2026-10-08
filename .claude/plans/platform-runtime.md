@@ -291,6 +291,13 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   (`scopes_of`, the granter's current scopes). Open: the `/platform` console
   tables (web), conflict of interest at assignment.
 
+- **`tenant-members-and-invitations/01`:** `GET /admin/members` (tenant-wide,
+  `vi-VN-x-icu` order, measured present), `PUT /admin/members/{id}/memberships`
+  (administrative roles kept, `plan_memberships`), `POST /admin/invitations`
+  (user without a sign-in, `status=invited` until the first sign-in links by
+  email), `status` on `/directory/members` from one SQL expression. No email
+  is sent (P1). Open: email linking before customer SSO is brokered.
+
 ## Deliberately not taken
 
 - **Vector or graph recall deciding the recalled set.**

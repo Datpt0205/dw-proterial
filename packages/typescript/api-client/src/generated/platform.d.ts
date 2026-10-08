@@ -40,7 +40,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/members": {
+    "/api/v1/admin/invitations": {
         parameters: {
             query?: never;
             header?: never;
@@ -48,6 +48,32 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /**
+         * Invite Member
+         * @description Create the person (no sign-in yet) and their memberships. No email is
+         *     sent: the admin tells the person, who then signs in with that email.
+         */
+        post: operations["invite_member_api_v1_admin_invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Members
+         * @description Everyone in the caller's tenant, by name (Vietnamese collation), with
+         *     their roles in each workspace.
+         */
+        get: operations["list_members_api_v1_admin_members_get"];
         put?: never;
         /** Grant Member */
         post: operations["grant_member_api_v1_admin_members_post"];
@@ -69,6 +95,29 @@ export interface paths {
         post?: never;
         /** Revoke Member */
         delete: operations["revoke_member_api_v1_admin_members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/members/{user_id}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Memberships
+         * @description Replace the person's non-administrative roles, workspace by workspace,
+         *     in one transaction. A workspace in the body without a membership gets one;
+         *     one left out keeps only its administrative roles, and goes without any.
+         *     Answers the person's memberships as they now are (empty: none left).
+         */
+        put: operations["set_memberships_api_v1_admin_members__user_id__memberships_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1655,6 +1704,15 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** InviteMemberRequest */
+        InviteMemberRequest: {
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Memberships */
+            memberships: components["schemas"]["WorkspaceRolesBody"][];
+        };
         /** KnowledgeDocumentView */
         KnowledgeDocumentView: {
             /** Chunk Count */
@@ -1710,6 +1768,19 @@ export interface components {
              */
             workspace_id: string;
         };
+        /**
+         * MemberMembershipsView
+         * @description A person's memberships in this tenant after a change; empty when none is left.
+         */
+        MemberMembershipsView: {
+            /** Memberships */
+            memberships: components["schemas"]["MemberWorkspaceView"][];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** MemberRefView */
         MemberRefView: {
             /** Display Name */
@@ -1721,6 +1792,18 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /** MemberWorkspaceView */
+        MemberWorkspaceView: {
+            /** Role Keys */
+            role_keys: string[];
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
         };
         /** MemoryCandidateView */
         MemoryCandidateView: {
@@ -2045,6 +2128,11 @@ export interface components {
             /** Manager User Id */
             manager_user_id?: string | null;
         };
+        /** SetMembershipsRequest */
+        SetMembershipsRequest: {
+            /** Memberships */
+            memberships: components["schemas"]["WorkspaceRolesBody"][];
+        };
         /** SetPermissionSetsBody */
         SetPermissionSetsBody: {
             /** Permission Set Keys */
@@ -2214,6 +2302,22 @@ export interface components {
              */
             user_id: string;
         };
+        /** TenantMemberView */
+        TenantMemberView: {
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string | null;
+            /** Memberships */
+            memberships: components["schemas"]["MemberWorkspaceView"][];
+            /** Status */
+            status: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** TenantSettingsView */
         TenantSettingsView: {
             /** Locale */
@@ -2352,6 +2456,8 @@ export interface components {
             permission_set_keys: string[];
             /** Role Keys */
             role_keys: string[];
+            /** Status */
+            status: string;
             /**
              * User Id
              * Format: uuid
@@ -2389,6 +2495,16 @@ export interface components {
             name: string;
             /** Slug */
             slug: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** WorkspaceRolesBody */
+        WorkspaceRolesBody: {
+            /** Role Keys */
+            role_keys: string[];
             /**
              * Workspace Id
              * Format: uuid
@@ -2510,6 +2626,62 @@ export interface operations {
             };
         };
     };
+    invite_member_api_v1_admin_invitations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRefView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_api_v1_admin_members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantMemberView"][];
+                };
+            };
+        };
+    };
     grant_member_api_v1_admin_members_post: {
         parameters: {
             query?: never;
@@ -2568,6 +2740,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_memberships_api_v1_admin_members__user_id__memberships_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMembershipsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberMembershipsView"];
+                };
             };
             /** @description Validation Error */
             422: {

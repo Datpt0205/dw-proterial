@@ -1156,6 +1156,38 @@
         "title": "IntegrationView",
         "type": "object"
       },
+      "InviteMemberRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 4,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRolesBody"
+            },
+            "minItems": 1,
+            "title": "Memberships",
+            "type": "array"
+          }
+        },
+        "required": [
+          "display_name",
+          "email",
+          "memberships"
+        ],
+        "title": "InviteMemberRequest",
+        "type": "object"
+      },
       "KnowledgeDocumentView": {
         "properties": {
           "chunk_count": {
@@ -1278,6 +1310,29 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MemberMembershipsView": {
+        "description": "A person's memberships in this tenant after a change; empty when none is left.",
+        "properties": {
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/MemberWorkspaceView"
+            },
+            "title": "Memberships",
+            "type": "array"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "memberships"
+        ],
+        "title": "MemberMembershipsView",
+        "type": "object"
+      },
       "MemberRefView": {
         "properties": {
           "display_name": {
@@ -1307,6 +1362,33 @@
           "display_name"
         ],
         "title": "MemberRefView",
+        "type": "object"
+      },
+      "MemberWorkspaceView": {
+        "properties": {
+          "role_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Role Keys",
+            "type": "array"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_name": {
+            "title": "Workspace Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "workspace_name",
+          "role_keys"
+        ],
+        "title": "MemberWorkspaceView",
         "type": "object"
       },
       "MemoryCandidateView": {
@@ -2084,6 +2166,23 @@
         "title": "SetManagerBody",
         "type": "object"
       },
+      "SetMembershipsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRolesBody"
+            },
+            "title": "Memberships",
+            "type": "array"
+          }
+        },
+        "required": [
+          "memberships"
+        ],
+        "title": "SetMembershipsRequest",
+        "type": "object"
+      },
       "SetPermissionSetsBody": {
         "properties": {
           "permission_set_keys": {
@@ -2555,6 +2654,50 @@
         "title": "SupportStaffView",
         "type": "object"
       },
+      "TenantMemberView": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "memberships": {
+            "items": {
+              "$ref": "#/components/schemas/MemberWorkspaceView"
+            },
+            "title": "Memberships",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "email",
+          "status",
+          "memberships"
+        ],
+        "title": "TenantMemberView",
+        "type": "object"
+      },
       "TenantSettingsView": {
         "properties": {
           "locale": {
@@ -2936,6 +3079,10 @@
             "title": "Role Keys",
             "type": "array"
           },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
           "user_id": {
             "format": "uuid",
             "title": "User Id",
@@ -2948,7 +3095,8 @@
           "email",
           "role_keys",
           "permission_set_keys",
-          "department"
+          "department",
+          "status"
         ],
         "title": "WorkspaceMemberView",
         "type": "object"
@@ -3031,6 +3179,29 @@
           "name"
         ],
         "title": "WorkspaceRefView",
+        "type": "object"
+      },
+      "WorkspaceRolesBody": {
+        "additionalProperties": false,
+        "properties": {
+          "role_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Role Keys",
+            "type": "array"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "role_keys"
+        ],
+        "title": "WorkspaceRolesBody",
         "type": "object"
       },
       "WorkspaceSummaryView": {
@@ -3246,7 +3417,93 @@
         ]
       }
     },
+    "/api/v1/admin/invitations": {
+      "post": {
+        "description": "Create the person (no sign-in yet) and their memberships. No email is\nsent: the admin tells the person, who then signs in with that email.",
+        "operationId": "invite_member_api_v1_admin_invitations_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberRefView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Invite Member",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/members": {
+      "get": {
+        "description": "Everyone in the caller's tenant, by name (Vietnamese collation), with\ntheir roles in each workspace.",
+        "operationId": "list_members_api_v1_admin_members_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TenantMemberView"
+                  },
+                  "title": "Response List Members Api V1 Admin Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Members",
+        "tags": [
+          "admin"
+        ]
+      },
       "post": {
         "operationId": "grant_member_api_v1_admin_members_post",
         "parameters": [
@@ -3366,6 +3623,78 @@
           }
         },
         "summary": "Revoke Member",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/members/{user_id}/memberships": {
+      "put": {
+        "description": "Replace the person's non-administrative roles, workspace by workspace,\nin one transaction. A workspace in the body without a membership gets one;\none left out keeps only its administrative roles, and goes without any.\nAnswers the person's memberships as they now are (empty: none left).",
+        "operationId": "set_memberships_api_v1_admin_members__user_id__memberships_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMembershipsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberMembershipsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Memberships",
         "tags": [
           "admin"
         ]
