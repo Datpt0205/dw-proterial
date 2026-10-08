@@ -33,6 +33,7 @@ import { errorMessage } from "../../lib/error-message";
 import { slugify } from "../../lib/slug";
 import { tenantStatus } from "../../lib/tenant-status";
 import { EmailPicker, type EmailOption } from "../../components/email-picker";
+import { SupportConsole } from "../../components/platform/support-console";
 
 export default function PlatformPage() {
   const { isPlatformOperator } = useAuth();
@@ -104,6 +105,7 @@ function PlatformConsole() {
           emailOptions={emailOptions}
           onChanged={loadOperators}
         />
+        <SupportConsole emailOptions={emailOptions} />
       </Flex>
     </div>
   );

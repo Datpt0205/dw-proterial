@@ -172,3 +172,13 @@ test_support_access_privileges`, API unit `test_support_endpoint.py` (5) và
   taxonomy. (3) không có secret mới. (4) không có header mới ở ticket này (header
   `X-DW-Support-Grant` là ticket 02, phải vào `_CORS_HEADERS`). (5) không có URL ra ngoài.
   (6) không có image hay dependency mới.
+- 8/10/2026, bước 7 (console `/platform`, nhánh `feat/antd-everywhere`): hai thẻ
+  antd "Yêu cầu hỗ trợ chờ giao người" (mã, khách và workspace, phạm vi, thời
+  hạn, lý do, giờ gửi giờ Việt Nam, `Select` chỉ gồm nhân viên trong
+  `support_staff` rồi "Giao") và "Nhân viên hỗ trợ" (thêm theo email kèm ghi
+  chú, gỡ có hộp xác nhận). Không cột nội dung hay số liệu nghiệp vụ. Client
+  `listSupportStaff`, `addSupportStaff`, `removeSupportStaff`,
+  `listSupportRequests`, `assignSupportRequest`, mỗi kiểu có dòng `SameType`
+  so với `generated/platform.d.ts`. Vitest `support-console.test.tsx`: nút
+  "Giao" khóa tới khi chọn người, chỉ một lựa chọn (đội hỗ trợ), gọi assign
+  đúng id.
