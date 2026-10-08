@@ -6,7 +6,7 @@ import { HomeOutlined } from "@ant-design/icons";
 import { PageHeader, RegionState } from "@dw/ui";
 import { useAuth } from "../lib/auth/auth-context";
 import { NAV_ITEMS } from "../lib/nav/registry";
-import { hasAnyRole } from "../lib/nav/roles";
+import { isNavItemVisible } from "../lib/nav/visibility";
 
 /**
  * The platform landing page.
@@ -23,9 +23,7 @@ export default function HomePage() {
   const destinations = NAV_ITEMS.filter(
     (item) =>
       item.href !== "/" &&
-      (!item.operatorOnly || isPlatformOperator) &&
-      (!item.scope || hasScope(item.scope)) &&
-      (!item.roles || hasAnyRole(roles, item.roles)),
+      isNavItemVisible(item, { isPlatformOperator, hasScope, roles }),
   );
 
   return (

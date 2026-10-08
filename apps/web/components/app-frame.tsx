@@ -10,7 +10,7 @@ import { useAuth } from "../lib/auth/auth-context";
 import { AUTH_MODE } from "../lib/auth/config";
 import { useNavBadges } from "../lib/nav/badges";
 import { NAV_ITEMS } from "../lib/nav/registry";
-import { hasAnyRole } from "../lib/nav/roles";
+import { isNavItemVisible } from "../lib/nav/visibility";
 import { LoginScreen } from "./login-screen";
 import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
@@ -75,16 +75,11 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const router = useRouter();
   const badges = useNavBadges();
 
-  // The nav the user can actually reach. Three filters: scope is the
-  // permission the API enforces anyway, role is who the page is for, and
-  // operatorOnly is the cross-tenant provisioning area.
+  // The nav the user can actually reach (lib/nav/visibility owns the rule).
   const visibleNav = useMemo(
     () =>
-      NAV_ITEMS.filter(
-        (item) =>
-          (!item.operatorOnly || isPlatformOperator) &&
-          (!item.scope || hasScope(item.scope)) &&
-          (!item.roles || hasAnyRole(roles, item.roles)),
+      NAV_ITEMS.filter((item) =>
+        isNavItemVisible(item, { isPlatformOperator, hasScope, roles }),
       ),
     [isPlatformOperator, hasScope, roles],
   );
