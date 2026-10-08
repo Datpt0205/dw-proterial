@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useMemo, type ReactNode } from "react";
-import { cn } from "@dw/ui";
 
 /**
  * An answer, rendered as the document it already is.
@@ -33,6 +32,11 @@ import { cn } from "@dw/ui";
  */
 
 /** A `[text](href)` whose href is not one of these is drawn as plain text. */
+/** Joins the class names that are set. */
+function cn(...names: (string | false | null | undefined)[]): string {
+  return names.filter(Boolean).join(" ");
+}
+
 const SAFE_LINK = /^(https?:\/\/|\/)/i;
 
 type Block =

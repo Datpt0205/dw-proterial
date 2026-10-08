@@ -19,3 +19,28 @@ export function errorMessage(error: unknown): string {
 export function errorCode(error: unknown): string | null {
   return error instanceof ApiError ? error.body.code : null;
 }
+
+/**
+ * A failure, as the shared `RegionState` reads it: the server's code and
+ * sentence (never `"<code>: …"`), or `"offline"` when the browser has no
+ * network and `fetch` could not even start.
+ */
+export function toRegionError(
+  error: unknown,
+): { code: string; message: string; requestId?: string | null } | "offline" {
+  if (error instanceof ApiError) {
+    return {
+      code: error.body.code,
+      message: error.body.message,
+      requestId: error.body.request_id,
+    };
+  }
+  if (
+    error instanceof TypeError &&
+    typeof navigator !== "undefined" &&
+    navigator.onLine === false
+  ) {
+    return "offline";
+  }
+  return { code: "internal", message: errorMessage(error) };
+}

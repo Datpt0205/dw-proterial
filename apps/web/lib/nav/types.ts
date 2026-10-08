@@ -1,10 +1,11 @@
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
 
 export interface NavItem {
   href: string;
   label: string;
   hint: string;
-  icon: LucideIcon;
+  /** An `@ant-design/icons` component. */
+  icon: ComponentType;
   exact?: boolean;
   /** Scope required to see this item (omit = always visible). */
   scope?: string;

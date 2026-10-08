@@ -190,6 +190,44 @@ Layout, Menu, Drawer, Grid) is on every page. That is inside the accepted
 out. On this Windows host the standalone step fails with a symlink EPERM,
 before this change and after it. CI builds on Linux.
 
+## antd everywhere (2026-10-08, Đạt: "phải dùng antd hết")
+
+Branch `feat/antd-everywhere`. The page-by-page rule is retired: every platform
+page and shell piece is rebuilt on antd v6 in one sweep (`CLAUDE.md` "Web UI").
+
+- **Removed:** the 12 shadcn modules of `@dw/ui` (alert, badge, button, card,
+  input, label, separator, skeleton, switch, table, tabs, `cn`) and their Radix,
+  class-variance-authority, clsx and tailwind-merge dependencies; in `apps/web`
+  sonner, lucide-react, radix-ui, cva, `cn`, and the unreachable assistant-ui
+  chat tree (`components/assistant-ui`, `components/ui`, `data-table`,
+  `country-select`, `source-icon`, `lib/hooks`, `lib/range`, `lib/countries`,
+  `components.json`, with `@assistant-ui/*`, `@tanstack/react-table`,
+  `beautiful-mermaid`, `react-shiki`, `remark-gfm`, `tw-shimmer`, `zustand`).
+  No page imported any of it since the Supply Chain context left on 2026-09-29.
+  A product that wants a chat thread builds it on antd.
+- **Added to `@dw/ui`:** `PageHeader` (one `<h1>`, breadcrumb named "Vị trí",
+  sizes from the theme's tokens) and `RegionState` with `ERROR_STATE`
+  (`satisfies Record<ErrorCodeValue, RegionKind>`) and `stateForError`; an
+  unknown code reads as `error`. `@dw/ui` now depends on `@dw/contracts` for
+  the type. `apps/web/components/load-error.tsx` draws a failed load through
+  it, with "Thử lại" only for a real failure.
+- **Notices:** `App.useApp()` everywhere (`message`, `modal.confirm` with a
+  danger OK and focus on "Hủy"); `useCachedResource`/`useCachedPages` print
+  the server's sentence, not `"<code>: …"`.
+- **One owner per label:** approval status (`lib/approvals/status.ts`, list
+  and detail shared it twice), tenant status (`lib/tenant-status.ts`, from
+  `ck_tenants_status`), `slugify` (`lib/slug.ts`, two copies; now maps `đ`).
+  `/admin` reads the role catalog from `GET /admin/roles` instead of a typed
+  copy that had already drifted from `platform.roles`.
+- **Guard:** `apps/web/lib/__tests__/antd-only.test.ts` reads every source and
+  both manifests of `apps/web` and `@dw/ui`; ESLint `no-restricted-imports`
+  also forbids the static `message`/`notification`. Mutation-checked: an
+  `@radix-ui/react-slot` import dropped into `@dw/ui/src` turned it red, and
+  so did `sonner` put back in `apps/web/package.json`.
+- `lib/dates.ts` now formats in `Asia/Ho_Chi_Minh` through dayjs (it used the
+  browser's zone); the shapes are unchanged.
+- antd 6.6 deprecates `List` (use `Listy`); rows are plain lists instead.
+
 ## Open
 
 - `lib/dates.ts` on dayjs, in Asia/Ho_Chi_Minh with the time first, and

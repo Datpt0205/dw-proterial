@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import type { ReactNode } from "react";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
-import { Toaster } from "sonner";
 import { THEME_CSS_VAR_CLASS, ThemeProvider } from "@dw/ui";
 import { AppFrame } from "../components/app-frame";
 import { AuthProvider } from "../lib/auth/auth-context";
@@ -33,7 +32,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <AuthProvider>
               <AppFrame>{children}</AppFrame>
             </AuthProvider>
-            <Toaster richColors position="bottom-right" />
           </ThemeProvider>
         </AntdRegistry>
       </body>

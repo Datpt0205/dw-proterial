@@ -23,14 +23,18 @@ const ROLE_LABELS: Record<string, string> = {
   platform_admin: "Tenant Admin",
 };
 
-/** Label for a single role key; unknown keys fall back to the raw key. */
-export function roleLabel(key: string): string {
-  return ROLE_LABELS[key] ?? key;
+/** How a platform operator (creates tenants, ADR-002) is named; not a role key. */
+export const OPERATOR_LABEL = "Platform Admin";
+
+/** Label for a single role key; an unknown key falls back to the name the
+ * role catalog gave it, then to the raw key. */
+export function roleLabel(key: string, catalogName?: string): string {
+  return ROLE_LABELS[key] ?? catalogName ?? key;
 }
 
 /** Deduplicated, comma-joined labels for a member's role keys. */
 export function roleLabels(keys: readonly string[]): string {
-  return [...new Set(keys.map(roleLabel))].join(", ");
+  return [...new Set(keys.map((key) => roleLabel(key)))].join(", ");
 }
 
 /** True when the user holds at least one of the roles an item asks for. */
