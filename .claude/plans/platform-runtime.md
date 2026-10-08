@@ -199,7 +199,8 @@ Mốc 6 (running many customers) is half done:
       tenant's own copy of a policy document;
     - `SqlPendingApprovalQuery`: a context counting its own pending
       approvals by type prefix;
-    - `scope_holders.py`: who holds a scope, for routing work to people;
+    - `scope_holders.py`: `holding` and `holds` (who holds a scope, for
+      routing work to people); only `scopes_of` has a caller (support grants);
     - `required_scope` on an approval: no platform node stamps one; a
       context's graph puts it in its interrupt payload;
     - `decided_by` in the resume payload: no platform graph reads it;
@@ -268,6 +269,34 @@ recorded in each ticket.
 - **`channel-delivery-expiry/01`:** a delivery pending past
   `retention@1.7.0.yaml` `channel_deliveries.pending_expiry_days` (7) fails
   as `channel_unconfigured`, audited (`983b509c3f0f`, ADR 0006 amendment).
+
+## Platform tickets (2026-10-08, `feat/platform-tickets`)
+
+Đạt delegated the open calls; each is decided provisionally and recorded in
+its ticket's Comments.
+
+- **`scope-holder-check/01`, `/02`:** `SqlScopeHolders.holds(tenant, ws,
+user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
+  `AccessContext`, both reading one membership query (`_members`) and
+  `effective_scopes`. Integration-tested on `dw_app`, mutation-checked.
+  Still no production caller (the "waiting for their first context" list
+  above).
+
+- **`support-access/01`:** customer-granted support grants (ADR 0024,
+  `af8ee878b4ab`): `support_staff`, `support_grants` with the status machine
+  in a trigger, a membership trigger refusing support staff on every path,
+  `SupportScopeCatalog` (empty on `main`), `SupportGrantService`,
+  `/support/*` and `/platform/support-*`. Refusals carry
+  `details.reason_code`. `SqlScopeHolders` now has its first caller
+  (`scopes_of`, the granter's current scopes). Open: the `/platform` console
+  tables (web), conflict of interest at assignment.
+
+- **`tenant-members-and-invitations/01`:** `GET /admin/members` (tenant-wide,
+  `vi-VN-x-icu` order, measured present), `PUT /admin/members/{id}/memberships`
+  (administrative roles kept, `plan_memberships`), `POST /admin/invitations`
+  (user without a sign-in, `status=invited` until the first sign-in links by
+  email), `status` on `/directory/members` from one SQL expression. No email
+  is sent (P1). Open: email linking before customer SSO is brokered.
 
 ## Deliberately not taken
 
