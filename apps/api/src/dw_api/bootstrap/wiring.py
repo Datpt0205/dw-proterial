@@ -68,9 +68,11 @@ from dw_platform.adapters.persistence.membership_admin import SqlMembershipAdmin
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
 from dw_platform.adapters.persistence.provisioning_repo import SqlProvisioningRepository
+from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.separation_of_duties_repo import (
     SqlSeparationOfDutiesRepository,
 )
+from dw_platform.adapters.persistence.support_grants import SqlSupportGrantRepository
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.adapters.persistence.zalo_link_repo import SqlZaloLink
 from dw_platform.application.admin_console import AdminConsoleService
@@ -87,6 +89,7 @@ from dw_platform.application.membership_admin import (
 from dw_platform.application.notifications import NotificationService
 from dw_platform.application.provisioning import ProvisioningService
 from dw_platform.application.separation_of_duties import SeparationOfDutiesService
+from dw_platform.application.support_access import SupportGrantService
 
 _LOG = logging.getLogger("dw_api.bootstrap")
 
@@ -99,6 +102,14 @@ def _asyncpg_dsn(url: str) -> str:
 
 
 def build_container(settings: ApiSettings | None = None) -> ApiContainer:
+    container = _build_container(settings)
+    # Every context has registered its support scope sets by now (the seam
+    # below); nothing may add one while the process serves requests.
+    container.support_catalog.freeze()
+    return container
+
+
+def _build_container(settings: ApiSettings | None) -> ApiContainer:
     settings = settings or ApiSettings()
     settings.validate_for_profile()
 
@@ -197,6 +208,13 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
         SqlSeparationOfDutiesRepository(session_factory), authorization, clock, ids
     )
     container.notifications = NotificationService(SqlNotificationRepository(session_factory))
+    container.support_grants = SupportGrantService(
+        repo=SqlSupportGrantRepository(session_factory),
+        member_scopes=SqlScopeHolders(session_factory),
+        catalog=container.support_catalog,
+        clock=clock,
+        ids=ids,
+    )
     # The user's own Zalo link, on the request pool (`dw_app`), which holds the
     # identity-plane grants it needs; never the provisioner engine.
     if settings.zalo_link_enabled:
@@ -287,7 +305,9 @@ def build_container(settings: ApiSettings | None = None) -> ApiContainer:
     # ---- BOUNDED CONTEXTS PLUG IN HERE -----------------------------------
     # Build your context from `container.runtime` (the RuntimeSeam) and attach
     # its handlers, then mount its router in `main.create_app`. Nothing above
-    # this line may import a business package.
+    # this line may import a business package. A context offering support
+    # access registers here too: `container.support_catalog.register(...)`
+    # and `.register_resource(...)` (ADR 0024).
 
     return container
 

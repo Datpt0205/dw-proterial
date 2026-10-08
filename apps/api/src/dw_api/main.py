@@ -40,6 +40,7 @@ from dw_api.routes.v1.memory import router as memory_router
 from dw_api.routes.v1.notifications import router as notifications_router
 from dw_api.routes.v1.platform import router as platform_router
 from dw_api.routes.v1.runs import router as runs_router
+from dw_api.routes.v1.support import router as support_router
 from dw_api.routes.v1.zalo import router as zalo_router
 from dw_api.routes.v1.zalo import webhook_router as zalo_webhook_router
 
@@ -137,6 +138,7 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
         knowledge_router,
         memory_router,
         integrations_router,
+        support_router,
     ):
         app.include_router(router, prefix="/api/v1")
 

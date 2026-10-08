@@ -199,7 +199,8 @@ Mốc 6 (running many customers) is half done:
       tenant's own copy of a policy document;
     - `SqlPendingApprovalQuery`: a context counting its own pending
       approvals by type prefix;
-    - `scope_holders.py`: who holds a scope, for routing work to people;
+    - `scope_holders.py`: `holding` and `holds` (who holds a scope, for
+      routing work to people); only `scopes_of` has a caller (support grants);
     - `required_scope` on an approval: no platform node stamps one; a
       context's graph puts it in its interrupt payload;
     - `decided_by` in the resume payload: no platform graph reads it;
@@ -280,6 +281,15 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   `effective_scopes`. Integration-tested on `dw_app`, mutation-checked.
   Still no production caller (the "waiting for their first context" list
   above).
+
+- **`support-access/01`:** customer-granted support grants (ADR 0024,
+  `af8ee878b4ab`): `support_staff`, `support_grants` with the status machine
+  in a trigger, a membership trigger refusing support staff on every path,
+  `SupportScopeCatalog` (empty on `main`), `SupportGrantService`,
+  `/support/*` and `/platform/support-*`. Refusals carry
+  `details.reason_code`. `SqlScopeHolders` now has its first caller
+  (`scopes_of`, the granter's current scopes). Open: the `/platform` console
+  tables (web), conflict of interest at assignment.
 
 ## Deliberately not taken
 

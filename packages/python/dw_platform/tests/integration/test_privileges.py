@@ -424,3 +424,73 @@ async def test_the_application_may_only_record_a_decision_on_an_approval(
                 assert not await column(name, "UPDATE"), name
     finally:
         await migrator.dispose()
+
+
+async def test_support_access_privileges(db_urls: DatabaseUrls) -> None:
+    """Migration af8ee878b4ab (ADR 0024). `support_staff`: `dw_app` reads, the
+    provisioner reads, adds and removes. `support_grants`: `dw_app` reads,
+    inserts the customer's columns and updates only the columns of the
+    customer's steps (approve, reject, revoke), never the assignment and never
+    a DELETE; the provisioner reads and updates only the assignment, and may
+    append to the tenant's audit log. Asked of the catalog."""
+    customer_update = (
+        "status",
+        "granted_by",
+        "granted_at",
+        "rejected_by",
+        "rejected_at",
+        "reject_reason",
+        "revoked_by",
+        "revoked_at",
+    )
+    assignment = ("staff_user_id", "assigned_by", "activated_at", "expires_at")
+    stamped = ("tenant_id", "workspace_id", "scopes", "scope_set_key", "requested_by", "code")
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+
+            async def table(role: str, name: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text("SELECT has_table_privilege(:r, :t, :v)"),
+                        {"r": role, "t": f"platform.{name}", "v": verb},
+                    )
+                )
+
+            async def column(role: str, col: str, verb: str) -> bool:
+                return bool(
+                    await conn.scalar(
+                        sa.text(
+                            "SELECT has_column_privilege(:r, 'platform.support_grants', :c, :v)"
+                        ),
+                        {"r": role, "c": col, "v": verb},
+                    )
+                )
+
+            assert await table("dw_app", "support_staff", "SELECT")
+            for verb in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+                assert not await table("dw_app", "support_staff", verb), verb
+            assert await table("dw_app", "support_grants", "SELECT")
+            for verb in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+                assert not await table("dw_app", "support_grants", verb), verb
+            for col in customer_update:
+                assert await column("dw_app", col, "UPDATE"), col
+            for col in (*assignment, *stamped):
+                assert not await column("dw_app", col, "UPDATE"), col
+            for col in assignment:
+                assert not await column("dw_app", col, "INSERT"), col
+
+            for verb in ("SELECT", "INSERT", "DELETE"):
+                assert await table("dw_provisioner", "support_staff", verb), verb
+            assert await table("dw_provisioner", "support_grants", "SELECT")
+            for verb in ("INSERT", "UPDATE", "DELETE"):
+                assert not await table("dw_provisioner", "support_grants", verb), verb
+            for col in assignment:
+                assert await column("dw_provisioner", col, "UPDATE"), col
+            for col in (*customer_update[1:], *stamped):
+                assert not await column("dw_provisioner", col, "UPDATE"), col
+            assert await table("dw_provisioner", "audit_events", "INSERT")
+            for verb in ("UPDATE", "DELETE"):
+                assert not await table("dw_provisioner", "audit_events", verb), verb
+    finally:
+        await migrator.dispose()

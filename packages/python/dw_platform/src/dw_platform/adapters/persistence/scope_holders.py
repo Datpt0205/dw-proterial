@@ -110,9 +110,18 @@ class SqlScopeHolders:
         """
         if not scope:
             return False
+        return scope in await self.scopes_of(tenant_id, workspace_id, user_id)
+
+    async def scopes_of(
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, user_id: uuid.UUID
+    ) -> frozenset[str]:
+        """Every scope `user_id`'s membership of `workspace_id` carries; empty
+        for no membership or a tenant that is not active. Implements
+        `MemberScopesPort` (a support grant is in force only while its granter
+        still holds what it stamped). Same provenance rule as `holds`."""
         bound = TenantScope(tenant_id=tenant_id, workspace_id=workspace_id)
         async with tenant_session(self.session_factory, bound) as session:
             members = await _members(session, tenant_id, workspace_id, user_id)
             if len(members) != 1:
-                return False
-            return scope in await _scopes_of(session, members[0])
+                return frozenset()
+            return await _scopes_of(session, members[0])
