@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 
-from dw_kernel.errors import PermissionDeniedError
+from dw_kernel.errors import UnauthenticatedError
 from dw_platform.application.identity import VerifiedClaims
 
 DEV_ISSUER = "dw-dev"
@@ -41,7 +41,8 @@ class DevTokenVerifier:
                 options={"require": ["exp", "iss", "aud", "sub"]},
             )
         except jwt.PyJWTError as exc:
-            raise PermissionDeniedError(
+            # Unauthenticated, not forbidden: a fresh sign-in is the fix.
+            raise UnauthenticatedError(
                 "invalid bearer token", details={"reason": type(exc).__name__}
             ) from exc
         return VerifiedClaims(
