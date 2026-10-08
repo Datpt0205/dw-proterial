@@ -20,7 +20,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 
 from dw_api.bootstrap import ApiContainer
-from dw_api.dependencies.auth import RequireAccessContext
+from dw_api.dependencies.auth import RequireAccessContext, RequireVerifiedIdentity
 from dw_api.dependencies.idempotency import RequireIdempotency
 from dw_api.dependencies.services import RequireContainer
 from dw_kernel.errors import InfrastructureError
@@ -30,6 +30,8 @@ from dw_platform.application.support_access import (
     RequestSupportGrant,
     SupportGrantService,
     SupportGrantView,
+    SupportRefusal,
+    support_access_refused,
 )
 
 router = APIRouter(prefix="/support", tags=["support"])
@@ -195,3 +197,68 @@ async def revoke_grant(
     """Takes effect at the staff member's next request."""
     view = await _service(container).revoke(context, grant_id)
     return await idempotency.record(_model(view))
+
+
+# ---- the staff side (ticket 02) ---------------------------------------------
+
+
+class MySupportGrantModel(BaseModel):
+    """A grant assigned to the caller: enough to open it, nothing the customer
+    wrote (no reason)."""
+
+    id: UUID
+    code: str
+    tenant_id: UUID
+    tenant_name: str
+    workspace_id: UUID
+    workspace_name: str
+    resource_type: str
+    resource_id: UUID | None
+    resource_label: str
+    scope_set_key: str
+    scope_set_label: str
+    # `active`, `expired`, `ineffective` or `revoked`, by the same rule the
+    # support context applies on every request.
+    state: str
+    activated_at: datetime | None
+    expires_at: datetime | None
+    revoked_at: datetime | None
+
+
+@router.get("/my-grants", response_model=list[MySupportGrantModel])
+async def my_grants(
+    identity: RequireVerifiedIdentity,
+    container: RequireContainer,
+) -> list[MySupportGrantModel]:
+    """The caller's grants, in force or ended in the last 30 days. Support
+    staff only (403 `support_staff_required`); no tenant header is read."""
+    if (
+        container.identity_bootstrap is None
+        or container.support_access is None
+        or container.staff_grants is None
+    ):
+        raise InfrastructureError("support access is not configured")
+    view = await container.identity_bootstrap.bootstrap(identity)
+    if not view.is_support_staff:
+        raise support_access_refused(SupportRefusal.STAFF_REQUIRED, "support staff only")
+    rows = await container.staff_grants.grants_for_staff(view.principal_id)
+    return [
+        MySupportGrantModel(
+            id=row.grant.id,
+            code=row.grant.code,
+            tenant_id=row.grant.tenant_id,
+            tenant_name=row.tenant_name,
+            workspace_id=row.grant.workspace_id,
+            workspace_name=row.workspace_name,
+            resource_type=row.grant.resource_type,
+            resource_id=row.grant.resource_id,
+            resource_label=row.grant.resource_label,
+            scope_set_key=row.grant.scope_set_key,
+            scope_set_label=row.grant.scope_set_label,
+            state=await container.support_access.state_of(row.grant),
+            activated_at=row.grant.activated_at,
+            expires_at=row.grant.expires_at,
+            revoked_at=row.grant.revoked_at,
+        )
+        for row in rows
+    ]

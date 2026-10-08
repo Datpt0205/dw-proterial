@@ -29,9 +29,12 @@ from dw_platform.application.support_access import (
     GrantChange,
     GrantStatus,
     NewSupportGrant,
+    StaffGrantRow,
     SupportGrant,
+    TenantPlan,
     support_staff_not_member,
 )
+from dw_platform.domain.audit import AuditEvent
 
 _G = tables.support_grants
 _NOT_SUPPORT_STAFF = "ck_memberships_not_support_staff"
@@ -196,3 +199,113 @@ def _mine(context: AccessContext, requested_by: UUID | None) -> list[sa.ColumnEl
     if requested_by is not None:
         clauses.append(_G.c.requested_by == requested_by)
     return clauses
+
+
+_SET_PRINCIPAL = sa.text("SELECT set_config('app.principal_id', :principal_id, true)")
+
+
+@dataclass(frozen=True)
+class SqlStaffGrants:
+    """Implements ``StaffGrantsPort`` and ``SupportAccessAuditPort`` as `dw_app`.
+
+    A staff member is in no customer tenant, so RLS shows them no grant; the
+    two `SECURITY DEFINER` functions return only the grants whose
+    `staff_user_id` is the transaction's `app.principal_id`, bound here from
+    the verified identity's user, per transaction.
+    """
+
+    session_factory: async_sessionmaker[AsyncSession]
+
+    async def is_support_staff(self, user_id: UUID) -> bool:
+        async with self.session_factory() as session, session.begin():
+            row = (
+                await session.execute(
+                    sa.select(tables.support_staff.c.user_id).where(
+                        tables.support_staff.c.user_id == user_id
+                    )
+                )
+            ).first()
+        return row is not None
+
+    async def grant_for_staff(self, staff_user_id: UUID, grant_id: UUID) -> SupportGrant | None:
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_SET_PRINCIPAL, {"principal_id": str(staff_user_id)})
+            row = (
+                await session.execute(
+                    sa.text("SELECT * FROM platform.support_grant_for_staff(:grant_id)"),
+                    {"grant_id": str(grant_id)},
+                )
+            ).first()
+        return grant_from_row(row) if row is not None else None
+
+    async def grants_for_staff(self, staff_user_id: UUID) -> list[StaffGrantRow]:
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_SET_PRINCIPAL, {"principal_id": str(staff_user_id)})
+            rows = (
+                await session.execute(sa.text("SELECT * FROM platform.support_grants_for_staff()"))
+            ).all()
+        return [
+            StaffGrantRow(
+                grant=SupportGrant(
+                    id=r.id,
+                    code=r.code,
+                    tenant_id=r.tenant_id,
+                    workspace_id=r.workspace_id,
+                    resource_type=r.resource_type,
+                    resource_id=r.resource_id,
+                    resource_label=r.resource_label,
+                    scope_set_key=r.scope_set_key,
+                    scope_set_label=r.scope_set_label,
+                    scopes=frozenset(r.scopes),
+                    # Not returned to the staff member: the customer's reason
+                    # is theirs (ADR 0024).
+                    reason="",
+                    duration_hours=0,
+                    status=GrantStatus(r.status),
+                    requested_by=None,
+                    requested_at=r.activated_at,
+                    granted_by=r.granted_by,
+                    staff_user_id=staff_user_id,
+                    activated_at=r.activated_at,
+                    expires_at=r.expires_at,
+                    revoked_at=r.revoked_at,
+                ),
+                tenant_name=r.tenant_name,
+                workspace_name=r.workspace_name,
+            )
+            for r in rows
+        ]
+
+    async def tenant_plan(self, tenant_id: UUID) -> TenantPlan | None:
+        async with tenant_session(self.session_factory, TenantScope(tenant_id, None)) as session:
+            row = (
+                await session.execute(
+                    sa.select(
+                        tables.entitlements.c.plan_id,
+                        tables.entitlements.c.feature_overrides,
+                        tables.plans.c.features,
+                        tables.tenants.c.status,
+                    )
+                    .select_from(
+                        tables.entitlements.join(
+                            tables.plans,
+                            tables.entitlements.c.plan_id == tables.plans.c.plan_id,
+                        ).join(
+                            tables.tenants, tables.tenants.c.id == tables.entitlements.c.tenant_id
+                        )
+                    )
+                    .where(tables.entitlements.c.tenant_id == tenant_id)
+                )
+            ).first()
+        # A tenant without a plan, or not active, enables nothing.
+        if row is None or row.status != "active":
+            return None
+        return TenantPlan(
+            plan_id=row.plan_id,
+            feature_flags=frozenset(row.features) | frozenset(row.feature_overrides),
+        )
+
+    async def record_access(self, event: AuditEvent) -> None:
+        scope = TenantScope(event.tenant_id.value, event.workspace_id.value)
+        async with tenant_session(self.session_factory, scope) as session:
+            await SqlAuditRepository(session).append(event)

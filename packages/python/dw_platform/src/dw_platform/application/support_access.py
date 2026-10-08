@@ -44,7 +44,7 @@ from dw_kernel.errors import (
 )
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
-from dw_platform.application.access_context import AccessContext
+from dw_platform.application.access_context import AccessContext, SupportScope
 from dw_platform.application.authorization import permission_denied
 from dw_platform.domain.audit import AuditEvent
 
@@ -92,6 +92,9 @@ class SupportRefusal(StrEnum):
     WRONG_STATUS = "support_grant_wrong_status"
     STAFF_REQUIRED = "support_staff_required"
     STAFF_NOT_MEMBER = "support_staff_not_member"
+    MFA_REQUIRED = "support_mfa_required"
+    GRANT_ENDED = "support_grant_ended"
+    CONTEXT_NOT_ALLOWED = "support_context_not_allowed"
 
 
 class GrantStatus(StrEnum):
@@ -695,3 +698,198 @@ def _checked_reason(reason: str) -> str:
     if not 1 <= len(stripped) <= MAX_REASON_LENGTH:
         raise DomainError("a reason of 1 to 300 characters is required")
     return stripped
+
+
+# ---- the support context (ticket 02) ---------------------------------------
+
+# RFC 8176 method names that mean a second factor. Keycloak 26.7 emits `otp`
+# for an OTP execution that carries an authentication reference (measured
+# 2026-10-08); `pwd` alone is one factor.
+SECOND_FACTOR_METHODS = frozenset({"otp", "hwk", "mfa"})
+
+SUPPORT_ACCESS_ACTION = "support.access"
+
+
+@dataclass(frozen=True, slots=True)
+class TenantPlan:
+    plan_id: str
+    feature_flags: frozenset[str]
+
+
+class StaffGrantsPort(Protocol):
+    """What the support context reads about a staff member and their grant,
+    without being a member of the customer's tenant."""
+
+    async def is_support_staff(self, user_id: UUID) -> bool: ...
+
+    async def grant_for_staff(self, staff_user_id: UUID, grant_id: UUID) -> SupportGrant | None:
+        """The grant, only when it is assigned to `staff_user_id`."""
+        ...
+
+    async def tenant_plan(self, tenant_id: UUID) -> TenantPlan | None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class StaffGrantRow:
+    """One line of a staff member's "my grants": assigned to them, in force or
+    ended in the last 30 days. No reason: what the customer wrote is theirs."""
+
+    grant: SupportGrant
+    tenant_name: str
+    workspace_name: str
+
+
+class StaffGrantsListPort(Protocol):
+    async def grants_for_staff(self, staff_user_id: UUID) -> list[StaffGrantRow]: ...
+
+
+class SupportAccessAuditPort(Protocol):
+    async def record_access(self, event: AuditEvent) -> None:
+        """Append one `support.access` event to the customer's trail."""
+        ...
+
+
+def support_access_refused(
+    reason: SupportRefusal, message: str, **details: object
+) -> PermissionDeniedError:
+    return PermissionDeniedError(message, details={"reason_code": reason.value, **details})
+
+
+@dataclass(frozen=True)
+class SupportAccessContextFactory:
+    """A support staff member's access context, built from a customer's grant.
+
+    Every step is checked on every request, in this order: the person is
+    support staff, the token carries a second factor, the grant is assigned
+    to them, it is in force now (`grant_effective_state`, the same reading as
+    the customer's list), and the tenant has `support_access`. The context
+    takes tenant and workspace from the grant, never from a header; it carries
+    no role (so no role bypass, `platform_admin` included) and exactly the
+    scopes stamped on the grant. It is never cached.
+    """
+
+    grants: StaffGrantsPort
+    member_scopes: MemberScopesPort
+    clock: UtcClock
+    ids: IdGenerator
+
+    def access_event(
+        self, context: AccessContext, *, method: str, route: str, path_ids: dict[str, str]
+    ) -> AuditEvent:
+        return support_access_audit(
+            event_id=self.ids.new_uuid(),
+            context=context,
+            method=method,
+            route=route,
+            path_ids=path_ids,
+            occurred_at=self.clock.now(),
+        )
+
+    async def state_of(self, grant: SupportGrant) -> str:
+        """The grant's effective state now (for "my grants"), by the same rule."""
+        granter_scopes = (
+            await self.member_scopes.scopes_of(
+                grant.tenant_id, grant.workspace_id, grant.granted_by
+            )
+            if grant.granted_by is not None
+            else frozenset()
+        )
+        return grant_effective_state(grant, self.clock.now(), granter_scopes)
+
+    async def build(
+        self, *, principal_id: UUID, auth_methods: frozenset[str], grant_id: UUID
+    ) -> AccessContext:
+        if not await self.grants.is_support_staff(principal_id):
+            raise support_access_refused(SupportRefusal.STAFF_REQUIRED, "support staff only")
+        if not auth_methods & SECOND_FACTOR_METHODS:
+            raise support_access_refused(
+                SupportRefusal.MFA_REQUIRED,
+                "a second authentication factor is required for support access",
+            )
+        return await self._context(principal_id, grant_id)
+
+    async def recheck(self, context: AccessContext) -> None:
+        """Before the last write of a long operation: the grant is still in
+        force (a revocation or expiry since the request began refuses it)."""
+        if context.support is None:
+            return
+        await self._context(context.principal_id, context.support.grant_id)
+
+    async def _context(self, principal_id: UUID, grant_id: UUID) -> AccessContext:
+        grant = await self.grants.grant_for_staff(principal_id, grant_id)
+        if grant is None:
+            raise NotFoundError("support grant not found")
+        now = self.clock.now()
+        granter_scopes = (
+            await self.member_scopes.scopes_of(
+                grant.tenant_id, grant.workspace_id, grant.granted_by
+            )
+            if grant.granted_by is not None
+            else frozenset()
+        )
+        state = grant_effective_state(grant, now, granter_scopes)
+        if state != GrantStatus.ACTIVE.value:
+            ended_reason = state if state in (EXPIRED, INEFFECTIVE) else "revoked"
+            ended_at = {
+                EXPIRED: grant.expires_at,
+                INEFFECTIVE: now,
+            }.get(ended_reason, grant.revoked_at or now)
+            raise support_access_refused(
+                SupportRefusal.GRANT_ENDED,
+                "this support grant is no longer in force",
+                ended_reason=ended_reason,
+                ended_at=ended_at.isoformat() if ended_at else None,
+            )
+        plan = await self.grants.tenant_plan(grant.tenant_id)
+        if plan is None or SUPPORT_ACCESS_FEATURE not in plan.feature_flags:
+            raise support_access_refused(
+                SupportRefusal.NOT_ENABLED,
+                "support access is not enabled for this organisation",
+            )
+        return AccessContext(
+            tenant_id=grant.tenant_id,
+            workspace_id=grant.workspace_id,
+            principal_id=principal_id,
+            roles=frozenset(),
+            scopes=grant.scopes,
+            plan_id=plan.plan_id,
+            feature_flags=plan.feature_flags,
+            support=SupportScope(
+                grant_id=grant.id,
+                code=grant.code,
+                resource_type=grant.resource_type,
+                resource_id=grant.resource_id,
+                scope_set_key=grant.scope_set_key,
+            ),
+        )
+
+
+def support_access_audit(
+    *,
+    event_id: UUID,
+    context: AccessContext,
+    method: str,
+    route: str,
+    path_ids: dict[str, str],
+    occurred_at: datetime,
+) -> AuditEvent:
+    """One access under a grant, on the customer's trail: the method, the route
+    template and the ids in its path. Never a query string, never a body."""
+    assert context.support is not None
+    return AuditEvent(
+        id=event_id,
+        tenant_id=TenantId(context.tenant_id),
+        workspace_id=WorkspaceId(context.workspace_id),
+        actor_id=UserId(context.principal_id),
+        action=SUPPORT_ACCESS_ACTION,
+        resource_type=_RESOURCE,
+        resource_id=str(context.support.grant_id),
+        occurred_at=occurred_at,
+        details={
+            "support_grant_id": str(context.support.grant_id),
+            "code": context.support.code,
+            "method": method,
+            "route": route,
+            "path_ids": path_ids,
+        },
+    )

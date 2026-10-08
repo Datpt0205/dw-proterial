@@ -54,6 +54,8 @@ _CORS_HEADERS = [
     "Content-Type",
     "X-Tenant-Id",
     "X-Workspace-Id",
+    # The customer's grant a support staff member acts under (ADR 0024).
+    "X-DW-Support-Grant",
     "Idempotency-Key",
 ]
 _CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]

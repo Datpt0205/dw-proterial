@@ -1159,6 +1159,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/support/my-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Grants
+         * @description The caller's grants, in force or ended in the last 30 days. Support
+         *     staff only (403 `support_staff_required`); no tenant header is read.
+         */
+        get: operations["my_grants_api_v1_support_my_grants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/zalo/connect": {
         parameters: {
             query?: never;
@@ -1426,6 +1447,11 @@ export interface components {
              * @default false
              */
             is_platform_operator: boolean;
+            /**
+             * Is Support Staff
+             * @default false
+             */
+            is_support_staff: boolean;
             /** Memberships */
             memberships: components["schemas"]["WorkspaceMembershipModel"][];
             /**
@@ -1878,6 +1904,52 @@ export interface components {
             valid_from: string;
             /** Worker Id */
             worker_id: string;
+        };
+        /**
+         * MySupportGrantModel
+         * @description A grant assigned to the caller: enough to open it, nothing the customer
+         *     wrote (no reason).
+         */
+        MySupportGrantModel: {
+            /** Activated At */
+            activated_at: string | null;
+            /** Code */
+            code: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Resource Id */
+            resource_id: string | null;
+            /** Resource Label */
+            resource_label: string;
+            /** Resource Type */
+            resource_type: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Scope Set Key */
+            scope_set_key: string;
+            /** Scope Set Label */
+            scope_set_label: string;
+            /** State */
+            state: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /** Tenant Name */
+            tenant_name: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
         };
         /** NewTenantView */
         NewTenantView: {
@@ -4654,6 +4726,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_grants_api_v1_support_my_grants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySupportGrantModel"][];
                 };
             };
         };

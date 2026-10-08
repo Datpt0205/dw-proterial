@@ -49,6 +49,8 @@ class _Identity:
     email: str | None
     issuer: str = ISSUER
     name: str | None = None
+    auth_methods: frozenset[str] = frozenset()
+    acr: str | None = None
 
 
 @pytest.fixture

@@ -483,6 +483,11 @@
             "title": "Is Platform Operator",
             "type": "boolean"
           },
+          "is_support_staff": {
+            "default": false,
+            "title": "Is Support Staff",
+            "type": "boolean"
+          },
           "memberships": {
             "items": {
               "$ref": "#/components/schemas/WorkspaceMembershipModel"
@@ -1549,6 +1554,125 @@
           "created_by_run_id"
         ],
         "title": "MemoryItemView",
+        "type": "object"
+      },
+      "MySupportGrantModel": {
+        "description": "A grant assigned to the caller: enough to open it, nothing the customer\nwrote (no reason).",
+        "properties": {
+          "activated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Id"
+          },
+          "resource_label": {
+            "title": "Resource Label",
+            "type": "string"
+          },
+          "resource_type": {
+            "title": "Resource Type",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "scope_set_key": {
+            "title": "Scope Set Key",
+            "type": "string"
+          },
+          "scope_set_label": {
+            "title": "Scope Set Label",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_name": {
+            "title": "Tenant Name",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_name": {
+            "title": "Workspace Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "tenant_id",
+          "tenant_name",
+          "workspace_id",
+          "workspace_name",
+          "resource_type",
+          "resource_id",
+          "resource_label",
+          "scope_set_key",
+          "scope_set_label",
+          "state",
+          "activated_at",
+          "expires_at",
+          "revoked_at"
+        ],
+        "title": "MySupportGrantModel",
         "type": "object"
       },
       "NewTenantView": {
@@ -6321,6 +6445,32 @@
           }
         },
         "summary": "Revoke Grant",
+        "tags": [
+          "support"
+        ]
+      }
+    },
+    "/api/v1/support/my-grants": {
+      "get": {
+        "description": "The caller's grants, in force or ended in the last 30 days. Support\nstaff only (403 `support_staff_required`); no tenant header is read.",
+        "operationId": "my_grants_api_v1_support_my_grants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MySupportGrantModel"
+                  },
+                  "title": "Response My Grants Api V1 Support My Grants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "My Grants",
         "tags": [
           "support"
         ]
