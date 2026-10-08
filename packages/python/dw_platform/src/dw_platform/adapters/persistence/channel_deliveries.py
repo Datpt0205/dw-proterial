@@ -51,6 +51,9 @@ _SCOPES_DUE = sa.text(
 # name), on the recipient's behalf. The recipient is in `details`, never the
 # actor: they did not send anything.
 LANE = "channel_delivery"
+# The retention lane's registry name (ADR 0011), and why it fails a row.
+RETENTION_LANE = "channel_deliveries_retention"
+UNCONFIGURED = "channel_unconfigured"
 # last_error is CHECKed at 500 characters.
 _ERROR_LIMIT = 500
 
@@ -238,10 +241,25 @@ class SqlChannelDeliveryRetention:
     """Implements ``dw_worker.consumers.retention.RetentionPrunePort``.
 
     The window is the database's (``platform.prune_channel_deliveries()``, 90
-    days, never a pending row), like the inbox it follows."""
+    days, never a pending row), like the inbox it follows. Then a row still
+    pending past ``pending_expiry`` (the retention policy's term) is failed as
+    ``channel_unconfigured``, with its audit row, so nothing waits forever when
+    no host sends (``platform.expire_pending_channel_deliveries``). Pruned
+    first, so a row failed here is history for one full window, not gone in
+    the same pass."""
 
     session_factory: async_sessionmaker[AsyncSession]
+    # No default: the term is the retention policy's, and only its owner says it.
+    pending_expiry: timedelta
 
     async def prune(self) -> None:
         async with self.session_factory() as session, session.begin():
             await session.execute(sa.text("SELECT platform.prune_channel_deliveries()"))
+            await session.execute(
+                sa.text("SELECT platform.expire_pending_channel_deliveries(:term, :actor, :label)"),
+                {
+                    "term": self.pending_expiry,
+                    "actor": system_actor(RETENTION_LANE).value,
+                    "label": system_actor_label(RETENTION_LANE),
+                },
+            )
