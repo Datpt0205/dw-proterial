@@ -500,7 +500,21 @@ export class ApiClient {
     );
   }
 
-  /** Close the tenant's waiver. 409 while members still hold both sides. */
+  /** Confirm a waiver another admin proposed; until then it lifts nothing.
+   * 409 if the caller proposed it, 404 if none is waiting. */
+  confirmSeparationOfDutiesWaiver(
+    ruleKey: string,
+    reason: string,
+  ): Promise<void> {
+    return this.requestNoContent(
+      "POST",
+      `/api/v1/admin/separation-of-duties/${encodeURIComponent(ruleKey)}/waiver/confirm`,
+      { body: { reason } },
+    );
+  }
+
+  /** Close the tenant's waiver, or withdraw one still waiting for
+   * confirmation. 409 while members still hold both sides. */
   revokeSeparationOfDutiesWaiver(
     ruleKey: string,
     reason: string,

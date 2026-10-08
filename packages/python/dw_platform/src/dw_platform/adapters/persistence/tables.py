@@ -498,6 +498,10 @@ sod_waivers = sa.Table(
     sa.Column("revoked_at", sa.TIMESTAMP(timezone=True), nullable=True),
     sa.Column("revoked_by", UUID(as_uuid=True), nullable=True),
     sa.Column("revoke_reason", sa.Text, nullable=True),
+    # A second holder of the waiver scope (f381f1694395); until then it lifts nothing.
+    sa.Column("confirmed_by", UUID(as_uuid=True), nullable=True),
+    sa.Column("confirmed_at", sa.TIMESTAMP(timezone=True), nullable=True),
+    sa.Column("confirm_reason", sa.Text, nullable=True),
 )
 
 # One person's in-app inbox (migration 855ae928c3fa). RLS narrows reads and

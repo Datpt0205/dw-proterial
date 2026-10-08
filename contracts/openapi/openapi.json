@@ -2003,6 +2003,30 @@
       },
       "SodWaiverView": {
         "properties": {
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
           "granted_at": {
             "format": "date-time",
             "title": "Granted At",
@@ -2021,7 +2045,9 @@
         "required": [
           "reason",
           "granted_by",
-          "granted_at"
+          "granted_at",
+          "confirmed_by",
+          "confirmed_at"
         ],
         "title": "SodWaiverView",
         "type": "object"
@@ -3003,6 +3029,51 @@
           }
         },
         "summary": "Waive Separation Of Duties Rule",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/separation-of-duties/{rule_key}/waiver/confirm": {
+      "post": {
+        "operationId": "confirm_separation_of_duties_waiver_api_v1_admin_separation_of_duties__rule_key__waiver_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_key",
+            "required": true,
+            "schema": {
+              "title": "Rule Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaiverDecisionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Separation Of Duties Waiver",
         "tags": [
           "admin"
         ]

@@ -58,7 +58,7 @@ function RuleList({ canDecide }: { canDecide: boolean }) {
       <PageHeading
         icon={Scale}
         title="Separation of duties"
-        description="Pairs of duties no single person may hold. A company too small to staff both sides may waive a rule that allows it, with a reason. Every waiver and revocation is recorded in the audit log."
+        description="Pairs of duties no single person may hold. A company too small to staff both sides may waive a rule that allows it, with a reason; a second admin must confirm the waiver before it takes effect. Every waiver, confirmation and revocation is recorded in the audit log."
       />
 
       {error && (
@@ -107,14 +107,18 @@ function RuleCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const waived = rule.waiver !== null;
+  // Proposed by one admin, not yet confirmed by another: it lifts nothing.
+  const pending = rule.waiver !== null && rule.waiver.confirmed_at === null;
 
-  const decide = async () => {
+  const decide = async (action: "waive" | "confirm" | "revoke") => {
     if (!reason.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      if (waived) {
+      if (action === "revoke") {
         await apiClient().revokeSeparationOfDutiesWaiver(rule.key, reason);
+      } else if (action === "confirm") {
+        await apiClient().confirmSeparationOfDutiesWaiver(rule.key, reason);
       } else {
         await apiClient().waiveSeparationOfDutiesRule(rule.key, reason);
       }
@@ -132,7 +136,9 @@ function RuleCard({
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-3 text-base">
           {rule.description}
-          {waived ? (
+          {pending ? (
+            <Badge variant="secondary">Awaiting confirmation</Badge>
+          ) : waived ? (
             <Badge variant="warning">Waived</Badge>
           ) : rule.waivable ? (
             <Badge variant="secondary">Enforced</Badge>
@@ -152,8 +158,11 @@ function RuleCard({
 
         {rule.waiver && (
           <p className="rounded-md bg-muted px-3 py-2">
-            Waived on {new Date(rule.waiver.granted_at).toLocaleString()}:{" "}
+            {pending ? "Proposed" : "Waived"} on{" "}
+            {new Date(rule.waiver.granted_at).toLocaleString()}:{" "}
             {rule.waiver.reason}
+            {pending &&
+              " Another admin must confirm it; until then the rule is enforced."}
           </p>
         )}
 
@@ -169,21 +178,41 @@ function RuleCard({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder={
-                waived
-                  ? "Why the waiver is no longer needed"
-                  : "Why this company cannot keep these duties apart"
+                pending
+                  ? "Why you confirm this waiver (or withdraw it)"
+                  : waived
+                    ? "Why the waiver is no longer needed"
+                    : "Why this company cannot keep these duties apart"
               }
               rows={2}
             />
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button
-              variant={waived ? "outline" : "destructive"}
-              onClick={() => void decide()}
-              disabled={busy || !reason.trim()}
-            >
-              {busy && <Loader2 className="size-4 animate-spin" />}
-              {waived ? "Revoke waiver" : "Waive for this tenant"}
-            </Button>
+            <div className="flex gap-2">
+              {pending && (
+                <Button
+                  variant="destructive"
+                  onClick={() => void decide("confirm")}
+                  disabled={busy || !reason.trim()}
+                >
+                  {busy && <Loader2 className="size-4 animate-spin" />}
+                  Confirm waiver
+                </Button>
+              )}
+              <Button
+                variant={waived ? "outline" : "destructive"}
+                onClick={() => void decide(waived ? "revoke" : "waive")}
+                disabled={busy || !reason.trim()}
+              >
+                {busy && !pending && (
+                  <Loader2 className="size-4 animate-spin" />
+                )}
+                {pending
+                  ? "Withdraw"
+                  : waived
+                    ? "Revoke waiver"
+                    : "Propose a waiver"}
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>
