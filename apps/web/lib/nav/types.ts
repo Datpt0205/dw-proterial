@@ -4,8 +4,8 @@ export interface NavItem {
   href: string;
   label: string;
   hint: string;
-  /** An `@ant-design/icons` component. */
-  icon: ComponentType;
+  /** An `@ant-design/icons` component; drawn `aria-hidden` beside the label. */
+  icon: ComponentType<{ "aria-hidden"?: boolean }>;
   exact?: boolean;
   /** Scope required to see this item (omit = always visible). */
   scope?: string;

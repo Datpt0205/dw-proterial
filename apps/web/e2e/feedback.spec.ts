@@ -14,8 +14,9 @@ import {
 
 const LOGIN_BUTTON = "Đăng nhập";
 const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8000";
-// Org admin of the seeded tenant.
-const ADMIN_SUBJECT = "dev|dieu.hoang";
+// The seeded tenant's platform_admin (`seed_env.py`): dieu.hoang, named here before,
+// is a member there and the inbox refuses her.
+const ADMIN_SUBJECT = "dev|chi.le";
 
 // A 1×1 PNG, so the paste path carries a real image through the whole stack.
 const PNG_BASE64 =

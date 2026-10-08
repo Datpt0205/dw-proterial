@@ -278,7 +278,12 @@ export function MembersManager() {
                         {m.email ?? "—"} · {m.department}
                       </Typography.Text>
                     </div>
-                    <Flex align="center" gap="small">
+                    <Flex
+                      align="center"
+                      gap="small"
+                      wrap
+                      className="max-w-full"
+                    >
                       <Select
                         id={roleId}
                         aria-label={`Vai của ${m.display_name}`}

@@ -45,7 +45,8 @@ const REQUEST = {
   requested_at: "2026-10-08T02:00:00Z",
 };
 
-describe("the operators' support console", () => {
+// antd's Select in jsdom takes seconds under a full parallel run.
+describe("the operators' support console", { timeout: 20_000 }, () => {
   it("assigns a waiting request only to someone on the support team", async () => {
     listSupportStaff.mockResolvedValue([
       {
@@ -80,7 +81,9 @@ describe("the operators' support console", () => {
     );
     // Only the support team is offered.
     await screen.findByTitle("Lan");
-    expect(document.querySelectorAll(".ant-select-item-option")).toHaveLength(1);
+    expect(document.querySelectorAll(".ant-select-item-option")).toHaveLength(
+      1,
+    );
     fireEvent.click(await screen.findByTitle("Lan"));
 
     fireEvent.click(screen.getByRole("button", { name: /Giao$/ }));

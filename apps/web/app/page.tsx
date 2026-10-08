@@ -52,7 +52,7 @@ export default function HomePage() {
               <Card hoverable size="small" className="h-full">
                 <Flex vertical gap={6}>
                   <Typography.Text strong>
-                    <Icon /> {item.label}
+                    <Icon aria-hidden /> {item.label}
                   </Typography.Text>
                   <Typography.Text type="secondary">
                     {item.hint}

@@ -159,7 +159,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
     const count = item.badgeKey ? badges[item.badgeKey] : undefined;
     return {
       key: item.href,
-      icon: <Icon />,
+      icon: <Icon aria-hidden />,
       label: (
         // Out of the tab order: the menu is the keyboard's way in (AppShellItem).
         <Link href={item.href} title={item.hint} tabIndex={-1}>
