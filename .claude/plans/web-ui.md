@@ -260,6 +260,37 @@ page and shell piece is rebuilt on antd v6 in one sweep (`CLAUDE.md` "Web UI").
   `buildTheme` through `theme.getDesignToken`, both modes (22 cases); red with
   the Tag success override or the dark `dangerColor` removed.
 
+## Content-Security-Policy (2026-10-08)
+
+- **Where:** `apps/web/middleware.ts` mints a nonce per request and sets the
+  policy (`lib/csp.ts`) on the request, where Next reads the nonce and stamps
+  its own scripts, and on the response. The root layout calls `connection()`,
+  so every page renders per request: a page prerendered at build carries no
+  nonce. Every route was already client-rendered; `next build` now lists all
+  of them as `ƒ`. Caddy writes no CSP for the web host (only the rendering
+  process can mint the nonce) and `default-src 'none'; frame-ancestors
+'none'` for the API host.
+- **Policy:** `script-src 'self' 'nonce-…' 'strict-dynamic'` (plus
+  `'unsafe-eval'` under `next dev` only); `style-src 'self' 'unsafe-inline'`;
+  `img-src 'self' blob: data:`; `connect-src` this origin, the API and
+  Keycloak; `frame-src 'self'` and Keycloak; `object-src 'none'`;
+  `base-uri 'self'`; `form-action 'self'` and Keycloak; `frame-ancestors
+'none'`. Files from `public/` (a path with an extension) and prefetches are
+  outside the matcher.
+- **Why styles stay `'unsafe-inline'`:** antd's CSS-in-JS inserts `<style>`
+  elements at runtime, `@ant-design/nextjs-registry` extracts the server's
+  without a nonce, and every component sets `style` attributes, which a nonce
+  cannot cover (`style-src-attr` would need `'unsafe-inline'` anyway). A style
+  cannot run code; the policy holds where scripts are.
+- **Tests:** `lib/__tests__/csp.test.ts` (4; red with `'unsafe-inline'` in
+  `script-src`); `e2e/platform-pages.spec.ts` visits every platform page with
+  the policy on and fails on a CSP console message or a page error.
+- **First-load JS** (`next build`, dev-auth, `output: "standalone"` commented
+  out for the measurement as before): `/` 328 kB, `/approvals` 436 kB,
+  `/audit` 427 kB, `/knowledge` 448 kB, `/platform` 426 kB, `/admin` 360 kB;
+  shared 103 kB; middleware 34.1 kB. The table pages are past the accepted
+  +250 kB over the shadcn pages (`/approvals` was 158 kB): about +278 kB.
+
 ## Open
 
 - `lib/dates.ts` on dayjs, in Asia/Ho_Chi_Minh with the time first, and

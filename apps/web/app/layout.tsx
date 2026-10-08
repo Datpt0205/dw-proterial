@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Be_Vietnam_Pro } from "next/font/google";
 import type { ReactNode } from "react";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
@@ -21,7 +22,15 @@ const beVietnamPro = Be_Vietnam_Pro({
   display: "swap",
 });
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  // Every page renders per request: the CSP nonce (middleware.ts) is minted
+  // per request, and a page prerendered at build time would carry none, so
+  // its scripts would be refused.
+  await connection();
   return (
     // The theme's variable class on <html>: see THEME_CSS_VAR_CLASS.
     <html lang="vi" className={THEME_CSS_VAR_CLASS}>
