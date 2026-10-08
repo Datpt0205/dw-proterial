@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
+from dw_platform.domain.audit import system_actor, system_actor_label
 
 _d = tables.channel_deliveries
 _m = tables.memberships
@@ -46,8 +47,10 @@ _SCOPES_DUE = sa.text(
     "SELECT tenant_id, workspace_id FROM platform.channel_delivery_scopes_due(:channel)"
 )
 
-# Who acted, on every audit row this writes: the lane, on the recipient's behalf.
-_ACTOR = "channel_delivery_lane"
+# Who acted, on every audit row this writes: the lane (its worker registry
+# name), on the recipient's behalf. The recipient is in `details`, never the
+# actor: they did not send anything.
+LANE = "channel_delivery"
 # last_error is CHECKed at 500 characters.
 _ERROR_LIMIT = 500
 
@@ -146,15 +149,16 @@ class SqlClaimedDelivery:
                 id=uuid.uuid4(),
                 tenant_id=self.tenant_id,
                 workspace_id=self.workspace_id,
-                actor_id=self.recipient_user_id,
+                actor_id=system_actor(LANE).value,
                 action=action,
                 resource_type="channel_delivery",
                 resource_id=str(self.id),
                 details={
                     "channel": self.channel,
                     "attempts": attempts,
-                    "actor": _ACTOR,
+                    "recipient_user_id": str(self.recipient_user_id),
                     **details,
+                    "actor": system_actor_label(LANE),
                 },
                 occurred_at=sa.func.now(),
             )
