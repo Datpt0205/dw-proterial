@@ -269,6 +269,18 @@ recorded in each ticket.
   `retention@1.7.0.yaml` `channel_deliveries.pending_expiry_days` (7) fails
   as `channel_unconfigured`, audited (`983b509c3f0f`, ADR 0006 amendment).
 
+## Platform tickets (2026-10-08, `feat/platform-tickets`)
+
+Đạt delegated the open calls; each is decided provisionally and recorded in
+its ticket's Comments.
+
+- **`scope-holder-check/01`, `/02`:** `SqlScopeHolders.holds(tenant, ws,
+user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
+  `AccessContext`, both reading one membership query (`_members`) and
+  `effective_scopes`. Integration-tested on `dw_app`, mutation-checked.
+  Still no production caller (the "waiting for their first context" list
+  above).
+
 ## Deliberately not taken
 
 - **Vector or graph recall deciding the recalled set.**
