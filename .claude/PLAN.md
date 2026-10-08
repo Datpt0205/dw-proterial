@@ -33,9 +33,8 @@ own file and a row here.
   plans and research live there, not here.
 - **Next:** on `feat/platform-hardening`, the six harness-audit slices in
   `platform-runtime.md` (memory vectors, write trust, the review queue,
-  compaction, retrieval and dev harness done; approval-audit 02 done 2026-10-06, 01 still owed, and it covers `memory.review` the
-  day it lands); then the
-  rest of the antd shell tickets (`web-ui/antd-shell/` 03–09).
+  compaction, retrieval, dev harness, approval-audit done; six security
+  debts done 2026-10-08); then the antd shell tickets (`web-ui/antd-shell/` 03–09).
 
 ## Decisions Đạt owes
 

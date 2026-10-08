@@ -197,6 +197,9 @@ kind of change nobody makes and everybody works around.
 
 ## Agent and tool rules
 
+- Every value a prompt interpolates is untrusted: `PromptRegistry` wraps it in
+  an escaped `<input name="...">` block. A template opts a variable out with
+  `raw_variables` and a reason, only for a value code builds (ADR 0010).
 - Graph state is typed and versioned; LLM output is always validated into a
   Pydantic schema.
 - Workflow nodes contain no provider SDK and no SQL, and never import a concrete
@@ -205,6 +208,11 @@ kind of change nobody makes and everybody works around.
   approval policy, timeout and idempotency. The executor authorizes, validates,
   executes, validates the output and audits.
 - All side effects use idempotency keys.
+- A background lane audits as itself, never as a person:
+  `dw_platform.domain.audit.lane_audit_event`, whose actor is
+  `system_actor(<lane>)`, a fixed id from the lane's worker registry name, and
+  whose `details.actor` reads `system:<lane>`. From a cross-tenant drain, write
+  with `lane_audit.append_across_tenants` (ADR 0011).
 - A tenant's plan quota is enforced where a run begins — in the runner, not in
   an API dependency. The API is not the only door: a worker reacting to an
   inbound event starts runs no request ever touched. The limit comes from the

@@ -12,7 +12,7 @@ from functools import cached_property
 import jwt
 from jwt import PyJWKClient
 
-from dw_kernel.errors import PermissionDeniedError
+from dw_kernel.errors import UnauthenticatedError
 from dw_platform.application.identity import VerifiedClaims
 
 
@@ -49,7 +49,8 @@ class KeycloakTokenVerifier:
                 options={"require": ["exp", "iss", "sub"]},
             )
         except jwt.PyJWTError as exc:
-            raise PermissionDeniedError(
+            # Unauthenticated, not forbidden: a fresh sign-in is the fix.
+            raise UnauthenticatedError(
                 "invalid bearer token", details={"reason": type(exc).__name__}
             ) from exc
         return VerifiedClaims(

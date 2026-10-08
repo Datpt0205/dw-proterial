@@ -159,6 +159,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/separation-of-duties/{rule_key}/waiver/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Separation Of Duties Waiver */
+        post: operations["confirm_separation_of_duties_waiver_api_v1_admin_separation_of_duties__rule_key__waiver_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/separation-of-duties/{rule_key}/waiver/revoke": {
         parameters: {
             query?: never;
@@ -1809,6 +1826,10 @@ export interface components {
         };
         /** SodWaiverView */
         SodWaiverView: {
+            /** Confirmed At */
+            confirmed_at: string | null;
+            /** Confirmed By */
+            confirmed_by: string | null;
             /**
              * Granted At
              * Format: date-time
@@ -2282,6 +2303,39 @@ export interface operations {
         };
     };
     waive_separation_of_duties_rule_api_v1_admin_separation_of_duties__rule_key__waiver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaiverDecisionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_separation_of_duties_waiver_api_v1_admin_separation_of_duties__rule_key__waiver_confirm_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -98,6 +98,33 @@ async def test_the_application_cannot_rewrite_the_audit_log(app_engine: AsyncEng
             await conn.execute(sa.text("DELETE FROM platform.audit_events"))
 
 
+async def test_a_decision_cannot_be_rewritten(db_urls: DatabaseUrls) -> None:
+    """Written once, rewritten by nothing (migration ecb47f78702c): who decided
+    is also on the append-only audit log, and this copy must not disagree.
+    DELETE stays, for offboarding's purge."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            held = {
+                verb: await conn.scalar(
+                    sa.text(
+                        "SELECT has_table_privilege('dw_app', 'platform.approval_decisions', :v)"
+                    ),
+                    {"v": verb},
+                )
+                for verb in ("SELECT", "INSERT", "UPDATE", "DELETE")
+            }
+    finally:
+        await migrator.dispose()
+    assert held == {"SELECT": True, "INSERT": True, "UPDATE": False, "DELETE": True}
+
+
+async def test_the_application_cannot_update_a_decision(app_engine: AsyncEngine) -> None:
+    async with app_engine.connect() as conn:
+        with pytest.raises(Exception, match="permission denied"):
+            await conn.execute(sa.text("UPDATE platform.approval_decisions SET comment = 'x'"))
+
+
 _CATALOGUE = ("platform.roles", "platform.permission_sets")
 
 

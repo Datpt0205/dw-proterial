@@ -124,7 +124,10 @@ Mốc 6 (running many customers) is half done:
   in-app notifications unexported (`ops-hardening.md` Open).
 - **Approval decisions audited; approvals, runs and audit read by workspace**
   (`platform-runtime/approval-audit-and-workspace/`): HITL-11 and the rest of
-  TEN-04. Ticket 01 open, and comes before the first product gate. Ticket 02
+  TEN-04. Ticket 01 **resolved 2026-10-08** (`feat/security-debts`): every
+  decision writes `approval.decided` (or, admitted by a channel code,
+  `approval.channel_decided`) in its own transaction; `dw_app` lost UPDATE on
+  `approval_decisions` (`ecb47f78702c`). Ticket 02
   **resolved 2026-10-06**, upstreamed from the first product's repo: the
   repository narrows approval, run and audit reads to the caller's workspace
   (RLS unchanged, still tenant-only), `decide` resumes in the run's own
@@ -240,6 +243,31 @@ Mốc 6 (running many customers) is half done:
   An unknown `embedding_provider` (the retired `tei` included) now stops
   startup instead of quietly becoming hash vectors. The key is only in local
   `.env`; uat/production have none yet.
+
+## Security debts (2026-10-08, `feat/security-debts`)
+
+Six debts, each its own commit and ticket under `platform-runtime/<folder>/`;
+Đạt delegated the open calls, decided provisionally (fail closed) and
+recorded in each ticket.
+
+- **`prompt-containment/01`:** `PromptRegistry` wraps every interpolated
+  value in an escaped `<input name>` block; `raw_variables` with a reason
+  opts out (ADR 0010). Open: the compaction summary prompt is copy, not a
+  registry artifact, and is not covered.
+- **`approval-audit-and-workspace/01`:** above.
+- **`system-actor/01`:** a lane audits as `system_actor(<lane>)`
+  (`lane_audit_event`, `append_across_tenants`, ADR 0011); memory expiry and
+  knowledge hard delete now audited, channel delivery no longer names the
+  recipient as actor.
+- **`sod-waiver-second-person/01`:** a waiver lifts nothing until a second
+  admin confirms it; a role or permission set cannot gain a scope that puts a
+  membership in breach (`f381f1694395`, ADR 0012). Open: a rule's own scopes
+  changing under memberships.
+- **`unauthenticated-401/01`:** missing or unverifiable bearer is 401 with
+  `WWW-Authenticate`; the web bounces only a request that carried a token.
+- **`channel-delivery-expiry/01`:** a delivery pending past
+  `retention@1.7.0.yaml` `channel_deliveries.pending_expiry_days` (7) fails
+  as `channel_unconfigured`, audited (`983b509c3f0f`, ADR 0006 amendment).
 
 ## Deliberately not taken
 

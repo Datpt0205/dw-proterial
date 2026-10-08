@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: retention
-policy_version: "1.6.0"
+policy_version: "1.7.0"
 
 # Dữ liệu sống bao lâu trước khi bị xoá hẳn.
 #
@@ -142,6 +142,17 @@ audit:
 checkpoints:
   superseded_days: 7
   idle_thread_days: 730
+
+# Tin gửi qua kênh chat (`platform.channel_deliveries`) còn `pending`. Từ 1.7.0.
+#
+# Không phải thời hạn pháp lý như phần trên mà là giới hạn chờ. Tin được xếp hàng
+# dù host có gửi hay không, nên khi bỏ bot token đi thì không lane nào gửi và
+# không gì đánh dấu hỏng: tin chờ mãi. Lane gửi xong một dòng trong vài giờ (năm
+# lần thử, lùi từ một phút), nên một dòng chờ quá hạn này sẽ không bao giờ được
+# gửi. Lane `channel_deliveries_retention` đánh nó `failed` với lý do
+# `channel_unconfigured` và ghi một dòng audit trong tenant của nó.
+channel_deliveries:
+  pending_expiry_days: 7
 
 # Trần mỗi lượt quét. Retention là kiểm soát dung lượng chứ không phải kiểm soát
 # tính đúng: một dòng sống quá hạn thêm một giờ không hại ai, còn một lệnh DELETE
