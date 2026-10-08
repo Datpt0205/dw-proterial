@@ -197,6 +197,9 @@ kind of change nobody makes and everybody works around.
 
 ## Agent and tool rules
 
+- Every value a prompt interpolates is untrusted: `PromptRegistry` wraps it in
+  an escaped `<input name="...">` block. A template opts a variable out with
+  `raw_variables` and a reason, only for a value code builds (ADR 0010).
 - Graph state is typed and versioned; LLM output is always validated into a
   Pydantic schema.
 - Workflow nodes contain no provider SDK and no SQL, and never import a concrete

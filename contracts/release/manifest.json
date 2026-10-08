@@ -25,12 +25,12 @@
   ],
   "eval_datasets": [
     {
-      "checksum": "4504460eb6160e093df4edba7e8a1e955f16a8e9916af80b35a36c22ac86dd5d",
+      "checksum": "2c3569c4af18d9543cbb0223b5dd1c59bf2e4932260ec193975baa1ac38d9d9d",
       "dataset_id": "platform_smoke",
-      "version": "1.1.0"
+      "version": "1.2.0"
     }
   ],
-  "git_sha": "485c12e2c4225bdbf22d92c81481289d042bf827",
+  "git_sha": "2ebd50ff9fa9a8d3a173a81d952faf715d9e14fb",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",
@@ -53,9 +53,9 @@
   ],
   "prompt_bundles": [
     {
-      "checksum": "d09bde4799b114aa013b9af9c82681cf225b4055bf2e2935870d45b78285bf63",
+      "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
       "prompt_id": "platform.untrusted_demo",
-      "version": "1.0.0"
+      "version": "1.1.0"
     }
   ],
   "rubrics": [],
