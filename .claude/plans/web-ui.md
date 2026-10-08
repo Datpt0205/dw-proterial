@@ -228,19 +228,44 @@ page and shell piece is rebuilt on antd v6 in one sweep (`CLAUDE.md` "Web UI").
   browser's zone); the shapes are unchanged.
 - antd 6.6 deprecates `List` (use `Listy`); rows are plain lists instead.
 
+## Vietnamese shell (2026-10-08)
+
+- `<html lang="vi">`; every platform page, the menu (13 labels, ticket 18)
+  and the shell (bell, account menu, feedback, gate states) in Vietnamese.
+- **Roles:** `lib/nav/roles.ts` is the one label table (member "Nhân viên",
+  approver "Người duyệt", manager "Quản lý", director "Giám đốc", executive
+  "Ban điều hành", org_admin "Quản trị hệ thống", platform_admin "Quản trị
+  toàn quyền"; the operator "Quản trị nền tảng"). An unknown key reads as the
+  catalog's name, then "Vai khác", never its code. `roles.test.ts` reads the
+  keys `0001_platform_reference.sql` seeds and fails on one without a label;
+  red with `manager` removed and with the fallback put back to the key.
+- **`lib/money.ts`:** `formatMoney` (`18.450.000.000 đ`, no-break space, never
+  "₫"), `formatMoneyNumber`, `formatCount`, `formatMoneyShort`, `parseMoney`
+  (both thousands styles; `1.5`, `1,5`, `12.345,67` refused), the antd
+  `InputNumber` formatter/parser, and `moneyInWords` ("Bằng chữ", Đạt asked
+  2026-10-08; this supersedes D12 for the reading a form prints, a legal
+  document's wording stays its context's). No platform page shows money yet:
+  the callers are products. ESLint now refuses `Intl.NumberFormat`,
+  `Intl.DateTimeFormat`, `toLocale*String` and `currency: "VND"` outside
+  `lib/money.ts` and `lib/dates.ts` (checked: a `toLocaleString` in a page is
+  an error).
+- **Dark contrast, by theme token:** antd's status `Tag` writes its text in
+  the status colour (light success 2.96:1, warning 3.27:1 on their tints,
+  dark error 3.4:1); the theme now gives `Tag` the status _text_ colours. A
+  dark danger button wrote #d63a30 on the card (3.65:1); it takes #ff6b61,
+  and a filled one the card colour as its label. `text-destructive` is gone
+  with the pages that used it (`Typography` danger reads `colorErrorText`).
+  The Markdown link uses `--color-link` (antd's link) instead of `sky-700`.
+  `lib/__tests__/theme-contrast.test.ts` measures all of it from
+  `buildTheme` through `theme.getDesignToken`, both modes (22 cases); red with
+  the Tag success override or the dark `dangerColor` removed.
+
 ## Open
 
 - `lib/dates.ts` on dayjs, in Asia/Ho_Chi_Minh with the time first, and
   `lib/money.ts`.
 - Playwright projects for viewports (320px, both sides of 992px) and a
   non-Vietnam time zone.
-- Replace sonner with `App.useApp()`; its toasts stay light in dark mode.
-- `<html lang="en">` while the antd locale is `vi_VN` and the copy is mixed.
-- Replace shadcn page by page. In dark mode, the literal colours left in
-  pages read with low contrast: `text-slate-*` and `text-red-600` on memory
-  and integrations, the sky link in markdown answers, the country select, and
-  the feedback asterisks. The first antd Table deletes the unlayered table
-  rules in `globals.css`.
 - The platform pages now render in palette A at antd's 14px, and follow the
   OS into dark mode. The server renders light, so a dark OS sees light until
   hydration: on `next dev` the body read `rgb(245, 245, 247)` before it
@@ -255,10 +280,6 @@ page and shell piece is rebuilt on antd v6 in one sweep (`CLAUDE.md` "Web UI").
 - Design v3 draws the menu's current item bold (600) in the main text
   colour. What ships is antd's weight with the link colour, except on the
   light header, where antd's primary (4.70:1) stays.
-- `text-destructive` in pages on the dark card: #d63a30 is 3.65:1 (antd's
-  derived #dc3e34 was 3.87:1, also failing). The Badge and the destructive
-  Alert use the error text colour #ff6b61; pages keep `text-destructive`
-  until each is replaced.
 - Dark `colorLinkHover` is derived by antd as #2e547e, 2.18:1 on the card.
   For ticket 07's contrast test.
 - antd's Checkbox and Radio draw focus on a sibling of the focused input,

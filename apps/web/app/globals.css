@@ -42,6 +42,9 @@
   --border: var(--ant-color-border-secondary);
   --input: var(--ant-color-border);
   --ring: var(--ant-color-primary);
+  /* Links outside antd (a Markdown answer): antd's link colour, 5.57:1 light
+     and 6.48:1 dark, where a literal sky-700 was 2.7:1 on the dark card. */
+  --link: var(--ant-color-link);
   /* antd's large radius; the md and xl steps below are offsets from it that
      antd has no token for. */
   --radius: var(--ant-border-radius-lg);
@@ -72,6 +75,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-link: var(--link);
   --radius-sm: var(--ant-border-radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

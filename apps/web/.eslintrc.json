@@ -34,6 +34,29 @@
           }
         ]
       }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "NewExpression[callee.object.name='Intl'][callee.property.name=/^(NumberFormat|DateTimeFormat)$/]",
+        "message": "Numbers go through lib/money.ts, dates through lib/dates.ts."
+      },
+      {
+        "selector": "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]",
+        "message": "Numbers go through lib/money.ts, dates through lib/dates.ts."
+      },
+      {
+        "selector": "Property[key.name='currency'][value.value='VND']",
+        "message": "Money goes through lib/money.ts (đ, never ₫)."
+      }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["lib/money.ts", "lib/dates.ts"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
 }

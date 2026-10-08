@@ -9,7 +9,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Digital Worker Platform",
-  description: "Agent workspace: approvals, knowledge, memory and audit",
+  description:
+    "Không gian làm việc của worker: duyệt, tri thức, bộ nhớ và nhật ký kiểm toán",
 };
 
 // Not a variable font on Google Fonts, so each weight in use is listed: antd's
@@ -23,7 +24,7 @@ const beVietnamPro = Be_Vietnam_Pro({
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // The theme's variable class on <html>: see THEME_CSS_VAR_CLASS.
-    <html lang="en" className={THEME_CSS_VAR_CLASS}>
+    <html lang="vi" className={THEME_CSS_VAR_CLASS}>
       <body className="min-h-screen bg-background text-foreground antialiased">
         {/* `layer` puts antd's styles in `@layer antd`, which globals.css
             orders between Tailwind's base and its utilities. */}
