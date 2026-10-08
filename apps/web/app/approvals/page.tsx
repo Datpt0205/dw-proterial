@@ -17,6 +17,7 @@ import {
   CheckOutlined,
   CheckSquareOutlined,
   CloseOutlined,
+  ExportOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
 import type { Approval } from "@dw/contracts";
@@ -27,7 +28,7 @@ import {
   ToolApprovalPayload,
   approvalTitle,
 } from "../../components/tool-approval";
-import { approvalClient } from "../../lib/approvals/registry";
+import { approvalClient, approvalInbox } from "../../lib/approvals/registry";
 import { APPROVAL_STATUS } from "../../lib/approvals/status";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
@@ -126,6 +127,8 @@ export default function ApprovalsPage() {
         )}
 
         {pending.map((approval) => {
+          // A context with its own inbox decides there: one door per approval.
+          const inbox = approvalInbox(approval);
           const lacking = missingScope(approval);
           const lockReason =
             lacking === null
@@ -167,13 +170,29 @@ export default function ApprovalsPage() {
                   {approval.reason}
                 </Typography.Text>
                 <ToolApprovalPayload payload={approval.payload} />
-                {!canDecide && (
+                {inbox?.kind === "link" && (
+                  <div>
+                    <Button
+                      type="primary"
+                      href={inbox.href}
+                      icon={<ExportOutlined aria-hidden />}
+                    >
+                      {inbox.label}
+                    </Button>
+                  </div>
+                )}
+                {inbox?.kind === "misconfigured" && (
+                  <Typography.Text type="secondary">
+                    Yêu cầu này được quyết ở nơi khác.
+                  </Typography.Text>
+                )}
+                {inbox === null && !canDecide && (
                   <Typography.Text type="secondary">
                     Vai của bạn không có quyền quyết yêu cầu, nên bạn chỉ xem
                     được.
                   </Typography.Text>
                 )}
-                {canDecide && (
+                {inbox === null && canDecide && (
                   <Flex vertical gap="small">
                     <label htmlFor={`comment-${approval.id}`}>
                       <Typography.Text strong>
