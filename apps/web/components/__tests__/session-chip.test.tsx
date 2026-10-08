@@ -27,7 +27,7 @@ function openMenu(): void {
 }
 
 function auditLinkShown(): boolean {
-  return screen.queryByRole("link", { name: /Audit log/ }) !== null;
+  return screen.queryByRole("link", { name: /Nhật ký kiểm toán/ }) !== null;
 }
 
 describe("session menu", () => {
@@ -35,7 +35,7 @@ describe("session menu", () => {
     scopes = ["approvals.read", "runs.read"];
     openMenu();
 
-    expect(screen.getByRole("button", { name: /Sign out/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Đăng xuất/ })).toBeTruthy();
     expect(auditLinkShown()).toBe(false);
   });
 

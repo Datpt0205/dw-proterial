@@ -1,52 +1,40 @@
 "use client";
 
 import { useCallback, useState, type ReactNode } from "react";
-import { Tooltip, Typography } from "antd";
-import { BadgeCheck, CircleX, ClipboardCheck, RefreshCw } from "lucide-react";
-import type { Approval } from "@dw/contracts";
+import Link from "next/link";
 import {
-  Badge,
+  Alert,
   Button,
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Flex,
   Input,
-  Skeleton,
   Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@dw/ui";
-import { EmptyState } from "../../components/empty-state";
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
+import {
+  CheckOutlined,
+  CheckSquareOutlined,
+  CloseOutlined,
+  ExportOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
+import type { Approval } from "@dw/contracts";
+import { PageHeader, RegionState } from "@dw/ui";
+import { LoadError } from "../../components/load-error";
 import { LoadMore } from "../../components/load-more";
-import { PageHeading } from "../../components/page-heading";
 import {
   ToolApprovalPayload,
   approvalTitle,
 } from "../../components/tool-approval";
-import { approvalClient } from "../../lib/approvals/registry";
+import { approvalClient, approvalInbox } from "../../lib/approvals/registry";
+import { APPROVAL_STATUS } from "../../lib/approvals/status";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
-import Link from "next/link";
+import { errorMessage } from "../../lib/error-message";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
-
-const STATUS_BADGE: Record<
-  Approval["status"],
-  {
-    label: string;
-    variant: "warning" | "success" | "destructive" | "secondary";
-  }
-> = {
-  pending: { label: "Pending", variant: "warning" },
-  approved: { label: "Approved", variant: "success" },
-  rejected: { label: "Rejected", variant: "destructive" },
-  cancelled: { label: "Cancelled", variant: "secondary" },
-};
 
 export default function ApprovalsPage() {
   const { hasScope } = useAuth();
@@ -103,7 +91,7 @@ export default function ApprovalsPage() {
       setError(null);
       reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "unknown error");
+      setError(errorMessage(e));
     } finally {
       setBusyId(null);
     }
@@ -113,201 +101,224 @@ export default function ApprovalsPage() {
   const decided = approvals.filter((item) => item.status !== "pending");
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <PageHeading
-        icon={ClipboardCheck}
-        title="Approvals"
-        description="A run that asks to change something outside this system pauses here until a person decides. Nothing on this page has happened yet."
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        icon={<CheckSquareOutlined />}
+        title="Duyệt"
+        subtitle="Một lượt chạy muốn thay đổi thứ gì ngoài hệ thống sẽ dừng ở đây tới khi có người quyết. Chưa việc nào ở trang này đã xảy ra."
         actions={
-          <Button variant="outline" size="icon" onClick={reload}>
-            <RefreshCw />
-          </Button>
+          <Button
+            icon={<ReloadOutlined aria-hidden />}
+            aria-label="Tải lại"
+            onClick={reload}
+          />
         }
       />
-      {(error ?? loadError) != null && (
-        <p className="text-sm text-destructive">
-          {error ??
-            (loadError instanceof Error ? loadError.message : "unknown error")}
-        </p>
-      )}
-      {loading && loadError == null && <Skeleton className="h-64 w-full" />}
-      {!loading && pending.length === 0 && (
-        <EmptyState
-          icon={ClipboardCheck}
-          title="Nothing waiting for a decision"
-          description="A request appears here the moment a worker reaches a side effect its policy will not let it perform alone."
-        />
-      )}
+      <Flex vertical gap="middle">
+        {error != null && <Alert type="error" showIcon title={error} />}
+        {loadError != null && <LoadError error={loadError} onRetry={reload} />}
+        {loading && loadError == null && <RegionState kind="loading" />}
+        {!loading && loadError == null && pending.length === 0 && (
+          <RegionState
+            kind="empty"
+            title="Không có yêu cầu nào chờ quyết"
+            description="Yêu cầu hiện ở đây ngay khi một worker tới thao tác mà chính sách không cho nó tự làm."
+          />
+        )}
 
-      {pending.map((approval) => {
-        const lacking = missingScope(approval);
-        const lockReason =
-          lacking === null
-            ? null
-            : `Chỉ người có quyền ${lacking} được quyết yêu cầu này`;
-        // Withdrawing your own request is not deciding it: the server lets the
-        // requester reject without the stamped scope, so the page does too.
-        const approveLocked = lacking !== null;
-        const rejectLocked = lacking !== null && !approval.requested_by_me;
-        // A disabled button takes no pointer events, so the tooltip hangs on a
-        // wrapper; the same sentence also sits beside the buttons as text.
-        const withLock = (locked: boolean, button: ReactNode) =>
-          locked ? (
-            <Tooltip title={lockReason}>
-              <span className="inline-flex">{button}</span>
-            </Tooltip>
-          ) : (
-            button
-          );
-        return (
-          <Card key={approval.id} className="overflow-hidden">
-            <CardHeader className="border-b bg-muted/40">
-              <CardTitle className="flex flex-col items-start gap-3 text-base sm:flex-row sm:items-center sm:justify-between">
+        {pending.map((approval) => {
+          // A context with its own inbox decides there: one door per approval.
+          const inbox = approvalInbox(approval);
+          const lacking = missingScope(approval);
+          const lockReason =
+            lacking === null
+              ? null
+              : `Chỉ người có quyền ${lacking} được quyết yêu cầu này`;
+          // Withdrawing your own request is not deciding it: the server lets
+          // the requester reject without the stamped scope, so the page does too.
+          const approveLocked = lacking !== null;
+          const rejectLocked = lacking !== null && !approval.requested_by_me;
+          // A disabled button takes no pointer events, so the tooltip hangs on
+          // a wrapper; the same sentence also sits beside the buttons as text.
+          const withLock = (locked: boolean, button: ReactNode) =>
+            locked ? (
+              <Tooltip title={lockReason}>
+                <span className="inline-flex">{button}</span>
+              </Tooltip>
+            ) : (
+              button
+            );
+          return (
+            <Card
+              key={approval.id}
+              title={
                 <Link href={`/approvals/${approval.id}`}>
                   {approvalTitle(approval.approval_type)}
                 </Link>
-                <Badge variant={STATUS_BADGE[approval.status].variant}>
-                  {STATUS_BADGE[approval.status].label}
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                <span className="font-mono text-xs">
-                  {approval.approval_type}
-                </span>{" "}
-                — {approval.reason}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-5 text-sm">
-              <ToolApprovalPayload
-                payload={approval.payload}
-                className="bg-muted/50"
-              />
-              {!canDecide && (
-                <p className="text-xs text-muted-foreground">
-                  Your roles do not carry <strong>approvals.decide</strong>, so
-                  this request is read-only for you.
-                </p>
-              )}
-              {canDecide && (
-                <div className="rounded-xl border bg-muted/30 p-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                    Your decision
-                  </p>
-                  <Input
-                    value={comments[approval.id] ?? ""}
-                    onChange={(event) =>
-                      setComments((current) => ({
-                        ...current,
-                        [approval.id]: event.target.value,
-                      }))
-                    }
-                    placeholder={
-                      approval.requires_comment
-                        ? "Note explaining the decision (required)"
-                        : "Note explaining the decision (optional)"
-                    }
-                  />
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {withLock(
-                      approveLocked,
-                      <Button
-                        onClick={() => void decide(approval, true)}
-                        disabled={
-                          approveLocked ||
-                          busyId === approval.id ||
-                          missingComment(approval)
-                        }
-                      >
-                        <BadgeCheck />
-                        {busyId === approval.id ? "Working…" : "Approve"}
-                      </Button>,
-                    )}
-                    {withLock(
-                      rejectLocked,
-                      <Button
-                        variant="destructive"
-                        onClick={() => void decide(approval, false)}
-                        disabled={
-                          rejectLocked ||
-                          busyId === approval.id ||
-                          missingComment(approval)
-                        }
-                      >
-                        <CircleX /> Reject
-                      </Button>,
-                    )}
-                    {lockReason !== null && (
-                      <Typography.Text type="secondary">
-                        {lockReason}
-                        {approval.requested_by_me &&
-                          ". Bạn vẫn rút được yêu cầu của mình."}
-                      </Typography.Text>
-                    )}
+              }
+              extra={
+                <Tag color={APPROVAL_STATUS[approval.status].color}>
+                  {APPROVAL_STATUS[approval.status].label}
+                </Tag>
+              }
+            >
+              <Flex vertical gap="middle">
+                <Typography.Text>
+                  <Typography.Text code className="break-all">
+                    {approval.approval_type}
+                  </Typography.Text>{" "}
+                  {approval.reason}
+                </Typography.Text>
+                <ToolApprovalPayload payload={approval.payload} />
+                {inbox?.kind === "link" && (
+                  <div>
+                    <Button
+                      type="primary"
+                      href={inbox.href}
+                      icon={<ExportOutlined aria-hidden />}
+                    >
+                      {inbox.label}
+                    </Button>
                   </div>
-                </div>
-              )}
-            </CardContent>
+                )}
+                {inbox?.kind === "misconfigured" && (
+                  <Typography.Text type="secondary">
+                    Yêu cầu này được quyết ở nơi khác.
+                  </Typography.Text>
+                )}
+                {inbox === null && !canDecide && (
+                  <Typography.Text type="secondary">
+                    Vai của bạn không có quyền quyết yêu cầu, nên bạn chỉ xem
+                    được.
+                  </Typography.Text>
+                )}
+                {inbox === null && canDecide && (
+                  <Flex vertical gap="small">
+                    <label htmlFor={`comment-${approval.id}`}>
+                      <Typography.Text strong>
+                        {approval.requires_comment
+                          ? "Nhận xét (bắt buộc)"
+                          : "Nhận xét (không bắt buộc)"}
+                      </Typography.Text>
+                    </label>
+                    <Input.TextArea
+                      id={`comment-${approval.id}`}
+                      rows={2}
+                      value={comments[approval.id] ?? ""}
+                      onChange={(event) =>
+                        setComments((current) => ({
+                          ...current,
+                          [approval.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="Lý do của quyết định"
+                    />
+                    <Flex wrap gap="small" align="center">
+                      {withLock(
+                        approveLocked,
+                        <Button
+                          type="primary"
+                          icon={<CheckOutlined aria-hidden />}
+                          onClick={() => void decide(approval, true)}
+                          loading={busyId === approval.id}
+                          disabled={approveLocked || missingComment(approval)}
+                        >
+                          Duyệt
+                        </Button>,
+                      )}
+                      {withLock(
+                        rejectLocked,
+                        <Button
+                          danger
+                          icon={<CloseOutlined aria-hidden />}
+                          onClick={() => void decide(approval, false)}
+                          disabled={
+                            rejectLocked ||
+                            busyId === approval.id ||
+                            missingComment(approval)
+                          }
+                        >
+                          Từ chối
+                        </Button>,
+                      )}
+                      {lockReason !== null && (
+                        <Typography.Text type="secondary">
+                          {lockReason}
+                          {approval.requested_by_me &&
+                            ". Bạn vẫn rút được yêu cầu của mình."}
+                        </Typography.Text>
+                      )}
+                    </Flex>
+                  </Flex>
+                )}
+              </Flex>
+            </Card>
+          );
+        })}
+
+        {decided.length > 0 && (
+          <Card title="Quyết định gần đây">
+            <Typography.Paragraph type="secondary">
+              Đã quyết; giữ ở đây để lần ra người đã cho một lượt chạy đi tiếp.
+            </Typography.Paragraph>
+            <Table<Approval>
+              rowKey="id"
+              size="small"
+              pagination={false}
+              scroll={{ x: "max-content" }}
+              dataSource={decided}
+              columns={[
+                {
+                  title: "Quyết lúc",
+                  dataIndex: "decided_at",
+                  render: (value: string | null) => formatDateTime(value),
+                },
+                {
+                  title: "Loại",
+                  dataIndex: "approval_type",
+                  render: (value: string) => (
+                    <Typography.Text code>{value}</Typography.Text>
+                  ),
+                },
+                {
+                  title: "Lý do",
+                  dataIndex: "reason",
+                  ellipsis: true,
+                },
+                {
+                  title: "Lượt chạy",
+                  dataIndex: "run_id",
+                  render: (value: string | null) =>
+                    value ? (
+                      <Typography.Text code>{value}</Typography.Text>
+                    ) : (
+                      "—"
+                    ),
+                },
+                {
+                  title: "Kết quả",
+                  dataIndex: "status",
+                  render: (value: Approval["status"]) => (
+                    <Tag color={APPROVAL_STATUS[value].color}>
+                      {APPROVAL_STATUS[value].label}
+                    </Tag>
+                  ),
+                },
+              ]}
+            />
           </Card>
-        );
-      })}
+        )}
 
-      {decided.length > 0 && (
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-base">Recent decisions</CardTitle>
-            <CardDescription>
-              Already decided; kept here so a run can be traced back to the
-              person who released it.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-1">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Decided</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>Run id</TableHead>
-                  <TableHead>Outcome</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {decided.map((approval) => (
-                  <TableRow key={approval.id} className="align-top">
-                    <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {formatDateTime(approval.decided_at)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {approval.approval_type}
-                    </TableCell>
-                    <TableCell className="max-w-64 truncate text-xs text-muted-foreground">
-                      {approval.reason}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {approval.run_id ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={STATUS_BADGE[approval.status].variant}>
-                        {STATUS_BADGE[approval.status].label}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {!loading && pending.length > 0 && (
-        <LoadMore
-          hasMore={hasMore}
-          loading={loadingMore}
-          onLoadMore={loadMore}
-          shown={approvals.length}
-          noun="requests"
-        />
-      )}
+        {!loading && pending.length > 0 && (
+          <LoadMore
+            hasMore={hasMore}
+            loading={loadingMore}
+            onLoadMore={loadMore}
+            shown={approvals.length}
+            noun="yêu cầu"
+          />
+        )}
+      </Flex>
     </div>
   );
 }

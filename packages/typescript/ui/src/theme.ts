@@ -57,6 +57,10 @@ const dark: typeof light = {
   colorBorderSecondary: "#3a3a3c",
 };
 
+/** The dark danger button's hover: lighter than its #ff6b61 label, as antd
+ * lightens a hover in dark mode. */
+const DARK_ERROR_TEXT_HOVER = "#ff8a82";
+
 /**
  * These five are antd *seed* tokens. antd drops a seed key from the token
  * override and keeps what the algorithm derived from it, which in light is
@@ -119,6 +123,27 @@ export function buildTheme(mode: ColorMode, fontFamily: string): ThemeConfig {
           horizontalItemHoverColor: palette.colorLink,
         }),
       },
+      // A status tag writes its text in the status colour on that colour's
+      // own tint. The status colour is for icons, borders and fills: light
+      // success on its tint is 2.96:1 and warning 3.27:1, dark error 3.4:1.
+      // The status text colours are the ones made for text.
+      Tag: {
+        colorSuccess: palette.colorSuccessText,
+        colorWarning: palette.colorWarningText,
+        colorError: palette.colorErrorText,
+      },
+      // A danger button that is not filled writes its label in colorError:
+      // dark #d63a30 on the card is 3.65:1. In dark mode it takes the error
+      // text colour, and a filled one, now that light, takes the card colour
+      // for its label instead of white (white on #ff6b61 is 2.6:1).
+      ...(mode === "dark" && {
+        Button: {
+          colorError: palette.colorErrorText,
+          colorErrorHover: DARK_ERROR_TEXT_HOVER,
+          colorErrorActive: palette.colorError,
+          dangerColor: palette.colorBgContainer,
+        },
+      }),
     },
   };
 }

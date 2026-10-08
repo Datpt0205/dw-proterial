@@ -1,13 +1,21 @@
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
 
 export interface NavItem {
   href: string;
   label: string;
   hint: string;
-  icon: LucideIcon;
+  /** An `@ant-design/icons` component; drawn `aria-hidden` beside the label. */
+  icon: ComponentType<{ "aria-hidden"?: boolean }>;
   exact?: boolean;
   /** Scope required to see this item (omit = always visible). */
   scope?: string;
+  /**
+   * Shown to a holder of at least one of these scopes, for a page two groups
+   * open with different scopes. With `scope` as well, both must hold. An empty
+   * list is a configuration error and hides the item. Navigation, not
+   * authorization: the API still checks.
+   */
+  anyScope?: string[];
   /**
    * Roles this item is for; the user needs one of them (omit = every role).
    * This is navigation, not authorization — the API still checks `scope`.

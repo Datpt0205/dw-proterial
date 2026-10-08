@@ -13,14 +13,14 @@ git: every slice's commit message, and the pre-split narrative at
 | ---------------------------------- | ----------------------------------- | ------------------------- |
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed        |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps   |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Shell done; 03–09 next    |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd everywhere, CSP done |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-09-29)
+## Now (2026-10-08)
 
 - **This repo is the platform seed, with no bounded context.** It is what a
   product starts from. The Supply Chain context was built here, then removed
@@ -31,10 +31,9 @@ own file and a row here.
 - **Products live in their own repos.** The first is E-HSDT bid preparation
   for contractors, in `https://github.com/Datpt0205/platform-bidding`. Its
   plans and research live there, not here.
-- **Next:** on `feat/platform-hardening`, the six harness-audit slices in
-  `platform-runtime.md` (memory vectors, write trust, the review queue,
-  compaction, retrieval, dev harness, approval-audit done; six security
-  debts done 2026-10-08); then the antd shell tickets (`web-ui/antd-shell/` 03–09).
+- **Done 2026-10-08:** antd everywhere, Vietnamese shell, CSP; tickets
+  scope-holder-check, nav-any-scope, approval-inbox-link, tenant-members,
+  support-access 01 and 02's core. **Next:** support-access 02 step 10 and 03.
 
 ## Decisions Đạt owes
 

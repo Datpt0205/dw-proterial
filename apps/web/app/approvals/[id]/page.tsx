@@ -22,6 +22,7 @@ import {
   ToolApprovalPayload,
   approvalTitle,
 } from "../../../components/tool-approval";
+import { APPROVAL_STATUS } from "../../../lib/approvals/status";
 import { useAuth } from "../../../lib/auth/auth-context";
 import { formatDateTime } from "../../../lib/dates";
 import { errorMessage } from "../../../lib/error-message";
@@ -42,13 +43,6 @@ const REASON: Record<Reason, string> = {
 
 const BREADCRUMB = [{ title: <Link href="/approvals">Duyệt</Link> }];
 
-const STATUS: Record<Approval["status"], { label: string; color: string }> = {
-  pending: { label: "Chờ quyết", color: "warning" },
-  approved: { label: "Đã duyệt", color: "success" },
-  rejected: { label: "Từ chối", color: "error" },
-  cancelled: { label: "Đã hủy", color: "default" },
-};
-
 function Header({ approval }: { approval?: Approval }) {
   const title = approval
     ? approvalTitle(approval.approval_type)
@@ -61,8 +55,8 @@ function Header({ approval }: { approval?: Approval }) {
           {title}
         </Typography.Title>
         {approval && (
-          <Tag color={STATUS[approval.status].color}>
-            {STATUS[approval.status].label}
+          <Tag color={APPROVAL_STATUS[approval.status].color}>
+            {APPROVAL_STATUS[approval.status].label}
           </Tag>
         )}
       </Flex>
