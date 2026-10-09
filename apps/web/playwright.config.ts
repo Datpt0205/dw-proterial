@@ -39,7 +39,33 @@ export default defineConfig({
     screenshot: "only-on-failure",
     locale: "vi-VN",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Viewports, owned here. The platform pages are checked on both sides of
+  // antd's lg (992px, where the menu becomes a drawer) and at a 320px phone;
+  // the older specs (the Sales demo among them) run on the desktop project
+  // only. Every project runs in Vietnam's time zone, so a dev machine and CI
+  // agree.
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], timezoneId: "Asia/Ho_Chi_Minh" },
+    },
+    ...(
+      [
+        ["phone-320", 320, 640],
+        ["narrow-991", 991, 800],
+        ["wide-992", 992, 800],
+      ] as const
+    ).map(([name, width, height]) => ({
+      name,
+      testMatch: /platform-pages\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width, height },
+        hasTouch: width < 400,
+        timezoneId: "Asia/Ho_Chi_Minh",
+      },
+    })),
+  ],
   webServer: [
     {
       // The repo's `.env` puts the API in oidc mode, which is right for a

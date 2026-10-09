@@ -29,15 +29,15 @@ describe("home page destinations", () => {
     scopes = ["approvals.read", "runs.read"];
     render(<HomePage />);
 
-    expect(offered("Approvals")).toBe(true);
-    expect(offered("Audit log")).toBe(false);
+    expect(offered("Duyệt")).toBe(true);
+    expect(offered("Nhật ký kiểm toán")).toBe(false);
   });
 
   it("offers the audit log to a holder of audit.events", () => {
     scopes = ["approvals.read", "runs.read", "audit.events"];
     render(<HomePage />);
 
-    expect(offered("Approvals")).toBe(true);
-    expect(offered("Audit log")).toBe(true);
+    expect(offered("Duyệt")).toBe(true);
+    expect(offered("Nhật ký kiểm toán")).toBe(true);
   });
 });

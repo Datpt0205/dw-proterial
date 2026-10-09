@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert, Table, Tabs, Typography, type TableColumnsType } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
-import { RegionState } from "../../../components/region-state";
+import { LoadError } from "../../../components/load-error";
 import { formatDate, formatDateTime, formatMonth } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { useResource } from "../_lib/use-resource";
@@ -61,7 +61,7 @@ function MasterData() {
       <PageHeader
         breadcrumb={salesCrumbs("Dữ liệu giả lập")}
         title="Dữ liệu giả lập"
-        description="Dữ liệu chủ mà DW1 đọc qua cổng kết nối giả lập: hư cấu, chỉ đọc. Khi có Bravo và SharePoint thật, cổng được thay mà quy trình không đổi."
+        subtitle="Dữ liệu chủ mà DW1 đọc qua cổng kết nối giả lập: hư cấu, chỉ đọc. Khi có Bravo và SharePoint thật, cổng được thay mà quy trình không đổi."
       />
       <Alert
         type="info"
@@ -109,8 +109,7 @@ function Snapshot<T extends object>({
   empty: ReactNode;
 }) {
   const data = useResource(cacheKey, load);
-  if (data.error)
-    return <RegionState error={data.error} onRetry={data.reload} />;
+  if (data.error) return <LoadError error={data.error} onRetry={data.reload} />;
   return (
     <Table<T>
       rowKey={rowKey}

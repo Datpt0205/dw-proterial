@@ -19,7 +19,7 @@ import {
   EyeOutlined,
 } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
-import { RegionState } from "../../../../components/region-state";
+import { LoadError } from "../../../../components/load-error";
 import { formatQuantity } from "../../../../lib/money";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
@@ -180,7 +180,7 @@ export function CandidatePicker({
           />
         )}
         {items.error ? (
-          <RegionState error={items.error} onRetry={items.reload} />
+          <LoadError error={items.error} onRetry={items.reload} />
         ) : null}
         {shown.length ? (
           <Table<Row>

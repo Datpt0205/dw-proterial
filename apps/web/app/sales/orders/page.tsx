@@ -6,7 +6,7 @@ import { CloseOutlined, StopOutlined } from "@ant-design/icons";
 import { Button, Empty, Select, Space, Table, Typography } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
-import { RegionState } from "../../../components/region-state";
+import { LoadError } from "../../../components/load-error";
 import {
   formatAge,
   formatDateTime,
@@ -160,14 +160,14 @@ function Orders() {
       <PageHeader
         breadcrumb={salesCrumbs("Đơn hàng")}
         title="Đơn hàng"
-        description={
+        subtitle={
           orders.data
             ? `${all.filter((o) => inGroup("open", o)).length} đơn đang làm · ${waitingCustomer.length} chờ khách · ${blocked.length} còn cờ chặn. Mỗi số PO là một hồ sơ; bản sửa của khách vào cùng hồ sơ.`
             : "Mỗi số PO của khách là một hồ sơ, từ bản đầu tới khi xác nhận; bản sửa của khách vào cùng hồ sơ."
         }
       />
       {orders.error ? (
-        <RegionState error={orders.error} onRetry={orders.reload} />
+        <LoadError error={orders.error} onRetry={orders.reload} />
       ) : (
         <>
           {orders.data ? (

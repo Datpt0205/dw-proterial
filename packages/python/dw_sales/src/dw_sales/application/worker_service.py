@@ -98,7 +98,7 @@ class WorkerService:
 
     async def _notify_resumers(self, context: AccessContext, paused: WorkerState) -> None:
         recipients = await self.holders.holding(
-            context, context.workspace_id, frozenset({SalesScopes.WORKER_RESUME.value})
+            context.tenant_id, context.workspace_id, frozenset({SalesScopes.WORKER_RESUME.value})
         )
         names = {m.user_id: m.display_name for m in await self.directory.list_members(context)}
         assert paused.changed_at is not None

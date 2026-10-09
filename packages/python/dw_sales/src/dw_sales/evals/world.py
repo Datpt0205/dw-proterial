@@ -409,7 +409,7 @@ class Directory:
         return [caller.member() for caller in self.callers]
 
     async def holding(
-        self, context: AccessContext, workspace_id: uuid.UUID, scopes: frozenset[str]
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, scopes: frozenset[str]
     ) -> list[uuid.UUID]:
         return [c.user_id for c in self.callers if c.scopes & scopes]
 

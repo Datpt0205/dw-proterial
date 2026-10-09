@@ -11,6 +11,9 @@ from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementSe
 
 pytestmark = pytest.mark.unit
 
+# Named to the settings, not read from them: `make` exports the local `.env`,
+# whose DW_PUBLIC_WEB_URL (another port, a hosted web) would otherwise decide
+# which origin this test's preflight is allowed from.
 WEB_ORIGIN = "http://localhost:3000"
 # CORSMiddleware answers the preflight before routing, so any path exercises
 # the method allow-list; this one is a real PUT route (sales intel).
@@ -19,7 +22,7 @@ PREFLIGHT_PATH = "/api/v1/intel/accounts/00000000-0000-5000-8000-000000000001/te
 
 def make_container() -> ApiContainer:
     return ApiContainer(
-        settings=ApiSettings(profile="test"),
+        settings=ApiSettings(profile="test", public_web_url=WEB_ORIGIN),
         engine=None,
         health_service=HealthService(probes={}),
         token_verifier=None,

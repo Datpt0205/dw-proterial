@@ -70,7 +70,7 @@ dưới đây là đề xuất `[Đề xuất 30/9]`.
    mở được (Q05,
    [ADR 0007 của context](https://github.com/Datpt0205/platform-bidding/blob/bidding/docs/products/ehsdt/adr/0007-bid-price-visible-to-pricing-and-owner-only.md)),
    và bộ lọc giá của ngữ cảnh hỗ trợ
-   ([ADR nền tảng 0008](0008-customer-granted-support-access.md)) áp cả ở đây. Xóa
+   ([ADR nền tảng 0024](0024-customer-granted-support-access.md)) áp cả ở đây. Xóa
    tenant và EV07 xóa luôn ảnh trang. Có test âm: `bid_lead` và ngữ cảnh hỗ trợ
    không mở được ảnh trang của bảng giá.
 6. **Neo mất hiệu lực theo trang.** Ngoài đổi tệp, đổi phiên bản parser, đổi bộ

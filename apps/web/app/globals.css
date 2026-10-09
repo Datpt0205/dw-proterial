@@ -8,7 +8,6 @@
 @layer theme, base, antd, components, utilities;
 
 @import "tailwindcss";
-@import "tw-shimmer";
 
 @source "../../../packages/typescript/ui/src";
 
@@ -36,6 +35,13 @@
   --color-destructive-foreground: var(--ant-color-text-light-solid);
   --color-success: var(--ant-color-success);
   --color-warning: var(--ant-color-warning);
+  /* Status text on its own light tint. The status colour itself is for icons,
+     borders and solid fills: on its tint, #1f9d4c is 2.96:1. */
+  --color-destructive-text: var(--ant-color-error-text);
+  --color-success-text: var(--ant-color-success-text);
+  --color-warning-text: var(--ant-color-warning-text);
+  /* Links outside antd (a Markdown answer): antd's link colour. */
+  --color-link: var(--ant-color-link);
   --color-border: var(--ant-color-border-secondary);
   --color-input: var(--ant-color-border);
   --color-ring: var(--ant-color-primary-border);
@@ -51,28 +57,6 @@
      minute. The fade is short on purpose: it marks the arrival without asking
      to be watched. */
   --animate-fade-in: fade-in 0.4s ease-out;
-  @keyframes collapsible-down {
-    from {
-      height: 0;
-    }
-    to {
-      height: var(
-        --radix-collapsible-content-height,
-        var(--collapsible-panel-height, auto)
-      );
-    }
-  }
-  @keyframes collapsible-up {
-    from {
-      height: var(
-        --radix-collapsible-content-height,
-        var(--collapsible-panel-height, auto)
-      );
-    }
-    to {
-      height: 0;
-    }
-  }
 }
 
 /* antd's screen tokens (screenSM … screenXXL). A media query cannot read a
@@ -126,24 +110,6 @@
   main .rounded-2xl.border.bg-card {
     border-color: var(--ant-color-border-secondary);
     box-shadow: var(--ant-box-shadow-tertiary);
-  }
-
-  /* The tables @dw/ui's `Table` draws. antd's Table styles itself, and a rule
-     here that reached it would restyle every antd table in a `main`. */
-  main table[data-slot="table"] thead {
-    background: var(--ant-color-fill-alter);
-  }
-  main table[data-slot="table"] th {
-    height: 2.75rem;
-    letter-spacing: 0.055em;
-  }
-  main table[data-slot="table"] tbody tr {
-    transition:
-      background-color 0.18s ease,
-      box-shadow 0.18s ease;
-  }
-  main table[data-slot="table"] tbody tr:hover {
-    background: var(--ant-control-item-bg-hover);
   }
 
   /* App-wide scrollbars (BA 2026-08-25): thin, both axes, and invisible until
@@ -229,54 +195,8 @@
     outline: none;
   }
 
-  /* Phones. `!important` in this layer outranks every normal declaration in
-     every layer, utilities included: that is what turns the @dw/ui tables into
-     cards, and why these rules name `[data-slot="table"]` and never a bare
-     `table`. */
+  /* Phones: antd's xs. */
   @media (width < theme(--breakpoint-sm)) {
-    main table[data-slot="table"] {
-      min-width: 0 !important;
-    }
-    main table[data-slot="table"] thead {
-      display: none;
-    }
-    main table[data-slot="table"] tbody {
-      display: grid;
-      gap: 0.625rem;
-      padding: 0.625rem;
-    }
-    main table[data-slot="table"] tbody tr {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 0.5rem 1rem;
-      border: 1px solid var(--color-border) !important;
-      border-radius: 1rem;
-      padding: 0.875rem;
-      background: var(--ant-color-bg-container);
-    }
-    main table[data-slot="table"] tbody tr:has(.animate-pulse) {
-      display: block;
-    }
-    main table[data-slot="table"] tbody td {
-      padding: 0 !important;
-      min-width: 0;
-    }
-    main table[data-slot="table"] tbody td:first-child {
-      grid-column: 1 / -1;
-      font-size: 0.9375rem;
-    }
-    main table[data-slot="table"] tbody td:not(:first-child) {
-      font-size: 0.75rem;
-    }
-    main table[data-slot="table"] tbody td:last-child {
-      text-align: right;
-    }
-    main .overflow-x-auto:has(> table[data-slot="table"]) {
-      overflow: visible;
-      border: 0;
-      background: transparent;
-      box-shadow: none;
-    }
     /* 16px stops iOS zooming the page when a field takes focus; it outranks
        antd's field size on purpose. */
     input,
@@ -299,7 +219,3 @@
     }
   }
 }
-
-@custom-variant data-open (&:where([data-state="open"], [data-open]:not([data-open="false"])));
-
-@custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));

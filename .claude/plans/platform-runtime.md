@@ -82,7 +82,10 @@ Mốc 6 (running many customers) is half done:
   in-app notifications unexported (`ops-hardening.md` Open).
 - **Approval decisions audited; approvals, runs and audit read by workspace**
   (`platform-runtime/approval-audit-and-workspace/`): HITL-11 and the rest of
-  TEN-04. Ticket 01 open, and comes before the first product gate. Ticket 02
+  TEN-04. Ticket 01 **resolved 2026-10-08** (`feat/security-debts`): every
+  decision writes `approval.decided` (or, admitted by a channel code,
+  `approval.channel_decided`) in its own transaction; `dw_app` lost UPDATE on
+  `approval_decisions` (`ecb47f78702c`). Ticket 02
   **resolved 2026-10-06**, upstreamed from the first product's repo: the
   repository narrows approval, run and audit reads to the caller's workspace
   (RLS unchanged, still tenant-only), `decide` resumes in the run's own
@@ -184,6 +187,59 @@ Mốc 6 (running many customers) is half done:
 - **`make check-deepgram` and `make check-search` run scripts that do not
   exist**, left over from the product this was extracted from.
   `make check-model` was the third, and works since 2026-09-28.
+
+## Security debts (2026-10-08, `feat/security-debts`)
+
+Six debts, each its own commit and ticket under `platform-runtime/<folder>/`;
+Đạt delegated the open calls, decided provisionally (fail closed) and
+recorded in each ticket.
+
+- **`prompt-containment/01`:** `PromptRegistry` wraps every interpolated
+  value in an escaped `<input name>` block; `raw_variables` with a reason
+  opts out (ADR 0010). Open: the compaction summary prompt is copy, not a
+  registry artifact, and is not covered.
+- **`approval-audit-and-workspace/01`:** above.
+- **`system-actor/01`:** a lane audits as `system_actor(<lane>)`
+  (`lane_audit_event`, `append_across_tenants`, ADR 0011); memory expiry and
+  knowledge hard delete now audited, channel delivery no longer names the
+  recipient as actor.
+- **`sod-waiver-second-person/01`:** a waiver lifts nothing until a second
+  admin confirms it; a role or permission set cannot gain a scope that puts a
+  membership in breach (`f381f1694395`, ADR 0012). Open: a rule's own scopes
+  changing under memberships.
+- **`unauthenticated-401/01`:** missing or unverifiable bearer is 401 with
+  `WWW-Authenticate`; the web bounces only a request that carried a token.
+- **`channel-delivery-expiry/01`:** a delivery pending past
+  `retention@1.7.0.yaml` `channel_deliveries.pending_expiry_days` (7) fails
+  as `channel_unconfigured`, audited (`983b509c3f0f`, ADR 0006 amendment).
+
+## Platform tickets (2026-10-08, `feat/platform-tickets`)
+
+Đạt delegated the open calls; each is decided provisionally and recorded in
+its ticket's Comments.
+
+- **`scope-holder-check/01`, `/02`:** `SqlScopeHolders.holds(tenant, ws,
+user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
+  `AccessContext`, both reading one membership query (`_members`) and
+  `effective_scopes`. Integration-tested on `dw_app`, mutation-checked.
+  Still no production caller (the "waiting for their first context" list
+  above).
+
+- **`support-access/01`:** customer-granted support grants (ADR 0024,
+  `af8ee878b4ab`): `support_staff`, `support_grants` with the status machine
+  in a trigger, a membership trigger refusing support staff on every path,
+  `SupportScopeCatalog` (empty on `main`), `SupportGrantService`,
+  `/support/*` and `/platform/support-*`. Refusals carry
+  `details.reason_code`. `SqlScopeHolders` now has its first caller
+  (`scopes_of`, the granter's current scopes). Open: the `/platform` console
+  tables (web), conflict of interest at assignment.
+
+- **`tenant-members-and-invitations/01`:** `GET /admin/members` (tenant-wide,
+  `vi-VN-x-icu` order, measured present), `PUT /admin/members/{id}/memberships`
+  (administrative roles kept, `plan_memberships`), `POST /admin/invitations`
+  (user without a sign-in, `status=invited` until the first sign-in links by
+  email), `status` on `/directory/members` from one SQL expression. No email
+  is sent (P1). Open: email linking before customer SSO is brokered.
 
 ## Deliberately not taken
 

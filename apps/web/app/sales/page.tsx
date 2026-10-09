@@ -5,7 +5,7 @@ import { Button, Card, Empty, Table, Typography } from "antd";
 import { ExclamationCircleOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
-import { RegionState } from "../../components/region-state";
+import { LoadError } from "../../components/load-error";
 import { useAuth } from "../../lib/auth/auth-context";
 import {
   dayDeadline,
@@ -252,7 +252,7 @@ function MyWork() {
       <PageHeader
         breadcrumb={salesCrumbs("Việc cần làm")}
         title="Việc cần làm"
-        description={
+        subtitle={
           <span role="status">
             {work.data
               ? `${items.length} việc đang chờ bạn${overdue.length ? `, ${overdue.length} việc đã quá hạn` : ""}. `
@@ -263,7 +263,7 @@ function MyWork() {
         }
       />
       {work.error ? (
-        <RegionState error={work.error} onRetry={work.reload} />
+        <LoadError error={work.error} onRetry={work.reload} />
       ) : (
         <>
           {work.data ? (
@@ -408,7 +408,7 @@ function MyWork() {
 
       <Card title="YCBG chờ Design" size="small" id="ycbg-cho-design">
         {ycbg.error ? (
-          <RegionState error={ycbg.error} onRetry={ycbg.reload} />
+          <LoadError error={ycbg.error} onRetry={ycbg.reload} />
         ) : (
           <Table
             rowKey="ycbg_no"

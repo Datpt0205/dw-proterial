@@ -15,11 +15,8 @@ import {
 } from "antd";
 import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
 import type { SalesSchemas, SourceRegion } from "@dw/api-client";
-import { PageHeader, StatusTag } from "@dw/ui";
-import {
-  RegionLoading,
-  RegionState,
-} from "../../../../components/region-state";
+import { PageHeader, StatusTag, RegionState } from "@dw/ui";
+import { LoadError } from "../../../../components/load-error";
 import { formatAge, formatDate, formatDateTime } from "../../../../lib/dates";
 import { useNow } from "../../../../lib/use-now";
 import { salesApi } from "../../_lib/api";
@@ -143,9 +140,9 @@ function OrderDetail() {
     work.reload();
   }, [order, work]);
 
-  if (order.loading) return <RegionLoading rows={14} />;
+  if (order.loading) return <RegionState kind="loading" />;
   if (order.error || !data)
-    return <RegionState error={order.error} onRetry={order.reload} />;
+    return <LoadError error={order.error} onRetry={order.reload} />;
 
   const required = expectedRegions(data);
   const missing = required.filter(
@@ -180,7 +177,7 @@ function OrderDetail() {
           { title: "Đơn hàng", href: "/sales/orders" },
           `PO ${data.po_no}`,
         )}
-        meta={
+        tags={
           <>
             <OrderStateTag status={data.status} />
             {data.revision ? (
@@ -199,8 +196,8 @@ function OrderDetail() {
           </>
         }
         title={`PO ${data.po_no}`}
-        description={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · ngày PO ${formatDate(data.po_date)}`}
-        extra={
+        subtitle={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · ngày PO ${formatDate(data.po_date)}`}
+        actions={
           primary ? (
             <Button
               icon={<FileSearchOutlined aria-hidden />}

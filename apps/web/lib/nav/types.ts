@@ -1,9 +1,8 @@
 import type { ComponentType } from "react";
 
 /**
- * A nav icon: an `@ant-design/icons` component (the Sales nav, and every new
- * one) or a lucide icon the platform pages still use. The bar draws it at
- * 1rem with `className`, and hides it from assistive tech.
+ * A nav icon: an `@ant-design/icons` component. The bar draws it at 1rem with
+ * `className`, and hides it from assistive tech.
  */
 export type NavIcon = ComponentType<{
   className?: string;
@@ -14,10 +13,18 @@ export interface NavItem {
   href: string;
   label: string;
   hint: string;
+  /** An `@ant-design/icons` component; drawn `aria-hidden` beside the label. */
   icon: NavIcon;
   exact?: boolean;
   /** Scope required to see this item (omit = always visible). */
   scope?: string;
+  /**
+   * Shown to a holder of at least one of these scopes, for a page two groups
+   * open with different scopes. With `scope` as well, both must hold. An empty
+   * list is a configuration error and hides the item. Navigation, not
+   * authorization: the API still checks.
+   */
+  anyScope?: string[];
   /**
    * Roles this item is for; the user needs one of them (omit = every role).
    * This is navigation, not authorization — the API still checks `scope`.

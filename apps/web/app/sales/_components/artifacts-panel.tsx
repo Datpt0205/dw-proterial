@@ -5,7 +5,7 @@ import { Card, Space, Table, Typography } from "antd";
 import { StatusTag } from "@dw/ui";
 import { DownloadOutlined, FileAddOutlined } from "@ant-design/icons";
 import type { Artifact } from "@dw/api-client";
-import { RegionState } from "../../../components/region-state";
+import { LoadError } from "../../../components/load-error";
 import { formatDateTime } from "../../../lib/dates";
 import { formatQuantity } from "../../../lib/money";
 import { salesApi } from "../_lib/api";
@@ -112,7 +112,7 @@ export function ArtifactsPanel({
       }
     >
       {list.error ? (
-        <RegionState error={list.error} onRetry={reload} />
+        <LoadError error={list.error} onRetry={reload} />
       ) : (
         <div className="space-y-3">
           {toRender.length ? (

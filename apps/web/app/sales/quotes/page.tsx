@@ -6,7 +6,7 @@ import { CloseOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { Button, Empty, Select, Space, Table, Typography } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
-import { RegionState } from "../../../components/region-state";
+import { LoadError } from "../../../components/load-error";
 import {
   dayDeadline,
   formatAge,
@@ -161,15 +161,17 @@ function Quotes() {
       <PageHeader
         breadcrumb={salesCrumbs("Báo giá")}
         title="Báo giá"
-        description={
+        subtitle={
           quotes.data
             ? `${open.length} yêu cầu đang làm · ${overdue.length} quá hạn · ${done.length} đã gửi hoặc từ chối. Hạn là hết ngày ghi trên yêu cầu, giờ Việt Nam.`
             : "Yêu cầu báo giá theo hạn: quá hạn trước, rồi hạn gần nhất. Hạn là hết ngày ghi trên yêu cầu, giờ Việt Nam."
         }
-        extra={<Link href="/sales/quotes/screening">Rà soát báo giá năm</Link>}
+        actions={
+          <Link href="/sales/quotes/screening">Rà soát báo giá năm</Link>
+        }
       />
       {quotes.error ? (
-        <RegionState error={quotes.error} onRetry={quotes.reload} />
+        <LoadError error={quotes.error} onRetry={quotes.reload} />
       ) : !quotes.loading && all.length === 0 ? (
         <Empty description="Chưa có yêu cầu báo giá. Hồ sơ được tạo khi DW1 xử lý thư có RFQ trong Hộp thư.">
           <Link href="/sales/inbox">Mở Hộp thư</Link>

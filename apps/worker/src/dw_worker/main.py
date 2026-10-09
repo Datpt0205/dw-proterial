@@ -23,6 +23,7 @@ import contextlib
 import logging
 import signal
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -110,7 +111,7 @@ logger = logging.getLogger("dw_worker")
 
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
-RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.6.0.yaml"
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.7.0.yaml"
 
 
 def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
@@ -375,7 +376,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         approval_codes_retention = SqlApprovalCodeRetention(session_factory=sessions)
         # Rows are queued whether or not this host sends them, so they are
         # pruned whether or not it does.
-        channel_deliveries_retention = SqlChannelDeliveryRetention(session_factory=sessions)
+        channel_deliveries_retention = SqlChannelDeliveryRetention(
+            session_factory=sessions,
+            pending_expiry=timedelta(days=retention_policy.channel_deliveries.pending_expiry_days),
+        )
         if settings.zalo_send_enabled:
             channel_delivery_consumer = build_channel_delivery_consumer(
                 SqlChannelOutbox(sessions),

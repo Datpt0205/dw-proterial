@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Be_Vietnam_Pro, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
-import { Toaster } from "sonner";
 import { THEME_ROOT_CLASS } from "@dw/ui/theme-class";
 import { AppFrame } from "../components/app-frame";
 import { UiRoot } from "../components/ui-root";
@@ -30,10 +30,19 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Digital Worker Platform",
-  description: "Agent workspace: approvals, knowledge, memory and audit",
+  description:
+    "Không gian làm việc của worker: duyệt, tri thức, bộ nhớ và nhật ký kiểm toán",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  // Every page renders per request: the CSP nonce (middleware.ts) is minted
+  // per request, and a page prerendered at build time would carry none, so
+  // its scripts would be refused.
+  await connection();
   return (
     <html
       lang="vi"
@@ -45,7 +54,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <AppFrame>{children}</AppFrame>
           </AuthProvider>
         </UiRoot>
-        <Toaster richColors position="bottom-right" />
       </body>
     </html>
   );

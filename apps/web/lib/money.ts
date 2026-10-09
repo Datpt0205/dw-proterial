@@ -133,3 +133,92 @@ export function formatAmountInput(
   const grouped = (integer ?? "").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return fraction !== undefined ? `${grouped},${fraction}` : grouped;
 }
+
+// ------------------------------------------------------- dong, in short --
+
+/** No-break space: the unit never wraps onto a line of its own. */
+const NBSP = " ";
+
+/**
+ * `18,45 tỷ`. Not for a value being compared with a threshold or being
+ * corrected: 14.995.000.000 and 15.000.000.000 both read "15 tỷ".
+ */
+export function formatMoneyShort(amount: number): string {
+  const billions = Math.round((amount / 1_000_000_000) * 100) / 100;
+  return `${String(billions).replace(".", ",")}${NBSP}tỷ`;
+}
+
+// ---------------------------------------------------------- bằng chữ --
+
+const DIGITS = [
+  "không",
+  "một",
+  "hai",
+  "ba",
+  "bốn",
+  "năm",
+  "sáu",
+  "bảy",
+  "tám",
+  "chín",
+];
+const SCALES = ["", "nghìn", "triệu"];
+
+/** One group of three digits; `full` when a higher group precedes it. */
+function readTriple(n: number, full: boolean): string {
+  const hundreds = Math.floor(n / 100);
+  const tens = Math.floor((n % 100) / 10);
+  const units = n % 10;
+  const words: string[] = [];
+  if (full || hundreds > 0) words.push(DIGITS[hundreds]!, "trăm");
+  if (tens === 0) {
+    if (units > 0 && words.length > 0) words.push("linh");
+  } else if (tens === 1) {
+    words.push("mười");
+  } else {
+    words.push(DIGITS[tens]!, "mươi");
+  }
+  if (units > 0) {
+    if (units === 1 && tens >= 2) words.push("mốt");
+    else if (units === 5 && tens >= 1) words.push("lăm");
+    else words.push(DIGITS[units]!);
+  }
+  return words.join(" ");
+}
+
+/** Below a billion; `full` when a higher part was already read. */
+function readUnderBillion(n: number, full: boolean): string {
+  const groups = [n % 1000, Math.floor(n / 1000) % 1000, Math.floor(n / 1e6)];
+  const parts: string[] = [];
+  for (let at = 2; at >= 0; at -= 1) {
+    const group = groups[at]!;
+    if (group === 0) continue;
+    const triple = readTriple(group, full || parts.length > 0);
+    parts.push(SCALES[at] ? `${triple} ${SCALES[at]}` : triple);
+  }
+  return parts.join(" ");
+}
+
+/** Billions repeat the scale: 1.234.000.000.000 is "một nghìn hai trăm ba
+ * mươi bốn tỷ", not "một nghìn tỷ hai trăm ba mươi bốn tỷ". */
+function readNumber(n: number, full: boolean): string {
+  if (n < 1e9) return readUnderBillion(n, full);
+  const billions = Math.floor(n / 1e9);
+  const rest = n % 1e9;
+  const head = `${readNumber(billions, full)} tỷ`;
+  return rest > 0 ? `${head} ${readUnderBillion(rest, true)}` : head;
+}
+
+/**
+ * "Bằng chữ": `Mười tám tỷ bốn trăm năm mươi triệu đồng` for 18.450.000.000.
+ * The wording of a legal document stays its context's to decide; this is the
+ * reading a form prints under an amount.
+ */
+export function moneyInWords(amount: number): string {
+  if (!Number.isSafeInteger(amount)) {
+    throw new RangeError("Số tiền phải là số nguyên trong giới hạn");
+  }
+  if (amount === 0) return "Không đồng";
+  const text = `${amount < 0 ? "âm " : ""}${readNumber(Math.abs(amount), false)} đồng`;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

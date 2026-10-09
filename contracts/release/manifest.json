@@ -35,9 +35,9 @@
   ],
   "eval_datasets": [
     {
-      "checksum": "4504460eb6160e093df4edba7e8a1e955f16a8e9916af80b35a36c22ac86dd5d",
+      "checksum": "2c3569c4af18d9543cbb0223b5dd1c59bf2e4932260ec193975baa1ac38d9d9d",
       "dataset_id": "platform_smoke",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "checksum": "371fe5c19f09669a6b304966e7c2c880bdb8f1a0b7e869580b860227084a5ee8",
@@ -45,7 +45,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "dcf71902e1051549259fff8412f274132a025cc6",
+  "git_sha": "33658ac8d85d48be29038fe728c45718e15dfa73",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",
@@ -56,9 +56,9 @@
       "version": "1.1.0"
     },
     {
-      "checksum": "fde5e39c166b55b2616311be8e132555def7c4e2e634d938ed4b58d28a961bf8",
+      "checksum": "c0ec53bf9f752948ddcb910c88cfb61f04020ee4c1e437aae74f77623fcaf075",
       "policy_id": "retention",
-      "version": "1.6.0"
+      "version": "1.7.0"
     },
     {
       "checksum": "c5035251d916d76a355d7d647388dd2844f933a9ae5b3d0846a48788c5dc14ef",
@@ -93,9 +93,9 @@
   ],
   "prompt_bundles": [
     {
-      "checksum": "d09bde4799b114aa013b9af9c82681cf225b4055bf2e2935870d45b78285bf63",
+      "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
       "prompt_id": "platform.untrusted_demo",
-      "version": "1.0.0"
+      "version": "1.1.0"
     }
   ],
   "rubrics": [],

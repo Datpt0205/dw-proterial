@@ -1,5 +1,6 @@
 "use client";
 
+import { RegionState } from "@dw/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -12,7 +13,7 @@ import {
   Typography,
 } from "antd";
 import type { SalesSchemas, SourceRegion } from "@dw/api-client";
-import { RegionLoading, RegionState } from "../../../components/region-state";
+import { LoadError } from "../../../components/load-error";
 import { formatDateTime } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { FIELD, label } from "../_lib/labels";
@@ -120,9 +121,9 @@ export function SourceDrawer({
   );
 
   const body = () => {
-    if (source.loading) return <RegionLoading rows={12} />;
+    if (source.loading) return <RegionState kind="loading" />;
     if (source.error)
-      return <RegionState error={source.error} onRetry={source.reload} />;
+      return <LoadError error={source.error} onRetry={source.reload} />;
     const data = source.data;
     if (!data) return null;
     if (data.kind === "pdf" && data.pdf_base64) {

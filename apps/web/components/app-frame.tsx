@@ -3,22 +3,30 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Loader2, LogOut } from "lucide-react";
-import { RobotOutlined } from "@ant-design/icons";
 import {
   Avatar,
   Badge,
+  Button,
+  Card,
+  Flex,
+  Spin,
   theme,
   Typography,
   type GlobalToken,
   type MenuProps,
 } from "antd";
-import { AppShell, Button } from "@dw/ui";
+import { LogoutOutlined, RobotOutlined } from "@ant-design/icons";
+import { AppShell } from "@dw/ui";
 import { useAuth } from "../lib/auth/auth-context";
 import { useNavBadges } from "../lib/nav/badges";
 import { NAV } from "../lib/nav/registry";
 import { isNavGroup, type NavEntry, type NavItem } from "../lib/nav/types";
-import { barNav, currentPage, navPages, visibleNav } from "../lib/nav/visible";
+import {
+  barNav,
+  currentPage,
+  navPages,
+  visibleNav,
+} from "../lib/nav/visibility";
 import { LoginScreen } from "./login-screen";
 import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
@@ -27,11 +35,24 @@ import { FeedbackLauncher } from "./feedback/launcher";
 
 function CenteredCard({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
-        {children}
-      </div>
-    </div>
+    <Flex align="center" justify="center" className="min-h-screen p-6">
+      <Card className="w-full max-w-md text-center">{children}</Card>
+    </Flex>
+  );
+}
+
+function FullScreenSpin({ tip }: { tip: string }) {
+  return (
+    <Flex
+      align="center"
+      justify="center"
+      gap="small"
+      className="min-h-screen"
+      role="status"
+    >
+      <Spin />
+      <Typography.Text type="secondary">{tip}</Typography.Text>
+    </Flex>
   );
 }
 
@@ -133,27 +154,23 @@ export function AppFrame({ children }: { children: ReactNode }) {
   // The dev-login page renders outside the gate (it is how you authenticate).
   if (pathname === "/dev-login") return <>{children}</>;
 
-  if (status === "loading") {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 size-5 animate-spin" /> Loading…
-      </div>
-    );
-  }
+  if (status === "loading") return <FullScreenSpin tip="Đang tải…" />;
 
   if (status === "unauthenticated") return <LoginScreen />;
 
   if (status === "error") {
     return (
       <CenteredCard>
-        <h1 className="text-lg font-semibold">Could not reach the server</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
-        <div className="mt-5 flex justify-center gap-2">
-          <Button onClick={() => window.location.reload()}>Retry</Button>
-          <Button variant="outline" onClick={logout}>
-            Sign out
+        <Typography.Title level={4}>
+          Không kết nối được máy chủ
+        </Typography.Title>
+        <Typography.Paragraph type="secondary">{error}</Typography.Paragraph>
+        <Flex justify="center" gap="small">
+          <Button type="primary" onClick={() => window.location.reload()}>
+            Thử lại
           </Button>
-        </div>
+          <Button onClick={logout}>Đăng xuất</Button>
+        </Flex>
       </CenteredCard>
     );
   }
@@ -161,13 +178,15 @@ export function AppFrame({ children }: { children: ReactNode }) {
   if (status === "no-workspace") {
     return (
       <CenteredCard>
-        <h1 className="text-lg font-semibold">No workspace yet</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          You are signed in but not assigned to any workspace yet. Contact an
-          administrator to be granted access.
-        </p>
-        <Button className="mt-5" variant="outline" onClick={logout}>
-          <LogOut /> Sign out
+        <Typography.Title level={4}>
+          Bạn chưa thuộc workspace nào
+        </Typography.Title>
+        <Typography.Paragraph type="secondary">
+          Bạn đã đăng nhập nhưng chưa được thêm vào workspace nào. Hãy nhờ quản
+          trị viên của công ty cấp quyền.
+        </Typography.Paragraph>
+        <Button icon={<LogoutOutlined aria-hidden />} onClick={logout}>
+          Đăng xuất
         </Button>
       </CenteredCard>
     );
@@ -176,13 +195,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   // status === "ready". While a redirect is pending, hold a loader instead of
   // mounting a page the user can't use — that is what stops its data calls from
   // firing a 403 (and a toast) before the redirect lands.
-  if (redirectTo) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 size-5 animate-spin" /> Đang chuyển…
-      </div>
-    );
-  }
+  if (redirectTo) return <FullScreenSpin tip="Đang chuyển…" />;
   return (
     <>
       <AppShell
@@ -236,8 +249,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
       >
         {children}
       </AppShell>
-      {/* Spec 003 US5: feedback is a utility beside the app, pinned to the
-          bottom-left corner of every page rather than a line in the nav. */}
+      {/* Feedback is a utility beside the app, pinned to the bottom-left
+          corner of every page rather than a line in the nav. */}
       <FeedbackLauncher />
     </>
   );

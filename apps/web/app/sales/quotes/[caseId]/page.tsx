@@ -19,11 +19,8 @@ import {
   QuestionCircleOutlined,
 } from "@ant-design/icons";
 import type { SourceRegion } from "@dw/api-client";
-import { PageHeader, StatusTag } from "@dw/ui";
-import {
-  RegionLoading,
-  RegionState,
-} from "../../../../components/region-state";
+import { PageHeader, StatusTag, RegionState } from "@dw/ui";
+import { LoadError } from "../../../../components/load-error";
 import {
   dayDeadline,
   daysSince,
@@ -107,9 +104,9 @@ function QuoteDetail() {
     work.reload();
   }, [quote, work]);
 
-  if (quote.loading) return <RegionLoading rows={14} />;
+  if (quote.loading) return <RegionState kind="loading" />;
   if (quote.error || !data)
-    return <RegionState error={quote.error} onRetry={quote.reload} />;
+    return <LoadError error={quote.error} onRetry={quote.reload} />;
 
   const currency = data.currency as Currency;
   const customer = customers.data?.items.find(
@@ -162,7 +159,7 @@ function QuoteDetail() {
           { title: "Báo giá", href: "/sales/quotes" },
           `RFQ ${data.rfq_no}`,
         )}
-        meta={
+        tags={
           <>
             <QuoteStateTag status={data.status} />
             <StatusTag tone="outline" mono>
@@ -181,8 +178,8 @@ function QuoteDetail() {
           </>
         }
         title={`RFQ ${data.rfq_no}`}
-        description={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · gửi từ ${data.sender}`}
-        extra={
+        subtitle={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · gửi từ ${data.sender}`}
+        actions={
           firstRegion ? (
             <Button
               icon={<FileSearchOutlined aria-hidden />}

@@ -7,7 +7,7 @@ import {
   navPages,
   visibleNav,
   type NavViewer,
-} from "../nav/visible";
+} from "../nav/visibility";
 
 function viewer(scopes: string[], roles: string[] = ["member"]): NavViewer {
   return {
@@ -223,7 +223,7 @@ describe("barNav", () => {
     const { entries, context } = barNav(visibleNav(NAV, admin));
     expect(context).toBeNull();
     expect(labels(entries)).toEqual(
-      expect.arrayContaining(["Sales", "Admin", "Home"]),
+      expect.arrayContaining(["Sales", "Quản trị", "Trang chủ"]),
     );
   });
 });

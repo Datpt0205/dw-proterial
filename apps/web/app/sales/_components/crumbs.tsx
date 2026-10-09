@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { BreadcrumbProps } from "antd";
+import type { PageHeaderCrumb } from "@dw/ui";
 
 /**
  * A Sales page's breadcrumb: the context, then each level down to the page;
@@ -9,7 +9,7 @@ import type { BreadcrumbProps } from "antd";
  */
 export function salesCrumbs(
   ...levels: (string | { title: string; href: string })[]
-): NonNullable<BreadcrumbProps["items"]> {
+): PageHeaderCrumb[] {
   return [
     { title: <Link href="/sales">Sales</Link> },
     ...levels.map((level) =>

@@ -9,19 +9,19 @@ git: every slice's commit message, and the pre-split narrative at
 
 ## Areas
 
-| Area                               | File                                | State                           |
-| ---------------------------------- | ----------------------------------- | ------------------------------- |
-| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed              |
-| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps         |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | Prototype theme; Sales restyled |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 10 built; 12 left    |
-| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed       |
+| Area                               | File                                | State                         |
+| ---------------------------------- | ----------------------------------- | ----------------------------- |
+| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed            |
+| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 10 built; 12 left  |
+| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-10-06)
+## Now (2026-10-08)
 
 - **This repo is now the Proterial product repo** (`origin`
   `Datpt0205/dw-proterial`; the platform seed stays in `Datpt0205/codebase`).
@@ -32,16 +32,16 @@ own file and a row here.
   smoke, runbook `sales/dw1-portal-demo/demo.md`, `make demo-reset`,
   `make test-web-sales`. All committed and pushed (`2284d3c`).
 - Platform pieces still waiting for a first caller: `platform-runtime.md`.
-- Sales ticket 10 committed 2026-10-06 (`8d098b3`): DW1 runs on the runtime,
-  quotation approval and cross-check are platform approvals (dw_sales ADR
-  0004 Proposed, Đạt to review).
-- Platform `96f95ad` merged 2026-10-07 (Sales approvals on the platform model,
-  `docs/adr/0011`); `2ebd50f` 2026-10-08 (Zalo channel, model stack, Caddy).
+- Sales ticket 10 (`8d098b3`, dw_sales ADR 0004 Proposed, Đạt to review).
+  Platform merges: `96f95ad`, `2ebd50f`, `ab33703` (2026-10-08: security
+  debts, antd-only web, CSP, support access; `web-ui.md`, `sales.md`).
 - **Next:** sales 12 (production hardening, needs-triage).
 
 ## Decisions Đạt owes
 
 - **Runtime:**
+    - sales roles decide UNSTAMPED approvals via `approvals.decide`
+      (`sales.md` Open: a stamp standing in for it, or stamped platform types);
     - a plan quota on direct model calls (`runs_per_day`/`spend_usd_per_day`
       are enforced only in the runner);
     - the model profile and key for uat/production (local runs on `luna`,
