@@ -11,8 +11,8 @@ import {
   Typography,
 } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
-import { PageHeader, StatusTag } from "@dw/ui";
-import { RegionLoading, RegionState } from "../../../components/region-state";
+import { PageHeader, StatusTag, RegionState } from "@dw/ui";
+import { LoadError } from "../../../components/load-error";
 import {
   formatDateTime,
   formatDuration,
@@ -67,7 +67,7 @@ function OverviewBody() {
       <PageHeader
         breadcrumb={salesCrumbs("Tổng quan quy trình")}
         title="Tổng quan quy trình"
-        description={`Số hồ sơ ở mỗi bước của hai quy trình, và thời gian DW1 và Sales bỏ ra, ${MOCK_SET}. Không có số tiền nào ở trang này.`}
+        subtitle={`Số hồ sơ ở mỗi bước của hai quy trình, và thời gian DW1 và Sales bỏ ra, ${MOCK_SET}. Không có số tiền nào ở trang này.`}
         tags={
           data ? (
             <StatusTag tone="gray">{`Cập nhật ${formatDateTime(data.as_of)}`}</StatusTag>
@@ -75,9 +75,9 @@ function OverviewBody() {
         }
       />
       {overview.loading ? (
-        <RegionLoading rows={10} />
+        <RegionState kind="loading" />
       ) : overview.error ? (
-        <RegionState error={overview.error} onRetry={overview.reload} />
+        <LoadError error={overview.error} onRetry={overview.reload} />
       ) : data ? (
         <OverviewContent data={data} />
       ) : null}

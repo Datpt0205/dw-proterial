@@ -20,7 +20,7 @@ import {
 } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
-import { RegionState } from "../../../components/region-state";
+import { LoadError } from "../../../components/load-error";
 import { useAuth } from "../../../lib/auth/auth-context";
 import {
   formatAge,
@@ -208,12 +208,12 @@ function Inbox() {
       <PageHeader
         breadcrumb={salesCrumbs("Hộp thư")}
         title="Hộp thư (giả lập)"
-        description={
+        subtitle={
           inbox.data
             ? `${messages.length} thư · ${waiting} chưa xử lý · ${routed.length} chuyển Sales. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách.`
             : "Thư mẫu kèm PO, yêu cầu báo giá và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
         }
-        extra={
+        actions={
           <GuardedButton
             type="primary"
             icon={<RobotOutlined aria-hidden />}
@@ -232,7 +232,7 @@ function Inbox() {
       />
       <ActionError error={error} />
       {inbox.error ? (
-        <RegionState error={inbox.error} onRetry={inbox.reload} />
+        <LoadError error={inbox.error} onRetry={inbox.reload} />
       ) : (
         <>
           {inbox.data ? (

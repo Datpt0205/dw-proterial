@@ -185,10 +185,11 @@ class MemberDirectoryPort(Protocol):
 class ScopeHoldersPort(Protocol):
     """The members of a workspace holding any of ``scopes``, read by the same
     function that builds the access context, so who is told to act and who
-    may act cannot disagree."""
+    may act cannot disagree. The tenant is named, not an access context: the
+    platform's `holding` reads only the tenant and the workspace."""
 
     async def holding(
-        self, context: AccessContext, workspace_id: uuid.UUID, scopes: frozenset[str]
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, scopes: frozenset[str]
     ) -> list[uuid.UUID]: ...
 
 

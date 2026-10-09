@@ -198,6 +198,15 @@ export const appTheme: ThemeConfig = {
     },
     Modal: { borderRadiusLG: 16 },
     Alert: { borderRadiusLG: 12 },
+    // An antd `Tag` with a status colour writes its text in that colour on
+    // the colour's own tint, where #1f9d4c is 2.96:1 and #c26a00 3.27:1. The
+    // status text steps are the ones made for text (`StatusTag` reads the
+    // same pairs from `STATUS_TONES`).
+    Tag: {
+      colorSuccess: seed.colorSuccessText,
+      colorWarning: seed.colorWarningText,
+      colorError: seed.colorErrorText,
+    },
     Breadcrumb: {
       itemColor: seed.colorTextTertiary,
       linkColor: seed.colorTextTertiary,

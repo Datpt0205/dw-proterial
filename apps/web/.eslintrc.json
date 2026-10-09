@@ -1,29 +1,85 @@
 {
   "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "sonner",
+            "message": "Notices go through antd: const { message, notification } = App.useApp()."
+          },
+          {
+            "name": "radix-ui",
+            "message": "antd is the one component system (CLAUDE.md, Web UI)."
+          },
+          {
+            "name": "lucide-react",
+            "message": "Icons come from @ant-design/icons."
+          },
+          {
+            "name": "class-variance-authority",
+            "message": "antd is the one component system (CLAUDE.md, Web UI)."
+          },
+          {
+            "name": "antd",
+            "importNames": ["message", "notification"],
+            "message": "The static API does not read the theme; use App.useApp()."
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["@radix-ui/*"],
+            "message": "antd is the one component system (CLAUDE.md, Web UI)."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "NewExpression[callee.object.name='Intl'][callee.property.name=/^(NumberFormat|DateTimeFormat)$/]",
+        "message": "Numbers go through lib/money.ts, dates through lib/dates.ts (formatDate, formatDateTime): one formatter, not two."
+      },
+      {
+        "selector": "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]",
+        "message": "Numbers go through lib/money.ts, dates through lib/dates.ts, not in the browser's zone and locale."
+      },
+      {
+        "selector": "Property[key.name='currency'][value.value='VND']",
+        "message": "Money goes through lib/money.ts (đ, never ₫)."
+      },
+      {
+        "selector": "NewExpression[callee.name='Date'][arguments.length>0]",
+        "message": "A date becomes text through lib/dates.ts (formatDate, formatDateTime), which owns the zone (giờ Việt Nam), the order and the unknown label (CLAUDE.md \"Web UI\")."
+      },
+      {
+        "selector": "ImportDeclaration[importKind!='type'][source.value=/^dayjs/]",
+        "message": "dayjs is set up once, in lib/dates.ts (plugins, the vi locale); import from there. A type-only import is fine."
+      }
+    ]
+  },
   "overrides": [
     {
-      "files": ["**/*.ts", "**/*.tsx"],
-      "excludedFiles": ["lib/dates.ts", "**/__tests__/**", "e2e/**"],
+      "files": ["**/__tests__/**", "e2e/**"],
       "rules": {
         "no-restricted-syntax": [
           "error",
           {
-            "selector": "NewExpression[callee.name='Date'][arguments.length>0]",
-            "message": "A date becomes text through lib/dates.ts (formatDate, formatDateTime), which owns the zone (giờ Việt Nam), the order and the unknown label (CLAUDE.md \"Web UI\")."
+            "selector": "NewExpression[callee.object.name='Intl'][callee.property.name=/^(NumberFormat|DateTimeFormat)$/]",
+            "message": "Numbers go through lib/money.ts, dates through lib/dates.ts (formatDate, formatDateTime): one formatter, not two."
           },
           {
-            "selector": "CallExpression[callee.property.name=/^toLocale(Date|Time)String$/]",
-            "message": "A date becomes text through lib/dates.ts (formatDate, formatDateTime), not in the browser's zone and locale."
-          },
-          {
-            "selector": "NewExpression[callee.object.name='Intl'][callee.property.name='DateTimeFormat']",
-            "message": "A date becomes text through lib/dates.ts (formatDate, formatDateTime): one formatter, not two."
-          },
-          {
-            "selector": "ImportDeclaration[importKind!='type'][source.value=/^dayjs/]",
-            "message": "dayjs is set up once, in lib/dates.ts (plugins, the vi locale); import from there. A type-only import is fine."
+            "selector": "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]",
+            "message": "Numbers go through lib/money.ts, dates through lib/dates.ts, not in the browser's zone and locale."
           }
         ]
+      }
+    },
+    {
+      "files": ["lib/money.ts", "lib/dates.ts"],
+      "rules": {
+        "no-restricted-syntax": "off"
       }
     }
   ]

@@ -103,6 +103,21 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   404, not 403, on a Sales request. Kept: makers, `CaseDecisions.check`
   (async guard, longest-prefix keyed), withdrawal (reads the approval as
   the run's requester). Platform ADR 0004 is `docs/adr/0011` here.
+- 2026-10-08, platform `ab33703` merged: the antd-only web (see
+  `web-ui.md`), decision audit (one `approval.decided` row per decision, the
+  platform's; Sales writes none of its own), append-only decisions, 401 for
+  a missing bearer (`test_sales_routes.py` follows), `ScopeHoldersPort.holding`
+  takes the tenant id as the platform's does, Sales role labels in the one
+  role-label table, `/approvals` links a Sales approval to its case. DW1
+  renders no prompt (spec decision 13), so the platform's prompt containment
+  versions no Sales prompt and `sales@1.0.0` is unchanged.
+  **Owed from that merge (Docker became unavailable mid-pass):** the
+  integration suites ran once before it stopped (729 passed, 6 failed: the
+  five new `ck_approval_requests_sales_stamped` cases on a test bug, and
+  `test_sales_api_access.py` still expecting 403 for a missing bearer); both
+  are fixed and NOT re-run. Playwright (sales spec, platform specs) and
+  `make check-rerank` were NOT run. `make db-migrate` did run on the dev DB
+  (head `a64b918fc1f2`) before the stop.
 - Next: 12 (needs-triage). Owed by the API to the pages:
   the PO-read attributes for the candidate picker, order due dates in
   my-work, Vietnamese refusal messages, server time. (Role names and
@@ -166,6 +181,18 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
 
 ## Open
 
+- **Sales roles decide unstamped approvals** (owed, Đạt; from
+  `ac31ff0f2087`). Every Sales approval type is stamped, and since the
+  platform merge of 2026-10-08 the database says so
+  (`ck_approval_requests_sales_stamped`, migration `a64b918fc1f2`: a
+  `sales.` approval carries a `sales.` scope or is not written). That does
+  not close the widening: the platform decides on `approvals.decide` AND the
+  stamp (`docs/adr/0011`), so `sales_pic`, `sales_head` and
+  `sales_quote_approver` keep `approvals.decide` and with it every
+  UNSTAMPED request in their workspace (`memory.review` today). Closing it
+  needs a platform decision, not a product patch: either a stamp stands in
+  for `approvals.decide` (then the three drop it), or the platform stamps
+  its own types (`memory.review`).
 - From ticket 09 (2026-10-06): the approval panel needs a page reload after
   the approver renders the preview; whether submit should render the preview
   itself (Đạt); the release manifest pins an eval dataset file but not the

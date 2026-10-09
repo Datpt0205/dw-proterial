@@ -178,5 +178,6 @@ async def test_an_unconfigured_source_answers_every_sales_route_with_503() -> No
 
     assert overview.status_code == process.status_code == 503
     assert overview.json()["message"] == NOT_CONFIGURED
-    # Who is asking is settled first: a caller with no token learns nothing.
-    assert anonymous.status_code == 403
+    # Who is asking is settled first: a caller with no token learns nothing
+    # but that it must sign in (401, the platform's missing-bearer answer).
+    assert anonymous.status_code == 401

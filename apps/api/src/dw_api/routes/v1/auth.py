@@ -40,6 +40,7 @@ class BootstrapResponse(BaseModel):
     display_name: str
     memberships: list[WorkspaceMembershipModel]
     is_platform_operator: bool = False
+    is_support_staff: bool = False
 
 
 router = APIRouter(tags=["identity"])
@@ -76,4 +77,5 @@ async def bootstrap(
             for m in view.memberships
         ],
         is_platform_operator=view.is_platform_operator,
+        is_support_staff=view.is_support_staff,
     )

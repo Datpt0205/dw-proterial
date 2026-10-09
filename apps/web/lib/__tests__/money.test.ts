@@ -5,7 +5,9 @@ import {
   CURRENCIES,
   formatAmountInput,
   formatMoney,
+  formatMoneyShort,
   formatQuantity,
+  moneyInWords,
   parseAmountInput,
   type Currency,
 } from "../money";
@@ -107,5 +109,36 @@ describe("parseAmountInput", () => {
   it("writes a decimal string back with grouping and a decimal comma", () => {
     expect(formatAmountInput("18450000000")).toBe("18.450.000.000");
     expect(formatAmountInput("0.615")).toBe("0,615");
+  });
+});
+
+describe("formatMoneyShort", () => {
+  it("shortens to tỷ, and is no good for a threshold", () => {
+    expect(formatMoneyShort(18450000000)).toBe(`18,45${NBSP}tỷ`);
+    expect(formatMoneyShort(14995000000)).toBe(formatMoneyShort(15000000000));
+  });
+});
+
+describe("moneyInWords (Bằng chữ)", () => {
+  it.each([
+    [0, "Không đồng"],
+    [5, "Năm đồng"],
+    [15, "Mười lăm đồng"],
+    [21, "Hai mươi mốt đồng"],
+    [105, "Một trăm linh năm đồng"],
+    [1050, "Một nghìn không trăm năm mươi đồng"],
+    [1005000, "Một triệu không trăm linh năm nghìn đồng"],
+    [1285000, "Một triệu hai trăm tám mươi lăm nghìn đồng"],
+    [18450000000, "Mười tám tỷ bốn trăm năm mươi triệu đồng"],
+    [1000000000000, "Một nghìn tỷ đồng"],
+    [1234000000000, "Một nghìn hai trăm ba mươi bốn tỷ đồng"],
+    [2000000005, "Hai tỷ không trăm linh năm đồng"],
+    [-5000, "Âm năm nghìn đồng"],
+  ])("%d reads %j", (amount, words) => {
+    expect(moneyInWords(amount)).toBe(words);
+  });
+
+  it("refuses a fraction rather than rounding it", () => {
+    expect(() => moneyInWords(1.5)).toThrow(RangeError);
   });
 });

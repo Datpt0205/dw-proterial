@@ -6,7 +6,7 @@ import { Card, Space, Table, Typography } from "antd";
 import { CheckCircleOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader } from "@dw/ui";
-import { RegionState } from "../../../components/region-state";
+import { LoadError } from "../../../components/load-error";
 import { formatAge, formatDateTime } from "../../../lib/dates";
 import { useNow } from "../../../lib/use-now";
 import { salesApi } from "../_lib/api";
@@ -96,11 +96,11 @@ function Review() {
       <PageHeader
         breadcrumb={salesCrumbs("Kiểm chéo & duyệt")}
         title="Kiểm chéo & duyệt"
-        description="Người làm hồ sơ không tự kiểm: đơn được một Sales khác kiểm chéo với Bravo, báo giá được người không định giá duyệt."
+        subtitle="Người làm hồ sơ không tự kiểm: đơn được một Sales khác kiểm chéo với Bravo, báo giá được người không định giá duyệt."
       />
       <Card size="small" title={`Đơn chờ kiểm chéo (${checks.length})`}>
         {orders.error ? (
-          <RegionState error={orders.error} onRetry={orders.reload} />
+          <LoadError error={orders.error} onRetry={orders.reload} />
         ) : (
           <Table<Order>
             rowKey="case_id"
@@ -158,7 +158,7 @@ function Review() {
       </Card>
       <Card size="small" title={`Báo giá chờ duyệt (${approvals.length})`}>
         {quotes.error ? (
-          <RegionState error={quotes.error} onRetry={quotes.reload} />
+          <LoadError error={quotes.error} onRetry={quotes.reload} />
         ) : (
           <Table<Quote>
             rowKey="case_id"

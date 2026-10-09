@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import Link from "next/link";
 import { Alert, Table, Typography } from "antd";
 import { PageHeader } from "@dw/ui";
-import { RegionState } from "../../../../components/region-state";
+import { LoadError } from "../../../../components/load-error";
 import { salesApi } from "../../_lib/api";
 import { useResource } from "../../_lib/use-resource";
 import { SCOPE } from "../../_components/sales-frame";
@@ -38,8 +38,8 @@ function Screening() {
           "Rà soát báo giá năm",
         )}
         title="Rà soát báo giá năm"
-        description="Mã đã báo cho khách nhưng 12 tháng không có đơn nào, trên dữ liệu giả lập. Sales quyết định giữ hay bỏ từng báo giá."
-        extra={<Link href="/sales/quotes">Về danh sách báo giá</Link>}
+        subtitle="Mã đã báo cho khách nhưng 12 tháng không có đơn nào, trên dữ liệu giả lập. Sales quyết định giữ hay bỏ từng báo giá."
+        actions={<Link href="/sales/quotes">Về danh sách báo giá</Link>}
       />
       <Alert
         type="info"
@@ -47,7 +47,7 @@ function Screening() {
         title="Báo cáo chỉ liệt kê; không xóa hay đổi báo giá nào."
       />
       {report.error ? (
-        <RegionState error={report.error} onRetry={report.reload} />
+        <LoadError error={report.error} onRetry={report.reload} />
       ) : (
         <Table
           rowKey={(r) => `${r.customer_code}:${r.prv_code}`}

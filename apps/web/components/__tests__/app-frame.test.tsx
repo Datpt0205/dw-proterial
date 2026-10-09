@@ -145,8 +145,8 @@ describe("the shell's navbar", () => {
         .getAttribute("href"),
     ).toBe("/sales");
     expect(within(bar).queryByRole("menuitem", { name: /^Sales$/ })).toBeNull();
-    expect(within(bar).queryByRole("link", { name: "Approvals" })).toBeNull();
-    expect(within(bar).queryByRole("link", { name: "Home" })).toBeNull();
+    expect(within(bar).queryByRole("link", { name: "Duyệt" })).toBeNull();
+    expect(within(bar).queryByRole("link", { name: "Trang chủ" })).toBeNull();
 
     const drawer = openDrawer();
     const pages = [
@@ -163,9 +163,7 @@ describe("the shell's navbar", () => {
         within(drawer).getByRole("link", { name }).getAttribute("href"),
       ).toBe(href);
     }
-    expect(
-      within(drawer).queryByRole("link", { name: "Approvals" }),
-    ).toBeNull();
+    expect(within(drawer).queryByRole("link", { name: "Duyệt" })).toBeNull();
   });
 
   it("names the brand after the product and points it at the first page", () => {
@@ -201,12 +199,27 @@ describe("the shell's navbar", () => {
     expect(screen.queryByText("Staff")).toBeNull();
   });
 
-  it("takes the role's name from the session, not from a copy of its own", () => {
+  it("names a role from the one label table, the catalogue only for a key it lacks", () => {
     quietSales();
     signIn([...MEMBER, ...PIC], ["director", "sales_head"]);
     (
       auth.active as { roleNames: Record<string, string> }
     ).roleNames.sales_head = "Tên do danh mục vai đặt";
+    renderShell();
+    // The table names sales_head; a catalogue rename does not fork the label.
+    expect(
+      screen.getByRole("button", {
+        name: "Tài khoản: Nguyễn Văn An, Trưởng bộ phận Sales",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("falls back to the catalogue's name for a Sales role the table does not hold", () => {
+    quietSales();
+    signIn([...MEMBER, ...PIC], ["member", "sales_trainee"]);
+    (
+      auth.active as { roleNames: Record<string, string> }
+    ).roleNames.sales_trainee = "Tên do danh mục vai đặt";
     renderShell();
     expect(
       screen.getByRole("button", {
@@ -257,13 +270,11 @@ describe("the shell's navbar", () => {
     expect(screen.getByRole("menuitem", { name: /Sales/ })).toBeTruthy();
     const drawer = openDrawer();
     expect(
-      within(drawer)
-        .getByRole("link", { name: "Approvals" })
-        .getAttribute("href"),
+      within(drawer).getByRole("link", { name: "Duyệt" }).getAttribute("href"),
     ).toBe("/approvals");
     expect(
       screen.getByRole("button", {
-        name: "Tài khoản: Nguyễn Văn An, Tenant Admin",
+        name: "Tài khoản: Nguyễn Văn An, Quản trị toàn quyền",
       }),
     ).toBeTruthy();
   });
@@ -278,9 +289,7 @@ describe("the shell's navbar", () => {
     const drawer = openDrawer();
     expect(within(drawer).queryByRole("link", { name: "Đơn hàng" })).toBeNull();
     expect(
-      within(drawer)
-        .getByRole("link", { name: "Approvals" })
-        .getAttribute("href"),
+      within(drawer).getByRole("link", { name: "Duyệt" }).getAttribute("href"),
     ).toBe("/approvals");
   });
 });

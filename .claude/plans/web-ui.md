@@ -85,16 +85,37 @@ the theme, the shell and the shared composites, not primitive wrappers.
   and `lib/money.ts`; `lang="vi"`; `globals.css` rules all in `@layer base`;
   Tailwind breakpoints equal antd's; muted text at 4.5:1 or above. Shell
   cost: about 130 kB first-load JS per route.
+- 2026-10-08, platform `ab33703` merged: antd is the only component system
+  (`lib/__tests__/antd-only.test.ts` and the ESLint `no-restricted-imports`
+  rule; sonner, radix, lucide, cva, assistant-ui and the shadcn files in
+  `@dw/ui` are gone). One implementation of each shared piece: `@dw/ui`
+  `PageHeader` (platform API: `subtitle`, `actions`, `tags`; Sales' `meta`
+  moved into `tags`), `RegionState`/`ERROR_STATE`/`stateForError` (the
+  product's `components/region-state.tsx` is gone; Sales pages use
+  `LoadError`, which also offers "Tải lại" on a conflict), drawn by this
+  product's theme (`appTheme`, `UiProvider`, `THEME_ROOT_CLASS`, Be Vietnam
+  Pro and JetBrains Mono, #006edc) plus the platform's antd `Tag` text
+  colours. The platform's `ThemeProvider`/`buildTheme` (dark mode) were not
+  taken: this product is light only. `lib/money.ts` is the product's
+  currency-aware file plus the platform's `formatMoneyShort` and
+  `moneyInWords`; the platform's whole-dong `parseMoney` and InputNumber
+  helpers were not taken (one parser: `parseAmountInput`). One nav
+  visibility module (`lib/nav/visibility.ts`: `isNavItemVisible` beside
+  `visibleNav`/`barNav`); admin pages are one "Quản trị" group with the
+  platform's Vietnamese labels. One role-label table (`lib/nav/roles.ts`)
+  names the Sales roles; `displayRole` reads it, the catalogue only for a
+  key it lacks. CSP middleware with a per-request nonce (layout awaits
+  `connection()`). `/approvals` links a `sales.` approval to its case page
+  (`app/sales/_meta/approvals.ts`).
 - The web vitest suite is not run by CI (one step in `frontend-quality`).
 - `next build` fails on this Windows account at the standalone symlink copy
   (EPERM), as it does at HEAD; the Linux builder stage passes.
 - Still open from the 2026-09-30 ui-quality gaps:
-    - many platform screens and labels are English under `lang="vi"`;
-    - sonner's `<Toaster>` and `useCachedResource`'s raw `failure.message`
-      toast; feedback moves to `App.useApp()` page by page;
+    - (closed 2026-10-08 by the platform merge: Vietnamese platform
+      screens, no sonner);
     - the API client sends no `Idempotency-Key`;
-    - `playwright.config.ts` has one Desktop Chrome project: no viewport
-      projects, no non-Vietnam `timezoneId`, no screenshot script;
+    - no screenshot script (viewport projects and the Vietnam `timezoneId`
+      came with the platform merge, for the platform pages spec);
     - no offline banner or session-expiry warning (the header's workspace
       switcher, bell and account menu are antd since 2026-10-05).
 

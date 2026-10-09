@@ -392,3 +392,66 @@ async def test_a_second_original_case_for_one_po_number_is_refused(
     assert refused.value.details["constraint"] == (
         "uq_order_cases_tenant_id_workspace_id_customer_code_po_no"
     )
+
+
+# ---------------------------------------------------- the approval's stamp --
+
+
+_APPROVAL = (
+    "INSERT INTO platform.approval_requests"
+    " (id, tenant_id, workspace_id, approval_type, requested_by, payload, status,"
+    "  required_scope)"
+    " VALUES (gen_random_uuid(), :t, :w, :type, :u, '{}'::jsonb, 'pending', :stamp)"
+)
+
+
+@pytest.mark.parametrize(
+    ("approval_type", "scope"),
+    [
+        ("sales.quote", None),
+        ("sales.order.cross_check", None),
+        # A stamp outside Sales is no Sales stamp: `approvals.decide` would
+        # pass it for every holder.
+        ("sales.quote", "approvals.decide"),
+    ],
+)
+async def test_a_sales_approval_without_a_sales_stamp_is_refused(
+    small_run: OrderRun,
+    app_sessions: async_sessionmaker[AsyncSession],
+    approval_type: str,
+    scope: str | None,
+) -> None:
+    refused = await _refused(
+        app_sessions,
+        small_run.scope,
+        _APPROVAL,
+        t=small_run.scope.tenant_id.value,
+        w=small_run.scope.workspace_id.value,
+        type=approval_type,
+        u=AN.user_id,
+        stamp=scope,
+    )
+    assert refused == "ck_approval_requests_sales_stamped"
+
+
+@pytest.mark.parametrize(
+    ("approval_type", "scope"),
+    [("sales.quote", "sales.quote.approve"), ("memory.review", None)],
+)
+async def test_a_stamped_sales_approval_and_any_other_type_are_written(
+    small_run: OrderRun,
+    app_sessions: async_sessionmaker[AsyncSession],
+    approval_type: str,
+    scope: str | None,
+) -> None:
+    refused = await _refused(
+        app_sessions,
+        small_run.scope,
+        _APPROVAL,
+        t=small_run.scope.tenant_id.value,
+        w=small_run.scope.workspace_id.value,
+        type=approval_type,
+        u=AN.user_id,
+        stamp=scope,
+    )
+    assert refused is None

@@ -98,6 +98,6 @@ async def test_the_viewer_gets_403_on_case_detail(api: Api) -> None:
 async def test_an_anonymous_caller_is_refused_and_learns_nothing_else(api: Api) -> None:
     response = await api.client.get("/api/v1/sales/overview")
 
-    # The platform's refusal of a missing token, before anything Sales runs.
-    assert response.status_code == 403
+    # The platform's refusal of a missing token (401), before anything Sales runs.
+    assert response.status_code == 401
     assert response.json()["message"] == "missing bearer token"
