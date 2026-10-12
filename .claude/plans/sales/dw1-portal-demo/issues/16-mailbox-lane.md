@@ -1,6 +1,6 @@
 # 16 — DW1 processes new mail on its own: a worker lane over `InboxPort`
 
-Status: needs-info
+Status: ready-for-agent
 Blocked by: —
 Category: enhancement
 
@@ -75,3 +75,12 @@ acceptance 4).
 - `CLAUDE.md` "Agent and tool rules" (lane audit, plan quota in the runner).
 
 ## Comments
+
+- 2026-10-12, Đạt ("làm theo bạn tự recommend"): the proposed defaults hold.
+    1. Shape (a): a worker principal per tenant, the spec's "DW1 (tài khoản
+       dịch vụ)", resolved by the platform like any member and holding
+       `sales.inbox.process` through a role, so `effective_scopes` stays the
+       one answer to who may act. The lane never mints a context of its own.
+    2. "Enabled" is the pause state only: every workspace with Sales data
+       runs unless paused.
+    3. Tick 60 s for the mock inbox locally; the real adapter picks its own.

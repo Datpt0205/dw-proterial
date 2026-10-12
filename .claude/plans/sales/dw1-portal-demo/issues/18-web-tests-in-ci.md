@@ -1,6 +1,6 @@
 # 18 — CI runs the web tests
 
-Status: needs-info
+Status: ready-for-agent
 Blocked by: —
 Category: enhancement
 
@@ -44,3 +44,8 @@ owed.
   `apps/web/lib/__tests__/antd-only.test.ts`.
 
 ## Comments
+
+- 2026-10-12, Đạt ("làm theo bạn tự recommend"): the proposed defaults hold.
+    1. Vitest runs on every push in `frontend-quality`.
+    2. The Playwright walk runs on pushes to `main` and nightly, non-blocking
+       until three consecutive green runs, then blocking on `main`.
