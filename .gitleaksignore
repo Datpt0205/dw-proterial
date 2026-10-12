@@ -16,3 +16,9 @@
 # This file's own comment, as committed in 8c46c65, quoted the same phrase and
 # tripped the same rule. The comment above no longer quotes it.
 8c46c65566ee25b330580a9f1b0476b7e7e4cbee:.gitleaksignore:generic-api-key:11
+
+# Zalo poll consumer test: fake token and secret ("tok-…", "sec-…") passed to
+# the settings so the test can assert repr() never prints them. Not a
+# credential. The line now carries `# gitleaks:allow`; this covers the commit
+# that introduced it.
+dfa0f399fa358671928216004984c62b9e1c187b:apps/worker/tests/unit/test_zalo_poll_consumer.py:generic-api-key:58
