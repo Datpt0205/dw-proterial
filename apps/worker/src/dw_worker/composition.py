@@ -1,4 +1,5 @@
-"""Worker composition root: wires the knowledge ingest pipeline from settings.
+"""Worker composition root: wires the knowledge ingest pipeline from settings,
+and the runner for the graphs a context hosts here.
 
 Mirrors the API's knowledge wiring but on the worker side, where the parse
 layer lives. Only the composition root imports concrete adapters
@@ -19,14 +20,22 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from dw_agent_runtime.adapters.checkpoint import SqlAlchemyCheckpointSaver
+from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.model_stack import (
     ModelProviderConfig,
     ModelStack,
     build_model_stack,
 )
+from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
+from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardStore
+from dw_agent_runtime.approval_flow import ApproveAndResumeService
+from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.model.prompts import PromptRegistry
-from dw_kernel.ports import SystemClock, UtcClock, Uuid7Generator
+from dw_agent_runtime.model.run_policy import load_worker_run_policy
+from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
+from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.adapters.api_parsers import (
     DeepgramTranscriptParser,
     GatewayFileParser,
@@ -39,6 +48,8 @@ from dw_knowledge.gateway import KnowledgeGateway
 from dw_knowledge.ingest_jobs import IngestJobStore
 from dw_knowledge.ports import DocumentParserPort, EmbeddingPort, ObjectStoragePort, VectorIndexPort
 from dw_observability.telemetry import TelemetryPort
+from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
+from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_worker.settings import WorkerSettings
 
 if TYPE_CHECKING:
@@ -243,3 +254,83 @@ def build_model_stack_for(
         telemetry=telemetry,
         mock_fixtures_dir=MOCK_MODEL_FIXTURES,
     )
+
+
+# ---- graphs this process hosts ---------------------------------------------
+
+# Pinned like the API pins them (`dw_api.bootstrap.paths`): the stale-run rule
+# both processes' runs are held to, and the release a run records. A test
+# holds the two pins together (`test_worker_sales_settings.py`).
+WORKER_RUN_POLICY = REPO_ROOT / "configs" / "policies" / "worker_runs@1.0.0.yaml"
+_RELEASE_MANIFEST_REF = REPO_ROOT / "contracts" / "release" / "manifest.ref"
+
+
+def release_manifest_ref() -> str:
+    """The content-addressed release this process serves; every run records it.
+    Absent only in an unreleased development tree."""
+    if _RELEASE_MANIFEST_REF.exists():
+        return _RELEASE_MANIFEST_REF.read_text(encoding="utf-8").strip()
+    return "unreleased"
+
+
+@dataclass(frozen=True)
+class WorkflowRuntime:
+    """Where a context registers the graphs this process hosts, the runner
+    that starts their runs, and the approvals those runs pause on."""
+
+    graphs: GraphRegistry
+    workers: WorkerRegistry
+    runner: LangGraphWorkflowRunner
+    approval_flow: ApproveAndResumeService
+
+
+def build_workflow_runtime(
+    settings: WorkerSettings,
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    clock: UtcClock,
+    ids: IdGenerator,
+    telemetry: TelemetryPort,
+) -> WorkflowRuntime:
+    """A runner as the API builds its own, for a context whose graph runs here.
+
+    Runs, checkpoints and approvals are PostgreSQL rows, so a run started in
+    this process is a run like any other: counted against the tenant's plan
+    where it begins (`allowance`, the daily spend guard beside it), recorded
+    with this release, and resumable by either process that registered its
+    graph. The per-run ledger is the one this process's model gateway holds
+    (`build_model_stack_for`), not a second one. No approval prefix is made
+    strict here beyond what a context registers: this process decides no
+    approval through this flow.
+    """
+    stack = build_model_stack_for(settings, sessions, clock=clock, telemetry=telemetry)
+    uow_factory = SqlPlatformUnitOfWorkFactory(sessions)
+    run_store = SqlWorkerRunStore(
+        sessions,
+        stale_run_after_seconds=load_worker_run_policy(WORKER_RUN_POLICY).stale_run_after_seconds,
+    )
+    graphs = GraphRegistry()
+    workers = WorkerRegistry(graph_registry=graphs)
+    runner = LangGraphWorkflowRunner(
+        worker_registry=workers,
+        graph_registry=graphs,
+        checkpoint_saver=SqlAlchemyCheckpointSaver(sessions),
+        run_store=run_store,
+        uow_factory=uow_factory,
+        clock=clock,
+        id_generator=ids,
+        allowance=PlanEntitlementService(DEFAULT_PLANS),
+        budget=stack.budget,
+        approval_policy=AutonomyApprovalPolicy(),
+        release_manifest_ref=release_manifest_ref(),
+        telemetry=telemetry,
+        spend_store=SqlSpendGuardStore(session_factory=sessions),
+    )
+    approval_flow = ApproveAndResumeService(
+        uow_factory=uow_factory,
+        runner=runner,
+        run_store=run_store,
+        clock=clock,
+        id_generator=ids,
+    )
+    return WorkflowRuntime(graphs, workers, runner, approval_flow)

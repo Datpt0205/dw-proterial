@@ -1,6 +1,6 @@
 # 16 — DW1 processes new mail on its own: a worker lane over `InboxPort`
 
-Status: ready-for-agent
+Status: done (2026-10-12, reviewed, uncommitted)
 Blocked by: —
 Category: enhancement
 
@@ -74,6 +74,27 @@ acceptance 4).
 - `dw_platform/domain/audit.py` (`system_actor`, `lane_audit_event`).
 - `CLAUDE.md` "Agent and tool rules" (lane audit, plan quota in the runner).
 
+## As built
+
+- Lane: `dw_sales/application/inbox_lane.py` (`InboxLane.tick`), paced by
+  `apps/worker/src/dw_worker/consumers/sales_inbox.py`, registered as
+  `sales_inbox` in `dw_worker.main.build_registry` (60 s), switch
+  `DW_WORKER_SALES_INBOX_LANE` (default on).
+- Authority: DW1's service account per tenant (subject `dw1_subject`, role
+  `sales_dw1` = `sales.inbox.process`, migration `af154486381e`), resolved by
+  `SqlMembershipLookup.find_service_access`, cut to `LANE_CEILING`, no role.
+- Once per message: skipped if it had a disposition when the tick began or
+  has one just before its run; `SqlMessageLog.record` refuses a second
+  disposition on a case (`message_already_processed`) for a run racing a
+  person.
+- DW1 assembled once for API and worker: `dw_sales.adapters.assembly.build_dw1`.
+- Tests: `dw_sales/tests/unit/test_inbox_lane.py`,
+  `dw_sales/tests/integration/test_sales_inbox_lane.py`,
+  `dw_platform/tests/integration/test_service_access.py`,
+  `apps/worker/tests/integration/test_sales_inbox_lane_db.py`,
+  `apps/worker/tests/unit/test_sales_inbox_consumer.py`,
+  `apps/worker/tests/unit/test_worker_sales_settings.py`, `test_worker.py`.
+
 ## Comments
 
 - 2026-10-12, Đạt ("làm theo bạn tự recommend"): the proposed defaults hold.
@@ -84,3 +105,72 @@ acceptance 4).
     2. "Enabled" is the pause state only: every workspace with Sales data
        runs unless paused.
     3. Tick 60 s for the mock inbox locally; the real adapter picks its own.
+
+- 2026-10-12, built (agent). What landed, per acceptance:
+    1. `sales_inbox` registered at the worker's seam
+       (`apps/worker/src/dw_worker/main.py`, `build_sales_inbox_lane`), under
+       `dw_sales.application.inbox_lane.SALES_INBOX_LANE`; `dw-sales` in
+       `apps/worker/pyproject.toml`; named in `test_worker.py`
+       (`test_dw1s_mailbox_lane_needs_a_database_object_storage_and_a_mailbox`).
+       Wired with a database, object storage and a bound mailbox; the
+       worker builds DW1 with the API's own call, now
+       `dw_sales.adapters.assembly.build_dw1`, over a LangGraph runner of
+       its own (`dw_worker.composition.build_workflow_runtime`).
+    2. `InboxLane.tick`: per workspace, DW1's context, nothing while paused,
+       then each message without a disposition, oldest first, through
+       `Dw1Runs.process` (one run per message). The idempotency key is the
+       message log's unique (workspace, message_id): `SqlMessageLog.record`
+       now replaces only a routed disposition and refuses
+       (`message_already_processed`) a second one on a case, so of a person
+       and the lane the second transaction rolls back.
+    3. `lane_audit_event` from `system_actor("sales_inbox")` per message,
+       `action = sales.message.processed_by_lane`, naming the account in
+       `details.account_id`; the processing's own rows name the account.
+    4. Role `sales_dw1` (migration `af154486381e`): `sales.inbox.process`
+       only. The account (subject `service|sales-dw1|<tenant_id>`, no email)
+       is seeded in tenant-alpha by `seed_dw1_accounts` (demo seed and
+       `make demo-reset`); the lane cuts its context to that one scope and
+       carries no role, so a role added by hand (even `platform_admin`)
+       widens nothing (`SqlMembershipLookup.find_service_access`).
+    5. Quota: the run's own `RunAllowancePort` check; the lane stops the
+       workspace for the tick on `QuotaExceededError`, the rest stay "Chưa xử
+       lý" in the inbox.
+    6. Pause: checked before any run each tick, and the run's step refuses
+       a pause that lands mid-tick.
+    7. Negative tests: `dw_sales/tests/unit/test_inbox_lane.py` (another
+       workspace's context refused, alpha's account is nobody in beta, a
+       paused workspace, a message a person processed, a person racing the
+       lane), `dw_sales/tests/integration/test_sales_inbox_lane.py` (the key
+       across two transactions, the seeded account's scopes),
+       `dw_platform/tests/integration/test_service_access.py`, and the whole
+       lane on Postgres in `apps/worker/tests/integration/test_sales_inbox_lane_db.py`.
+    8. No `ReapTarget`: the lane owns no job queue.
+       Also: a message whose run fails waits a doubling delay (5 min to 6 h) so
+       one bad file does not spend a run a minute. Demo: the lane is on by
+       default (decision 3); `DW_WORKER_SALES_INBOX_LANE=false` keeps the
+       walk-through by button deterministic (demo.md section 1, new 3.9).
+       Open: a lane run is recorded with `channel="web"` (`RuntimeDw1Runs`
+       hard-codes it; trace metadata only); a production tenant's DW1 account
+       is not provisioned by anything yet (seed only).
+
+- 2026-10-12, review (agent). Re-ran the guards' mutations through bash,
+  each with a green baseline first and the file restored and compared after:
+  the pause check, the other-workspace refusal, the quota stop, a widened
+  `LANE_CEILING`, the lane's audit actor, the "not in done" filter (unit),
+  the `record` `where=` (integration, both the overwrite and the two-transaction
+  race) and `find_service_access` passing no ceiling (integration): all red.
+  Migration `af154486381e` upgrade, downgrade -1, upgrade on a scratch
+  database: the role present, absent, present; one head.
+  Fixed: a routed message may be processed again, so the log's key did not
+  keep the lane off a message a person routed after the tick began, and a
+  pause landing mid-tick still cost one refused run. The lane now re-reads
+  the pause and the message's disposition just before each run.
+  `test_a_message_a_person_routes_during_the_tick_is_not_processed_again`
+  and a run count on the mid-tick pause test go red without it.
+  Still open: the worker image (now with dw-sales) is not built or scanned
+  here, so CI's trivy run is the first look; the lane's own audit row is a
+  transaction after the run's (the run's rows, as the account, are in the
+  run's transaction); runs record `channel="web"`; sign-in's
+  `users.subject` match would resolve DW1's account if an identity provider
+  ever issued that subject (nothing refuses `service|` subjects at sign-in);
+  no production tenant's account is provisioned.

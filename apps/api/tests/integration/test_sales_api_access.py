@@ -103,3 +103,20 @@ async def test_an_anonymous_caller_is_refused_and_learns_nothing_else(api: Api) 
     # The platform's refusal of a missing token (401), before anything Sales runs.
     assert response.status_code == 401
     assert response.json()["message"] == "missing bearer token"
+
+
+async def test_another_tenants_pic_cannot_correct_a_value_on_alphas_order(api: Api) -> None:
+    """Ticket 15: the per-field correction reads the case in the caller's own
+    workspace only; Beta's PIC learns nothing and Alpha's order is unchanged."""
+    an, bao = api.as_(AN), api.as_(BAO, BETA)
+    case = await order_of(an, "M27")
+
+    written = await bao.post(
+        f"/orders/{case['case_id']}/findings/value_uncertain:2/corrections",
+        {"case_version": case["case_version"], "field": "quantity", "value": "1"},
+    )
+
+    assert written.status_code == 404
+    after = (await an.get(f"/orders/{case['case_id']}")).json()
+    assert after["case_version"] == case["case_version"]
+    assert all(not line["corrections"] for line in after["lines"])

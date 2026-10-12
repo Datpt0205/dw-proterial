@@ -369,6 +369,55 @@ describe("per-finding decisions", () => {
     expect(within(group).getByText("Yêu cầu khách sửa")).toBeTruthy();
   });
 
+  it("offers a free-text value on a value_uncertain only as the server allows it (ticket 15)", () => {
+    const viewer = as(AN, PIC);
+    const uncertain = (allowed: string[]) =>
+      order({
+        findings: [
+          finding({
+            key: "value_uncertain:-",
+            code: "value_uncertain",
+            line_no: null,
+            expected: null,
+            actual: "unchecked_region",
+            allowed,
+          }),
+        ],
+      });
+    const { unmount } = ui(
+      <FindingsPanel
+        order={uncertain(["ask_customer"])}
+        viewer={viewer}
+        onChanged={() => {}}
+        onOpenSource={() => {}}
+        onPickCode={() => {}}
+      />,
+    );
+    const typedFirst = screen.getByRole("radiogroup", {
+      name: "Quyết định cho cờ này",
+    });
+    expect(
+      within(typedFirst).queryByText("Ghi chú sheet chưa kiểm"),
+    ).toBeNull();
+    expect(within(typedFirst).queryByText("Sửa giá trị")).toBeNull();
+    unmount();
+
+    ui(
+      <FindingsPanel
+        order={uncertain(["ask_customer", "corrected_by_sales"])}
+        viewer={viewer}
+        onChanged={() => {}}
+        onOpenSource={() => {}}
+        onPickCode={() => {}}
+      />,
+    );
+    const noted = screen.getByRole("radiogroup", {
+      name: "Quyết định cho cờ này",
+    });
+    expect(within(noted).getByText("Ghi chú sheet chưa kiểm")).toBeTruthy();
+    expect(within(noted).queryByText("Sửa giá trị")).toBeNull();
+  });
+
   it("asks for a reason before an acceptance is sent", async () => {
     const viewer = as(AN, PIC);
     ui(

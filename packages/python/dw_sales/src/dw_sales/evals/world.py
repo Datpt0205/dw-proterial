@@ -74,7 +74,7 @@ from dw_sales.application.runs import subject_of
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.source import required_regions
 from dw_sales.application.views import MessageDispositionView
-from dw_sales.domain.dispositions import CaseKind, MessageDisposition
+from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.workflows.graph import register
@@ -243,6 +243,16 @@ class _Messages:
         self._held = held
 
     async def record(self, disposition: MessageDisposition, processed_at: datetime) -> None:
+        # Refuses what the SQL log refuses: only a routed message is replaced.
+        earlier = self._held.get(disposition.message_id)
+        if earlier is not None and earlier.disposition.kind is not DispositionKind.ROUTED_TO_SALES:
+            raise ConflictError(
+                "the message is already on a case",
+                details={
+                    "message_id": disposition.message_id,
+                    "rule": "message_already_processed",
+                },
+            )
         self._held.pop(disposition.message_id, None)
         self._held[disposition.message_id] = LoggedMessage(disposition, processed_at)
 

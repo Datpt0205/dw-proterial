@@ -88,6 +88,20 @@ async def test_a_check_basis_holds_the_keys_of_line_basis(catalog: AsyncConnecti
     assert set(re.findall(r"'([a-z_]+)'", listed)) == set(orders.LineBasis.model_fields)
 
 
+@pytest.mark.parametrize(
+    "name", ["ck_order_lines_corrections", "ck_order_revisions_header_corrections"]
+)
+async def test_a_correction_holds_the_keys_of_its_domain_record(
+    catalog: AsyncConnection, name: str
+) -> None:
+    """Ticket 15: the CHECK names every field `ValueCorrection` writes, and
+    refuses any other key."""
+    definition = await _constraint(catalog, name)
+    fields = set(orders.ValueCorrection.model_fields)
+    assert set(re.findall(r'@\."key" == "([a-z_]+)"', definition)) == fields  # no other key
+    assert set(re.findall(r'exists \(@\."([a-z_]+)"\)', definition)) == fields  # each one
+
+
 async def test_a_decision_not_applied_holds_the_keys_of_its_domain_record(
     catalog: AsyncConnection,
 ) -> None:

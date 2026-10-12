@@ -55,6 +55,7 @@ from dw_sales.application.views import (
     order_summary,
 )
 from dw_sales.domain.orders import (
+    AMOUNT_FIELDS,
     Accepted,
     Actor,
     AskCustomer,
@@ -165,6 +166,38 @@ class OrderCommands:
             await save_order(work, context, self.ids, case, confirmed, event)
             await work.commit()
         return order_change(confirmed)
+
+    async def correct_value(
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        finding_key: str,
+        *,
+        case_version: int,
+        field: str,
+        value: str,
+    ) -> CaseChangeView:
+        """One value a `value_uncertain` flagged, typed by Sales (ticket 15),
+        with the checks run again on the corrected values
+        (`OrderIntake.correct_value`). An amount is typed only by a holder of
+        `sales.price.read`, as only they read one (403). The event and the
+        audit row name the finding and the field, never the value."""
+        await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
+        if field in AMOUNT_FIELDS:
+            await self._require(context, case_id, SalesScopes.PRICE_READ)
+        actor, now, scope = order_actor(context, self.gate), self.clock.now(), sales_scope(context)
+        async with self.uow(scope) as work:
+            case = (await stored_order(work, case_id)).case
+            same_version(case_id, case.case_version, case_version)
+            corrected = await self.intake.correct_value(
+                scope, case, finding_key, field, value, actor, now
+            )
+            event = person_event(
+                "order.value_corrected", context, now, finding_key=finding_key, field=field
+            )
+            await save_order(work, context, self.ids, case, corrected, event)
+            await work.commit()
+        return order_change(corrected)
 
     async def record_pc_date(
         self, context: AccessContext, case_id: uuid.UUID, line_no: int, *, case_version: int

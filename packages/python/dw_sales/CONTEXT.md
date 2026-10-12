@@ -29,6 +29,11 @@ API and the plan use the English terms. The spec is
   on the case when the check ran. It is never re-read from master data.
 - **Coverage statement** (Phạm vi đã kiểm): what was read and checked on one
   order ("Đã đọc N/N dòng …").
+- **Value correction** (Giá trị Sales sửa): the value Sales typed for one
+  field a `value_uncertain` flagged, with who and when. It is kept beside the
+  value as read, which stays the evidence; the order is entered, uploaded and
+  confirmed with the corrected value. A line's number and the PO's number and
+  revision are only confirmed as read, never changed.
 - **Source anchor** (Neo nguồn): where a value was read: `sheet!cell`, or a
   page plus boxes on the rendered page, or a quote. It always carries the
   attachment's sha256.
@@ -53,9 +58,16 @@ API and the plan use the English terms. The spec is
 | `sales_price_evidence` | permission set | Xem giá đã báo cho khách khác |
 | `sales_quote_approver` | permission set | Người duyệt báo giá thay      |
 | `sales_export_control` | permission set | PIC kiểm soát xuất khẩu       |
+| `sales_dw1`            | role           | DW1 (tài khoản dịch vụ)       |
 
 DW1 itself is the **Digital Worker** (tài khoản dịch vụ DW1). Its events
 carry `actor_kind = worker`.
+
+**DW1's service account** (Tài khoản dịch vụ DW1): one per tenant, a platform
+user with a membership holding the role `sales_dw1` (`sales.inbox.process`
+only), resolved by the platform like any member. It signs in nowhere. The
+**mailbox lane** (DW1 tự xử lý thư, the worker's `sales_inbox` lane, ticket 16) acts under it: every new message processed in a DW1 run of its own, as if
+"DW xử lý" had been pressed, except while DW1 is paused.
 
 ## Value states
 

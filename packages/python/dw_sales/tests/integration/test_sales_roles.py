@@ -62,6 +62,9 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
     assert "sales.order.resend_cross_check" not in pic
     assert "sales.case.assign" not in pic
     assert roles["sales_viewer"] == {"sales.overview.read"}
+    # DW1's service account (af154486381e): it processes the mailbox and
+    # nothing else; it decides nothing, so not `approvals.decide` either.
+    assert roles["sales_dw1"] == {"sales.inbox.process"}
     assert permission_sets["sales_price_evidence"] == {"sales.price.other_customers.read"}
     # `approvals.decide` too since ac31ff0f2087: the platform asks every
     # decider for it besides the request's stamp (docs/adr/0011).

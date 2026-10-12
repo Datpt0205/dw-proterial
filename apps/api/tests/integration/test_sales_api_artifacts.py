@@ -230,7 +230,7 @@ async def test_the_cross_check_sheet_waits_for_the_bravo_entry(api: Api) -> None
 
     (sheet,) = await _render(an, "orders", case, "cross_check_sheet")
 
-    assert sheet["template_ref"] == "sales_documents.cross_check_sheet.vi@1.0.0"
+    assert sheet["template_ref"] == "sales_documents.cross_check_sheet.vi@1.1.0"
 
 
 # ----------------------------------------------------------- the quotation --
@@ -258,7 +258,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
         for f in files
     }
 
-    assert {f["template_ref"] for f in files} == {"sales_documents.quotation.ja@1.0.0"}
+    assert {f["template_ref"] for f in files} == {"sales_documents.quotation.ja@1.1.0"}
     assert all(response.status_code == 200 for response in served.values())
     assert final["approval"]["document_sha256"].encode() in b"".join(
         str(c.value).encode()

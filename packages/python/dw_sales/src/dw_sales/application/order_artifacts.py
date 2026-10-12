@@ -1,9 +1,10 @@
 """The files and drafts of an order case (WIV-03-012), each composed from the case.
 
 One function per artifact kind; `artifacts_service.ORDER_GATES` says when each
-may be rendered and downloaded. Every number is the case's: the line as read
-(with Sales' confirmed mapping), the check basis stamped when it was checked,
-the dates Sales confirmed. A value Sales typed is named with who typed it.
+may be rendered and downloaded. Every number is the case's: the line as it is
+entered (each value as read, or as Sales corrected it, with Sales' confirmed
+mapping), the check basis stamped when it was checked, the dates Sales
+confirmed. A value Sales typed is named with who typed it.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from dw_sales.application.drafting import Drafting, Rendered, anchor_text, fille
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Language
 from dw_sales.domain.orders import (
+    TOTAL_FIELD,
     Accepted,
     AskCustomer,
     CorrectedBySales,
@@ -70,6 +72,9 @@ _CHECKED: Final[tuple[UploadField, ...]] = (
     "amount",
     "requested_date",
 )
+# The PO's own values a cross-checker compares, when its `value_uncertain`
+# flagged them, before the lines.
+_HEADER_CHECKED: Final[tuple[str, ...]] = ("po_no", "revision", "po_date", "currency", TOTAL_FIELD)
 # What a finding was checked against, by the basis it names.
 _QUOTATION_BASIS: Final = frozenset(
     {
@@ -89,7 +94,8 @@ _CONVERT_BASIS: Final = frozenset({FindingCode.CODE_UNMAPPED, FindingCode.CODE_A
 
 
 def upload_values(case: OrderCase, line: OrderLine) -> dict[UploadField, Value]:
-    """What the upload file holds for ``line``: the line as read, the PRV code
+    """What the upload file holds for ``line``: the line and the header as
+    entered (a value Sales corrected replaces the value as read), the PRV code
     Sales mapped it to, and DW1's suggested date. The one source of the upload
     value, for the upload file and the cross-check sheet alike."""
     if line.mapping.prv_code is None:
@@ -97,7 +103,7 @@ def upload_values(case: OrderCase, line: OrderLine) -> dict[UploadField, Value]:
             "dòng chưa có mã PRV",
             details={"case_id": str(case.case_id), "line": line.line_no},
         )
-    header, po = case.header, line.po_line
+    header, po = case.effective_header, line.effective
     return {
         "customer_code": case.customer_code,
         "po_no": header.po_no,
@@ -122,6 +128,11 @@ def _po_value(line: OrderLine, field: str) -> Value:
     return None if field == "prv_code" else getattr(line.po_line, field)
 
 
+def _corrected_value(line: OrderLine, field: str) -> Value:
+    """The value Sales typed for a flagged field, as its type; None otherwise."""
+    return getattr(line.effective, field) if line.correction(field) is not None else None
+
+
 def _anchor(line: OrderLine, field: str) -> SourceAnchor:
     anchors = line.po_line.anchors
     return anchors.customer_item_code if field == "prv_code" else getattr(anchors, field)
@@ -135,17 +146,13 @@ def _finding_anchor(case: OrderCase, finding: Finding) -> SourceAnchor | None:
     return _anchor(case.line(finding.line_no), field)
 
 
-def _flagged(line: OrderLine) -> frozenset[str]:
-    return frozenset(flag.field for flag in line.po_line.flags)
-
-
 def _line_findings(case: OrderCase, line: OrderLine, field: str) -> list[Finding]:
     found = []
     for finding in case.findings:
         if finding.line_no != line.line_no:
             continue
         if _FIELD_OF.get(finding.code) == field or (
-            finding.code is FindingCode.VALUE_UNCERTAIN and field in _flagged(line)
+            finding.code is FindingCode.VALUE_UNCERTAIN and field in line.po_line.flagged
         ):
             found.append(finding)
     return found
@@ -212,14 +219,21 @@ def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:
     Bravo sales-order number and who recorded it."""
     case = d.case
     doc = d.internal("cross_check_sheet")
-    rows: list[tuple[Value, ...]] = []
+    rows: list[tuple[Value, ...]] = _header_rows(d, doc)
     for line in case.lines:
         upload = upload_values(case, line)
         for field in _CHECKED:
             findings = _line_findings(case, line, field)
+            # A value_uncertain is typed field by field: its own corrections
+            # name who typed which value, not who resolved the finding.
             typed = [
-                f.disposition.by for f in findings if isinstance(f.disposition, CorrectedBySales)
+                f.disposition.by
+                for f in findings
+                if isinstance(f.disposition, CorrectedBySales)
+                and f.code is not FindingCode.VALUE_UNCERTAIN
             ]
+            if (correction := line.correction(field)) is not None:
+                typed.append(correction.by)
             confirmed_by = line.mapping.confirmed_by
             if field == "prv_code" and line.mapping.hand_entered and confirmed_by is not None:
                 typed.append(confirmed_by)
@@ -228,6 +242,7 @@ def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:
                     line.line_no,
                     column(doc, field),
                     _po_value(line, field),
+                    _corrected_value(line, field),
                     anchor_text(_anchor(line, field)),
                     upload[field],
                     ", ".join(f.code.value for f in findings) or None,
@@ -257,6 +272,7 @@ def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:
                 "line_no",
                 "field",
                 "po_value",
+                "corrected_value",
                 "anchor",
                 "upload_value",
                 "findings",
@@ -267,6 +283,45 @@ def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:
         rows=tuple(rows),
     )
     return (d.xlsx(doc.ref, Workbook((sheet,), INTERNAL, d.at)),)
+
+
+def _header_rows(d: OrderDrafting, doc: Bound[DocumentTemplate]) -> list[tuple[Value, ...]]:
+    """The PO's own values its `value_uncertain` flagged: as read, as Sales
+    typed it, and in the upload file (the total is not in it)."""
+    case = d.case
+    finding = next(
+        (f for f in case.findings if f.code is FindingCode.VALUE_UNCERTAIN and f.line_no is None),
+        None,
+    )
+    if finding is None:
+        return []
+    flagged = case.flagged_fields(finding)
+    header, entered, total = case.header, case.effective_document, case.document.total
+    rows: list[tuple[Value, ...]] = []
+    for field in _HEADER_CHECKED:
+        if field not in flagged:
+            continue
+        correction = case.header_correction(field)
+        if field == TOTAL_FIELD:
+            assert total is not None and entered.total is not None  # flagged, so printed
+            read, anchor, typed, upload = total.amount, total.anchor, entered.total.amount, None
+        else:
+            read, anchor = getattr(header, field), getattr(header.anchors, field)
+            typed = upload = getattr(entered.header, field)
+        rows.append(
+            (
+                None,
+                column(doc, field),
+                read,
+                typed if correction is not None else None,
+                anchor_text(anchor),
+                upload,
+                finding.code.value,
+                _disposition_text(doc, finding),
+                d.people.name(correction.by) if correction is not None else None,
+            )
+        )
+    return rows
 
 
 def _disposition_text(doc: Bound[DocumentTemplate], finding: Finding) -> str:
@@ -291,13 +346,13 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
             line_template(bound),
             {
                 "line_no": line.line_no,
-                "customer_item_code": line.po_line.customer_item_code,
+                "customer_item_code": line.effective.customer_item_code,
                 "prv_code": line.mapping.prv_code,
-                "description": line.po_line.description,
-                "quantity": line.po_line.quantity,
-                "uom": line.po_line.uom,
-                "unit_price": line.po_line.unit_price,
-                "currency": case.header.currency,
+                "description": line.effective.description,
+                "quantity": line.effective.quantity,
+                "uom": line.effective.uom,
+                "unit_price": line.effective.unit_price,
+                "currency": case.effective_header.currency,
                 "confirmed_date": day_text(_confirmed_date(case, line), language),
             },
         )
@@ -336,12 +391,12 @@ def portal_checklist(d: OrderDrafting) -> tuple[Rendered, ...]:
     rows = tuple(
         (
             line.line_no,
-            line.po_line.customer_item_code,
+            line.effective.customer_item_code,
             line.mapping.prv_code,
-            line.po_line.quantity,
-            line.po_line.uom,
-            line.po_line.unit_price,
-            case.header.currency,
+            line.effective.quantity,
+            line.effective.uom,
+            line.effective.unit_price,
+            case.effective_header.currency,
             _confirmed_date(case, line),
             None,
         )
@@ -446,7 +501,7 @@ def convert_list_proposal(d: OrderDrafting) -> tuple[Rendered, ...]:
         (
             case.customer_code,
             d.customer.name,
-            line.po_line.customer_item_code,
+            line.effective.customer_item_code,
             line.mapping.prv_code,
             _people_line(d, line.mapping.confirmed_by),
             local_time(line.mapping.confirmed_at).date() if line.mapping.confirmed_at else None,
@@ -482,11 +537,11 @@ def design_code_request(d: OrderDrafting) -> tuple[Rendered, ...]:
             line_template(bound),
             {
                 "line_no": line.line_no,
-                "customer_item_code": line.po_line.customer_item_code,
-                "description": line.po_line.description,
-                "quantity": line.po_line.quantity,
-                "uom": line.po_line.uom,
-                "requested_date": day_text(line.po_line.requested_date, INTERNAL),
+                "customer_item_code": line.effective.customer_item_code,
+                "description": line.effective.description,
+                "quantity": line.effective.quantity,
+                "uom": line.effective.uom,
+                "requested_date": day_text(line.effective.requested_date, INTERNAL),
             },
         )
         for line in waiting
@@ -504,10 +559,10 @@ def cannot_supply_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
             line_template(bound),
             {
                 "line_no": line.line_no,
-                "customer_item_code": line.po_line.customer_item_code,
-                "description": line.po_line.description,
-                "quantity": line.po_line.quantity,
-                "uom": line.po_line.uom,
+                "customer_item_code": line.effective.customer_item_code,
+                "description": line.effective.description,
+                "quantity": line.effective.quantity,
+                "uom": line.effective.uom,
             },
         )
         for line in case.lines
@@ -521,12 +576,13 @@ def cannot_supply_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
 
 def _order_values(d: OrderDrafting, language: Language) -> dict[str, object]:
     case = d.case
+    header = case.effective_header
     return {
         "customer_code": case.customer_code,
         "customer_name": d.customer.name,
-        "po_no": case.header.po_no,
-        "revision": case.header.revision,
-        "po_date": day_text(case.header.po_date, language),
-        "currency": case.header.currency,
+        "po_no": header.po_no,
+        "revision": header.revision,
+        "po_date": day_text(header.po_date, language),
+        "currency": header.currency,
         "bravo_so_no": case.bravo_so_no,
     }

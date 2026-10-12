@@ -118,7 +118,7 @@ GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
 ARTIFACT_COPY = load_artifact_copy(
     emails=COPY / "sales_emails@1.0.0.yaml",
-    documents=COPY / "sales_documents@1.0.0.yaml",
+    documents=COPY / "sales_documents@1.1.0.yaml",
     upload=POLICIES / "sales_bravo_upload@1.0.0.yaml",
     quote_rules=QUOTE_RULES,
 )
@@ -337,19 +337,41 @@ async def in_review(message_id: str, cases: OrderCases | None = None) -> OrderCa
 
 
 def decided_all(case: OrderCase, by: uuid.UUID = AN) -> OrderCase:
-    """Every open finding decided the way its code allows, by ``by``."""
+    """Every open finding decided the way its code allows, by ``by``. A
+    `value_uncertain` is typed field by field first (`typed_all`)."""
     actor = Actor(user_id=by, capabilities=frozenset({Capability.ACKNOWLEDGE_EXPORT_CONTROL}))
     for finding in case.findings:
         if not finding.is_open:
             continue
-        if finding.code is FindingCode.VALUE_UNCERTAIN or finding.code is (
-            FindingCode.CUSTOMER_UNKNOWN
-        ):
-            value = case.customer_code if finding.code is FindingCode.CUSTOMER_UNKNOWN else "6100"
+        if finding.code is FindingCode.CUSTOMER_UNKNOWN:
+            value = case.customer_code
             disposition: Any = CorrectedBySales(value=value, source="PO gốc", by=by, at=T0)
         else:
             disposition = Accepted(reason="đã xem", by=by, at=T0)
         case = case.dispose(finding.key, disposition, actor)
+    return case
+
+
+# M27 line 2's price as Sales reads it on the hidden row: not the price read.
+CORRECTED_PRICE = Decimal("0.0475")
+
+
+async def typed_all(case: OrderCase, by: uuid.UUID = AN) -> OrderCase:
+    """Every value each `value_uncertain` flagged, typed by ``by`` as read,
+    except line 2's unit price, typed as `CORRECTED_PRICE`."""
+    actor = Actor(user_id=by)
+    for finding in case.findings:
+        if finding.code is not FindingCode.VALUE_UNCERTAIN:
+            continue
+        line = case.line(finding.line_no) if finding.line_no is not None else None
+        for name in sorted(case.flagged_fields(finding)):
+            assert line is not None
+            value = str(getattr(line.po_line, name))
+            if (line.line_no, name) == (2, "unit_price"):
+                value = str(CORRECTED_PRICE)
+            case = await intake(OrderCases()).correct_value(
+                SCOPE, case, finding.key, name, value, actor, T0
+            )
     return case
 
 
@@ -494,7 +516,7 @@ async def _confirmed_m13() -> OrderCase:
 
 
 async def _uploaded_m27() -> OrderCase:
-    return uploaded(decided_all(await in_review("M27")))
+    return uploaded(decided_all(await typed_all(await in_review("M27"))))
 
 
 async def _candidate_m05() -> OrderCase:
@@ -625,7 +647,12 @@ async def test_each_kind_renders_at_its_state_with_template_version_and_hash(kin
         assert (record.kind, record.case_version) == (kind, case.case_version)
         assert record.sha256 == hashlib.sha256(data).hexdigest() == view.sha256
         assert record.size_bytes == len(data)
-        assert record.template_ref.endswith("@1.0.0"), record.template_ref
+        pinned = {
+            ARTIFACT_COPY.emails.version,
+            ARTIFACT_COPY.documents.version,
+            ARTIFACT_COPY.upload.policy_version,
+        }
+        assert record.template_ref.rsplit("@", 1)[1] in pinned, record.template_ref
         assert record.content_type in (XLSX, PDF, EML)
         served = await download(world, case, record.artifact_id, as_=_who(kind))
         assert served == data
@@ -881,11 +908,36 @@ async def test_the_cross_check_sheet_names_who_typed_and_who_recorded_the_entry(
     assert "Nguyễn Văn An" in text  # recorded the Bravo entry and typed values
     rows = _sheet_rows(data)
     header_at = next(i for i, row in enumerate(rows) if row[:2] == ["Dòng", "Giá trị"])
-    typed = {row[0] for row in rows[header_at + 1 :] if row[7] == "Nguyễn Văn An"}
-    assert typed == {2, 4, 5, 6}  # the lines whose value_uncertain Sales corrected
-    upload = {(row[0], row[1]): row[4] for row in rows[header_at + 1 :] if row[1] == "Đơn giá"}
+    assert rows[header_at][2:4] == ["Trên PO", "Sales sửa thành"]
+    body = rows[header_at + 1 :]
+    typed = {row[0] for row in body if row[8] == "Nguyễn Văn An"}
+    assert typed == {2, 4, 5, 6}  # the lines whose flagged values Sales typed
+    prices = {row[0]: row for row in body if row[1] == "Đơn giá"}
+    # Per value: as read, as Sales typed it, and in the upload file.
+    read, corrected, upload = (prices[2][i] for i in (2, 3, 5))
+    assert Decimal(str(read)) == case.line(2).po_line.unit_price
+    assert Decimal(str(corrected)) == Decimal(str(upload)) == CORRECTED_PRICE
     for line in case.lines:
-        assert Decimal(str(upload[(line.line_no, "Đơn giá")])) == line.po_line.unit_price
+        if line.line_no == 2:
+            continue
+        assert Decimal(str(prices[line.line_no][5])) == line.po_line.unit_price
+        # Typed as read on the flagged lines, nothing typed on the others.
+        assert (prices[line.line_no][3] is None) == (line.line_no not in {4, 5, 6})
+
+
+async def test_the_upload_file_prints_the_value_sales_corrected_not_the_value_read() -> None:
+    """Ticket 15: a corrected value reaches the upload file; the value as read
+    stays on the line as the evidence."""
+    case = await _uploaded_m27()
+    data = await _one(case, "bravo_upload")
+
+    _header, *rows = _sheet_rows(data)
+    fields = [c.field for c in ARTIFACT_COPY.upload.columns]
+    by_line = {int(row[fields.index("line_no")]): row for row in rows}
+    price = fields.index("unit_price")
+    assert Decimal(str(by_line[2][price])) == CORRECTED_PRICE
+    assert case.line(2).po_line.unit_price != CORRECTED_PRICE
+    assert Decimal(str(by_line[1][price])) == case.line(1).po_line.unit_price
 
 
 async def test_the_confirmation_names_the_pic_the_checker_and_a_date_per_line() -> None:
@@ -1019,7 +1071,7 @@ async def test_m10_quotation_is_japanese_and_from_the_submitted_document_only() 
         assert case.submission.document_sha256 in text
         assert "Đỗ Minh Giang" in text  # the approver, by name
     assert {r.template_ref for r, _ in await _rendered(case, "quotation_final")} == {
-        "sales_documents.quotation.ja@1.0.0"
+        "sales_documents.quotation.ja@1.1.0"
     }
 
 

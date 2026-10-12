@@ -49,8 +49,10 @@ from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
+    AMOUNT_FIELDS,
     AskCustomer,
     CorrectedBySales,
+    DispositionKind,
     Finding,
     FindingCode,
     FindingDisposition,
@@ -59,6 +61,7 @@ from dw_sales.domain.orders import (
     OrderCase,
     OrderLine,
     PoLineAnchors,
+    ValueCorrection,
 )
 from dw_sales.domain.quotes import (
     FindingAccepted,
@@ -205,7 +208,6 @@ PRICE_BEARING_ORDER_CODES: Final = frozenset(
     }
 )
 _TYPED_AMOUNT_CODES: Final = PRICE_BEARING_ORDER_CODES | {FindingCode.VALUE_UNCERTAIN}
-_AMOUNT_FIELDS: Final = frozenset({"unit_price", "amount"})
 
 
 class ValueState(StrEnum):
@@ -243,6 +245,35 @@ class OrderFindingView(BaseModel):
     disposition: DispositionView
     # What the findings table allows besides `open`, for the screen to offer.
     allowed: list[str]
+    # The values a `value_uncertain` flagged, each corrected on its own
+    # (`POST .../corrections`); empty for every other code.
+    fields: list[str]
+
+
+class ValueCorrectionView(BaseModel):
+    """A value Sales typed for a flagged field, beside the value as read. An
+    amount is shown only with `sales.price.read`."""
+
+    model_config = _VIEW
+
+    field: str
+    value: Words
+    by: uuid.UUID
+    at: datetime
+
+
+def _corrections(
+    corrections: Iterable[ValueCorrection], prices: PriceView
+) -> list[ValueCorrectionView]:
+    return [
+        ValueCorrectionView(
+            field=c.field,
+            value=c.value if prices.amounts or c.field not in AMOUNT_FIELDS else HIDDEN,
+            by=c.by,
+            at=c.at,
+        )
+        for c in corrections
+    ]
 
 
 def _order_disposition(
@@ -267,7 +298,7 @@ def _order_disposition(
     )
 
 
-def order_finding(finding: Finding, prices: PriceView) -> OrderFindingView:
+def order_finding(case: OrderCase, finding: Finding, prices: PriceView) -> OrderFindingView:
     visible = prices.amounts or finding.code not in PRICE_BEARING_ORDER_CODES
     return OrderFindingView(
         key=finding.key,
@@ -279,8 +310,19 @@ def order_finding(finding: Finding, prices: PriceView) -> OrderFindingView:
         actual=_words(finding.actual, visible),
         rule_version=finding.rule_version,
         disposition=_order_disposition(finding.code, finding.disposition, prices),
-        allowed=sorted(kind.value for kind in ALLOWED_DISPOSITIONS[finding.code]),
+        allowed=sorted(kind.value for kind in _offered(case, finding)),
+        fields=sorted(case.flagged_fields(finding)),
     )
+
+
+def _offered(case: OrderCase, finding: Finding) -> frozenset[DispositionKind]:
+    """What the findings table allows, less a free-text value on a
+    `value_uncertain` the case would refuse (`OrderCase.takes_value_note`): the
+    screen offers what the write takes."""
+    allowed = ALLOWED_DISPOSITIONS[finding.code]
+    if finding.code is FindingCode.VALUE_UNCERTAIN and not case.takes_value_note(finding):
+        return allowed - {DispositionKind.CORRECTED_BY_SALES}
+    return allowed
 
 
 class MappingView(BaseModel):
@@ -344,6 +386,8 @@ class OrderLineView(BaseModel):
     requested_date: date
     anchors: dict[str, SourceAnchor]
     flags: list[FlaggedValue]
+    # What Sales typed for flagged values; the values above stay as read.
+    corrections: list[ValueCorrectionView]
     value_states: dict[str, ValueState]
     mapping: MappingView
     basis: LineBasisView
@@ -354,22 +398,16 @@ class OrderLineView(BaseModel):
 
 
 def _line_states(case: OrderCase, line: OrderLine) -> dict[str, ValueState]:
-    """Each printed value's state: uncertain while its region is flagged and
-    the finding on it undecided, hand-entered once Sales typed it, confirmed
-    once the PIC prepared the case against the source, otherwise as DW1 read
-    it."""
-    flagged = {flag.field for flag in line.po_line.flags}
-    uncertain = [
-        f
-        for f in case.findings
-        if f.code is FindingCode.VALUE_UNCERTAIN and f.line_no == line.line_no
-    ]
-    typed = any(isinstance(f.disposition, CorrectedBySales) for f in uncertain)
+    """Each printed value's state: hand-entered once Sales typed it, uncertain
+    while its region is flagged and nothing is typed for it, confirmed once
+    the PIC prepared the case against the source, otherwise as DW1 read it."""
+    flagged = line.po_line.flagged
+    typed = {c.field for c in line.corrections}
     # A preparer is stamped exactly while the self-check stands.
     prepared = case.prepared_by is not None
     states: dict[str, ValueState] = {}
     for field in PoLineAnchors.model_fields:
-        if field in flagged and typed:
+        if field in typed:
             states[field] = ValueState.HAND_ENTERED
         elif field in flagged:
             states[field] = ValueState.UNCERTAIN
@@ -431,6 +469,7 @@ def order_line(case: OrderCase, line: OrderLine, prices: PriceView) -> OrderLine
         requested_date=po.requested_date,
         anchors=dict(po.anchors),
         flags=list(po.flags),
+        corrections=_corrections(line.corrections, prices),
         value_states=_line_states(case, line),
         mapping=MappingView(
             status=mapping.status.value,
@@ -458,7 +497,7 @@ class LineChangeView(BaseModel):
 
 
 def _change(change: LineChange, prices: PriceView) -> LineChangeView:
-    visible = prices.amounts or change.field not in _AMOUNT_FIELDS
+    visible = prices.amounts or change.field not in AMOUNT_FIELDS
     return LineChangeView(
         line_no=change.line_no,
         field=change.field,
@@ -524,6 +563,9 @@ class OrderCaseView(BaseModel):
     attachment_sha256: str
     header_anchors: dict[str, SourceAnchor]
     header_flags: list[FlaggedValue]
+    # What Sales typed for the header values and the total (`total`) the
+    # PO-level `value_uncertain` flagged; the values here stay as read.
+    header_corrections: list[ValueCorrectionView]
     buyer: str | None
     buyer_anchor: SourceAnchor | None
     total: Amount | None
@@ -620,6 +662,7 @@ def order_case(
         attachment_sha256=document.attachment_sha256,
         header_anchors=dict(case.header.anchors),
         header_flags=list(case.header.flags),
+        header_corrections=_corrections(case.header_corrections, prices),
         buyer=document.buyer,
         buyer_anchor=document.buyer_anchor,
         total=_amount(total.amount, prices.amounts) if total else None,
@@ -633,7 +676,7 @@ def order_case(
             findings=coverage.findings,
         ),
         lines=[order_line(case, line, prices) for line in case.lines],
-        findings=[order_finding(f, prices) for f in case.findings],
+        findings=[order_finding(case, f, prices) for f in case.findings],
         changes=[_change(change, prices) for change in case.changes],
         superseded=[
             SupersededView(

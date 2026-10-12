@@ -7,7 +7,7 @@ import base64
 
 import pytest
 from sales_api_harness import AN, DIEU, HA, Api
-from sales_flow import order_of, process, quote
+from sales_flow import order_of, process, quote, typed_as_read
 
 pytestmark = pytest.mark.integration
 
@@ -43,20 +43,9 @@ async def test_a_sheet_is_served_as_its_grid_with_the_hidden_flags(api: Api) -> 
 
 async def test_a_flagged_value_holds_prepare_until_its_sheet_is_served(api: Api) -> None:
     an = api.as_(AN)
-    case = await order_of(an, "M27")
-    # Every finding typed, so only the source gate is left.
-    for finding in case["findings"]:
-        response = await an.post(
-            f"/orders/{case['case_id']}/findings/{finding['key']}/disposition",
-            {
-                "case_version": case["case_version"],
-                "disposition": "corrected_by_sales",
-                "value": "1000",
-                "source": "Đối chiếu bản in",
-            },
-        )
-        assert response.status_code == 200, response.text
-        case = (await an.get(f"/orders/{case['case_id']}")).json()
+    # Every flagged value typed, so only the source gate is left.
+    case = await typed_as_read(an, await order_of(an, "M27"))
+    assert not [f for f in case["findings"] if f["disposition"]["kind"] == "open"]
     po_sheet = case["header_anchors"]["po_no"]["cell_ref"].rsplit("!", 1)[0]
     await an.get(f"/orders/{case['case_id']}/source/{case['attachment_id']}", sheet=po_sheet)
 

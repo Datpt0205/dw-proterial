@@ -6,9 +6,11 @@ read instead of reaching a handler.
 
 - `order_cases`: one row, the case's stamps and status.
 - `order_revisions`: the current revision and every one it superseded, each
-  with its document (without its lines).
-- `order_lines`: per revision, the printed line, its mapping and its check
-  basis. A superseded revision keeps its lines as they last stood.
+  with its document (without its lines) and what Sales typed for its flagged
+  header values.
+- `order_lines`: per revision, the printed line, its mapping, its check
+  basis and what Sales typed for its flagged values. A superseded revision
+  keeps its lines as they last stood.
 - `order_findings`: per revision, in the order raised. The current revision's
   are replaced on every save, as the domain replaces them.
 """
@@ -47,6 +49,7 @@ from dw_sales.domain.orders import (
     PoDocument,
     PoLine,
     SupersededRevision,
+    ValueCorrection,
 )
 
 _C = tables.order_cases
@@ -110,7 +113,12 @@ def _line_columns(line: OrderLine) -> dict[str, Any]:
         "confirmed_delivery_date": line.confirmed_delivery_date,
         "pc_confirmed_by": line.pc_confirmed_by,
         "pc_confirmed_at": line.pc_confirmed_at,
+        "corrections": _corrections(line.corrections),
     }
+
+
+def _corrections(corrections: Iterable[ValueCorrection]) -> list[dict[str, Any]]:
+    return [c.model_dump(mode="json") for c in corrections]
 
 
 def _finding_columns(finding: Finding) -> dict[str, Any]:
@@ -145,6 +153,7 @@ async def _insert_revision(
             message_id=case.message_id,
             received_at=case.received_at,
             document=case.document.model_dump(mode="json", exclude={"lines"}),
+            header_corrections=_corrections(case.header_corrections),
         )
     )
     await session.execute(
@@ -234,6 +243,7 @@ def _order_line(row: RowMapping) -> OrderLine:
         confirmed_delivery_date=row["confirmed_delivery_date"],
         pc_confirmed_by=row["pc_confirmed_by"],
         pc_confirmed_at=row["pc_confirmed_at"],
+        corrections=tuple(ValueCorrection.model_validate(c) for c in row["corrections"]),
     )
 
 
@@ -343,6 +353,7 @@ def _rebuild(
             # Every preparer and Bravo recorder the trigger accumulated: the
             # case refuses a checker among them before the CHECK has to.
             "earlier_makers": frozenset(row["makers"]),
+            "header_corrections": now["header_corrections"],
         }
     )
     if case.header.po_no != row["po_no"]:
@@ -473,6 +484,11 @@ class SqlOrderCaseRepository:
         if current.message_id == case.message_id:
             if stored_ids[:-1] != history:
                 raise ConflictError("the case's revisions are not the stored ones", details=details)
+            await self.session.execute(
+                sa.update(_R)
+                .where(_R.c.id == current.id)
+                .values(header_corrections=_corrections(case.header_corrections))
+            )
             await _update_lines(self.session, self.scope, current.id, case.lines)
             await _replace_findings(self.session, self.scope, current.id, case.findings)
             return

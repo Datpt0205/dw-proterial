@@ -27,6 +27,7 @@ import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
 import { FindingWords } from "../../_components/money";
 import { DispositionTag, SeverityTag } from "../../_components/tags";
+import { ValueCorrections } from "./value-corrections";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Finding = SalesSchemas["OrderFindingView"];
@@ -158,6 +159,10 @@ function FindingCard({
   const { run, pending } = useAction();
   const [error, setError] = useState<unknown>(null);
   const offer = dispositionOffer(order, finding, viewer);
+  // A value DW1 was not sure of is typed field by field (ticket 15). The one
+  // free-text note left, for a sheet nothing reads, is in `allowed` only
+  // while the case would take it (`OrderCase.takes_value_note`).
+  const perField = finding.code === "value_uncertain";
   const choices = finding.allowed.filter((a): a is Choice => a !== "open");
   const [choice, setChoice] = useState<Choice | null>(null);
   const [form] = Form.useForm<{
@@ -256,13 +261,23 @@ function FindingCard({
             {finding.disposition.reason
               ? ` · Lý do: ${finding.disposition.reason}`
               : ""}
-            {typeof finding.disposition.value === "string"
+            {typeof finding.disposition.value === "string" && !perField
               ? ` · Giá trị: ${finding.disposition.value}`
               : ""}
             {finding.disposition.source
               ? ` · Nguồn: ${finding.disposition.source}`
               : ""}
           </Typography.Text>
+        ) : null}
+
+        {perField && finding.fields.length ? (
+          <ValueCorrections
+            order={order}
+            finding={finding}
+            canEdit={offer !== null && !offer.reason}
+            canTypeAmounts={viewer.hasScope("sales.price.read")}
+            onCorrected={onDecided}
+          />
         ) : null}
 
         {offer === null ? null : offer.reason ? (
@@ -301,7 +316,9 @@ function FindingCard({
                     : c === "corrected_by_sales"
                       ? mapping
                         ? "Chọn mã PRV"
-                        : "Sửa giá trị"
+                        : perField
+                          ? "Ghi chú sheet chưa kiểm"
+                          : "Sửa giá trị"
                       : "Yêu cầu khách sửa",
               }))}
             />

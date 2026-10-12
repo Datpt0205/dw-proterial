@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, Descriptions, Space, Table, Typography } from "antd";
 import { StatusTag } from "@dw/ui";
 import {
@@ -8,7 +8,7 @@ import {
   CheckCircleOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
-import type { SalesSchemas } from "@dw/api-client";
+import type { SalesSchemas, Words } from "@dw/api-client";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
@@ -39,6 +39,32 @@ const STATE_ORDER = [
 function weakest(states: Record<string, string>): string {
   const values = Object.values(states);
   return STATE_ORDER.find((s) => values.includes(s)) ?? "dw";
+}
+
+/**
+ * A line's value as it is entered: what Sales typed for it (ticket 15), with
+ * the value as read under it, or the value as read when nothing was typed.
+ */
+function Entered({
+  line,
+  field,
+  show,
+}: {
+  line: Line;
+  field: string;
+  show: (value: Words) => ReactNode;
+}) {
+  const read = new Map<string, unknown>(Object.entries(line)).get(
+    field,
+  ) as Words;
+  const typed = line.corrections.find((c) => c.field === field);
+  if (!typed) return <>{show(read)}</>;
+  return (
+    <Space orientation="vertical" size={0}>
+      {show(typed.value)}
+      <Typography.Text>Đọc được: {show(read)}</Typography.Text>
+    </Space>
+  );
 }
 
 /** Past this many lines the table renders only the rows in view (G23). */
@@ -171,7 +197,16 @@ export function LinesTable({
             key: "qty",
             align: "right",
             render: (_, line) => (
-              <Quantity value={line.quantity} uom={line.uom} />
+              <Entered
+                line={line}
+                field="quantity"
+                show={(v) => (
+                  <Quantity
+                    value={typeof v === "string" ? v : null}
+                    uom={line.uom}
+                  />
+                )}
+              />
             ),
           },
           {
@@ -179,7 +214,11 @@ export function LinesTable({
             key: "price",
             align: "right",
             render: (_, line) => (
-              <Money value={line.unit_price} currency={order.currency} />
+              <Entered
+                line={line}
+                field="unit_price"
+                show={(v) => <Money value={v} currency={order.currency} />}
+              />
             ),
           },
           {
@@ -187,13 +226,23 @@ export function LinesTable({
             key: "amount",
             align: "right",
             render: (_, line) => (
-              <Money value={line.amount} currency={order.currency} />
+              <Entered
+                line={line}
+                field="amount"
+                show={(v) => <Money value={v} currency={order.currency} />}
+              />
             ),
           },
           {
             title: "Ngày yêu cầu",
-            dataIndex: "requested_date",
-            render: (d: string) => formatDate(d),
+            key: "requested_date",
+            render: (_, line) => (
+              <Entered
+                line={line}
+                field="requested_date"
+                show={(v) => formatDate(typeof v === "string" ? v : null)}
+              />
+            ),
           },
           {
             title: "Ngày giao",

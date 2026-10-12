@@ -319,3 +319,51 @@ async def test_once_prepared_every_value_reads_as_checked_by_a_person(api: Api) 
     states = {s for line in ready["lines"] for s in line["value_states"].values()}
 
     assert states == {"confirmed"}
+
+
+async def test_a_flagged_value_is_corrected_field_by_field_and_audited_without_it(
+    api: Api, migrator: AsyncEngine
+) -> None:
+    """Ticket 15: a typed value per field, validated against what the finding
+    flagged; the line keeps the value as read; the audit row names the field."""
+    an = api.as_(AN)
+    case = await order_of(an, "M27")
+    base = f"/orders/{case['case_id']}/findings/value_uncertain:2"
+    version = {"case_version": case["case_version"]}
+
+    free_text = await an.post(
+        f"{base}/disposition",
+        {**version, "disposition": "corrected_by_sales", "value": "0.0475", "source": "bản in"},
+    )
+    assert free_text.status_code == 409
+    unflagged = await an.post(
+        f"{base}/corrections", {**version, "field": "currency", "value": "USD"}
+    )
+    assert unflagged.status_code == 422
+    not_a_number = await an.post(
+        f"{base}/corrections", {**version, "field": "quantity", "value": "sáu nghìn"}
+    )
+    assert not_a_number.status_code == 422
+    assert "sáu nghìn" not in not_a_number.text
+
+    typed = await decide(
+        an,
+        case,
+        "findings/value_uncertain:2/corrections",
+        {"field": "unit_price", "value": "0.0475"},
+    )
+
+    line = next(x for x in typed["lines"] if x["line_no"] == 2)
+    assert line["unit_price"] == "0.0465"  # as read: the evidence
+    assert [(c["field"], c["value"], c["by"]) for c in line["corrections"]] == [
+        ("unit_price", "0.0475", str(user_id(AN)))
+    ]
+    assert line["value_states"]["unit_price"] == "hand_entered"
+    mismatch = next(f for f in typed["findings"] if f["key"] == "price_mismatch:2")
+    assert mismatch["disposition"]["kind"] == "open"
+    assert str(user_id(AN)) in typed["makers"]
+    audit = (await _audit(migrator, case["case_id"]))[-1]
+    assert audit["action"] == "sales.order.value_corrected"
+    assert audit["details"]["finding_key"] == "value_uncertain:2"  # type: ignore[index]
+    assert audit["details"]["field"] == "unit_price"  # type: ignore[index]
+    assert "0.0475" not in str(audit) and "0.0465" not in str(audit)

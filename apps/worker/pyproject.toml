@@ -20,6 +20,10 @@ dependencies = [
     # composition root, so it is declared here rather than borrowed from the
     # context packages that also depend on it.
     "dw-observability",
+    # DW1's mailbox lane (Sales ticket 16): the composition root builds DW1
+    # and registers its lane, so the context is declared here rather than
+    # reached through a package that happens to pull it in.
+    "dw-sales",
     "pydantic>=2.10,<3",
     "pydantic-settings>=2.7,<3",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",

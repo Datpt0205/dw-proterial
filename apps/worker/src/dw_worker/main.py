@@ -41,6 +41,7 @@ from dw_connectors.adapters.zalo_inbound import ZaloInbound
 from dw_connectors.adapters.zalo_link import link_help
 from dw_connectors.inbound import ChannelCommandRegistry, InboundRouter
 from dw_connectors.ports import ChatSenderPort
+from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_knowledge.retention import SqlKnowledgeRetention
@@ -63,11 +64,17 @@ from dw_platform.adapters.persistence.channel_inbound import (
     SqlChannelUpdateQueue,
 )
 from dw_platform.adapters.persistence.channel_preferences import SqlChannelPreferences
+from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
-from dw_platform.adapters.persistence.notifications import SqlNotificationRetention
+from dw_platform.adapters.persistence.notifications import (
+    SqlNotificationRepository,
+    SqlNotificationRetention,
+)
 from dw_platform.adapters.persistence.offboarding import SqlTenantOffboarding
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
+from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.adapters.persistence.zalo_link_repo import (
     SqlChannelLinkNonceRetention,
@@ -78,6 +85,9 @@ from dw_platform.application.approval_codes import ApprovalSubjectVersions, Deci
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.retention_policy import load_retention_policy
+from dw_sales.adapters.assembly import build_dw1
+from dw_sales.application.inbox_lane import SALES_INBOX_LANE, InboxLane
+from dw_sales.application.ports import SalesScope
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
@@ -86,6 +96,8 @@ from dw_worker.composition import (
     build_ingest_components,
     build_object_storage,
     build_vector_index,
+    build_workflow_runtime,
+    release_manifest_ref,
 )
 from dw_worker.consumers import ConsumerRegistry
 from dw_worker.consumers.channel_delivery import build_channel_delivery_consumer
@@ -98,6 +110,8 @@ from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
+from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTERVAL_SECONDS
+from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -249,6 +263,48 @@ def build_zalo_inbound(
     )
 
 
+def build_sales_inbox_lane(
+    settings: WorkerSettings,
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    clock: UtcClock,
+    ids: IdGenerator,
+    telemetry: TelemetryPort,
+) -> tuple[InboxLane, SalesScope] | None:
+    """DW1's mailbox lane over the workspace its mock mailbox is bound to, or
+    None where no mailbox is (a deployed profile without SALES_DEMO_*).
+
+    DW1 is built by the call the API makes (`build_dw1`), over a runner of
+    this process's own: its runs are the runs "DW xử lý" starts, counted
+    against the same plan, and the lane acts as DW1's service account,
+    resolved by the platform's membership lookup like any member.
+    """
+    demo = settings.sales_demo_scope()
+    if demo is None:
+        return None
+    scope = SalesScope(TenantId(demo[0]), WorkspaceId(demo[1]))
+    mount = build_dw1(
+        scope=scope,
+        configs=REPO_ROOT / "configs",
+        session_factory=sessions,
+        audit=SqlAuditRepository,
+        clock=clock,
+        ids=ids,
+        authorization=ScopeAuthorizationService(),
+        directory=SqlWorkspaceDirectory(sessions),
+        holders=SqlScopeHolders(sessions),
+        notifications=SqlNotificationRepository(sessions),
+        artifact_bytes=build_object_storage(settings),
+        release_manifest_ref=release_manifest_ref(),
+        runtime=build_workflow_runtime(
+            settings, sessions, clock=clock, ids=ids, telemetry=telemetry
+        ),
+        lane_access=SqlMembershipLookup(sessions),
+    )
+    assert mount.lane is not None  # built with lane_access
+    return mount.lane, scope
+
+
 def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     """Wire the lanes this process hosts, skipping any whose infra is absent."""
     registry = ConsumerRegistry()
@@ -308,6 +364,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # Ops hardening Phase 4. Needs object storage too, not just a database -
     # export/purge touch three buckets and the vector index alongside Postgres.
     offboarding_consumer: Callable[[], Awaitable[None]] | None = None
+    # DW1's mailbox lane (Sales ticket 16): a database, object storage (DW1's
+    # services are built whole, files included), a bound mailbox, and the
+    # host's switch on.
+    sales_inbox_consumer: Callable[[], Awaitable[None]] | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -411,6 +471,13 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     clock=clock,
                 )
             )
+            if settings.sales_inbox_lane:
+                sales = build_sales_inbox_lane(
+                    settings, sessions, clock=clock, ids=ids, telemetry=telemetry
+                )
+                if sales is not None:
+                    lane, mailbox = sales
+                    sales_inbox_consumer = build_sales_inbox_consumer(lane, [mailbox])
         registry.register(
             "outbox",
             build_outbox_consumer(
@@ -434,21 +501,18 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         )
 
     # ---- BOUNDED CONTEXT LANES REGISTER HERE -----------------------------
-    # Sales registers here. Left COMMENTED on purpose, twice over:
+    # `apps/worker/tests/unit/test_worker.py` asserts the exact set of lanes
+    # this process hosts, so a context's lane arriving is a deliberate,
+    # visible change. A context appends a `ReapTarget` for every job queue it
+    # owns, so abandoned rows are settled by the one reaper.
     #
-    #   - a generated context owns no queue, so a lane would be a consumer with
-    #     nothing to consume — a placeholder, which this repo does not ship;
-    #   - `apps/worker/tests/unit/test_worker.py` asserts the exact set of lanes
-    #     this process hosts, so a context's lane arriving is a deliberate,
-    #     visible change and not something a scaffold slips in.
-    #
-    # Uncomment when the context has real work, add `dw-sales` to
-    # `apps/worker/pyproject.toml`, name the lane in that test, and append a
-    # `ReapTarget` for every job queue it owns so abandoned rows are settled by
-    # the one reaper rather than by a second sweeper.
-    #
-    #     from dw_sales.adapters import ...
-    #     registry.register("sales", <its consumer>)
+    # Sales: DW1's mailbox lane (ticket 16), under the name its audit actor is
+    # derived from. It owns no job queue (it reads the mailbox and writes the
+    # message log), so it has no ReapTarget.
+    if sales_inbox_consumer is not None:
+        registry.register(
+            SALES_INBOX_LANE, sales_inbox_consumer, interval_seconds=SALES_INBOX_INTERVAL_SECONDS
+        )
 
     # build_<context>_components(settings) → registry.register(...), and append
     # a ReapTarget per job queue the context owns.

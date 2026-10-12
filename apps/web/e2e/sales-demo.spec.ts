@@ -28,6 +28,13 @@ import {
  * the customer's Rev.1 (M07) would otherwise join M04's case before anyone
  * asked for it; processing M04 first shows the procedure's order (WIV-03-012
  * step 8, then the revision supersedes it in the same case).
+ *
+ * DW1's mailbox lane (ticket 16) would process the reset mailbox on its own
+ * within a minute, before any button is pressed. A worker running beside a
+ * reused API therefore runs with `DW_WORKER_SALES_INBOX_LANE=false` (demo.md,
+ * section 1); CI starts no worker. The lane itself is tested in
+ * `dw_sales/tests/unit/test_inbox_lane.py` and against Postgres in
+ * `apps/worker/tests/integration/test_sales_inbox_lane_db.py`.
  */
 
 // A dev server compiles each route on its first visit, and the API reads the

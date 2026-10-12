@@ -152,6 +152,20 @@ export class SalesApi {
     );
   }
 
+  /** One value a `value_uncertain` flagged, typed by Sales (ticket 15). */
+  correctValue(
+    caseId: string,
+    findingKey: string,
+    body: Body<"/api/v1/sales/orders/{case_id}/findings/{finding_key}/corrections">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/orders/{case_id}/findings/{finding_key}/corrections">(
+      `/api/v1/sales/orders/${enc(caseId)}/findings/${enc(findingKey)}/corrections`,
+      body,
+      key,
+    );
+  }
+
   confirmMapping(
     caseId: string,
     lineNo: number,
