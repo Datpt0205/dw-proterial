@@ -55,7 +55,8 @@ def test_no_database_no_poll_lane() -> None:
 
 
 def test_the_settings_never_print_the_bot_token() -> None:
-    settings = bare_settings(zalo_bot_token="tok-123456789", zalo_link_secret="sec-987654321")
+    token, secret = "tok-123456789", "sec-987654321"  # gitleaks:allow (fakes)
+    settings = bare_settings(zalo_bot_token=token, zalo_link_secret=secret)
     assert "tok-123456789" not in repr(settings)
     assert "sec-987654321" not in repr(settings)
 
