@@ -20,6 +20,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.application.access import Gate, SalesAuthorizationPort
 from dw_sales.application.artifact_content import ArtifactWriterPort
 from dw_sales.application.artifacts_service import ArtifactService
+from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.drafting import ArtifactCopy
@@ -57,6 +58,7 @@ class SalesServices:
     artifacts: ArtifactService
     master_data: MasterDataService
     worker: WorkerService
+    assignment: AssignmentService
     gate: Gate
 
 
@@ -125,6 +127,7 @@ def assemble(
         ),
         master_data=MasterDataService(gate, catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
+        assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing)

@@ -27,6 +27,12 @@ type Json<
   ? R
   : never;
 
+type PutJson<P extends keyof paths> = paths[P]["put"] extends {
+  responses: { 200: { content: { "application/json": infer R } } };
+}
+  ? R
+  : never;
+
 type Body<P extends keyof paths> = paths[P]["post"] extends {
   requestBody: { content: { "application/json": infer B } };
 }
@@ -66,6 +72,17 @@ export class SalesApi {
     idempotencyKey: string,
   ): Promise<Json<P, "post">> {
     return this.client.request("POST", path, shaped<Json<P, "post">>(), {
+      body,
+      idempotencyKey,
+    });
+  }
+
+  private put<P extends keyof paths>(
+    path: string,
+    body: unknown,
+    idempotencyKey: string,
+  ): Promise<PutJson<P>> {
+    return this.client.request("PUT", path, shaped<PutJson<P>>(), {
       body,
       idempotencyKey,
     });
@@ -390,6 +407,39 @@ export class SalesApi {
       `/api/v1/sales/${kind === "order" ? "orders" : "quotes"}/${enc(caseId)}/artifacts/${enc(artifactId)}`,
     );
     return response.blob();
+  }
+
+  // ---- the assignee (ticket 17) ---------------------------------------------
+
+  /** Who the case may be given to: members who work this kind of case here. */
+  assignees(kind: "order" | "quote", caseId: string) {
+    return kind === "order"
+      ? this.get<"/api/v1/sales/orders/{case_id}/assignees">(
+          `/api/v1/sales/orders/${enc(caseId)}/assignees`,
+        )
+      : this.get<"/api/v1/sales/quotes/{case_id}/assignees">(
+          `/api/v1/sales/quotes/${enc(caseId)}/assignees`,
+        );
+  }
+
+  /** The head gives the case to `assignee`, or to nobody when null. */
+  reassign(
+    kind: "order" | "quote",
+    caseId: string,
+    body: { assignee: string | null; case_version: number },
+    key: string,
+  ) {
+    return kind === "order"
+      ? this.put<"/api/v1/sales/orders/{case_id}/assignee">(
+          `/api/v1/sales/orders/${enc(caseId)}/assignee`,
+          body,
+          key,
+        )
+      : this.put<"/api/v1/sales/quotes/{case_id}/assignee">(
+          `/api/v1/sales/quotes/${enc(caseId)}/assignee`,
+          body,
+          key,
+        );
   }
 
   // ---- master data (read-only mock) ----------------------------------------

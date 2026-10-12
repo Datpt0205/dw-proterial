@@ -44,6 +44,7 @@ from dw_kernel.errors import InfrastructureError
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
+from dw_sales.application.assignment import AssigneeView
 from dw_sales.application.overview_service import OverviewView, WorkItem
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
@@ -68,6 +69,7 @@ from dw_sales.application.views import (
     WorkerStateView,
 )
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CloseReason, Note
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
@@ -110,6 +112,12 @@ class BravoEntryBody(VersionBody):
     # Absent only when applying a revision's change to an order already in Bravo.
     so_no: DocumentNo | None = None
     entry_compared: bool
+
+
+class AssigneeBody(VersionBody):
+    """Who the case is given to; null gives it to nobody (every PIC's)."""
+
+    assignee: uuid.UUID | None
 
 
 class LineDate(BaseModel):
@@ -422,6 +430,58 @@ def build_router(
             case_version=body.case_version,
             so_no=body.so_no,
             entry_compared=body.entry_compared,
+        )
+        return await idem.record(change)
+
+    # ------------------------------------------------- the assignee (17) --
+    # Who a case may be given to, and giving it: the head's
+    # (`sales.case.assign`), for an order or a quote alike.
+
+    assign_scope = [scopes(SalesScopes.CASE_ASSIGN)]
+
+    @router.get(
+        "/orders/{case_id}/assignees",
+        response_model=list[AssigneeView],
+        dependencies=assign_scope,
+    )
+    async def order_assignees(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[AssigneeView]:
+        return await svc.assignment.candidates(context, CaseKind.ORDER, case_id)
+
+    @router.put(
+        "/orders/{case_id}/assignee", response_model=CaseChangeView, dependencies=assign_scope
+    )
+    async def reassign_order(
+        case_id: uuid.UUID, body: AssigneeBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.assignment.reassign(
+            context,
+            CaseKind.ORDER,
+            case_id,
+            assignee=body.assignee,
+            case_version=body.case_version,
+        )
+        return await idem.record(change)
+
+    @router.get(
+        "/quotes/{case_id}/assignees",
+        response_model=list[AssigneeView],
+        dependencies=assign_scope,
+    )
+    async def quote_assignees(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[AssigneeView]:
+        return await svc.assignment.candidates(context, CaseKind.QUOTE, case_id)
+
+    @router.put(
+        "/quotes/{case_id}/assignee", response_model=CaseChangeView, dependencies=assign_scope
+    )
+    async def reassign_quote(
+        case_id: uuid.UUID, body: AssigneeBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.assignment.reassign(
+            context,
+            CaseKind.QUOTE,
+            case_id,
+            assignee=body.assignee,
+            case_version=body.case_version,
         )
         return await idem.record(change)
 

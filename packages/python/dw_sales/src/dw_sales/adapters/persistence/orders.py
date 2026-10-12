@@ -452,6 +452,11 @@ class SqlOrderCaseRepository:
             await self._save_revisions(case, event.occurred_at, details)
             await self._event(case, was, event)
 
+    async def assign(self, case_id: uuid.UUID, assigned_to: uuid.UUID | None) -> None:
+        await self.session.execute(
+            sa.update(_C).where(_C.c.id == case_id).values(assigned_to=assigned_to)
+        )
+
     async def _save_revisions(
         self, case: OrderCase, at: datetime, details: dict[str, object]
     ) -> None:

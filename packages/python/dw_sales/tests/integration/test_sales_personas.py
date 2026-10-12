@@ -48,6 +48,7 @@ HEAD = PIC | {
     "sales.quote.approve",
     "sales.worker.resume",
     "sales.order.resend_cross_check",
+    "sales.case.assign",
 }
 # (subject, tenant) -> the `sales.*` scopes the spec's actor table gives them.
 SPEC: dict[tuple[str, str], frozenset[str]] = {

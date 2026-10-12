@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed            |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 12–18 open         |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13, 14, 17 built; 12, 15–27   |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
 
 After working in an area, update its file. Update this index only when an
@@ -35,8 +35,8 @@ own file and a row here.
 - Sales ticket 10 (`8d098b3`, dw_sales ADR 0004 Proposed, Đạt to review).
   Platform merges: `96f95ad`, `2ebd50f`, `ab33703` (2026-10-08: security
   debts, antd-only web, CSP, support access; `web-ui.md`, `sales.md`).
-- **Next:** sales 13 → 14 → 17, then 15, 16, 18 (decided 2026-10-12),
-  then 19–27. Proterial has the requirements doc; ticket 12 waits on it.
+- **Next:** sales 15, 16, 18, then 19–27 (13, 14, 17 built 2026-10-12:
+  `sales.md`). Proterial has the requirements doc; 12 waits on it.
 
 ## Decisions Đạt owes
 
