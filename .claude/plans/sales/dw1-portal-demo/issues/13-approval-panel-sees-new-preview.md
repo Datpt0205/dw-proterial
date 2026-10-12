@@ -1,6 +1,6 @@
 # 13 — The quote approval panel sees a preview rendered on the same page
 
-Status: ready-for-agent
+Status: done (2026-10-12; not committed)
 Blocked by: —
 Category: bug
 
@@ -48,4 +48,29 @@ change on a render.
   `_lib/use-resource.ts`, `quotes/[caseId]/page.tsx`.
 - `apps/web/e2e/sales-demo.spec.ts` test 7.
 
+## As built (2026-10-12)
+
+- One owner of the file list: `useCaseArtifacts(kind, caseId, caseVersion)`
+  in `_components/artifacts-panel.tsx` reads it once per page (after the
+  case has loaded, and again when the case version changes). The quote page
+  hands it to `ArtifactsPanel` (`list`, which reloads it after a render) and
+  to `ApprovalPanel` (`artifacts`); `useLatestPdf` and its second fetch are
+  gone, replaced by the pure `latestPdf(artifacts, version, kind)`. The order
+  page uses the same hook for its one panel. No timer, no polling.
+- A failed render leaves the list untouched: the reload runs only on the
+  API's 2xx (`useAction`).
+- Vitest `app/sales/_lib/__tests__/quote-preview.test.tsx` renders the whole
+  quote page (mocked API): rendering the preview in the files panel makes the
+  approval panel offer "Xem bản xem trước (PDF…)" with one read of the case
+  and two of the list; a failed render keeps "Chưa có bản xem trước…".
+  Red before the change (the approval panel kept its own copy). Mutation
+  checks, each turning the first test red: the page passing `artifacts={[]}`
+  to the approval panel; the files panel not reloading the shared list after
+  a render.
+- `e2e/sales-demo.spec.ts` test 7 no longer reloads the page after rendering
+  the preview, and the comment explaining the workaround is gone. The walk
+  itself was NOT run in this pass (needs the full stack).
+
 ## Comments
+
+- 2026-10-12 (agent): removing the wiring turns the vitest red, as above.

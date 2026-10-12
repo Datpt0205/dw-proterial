@@ -242,6 +242,7 @@ describe("the pricer/approver rule on a quote", () => {
       <ApprovalPanel
         quote={pendingQuote()}
         viewer={pricer}
+        artifacts={[]}
         onDone={() => {}}
       />,
     );

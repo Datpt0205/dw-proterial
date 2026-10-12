@@ -38,7 +38,10 @@ import { coverageStatement } from "../../_lib/statements";
 import { useResource } from "../../_lib/use-resource";
 import { isOpen } from "../../_lib/order-actions";
 import { useSalesViewer } from "../../_lib/viewer";
-import { ArtifactsPanel } from "../../_components/artifacts-panel";
+import {
+  ArtifactsPanel,
+  useCaseArtifacts,
+} from "../../_components/artifacts-panel";
 import { CaseSummary } from "../../_components/case-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -130,6 +133,7 @@ function OrderDetail() {
   const [picking, setPicking] = useState<number | null>(null);
 
   const data = order.data;
+  const artifacts = useCaseArtifacts("order", caseId, data?.case_version);
   useEffect(() => {
     if (data) document.title = `PO ${data.po_no} · Đơn hàng · Sales`;
   }, [data]);
@@ -377,7 +381,7 @@ function OrderDetail() {
         canRender={viewer.hasScope("sales.order.prepare")}
         renderReason="Bạn không có quyền soạn tệp của đơn hàng (cần vai Sales phụ trách)."
         language={customer?.language}
-        refreshKey={data.case_version}
+        list={artifacts}
       />
 
       {data.changes.length ? (
