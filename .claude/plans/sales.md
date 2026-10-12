@@ -10,8 +10,30 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 - Context `dw_sales` scaffolded with `scripts/new_context.py` (14 seams).
 - Feature in progress: `sales/dw1-portal-demo/` — DW1 end to end on mock data
-  behind real ports. Spec: `sales/dw1-portal-demo/spec.md`. Tickets 01–12 in
+  behind real ports. Spec: `sales/dw1-portal-demo/spec.md`. Tickets 01–27 in
   `sales/dw1-portal-demo/issues/`.
+- 2026-10-12, ticket 12 triaged: what needs nothing from Proterial became
+  17 and 19–27 (rule overrides, legacy encodings, delivery schedules,
+  support without prices, telemetry, SQL overview, ClamAV and worker
+  parsing, public-repo guard, legacy Office and OCR), all ready-for-agent;
+  12 keeps what waits on the requirements doc (needs-info). The doc,
+  `DW1_Don-hang-Bao-gia_Nhung-gi-can-co_30-09-2026_v1.2.docx`, still has its
+  contact and reply-date placeholders unfilled. Order agreed with Đạt:
+  13 → 14 → 17, then 19–27.
+- 2026-10-12, the gaps left in the demo flow became tickets 13–18, each
+  checked against the code that day (the Open items below point at them):
+    - 13 the quote approval panel sees a new preview without a reload
+      (ready-for-agent);
+    - 14 an order whose cross-check decision failed to apply can be
+      cross-checked again (ready-for-agent; wider than the race noted under
+      ticket 10: any version bump between decide and apply strands it);
+    - 15 `value_uncertain` corrected per field, and the upload file prints the
+      correction (needs-info: re-run the line's checks?);
+    - 16 a worker lane processes new mail (needs-info: whose authority the
+      lane carries);
+    - 17 the head reassigns a case (G22, moved out of 12; ready-for-agent);
+    - 18 CI runs vitest and the DW1 walk (needs-info: the CI decision owed in
+      `PLAN.md`).
 - Tickets 01 and 07 committed 2026-10-03; 01 follow-up (fixtures M13–M32,
   mock Bravo history, open YCBG list, snapshot as_of, one SourceAnchor) and
   02/03 reworked to the amended spec, adversarially reviewed and committed
@@ -194,17 +216,17 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
   for `approvals.decide` (then the three drop it), or the platform stamps
   its own types (`memory.review`).
 - From ticket 09 (2026-10-06): the approval panel needs a page reload after
-  the approver renders the preview; whether submit should render the preview
+  the approver renders the preview (ticket 13); whether submit should render the preview
   itself (Đạt); the release manifest pins an eval dataset file but not the
   fixtures and truth files it names (platform); the mock README's
   Design-reply dispositions assume Sales recorded the YCBG first (the eval
-  states those steps); CI does not run `make test-web-sales`; the walk passed
+  states those steps); CI does not run `make test-web-sales` (ticket 18); the walk passed
   11/11 once, then a re-run timed out on Hà's overview ("Loading…", 60 s)
   under heavy machine load: unexplained until a green run on an idle machine.
 
 - From ticket 06 (2026-10-05): a `value_uncertain` correction is one value
-  for a whole region, so the upload file carries the values as read (domain
-  follow-up); an object written before its record commits can be orphaned
+  for a whole region, so the upload file carries the values as read
+  (ticket 15); an object written before its record commits can be orphaned
   (purged by offboarding); rendering is not stopped by the pause (Đạt to
   decide); the web client types need `pnpm run generate:api-types`.
 
@@ -231,13 +253,15 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
   approval requires its stamped `sales.quote.approve`, so Diệu's
   `approvals.decide` decides none; tested in the API suite, the unit suite,
   the eval and the walk.)
-- From ticket 10 (2026-10-06): the platform's generic Approvals page lists
-  Sales approvals to their deciders but sends no case version, so deciding
-  there is refused (the page is shadcn and moves to antd first); an order
-  whose decision passed the guard and then failed in its run (a one-request
-  race) has no step that raises its cross-check again; processing's audit
-  rows do not name the run (decision rows do); no mailbox consumer exists, and
-  one must start a DW1 run to be counted.
+- From ticket 10 (2026-10-06): the generic Approvals page sends no case
+  version, so deciding a Sales approval there would be refused. Closed by the
+  platform's `approval-inbox-link` (merged 2026-10-08): `salesApprovalHost`
+  in `apps/web/app/sales/_meta/approvals.ts` makes `/approvals` show "Mở hồ
+  sơ để quyết định", linking to the case page, instead of the decide
+  buttons. An order whose decision passed the guard and then failed in its
+  run has no step that raises its cross-check again: ticket 14. Processing's
+  audit rows do not name the run (decision rows do). No mailbox consumer
+  exists, and one must start a DW1 run to be counted: ticket 16.
 - Public repo: the repo name and these plan files name Proterial and its
   procedure codes (WIV-03-0xx). Đạt decided on 2026-10-05 to keep the repo
   public and not alias them. Mock data, people and figures stay fictional,
