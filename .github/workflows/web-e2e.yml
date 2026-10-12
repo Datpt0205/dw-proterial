@@ -1,0 +1,86 @@
+name: Web E2E (DW1 walk)
+
+# The DW1 demo walked in a browser as each persona (`make test-web-sales`,
+# apps/web/e2e/sales-demo.spec.ts). Ticket 18, decided by Đạt 2026-10-12: on
+# pushes to main and nightly, non-blocking until three consecutive green runs,
+# then blocking on main. Its own workflow rather than a job in ci.yml because a
+# `schedule` trigger there would run every CI job nightly, not just this one.
+#
+# Making it blocking is one line: delete `continue-on-error: true` below, in a
+# commit that names the three green run ids. The ticket records who flips it
+# (.claude/plans/sales/dw1-portal-demo/issues/18-web-tests-in-ci.md).
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 19 * * *" # 02:00 Asia/Ho_Chi_Minh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-e2e-${{ github.ref }}
+  # Not cancelled by the next push: "three consecutive green runs" counts
+  # finished runs, and a run cancelled halfway proves nothing either way.
+  cancel-in-progress: false
+
+jobs:
+  sales-walk:
+    name: DW1 walk in a browser (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Non-blocking until three consecutive green runs (see the header). A red
+    # run still shows red on the job; only the workflow's conclusion ignores it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.31"
+          enable-cache: true
+      - name: Sync workspace
+        run: uv sync --all-packages
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: pnpm --filter @dw/web exec playwright install --with-deps chromium
+      - name: Start Postgres, object storage, cache and vector store
+        # The integration job's pattern, without Keycloak and the document
+        # sandbox: the walk signs in through the dev-auth session bridge, and
+        # Sales prints its own files (dw_sales.adapters.artifact_files). The
+        # buckets are a one-shot; `run` returns its exit code, where `up --wait`
+        # would read its normal exit as a failure.
+        run: |
+          cp .env.example .env
+          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey s3
+          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra run --rm s3-setup
+      - name: Migrate
+        run: make db-migrate
+      - name: DW1 walk
+        # Playwright starts the dev-auth API and the web itself (playwright.config.ts
+        # `webServer`); the spec resets the demo tenants first. No retries: a
+        # timeout here is investigated, not retried away (ticket 18, acceptance 3).
+        # A step limit under the job's: a walk that hangs past it fails this
+        # step, so the upload below runs on `failure()` with time left, rather
+        # than hoping the job-level timeout still runs it as `cancelled()`.
+        timeout-minutes: 30
+        run: make test-web-sales
+      - name: Upload the Playwright trace
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-sales-walk
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/
+          retention-days: 14
+      - name: Stop infra
+        if: always()
+        run: docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra down -v
