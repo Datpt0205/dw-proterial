@@ -103,7 +103,7 @@ def assemble(
         release_manifest_ref,
     )
     services = SalesServices(
-        overview=OverviewService(uow, gate, clock, inbox, kpi, directory),
+        overview=OverviewService(uow, gate, clock, inbox, kpi, directory, pending),
         inbox=InboxQueries(uow, gate, inbox),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=OrderQueries(uow, gate, pending),

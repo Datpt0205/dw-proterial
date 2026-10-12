@@ -149,6 +149,8 @@ export function order(overrides: Partial<Order> = {}): Order {
     closed_at: null,
     superseded_by_case: null,
     makers: [],
+    cross_check_stalled: false,
+    unapplied_decision: null,
     lines: [line],
     ...overrides,
   };

@@ -157,6 +157,22 @@ class PendingDecisionView(BaseModel):
     approval_type: str
 
 
+class UnappliedDecisionView(BaseModel):
+    """A cross-check decision the platform recorded and DW1's run could not
+    apply to the order (ticket 14): who decided which way, on which version,
+    and the reason code. Ids and codes only."""
+
+    model_config = _VIEW
+
+    approval_id: uuid.UUID | None
+    run_id: uuid.UUID
+    decided_by: uuid.UUID
+    approved: bool
+    decided_on: int | None
+    reason_code: str
+    at: datetime
+
+
 def order_change(case: OrderCase) -> CaseChangeView:
     return CaseChangeView(
         case_kind=CaseKind.ORDER,
@@ -549,6 +565,13 @@ class OrderCaseView(BaseModel):
     makers: list[uuid.UUID]
     # The cross-check approval this order waits on, while it does.
     decision: PendingDecisionView | None = None
+    # Nothing is on the way to the cross-check the order awaits: no approval
+    # pending and no DW1 run about it unfinished. Its Bravo recorder or the
+    # head raises it again (ticket 14).
+    cross_check_stalled: bool
+    # The last cross-check decision recorded and not applied, said while the
+    # order still awaits its cross-check.
+    unapplied_decision: UnappliedDecisionView | None
 
 
 def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummaryView:
@@ -575,8 +598,10 @@ def order_case(
     release_manifest_ref: str | None,
     prices: PriceView,
     decision: PendingDecisionView | None = None,
+    stalled: bool = False,
 ) -> OrderCaseView:
     document = case.document
+    unapplied = case.unapplied_decision
     total = document.total
     coverage = case.coverage()
     return OrderCaseView(
@@ -647,6 +672,20 @@ def order_case(
         superseded_by_case=case.superseded_by_case,
         makers=sorted(case.makers),
         decision=decision,
+        cross_check_stalled=stalled,
+        unapplied_decision=(
+            UnappliedDecisionView(
+                approval_id=unapplied.approval_id,
+                run_id=unapplied.run_id,
+                decided_by=unapplied.decided_by,
+                approved=unapplied.approved,
+                decided_on=unapplied.decided_on,
+                reason_code=unapplied.reason_code,
+                at=unapplied.at,
+            )
+            if unapplied
+            else None
+        ),
     )
 
 

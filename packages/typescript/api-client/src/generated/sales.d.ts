@@ -398,6 +398,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/resend-cross-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Cross Check
+         * @description "Gửi kiểm chéo lại" (ticket 14). Whoever recorded the Bravo entry,
+         *     with `sales.order.prepare`; anyone else also needs
+         *     `sales.order.resend_cross_check`, which the case checks (403).
+         */
+        post: operations["resend_cross_check_api_v1_sales_orders__case_id__resend_cross_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/source/{attachment_id}": {
         parameters: {
             query?: never;
@@ -1451,6 +1473,8 @@ export interface components {
             coverage: components["schemas"]["CoverageView"];
             /** Cross Check Required */
             cross_check_required: boolean | null;
+            /** Cross Check Stalled */
+            cross_check_stalled: boolean;
             /** Cross Checked At */
             cross_checked_at: string | null;
             /** Cross Checked By */
@@ -1521,6 +1545,7 @@ export interface components {
             superseded_by_case: string | null;
             total: components["schemas"]["Amount"] | null;
             total_anchor: components["schemas"]["SourceAnchor"] | null;
+            unapplied_decision: components["schemas"]["UnappliedDecisionView"] | null;
         };
         /** OrderFindingView */
         OrderFindingView: {
@@ -2313,6 +2338,37 @@ export interface components {
             pc?: null;
             sales: components["schemas"]["TimeStat"];
         };
+        /**
+         * UnappliedDecisionView
+         * @description A cross-check decision the platform recorded and DW1's run could not
+         *     apply to the order (ticket 14): who decided which way, on which version,
+         *     and the reason code. Ids and codes only.
+         */
+        UnappliedDecisionView: {
+            /** Approval Id */
+            approval_id: string | null;
+            /** Approved */
+            approved: boolean;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Decided By
+             * Format: uuid
+             */
+            decided_by: string;
+            /** Decided On */
+            decided_on: number | null;
+            /** Reason Code */
+            reason_code: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -3059,6 +3115,44 @@ export interface operations {
         };
     };
     prepare_api_v1_sales_orders__case_id__prepare_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_cross_check_api_v1_sales_orders__case_id__resend_cross_check_post: {
         parameters: {
             query?: never;
             header?: {

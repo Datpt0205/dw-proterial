@@ -20,7 +20,8 @@ names neither implementation (it may not import the app).
   quotation and cross-checking or returning an order are decisions on a
   platform approval (`POST /api/v1/approvals/{id}/decisions`), which DW1's
   run pauses on and applies (dw_sales ADR 0004). The routes that raise them
-  (`submit`, `bravo-entry`) and "DW xử lý" start a DW1 run (`svc.dw1`).
+  (`submit`, `bravo-entry`, `resend-cross-check`) and "DW xử lý" start a
+  DW1 run (`svc.dw1`).
 """
 
 # No `from __future__ import annotations` here: the routes annotate their
@@ -422,6 +423,20 @@ def build_router(
             so_no=body.so_no,
             entry_compared=body.entry_compared,
         )
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/resend-cross-check",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def resend_cross_check(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        """ "Gửi kiểm chéo lại" (ticket 14). Whoever recorded the Bravo entry,
+        with `sales.order.prepare`; anyone else also needs
+        `sales.order.resend_cross_check`, which the case checks (403)."""
+        change = await svc.dw1.resend_cross_check(context, case_id, case_version=body.case_version)
         return await idem.record(change)
 
     @router.post(

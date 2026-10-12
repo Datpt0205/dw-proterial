@@ -14,13 +14,16 @@ hidden, never a 403 and never a zero (spec decision 8, dw_sales ADR 0003).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
+from types import MappingProxyType
+from typing import Final, Protocol
 
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.ports import SalesScope
+from dw_sales.domain.orders import Actor, Capability
 
 
 class SalesScopes(StrEnum):
@@ -33,6 +36,8 @@ class SalesScopes(StrEnum):
     INBOX_PROCESS = "sales.inbox.process"
     ORDER_PREPARE = "sales.order.prepare"
     ORDER_CROSS_CHECK = "sales.order.cross_check"
+    # Raise an order's cross-check again for its Bravo recorder (ticket 14).
+    ORDER_RESEND_CROSS_CHECK = "sales.order.resend_cross_check"
     QUOTE_PREPARE = "sales.quote.prepare"
     QUOTE_APPROVE = "sales.quote.approve"
     COMPLIANCE_ACK = "sales.compliance.ack"
@@ -113,3 +118,19 @@ class Gate:
 
     def prices(self, context: AccessContext) -> PriceView:
         return PriceView.of(context, self.authz)
+
+
+# The scope that verifies each capability an order case asks for.
+_CAPABILITIES: Final[Mapping[Capability, SalesScopes]] = MappingProxyType(
+    {
+        Capability.ACKNOWLEDGE_EXPORT_CONTROL: SalesScopes.COMPLIANCE_ACK,
+        Capability.RESEND_CROSS_CHECK: SalesScopes.ORDER_RESEND_CROSS_CHECK,
+    }
+)
+
+
+def order_actor(context: AccessContext, gate: Gate) -> Actor:
+    """The caller as an order case knows them: their principal id, and each
+    capability whose scope (`_CAPABILITIES`) their verified context holds."""
+    capabilities = frozenset(c for c, scope in _CAPABILITIES.items() if gate.allows(context, scope))
+    return Actor(user_id=context.principal_id, capabilities=capabilities)

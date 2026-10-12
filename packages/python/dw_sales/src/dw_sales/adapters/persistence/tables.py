@@ -63,6 +63,9 @@ order_cases = sa.Table(
     sa.Column("superseded_by_case", UUID(as_uuid=True)),
     sa.Column("assigned_to", UUID(as_uuid=True)),
     sa.Column("release_manifest_ref", sa.Text),
+    # A cross-check decision recorded and not applied (ticket 14), while the
+    # order awaits its cross-check: ids, an outcome and a reason code.
+    sa.Column("unapplied_decision", JSONB(none_as_null=True)),
     # Written by the `accumulate_makers` trigger only.
     sa.Column("makers", ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),

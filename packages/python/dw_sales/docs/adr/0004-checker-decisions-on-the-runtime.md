@@ -89,9 +89,12 @@ DW1 is a worker on the runtime (`configs/workers/sales.yaml`, graph
 - A decision that passes the guard can still fail when the run applies it, if
   the case changed in the instant between (the window is one request long);
   the run then ends failed and the approval stays decided. A quotation
-  recovers by being priced and submitted again; an order at
-  `uploaded_to_bravo` has no step that raises its cross-check again yet
-  (open, ticket 12).
+  recovers by being priced and submitted again. An order at
+  `uploaded_to_bravo` recovers since ticket 14 (2026-10-12): the order
+  records the decision not applied and why, the audit names the run, the
+  approval and the reason, and its Bravo recorder (or the head, with
+  `sales.order.resend_cross_check`) raises the cross-check again in a new
+  run. Decide and apply stay two transactions.
 - Ticket 10 had to land before DW1 reads a real document or an adapter
   writes outside the platform; both remain ticket 12's.
 

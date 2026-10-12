@@ -17,11 +17,13 @@ the message log, never an amount (spec decision 8):
 
 **My work** (`sales.case.read`): the next step on each open case, for a
 caller whose scopes allow that step. The cross-check goes to every holder of
-`sales.order.cross_check` who made none of the case, an approval to every
-holder of `sales.quote.approve` who did not price it; every other step to
-the case's assignee, and an unassigned case to everyone who may take the
-step. Messages routed to Sales go to their owner, or to every PIC when the
-owner is the pool.
+`sales.order.cross_check` who made none of the case, while its approval is
+pending; an order whose cross-check nothing is on the way to (ticket 14)
+goes to whoever recorded its Bravo entry, to raise it again. An approval
+goes to every holder of `sales.quote.approve` who did not price it; every
+other step to the case's assignee, and an unassigned case to everyone who
+may take the step. Messages routed to Sales go to their owner, or to every
+PIC when the owner is the pool.
 
 The overview loads every case of the workspace: right for the demo's mock
 set, and owed to SQL aggregates before real volume (ticket 12).
@@ -51,6 +53,7 @@ from dw_sales.application.case_store import (
     Stored,
 )
 from dw_sales.application.ports import InboxPort, MemberDirectoryPort
+from dw_sales.application.runs import PendingDecisionsPort, awaited
 from dw_sales.application.views import WorkerStateView, worker_state
 from dw_sales.domain.dispositions import SALES_PIC_POOL, CaseKind, DispositionKind
 from dw_sales.domain.kpi import SalesKpi
@@ -283,6 +286,7 @@ class OverviewService:
     inbox: InboxPort
     kpi: SalesKpi
     directory: MemberDirectoryPort
+    decisions: PendingDecisionsPort
 
     async def overview(self, context: AccessContext) -> OverviewView:
         await self.gate.require(context, SalesScopes.OVERVIEW_READ, resource_type="sales_overview")
@@ -353,7 +357,7 @@ class OverviewService:
             orders = list(await work.orders.list_all())
             quotes = list(await work.quotes.list_all())
             messages = list(await work.messages.list_all())
-        items = [item for s in orders if (item := self._order_item(context, s)) is not None]
+        items = [item for s in orders if (item := await self._order_item(context, s)) is not None]
         items += [item for s in quotes if (item := self._quote_item(context, s)) is not None]
         if self.gate.allows(context, SalesScopes.INBOX_PROCESS):
             mine = {
@@ -387,13 +391,27 @@ class OverviewService:
             return False
         return assigned_to is None or assigned_to == context.principal_id
 
-    def _order_item(self, context: AccessContext, stored: Stored[OrderCase]) -> WorkItem | None:
+    async def _order_item(
+        self, context: AccessContext, stored: Stored[OrderCase]
+    ) -> WorkItem | None:
         case, assigned = stored.case, stored.origin.assigned_to
         step = _ORDER_NEXT.get(case.status)
         if step is None:
             return None
         action, scope = step
-        if action == "cross_check":
+        wait = await awaited(self.decisions, context, case) if action == "cross_check" else None
+        if wait is not None and wait.stalled:
+            # Nothing is on the way to the cross-check: its Bravo recorder
+            # raises it again (the head may too, from the order's page).
+            if context.principal_id != case.bravo_recorded_by or not self.gate.allows(
+                context, SalesScopes.ORDER_PREPARE
+            ):
+                return None
+            action = "resend_cross_check"
+        elif wait is not None and wait.approval_id is None:
+            # A run is on its way to raising it: nothing to decide yet.
+            return None
+        elif action == "cross_check":
             # Anyone who may cross-check and made none of the case.
             if not self.gate.allows(context, scope) or context.principal_id in case.makers:
                 return None

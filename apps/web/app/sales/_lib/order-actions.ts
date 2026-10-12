@@ -27,6 +27,7 @@ export type OrderAction =
   | "applyChange"
   | "crossCheck"
   | "returnOrder"
+  | "resendCrossCheck"
   | "confirm"
   | "close";
 
@@ -39,6 +40,7 @@ export interface Offer {
 export const MAKER_CHECKER = "tách nhiệm, WIV-03-012 bước 9";
 
 const PIC = label(SALES_ROLE, "sales_pic");
+const HEAD = label(SALES_ROLE, "sales_head");
 const EXPORT_PIC = label(SALES_ROLE, "sales_export_control");
 
 // The states a step is offered in (the domain's `_NEXT`, read as buttons).
@@ -118,6 +120,10 @@ const NOT_SERVED =
 export const NO_CROSS_CHECK_REQUEST =
   "Chưa có yêu cầu kiểm chéo đang chờ cho đơn này: tải lại trang; nếu vẫn chưa có, báo bộ phận hỗ trợ.";
 
+/** The order's cross-check has nothing on the way to it (ticket 14). */
+export const STALLED_CROSS_CHECK =
+  "Chưa có yêu cầu kiểm chéo đang chờ: người nhập Bravo cho đơn này hoặc Trưởng bộ phận Sales cần bấm “Gửi kiểm chéo lại”.";
+
 export function orderOffers(
   order: Order,
   viewer: Viewer,
@@ -179,9 +185,22 @@ export function orderOffers(
           ? NOT_SERVED
           : order.decision
             ? null
-            : NO_CROSS_CHECK_REQUEST));
+            : order.cross_check_stalled
+              ? STALLED_CROSS_CHECK
+              : NO_CROSS_CHECK_REQUEST));
     offers.crossCheck = { reason };
     offers.returnOrder = { reason };
+    // Nothing is on the way to the cross-check: the Bravo recorder, or the
+    // head, raises it again. The case refuses anyone else (403).
+    if (order.cross_check_stalled)
+      offers.resendCrossCheck = {
+        reason: !canPrepare
+          ? noPrepare
+          : order.bravo_recorded_by === viewer.principalId ||
+              viewer.hasScope("sales.order.resend_cross_check")
+            ? null
+            : `Chỉ người đã nhập Bravo cho đơn này hoặc ${HEAD} gửi kiểm chéo lại.`,
+      };
   }
 
   const confirmable =

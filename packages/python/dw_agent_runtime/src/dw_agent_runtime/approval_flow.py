@@ -309,6 +309,10 @@ class ApproveAndResumeService:
 
         if record is not None and request.run_id is not None:
             resume_payload: dict[str, Any] = {
+                # Which approval was decided: the run row names it too, but a
+                # graph that records a decision it could not apply has only
+                # its context and this payload to name it with.
+                "approval_id": str(request.id),
                 "approved": approve,
                 "comment": comment,
                 # Who decided, from the decider's verified context. The run

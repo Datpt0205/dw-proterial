@@ -170,6 +170,19 @@ class MemoryRuns:
             and row.approval_request_id is not None
         ]
 
+    async def active_since(
+        self, tenant_id: uuid.UUID, *, worker_id: str, subject_ref: str
+    ) -> datetime | None:
+        started = [
+            row.created_at
+            for row in self.rows.values()
+            if row.context.tenant_id == tenant_id
+            and row.context.worker_id == worker_id
+            and row.context.subject_ref == subject_ref
+            and row.status not in TERMINAL_STATUSES
+        ]
+        return min(started, default=None)
+
     def _row(self, tenant_id: uuid.UUID, run_id: uuid.UUID) -> _Run:
         row = self.rows.get(run_id)
         if row is None or row.context.tenant_id != tenant_id:

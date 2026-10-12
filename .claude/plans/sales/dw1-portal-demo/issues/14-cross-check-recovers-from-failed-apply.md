@@ -1,6 +1,6 @@
 # 14 — An order whose cross-check decision failed to apply can be cross-checked again
 
-Status: ready-for-agent
+Status: done (2026-10-12; not committed)
 Blocked by: —
 Category: bug
 
@@ -67,5 +67,69 @@ re-submitting withdraws and raises a fresh approval.
 - `dw_agent_runtime/approval_flow.py` (`decide`, `withdraw`),
   `adapters/langgraph_runner.py` (`_fail`).
 - `sales.md` Open "From ticket 10"; ticket 10 line 100.
+
+## As built (2026-10-12)
+
+- **Reproduced first.** `dw_sales/tests/unit/test_cross_check_recovery.py`
+  wraps the Sales decision guard so An acknowledges NOC/ESF on M03 between
+  the guard and the resume: the approval ends APPROVED, the run FAILED, the
+  order at `uploaded_to_bravo` with no pending approval. Red before the fix
+  (no way out); the API suite repeats it through the routes
+  (`apps/api/tests/integration/test_sales_api_cross_check_recovery.py`).
+  A second way to strand an order was found on the way: `POST bravo-entry`
+  on an order already in Bravo withdrew its pending cross-check before the
+  run refused the step. It is now refused (409) before anything is
+  withdrawn.
+- **The trace.** `CaseDecisions.apply` catches the case's refusal of the
+  decision (any `DWError`), and for an order records it before re-raising
+  (the run still ends FAILED): `OrderCase.decision_not_applied` stamps an
+  `UnappliedDecision` (approval id, run id, decider, outcome, the version
+  decided on, reason code, time) with event `order.decision_not_applied`
+  (DW1's, initiated by the decider) and one audit row naming the run
+  (`run_id`), the approval (`details.approval_id`) and `reason_code`; ids and
+  codes only. The reason code is the refusal's `rule` (`same_version` now
+  says `stale_case_version`), else its error code. A case that already moved
+  on gets the audit row only. The platform's resume payload now names the
+  approval (`approval_id`), the one line the graph needed to say which.
+- **Stored** in `sales.order_cases.unapplied_decision` (jsonb, migration
+  `58184771c541`). Its CHECK holds it to `uploaded_to_bravo` and to exactly
+  `UnappliedDecision`'s keys with a code-shaped `reason_code`, so a comment
+  or an amount has no field there (`test_sales_schema.py` compares the keys;
+  the API suite shows a stranger key, a missing code and an amount-shaped
+  code refused). Writing Python `None` as JSON `null` was caught by this
+  CHECK on the first run: the column is `JSONB(none_as_null=True)`.
+- **"Gửi kiểm chéo lại"**: `POST /orders/{id}/resend-cross-check`
+  `{case_version}` with `Idempotency-Key`, route scope `sales.order.prepare`.
+  `Dw1Runs.resend_cross_check` reads the case (404 elsewhere), checks the
+  version (409), lets the case refuse (`OrderCase.resend_cross_check`: 409
+  unless it awaits its cross-check; 403 unless the caller recorded the Bravo
+  entry or holds the new `sales.order.resend_cross_check`, granted to
+  `sales_head` only by the same migration), then refuses 409 while an
+  approval is pending (`cross_check_pending`) or any DW1 run about the order
+  is unfinished (`dw1_running`, read from the run store's `active_since`,
+  which nothing read before). It starts an `order_cross_check` run; its step
+  (`CaseDecisions.record_bravo_entry`, which now picks the step by the
+  order's state) asks the case again and bumps the version, so two presses
+  at once meet the version and never raise two. Graph and worker versions
+  are unchanged: the graph's code is not.
+- **Maker/checker unchanged**: the new approval names `OrderCase.makers` as
+  before; whoever re-raises is its requester (the platform excludes the
+  requester), and the decider of the failed one may decide again.
+- **The order page** shows "Quyết định kiểm chéo trước chưa được áp dụng vào
+  đơn" with who decided which way, on which version, the reason
+  (`NOT_APPLIED_REASON`, glossary "Not-applied reasons") and who acts; the
+  button "Gửi kiểm chéo lại" is offered to the recorder and the head, and
+  disabled with the reason in words for any other PIC. `OrderCaseView`
+  gains `cross_check_stalled` and `unapplied_decision`.
+- **My work**: `cross_check` only while an approval is pending; a stalled
+  order is `resend_cross_check` for its Bravo recorder (the head acts from
+  the page). Left as it was: an order at `uploaded_to_bravo` whose rules need
+  no cross-check still shows the `cross_check` item (pre-existing).
+- **Mutation checks** (each turned a test red, after a baseline run passed):
+  the case's authority check; the pending and the unfinished-run refusals;
+  the bravo-entry status pre-check; the trace in `apply`; the stalled branch
+  of my-work; clearing the record when the order moves on (needed a test of
+  its own, added); the `stale_case_version` rule code; on the web, the
+  page's explanation, the offer to everyone, the offer to no one.
 
 ## Comments

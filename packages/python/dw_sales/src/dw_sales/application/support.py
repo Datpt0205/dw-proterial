@@ -70,6 +70,7 @@ def same_version(case_id: uuid.UUID, current: int, decided_on: int) -> None:
                 "case_id": str(case_id),
                 "case_version": current,
                 "decided_on": decided_on,
+                "rule": "stale_case_version",
             },
         )
 
@@ -99,11 +100,14 @@ def audit_row(
     to_status: str,
     event: CaseEvent,
     run_id: uuid.UUID | None = None,
+    approval_id: uuid.UUID | None = None,
 ) -> AuditEvent:
     """The platform audit row for one case event, in the event's own terms.
 
     ``run_id`` is the DW1 run the event happened in, when it did: a decision
     applied when the run resumed names the run, and through it the approval.
+    ``approval_id`` names the approval itself where the run is not enough to
+    find it: a decision that was not applied (ticket 14).
     """
     actor = event.actor
     details: dict[str, object] = {
@@ -119,6 +123,8 @@ def audit_row(
         value = getattr(event, name)
         if value is not None:
             details[name] = value
+    if approval_id is not None:
+        details["approval_id"] = str(approval_id)
     return AuditEvent(
         id=ids.new_uuid(),
         tenant_id=TenantId(context.tenant_id),
@@ -165,6 +171,7 @@ async def save_order(
     event: CaseEvent,
     *,
     run_id: uuid.UUID | None = None,
+    approval_id: uuid.UUID | None = None,
 ) -> None:
     """The order's next state, its event and its audit row, in the open
     transaction; the caller commits."""
@@ -180,6 +187,7 @@ async def save_order(
             to_status=after.status.value,
             event=event,
             run_id=run_id,
+            approval_id=approval_id,
         )
     )
 
