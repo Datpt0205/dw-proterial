@@ -15,7 +15,11 @@ same code (`_decide`):
   blocking price finding without its reason, a maker) is refused while the
   approval is still undecided;
 - **when the run resumes** (`apply`): the same transition, written, as the
-  decider, linked to the run.
+  decider, linked to the run. A decision the case refuses here (it changed
+  in the instant between, say) is still recorded on the platform; the order
+  then says it was not applied and why, the audit names the run, the
+  approval and the reason, and its cross-check can be raised again
+  (ticket 14).
 
 The decide scope is not asked for here: the platform requires
 `approvals.decide` and the scope the approval was stamped with in its
@@ -27,6 +31,7 @@ through `ApproveAndResumeService.decide`, which checked it.
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -35,14 +40,13 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
-from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
+from dw_kernel.errors import ConflictError, DomainError, DWError, PermissionDeniedError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.approval import ApprovalRequest
-from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.inbox_service import InboxProcessing
-from dw_sales.application.orders_service import order_actor
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import local_day, parse_finding_key
 from dw_sales.application.runs import (
@@ -54,6 +58,7 @@ from dw_sales.application.runs import (
 )
 from dw_sales.application.source import require_served
 from dw_sales.application.support import (
+    audit_row,
     decided,
     person_event,
     same_version,
@@ -61,13 +66,16 @@ from dw_sales.application.support import (
     save_quote,
     stored_order,
     stored_quote,
+    worker_event,
 )
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.orders import Actor, OrderCase, OrderStatus
+from dw_sales.domain.orders import Actor, OrderCase, OrderStatus, UnappliedDecision
 from dw_sales.domain.quotes import QuoteActor, QuoteCapability, QuoteCase
 
 _QUOTE = "sales_quote_case"
 _ORDER = "sales_order_case"
+# The shape a case event's reason code takes (`CaseEvent.reason_code`).
+_REASON_CODE = re.compile(r"[a-z_]{1,40}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,30 +164,38 @@ class CaseDecisions:
         entry_compared: bool,
         run_id: uuid.UUID,
     ) -> DecisionAsked | None:
-        """The sales-order number and the statement that the Bravo entry was
-        compared with the PO; on a revised order in Bravo, the change applied.
-        The cross-check the run then waits on, unless the case's rules need
-        none."""
+        """What brings the order to its cross-check, by the state it is in:
+        the sales-order number and the statement that the Bravo entry was
+        compared with the PO; on a revised order in Bravo, the change applied;
+        on an order already in Bravo, its cross-check raised again ("Gửi kiểm
+        chéo lại", ticket 14, which the case allows only its Bravo recorder or
+        the head). The cross-check the run then waits on, unless the case's
+        rules need none."""
         await self.gate.require(
             context, SalesScopes.ORDER_PREPARE, resource_type=_ORDER, resource_id=str(case_id)
         )
         actor, now = order_actor(context, self.gate), self.clock.now()
 
-        def step(case: OrderCase) -> OrderCase:
+        def step(case: OrderCase) -> tuple[OrderCase, str]:
+            if case.status is OrderStatus.UPLOADED_TO_BRAVO:
+                return case.resend_cross_check(actor), "order.cross_check_resent"
             if case.status is OrderStatus.CHANGE_REVIEW:
-                return case.apply_change(actor, now, entry_compared=entry_compared)
+                applied = case.apply_change(actor, now, entry_compared=entry_compared)
+                return applied, "order.bravo_recorded"
             if so_no is None:
                 raise DomainError(
                     "a Bravo entry names its sales-order number",
                     details={"case_id": str(case.case_id), "field": "so_no"},
                 )
-            return case.record_bravo_entry(so_no, actor, now, entry_compared=entry_compared)
+            recorded = case.record_bravo_entry(so_no, actor, now, entry_compared=entry_compared)
+            return recorded, "order.bravo_recorded"
 
         async with self.uow(sales_scope(context)) as work:
             case = (await stored_order(work, case_id)).case
             same_version(case_id, case.case_version, case_version)
-            after = decided(lambda: step(case))
-            event = person_event("order.bravo_recorded", context, now, field="bravo_so_no")
+            after, action = decided(lambda: step(case))
+            field = "bravo_so_no" if action == "order.bravo_recorded" else None
+            event = person_event(action, context, now, field=field)
             await save_order(work, context, self.ids, case, after, event, run_id=run_id)
             await work.commit()
         return DecisionAsked.of_order(after) if awaiting(after) is not None else None
@@ -226,19 +242,89 @@ class CaseDecisions:
         decider = context.model_copy(
             update={"principal_id": given.decided_by, "roles": frozenset(), "scopes": frozenset()}
         )
-        return await self._decide(
-            asked,
-            _Decision(
-                decider=decider,
-                approve=given.approved,
-                comment=given.comment,
-                reasons=given.reasons,
-                subject_version=given.subject_version,
-                approves_quotes=asked.approval_type is DecisionType.QUOTE_APPROVAL,
-            ),
-            write=True,
-            run_id=run_id,
-        )
+        try:
+            return await self._decide(
+                asked,
+                _Decision(
+                    decider=decider,
+                    approve=given.approved,
+                    comment=given.comment,
+                    reasons=given.reasons,
+                    subject_version=given.subject_version,
+                    approves_quotes=asked.approval_type is DecisionType.QUOTE_APPROVAL,
+                ),
+                write=True,
+                run_id=run_id,
+            )
+        except DWError as refused:
+            # The platform has recorded the decision; the run ends failed.
+            if asked.case_kind is CaseKind.ORDER:
+                await self._not_applied(decider, asked, given, refused, run_id=run_id)
+            raise
+
+    async def _not_applied(
+        self,
+        decider: AccessContext,
+        asked: DecisionAsked,
+        given: DecisionGiven,
+        refused: DWError,
+        *,
+        run_id: uuid.UUID,
+    ) -> None:
+        """The trace of a cross-check decision the case refused when the run
+        applied it (ticket 14): the order says so while it still awaits its
+        cross-check, and the audit row names the run, the approval and the
+        reason code. Ids and codes only: the comment stays on the platform's
+        decision record. Written by DW1, at the decider's decision."""
+        rule = refused.details.get("rule")
+        reason = rule if isinstance(rule, str) and _REASON_CODE.fullmatch(rule) else None
+        reason = reason or refused.code.value
+        now = self.clock.now()
+        event = worker_event("order.decision_not_applied", decider, now, reason_code=reason)
+        async with self.uow(sales_scope(decider)) as work:
+            stored = await work.orders.get(asked.case_id)
+            if stored is None:
+                return
+            case = stored.case
+            if awaiting(case) is DecisionType.ORDER_CROSS_CHECK:
+                after = case.decision_not_applied(
+                    UnappliedDecision(
+                        approval_id=given.approval_id,
+                        run_id=run_id,
+                        decided_by=given.decided_by,
+                        approved=given.approved,
+                        decided_on=given.subject_version,
+                        reason_code=reason,
+                        at=now,
+                    )
+                )
+                await save_order(
+                    work,
+                    decider,
+                    self.ids,
+                    case,
+                    after,
+                    event,
+                    run_id=run_id,
+                    approval_id=given.approval_id,
+                )
+            else:
+                # The case moved on (revised, say): nothing to say on it.
+                await work.audit.append(
+                    audit_row(
+                        decider,
+                        self.ids,
+                        case_kind=CaseKind.ORDER,
+                        case_id=case.case_id,
+                        case_version=case.case_version,
+                        from_status=case.status.value,
+                        to_status=case.status.value,
+                        event=event,
+                        run_id=run_id,
+                        approval_id=given.approval_id,
+                    )
+                )
+            await work.commit()
 
     async def _decide(
         self,

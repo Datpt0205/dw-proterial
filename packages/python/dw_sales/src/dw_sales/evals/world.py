@@ -638,7 +638,12 @@ def open_world(
     worker_file = repo_root / "configs" / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     runs = RuntimeDw1Runs(
-        runtime.runner, runtime.approval_flow, ids, worker.worker_id, worker.worker_version
+        runtime.runner,
+        runtime.approval_flow,
+        runtime.runs,
+        ids,
+        worker.worker_id,
+        worker.worker_version,
     )
     assembly = assemble(
         uow=store,

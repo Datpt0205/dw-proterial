@@ -463,6 +463,7 @@ def build_sales(
     runs = RuntimeDw1Runs(
         runtime.runner,
         runtime.approval_flow,
+        runtime.approval_flow.run_store,
         ids,
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 from dw_agent_runtime.adapters.run_store import WaitingRun
@@ -36,10 +37,19 @@ class SubjectApprovalsPort(Protocol):
     ) -> int: ...
 
 
+class ActiveRunsPort(Protocol):
+    """The run store's question about a subject (`SqlWorkerRunStore`)."""
+
+    async def active_since(
+        self, tenant_id: uuid.UUID, *, worker_id: str, subject_ref: str
+    ) -> datetime | None: ...
+
+
 @dataclass(frozen=True)
 class RuntimeDw1Runs:
     runner: WorkflowRunnerPort
     approvals: SubjectApprovalsPort
+    active: ActiveRunsPort
     ids: IdGenerator
     # The worker the runs are recorded under, as its config declares it.
     worker_id: str
@@ -82,3 +92,10 @@ class RuntimeDw1Runs:
 
     async def withdraw(self, context: AccessContext, subject_ref: str) -> None:
         await self.approvals.withdraw(context, worker_id=self.worker_id, subject_ref=subject_ref)
+
+    async def unfinished(self, context: AccessContext, subject_ref: str) -> bool:
+        # Running, or paused on its approval: any status that is not terminal.
+        started = await self.active.active_since(
+            context.tenant_id, worker_id=self.worker_id, subject_ref=subject_ref
+        )
+        return started is not None

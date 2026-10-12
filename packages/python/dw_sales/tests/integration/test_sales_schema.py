@@ -88,6 +88,17 @@ async def test_a_check_basis_holds_the_keys_of_line_basis(catalog: AsyncConnecti
     assert set(re.findall(r"'([a-z_]+)'", listed)) == set(orders.LineBasis.model_fields)
 
 
+async def test_a_decision_not_applied_holds_the_keys_of_its_domain_record(
+    catalog: AsyncConnection,
+) -> None:
+    """Ids, an outcome, a version and a reason code (ticket 14): the CHECK
+    refuses any other key, so a comment or an amount has no field there."""
+    definition = await _constraint(catalog, "ck_order_cases_unapplied_decision")
+    (listed,) = re.findall(r"ARRAY\[([^\]]+)\]", definition)
+    assert set(re.findall(r"'([a-z_]+)'", listed)) == set(orders.UnappliedDecision.model_fields)
+    assert "'uploaded_to_bravo'" in definition
+
+
 async def test_every_foreign_key_says_what_a_delete_does_and_is_indexed(
     catalog: AsyncConnection,
 ) -> None:

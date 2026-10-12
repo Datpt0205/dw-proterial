@@ -154,6 +154,9 @@ class Api:
     sessions: async_sessionmaker[AsyncSession]
     app: FastAPI
     runner: LangGraphWorkflowRunner
+    # Where a test reaches the decision guards (ticket 14 puts a version bump
+    # between the guard and the resume).
+    approval_flow: ApproveAndResumeService
 
     def as_(self, subject: str, tenant: str = ALPHA) -> Persona:
         return Persona(self.client, subject, tenant)
@@ -234,7 +237,7 @@ async def build_app(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client,
         ):
-            yield Api(client, artifacts, sessions, app, runner)
+            yield Api(client, artifacts, sessions, app, runner, approval_flow)
     finally:
         await engine.dispose()
 

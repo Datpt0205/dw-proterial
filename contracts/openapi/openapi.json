@@ -4113,6 +4113,10 @@
             ],
             "title": "Cross Check Required"
           },
+          "cross_check_stalled": {
+            "title": "Cross Check Stalled",
+            "type": "boolean"
+          },
           "cross_checked_at": {
             "anyOf": [
               {
@@ -4379,6 +4383,16 @@
                 "type": "null"
               }
             ]
+          },
+          "unapplied_decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnappliedDecisionView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4432,7 +4446,9 @@
           "closed_by",
           "closed_at",
           "superseded_by_case",
-          "makers"
+          "makers",
+          "cross_check_stalled",
+          "unapplied_decision"
         ],
         "title": "OrderCaseView",
         "type": "object"
@@ -7799,6 +7815,68 @@
           "customer"
         ],
         "title": "TimesView",
+        "type": "object"
+      },
+      "UnappliedDecisionView": {
+        "description": "A cross-check decision the platform recorded and DW1's run could not\napply to the order (ticket 14): who decided which way, on which version,\nand the reason code. Ids and codes only.",
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "decided_by": {
+            "format": "uuid",
+            "title": "Decided By",
+            "type": "string"
+          },
+          "decided_on": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided On"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "run_id",
+          "decided_by",
+          "approved",
+          "decided_on",
+          "reason_code",
+          "at"
+        ],
+        "title": "UnappliedDecisionView",
         "type": "object"
       },
       "UpdateTenantBody": {
@@ -12281,6 +12359,78 @@
           }
         },
         "summary": "Prepare",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/resend-cross-check": {
+      "post": {
+        "description": "\"Gửi kiểm chéo lại\" (ticket 14). Whoever recorded the Bravo entry,\nwith `sales.order.prepare`; anyone else also needs\n`sales.order.resend_cross_check`, which the case checks (403).",
+        "operationId": "resend_cross_check_api_v1_sales_orders__case_id__resend_cross_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resend Cross Check",
         "tags": [
           "sales"
         ]

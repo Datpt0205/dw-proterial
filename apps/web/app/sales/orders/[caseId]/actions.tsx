@@ -62,6 +62,7 @@ const BUTTON: Record<OrderAction, string> = {
   applyChange: "Đã áp dụng thay đổi trên Bravo",
   crossCheck: "Kiểm chéo đạt",
   returnOrder: "Trả lại",
+  resendCrossCheck: "Gửi kiểm chéo lại",
   confirm: "Đã gửi xác nhận",
   close: "Đóng hồ sơ",
 };
@@ -108,6 +109,17 @@ export function OrderActions({
       ),
     );
 
+  const resendCrossCheck = async () =>
+    done(
+      await run(
+        "resendCrossCheck",
+        { v: order.case_version },
+        (key) =>
+          salesApi().resendCrossCheck(order.case_id, order.case_version, key),
+        "Đã gửi kiểm chéo lại: yêu cầu kiểm chéo mới đang chờ",
+      ),
+    );
+
   if (entries.length === 0)
     return (
       <Typography.Text>
@@ -130,7 +142,11 @@ export function OrderActions({
             reason={offer.reason}
             loading={pending === action}
             onClick={() =>
-              action === "prepare" ? prepare() : setDialog(action)
+              action === "prepare"
+                ? prepare()
+                : action === "resendCrossCheck"
+                  ? resendCrossCheck()
+                  : setDialog(action)
             }
           >
             {BUTTON[action]}

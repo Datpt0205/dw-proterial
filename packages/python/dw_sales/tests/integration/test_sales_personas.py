@@ -43,7 +43,12 @@ PIC = frozenset(
         "sales.worker.pause",
     }
 )
-HEAD = PIC | {"sales.price.other_customers.read", "sales.quote.approve", "sales.worker.resume"}
+HEAD = PIC | {
+    "sales.price.other_customers.read",
+    "sales.quote.approve",
+    "sales.worker.resume",
+    "sales.order.resend_cross_check",
+}
 # (subject, tenant) -> the `sales.*` scopes the spec's actor table gives them.
 SPEC: dict[tuple[str, str], frozenset[str]] = {
     ("dev|an.nguyen", ALPHA): PIC | {"sales.compliance.ack"},

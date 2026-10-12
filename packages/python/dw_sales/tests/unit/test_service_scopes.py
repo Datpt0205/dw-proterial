@@ -76,7 +76,7 @@ RUN = uuid.UUID(int=10)
 sources = SourceService(STORE, GATE, CLOCK, STORE, STORE)
 artifacts = ArtifactService(STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE)
 master = MasterDataService(GATE, STORE)
-overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE)
+overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE)
 worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 
 type Call = Callable[[AccessContext], Awaitable[object]]
@@ -105,6 +105,10 @@ CALLS: dict[str, tuple[str, Call]] = {
         lambda c: dw1.record_bravo_entry(
             c, CASE, case_version=1, so_no="SO26-1001", entry_compared=True
         ),
+    ),
+    "dw1.resend_cross_check": (
+        "sales.order.prepare",
+        lambda c: dw1.resend_cross_check(c, CASE, case_version=1),
     ),
     "dw1.submit_quote": (
         "sales.quote.prepare",

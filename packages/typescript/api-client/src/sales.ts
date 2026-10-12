@@ -189,6 +189,15 @@ export class SalesApi {
     );
   }
 
+  /** "Gửi kiểm chéo lại": a new DW1 run raises the order's cross-check (ticket 14). */
+  resendCrossCheck(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/resend-cross-check">(
+      `/api/v1/sales/orders/${enc(caseId)}/resend-cross-check`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   confirm(
     caseId: string,
     body: Body<"/api/v1/sales/orders/{case_id}/confirm">,

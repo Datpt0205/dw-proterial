@@ -90,6 +90,9 @@ def _case_columns(case: OrderCase) -> dict[str, Any]:
         "closed_by": case.closed_by,
         "closed_at": case.closed_at,
         "superseded_by_case": case.superseded_by_case,
+        "unapplied_decision": (
+            case.unapplied_decision.model_dump(mode="json") if case.unapplied_decision else None
+        ),
     }
 
 
@@ -386,6 +389,7 @@ _CASE_FIELDS = (
     "closed_by",
     "closed_at",
     "superseded_by_case",
+    "unapplied_decision",
 )
 
 

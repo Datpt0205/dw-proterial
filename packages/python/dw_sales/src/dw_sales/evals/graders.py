@@ -82,7 +82,13 @@ GIANG = Caller(
     uuid.UUID(int=0x61),
     "Đỗ Minh Giang",
     "giang.do@alpha.local",
-    _PIC | {_S.PRICE_OTHER_CUSTOMERS_READ, _S.QUOTE_APPROVE, _S.WORKER_RESUME},
+    _PIC
+    | {
+        _S.PRICE_OTHER_CUSTOMERS_READ,
+        _S.QUOTE_APPROVE,
+        _S.WORKER_RESUME,
+        _S.ORDER_RESEND_CROSS_CHECK,
+    },
 )
 KHOA = Caller(
     uuid.UUID(int=0x6B), "Lâm Văn Khoa", "khoa.lam@alpha.local", _PIC | {_S.QUOTE_APPROVE}

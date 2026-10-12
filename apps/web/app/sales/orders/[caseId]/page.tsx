@@ -25,7 +25,9 @@ import {
   CLOSE_REASON,
   FIELD,
   label,
+  NOT_APPLIED_REASON,
   ORDER_STATE,
+  SALES_ROLE,
 } from "../../_lib/labels";
 import { usePeople } from "../../_lib/people";
 import {
@@ -266,6 +268,28 @@ function OrderDetail() {
           showIcon
           title="Đơn bị trả lại sau kiểm chéo"
           description={`${name(data.returned_by)} trả lại lúc ${formatDateTime(data.returned_at)}. Lý do: ${data.returned_reason}`}
+        />
+      ) : null}
+      {data.cross_check_stalled ? (
+        <Alert
+          type="warning"
+          showIcon
+          title={
+            data.unapplied_decision
+              ? "Quyết định kiểm chéo trước chưa được áp dụng vào đơn"
+              : "Đơn chưa có yêu cầu kiểm chéo đang chờ"
+          }
+          description={`${
+            data.unapplied_decision
+              ? `${name(data.unapplied_decision.decided_by)} đã ${
+                  data.unapplied_decision.approved ? "kiểm chéo đạt" : "trả lại"
+                }${
+                  data.unapplied_decision.decided_on
+                    ? ` trên phiên bản ${data.unapplied_decision.decided_on}`
+                    : ""
+                }, nhưng DW1 không áp dụng được lúc ${formatDateTime(data.unapplied_decision.at)}. Lý do: ${label(NOT_APPLIED_REASON, data.unapplied_decision.reason_code)}. `
+              : ""
+          }Người nhập Bravo cho đơn này hoặc ${label(SALES_ROLE, "sales_head")} bấm “Gửi kiểm chéo lại” để tạo yêu cầu kiểm chéo mới ở phiên bản ${data.case_version}.`}
         />
       ) : null}
 

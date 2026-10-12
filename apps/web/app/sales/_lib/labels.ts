@@ -55,6 +55,16 @@ export const CLOSE_REASON = {
   cannot_supply: "Không cung cấp được",
 } as const;
 
+/**
+ * Why a cross-check decision was not applied (`UnappliedDecision.reason_code`,
+ * ticket 14). A code not listed is shown as itself.
+ */
+export const NOT_APPLIED_REASON = {
+  stale_case_version: "Hồ sơ đã đổi phiên bản sau khi quyết định",
+  decision_stale: "Hồ sơ không còn chờ quyết định này",
+  source_not_served: "Người kiểm chưa mở nguồn của phiên bản này",
+} as const;
+
 /** "Quote case states". */
 export const QUOTE_STATE = {
   received: "Đã nhận",
@@ -162,6 +172,7 @@ export const GLOSSARY_LISTS = {
   "Close reasons": CLOSE_REASON,
   "Decline reasons": DECLINE_REASON,
   "Routing reasons": ROUTING_REASON,
+  "Not-applied reasons": NOT_APPLIED_REASON,
 } as const;
 
 // ------------------------------------------------- the screen's own words --
@@ -173,6 +184,7 @@ export const ACTION = {
   cross_check: "Kiểm chéo với Bravo",
   confirm: "Gửi xác nhận cho khách",
   apply_change: "Áp dụng thay đổi PO trên Bravo",
+  resend_cross_check: "Gửi kiểm chéo lại",
   draft_ycbg: "Soạn YCBG",
   record_ycbg: "Ghi số YCBG trên Bravo",
   send_to_design: "Gửi Design",

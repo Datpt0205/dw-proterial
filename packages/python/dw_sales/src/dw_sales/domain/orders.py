@@ -473,6 +473,9 @@ class Capability(StrEnum):
     """
 
     ACKNOWLEDGE_EXPORT_CONTROL = "acknowledge_export_control"
+    # Raise an order's cross-check again when the recorder of its Bravo entry
+    # cannot (`sales.order.resend_cross_check`, the head's).
+    RESEND_CROSS_CHECK = "resend_cross_check"
 
 
 class Actor(BaseModel):
@@ -860,6 +863,27 @@ _CROSS_CHECKED_ON: Final = frozenset({_S.CROSS_CHECKED, _S.CONFIRMED})
 MAKER_CHECKER_RULE: Final = "tách nhiệm, WIV-03-012 bước 9"
 
 
+class UnappliedDecision(BaseModel):
+    """A cross-check decision the platform recorded and DW1's run could not
+    apply to the case (ticket 14): the case changed between the decision and
+    its apply, say. Said on the order until its cross-check is raised again.
+
+    Ids, the outcome, the version the checker decided on and a reason code;
+    the checker's comment stays on the platform's decision record.
+    """
+
+    model_config = _FROZEN
+
+    # None only for a run resumed before the platform named the approval.
+    approval_id: uuid.UUID | None
+    run_id: uuid.UUID
+    decided_by: ActorId
+    approved: bool
+    decided_on: int | None = Field(default=None, ge=1)
+    reason_code: str = Field(pattern=r"^[a-z_]{1,40}$")
+    at: AwareDatetime
+
+
 class OrderCase(BaseModel):
     """One customer PO number, every revision of it, from reading to confirmation."""
 
@@ -919,6 +943,9 @@ class OrderCase(BaseModel):
     # store's `makers` column accumulates the same names by trigger, and a
     # stored case is read back with them here.
     earlier_makers: frozenset[ActorId] = frozenset()
+    # Only while the order awaits its cross-check: the last decision on it
+    # that was not applied. Cleared when it is raised again or the case moves.
+    unapplied_decision: UnappliedDecision | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -965,6 +992,8 @@ class OrderCase(BaseModel):
             raise ValueError("only a revised case lists changes")
         if (self.superseded_by_case is not None) != (self.close_reason is CloseReason.SUPERSEDED):
             raise ValueError("a case closed as superseded names its successor, and only it does")
+        if self.unapplied_decision is not None and self.status is not _S.UPLOADED_TO_BRAVO:
+            raise ValueError("only an order awaiting its cross-check names a decision not applied")
         self._stamps_fit_the_status()
         if self.cross_checked_by is not None and (
             self.cross_checked_by in (self.prepared_by, self.bravo_recorded_by)
@@ -1282,6 +1311,39 @@ class OrderCase(BaseModel):
             **self._cleared_from_prepared(),
         )
 
+    def decision_not_applied(self, decision: UnappliedDecision) -> OrderCase:
+        """uploaded_to_bravo, unchanged: the cross-check decided on it was not
+        applied (ticket 14). The case says so until its cross-check is raised
+        again; nothing else about it changes."""
+        if self.status is not _S.UPLOADED_TO_BRAVO:
+            raise ConflictError(
+                "only an order awaiting its cross-check records a decision not applied",
+                details={"case_id": str(self.case_id), "status": self.status.value},
+            )
+        return self._next(self.status, unapplied_decision=decision)
+
+    def resend_cross_check(self, actor: Actor) -> OrderCase:
+        """uploaded_to_bravo, unchanged: its cross-check raised again ("Gửi
+        kiểm chéo lại"), once the one before was decided and not applied, or
+        never raised. By whoever recorded the Bravo entry, or by someone the
+        caller verified may do it for them (the head). The makers stay what
+        they were: raising it again makes nobody a maker."""
+        if self.status is not _S.UPLOADED_TO_BRAVO or self.cross_check_required is False:
+            raise ConflictError(
+                "only an order awaiting its cross-check has it raised again",
+                details={"case_id": str(self.case_id), "status": self.status.value},
+            )
+        if (
+            actor.user_id != self.bravo_recorded_by
+            and Capability.RESEND_CROSS_CHECK not in actor.capabilities
+        ):
+            raise PermissionDeniedError(
+                "the cross-check is raised again by whoever recorded the Bravo entry,"
+                " or by the head",
+                details={"case_id": str(self.case_id), "rule": "resend_cross_check"},
+            )
+        return self._next(self.status, unapplied_decision=None)
+
     def record_pc_confirmation(self, line_no: int, actor: Actor, at: datetime) -> OrderCase:
         """PC agreed a short lead time for the line (outside the portal)."""
         if not any(
@@ -1492,6 +1554,9 @@ class OrderCase(BaseModel):
         return {**_CLEARED_FROM_PREPARED, "earlier_makers": self._retired_makers()}
 
     def _next(self, status: OrderStatus, **changes: object) -> OrderCase:
+        if status is not self.status:
+            # A case that moves on no longer waits on the decision not applied.
+            changes.setdefault("unapplied_decision", None)
         # Validated again: `model_copy(update=...)` would skip the invariants.
         return OrderCase.model_validate(
             {**dict(self), **changes, "status": status, "case_version": self.case_version + 1}

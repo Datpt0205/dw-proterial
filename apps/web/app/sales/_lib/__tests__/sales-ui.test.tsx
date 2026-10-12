@@ -44,6 +44,7 @@ import {
   MAKER_CHECKER,
   NO_CROSS_CHECK_REQUEST,
   orderOffers,
+  STALLED_CROSS_CHECK,
 } from "../order-actions";
 import { approvalReason } from "../quote-actions";
 import {
@@ -205,6 +206,54 @@ describe("the maker/checker rule on an order", () => {
     expect(
       orderOffers(blocked, viewer, { sourceOpened: true }).prepare?.reason,
     ).toBe("Còn 2 cờ chưa quyết định.");
+  });
+});
+
+describe("an order whose cross-check nothing is on the way to (ticket 14)", () => {
+  const stalled = () => ({
+    ...orderInBravo(),
+    decision: null,
+    cross_check_stalled: true,
+  });
+
+  it("offers the Bravo recorder to raise it again", () => {
+    const viewer = as(AN, PIC);
+    ui(
+      <OrderActions
+        order={stalled()}
+        viewer={viewer}
+        sourceOpened
+        onChanged={() => {}}
+      />,
+    );
+    expect(
+      screen
+        .getByRole("button", { name: "Gửi kiểm chéo lại" })
+        .hasAttribute("disabled"),
+    ).toBe(false);
+  });
+
+  it("offers the head too, and refuses a PIC who did not record the entry, in words", () => {
+    expect(
+      orderOffers(
+        stalled(),
+        as(GIANG, [...PIC, "sales.order.resend_cross_check"]),
+        { sourceOpened: true },
+      ).resendCrossCheck?.reason,
+    ).toBeNull();
+    const dieu = orderOffers(stalled(), as(DIEU, PIC), { sourceOpened: true });
+    expect(dieu.resendCrossCheck?.reason).toBe(
+      "Chỉ người đã nhập Bravo cho đơn này hoặc Trưởng bộ phận Sales gửi kiểm chéo lại.",
+    );
+    // The checker is told why there is nothing to decide, and who acts.
+    expect(dieu.crossCheck?.reason).toBe(STALLED_CROSS_CHECK);
+  });
+
+  it("is not offered while a cross-check request is pending", () => {
+    const offers = orderOffers(orderInBravo(), as(AN, PIC), {
+      sourceOpened: true,
+    });
+    expect(offers.resendCrossCheck).toBeUndefined();
   });
 });
 

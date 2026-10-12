@@ -28,13 +28,13 @@ from typing import Literal
 from dw_kernel.errors import DomainError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.runs import (
     PendingDecisionsPort,
+    awaited,
     awaiting,
-    subject_of,
     withdraw_if_left,
 )
 from dw_sales.application.source import require_served
@@ -54,12 +54,10 @@ from dw_sales.application.views import (
     order_change,
     order_summary,
 )
-from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
     Accepted,
     Actor,
     AskCustomer,
-    Capability,
     CloseReason,
     CorrectedBySales,
     FindingDisposition,
@@ -70,17 +68,6 @@ from dw_sales.domain.orders import (
 DispositionChoice = Literal["open", "accepted", "corrected_by_sales", "ask_customer"]
 
 _ORDER = "sales_order_case"
-
-
-def order_actor(context: AccessContext, gate: Gate) -> Actor:
-    """The caller as the case knows them: their principal id, and the export
-    -control capability when their scopes include `sales.compliance.ack`."""
-    capabilities = (
-        frozenset({Capability.ACKNOWLEDGE_EXPORT_CONTROL})
-        if gate.allows(context, SalesScopes.COMPLIANCE_ACK)
-        else frozenset()
-    )
-    return Actor(user_id=context.principal_id, capabilities=capabilities)
 
 
 @dataclass(frozen=True)
@@ -101,17 +88,18 @@ class OrderQueries:
         )
         async with self.uow(sales_scope(context)) as work:
             stored = await stored_order(work, case_id)
+        wait = await awaited(self.decisions, context, stored.case)
+        waits_on = awaiting(stored.case)
         decision = None
-        if (waits_on := awaiting(stored.case)) is not None:
-            approval_id = await self.decisions.pending(context, subject_of(CaseKind.ORDER, case_id))
-            if approval_id is not None:
-                decision = PendingDecisionView(approval_id=approval_id, approval_type=waits_on)
+        if waits_on is not None and wait is not None and wait.approval_id is not None:
+            decision = PendingDecisionView(approval_id=wait.approval_id, approval_type=waits_on)
         return order_case(
             stored.case,
             assigned_to=stored.origin.assigned_to,
             release_manifest_ref=stored.origin.release_manifest_ref,
             prices=self.gate.prices(context),
             decision=decision,
+            stalled=wait is not None and wait.stalled,
         )
 
 

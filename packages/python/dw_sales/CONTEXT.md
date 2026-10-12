@@ -106,6 +106,15 @@ The transitions are owned by `OrderCase` and `QuoteCase` in
 Close reasons: `duplicate` (PO trùng), `not_an_order` (Không phải đơn hàng),
 `superseded` (Đã có bản thay thế), `cannot_supply` (Không cung cấp được).
 
+**Decision not applied** (Quyết định chưa được áp dụng): a cross-check
+decision the platform recorded and DW1's run could not apply to the order,
+because the case changed in between. The order says so until whoever
+recorded its Bravo entry, or the head (`sales.order.resend_cross_check`),
+raises the cross-check again (**Gửi kiểm chéo lại**, ticket 14).
+Not-applied reasons: `stale_case_version` (Hồ sơ đã đổi phiên bản sau khi
+quyết định), `decision_stale` (Hồ sơ không còn chờ quyết định này),
+`source_not_served` (Người kiểm chưa mở nguồn của phiên bản này).
+
 ## Quote case states
 
 | State                  | Label                    |

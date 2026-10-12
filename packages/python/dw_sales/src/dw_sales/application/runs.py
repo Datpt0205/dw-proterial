@@ -8,7 +8,9 @@ where every run begins (`RunAllowancePort`):
 - a quotation submitted for approval (WIV-03-023 step 9): the run pauses on
   a `sales.quote` approval and resumes with the decision;
 - an order recorded in Bravo, for its cross-check (WIV-03-012 step 9): the
-  run pauses on a `sales.order.cross_check` approval.
+  run pauses on a `sales.order.cross_check` approval. The same run raises
+  the cross-check again ("Gửi kiểm chéo lại", ticket 14) for an order whose
+  earlier decision was not applied, or whose run never paused.
 
 The decision is a person's, made through the platform's approvals
 (`POST /api/v1/approvals/{id}/decisions`), and applied to the case by the
@@ -29,11 +31,12 @@ from typing import Final, Literal, Protocol
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from dw_kernel.errors import ConflictError
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort
-from dw_sales.application.support import stored_order, stored_quote
+from dw_sales.application.support import same_version, stored_order, stored_quote
 from dw_sales.application.views import (
     CaseChangeView,
     MessageDispositionView,
@@ -175,6 +178,9 @@ class DecisionGiven(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="ignore", hide_input_in_errors=True)
 
+    # The approval decided. None only for a run resumed before the platform
+    # named it in the resume payload.
+    approval_id: uuid.UUID | None = None
     approved: bool
     comment: str
     decided_by: uuid.UUID
@@ -223,6 +229,42 @@ class PendingDecisionsPort(Protocol):
     async def withdraw(self, context: AccessContext, subject_ref: str) -> None:
         """Cancel it: the case moved on without the decision."""
         ...
+
+    async def unfinished(self, context: AccessContext, subject_ref: str) -> bool:
+        """Whether a DW1 run about the case has not finished: still running,
+        or paused on its approval."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class Awaited:
+    """What is on the way to the decision a case waits on."""
+
+    # The approval pending, if one is.
+    approval_id: uuid.UUID | None
+    # A DW1 run about the case has not finished (a pending approval's has not).
+    unfinished: bool
+
+    @property
+    def stalled(self) -> bool:
+        """Nothing is: no approval to decide, and no run that will raise one.
+        An order here has its cross-check raised again (ticket 14)."""
+        return not self.unfinished
+
+
+async def awaited(
+    decisions: PendingDecisionsPort, context: AccessContext, case: OrderCase | QuoteCase
+) -> Awaited | None:
+    """For a case waiting on a decision (`awaiting`), what is on the way to it;
+    None for a case that waits on none."""
+    if awaiting(case) is None:
+        return None
+    kind = CaseKind.QUOTE if isinstance(case, QuoteCase) else CaseKind.ORDER
+    subject = subject_of(kind, case.case_id)
+    approval_id = await decisions.pending(context, subject)
+    if approval_id is not None:
+        return Awaited(approval_id, unfinished=True)
+    return Awaited(None, unfinished=await decisions.unfinished(context, subject))
 
 
 async def withdraw_if_left(
@@ -313,6 +355,16 @@ class Dw1Runs:
         await self.gate.require(
             context, SalesScopes.ORDER_PREPARE, resource_type=_ORDER, resource_id=str(case_id)
         )
+        # Refused before anything is withdrawn: on an order already in Bravo
+        # this would cancel the cross-check it waits on, and the run's step
+        # would raise it again past `resend_cross_check`'s checks.
+        async with self.uow(sales_scope(context)) as work:
+            status = (await stored_order(work, case_id)).case.status
+        if status not in (OrderStatus.PREPARED, OrderStatus.CHANGE_REVIEW):
+            raise ConflictError(
+                "a Bravo entry is recorded for a prepared order, or a change under review",
+                details={"case_id": str(case_id), "status": status.value},
+            )
         subject = subject_of(CaseKind.ORDER, case_id)
         await self.decisions.withdraw(context, subject)
         task = Dw1Task(
@@ -323,6 +375,45 @@ class Dw1Runs:
             entry_compared=entry_compared,
         )
         await self.runs.run(context, task, subject_ref=subject)
+        async with self.uow(sales_scope(context)) as work:
+            return order_change((await stored_order(work, case_id)).case)
+
+    async def resend_cross_check(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> CaseChangeView:
+        """ "Gửi kiểm chéo lại" (ticket 14): an order in Bravo that nothing is on
+        the way to cross-checking (the decision on it was not applied, or its
+        run ended before it paused) has its cross-check raised again, in a new
+        DW1 run at the current version.
+
+        Whoever recorded the Bravo entry, or a holder of
+        `sales.order.resend_cross_check`; the case refuses anyone else (403)
+        here, and again in the run. Refused (409) while an approval is pending
+        or a DW1 run about the order is unfinished, so it never makes two; two
+        presses at once meet the case version, which the run's step bumps.
+        """
+        await self.gate.require(
+            context, SalesScopes.ORDER_PREPARE, resource_type=_ORDER, resource_id=str(case_id)
+        )
+        async with self.uow(sales_scope(context)) as work:
+            case = (await stored_order(work, case_id)).case
+        same_version(case_id, case.case_version, case_version)
+        # The case's own refusal (403, 409), before a run is spent.
+        case.resend_cross_check(order_actor(context, self.gate))
+        wait = await awaited(self.decisions, context, case)
+        assert wait is not None  # the case awaits its cross-check: checked above
+        if wait.approval_id is not None:
+            raise ConflictError(
+                "đơn đang có yêu cầu kiểm chéo chờ quyết định",
+                details={"case_id": str(case_id), "rule": "cross_check_pending"},
+            )
+        if wait.unfinished:
+            raise ConflictError(
+                "DW1 đang xử lý đơn này: chờ lượt chạy xong rồi tải lại",
+                details={"case_id": str(case_id), "rule": "dw1_running"},
+            )
+        task = Dw1Task(kind="order_cross_check", case_id=case_id, case_version=case_version)
+        await self.runs.run(context, task, subject_ref=subject_of(CaseKind.ORDER, case_id))
         async with self.uow(sales_scope(context)) as work:
             return order_change((await stored_order(work, case_id)).case)
 
