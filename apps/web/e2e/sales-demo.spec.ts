@@ -745,9 +745,7 @@ test("7. Giang approves M10 with the document preview shown; the send draft is r
   await expect(
     page.getByText("Duyệt báo giá Q26-0301", { exact: true }),
   ).toBeVisible();
-  // The preview is rendered on request, from "Tệp và thư nháp DW1 soạn". The
-  // approval panel reads the file list on its own and is not told when the
-  // other panel renders one, so the page is read again after rendering.
+  // The preview is rendered on request, from "Tệp và thư nháp DW1 soạn".
   const render = page.getByRole("button", {
     name: "Soạn Tài liệu báo giá (bản xem trước)",
     exact: true,
@@ -764,7 +762,6 @@ test("7. Giang approves M10 with the document preview shown; the send draft is r
         })
         .first(),
     ).toBeVisible();
-    await page.reload();
   }
   await preview.click();
   await expect(page.getByLabel("Trang 1 của bản gốc")).toBeVisible();

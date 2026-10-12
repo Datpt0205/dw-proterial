@@ -12,7 +12,7 @@ import {
   Table,
   Typography,
 } from "antd";
-import type { SalesSchemas } from "@dw/api-client";
+import type { Artifact, SalesSchemas } from "@dw/api-client";
 import { approvalClient } from "../../../../lib/approvals/registry";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
 import type { Currency } from "../../../../lib/money";
@@ -23,7 +23,7 @@ import type { Viewer } from "../../_lib/order-actions";
 import { usePeople } from "../../_lib/people";
 import { approvalReason } from "../../_lib/quote-actions";
 import { useAction } from "../../_lib/use-action";
-import { blobBase64, useLatestPdf } from "../../_components/artifacts-panel";
+import { blobBase64, latestPdf } from "../../_components/artifacts-panel";
 import { GuardedButton } from "../../_components/guarded-button";
 import { PdfPage } from "../../_components/pdf-page";
 import {
@@ -55,10 +55,13 @@ const PRICE_CODES = [
 export function ApprovalPanel({
   quote,
   viewer,
+  artifacts,
   onDone,
 }: {
   quote: Quote;
   viewer: Viewer;
+  /** The page's file list, the one the files panel renders into. */
+  artifacts: readonly Artifact[];
   onDone: () => void;
 }) {
   const name = usePeople();
@@ -70,16 +73,11 @@ export function ApprovalPanel({
   const [returnForm] = Form.useForm<{ comment: string }>();
   const submission = quote.submission;
   const reason = approvalReason(quote, viewer);
-  const preview = useLatestPdf(
-    "quote",
-    quote.case_id,
-    quote.case_version,
-    "quotation_preview",
-  );
+  const preview = latestPdf(artifacts, quote.case_version, "quotation_preview");
   const [pdf, setPdf] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<unknown>(null);
   const showPreview = async () => {
-    if (!preview.artifact) return;
+    if (!preview) return;
     setPreviewError(null);
     try {
       setPdf(
@@ -87,7 +85,7 @@ export function ApprovalPanel({
           await salesApi().downloadArtifact(
             "quote",
             quote.case_id,
-            preview.artifact.artifact_id,
+            preview.artifact_id,
           ),
         ),
       );
@@ -258,7 +256,7 @@ export function ApprovalPanel({
           ]}
         />
         <Typography.Title level={5}>Tài liệu báo giá</Typography.Title>
-        {preview.artifact ? (
+        {preview ? (
           pdf ? (
             <div className="max-w-3xl">
               <PdfPage data={pdf} page={1} boxes={[]} />
@@ -266,14 +264,13 @@ export function ApprovalPanel({
           ) : (
             <GuardedButton
               reason={
-                preview.artifact.downloadable
+                preview.downloadable
                   ? null
                   : "Bản xem trước chỉ người định giá và người duyệt mở được, khi báo giá đang chờ duyệt."
               }
               onClick={showPreview}
             >
-              Xem bản xem trước (PDF, mã băm{" "}
-              {preview.artifact.sha256.slice(0, 12)}…)
+              Xem bản xem trước (PDF, mã băm {preview.sha256.slice(0, 12)}…)
             </GuardedButton>
           )
         ) : (

@@ -46,7 +46,10 @@ import { usePeople } from "../../_lib/people";
 import { anchorRegion } from "../../_lib/served";
 import { useResource } from "../../_lib/use-resource";
 import { useSalesViewer } from "../../_lib/viewer";
-import { ArtifactsPanel } from "../../_components/artifacts-panel";
+import {
+  ArtifactsPanel,
+  useCaseArtifacts,
+} from "../../_components/artifacts-panel";
 import { CaseSummary } from "../../_components/case-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -95,6 +98,7 @@ function QuoteDetail() {
   >(null);
 
   const data = quote.data;
+  const artifacts = useCaseArtifacts("quote", caseId, data?.case_version);
   useEffect(() => {
     if (data) document.title = `RFQ ${data.rfq_no} · Báo giá · Sales`;
   }, [data]);
@@ -306,7 +310,12 @@ function QuoteDetail() {
       </Card>
 
       {data.status === "pending_approval" ? (
-        <ApprovalPanel quote={data} viewer={viewer} onDone={reload} />
+        <ApprovalPanel
+          quote={data}
+          viewer={viewer}
+          artifacts={artifacts.data?.artifacts ?? []}
+          onDone={reload}
+        />
       ) : null}
 
       <Card size="small" title="Yêu cầu của khách">
@@ -556,7 +565,7 @@ function QuoteDetail() {
         canRender={viewer.hasScope("sales.quote.prepare")}
         renderReason="Bạn không có quyền soạn tệp của báo giá (cần vai Sales phụ trách)."
         language={customer?.language}
-        refreshKey={data.case_version}
+        list={artifacts}
       />
 
       <Collapse
