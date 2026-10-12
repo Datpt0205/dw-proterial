@@ -43,8 +43,12 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       (`a64b918fc1f2`) lets a `sales.` approval with a NULL `required_scope`
       through, because `false OR NULL` is NULL and a NULL CHECK passes; its two
       tests fail (`test_sales_constraints.py`, `[sales.quote-None]`,
-      `[sales.order.cross_check-None]`). Owed: a revision with
-      `coalesce(required_scope, '') LIKE 'sales.%'`. Not fixed here (no ticket).
+      `[sales.order.cross_check-None]`). **Closed 2026-10-12 by migration
+      `d9e73228e7d7`**: the constraint, same name, now reads
+      `coalesce(required_scope, '') LIKE 'sales.%'`; validated on ADD, so an
+      unstamped Sales row already in the table stops the upgrade (measured on
+      a scratch database: "violated by some row"); downgrade restores
+      `a64b918fc1f2`'s definition. Both tests red before, green after.
 - 2026-10-12, the gaps left in the demo flow became tickets 13–18, each
   checked against the code that day (the Open items below point at them):
     - 13 the quote approval panel sees a new preview without a reload
@@ -233,8 +237,9 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 - **Sales roles decide unstamped approvals** (owed, Đạt; from
   `ac31ff0f2087`). Every Sales approval type is stamped, and since the
   platform merge of 2026-10-08 the database says so
-  (`ck_approval_requests_sales_stamped`, migration `a64b918fc1f2`: a
-  `sales.` approval carries a `sales.` scope or is not written). That does
+  (`ck_approval_requests_sales_stamped`, migration `a64b918fc1f2`, NULL
+  refused since `d9e73228e7d7`: a `sales.` approval carries a `sales.`
+  scope or is not written). That does
   not close the widening: the platform decides on `approvals.decide` AND the
   stamp (`docs/adr/0011`), so `sales_pic`, `sales_head` and
   `sales_quote_approver` keep `approvals.decide` and with it every
