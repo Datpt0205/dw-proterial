@@ -361,6 +361,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/findings/{finding_key}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Correct Value */
+        post: operations["correct_value_api_v1_sales_orders__case_id__findings__finding_key__corrections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/findings/{finding_key}/disposition": {
         parameters: {
             query?: never;
@@ -1021,6 +1038,20 @@ export interface components {
             kind: "fixed" | "lme_band";
             low_usd_per_tonne?: components["schemas"]["Amount"] | null;
         };
+        /**
+         * CorrectionBody
+         * @description One value a `value_uncertain` flagged, as Sales reads it on the source:
+         *     the field it is, and the value as text, which the case validates as that
+         *     field's type (a number, a date, a unit, text).
+         */
+        CorrectionBody: {
+            /** Case Version */
+            case_version: number;
+            /** Field */
+            field: string;
+            /** Value */
+            value: string;
+        };
         /** CoverageView */
         CoverageView: {
             /** Checks Run */
@@ -1590,6 +1621,8 @@ export interface components {
             header_anchors: {
                 [key: string]: components["schemas"]["SourceAnchor"];
             };
+            /** Header Corrections */
+            header_corrections: components["schemas"]["ValueCorrectionView"][];
             /** Header Flags */
             header_flags: components["schemas"]["FlaggedValue"][];
             /** Lines */
@@ -1648,6 +1681,8 @@ export interface components {
             code: components["schemas"]["FindingCode"];
             disposition: components["schemas"]["DispositionView"];
             expected: components["schemas"]["Words"] | null;
+            /** Fields */
+            fields: string[];
             /** Key */
             key: string;
             /** Line No */
@@ -1667,6 +1702,8 @@ export interface components {
             basis: components["schemas"]["LineBasisView"];
             /** Confirmed Delivery Date */
             confirmed_delivery_date: string | null;
+            /** Corrections */
+            corrections: components["schemas"]["ValueCorrectionView"][];
             /** Customer Item Code */
             customer_item_code: string;
             /** Description */
@@ -2474,6 +2511,26 @@ export interface components {
             type: string;
         };
         /**
+         * ValueCorrectionView
+         * @description A value Sales typed for a flagged field, beside the value as read. An
+         *     amount is shown only with `sales.price.read`.
+         */
+        ValueCorrectionView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Field */
+            field: string;
+            value: components["schemas"]["Words"];
+        };
+        /**
          * ValueState
          * @description How sure a value on a case is (CONTEXT.md "Value states").
          * @enum {string}
@@ -3134,6 +3191,45 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correct_value_api_v1_sales_orders__case_id__findings__finding_key__corrections_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                finding_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionBody"];
             };
         };
         responses: {

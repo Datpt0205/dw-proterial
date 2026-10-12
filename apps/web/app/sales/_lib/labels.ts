@@ -153,6 +153,7 @@ export const SALES_ROLE = {
   sales_price_evidence: "Xem giá đã báo cho khách khác",
   sales_quote_approver: "Người duyệt báo giá thay",
   sales_export_control: "PIC kiểm soát xuất khẩu",
+  sales_dw1: "DW1 (tài khoản dịch vụ)",
 } as const;
 
 /** The glossary tables the test compares, by the heading they sit under. */

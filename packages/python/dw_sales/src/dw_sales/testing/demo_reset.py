@@ -13,8 +13,14 @@ as it would in a real tenant.
 Artifact bytes already in object storage are not deleted. Their records are
 gone, so nothing serves them; tenant offboarding purges them by prefix.
 
-Then it runs the full demo seed (`seed_personas`: the platform seed, then the
-Sales keys), so a persona whose role was changed by hand is reset too.
+Then it runs the full demo seed (`seed_personas`: the platform seed, the Sales
+keys, then DW1's service account), so a persona whose role was changed by hand
+is reset too.
+
+With a worker running and its mailbox lane on (`DW_WORKER_SALES_INBOX_LANE`,
+ticket 16), DW1 processes the reset mailbox by itself on the lane's next tick,
+within a minute. A walk-through that presses "DW xử lý" by hand runs the
+worker with the lane off (`demo.md`, section 1).
 
 Local and test profiles only, as the migrator (the one role that may delete
 across these tables; the app role may not touch an append-only one):

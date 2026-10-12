@@ -108,6 +108,15 @@ class MappingBody(VersionBody):
     prv_code: PrvCode
 
 
+class CorrectionBody(VersionBody):
+    """One value a `value_uncertain` flagged, as Sales reads it on the source:
+    the field it is, and the value as text, which the case validates as that
+    field's type (a number, a date, a unit, text)."""
+
+    field: Annotated[str, Field(pattern=r"^[a-z_]{1,32}$")]
+    value: Annotated[str, Field(min_length=1, max_length=200)]
+
+
 class BravoEntryBody(VersionBody):
     # Absent only when applying a revision's change to an order already in Bravo.
     so_no: DocumentNo | None = None
@@ -356,6 +365,29 @@ def build_router(
             reason=body.reason,
             value=body.value,
             source=body.source,
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/orders/{case_id}/findings/{finding_key}/corrections",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def correct_value(
+        case_id: uuid.UUID,
+        finding_key: _FindingKey,
+        body: CorrectionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChangeView:
+        change = await svc.order_commands.correct_value(
+            context,
+            case_id,
+            finding_key,
+            case_version=body.case_version,
+            field=body.field,
+            value=body.value,
         )
         return await idem.record(change)
 

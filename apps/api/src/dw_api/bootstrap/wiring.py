@@ -43,14 +43,12 @@ from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.approval_codes import ApprovalViewService
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
-from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry, parse_worker_file
+from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_api.bootstrap.container import ApiContainer
 from dw_api.bootstrap.identity import build_token_verifier
 from dw_api.bootstrap.paths import (
-    COPY_DIR,
-    POLICIES_DIR,
+    CONFIGS,
     WORKER_RUN_POLICY,
-    WORKERS_DIR,
     release_manifest_ref,
 )
 from dw_api.bootstrap.runtime import build_runtime
@@ -410,93 +408,36 @@ def build_sales(
     (`configs/workers/sales.yaml`) are registered here, every `sales.`
     approval is made strict and checked by the context before it is recorded
     (`dw_sales.workflows.graph.register`), and "DW xử lý", a submitted
-    quotation and a recorded Bravo entry each start a run.
+    quotation and a recorded Bravo entry each start a run. Built by
+    `dw_sales.adapters.assembly.build_dw1`, the call the worker's mailbox lane
+    makes too, so both read the same mailbox the same way.
     """
     from dw_kernel.ids import TenantId, WorkspaceId
     from dw_platform.adapters.persistence.repositories import SqlAuditRepository
-    from dw_sales.adapters.artifact_files import ArtifactFiles
-    from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
-    from dw_sales.adapters.order_rules import PlatformOrderRules
-    from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
-    from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
-    from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
-    from dw_sales.adapters.policy_files import load_sales_policies
-    from dw_sales.adapters.readers import mock_po_readers
-    from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
-    from dw_sales.adapters.runtime import RuntimeDw1Runs
-    from dw_sales.adapters.source_view import FileSourceView
-    from dw_sales.application.order_intake import OrderIntake
+    from dw_sales.adapters.assembly import build_dw1
     from dw_sales.application.ports import SalesScope
-    from dw_sales.application.quotation import QuotationService
-    from dw_sales.application.services import assemble
     from dw_sales.presentation.routes import SalesMount
-    from dw_sales.workflows.graph import register
 
     demo = settings.sales_demo_scope()
     if demo is None:
         _LOG.warning("sales: no data source configured; /api/v1/sales answers 503")
         return SalesMount(services=None)
-    scope = SalesScope(TenantId(demo[0]), WorkspaceId(demo[1]))
-    catalog = MockSalesCatalog.load(scope)
-    inbox = MockInbox.load(scope)
-    policies = load_sales_policies(POLICIES_DIR, COPY_DIR)
-    quotation = QuotationService(
-        catalog=catalog,
-        inbox=inbox,
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
-        cases=SqlQuoteCaseLookup(session_factory),
-        ledger=catalog,
-        rules=policies.quote_rules,
-        pricing=policies.pricing,
-    )
-    intake = OrderIntake(
-        catalog=catalog,
-        inbox=inbox,
-        reader=mock_po_readers(),
-        rules=PlatformOrderRules(policies.order_rules),
-        cases=SqlOrderCaseLookup(session_factory),
-        new_case_id=ids.new_uuid,
-    )
-    worker_file = WORKERS_DIR / "sales.yaml"
-    worker, _ = parse_worker_file(worker_file)
-    runs = RuntimeDw1Runs(
-        runtime.runner,
-        runtime.approval_flow,
-        runtime.approval_flow.run_store,
-        ids,
-        worker_id=worker.worker_id,
-        worker_version=worker.worker_version,
-    )
-    assembly = assemble(
-        uow=SqlSalesUnitOfWorkFactory(session_factory, audit=SqlAuditRepository),
-        authorization=authorization,
+    mount = build_dw1(
+        scope=SalesScope(TenantId(demo[0]), WorkspaceId(demo[1])),
+        configs=CONFIGS,
+        session_factory=session_factory,
+        audit=SqlAuditRepository,
         clock=clock,
         ids=ids,
-        catalog=catalog,
-        inbox=inbox,
-        intake=intake,
-        quotation=quotation,
-        files=FileSourceView(policies.order_rules.intake),
-        kpi=policies.kpi,
+        authorization=authorization,
         directory=directory,
         holders=holders,
         notifications=notifications,
         artifact_bytes=artifact_bytes,
-        artifact_writer=ArtifactFiles(),
-        artifact_copy=policies.artifact_copy,
         release_manifest_ref=release_manifest_ref,
-        runs=runs,
-        pending=runs,
+        runtime=runtime,
     )
-    register(
-        graphs=runtime.graphs,
-        workers=runtime.workers,
-        approvals=runtime.approval_flow,
-        steps=assembly.decisions,
-        worker_file=worker_file,
-    )
-    return SalesMount(services=assembly.services)
+    return SalesMount(services=mount.services)
 
 
 def build_engine(url: str, *, pool_pre_ping: bool = True) -> AsyncEngine:

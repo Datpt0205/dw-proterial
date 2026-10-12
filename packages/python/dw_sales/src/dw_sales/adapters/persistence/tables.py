@@ -82,6 +82,7 @@ order_revisions = sa.Table(
     sa.Column("message_id", sa.Text, nullable=False),
     sa.Column("received_at", _TS, nullable=False),
     sa.Column("document", JSONB, nullable=False),
+    sa.Column("header_corrections", JSONB, nullable=False, server_default="[]"),
     sa.Column("superseded_at", _TS),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
@@ -105,6 +106,7 @@ order_lines = sa.Table(
     sa.Column("confirmed_delivery_date", sa.Date),
     sa.Column("pc_confirmed_by", UUID(as_uuid=True)),
     sa.Column("pc_confirmed_at", _TS),
+    sa.Column("corrections", JSONB, nullable=False, server_default="[]"),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

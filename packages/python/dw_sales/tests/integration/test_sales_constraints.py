@@ -7,6 +7,7 @@ constraint (spec decision 7, ticket 04).
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -281,6 +282,40 @@ async def test_a_line_without_its_check_basis_or_with_a_stranger_key_is_refused(
     with pytest.raises(DBAPIError, match="null value"):
         async with bound(app_sessions, small_run.scope) as session:
             await session.execute(sa.text(target.format(basis="NULL")), {"id": case.case_id})
+
+
+@pytest.mark.parametrize(
+    ("table", "column"),
+    [("order_lines", "corrections"), ("order_revisions", "header_corrections")],
+)
+async def test_a_correction_holds_its_four_keys_and_nothing_else(
+    small_run: OrderRun, app_sessions: async_sessionmaker[AsyncSession], table: str, column: str
+) -> None:
+    """Ticket 15: a correction is a field, a value, who and when; a note or a
+    second value has no key to travel in, and a missing key is refused too."""
+    case = _m01(small_run)
+    where = (
+        "case_id = :id AND superseded_at IS NULL"
+        if table == "order_revisions"
+        else "revision_id = (SELECT id FROM sales.order_revisions"
+        " WHERE case_id = :id AND superseded_at IS NULL)"
+    )
+    target = f"UPDATE sales.{table} SET {column} = CAST(:value AS jsonb) WHERE {where}"
+    typed = {"field": "quantity", "value": "6100", "by": str(AN.user_id), "at": T0.isoformat()}
+    for value in (
+        '{"field": "quantity"}',
+        '["quantity"]',
+        json.dumps([{k: v for k, v in typed.items() if k != "by"}]),
+        json.dumps([{**typed, "note": "giá 0.658"}]),
+    ):
+        refused = await _refused(
+            app_sessions, small_run.scope, target, id=case.case_id, value=value
+        )
+        assert refused == f"ck_{table}_{column}", value
+    accepted = await _refused(
+        app_sessions, small_run.scope, target, id=case.case_id, value=json.dumps([typed])
+    )
+    assert accepted is None
 
 
 @pytest.mark.parametrize(

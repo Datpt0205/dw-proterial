@@ -30,7 +30,7 @@ import unicodedata
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from dw_kernel.errors import ConflictError
@@ -40,6 +40,7 @@ from dw_sales.application.order_ports import (
     PoDocumentReaderPort,
 )
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
+from dw_sales.application.support import decided
 from dw_sales.domain.catalog import Customer, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
@@ -50,6 +51,8 @@ from dw_sales.domain.dispositions import (
 )
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import (
+    CUSTOMER_CHECK_CODES,
+    DOCUMENT_CHECK_CODES,
     IntakeCaps,
     MappedLine,
     OrderRules,
@@ -63,13 +66,17 @@ from dw_sales.domain.order_checks import (
 from dw_sales.domain.orders import (
     Actor,
     Finding,
+    FindingCode,
     LineCheck,
     OrderCase,
+    OrderLine,
     OrderStatus,
     PoDocument,
     PoHeader,
     PoLine,
+    Recheck,
     Unreadable,
+    ValueCorrection,
 )
 
 
@@ -349,17 +356,13 @@ class OrderIntake:
         """
         line = case.line(line_no)
         details: dict[str, object] = {"case_id": str(case.case_id), "line": line_no}
-        rules = await self.rules.rules(scope)
-        if rules.version != case.rules_version:
-            raise ConflictError(
-                "the case was checked under rules that no longer apply", details=details
-            )
+        rules = await self._case_rules(scope, case, details)
         item = (await self.catalog.item_by_prv_code(scope, prv_code)).data
         if item is None:
             raise ConflictError(
                 "the item master has no such PRV code", details={**details, "field": "prv_code"}
             )
-        header = case.header
+        header = case.effective_header
         lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
         mapped = MappedLine(line.mapping, item, line.basis.convert_prv_code)
         recheck, _ = await self._check_line(
@@ -367,12 +370,126 @@ class OrderIntake:
             case.customer_code,
             header,
             case.received_at,
-            line.po_line,
+            line.effective,
             mapped,
             lme.data,
             rules,
         )
         return case.confirm_mapping(line_no, prv_code, actor, at, recheck)
+
+    async def correct_value(
+        self,
+        scope: SalesScope,
+        case: OrderCase,
+        finding_key: str,
+        field: str,
+        value: str,
+        actor: Actor,
+        at: datetime,
+    ) -> OrderCase:
+        """Sales types one value a `value_uncertain` flagged, and the checks
+        run again on the corrected values (ticket 15; Đạt, 2026-10-12).
+
+        A line's correction runs that line's checks again, and the document's
+        (its amount is one the total adds up). A header correction runs the
+        document's and the customer's checks again, and every line's when the
+        PO date or the currency changed. Lines are checked against today's
+        master data under the rules stamped on the case, as for a confirmed
+        mapping; once the tenant's rules have moved on it is refused. What the
+        case keeps and reopens is the case's to decide
+        (`OrderCase.correct_value`).
+        """
+        details: dict[str, object] = {"case_id": str(case.case_id), "finding": finding_key}
+        correction = decided(
+            lambda: ValueCorrection(field=field, value=value, by=actor.user_id, at=at)
+        )
+        corrected = decided(lambda: case.corrected(finding_key, correction, actor))
+        rules = await self._case_rules(scope, case, details)
+        header = corrected.document.header
+        lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
+        checks: list[LineCheck] = []
+        for line in corrected.lines:
+            if line.line_no not in corrected.rechecked:
+                continue
+            remap = corrected.remapped and line.line_no == corrected.line_no
+            mapped = await self._mapped_again(scope, case.customer_code, line, remap=remap)
+            check, _ = await self._check_line(
+                scope,
+                case.customer_code,
+                header,
+                case.received_at,
+                line.effective,
+                mapped,
+                lme.data,
+                rules,
+            )
+            checks.append(check)
+        po_findings = list(check_document(corrected.document, rules))
+        po_codes = DOCUMENT_CHECK_CODES
+        if corrected.line_no is None:
+            po_findings += await self._customer_findings(scope, case, header.po_date, rules)
+            po_codes |= CUSTOMER_CHECK_CODES
+        recheck = Recheck(tuple(checks), tuple(po_findings), po_codes)
+        return decided(lambda: case.correct_value(finding_key, correction, actor, recheck))
+
+    async def _case_rules(
+        self, scope: SalesScope, case: OrderCase, details: dict[str, object]
+    ) -> OrderRules:
+        """The tenant's rules, while they are the ones stamped on the case: a
+        recheck under other rules would put two versions on one case."""
+        rules = await self.rules.rules(scope)
+        if rules.version != case.rules_version:
+            raise ConflictError(
+                "the case was checked under rules that no longer apply", details=details
+            )
+        return rules
+
+    async def _mapped_again(
+        self, scope: SalesScope, customer_code: str, line: OrderLine, *, remap: bool
+    ) -> MappedLine:
+        """What a line is checked against again: its PRV code computed again
+        from its entered values when ``remap``, else its mapping as it stands
+        and the item that names."""
+        if remap:
+            entered = line.effective
+            entry = await self.catalog.convert_entry(
+                scope, customer_code, entered.customer_item_code
+            )
+            items = await self.catalog.items(scope)
+            return map_line(entered, entry=entry.data, items=items.data)
+        code = line.mapping.checked_against
+        item = None if code is None else (await self.catalog.item_by_prv_code(scope, code)).data
+        if code is not None and item is None:
+            raise ConflictError(
+                "the item the line was checked against is no longer in the item master",
+                details={"line": line.line_no},
+            )
+        return MappedLine(line.mapping, item, line.basis.convert_prv_code)
+
+    async def _customer_findings(
+        self, scope: SalesScope, case: OrderCase, po_date: date, rules: OrderRules
+    ) -> tuple[Finding, ...]:
+        """The customer's and the sender's checks again, on the entered PO date
+        (the fiscal year an ESF is renewed for). The sender's results are the
+        message's; a customer taken from the document is one with
+        `customer_unknown`, which that check raised exactly then."""
+        customer = (await self.catalog.customer_by_code(scope, case.customer_code)).data
+        message = await self.inbox.get_message(scope, case.message_id)
+        if customer is None or message is None:
+            raise ConflictError(
+                "the customer or the message the case was read from is no longer there",
+                details={"case_id": str(case.case_id)},
+            )
+        return check_customer(
+            customer,
+            attributed_by_document=any(
+                f.code is FindingCode.CUSTOMER_UNKNOWN for f in case.findings
+            ),
+            authentication=message.authentication,
+            po_date=po_date,
+            received_at=case.received_at,
+            rules=rules,
+        )
 
     async def _check_line(
         self,

@@ -77,6 +77,23 @@ async def decide(
     return await order(persona, case["case_id"])
 
 
+async def typed_as_read(pic: Persona, case: dict[str, Any]) -> dict[str, Any]:
+    """Every value each line's `value_uncertain` flagged, typed by ``pic`` as
+    the line reads it (ticket 15: a correction is per field)."""
+    for finding in case["findings"]:
+        if finding["code"] != "value_uncertain" or finding["line_no"] is None:
+            continue
+        for field in finding["fields"]:
+            line = next(x for x in case["lines"] if x["line_no"] == finding["line_no"])
+            case = await decide(
+                pic,
+                case,
+                f"findings/{finding['key']}/corrections",
+                {"field": field, "value": str(line[field])},
+            )
+    return case
+
+
 async def prepared(pic: Persona, case: dict[str, Any]) -> dict[str, Any]:
     await open_sources(pic, case)
     return await decide(pic, case, "prepare")

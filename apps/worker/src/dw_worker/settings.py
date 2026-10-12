@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -265,6 +266,56 @@ class WorkerSettings(BaseSettings):
         default="http://localhost:3000",
         validation_alias=AliasChoices("DW_WORKER_PUBLIC_WEB_URL", "DW_PUBLIC_WEB_URL"),
     )
+
+    # --- Sales (DW1): the mailbox lane (ticket 16) ---
+    # The one (tenant, workspace) DW1's mock mailbox is bound to, read the way
+    # the API reads it (`ApiSettings.sales_demo_scope`): the same variables,
+    # and locally the same first-login tenant and workspace. Two processes
+    # bound to two different mailboxes would be a lane processing mail nobody
+    # sees; `test_worker_sales_settings.py` holds the two readings together.
+    sales_demo_tenant_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DW_WORKER_SALES_DEMO_TENANT_ID", "SALES_DEMO_TENANT_ID"),
+    )
+    sales_demo_workspace_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DW_WORKER_SALES_DEMO_WORKSPACE_ID", "SALES_DEMO_WORKSPACE_ID"
+        ),
+    )
+    default_tenant_id: str = Field(
+        default="d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d",
+        validation_alias=AliasChoices("DW_WORKER_DEFAULT_TENANT_ID", "DW_API_DEFAULT_TENANT_ID"),
+    )
+    default_workspace_id: str = Field(
+        default="64764894-718d-5558-ba17-9a2949214063",
+        validation_alias=AliasChoices(
+            "DW_WORKER_DEFAULT_WORKSPACE_ID", "DW_API_DEFAULT_WORKSPACE_ID"
+        ),
+    )
+    # Whether this host runs the lane at all. On by default: DW1 processes
+    # new mail on its own. Off is for a walk-through that presses "DW xử lý"
+    # by hand on a mailbox the lane would otherwise empty within a minute
+    # (`.claude/plans/sales/dw1-portal-demo/demo.md`). Whether DW1 works in a
+    # workspace is its pause switch, not this.
+    sales_inbox_lane: bool = Field(
+        default=True, validation_alias=AliasChoices("DW_WORKER_SALES_INBOX_LANE")
+    )
+
+    def sales_demo_scope(self) -> tuple[uuid.UUID, uuid.UUID] | None:
+        """The one (tenant, workspace) DW1's mocks stand in for, or None.
+
+        Named explicitly, it is that pair in any profile. Unnamed, a deployed
+        profile has none (the mocks are not wired), and local/test fall back to
+        the first-login tenant and workspace, where the demo personas live.
+        """
+        if self.sales_demo_tenant_id is not None:
+            if self.sales_demo_workspace_id is None:
+                raise RuntimeError("SALES_DEMO_TENANT_ID needs SALES_DEMO_WORKSPACE_ID beside it")
+            return uuid.UUID(self.sales_demo_tenant_id), uuid.UUID(self.sales_demo_workspace_id)
+        if self.is_deployed:
+            return None
+        return uuid.UUID(self.default_tenant_id), uuid.UUID(self.default_workspace_id)
 
     @property
     def zalo_poll_enabled(self) -> bool:

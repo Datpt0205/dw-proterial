@@ -267,7 +267,14 @@ class MessageLogPort(Protocol):
     """What became of each inbound message (spec decision 10)."""
 
     async def record(self, disposition: MessageDisposition, processed_at: datetime) -> None:
-        """The message's disposition, replacing any earlier one for it."""
+        """The message's disposition: its first, or one replacing a routing to
+        Sales (a routed message may be processed again).
+
+        Raises `ConflictError` (`message_already_processed`) when the message
+        already has any other disposition: the (workspace, message_id) pair is
+        the message's idempotency key, so whichever of a person and DW1's
+        mailbox lane gets there second has its whole transaction refused.
+        """
         ...
 
     async def get(self, message_id: str) -> MessageDisposition | None: ...

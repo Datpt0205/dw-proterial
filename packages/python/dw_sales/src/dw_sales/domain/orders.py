@@ -32,9 +32,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, Self
+from typing import Annotated, Final, Literal, NamedTuple, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
 from dw_sales.domain.anchors import SourceAnchor
@@ -72,6 +72,20 @@ Note = Annotated[str, Field(min_length=1, max_length=500, pattern=r"\S")]
 VersionRef = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$")]
 
 PoHeaderField = Literal["po_no", "revision", "po_date", "currency"]
+# The printed total, as a value of the PO's header a correction names: a
+# line's `amount` is another value.
+TOTAL_FIELD: Final = "total"
+# The values that are amounts (spec decision 8): read and typed only with
+# `sales.price.read`, never in an audit row or an error.
+AMOUNT_FIELDS: Final = frozenset({"unit_price", "amount", TOTAL_FIELD})
+# What a line and the PO are known by (finding keys, revisions, the history
+# of the PO number). A correction confirms them as read; a different one is
+# another line or another PO, which the customer is asked about.
+_IDENTITY_FIELDS: Final = frozenset({"line_no", "po_no", "revision"})
+# A line's values its PRV code is computed from (`order_checks.map_line`).
+_MAPPING_INPUTS: Final = frozenset({"customer_item_code", "description"})
+# The header values every line is checked with (`order_checks.check_line`).
+_LINE_CHECK_HEADER_INPUTS: Final = frozenset({"po_date", "currency"})
 PoLineField = Literal[
     "line_no",
     "customer_item_code",
@@ -113,6 +127,47 @@ def _require_fields(flags: Iterable[FlaggedValue], allowed: Iterable[str], owner
         raise ValueError(f"{owner} flags fields it does not have: {unknown}")
 
 
+class ValueCorrection(BaseModel):
+    """The value Sales typed for one field a `value_uncertain` flagged.
+
+    Kept beside the value as read, which stays the evidence. ``value`` is the
+    field's value as text, validated as that field's type (a Decimal, a date,
+    a unit, text) by the line or header it corrects. Whoever typed it is a
+    maker of the case (spec decision 7).
+    """
+
+    model_config = _FROZEN
+
+    field: str = Field(pattern=r"^[a-z_]{1,32}$")
+    value: PrintedText
+    by: ActorId
+    at: AwareDatetime
+
+
+def _require_corrections(
+    corrections: Sequence[ValueCorrection], flagged: frozenset[str], owner: str
+) -> None:
+    fields = [c.field for c in corrections]
+    if len(fields) != len(set(fields)):
+        raise ValueError(f"{owner} corrects a field twice")
+    if unflagged := sorted(set(fields) - flagged):
+        raise ValueError(f"{owner} corrects fields nothing flagged: {unflagged}")
+
+
+def _with_values[M: BaseModel](model: M, corrections: Iterable[ValueCorrection]) -> M:
+    """``model`` holding each correction's value, validated as its field's type."""
+    typed = {c.field: c.value for c in corrections}
+    if not typed:
+        return model
+    return type(model).model_validate({**dict(model), **typed})
+
+
+def _keeps_identity(before: BaseModel, after: BaseModel, owner: str) -> None:
+    for field in _IDENTITY_FIELDS & type(before).model_fields.keys():
+        if getattr(before, field) != getattr(after, field):
+            raise ValueError(f"{owner} corrects its {field}, which is who it is")
+
+
 class PoHeaderAnchors(BaseModel):
     model_config = _FROZEN
 
@@ -138,6 +193,11 @@ class PoHeader(BaseModel):
     def _flags_name_header_fields(self) -> Self:
         _require_fields(self.flags, PoHeaderAnchors.model_fields, "a header")
         return self
+
+    @property
+    def flagged(self) -> frozenset[str]:
+        """The fields read from a flagged region."""
+        return frozenset(flag.field for flag in self.flags)
 
 
 class PoLineAnchors(BaseModel):
@@ -178,6 +238,11 @@ class PoLine(BaseModel):
     def _flags_name_line_fields(self) -> Self:
         _require_fields(self.flags, PoLineAnchors.model_fields, f"line {self.line_no}")
         return self
+
+    @property
+    def flagged(self) -> frozenset[str]:
+        """The fields read from a flagged region."""
+        return frozenset(flag.field for flag in self.flags)
 
 
 class PrintedTotal(BaseModel):
@@ -656,6 +721,9 @@ class OrderLine(BaseModel):
     # Who agreed a short lead time with PC (outside the portal), and when.
     pc_confirmed_by: ActorId | None = None
     pc_confirmed_at: AwareDatetime | None = None
+    # What Sales typed for the values its `value_uncertain` flagged, one per
+    # field; `po_line` keeps the values as read.
+    corrections: tuple[ValueCorrection, ...] = ()
 
     @model_validator(mode="after")
     def _pc_confirmation_names_who_and_when(self) -> Self:
@@ -663,9 +731,26 @@ class OrderLine(BaseModel):
             raise ValueError("a PC confirmation names who and when")
         return self
 
+    @model_validator(mode="after")
+    def _corrections_are_the_flagged_values(self) -> Self:
+        owner = f"line {self.line_no}"
+        _require_corrections(self.corrections, self.po_line.flagged, owner)
+        _keeps_identity(self.po_line, self.effective, owner)
+        return self
+
     @property
     def line_no(self) -> int:
         return self.po_line.line_no
+
+    @property
+    def effective(self) -> PoLine:
+        """The line as it is entered: the values as read, each corrected one
+        replaced by what Sales typed. What the checks, the upload file and
+        every draft read."""
+        return _with_values(self.po_line, self.corrections)
+
+    def correction(self, field: str) -> ValueCorrection | None:
+        return next((c for c in self.corrections if c.field == field), None)
 
 
 class LineCheck(BaseModel):
@@ -681,6 +766,34 @@ class LineCheck(BaseModel):
         if any(f.line_no != self.line.line_no for f in self.findings):
             raise ValueError(f"a check of line {self.line.line_no} names another line")
         return self
+
+
+class Corrected(NamedTuple):
+    """A case's values with one more correction (`OrderCase.corrected`): what
+    its checks are run again on before `OrderCase.correct_value` takes them."""
+
+    # The line corrected; None for the PO header or its total.
+    line_no: int | None
+    lines: tuple[OrderLine, ...]
+    header_corrections: tuple[ValueCorrection, ...]
+    # The PO as it is entered: every value as read or as corrected.
+    document: PoDocument
+    # The lines to check again: the corrected one, or every line when a
+    # header value they were checked with (the date, the currency) is.
+    rechecked: frozenset[int]
+    # The corrected line's PRV code is computed again: a value it was mapped
+    # from changed.
+    remapped: bool
+
+
+class Recheck(NamedTuple):
+    """The checks run again on a case's corrected values, under its rules."""
+
+    lines: tuple[LineCheck, ...]
+    # The PO-level findings raised again, and every code the checks that
+    # raised them can raise: those of the case are replaced, the others kept.
+    po_findings: tuple[Finding, ...]
+    po_codes: frozenset[FindingCode]
 
 
 # ---------------------------------------------------------------- revisions --
@@ -741,6 +854,52 @@ def diff_lines(before: Sequence[PoLine], after: Sequence[PoLine]) -> tuple[LineC
                     )
                 )
     return tuple(changes)
+
+
+def rebase_changes(
+    changes: Sequence[LineChange], was: Sequence[PoLine], now: Sequence[PoLine]
+) -> tuple[LineChange, ...]:
+    """A revision's change list once a value of the revision is corrected:
+    ``was`` and ``now`` are its lines as entered before and after.
+
+    Each value's ``before`` stays what the order held before the revision (a
+    listed change's, else the value it had, which no change means was the
+    same); its ``after`` is the value as now entered. A line the revision
+    dropped keeps its changes. In `diff_lines`' order.
+    """
+    listed = {(c.line_no, c.field): c for c in changes}
+    old = {line.line_no: line for line in was}
+    new = {line.line_no: line for line in now}
+    rebased: list[LineChange] = []
+    for line_no in sorted({c.line_no for c in changes} | new.keys()):
+        if line_no not in new:
+            rebased += [c for c in changes if c.line_no == line_no]
+            continue
+        for field in _COMPARED:
+            value, change = getattr(new[line_no], field), listed.get((line_no, field))
+            if change is None:
+                held = getattr(old[line_no], field)
+                if held != value:
+                    rebased.append(
+                        LineChange(
+                            line_no=line_no, field=field, before=_text(held), after=_text(value)
+                        )
+                    )
+            elif not _holds(change.before, field, value):
+                rebased.append(
+                    LineChange(
+                        line_no=line_no, field=field, before=change.before, after=_text(value)
+                    )
+                )
+    return tuple(rebased)
+
+
+def _holds(text: str | None, field: str, value: object) -> bool:
+    """Whether ``text`` (a change's side) is ``value``, compared as the
+    field's values are (`diff_lines`): ``0.658`` is ``0.6580``."""
+    if text is None:
+        return False
+    return TypeAdapter(PoLine.model_fields[field].annotation).validate_python(text) == value
 
 
 def _text(value: object) -> str | None:
@@ -946,6 +1105,10 @@ class OrderCase(BaseModel):
     # Only while the order awaits its cross-check: the last decision on it
     # that was not applied. Cleared when it is raised again or the case moves.
     unapplied_decision: UnappliedDecision | None = None
+    # What Sales typed for the header values and the total the PO-level
+    # `value_uncertain` flagged, one per field (`TOTAL_FIELD` for the total);
+    # the document keeps the values as read.
+    header_corrections: tuple[ValueCorrection, ...] = ()
 
     @model_validator(mode="before")
     @classmethod
@@ -994,6 +1157,10 @@ class OrderCase(BaseModel):
             raise ValueError("a case closed as superseded names its successor, and only it does")
         if self.unapplied_decision is not None and self.status is not _S.UPLOADED_TO_BRAVO:
             raise ValueError("only an order awaiting its cross-check names a decision not applied")
+        _require_corrections(self.header_corrections, self._header_flagged, "the PO header")
+        _keeps_identity(self.header, self.effective_header, "the PO header")
+        if self.header_corrections:
+            self.effective_document  # noqa: B018 -- validates the typed values
         self._stamps_fit_the_status()
         if self.cross_checked_by is not None and (
             self.cross_checked_by in (self.prepared_by, self.bravo_recorded_by)
@@ -1040,6 +1207,60 @@ class OrderCase(BaseModel):
         return self.document.header
 
     @property
+    def effective_header(self) -> PoHeader:
+        """The header as it is entered: as read, each corrected value replaced."""
+        return _with_values(
+            self.header, (c for c in self.header_corrections if c.field != TOTAL_FIELD)
+        )
+
+    @property
+    def effective_document(self) -> PoDocument:
+        """The PO as it is entered: every value as read or as Sales corrected it."""
+        return _entered(self.document, self.lines, self.header_corrections)
+
+    def header_correction(self, field: str) -> ValueCorrection | None:
+        return next((c for c in self.header_corrections if c.field == field), None)
+
+    def flagged_fields(self, finding: Finding) -> frozenset[str]:
+        """The values a `value_uncertain` flagged, which its corrections name:
+        its line's, or the header's and the total's. None for another code."""
+        if finding.code is not FindingCode.VALUE_UNCERTAIN:
+            return frozenset()
+        if finding.line_no is None:
+            return self._header_flagged
+        return self.line(finding.line_no).po_line.flagged
+
+    @property
+    def _header_flagged(self) -> frozenset[str]:
+        total = self.document.total
+        read_hidden = total is not None and bool(total.flags)
+        return self.header.flagged | (frozenset({TOTAL_FIELD}) if read_hidden else frozenset())
+
+    def _corrections_for(self, finding: Finding) -> tuple[ValueCorrection, ...]:
+        if finding.line_no is None:
+            return self.header_corrections
+        return self.line(finding.line_no).corrections
+
+    def takes_value_note(self, finding: Finding) -> bool:
+        """Whether a `value_uncertain` is decided by a free-text
+        `corrected_by_sales` (`dispose`): only the PO's one that names a sheet
+        nothing reads, once every value it flagged is typed. What the screen
+        offers reads this too (`views.order_finding`)."""
+        return self._names_unchecked_region(finding) and not self._untyped(finding)
+
+    def _untyped(self, finding: Finding) -> frozenset[str]:
+        return self.flagged_fields(finding) - {c.field for c in self._corrections_for(finding)}
+
+    def _names_unchecked_region(self, finding: Finding) -> bool:
+        """A PO-level `value_uncertain` also says a sheet nothing reads was
+        not checked: no field names it, so no correction resolves it."""
+        return (
+            finding.code is FindingCode.VALUE_UNCERTAIN
+            and finding.line_no is None
+            and bool(self.document.unchecked_regions)
+        )
+
+    @property
     def attachment_id(self) -> str:
         return self.document.attachment_id
 
@@ -1053,7 +1274,8 @@ class OrderCase(BaseModel):
 
         The preparer, whoever recorded the Bravo entry, in this round or an
         earlier one (`earlier_makers`), and whoever typed a value still on the
-        case: a corrected value, or a PRV code typed for an unmapped line.
+        case: a corrected value (a finding's, or one field's), or a PRV code
+        typed for an unmapped line.
         """
         names: set[ActorId | None] = {self.prepared_by, self.bravo_recorded_by}
         names |= self.earlier_makers
@@ -1061,6 +1283,8 @@ class OrderCase(BaseModel):
             f.disposition.by for f in self.findings if isinstance(f.disposition, CorrectedBySales)
         }
         names |= {line.mapping.confirmed_by for line in self.lines if line.mapping.hand_entered}
+        names |= {c.by for line in self.lines for c in line.corrections}
+        names |= {c.by for c in self.header_corrections}
         return frozenset(name for name in names if name is not None)
 
     def finding(self, key: str) -> Finding:
@@ -1146,6 +1370,21 @@ class OrderCase(BaseModel):
                 details={"case_id": str(self.case_id), "finding": key},
             )
         if (
+            finding.code is FindingCode.VALUE_UNCERTAIN
+            and kind is DispositionKind.CORRECTED_BY_SALES
+            and not self.takes_value_note(finding)
+        ):
+            # A typed value is a field's (`correct_value`); a note is left only
+            # for the sheet nothing reads, once every flagged value is typed.
+            raise ConflictError(
+                "a value_uncertain is corrected field by field",
+                details={
+                    "case_id": str(self.case_id),
+                    "finding": key,
+                    "fields": sorted(self._untyped(finding)),
+                },
+            )
+        if (
             finding.code is FindingCode.CUSTOMER_UNKNOWN
             and isinstance(disposition, CorrectedBySales)
             and disposition.value != self.customer_code
@@ -1200,6 +1439,8 @@ class OrderCase(BaseModel):
         item = recheck.line.basis.item
         if item is None or item.prv_code != prv_code or recheck.line.line_no != line_no:
             raise DomainError("the line was checked again against another item", details=details)
+        if recheck.line.po_line != line.effective:
+            raise DomainError("the line was checked again on other values", details=details)
         rechecked = [f for f in recheck.findings if f.code in ITEM_FINDINGS]
         if any(f.rule_version != self.rules_version for f in rechecked):
             raise ConflictError("the line was checked again under other rules", details=details)
@@ -1210,7 +1451,14 @@ class OrderCase(BaseModel):
             confirmed_by=actor.user_id,
             confirmed_at=at,
         )
-        new_line = recheck.line.model_copy(update={"mapping": confirmed})
+        new_line = OrderLine.model_validate(
+            {
+                **dict(recheck.line),
+                "mapping": confirmed,
+                "po_line": line.po_line,
+                "corrections": line.corrections,
+            }
+        )
         source = "candidate" if mapping.candidates else "PRV code typed by Sales (item master)"
         kept: list[Finding] = []
         for f in self.findings:
@@ -1222,6 +1470,153 @@ class OrderCase(BaseModel):
         return self._edited(
             lines=tuple(new_line if x.line_no == line_no else x for x in self.lines),
             findings=_in_line_order((*kept, *rechecked)),
+        )
+
+    def corrected(self, key: str, correction: ValueCorrection, actor: Actor) -> Corrected:
+        """The case's values with ``correction`` too, for its checks to run on.
+
+        Refused unless ``key`` is a `value_uncertain` that flagged the field,
+        the correction is the actor's, and the case is where values are
+        decided. The value is validated as the field's type (422 naming the
+        field). A line's number, or the PO's number or revision, is confirmed
+        as read and never changed (409): another number is another line or
+        another PO, which the customer is asked about.
+        """
+        finding = self.finding(key)
+        field = correction.field
+        details: dict[str, object] = {"case_id": str(self.case_id), "finding": key, "field": field}
+        self._require_editable()
+        if finding.code is not FindingCode.VALUE_UNCERTAIN:
+            raise ConflictError(f"{finding.code} is not corrected field by field", details=details)
+        if correction.by != actor.user_id:
+            raise DomainError("a decision is recorded as its actor's", details=details)
+        if field not in self.flagged_fields(finding):
+            raise DomainError("the finding did not flag this field", details=details)
+        lines, header_corrections = self.lines, self.header_corrections
+        read: BaseModel
+        typed: BaseModel
+        if finding.line_no is None:
+            header_corrections = (*_without(header_corrections, field), correction)
+            read = self.header
+            typed = _with_values(read, [correction] if field != TOTAL_FIELD else [])
+        else:
+            line = self.line(finding.line_no)
+            corrections = (*_without(line.corrections, field), correction)
+            read, typed = line.po_line, _with_values(line.po_line, corrections)
+        if field in _IDENTITY_FIELDS and getattr(read, field) != getattr(typed, field):
+            raise ConflictError(
+                f"a correction confirms the {field} as read: another one is asked of the customer",
+                details=details,
+            )
+        rechecked: frozenset[int] = frozenset()
+        remapped = False
+        if finding.line_no is not None:
+            new_line = OrderLine.model_validate({**dict(line), "corrections": corrections})
+            lines = tuple(new_line if x.line_no == line.line_no else x for x in lines)
+            rechecked = frozenset({line.line_no})
+            was, now = line.effective, new_line.effective
+            remapped = any(getattr(was, name) != getattr(now, name) for name in _MAPPING_INPUTS)
+        entered = _entered(self.document, lines, header_corrections)
+        if (
+            finding.line_no is None
+            and field in _LINE_CHECK_HEADER_INPUTS
+            and entered.header != self.effective_header
+        ):
+            rechecked = frozenset(x.line_no for x in lines)
+        return Corrected(finding.line_no, lines, header_corrections, entered, rechecked, remapped)
+
+    def correct_value(
+        self, key: str, correction: ValueCorrection, actor: Actor, recheck: Recheck
+    ) -> OrderCase:
+        """One value a `value_uncertain` flagged, typed by Sales, with the
+        checks run again on the corrected values (Đạt, 2026-10-12).
+
+        ``recheck`` is `corrected`'s lines checked again under this case's
+        rules, and the PO-level checks run again on the corrected PO. A
+        finding whose key and compared values did not change keeps its
+        decision; one that changed, or is new, is open. A line whose PRV code
+        was computed again (its code or description corrected) has its mapping
+        and mapping findings replaced, open; any other line keeps them. The
+        finding is resolved (`corrected_by_sales`, by the actor) once every
+        field it flagged has a correction, unless it also names a sheet
+        nothing reads, which a note decides (`dispose`).
+        """
+        corrected = self.corrected(key, correction, actor)
+        details: dict[str, object] = {"case_id": str(self.case_id), "finding": key}
+        checks = {check.line.line_no: check for check in recheck.lines}
+        if checks.keys() != corrected.rechecked:
+            raise DomainError("the case was checked again on other lines", details=details)
+        if any(
+            f.line_no is not None or f.code not in recheck.po_codes for f in recheck.po_findings
+        ):
+            raise DomainError("the PO was checked again by other checks", details=details)
+        remapped = {corrected.line_no} if corrected.remapped else set()
+        raised = [
+            f
+            for f in (*recheck.po_findings, *(f for c in recheck.lines for f in c.findings))
+            if f.line_no is None or f.code not in MAPPING_FINDINGS or f.line_no in remapped
+        ]
+        if any(f.rule_version != self.rules_version for f in raised):
+            raise ConflictError("the case was checked again under other rules", details=details)
+        lines: list[OrderLine] = []
+        for line in corrected.lines:
+            check = checks.get(line.line_no)
+            if check is None:
+                lines.append(line)
+                continue
+            if check.line.po_line != line.effective:
+                raise DomainError("the line was checked again on other values", details=details)
+            if line.line_no in remapped:
+                if check.line.mapping.status is MappingStatus.CANDIDATE_CONFIRMED:
+                    raise DomainError("a mapping computed again is not confirmed", details=details)
+            elif check.line.mapping != line.mapping:
+                raise DomainError(
+                    "the line was checked again with another mapping", details=details
+                )
+            lines.append(_rechecked_line(line, check, self.findings))
+
+        def replaced(f: Finding) -> bool:
+            if f.line_no is None:
+                return f.code in recheck.po_codes
+            return f.line_no in checks and (f.code not in MAPPING_FINDINGS or f.line_no in remapped)
+
+        old = {f.key: f for f in self.findings}
+        new = [f if f.code in MAPPING_FINDINGS else _carried(f, old.get(f.key)) for f in raised]
+        findings = _in_line_order((*(f for f in self.findings if not replaced(f)), *new))
+        target = next(f for f in findings if f.key == key)
+        typed = (
+            corrected.header_corrections
+            if target.line_no is None
+            else next(x for x in lines if x.line_no == target.line_no).corrections
+        )
+        if self.flagged_fields(target) <= {c.field for c in typed} and not (
+            self._names_unchecked_region(target)
+        ):
+            resolved = CorrectedBySales(
+                value=",".join(sorted(c.field for c in typed)),
+                source=_TYPED_PER_FIELD,
+                by=actor.user_id,
+                at=correction.at,
+            )
+            findings = tuple(
+                f.model_copy(update={"disposition": resolved}) if f.key == key else f
+                for f in findings
+            )
+        return self._edited(
+            lines=tuple(lines),
+            # Validated again: model_copy alone skips the invariants.
+            findings=tuple(Finding.model_validate(dict(f)) for f in findings),
+            header_corrections=corrected.header_corrections,
+            # A revision's change list is what the PIC applies in Bravo: its
+            # after is the value as entered, as the upload file's is. A case
+            # never revised lists none.
+            changes=rebase_changes(
+                self.changes,
+                [line.effective for line in self.lines],
+                [line.effective for line in lines],
+            )
+            if self.superseded
+            else (),
         )
 
     def request_correction(self) -> OrderCase:
@@ -1461,7 +1856,10 @@ class OrderCase(BaseModel):
                     message_id=self.message_id, received_at=self.received_at, document=self.document
                 ),
             ),
-            changes=diff_lines(self.document.lines, revision.document.lines),
+            # From the order as it was entered, corrections and all, to the
+            # revision as read; the revision starts with no correction.
+            changes=diff_lines(self.effective_document.lines, revision.document.lines),
+            header_corrections=(),
             **cleared,
         )
 
@@ -1544,16 +1942,19 @@ class OrderCase(BaseModel):
         In ``prepared`` it reopens the self-check: back to ``in_review``,
         the preparation cleared.
         """
-        if self.status not in _EDITABLE:
-            raise ConflictError(
-                f"an order case is not edited in {self.status}",
-                details={"case_id": str(self.case_id), "status": self.status.value},
-            )
+        self._require_editable()
         if self.status is _S.PREPARED:
             return self._next(
                 transition(self.status, _S.IN_REVIEW), **changes, **self._cleared_from_prepared()
             )
         return self._next(self.status, **changes)
+
+    def _require_editable(self) -> None:
+        if self.status not in _EDITABLE:
+            raise ConflictError(
+                f"an order case is not edited in {self.status}",
+                details={"case_id": str(self.case_id), "status": self.status.value},
+            )
 
     def _retired_makers(self) -> frozenset[ActorId]:
         """The makers so far, as the earlier ones of the next round."""
@@ -1584,6 +1985,74 @@ _CLEARED_FROM_PREPARED: Final[Mapping[str, object]] = MappingProxyType(
         "bravo_entry_compared": False,
     }
 )
+
+
+# The note a `value_uncertain` is resolved with once each value it flagged is
+# typed: the values themselves are on the line or the header, per field.
+_TYPED_PER_FIELD: Final = "Sales nhập lại từng giá trị bị gắn cờ"
+
+
+def _without(corrections: Iterable[ValueCorrection], field: str) -> tuple[ValueCorrection, ...]:
+    return tuple(c for c in corrections if c.field != field)
+
+
+def _entered(
+    document: PoDocument,
+    lines: Iterable[OrderLine],
+    header_corrections: Sequence[ValueCorrection],
+) -> PoDocument:
+    """The PO as it is entered: each line's and the header's values as read,
+    every corrected one replaced, validated as the document is."""
+    total = document.total
+    typed_total = [c for c in header_corrections if c.field == TOTAL_FIELD]
+    if total is not None and typed_total:
+        total = _with_values(total, [typed_total[0].model_copy(update={"field": "amount"})])
+    return PoDocument.model_validate(
+        {
+            **dict(document),
+            "header": _with_values(
+                document.header, (c for c in header_corrections if c.field != TOTAL_FIELD)
+            ),
+            "lines": tuple(line.effective for line in lines),
+            "total": total,
+        }
+    )
+
+
+def _carried(raised: Finding, before: Finding | None) -> Finding:
+    """A finding raised again keeps the decision on it while its key and the
+    values it compared are the same; otherwise it is open."""
+    if before is None or (before.severity, before.expected, before.actual) != (
+        raised.severity,
+        raised.expected,
+        raised.actual,
+    ):
+        return raised
+    return raised.model_copy(update={"disposition": before.disposition})
+
+
+def _rechecked_line(line: OrderLine, check: LineCheck, findings: Iterable[Finding]) -> OrderLine:
+    """``line`` as ``check`` found it on its entered values: the values as read
+    and their corrections kept, the basis and suggested date its check's.
+    PC's agreement on a short lead time stays while that finding is raised
+    again unchanged; the date Sales confirms stays as it was."""
+    short = FindingCode.REQUESTED_DATE_SHORT_LT
+    was = [f for f in findings if f.code is short and f.line_no == line.line_no]
+    now = [f for f in check.findings if f.code is short]
+    same = len(was) == len(now) == 1 and (was[0].expected, was[0].actual) == (
+        now[0].expected,
+        now[0].actual,
+    )
+    return OrderLine.model_validate(
+        {
+            **dict(check.line),
+            "po_line": line.po_line,
+            "corrections": line.corrections,
+            "confirmed_delivery_date": line.confirmed_delivery_date,
+            "pc_confirmed_by": line.pc_confirmed_by if same else None,
+            "pc_confirmed_at": line.pc_confirmed_at if same else None,
+        }
+    )
 
 
 def _in_line_order(findings: Iterable[Finding]) -> tuple[Finding, ...]:

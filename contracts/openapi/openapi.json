@@ -1078,6 +1078,35 @@
         "title": "CopperBasisView",
         "type": "object"
       },
+      "CorrectionBody": {
+        "additionalProperties": false,
+        "description": "One value a `value_uncertain` flagged, as Sales reads it on the source:\nthe field it is, and the value as text, which the case validates as that\nfield's type (a number, a date, a unit, text).",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "field": {
+            "pattern": "^[a-z_]{1,32}$",
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "field",
+          "value"
+        ],
+        "title": "CorrectionBody",
+        "type": "object"
+      },
       "CoverageView": {
         "properties": {
           "checks_run": {
@@ -4261,6 +4290,13 @@
             "title": "Header Anchors",
             "type": "object"
           },
+          "header_corrections": {
+            "items": {
+              "$ref": "#/components/schemas/ValueCorrectionView"
+            },
+            "title": "Header Corrections",
+            "type": "array"
+          },
           "header_flags": {
             "items": {
               "$ref": "#/components/schemas/FlaggedValue"
@@ -4460,6 +4496,7 @@
           "attachment_sha256",
           "header_anchors",
           "header_flags",
+          "header_corrections",
           "buyer",
           "buyer_anchor",
           "total",
@@ -4541,6 +4578,13 @@
               }
             ]
           },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -4575,7 +4619,8 @@
           "actual",
           "rule_version",
           "disposition",
-          "allowed"
+          "allowed",
+          "fields"
         ],
         "title": "OrderFindingView",
         "type": "object"
@@ -4606,6 +4651,13 @@
               }
             ],
             "title": "Confirmed Delivery Date"
+          },
+          "corrections": {
+            "items": {
+              "$ref": "#/components/schemas/ValueCorrectionView"
+            },
+            "title": "Corrections",
+            "type": "array"
           },
           "customer_item_code": {
             "title": "Customer Item Code",
@@ -4701,6 +4753,7 @@
           "requested_date",
           "anchors",
           "flags",
+          "corrections",
           "value_states",
           "mapping",
           "basis",
@@ -8065,6 +8118,36 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ValueCorrectionView": {
+        "description": "A value Sales typed for a flagged field, beside the value as read. An\namount is shown only with `sales.price.read`.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Words"
+          }
+        },
+        "required": [
+          "field",
+          "value",
+          "by",
+          "at"
+        ],
+        "title": "ValueCorrectionView",
         "type": "object"
       },
       "ValueState": {
@@ -12209,6 +12292,87 @@
           }
         },
         "summary": "Correction Request",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/findings/{finding_key}/corrections": {
+      "post": {
+        "operationId": "correct_value_api_v1_sales_orders__case_id__findings__finding_key__corrections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "finding_key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$",
+              "title": "Finding Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Correct Value",
         "tags": [
           "sales"
         ]

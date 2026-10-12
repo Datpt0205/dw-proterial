@@ -14,7 +14,8 @@ Two rules hold here for every handler:
 - **An audit row carries ids, codes, transitions and the case version**,
   copied from the case event, which has no field an amount could travel in
   (spec decision 8). The person is the audit actor; for DW1's own work, the
-  person whose request started it, with the worker named in the details.
+  principal whose request started it (a person, or DW1's service account in
+  the mailbox lane), with the worker named in the details.
 """
 
 from __future__ import annotations
@@ -38,9 +39,9 @@ from dw_sales.domain.quotes import QuoteCase
 # DW1's own identity on the events it writes (spec "Actors", decision 5), and
 # the worker its runs are recorded under: `configs/workers/sales.yaml` declares
 # the same id and version, and `test_dw1_worker.py` holds the two together. A
-# production service principal holding `sales.inbox.process` only is still
-# owed (ticket 12); until then a run's actor is the person who started it and
-# DW1's events name them as `initiated_by`.
+# run's actor is the principal who started it, and DW1's events name them as
+# `initiated_by`: the person who pressed "DW xử lý", or DW1's own service
+# account when the worker's mailbox lane started it (`inbox_lane`, ticket 16).
 DW1_WORKER_ID = "sales-dw1"
 DW1_WORKER_VERSION = "1.0.0"
 

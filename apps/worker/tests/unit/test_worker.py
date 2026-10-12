@@ -90,6 +90,9 @@ def bare_settings(**overrides: object) -> WorkerSettings:
         "otel_endpoint": None,
         "zalo_bot_token": "",
         "zalo_link_secret": "",
+        "sales_demo_tenant_id": None,
+        "sales_demo_workspace_id": None,
+        "sales_inbox_lane": True,
     }
     absent.update(overrides)
     return WorkerSettings(**absent)  # type: ignore[arg-type]
@@ -171,6 +174,25 @@ def test_the_offboarding_lane_needs_object_storage_too_not_just_a_database() -> 
         s3_endpoint_url="http://localhost:9000",
     )
     assert "offboarding" in build_registry(db_and_s3).all()
+
+
+def test_dw1s_mailbox_lane_needs_a_database_object_storage_and_a_mailbox() -> None:
+    """Sales ticket 16. DW1's services are built whole (files included), so
+    object storage too; a mailbox, which a deployed profile has only when
+    SALES_DEMO_* names one; and the host's switch on. Every 60 seconds, the
+    mock mailbox's cadence."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    assert "sales_inbox" not in build_registry(bare_settings(database_url=db)).all()
+
+    registry = build_registry(bare_settings(database_url=db, s3_endpoint_url=s3))
+    assert "sales_inbox" in registry.all()
+    assert registry.interval_for("sales_inbox", 1.0) == 60.0
+
+    switched_off = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    assert "sales_inbox" not in build_registry(switched_off).all()
+    deployed = bare_settings(database_url=db, s3_endpoint_url=s3, profile="uat")
+    assert "sales_inbox" not in build_registry(deployed).all()
 
 
 def test_the_pinned_retention_policy_promises_only_classes_code_can_assign() -> None:

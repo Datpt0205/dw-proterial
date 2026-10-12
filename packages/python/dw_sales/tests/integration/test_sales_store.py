@@ -10,14 +10,20 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from decimal import Decimal
+from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
 from sales_harness import DW1, T0, OrderRun, QuoteRun, user
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
+from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
+from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
+from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
+from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.application.case_store import (
     ArtifactRecord,
     CaseEvent,
@@ -25,12 +31,14 @@ from dw_sales.application.case_store import (
     SourceRegion,
     WorkerState,
 )
+from dw_sales.application.order_intake import OrderIntake
 from dw_sales.domain.dispositions import CaseKind, DispositionKind
 from dw_sales.domain.orders import Accepted, Actor, OrderStatus
 
 pytestmark = pytest.mark.integration
 
 AN_ID = uuid.UUID(int=0xA1)
+POLICIES = Path(__file__).resolve().parents[5] / "configs" / "policies"
 DIEU_ID = uuid.UUID(int=0xD1)
 
 # Prices the golden runs handle (M04's PO and quotation, M10's decision and
@@ -174,6 +182,74 @@ async def test_a_disposition_reads_back_with_who_and_when(
         stored = await work.orders.get(case.case_id)
     assert stored is not None and stored.case == decided
     assert stored.case.status is OrderStatus.IN_REVIEW
+
+
+async def test_a_corrected_value_reads_back_beside_the_value_as_read(
+    order_run: OrderRun,
+    uow: SqlSalesUnitOfWorkFactory,
+    app_sessions: async_sessionmaker[AsyncSession],
+    migrator: AsyncEngine,
+) -> None:
+    """Ticket 15: the value as read stays in `po_line`, the typed one beside
+    it; the event names the finding and the field, never the value."""
+    case = order_run.outcomes["M27"].case
+    assert case is not None
+    scope = order_run.scope
+    intake = OrderIntake(
+        catalog=MockSalesCatalog.load(scope),
+        inbox=MockInbox.load(scope),
+        reader=mock_po_readers(),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.0.0.yaml")),
+        cases=SqlOrderCaseLookup(app_sessions),
+        new_case_id=uuid.uuid4,
+    )
+    an = Actor(user_id=AN_ID)
+    reviewing = case.start_review()
+    corrected = await intake.correct_value(
+        scope, reviewing, "value_uncertain:2", "unit_price", "0.0475", an, T0
+    )
+    async with uow(scope) as work:
+        for before, after, action in (
+            (case, reviewing, "order.review_started"),
+            (reviewing, corrected, "order.value_corrected"),
+        ):
+            event = CaseEvent(
+                action=action,
+                actor=user(an.user_id),
+                occurred_at=T0,
+                finding_key="value_uncertain:2",
+                field="unit_price",
+            )
+            await work.orders.save(after, expected_version=before.case_version, event=event)
+        await work.commit()
+
+    async with uow(scope) as work:
+        stored = await work.orders.get(case.case_id)
+    assert stored is not None and stored.case == corrected
+    line = stored.case.line(2)
+    assert (line.po_line.unit_price, line.effective.unit_price) == (
+        Decimal("0.0465"),
+        Decimal("0.0475"),
+    )
+    assert stored.case.finding("price_mismatch:2").is_open
+    async with migrator.connect() as conn:
+        events = (
+            (
+                await conn.execute(
+                    sa.text(
+                        "SELECT * FROM sales.case_events"
+                        " WHERE case_id = :id AND action = 'order.value_corrected'"
+                    ),
+                    {"id": case.case_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
+    assert len(events) == 1
+    assert (events[0]["finding_key"], events[0]["field"]) == ("value_uncertain:2", "unit_price")
+    text = repr([tuple(row.values()) for row in events])
+    assert "0.0475" not in text and "0.0465" not in text
 
 
 async def test_records_the_flows_keep_besides_cases(

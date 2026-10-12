@@ -97,6 +97,12 @@ CALLS: dict[str, tuple[str, Call]] = {
             c, CASE, "price_mismatch:2", case_version=1, disposition="ask_customer"
         ),
     ),
+    "orders.correct_value": (
+        "sales.order.prepare",
+        lambda c: order_commands.correct_value(
+            c, CASE, "value_uncertain:2", case_version=1, field="quantity", value="6100"
+        ),
+    ),
     "orders.mapping": (
         "sales.order.prepare",
         lambda c: order_commands.confirm_mapping(c, CASE, 1, case_version=1, prv_code="CB-2001"),
@@ -182,6 +188,22 @@ async def test_a_service_refuses_a_caller_without_its_scope_before_reading(name:
         await call(_context())
 
     assert refused.value.details["action"] == scope
+
+
+@pytest.mark.parametrize("field", ["unit_price", "amount", "total"])
+async def test_an_amount_is_typed_only_with_the_price_scope_before_reading(field: str) -> None:
+    """Ticket 15: a price is written only by who may read one, as it is read."""
+    with pytest.raises(PermissionDeniedError) as refused:
+        await order_commands.correct_value(
+            _context("sales.order.prepare"),
+            CASE,
+            "value_uncertain:2",
+            case_version=1,
+            field=field,
+            value="0.05",
+        )
+
+    assert refused.value.details["action"] == "sales.price.read"
 
 
 async def test_the_source_of_a_case_needs_the_price_scope_besides_reading_it() -> None:

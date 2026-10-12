@@ -16,8 +16,18 @@ Phần tự động của kịch bản (đường chính và các lần bị t�
 make infra-up          # Postgres, Keycloak, S3, ... trong Docker
 make db-migrate
 make demo-reset        # trạng thái bắt đầu của demo (xem dưới)
-make dev               # API :8300, web :3300 theo .env (DW_WEB_PORT=3300)
+DW_WORKER_SALES_INBOX_LANE=false make dev   # API :8300, web :3300 theo .env (DW_WEB_PORT=3300)
 ```
+
+**Vì sao tắt làn hộp thư.** Từ ticket 16, worker có làn `sales_inbox`: mỗi
+phút DW1 tự xử lý mọi thư mới (cũ nhất trước), bằng tài khoản dịch vụ DW1 của
+tenant, như thể có người bấm **DW xử lý**. Mặc định làn này bật. Kịch bản 3.1
+và 3.2 cần An tự bấm, theo đúng thứ tự (M04 trước M07), nên buổi demo theo
+nút bấm chạy worker với làn tắt (`DW_WORKER_SALES_INBOX_LANE=false`). Bật làn
+(chỉ `make dev`) thì sau `make demo-reset` khoảng một phút hộp thư đã được xử
+lý hết; phần 3.9 cho thấy điều đó. Tắt làn không tắt DW1: nút **DW xử lý**
+vẫn chạy, công tắc tạm dừng vẫn là thứ duy nhất quyết định DW1 có làm việc
+trong một workspace hay không.
 
 `make demo-reset` đưa stack về **đúng một trạng thái bắt đầu**, lần nào cũng
 như nhau:
@@ -29,12 +39,15 @@ như nhau:
   `sales.*` cùng quyết định, nên hộp duyệt bắt đầu trống và buổi diễn tập
   trước không ăn vào số lượt chạy trong ngày của gói;
 - chạy seed nền tảng rồi gán vai Sales cho các persona
-  (`dw_sales.testing.seed_personas`);
+  (`dw_sales.testing.seed_personas`), và tạo tài khoản dịch vụ DW1 ở
+  tenant-alpha (vai `sales_dw1`: chỉ `sales.inbox.process`; không đăng nhập
+  được, không có trong danh sách persona);
 - cho mỗi persona một tài khoản Keycloak, mật khẩu là `DW_DEV_USER_PASSWORD`
   trong `.env` (không commit).
 
-Sau đó: hộp thư 32 thư đều "Chưa xử lý", không có hồ sơ nào, DW1 đang chạy.
-Chỉ chạy được ở profile `local`/`test`.
+Sau đó: hộp thư 32 thư đều "Chưa xử lý", không có hồ sơ nào, DW1 đang chạy
+(với làn hộp thư tắt; bật thì DW1 xử lý hết trong khoảng một phút). Chỉ chạy
+được ở profile `local`/`test`.
 
 Đăng nhập ở `http://localhost:3300` bằng email persona và mật khẩu trên. Đổi
 người: đăng xuất rồi đăng nhập lại (hoặc mở cửa sổ ẩn danh cho người thứ hai).
@@ -209,6 +222,25 @@ trước, đúng thứ tự WIV-03-012 bước 8.
   `sales.price.read`.
 - **Bảo** (tenant-beta): hộp thư rỗng; mở một hồ sơ của tenant-alpha bằng id
   → **404** (không phải 403: không xác nhận hồ sơ tồn tại).
+
+### 3.9 DW1 tự xử lý thư mới (ticket 16)
+
+Chạy riêng, sau phần 3.8 hoặc ở một buổi khác: dừng `make dev`, chạy
+`make demo-reset`, rồi `make dev` (làn hộp thư bật, mặc định).
+
+1. **An** mở _Sales → Hộp thư_: trong khoảng một phút, mọi thư sang "Đã tạo hồ
+   sơ", "Đã gắn vào hồ sơ" hoặc "Chuyển Sales xử lý" mà không ai bấm; tải lại
+   trang để thấy. M07 (Rev.1) đã vào hồ sơ M04 vì DW1 xử lý thư cũ nhất trước.
+2. Sự kiện hồ sơ ghi "DW1"; audit log có một dòng
+   `sales.message.processed_by_lane` cho mỗi thư, người làm là
+   `system:sales_inbox` và ghi tài khoản dịch vụ DW1 đã dùng — không phải tên
+   một người.
+3. **An** bấm **Tạm dừng DW1**: từ phút sau làn bỏ qua workspace này, không
+   tốn lượt chạy nào. Thư mới (nếu có) ở lại "Chưa xử lý" cho tới khi **Giang**
+   cho DW1 chạy lại.
+4. Mỗi thư là một lượt chạy, đếm vào số lượt trong ngày của gói. Hết lượt thì
+   các thư còn lại ở "Chưa xử lý", ai cũng thấy, và làn thử lại vào ngày hôm
+   sau.
 
 ## 4. Điều demo này cho thấy và không cho thấy
 

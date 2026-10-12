@@ -40,6 +40,7 @@ export function finding(overrides: Partial<Finding> = {}): Finding {
       at: null,
     },
     allowed: ["accepted", "ask_customer"],
+    fields: [],
     ...overrides,
   };
 }
@@ -61,6 +62,7 @@ export function order(overrides: Partial<Order> = {}): Order {
       unit_price: anchor(3),
     },
     flags: [],
+    corrections: [],
     value_states: { line_no: "dw", description: "dw", unit_price: "dw" },
     mapping: {
       status: "exact",
@@ -107,6 +109,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     attachment_sha256: SHA,
     header_anchors: { po_no: anchor(1) },
     header_flags: [],
+    header_corrections: [],
     buyer: null,
     buyer_anchor: null,
     total: "94115000",

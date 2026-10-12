@@ -35,8 +35,8 @@ own file and a row here.
 - Sales ticket 10 (`8d098b3`, dw_sales ADR 0004 Proposed, Đạt to review).
   Platform merges: `96f95ad`, `2ebd50f`, `ab33703` (2026-10-08: security
   debts, antd-only web, CSP, support access; `web-ui.md`, `sales.md`).
-- **Next:** sales 15, 16, 18, then 19–27 (13, 14, 17 built 2026-10-12:
-  `sales.md`). Proterial has the requirements doc; 12 waits on it.
+- **Next:** CI for 13–18 (all built 2026-10-12, not yet committed:
+  `sales.md`), then 19–27. Proterial has the requirements doc; 12 waits on it.
 
 ## Decisions Đạt owes
 

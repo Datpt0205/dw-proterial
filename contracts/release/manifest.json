@@ -28,6 +28,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "597bf7df393c3f258460311369d4b78b61ff531d566ef375c8facc3f929fd13a",
+      "copy_id": "sales_documents",
+      "version": "1.1.0"
+    },
+    {
       "checksum": "b95c6c69ad61aa72716e6ba750f203733839ce5476384724b4cedb2f6af1677e",
       "copy_id": "sales_emails",
       "version": "1.0.0"
@@ -45,7 +50,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "33658ac8d85d48be29038fe728c45718e15dfa73",
+  "git_sha": "ab751f8f5615a888f56665013854e3c2085c2a60",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",

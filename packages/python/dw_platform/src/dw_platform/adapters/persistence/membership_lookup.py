@@ -217,6 +217,40 @@ class SqlMembershipLookup:
                 workspace_id,
             )
 
+    async def find_service_access(
+        self,
+        subject: str,
+        tenant_id: UUID,
+        workspace_id: UUID,
+        ceiling: frozenset[str],
+    ) -> MembershipAccess | None:
+        """The access a service account holds in one workspace, cut to ``ceiling``.
+
+        A service account (a context's digital worker acting on its own, such
+        as a mailbox lane) is a platform user with a membership like anyone's,
+        so who it is and what it may do are read the way sign-in reads them:
+        the membership, the tenant's status and plan, `effective_scopes`. It
+        signs in nowhere, so it is found by its own ``subject`` only, never
+        through an external identity. As for a linked chat, the scopes never
+        exceed the caller's ``ceiling`` and no role is carried, so a role added
+        to the account by hand (``platform_admin`` passes every check) cannot
+        widen what the caller does with it.
+
+        None when the account has no membership in that workspace, or the
+        tenant is locked or has no plan.
+        """
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_SET_LOOKUP_CONTEXT, {"tenant_id": str(tenant_id)})
+            return await _access_in(
+                session,
+                tables.memberships.c.user_id.in_(
+                    sa.select(tables.users.c.id).where(tables.users.c.subject == subject)
+                ),
+                tenant_id,
+                workspace_id,
+                ceiling,
+            )
+
     async def find_linked_access(
         self,
         user_id: UUID,

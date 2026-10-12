@@ -3,10 +3,16 @@ seed's memberships, per the spec's actor table (ticket 11).
 
 Who owns which row: a user and their membership are platform rows, created by
 ``dw_platform.testing.seed_env`` with platform roles only. This module adds the
-``sales_*`` keys to those memberships and nothing else, because the platform
-seed must not name a context. It writes no user and creates no membership: a
-persona whose membership is missing fails loudly, since the platform seed was
-not run first.
+``sales_*`` keys to those memberships, because the platform seed must not name
+a context. It writes no person and creates no person's membership: a persona
+whose membership is missing fails loudly, since the platform seed was not run
+first.
+
+The one account it does create is not a person: DW1's own service account in
+the demo tenant ("DW1 (tài khoản dịch vụ)", ticket 16), which the worker's
+mailbox lane acts under (``seed_dw1_accounts``). It holds the role
+``sales_dw1`` (``sales.inbox.process``) and nothing else, has no email, and is
+not in the sign-in roster.
 
 Each write passes the database's separation-of-duty trigger, so a persona that
 broke a rule (tenant IT holding a price scope) cannot be seeded at all.
@@ -31,11 +37,13 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from dw_platform.adapters.persistence import tables
 from dw_platform.testing.seed_env import seed_test_env, sid
+from dw_sales.application.inbox_lane import dw1_subject
 
 # The catalogue keys this context owns (CONTEXT.md, "Roles and permission
 # sets"). A key with this prefix on a persona's membership is the seed's to set;
@@ -145,10 +153,73 @@ async def seed_sales_personas(database_url: str, personas: Sequence[Persona] = P
     return written
 
 
+# The tenants whose mailbox the demo's mock is bound to: where DW1 has an
+# account for its mailbox lane. tenant-beta's PIC has an empty mailbox and no
+# lane, which is what the cross-tenant tests need of it.
+DW1_ACCOUNT_TENANTS: tuple[str, ...] = ("tenant-alpha",)
+DW1_ACCOUNT_NAME = "DW1 (tài khoản dịch vụ)"
+DW1_ROLE = "sales_dw1"
+
+
+async def seed_dw1_accounts(
+    database_url: str, tenant_slugs: Sequence[str] = DW1_ACCOUNT_TENANTS
+) -> None:
+    """DW1's service account in each tenant's main workspace, holding the
+    role ``sales_dw1`` and nothing else.
+
+    Re-running resets the membership to exactly that, so a role or a
+    permission set given to the account by hand is taken off again.
+    """
+    engine = create_async_engine(database_url, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            for slug in tenant_slugs:
+                tenant_id = sid("tenant", slug)
+                subject = dw1_subject(tenant_id)
+                user = pg_insert(tables.users).values(
+                    id=sid("user", subject), subject=subject, display_name=DW1_ACCOUNT_NAME
+                )
+                await conn.execute(
+                    user.on_conflict_do_update(
+                        index_elements=["subject"],
+                        set_={"display_name": user.excluded.display_name, "email": None},
+                    )
+                )
+                user_id = (
+                    await conn.execute(
+                        sa.select(tables.users.c.id).where(tables.users.c.subject == subject)
+                    )
+                ).scalar_one()
+                membership = pg_insert(tables.memberships).values(
+                    id=sid("membership", f"{slug}:{subject}"),
+                    tenant_id=tenant_id,
+                    workspace_id=sid("workspace", f"{slug}:main"),
+                    user_id=user_id,
+                    role_keys=[DW1_ROLE],
+                    permission_set_keys=[],
+                    department="kinh-doanh",
+                )
+                await conn.execute(
+                    membership.on_conflict_do_update(
+                        constraint="uq_memberships_scope_user",
+                        set_={
+                            "role_keys": membership.excluded.role_keys,
+                            "permission_set_keys": membership.excluded.permission_set_keys,
+                        },
+                    )
+                )
+    finally:
+        await engine.dispose()
+
+
 async def seed_demo(database_url: str) -> None:
     await seed_test_env(database_url)
     written = await seed_sales_personas(database_url)
-    print(f"platform seed done; {written} Sales persona membership(s) written")
+    await seed_dw1_accounts(database_url)
+    print(
+        f"platform seed done; {written} Sales persona membership(s) written;"
+        f" DW1's service account in {', '.join(DW1_ACCOUNT_TENANTS)}"
+    )
 
 
 def main() -> None:

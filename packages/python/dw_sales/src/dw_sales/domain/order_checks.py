@@ -482,6 +482,21 @@ def _quotation_basis(quotation: Quotation | None) -> QuotationBasis | None:
 # ---------------------------------------------------------- the PO as read --
 
 
+# The codes each PO-level check raises: what running it again replaces on a
+# case (`OrderCase.correct_value`), which refuses a finding outside them.
+DOCUMENT_CHECK_CODES: Final = frozenset(
+    {FindingCode.LINE_TOTAL_MISMATCH, FindingCode.VALUE_UNCERTAIN}
+)
+CUSTOMER_CHECK_CODES: Final = frozenset(
+    {
+        FindingCode.CUSTOMER_UNKNOWN,
+        FindingCode.CUSTOMER_TEMPORARY,
+        FindingCode.MISSING_NOC_ESF,
+        FindingCode.SENDER_UNVERIFIED,
+    }
+)
+
+
 def check_document(document: PoDocument, rules: OrderRules) -> tuple[Finding, ...]:
     """Whether every line printed was read, and read from a place a person sees.
 

@@ -19,6 +19,15 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   12 keeps what waits on the requirements doc (needs-info). Đạt sent the
   requirements doc to Proterial (confirmed 2026-10-12). Order agreed with Đạt:
   13 → 14 → 17, then 19–27.
+- 2026-10-12, ticket 15 built (uncommitted; "As built" in the ticket): a
+  `value_uncertain` is corrected per field with a typed value
+  (`POST /orders/{id}/findings/{key}/corrections`), kept beside the value as
+  read (migration `33f444c15062`), and the upload file, the cross-check sheet
+  (`sales_documents@1.1.0`) and the drafts print the entered value; the
+  corrected line's checks (header: PO-level checks) run again and a finding
+  whose values did not change keeps its decision. Reviewed the same day: a
+  revised order's change list now carries the corrected value, and the
+  findings card offers the sheet note only when the case would take it.
 - 2026-10-12, tickets 13, 14 and 17 built (uncommitted; each ticket's "As
   built" has the detail and its mutation checks):
     - 13: the quote page reads the artifact list once (`useCaseArtifacts`)
@@ -57,14 +66,26 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       cross-checked again (ready-for-agent; wider than the race noted under
       ticket 10: any version bump between decide and apply strands it);
     - 15 `value_uncertain` corrected per field, and the upload file prints the
-      correction (ready-for-agent 2026-10-12: re-run the corrected line's checks only);
-    - 16 a worker lane processes new mail (ready-for-agent 2026-10-12: a worker
-      principal per tenant holds `sales.inbox.process`; pause state only;
-      60 s tick);
+      correction (done 2026-10-12, uncommitted, reviewed; re-run the corrected line's checks, plus the total check);
+    - 16 a worker lane processes new mail (done 2026-10-12, uncommitted:
+      the worker's `sales_inbox` lane acts as DW1's service account per
+      tenant, role `sales_dw1` = `sales.inbox.process` only, migration
+      `af154486381e`, resolved by `SqlMembershipLookup.find_service_access`
+      and cut to that one scope; one run per message, oldest first; the
+      message log's (workspace, message_id) key refuses a second disposition
+      on a case; pause state only; 60 s tick; the lane audits as
+      `system:sales_inbox`. DW1 is built for both processes by
+      `dw_sales.adapters.assembly.build_dw1`. The lane is on by default;
+      `DW_WORKER_SALES_INBOX_LANE=false` for the walk-through by button,
+      which demo.md now says. Reviewed 2026-10-12: the lane re-reads each
+      message and the pause just before its run, so it never re-processes
+      one a person routed mid-tick nor spends a run a pause would refuse;
+      worker image not yet scanned);
     - 17 the head reassigns a case (G22, moved out of 12; ready-for-agent);
     - 18 CI runs vitest and the DW1 walk (ready-for-agent 2026-10-12: vitest on
       every push; the walk on `main` and nightly, blocking after three green
-      runs in a row).
+      runs in a row). Built and adversarially reviewed 2026-10-12, not
+      committed; not yet seen on a runner (the ticket's "Still to prove").
 - Tickets 01 and 07 committed 2026-10-03; 01 follow-up (fixtures M13–M32,
   mock Bravo history, open YCBG list, snapshot as_of, one SourceAnchor) and
   02/03 reworked to the amended spec, adversarially reviewed and committed
@@ -258,7 +279,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 
 - From ticket 06 (2026-10-05): a `value_uncertain` correction is one value
   for a whole region, so the upload file carries the values as read
-  (ticket 15); an object written before its record commits can be orphaned
+  (closed by ticket 15, 2026-10-12); an object written before its record commits can be orphaned
   (purged by offboarding); rendering is not stopped by the pause (Đạt to
   decide); the web client types need `pnpm run generate:api-types`.
 
@@ -293,7 +314,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   buttons. An order whose decision passed the guard and then failed in its
   run had no step that raises its cross-check again: closed by ticket 14. Processing's
   audit rows do not name the run (decision rows do). No mailbox consumer
-  exists, and one must start a DW1 run to be counted: ticket 16.
+  exists, and one must start a DW1 run to be counted: ticket 16 (built
+  2026-10-12; each message is its own counted run).
 - Public repo: the repo name and these plan files name Proterial and its
   procedure codes (WIV-03-0xx). Đạt decided on 2026-10-05 to keep the repo
   public and not alias them. Mock data, people and figures stay fictional,

@@ -14,6 +14,7 @@ from sqlalchemy import RowMapping
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from dw_kernel.errors import ConflictError
 from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import refusals_named, scope_values
 from dw_sales.application.case_store import (
@@ -25,7 +26,7 @@ from dw_sales.application.case_store import (
     WorkerState,
 )
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.dispositions import CaseKind, MessageDisposition
+from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 
 _M = tables.messages
 _S = tables.source_served
@@ -77,12 +78,25 @@ class SqlMessageLog:
             **values,
         )
         async with refusals_named(self.session, message_id=disposition.message_id):
-            await self.session.execute(
+            written = await self.session.execute(
                 statement.on_conflict_do_update(
                     index_elements=[_M.c.tenant_id, _M.c.workspace_id, _M.c.message_id],
                     set_={name: statement.excluded[name] for name in values},
-                )
+                    # The (workspace, message_id) key is the message's
+                    # idempotency key: only a message routed to Sales is
+                    # processed again. Two processors racing on one message
+                    # meet here, and the second one's transaction is refused.
+                    where=_M.c.disposition == DispositionKind.ROUTED_TO_SALES.value,
+                ).returning(_M.c.id)
             )
+            if written.first() is None:
+                raise ConflictError(
+                    "the message is already on a case",
+                    details={
+                        "message_id": disposition.message_id,
+                        "rule": "message_already_processed",
+                    },
+                )
 
     async def get(self, message_id: str) -> MessageDisposition | None:
         row = (

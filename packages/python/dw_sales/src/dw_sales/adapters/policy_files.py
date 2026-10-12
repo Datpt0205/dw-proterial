@@ -100,7 +100,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
         artifact_copy=load_artifact_copy(
             emails=copy_dir / "sales_emails@1.0.0.yaml",
-            documents=copy_dir / "sales_documents@1.0.0.yaml",
+            documents=copy_dir / "sales_documents@1.1.0.yaml",
             upload=policies_dir / "sales_bravo_upload@1.0.0.yaml",
             quote_rules=quote_rules,
         ),
