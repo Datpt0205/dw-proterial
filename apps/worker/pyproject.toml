@@ -40,7 +40,8 @@ dependencies = [
 # worker image only; the knowledge ingest consumer degrades to plaintext when
 # absent, so a lean deployment can skip several gigabytes of wheels.
 parsers = [
-    "docling>=2.15,<3",
+    # >=2.132.0: CVE-2026-105744 (HIGH, arbitrary file read/write) is fixed there.
+    "docling>=2.132.0,<3",
     # Declared explicitly so the CPU-only index override in the root
     # [tool.uv.sources] applies (docling pulls torch transitively otherwise,
     # which would resolve the multi-GB CUDA wheels from PyPI).

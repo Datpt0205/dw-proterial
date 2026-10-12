@@ -55,6 +55,25 @@ Mốc 6 (running many customers) is half done:
       checked by hand only.
     - CI does not run the web vitest suite or the Sales browser walk.
 
+- **docling CVE-2026-105744 (HIGH, arbitrary file read/write)** failed
+  trivy on CI run 37893880540 (2026-10-09) in `dw-worker:local`, not the
+  docgen image: docling is the worker's optional `parsers` extra. Fixed
+  2026-10-12: `apps/worker/pyproject.toml` floor `docling>=2.132.0,<3`,
+  the lock takes docling and docling-slim 2.128.0 -> 2.137.0 (published
+  2026-10-09; 2.138.0 was hours old and was not taken), docling-core
+  2.97.0 -> 2.101.1, docling-parse 7.20.0 -> 7.22.2, no package added or
+  removed; pip-audit finds nothing against those four.
+  Found on the way, still owed:
+    - **Nothing imports docling** (failure-modes #1): no `.py` file in the
+      repository has named it since the baseline commit, yet the worker
+      image carries it with torch. Wire a parser or drop the extra.
+    - **pip-audit and `trivy fs` cannot see it** (failure-modes #0): CI's
+      `uv export --all-packages` leaves out extras, so pip-audit never
+      audited docling (it knows eight advisories against 2.128.0 when
+      asked); trivy's uv.lock analyser reports the 2.128.0 lock clean too.
+      Only the image scan saw it. `--all-extras` on the export would close
+      the first.
+
 - **CI: the three run-state announcement timeouts were a plugin race**
   (fixed 2026-10-02). pytest-asyncio (auto mode) and anyio's pytest plugin both
   wrap async fixtures; the one registered last wins, and registration follows
