@@ -43,6 +43,8 @@ def _sales_routes() -> list[tuple[str, str]]:
 async def _call(persona: Persona, method: str, path: str) -> int:
     if method == "GET":
         return (await persona.get(path, sheet="PO")).status_code
+    if method == "PUT":
+        return (await persona.put(path, {"case_version": 1, "assignee": None})).status_code
     return (await persona.post(path, {"case_version": 1})).status_code
 
 

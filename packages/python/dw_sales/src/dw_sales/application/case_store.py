@@ -111,8 +111,8 @@ class CaseOrigin:
     """Stamped when a case is opened and never looked up again (G22).
 
     ``assigned_to`` is the user the customer's Sales PIC resolved to then, or
-    None when no user matched; ``release_manifest_ref`` the release the case
-    was opened under.
+    None when no user matched, until the head reassigns the case (ticket 17,
+    `assign`); ``release_manifest_ref`` the release the case was opened under.
     """
 
     assigned_to: uuid.UUID | None
@@ -243,6 +243,11 @@ class OrderCaseStorePort(Protocol):
         """
         ...
 
+    async def assign(self, case_id: uuid.UUID, assigned_to: uuid.UUID | None) -> None:
+        """The case's assignee (ticket 17). The caller saves the case's next
+        version with its event in the same transaction."""
+        ...
+
 
 class QuoteCaseStorePort(Protocol):
     async def get(self, case_id: uuid.UUID) -> Stored[QuoteCase] | None: ...
@@ -254,6 +259,8 @@ class QuoteCaseStorePort(Protocol):
     async def add(self, case: QuoteCase, origin: CaseOrigin, event: CaseEvent) -> None: ...
 
     async def save(self, case: QuoteCase, *, expected_version: int, event: CaseEvent) -> None: ...
+
+    async def assign(self, case_id: uuid.UUID, assigned_to: uuid.UUID | None) -> None: ...
 
 
 class MessageLogPort(Protocol):

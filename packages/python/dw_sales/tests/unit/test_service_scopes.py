@@ -22,6 +22,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_sales.application.access import Gate
 from dw_sales.application.artifacts_service import ArtifactService
+from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
@@ -30,6 +31,7 @@ from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.runs import Dw1Runs
 from dw_sales.application.source import SourceService
 from dw_sales.application.worker_service import WorkerService
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CloseReason
 from dw_sales.domain.quotes import DeclineReason
 
@@ -78,6 +80,7 @@ artifacts = ArtifactService(STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE,
 master = MasterDataService(GATE, STORE)
 overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE)
 worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
+assignment = AssignmentService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 
 type Call = Callable[[AccessContext], Awaitable[object]]
 
@@ -105,6 +108,14 @@ CALLS: dict[str, tuple[str, Call]] = {
         lambda c: dw1.record_bravo_entry(
             c, CASE, case_version=1, so_no="SO26-1001", entry_compared=True
         ),
+    ),
+    "assignment.reassign": (
+        "sales.case.assign",
+        lambda c: assignment.reassign(c, CaseKind.ORDER, CASE, assignee=None, case_version=1),
+    ),
+    "assignment.candidates": (
+        "sales.case.assign",
+        lambda c: assignment.candidates(c, CaseKind.QUOTE, CASE),
     ),
     "dw1.resend_cross_check": (
         "sales.order.prepare",

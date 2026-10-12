@@ -1582,6 +1582,18 @@ class QuoteCase(BaseModel):
             if line.prv_code is not None
         )
 
+    def reassigned(self) -> QuoteCase:
+        """The case's next version, nothing in it changed: its assignee, which
+        is stamped beside the case and not in it, is about to (ticket 17). A
+        quotation declined or recorded in the master list is no one's work
+        any more and is refused."""
+        if not _MOVES[self.status]:
+            raise ConflictError(
+                "a closed case is not reassigned",
+                details={"case_id": str(self.case_id), "rule": "case_closed"},
+            )
+        return self._changed()
+
     # -------------------------------------------------------------- moves --
 
     def _changed(self, **changes: object) -> QuoteCase:

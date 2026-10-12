@@ -43,6 +43,8 @@ class SalesScopes(StrEnum):
     COMPLIANCE_ACK = "sales.compliance.ack"
     WORKER_PAUSE = "sales.worker.pause"
     WORKER_RESUME = "sales.worker.resume"
+    # Reassign a case to another member who works it (ticket 17, the head's).
+    CASE_ASSIGN = "sales.case.assign"
 
 
 class SalesAuthorizationPort(Protocol):

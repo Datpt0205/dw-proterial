@@ -116,6 +116,11 @@ class SqlQuoteCaseRepository:
             )
             await self._event(case, was, event)
 
+    async def assign(self, case_id: uuid.UUID, assigned_to: uuid.UUID | None) -> None:
+        await self.session.execute(
+            sa.update(_Q).where(_Q.c.id == case_id).values(assigned_to=assigned_to)
+        )
+
     async def _event(self, case: QuoteCase, from_status: str | None, event: CaseEvent) -> None:
         await record_event(
             self.session,

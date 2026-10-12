@@ -19,6 +19,32 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   12 keeps what waits on the requirements doc (needs-info). Đạt sent the
   requirements doc to Proterial (confirmed 2026-10-12). Order agreed with Đạt:
   13 → 14 → 17, then 19–27.
+- 2026-10-12, tickets 13, 14 and 17 built (uncommitted; each ticket's "As
+  built" has the detail and its mutation checks):
+    - 13: the quote page reads the artifact list once (`useCaseArtifacts`)
+      and hands it to the files panel and the approval panel, so a rendered
+      preview shows without a reload; the walk's `page.reload()` is gone
+      (the walk itself was not run);
+    - 14: a cross-check decision the run cannot apply is recorded on the
+      order (`unapplied_decision`, migration `58184771c541`) and in the
+      audit (run, approval, reason code), and "Gửi kiểm chéo lại"
+      (`POST /orders/{id}/resend-cross-check`; the Bravo recorder, or the
+      head with the new `sales.order.resend_cross_check`) raises a new
+      approval; `bravo-entry` on an order already in Bravo no longer
+      withdraws its pending cross-check. The platform's resume payload now
+      names the approval (`approval_id`), and its in-memory run store has
+      `active_since`: both are platform code changed in this repo, owed
+      upstream;
+    - 17: the head reassigns a case (`PUT /orders|quotes/{id}/assignee`,
+      `sales.case.assign`, migration `934101cde272`), eligibility from
+      `ScopeHoldersPort.holding`, audit with old and new ids, the new
+      assignee notified.
+      Found while running the integration suites: `ck_approval_requests_sales_stamped`
+      (`a64b918fc1f2`) lets a `sales.` approval with a NULL `required_scope`
+      through, because `false OR NULL` is NULL and a NULL CHECK passes; its two
+      tests fail (`test_sales_constraints.py`, `[sales.quote-None]`,
+      `[sales.order.cross_check-None]`). Owed: a revision with
+      `coalesce(required_scope, '') LIKE 'sales.%'`. Not fixed here (no ticket).
 - 2026-10-12, the gaps left in the demo flow became tickets 13–18, each
   checked against the code that day (the Open items below point at them):
     - 13 the quote approval panel sees a new preview without a reload
@@ -216,8 +242,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   needs a platform decision, not a product patch: either a stamp stands in
   for `approvals.decide` (then the three drop it), or the platform stamps
   its own types (`memory.review`).
-- From ticket 09 (2026-10-06): the approval panel needs a page reload after
-  the approver renders the preview (ticket 13); whether submit should render the preview
+- From ticket 09 (2026-10-06): the approval panel needed a page reload after
+  the approver rendered the preview (closed by ticket 13); whether submit should render the preview
   itself (Đạt); the release manifest pins an eval dataset file but not the
   fixtures and truth files it names (platform); the mock README's
   Design-reply dispositions assume Sales recorded the YCBG first (the eval
@@ -260,7 +286,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   in `apps/web/app/sales/_meta/approvals.ts` makes `/approvals` show "Mở hồ
   sơ để quyết định", linking to the case page, instead of the decide
   buttons. An order whose decision passed the guard and then failed in its
-  run has no step that raises its cross-check again: ticket 14. Processing's
+  run had no step that raises its cross-check again: closed by ticket 14. Processing's
   audit rows do not name the run (decision rows do). No mailbox consumer
   exists, and one must start a DW1 run to be counted: ticket 16.
 - Public repo: the repo name and these plan files name Proterial and its

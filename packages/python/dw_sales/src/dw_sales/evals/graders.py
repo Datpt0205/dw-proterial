@@ -88,6 +88,7 @@ GIANG = Caller(
         _S.QUOTE_APPROVE,
         _S.WORKER_RESUME,
         _S.ORDER_RESEND_CROSS_CHECK,
+        _S.CASE_ASSIGN,
     },
 )
 KHOA = Caller(

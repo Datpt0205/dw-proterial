@@ -40,6 +40,7 @@ export const SCOPE = {
   ack: "sales.compliance.ack",
   pause: "sales.worker.pause",
   resume: "sales.worker.resume",
+  assign: "sales.case.assign",
 } as const;
 
 interface SalesFrame {

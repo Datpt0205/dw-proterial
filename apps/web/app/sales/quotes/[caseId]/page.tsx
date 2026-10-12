@@ -51,6 +51,7 @@ import {
   useCaseArtifacts,
 } from "../../_components/artifacts-panel";
 import { CaseSummary } from "../../_components/case-summary";
+import { ReassignButton } from "../../_components/reassign";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money, Quantity } from "../../_components/money";
@@ -184,19 +185,29 @@ function QuoteDetail() {
         title={`RFQ ${data.rfq_no}`}
         subtitle={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · gửi từ ${data.sender}`}
         actions={
-          firstRegion ? (
-            <Button
-              icon={<FileSearchOutlined aria-hidden />}
-              onClick={() =>
-                setSource({
-                  region: firstRegion,
-                  attachmentId: data.attachment_id,
-                })
-              }
-            >
-              Mở bản gốc
-            </Button>
-          ) : null
+          <>
+            {firstRegion ? (
+              <Button
+                icon={<FileSearchOutlined aria-hidden />}
+                onClick={() =>
+                  setSource({
+                    region: firstRegion,
+                    attachmentId: data.attachment_id,
+                  })
+                }
+              >
+                Mở bản gốc
+              </Button>
+            ) : null}
+            <ReassignButton
+              kind="quote"
+              caseId={data.case_id}
+              caseVersion={data.case_version}
+              assignedTo={data.assigned_to}
+              viewer={viewer}
+              onDone={reload}
+            />
+          </>
         }
       />
 

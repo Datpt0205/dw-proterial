@@ -126,6 +126,18 @@ class Persona:
         self.calls.append(response)
         return response
 
+    async def put(self, path: str, body: Any, *, key: str | None = None) -> httpx.Response:
+        response = await self.client.put(
+            f"/api/v1/sales{path}",
+            content=json.dumps(body, default=str),
+            headers={
+                **self.headers(key or str(uuid.uuid4())),
+                "Content-Type": "application/json",
+            },
+        )
+        self.calls.append(response)
+        return response
+
     async def platform(self, path: str) -> httpx.Response:
         response = await self.client.get(f"/api/v1{path}", headers=self.headers())
         self.calls.append(response)

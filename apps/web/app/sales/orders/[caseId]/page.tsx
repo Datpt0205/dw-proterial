@@ -45,6 +45,7 @@ import {
   useCaseArtifacts,
 } from "../../_components/artifacts-panel";
 import { CaseSummary } from "../../_components/case-summary";
+import { ReassignButton } from "../../_components/reassign";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money } from "../../_components/money";
@@ -204,16 +205,26 @@ function OrderDetail() {
         title={`PO ${data.po_no}`}
         subtitle={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · ngày PO ${formatDate(data.po_date)}`}
         actions={
-          primary ? (
-            <Button
-              icon={<FileSearchOutlined aria-hidden />}
-              onClick={() =>
-                setSource({ region: primary, field: "po_no", lineNo: null })
-              }
-            >
-              Mở bản gốc
-            </Button>
-          ) : null
+          <>
+            {primary ? (
+              <Button
+                icon={<FileSearchOutlined aria-hidden />}
+                onClick={() =>
+                  setSource({ region: primary, field: "po_no", lineNo: null })
+                }
+              >
+                Mở bản gốc
+              </Button>
+            ) : null}
+            <ReassignButton
+              kind="order"
+              caseId={data.case_id}
+              caseVersion={data.case_version}
+              assignedTo={data.assigned_to}
+              viewer={viewer}
+              onDone={reload}
+            />
+          </>
         }
       />
 

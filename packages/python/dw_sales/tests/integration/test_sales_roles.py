@@ -51,6 +51,8 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         "sales.worker.resume",
         # Raises an order's cross-check again for its Bravo recorder (58184771c541).
         "sales.order.resend_cross_check",
+        # Gives a case to another member (934101cde272).
+        "sales.case.assign",
     }
     assert pic <= head
     # Both decide a Sales request (cross-check, quote approval), so both carry
@@ -58,6 +60,7 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
     assert "approvals.decide" in pic and "approvals.decide" in head
     assert "sales.quote.approve" not in pic and "sales.worker.resume" not in pic
     assert "sales.order.resend_cross_check" not in pic
+    assert "sales.case.assign" not in pic
     assert roles["sales_viewer"] == {"sales.overview.read"}
     assert permission_sets["sales_price_evidence"] == {"sales.price.other_customers.read"}
     # `approvals.decide` too since ac31ff0f2087: the platform asks every

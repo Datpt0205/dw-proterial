@@ -228,6 +228,11 @@ class _Cases[CaseT: (OrderCase, QuoteCase)]:
         self._held[case.case_id] = Stored(case, stored.origin)
         self._events.append(_logged(self._kind, case, stored.case.status.value, event))
 
+    async def assign(self, case_id: uuid.UUID, assigned_to: uuid.UUID | None) -> None:
+        stored = self._held[case_id]
+        origin = CaseOrigin(assigned_to, stored.origin.release_manifest_ref)
+        self._held[case_id] = Stored(stored.case, origin)
+
 
 def _message_of(case: OrderCase | QuoteCase) -> str:
     return case.message_id if isinstance(case, OrderCase) else case.request.message_id

@@ -478,6 +478,55 @@
         "title": "AssignedSupportGrantView",
         "type": "object"
       },
+      "AssigneeBody": {
+        "additionalProperties": false,
+        "description": "Who the case is given to; null gives it to nobody (every PIC's).",
+        "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee"
+          },
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_version",
+          "assignee"
+        ],
+        "title": "AssigneeBody",
+        "type": "object"
+      },
+      "AssigneeView": {
+        "description": "A member the case may be given to.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name"
+        ],
+        "title": "AssigneeView",
+        "type": "object"
+      },
       "AttachmentView": {
         "properties": {
           "attachment_id": {
@@ -11763,6 +11812,124 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/assignee": {
+      "put": {
+        "operationId": "reassign_order_api_v1_sales_orders__case_id__assignee_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssigneeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reassign Order",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/assignees": {
+      "get": {
+        "operationId": "order_assignees_api_v1_sales_orders__case_id__assignees_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssigneeView"
+                  },
+                  "title": "Response Order Assignees Api V1 Sales Orders  Case Id  Assignees Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Assignees",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/bravo-entry": {
       "post": {
         "operationId": "bravo_entry_api_v1_sales_orders__case_id__bravo_entry_post",
@@ -12862,6 +13029,124 @@
           }
         },
         "summary": "Quote Artifact",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/assignee": {
+      "put": {
+        "operationId": "reassign_quote_api_v1_sales_quotes__case_id__assignee_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssigneeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reassign Quote",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/assignees": {
+      "get": {
+        "operationId": "quote_assignees_api_v1_sales_quotes__case_id__assignees_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssigneeView"
+                  },
+                  "title": "Response Quote Assignees Api V1 Sales Quotes  Case Id  Assignees Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Assignees",
         "tags": [
           "sales"
         ]
