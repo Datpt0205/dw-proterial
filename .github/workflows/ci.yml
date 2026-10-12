@@ -139,7 +139,7 @@ jobs:
       # would leave a green build hiding a scaffold that cannot be undone.
 
   frontend-quality:
-    name: Frontend lint · typecheck · build
+    name: Frontend lint · typecheck · test · build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -163,6 +163,12 @@ jobs:
         run: pnpm run lint
       - name: Typecheck
         run: pnpm run typecheck
+      - name: Unit tests (vitest)
+        # The antd-only guard, the CSS layer order and the approvals registry
+        # live here; until ticket 18 no job ran them, so a banned UI library
+        # came back through a green build. The browser walk is its own
+        # workflow (web-e2e.yml): it needs services, this needs none.
+        run: pnpm --filter @dw/web test
       - name: Build web
         run: pnpm --filter @dw/web build
 
@@ -190,8 +196,13 @@ jobs:
         run: uv sync --all-packages
       - name: bandit (Python SAST, medium+)
         run: uvx --python 3.12 bandit@1.8.6 -r apps/api/src apps/docgen/src apps/worker/src packages/python/*/src -ll
-      - name: pip-audit (Python dependencies)
-        run: uv export --all-packages --no-emit-workspace --format requirements.txt > /tmp/requirements.txt && uvx pip-audit@2.9.0 -r /tmp/requirements.txt --disable-pip
+      - name: pip-audit (Python dependencies, optional extras included)
+        # --all-extras: without it the export leaves out every optional extra,
+        # so the worker's `parsers` (docling, torch) was never audited and only
+        # trivy's image scan caught docling's CVE (failure-modes #0). torch and
+        # torchvision still come out as `+cpu` local versions, which PyPI does
+        # not know, and pip-audit skips them with a notice.
+        run: uv export --all-packages --all-extras --no-emit-workspace --format requirements.txt > /tmp/requirements.txt && uvx pip-audit@2.9.0 -r /tmp/requirements.txt --disable-pip
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

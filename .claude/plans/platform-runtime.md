@@ -54,6 +54,8 @@ Mốc 6 (running many customers) is half done:
     - `KeycloakTokenVerifier` (RS256/JWKS) has no test; pyjwt 2.15.1 was
       checked by hand only.
     - CI does not run the web vitest suite or the Sales browser walk.
+      Built 2026-10-12 (sales ticket 18, not yet seen on a runner):
+      vitest in `frontend-quality`, the walk in `web-e2e.yml`.
 
 - **docling CVE-2026-105744 (HIGH, arbitrary file read/write)** failed
   trivy on CI run 37893880540 (2026-10-09) in `dw-worker:local`, not the
@@ -72,7 +74,9 @@ Mốc 6 (running many customers) is half done:
       audited docling (it knows eight advisories against 2.128.0 when
       asked); trivy's uv.lock analyser reports the 2.128.0 lock clean too.
       Only the image scan saw it. `--all-extras` on the export would close
-      the first.
+      the first. Done 2026-10-12 (sales ticket 18): the export now carries
+      the extras and pip-audit finds nothing; it still skips `torch` and
+      `torchvision`, whose `+cpu` versions PyPI does not know.
 
 - **CI: the three run-state announcement timeouts were a plugin race**
   (fixed 2026-10-02). pytest-asyncio (auto mode) and anyio's pytest plugin both
