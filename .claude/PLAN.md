@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed            |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 10 built; 12 left  |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | Demo done; 12–18 open         |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
 
 After working in an area, update its file. Update this index only when an
@@ -35,7 +35,7 @@ own file and a row here.
 - Sales ticket 10 (`8d098b3`, dw_sales ADR 0004 Proposed, Đạt to review).
   Platform merges: `96f95ad`, `2ebd50f`, `ab33703` (2026-10-08: security
   debts, antd-only web, CSP, support access; `web-ui.md`, `sales.md`).
-- **Next:** sales 12 (production hardening, needs-triage).
+- **Next:** sales 13 → 14 → 17, then 19–27; 15, 16, 18 wait on Đạt.
 
 ## Decisions Đạt owes
 
@@ -47,7 +47,7 @@ own file and a row here.
     - the model profile and key for uat/production (local runs on `luna`,
       gpt-5.6-luna, `make check-model`; the key is only in local `.env`);
     - the rerank key for uat/production (FPT Cloud locally, `make check-rerank`);
-    - whether CI runs the web vitest suite.
+    - whether CI runs vitest and the DW1 walk (sales ticket 18).
 - **Ops:**
     - spend guard dollar thresholds per plan;
     - a retention term for offboarding export bundles;
