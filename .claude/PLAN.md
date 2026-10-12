@@ -35,7 +35,8 @@ own file and a row here.
 - Sales ticket 10 (`8d098b3`, dw_sales ADR 0004 Proposed, Đạt to review).
   Platform merges: `96f95ad`, `2ebd50f`, `ab33703` (2026-10-08: security
   debts, antd-only web, CSP, support access; `web-ui.md`, `sales.md`).
-- **Next:** sales 13 → 14 → 17, then 19–27; 15, 16, 18 wait on Đạt.
+- **Next:** sales 13 → 14 → 17, then 15, 16, 18 (decided 2026-10-12),
+  then 19–27. Proterial has the requirements doc; ticket 12 waits on it.
 
 ## Decisions Đạt owes
 
@@ -47,7 +48,6 @@ own file and a row here.
     - the model profile and key for uat/production (local runs on `luna`,
       gpt-5.6-luna, `make check-model`; the key is only in local `.env`);
     - the rerank key for uat/production (FPT Cloud locally, `make check-rerank`);
-    - whether CI runs vitest and the DW1 walk (sales ticket 18).
 - **Ops:**
     - spend guard dollar thresholds per plan;
     - a retention term for offboarding export bundles;

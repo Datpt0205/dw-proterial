@@ -1,6 +1,6 @@
 # 15 — A `value_uncertain` correction is per field and reaches the upload file
 
-Status: needs-info
+Status: ready-for-agent
 Blocked by: —
 Category: bug
 
@@ -72,3 +72,9 @@ of a mapping finding is refused, Sales uses `confirm_mapping`, and the typed
 - `sales.md` Open, "From ticket 06".
 
 ## Comments
+
+- 2026-10-12, Đạt ("làm theo bạn tự recommend"): the proposed default holds.
+  After a correction, re-run the checks of the corrected line only (header
+  corrections re-run the PO-level checks); a finding whose key and inputs
+  did not change keeps its disposition, and one that changed reopens. The
+  case version bumps as for any edit.

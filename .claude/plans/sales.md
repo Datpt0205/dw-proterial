@@ -16,9 +16,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   17 and 19–27 (rule overrides, legacy encodings, delivery schedules,
   support without prices, telemetry, SQL overview, ClamAV and worker
   parsing, public-repo guard, legacy Office and OCR), all ready-for-agent;
-  12 keeps what waits on the requirements doc (needs-info). The doc,
-  `DW1_Don-hang-Bao-gia_Nhung-gi-can-co_30-09-2026_v1.2.docx`, still has its
-  contact and reply-date placeholders unfilled. Order agreed with Đạt:
+  12 keeps what waits on the requirements doc (needs-info). Đạt sent the
+  requirements doc to Proterial (confirmed 2026-10-12). Order agreed with Đạt:
   13 → 14 → 17, then 19–27.
 - 2026-10-12, the gaps left in the demo flow became tickets 13–18, each
   checked against the code that day (the Open items below point at them):
@@ -28,12 +27,14 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       cross-checked again (ready-for-agent; wider than the race noted under
       ticket 10: any version bump between decide and apply strands it);
     - 15 `value_uncertain` corrected per field, and the upload file prints the
-      correction (needs-info: re-run the line's checks?);
-    - 16 a worker lane processes new mail (needs-info: whose authority the
-      lane carries);
+      correction (ready-for-agent 2026-10-12: re-run the corrected line's checks only);
+    - 16 a worker lane processes new mail (ready-for-agent 2026-10-12: a worker
+      principal per tenant holds `sales.inbox.process`; pause state only;
+      60 s tick);
     - 17 the head reassigns a case (G22, moved out of 12; ready-for-agent);
-    - 18 CI runs vitest and the DW1 walk (needs-info: the CI decision owed in
-      `PLAN.md`).
+    - 18 CI runs vitest and the DW1 walk (ready-for-agent 2026-10-12: vitest on
+      every push; the walk on `main` and nightly, blocking after three green
+      runs in a row).
 - Tickets 01 and 07 committed 2026-10-03; 01 follow-up (fixtures M13–M32,
   mock Bravo history, open YCBG list, snapshot as_of, one SourceAnchor) and
   02/03 reworked to the amended spec, adversarially reviewed and committed
@@ -182,8 +183,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 The requirements doc `DW1_Don-hang-Bao-gia_Nhung-gi-can-co_30-09-2026_v1.2.docx`
 (kept outside git) lists them: convert list, item master, quotation master
 list and LME rule, Bravo upload template, sample POs with their Bravo orders,
-mailbox access, AI/data approval, WIV-03-012/023 texts. Not sent yet
-(2026-10-02).
+mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
+(confirmed 2026-10-12); answers awaited.
 
 ## Slice log
 
