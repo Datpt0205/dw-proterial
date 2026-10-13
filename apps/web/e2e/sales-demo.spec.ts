@@ -404,7 +404,11 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
   const an = await persona(request, AN);
   await signIn(page, request, AN);
   await page.goto("/sales/inbox");
-  await page.getByRole("button", { name: /DW xử lý tất cả \(42\)/ }).click();
+  // The count is whatever step 1 left unprocessed; the mailbox grows with the
+  // fixtures, so the walk does not pin it (a pinned 42 broke when M44/M45 came).
+  await page
+    .getByRole("button", { name: /DW xử lý tất cả \([1-9]\d*\)/ })
+    .click();
   await expect(
     page.getByText(/^45 thư · 0 chưa xử lý · \d+ chuyển Sales/),
   ).toBeVisible({
