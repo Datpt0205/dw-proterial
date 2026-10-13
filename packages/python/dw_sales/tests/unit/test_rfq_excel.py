@@ -125,6 +125,7 @@ def test_every_value_is_read_from_the_cell_its_label_or_column_names() -> None:
     document = _read(_bytes(_workbook()))
 
     assert document is not None
+    assert document.rfq_no is not None and document.rfq_date is not None
     assert (document.rfq_no.value, document.rfq_no.source.cell) == ("QRL-RFQ-2609-03", "B4")
     assert (document.rfq_date.value, document.rfq_date.source.cell) == (date(2026, 9, 29), "E4")
     assert document.quote_due is not None
@@ -159,7 +160,7 @@ async def test_both_mock_requests_are_read_with_their_own_sheet_names() -> None:
         )
         assert content is not None
         document = ExcelRfqReader().read(content)
-        assert document is not None
+        assert document is not None and document.rfq_no is not None
         sheets[message_id] = document.rfq_no.source.sheet
 
     assert sheets == {"M09": "RFQ", "M10": "見積依頼"}
@@ -315,15 +316,24 @@ def _zip(entries: dict[str, bytes], compression: int = zipfile.ZIP_STORED) -> by
 @pytest.mark.parametrize(
     ("data", "name"),
     [
-        (_bytes(_workbook()), "QRL-RFQ-2609-03.pdf"),
         (b"%PDF-1.4 not a workbook", "QRL-RFQ-2609-03.xlsx"),
         (_zip({"hello.txt": b"not a workbook"}), "QRL-RFQ-2609-03.xlsx"),
         (_bytes(_workbook(cells={"A4": "PO No."})), "QRL-PO-0926-12.xlsx"),
     ],
-    ids=["not_an_xlsx_name", "not_a_zip", "a_zip_but_no_workbook", "a_workbook_but_no_rfq"],
+    ids=["not_a_zip", "a_zip_but_no_workbook", "a_workbook_but_no_rfq"],
 )
 def test_a_file_that_is_not_a_request_this_reader_knows_is_not_read(data: bytes, name: str) -> None:
     assert _read(data, name) is None
+
+
+@pytest.mark.parametrize("name", ["QRL-RFQ-2609-03.pdf", "rfq.dat", "RFQ.XLSX"])
+def test_a_request_is_read_whatever_the_sender_named_the_file(name: str) -> None:
+    """The bytes say what a file is (ticket 29): a request named as a PDF, or
+    with no extension at all, is the workbook it is."""
+    document = _read(_bytes(_workbook()), name)
+
+    assert document is not None and document.rfq_no is not None
+    assert document.rfq_no.value == "QRL-RFQ-2609-03"
 
 
 async def test_each_mock_attachment_is_read_by_exactly_the_reader_its_fixture_names() -> None:

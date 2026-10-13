@@ -28,7 +28,7 @@ from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.application.case_store import CaseEvent, CaseOrigin, EventActor
 from dw_sales.application.order_intake import IntakeOutcome, OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -143,7 +143,8 @@ async def run_mailbox(
         catalog=MockSalesCatalog.load(scope),
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.2.0.yaml")),
+        quote_forms=ExcelQuoteForms(),
+        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.3.0.yaml")),
         # Duplicates and revisions are recognised against the cases as stored.
         cases=SqlOrderCaseLookup(sessions),
         new_case_id=uuid.uuid4,

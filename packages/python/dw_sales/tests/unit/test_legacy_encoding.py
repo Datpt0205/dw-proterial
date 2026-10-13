@@ -35,6 +35,7 @@ from dw_sales.adapters.mock.generate_attachments import FONT_PATH, load_purchase
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.readers import ExcelPoReader, PdfPoReader, mock_po_readers
 from dw_sales.adapters.readers.layouts import MOCK_EXCEL_LAYOUTS, MOCK_PDF_LAYOUTS
+from dw_sales.adapters.rfq_excel import ExcelQuoteForms
 from dw_sales.application.access import PriceView
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import InboxPort, SalesScope
@@ -60,7 +61,7 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(ROOT / "configs" / "policies" / "sales_order_rules@1.2.0.yaml")
+RULES = load_order_rules(ROOT / "configs" / "policies" / "sales_order_rules@1.3.0.yaml")
 CAPS = RULES.intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)
@@ -346,7 +347,7 @@ def test_the_document_check_raises_a_blocking_po_level_legacy_encoding() -> None
 
     assert (finding.line_no, finding.severity, finding.blocking) == (None, Severity.ERROR, True)
     assert (finding.expected, finding.actual) == ("Unicode", "TCVN3")
-    assert finding.rule_version == "sales_order_rules@1.2.0"
+    assert finding.rule_version == "sales_order_rules@1.3.0"
     assert not [
         f
         for f in check_document(_excel(_fixture(M01)), RULES)
@@ -472,6 +473,7 @@ def _intake(inbox: InboxPort, cases: _Cases) -> OrderIntake:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=inbox,
         reader=mock_po_readers(),
+        quote_forms=ExcelQuoteForms(),
         rules=PlatformOrderRules(RULES),
         cases=cases,
         new_case_id=lambda: uuid.UUID(int=next(ids)),

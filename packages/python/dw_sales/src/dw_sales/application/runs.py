@@ -44,7 +44,7 @@ from dw_sales.application.views import (
     order_change,
     quote_change,
 )
-from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus
 
@@ -313,7 +313,10 @@ class Dw1Runs:
             context, Dw1Task(kind="process", message_id=message_id), subject_ref=None
         )
         logged = await self._logged(context)
-        return logged[message_id]
+        # Absent: the model gave no usable answer and the message is young
+        # enough to be tried again (ticket 31), so it is still not processed.
+        pending = message_disposition(MessageDisposition.pending(message_id), None)
+        return logged.get(message_id, pending)
 
     async def process_all(self, context: AccessContext) -> list[MessageDispositionView]:
         """Every message still without a disposition, oldest first, in one run."""

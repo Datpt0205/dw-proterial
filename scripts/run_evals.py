@@ -118,7 +118,14 @@ def main() -> int:
 # context's model step meets a model. Local development only: the endpoint
 # guard admits localhost because this is not a deployed profile.
 
-RECORDED = REPO_ROOT / "evals" / "fixtures" / "cases" / "sales_descriptions_recorded.json"
+_CASES = REPO_ROOT / "evals" / "fixtures" / "cases"
+RECORDED = _CASES / "sales_descriptions_recorded.json"
+# Where each model step's recorded answers live, by prompt id: the files the
+# smoke replays (`dw_sales.evals.recorded`).
+RECORDED_BY_PROMPT = {
+    "sales.message_intent": _CASES / "sales_intent_recorded.json",
+    "sales.rfq_extraction": _CASES / "sales_rfq_recorded.json",
+}
 
 
 def live_model_for(profile: str) -> object:
@@ -128,8 +135,8 @@ def live_model_for(profile: str) -> object:
     from dw_agent_runtime.model.gateway import InMemoryUsageRecorder, RoutingModelGateway
     from dw_agent_runtime.model.profiles import ModelProfileRegistry
     from dw_agent_runtime.model.prompts import PromptRegistry
-    from dw_sales.adapters.model_interpretation import GatewayInterpretation
-    from dw_sales.evals.descriptions import Observed
+    from dw_sales.adapters.assembly import interpretation_for
+    from dw_sales.evals.recorded import Observed
 
     profiles = ModelProfileRegistry()
     profiles.load_directory(REPO_ROOT / "configs" / "models")
@@ -151,13 +158,28 @@ def live_model_for(profile: str) -> object:
         usage_recorder=InMemoryUsageRecorder(),
         default_profile=profiles.resolve(profile).profile_id,
     )
-    return Observed(GatewayInterpretation(gateway, profile))
+    return Observed(interpretation_for(gateway, REPO_ROOT / "configs", profile))
 
 
 def record_answers(model: object) -> int:
     import json
 
+    count = 0
+    for prompt_id, answers in getattr(model, "recorded", {}).items():
+        path = RECORDED_BY_PROMPT[prompt_id]
+        held = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        held["_comment"] = (
+            f"The local model's answers (onprem profile) to {prompt_id}, by answer key (the "
+            "prompt and its exact inputs, hashed), recorded by `run_evals.py --live onprem "
+            "--record`; the smoke replays them, so CI scores the same readings through the same "
+            "code without a model. null: the call gave no usable answer. Fictional text."
+        )
+        held["answers"] = dict(sorted({**held.get("answers", {}), **answers}.items()))
+        path.write_bytes((json.dumps(held, ensure_ascii=False, indent=2) + chr(10)).encode("utf-8"))
+        count += len(answers)
     answers = dict(getattr(model, "answers", {}))
+    if not answers:
+        return count
     held = json.loads(RECORDED.read_text(encoding="utf-8")) if RECORDED.exists() else {}
     merged = {**held.get("answers", {}), **answers}
     held["_comment"] = (
@@ -168,11 +190,20 @@ def record_answers(model: object) -> int:
     held["answers"] = dict(sorted(merged.items()))
     text = json.dumps(held, ensure_ascii=False, indent=2) + chr(10)
     RECORDED.write_bytes(text.encode("utf-8"))
-    return len(answers)
+    return count + len(answers)
 
 
 def _summary(details: dict[str, object]) -> str:
-    keys = ("vi_en", "by_language", "latency", "meets_proposed_bar_vi_en", "seen", "reason")
+    keys = (
+        "all",
+        "vi_en",
+        "by_language",
+        "latency",
+        "meets_proposed_bar",
+        "meets_proposed_bar_vi_en",
+        "seen",
+        "reason",
+    )
     import json
 
     return json.dumps({k: details[k] for k in keys if k in details}, ensure_ascii=False)

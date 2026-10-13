@@ -9,6 +9,7 @@ own tenant, the mock mailbox bound to it, and the account the demo seed gives.
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ from dw_observability.telemetry import NullTelemetry
 from dw_platform.adapters.persistence import tables
 from dw_platform.domain.audit import system_actor
 from dw_platform.testing.seed_env import sid
+from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.persistence import tables as sales_tables
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE, InboxLane, dw1_subject
 from dw_sales.application.ports import SalesScope
@@ -40,7 +42,9 @@ from dw_worker.settings import WorkerSettings
 
 pytestmark = pytest.mark.integration
 
-MAILBOX = 32  # the fictional mock mailbox (`dw_sales/adapters/mock/README.md`)
+# The fictional mock mailbox, counted from its fixture: a number typed here
+# went stale twice as messages were added (`dw_sales/adapters/mock/README.md`).
+MAILBOX = len(json.loads((DATA_DIR / "inbox.json").read_text(encoding="utf-8")))
 
 
 @dataclass(frozen=True)

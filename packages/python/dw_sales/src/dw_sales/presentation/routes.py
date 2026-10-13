@@ -156,6 +156,9 @@ class AnswerBody(VersionBody):
     needed_by: date | None = None
     customer_code: CustomerCode | None = None
     note: Reason | None = None
+    # `value_uncertain` (ticket 29): one value a model read, as Sales types it.
+    field: Annotated[str, Field(pattern=r"^[a-z_]{1,32}$")] | None = None
+    value: Annotated[str, Field(min_length=1, max_length=500)] | None = None
 
 
 class YcbgBody(VersionBody):
@@ -661,6 +664,8 @@ def build_router(
             needed_by=body.needed_by,
             customer_code=body.customer_code,
             note=body.note,
+            field=body.field,
+            value=body.value,
         )
         return await idem.record(change)
 

@@ -196,12 +196,23 @@ class QuoteCommands:
         needed_by: date | None = None,
         customer_code: str | None = None,
         note: str | None = None,
+        field: str | None = None,
+        value: str | None = None,
     ) -> CaseChangeView:
-        """Sales types what the request lacked (`rfq_incomplete`) or confirms
-        the customer of a forwarded one (`customer_unknown`)."""
+        """Sales types what the request lacked (`rfq_incomplete`), confirms
+        the customer of a forwarded one (`customer_unknown`), or confirms one
+        value a model read, typing it as it should be (`value_uncertain`,
+        ticket 29)."""
         code, line_no = parse_finding_key(finding_key)
+        uncertain = code is QuoteFindingCode.VALUE_UNCERTAIN
 
         def step(case: QuoteCase, actor: QuoteActor, at: datetime) -> QuoteCase:
+            if uncertain:
+                if field is None or value is None:
+                    raise DomainError(
+                        "the field and its value are named", details={"field": "field"}
+                    )
+                return case.confirm_value(line_no, field, value, by=actor.user_id, at=at)
             if code is QuoteFindingCode.CUSTOMER_UNKNOWN:
                 if customer_code is None:
                     raise DomainError("the customer is named", details={"field": "customer_code"})
@@ -224,9 +235,10 @@ class QuoteCommands:
             context,
             case_id,
             case_version,
-            "quote.finding_answered",
+            "quote.value_confirmed" if uncertain else "quote.finding_answered",
             step,
             finding_key=finding_key,
+            field=field if uncertain else None,
         )
 
     async def ycbg(

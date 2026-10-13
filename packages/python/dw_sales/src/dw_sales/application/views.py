@@ -47,6 +47,7 @@ from dw_sales.domain.catalog import (
 )
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
+from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
@@ -70,6 +71,7 @@ from dw_sales.domain.quotes import (
     PriceEvidence,
     QuoteCase,
     QuoteFinding,
+    RequestReading,
 )
 
 _VIEW = ConfigDict(frozen=True)
@@ -824,6 +826,18 @@ class QuoteDispositionView(BaseModel):
     customer_code: str | None = None
 
 
+class ValueConfirmationView(BaseModel):
+    """One value a model read, as Sales confirmed it (ticket 29)."""
+
+    model_config = _VIEW
+
+    field: str
+    read: str
+    value: str
+    by: uuid.UUID
+    at: datetime
+
+
 class QuoteFindingView(BaseModel):
     model_config = _VIEW
 
@@ -832,6 +846,9 @@ class QuoteFindingView(BaseModel):
     blocking: bool
     line_no: int | None
     missing: list[str]
+    # `value_uncertain`: the values a model read, and those Sales confirmed.
+    flagged: list[str] = []
+    confirmed: list[ValueConfirmationView] = []
     # Every quotation code compares amounts or a copper basis: price-bearing.
     expected: Words | None
     actual: Words | None
@@ -868,6 +885,8 @@ def quote_finding(finding: QuoteFinding, prices: PriceView) -> QuoteFindingView:
         blocking=finding.blocking,
         line_no=finding.line_no,
         missing=list(finding.missing),
+        flagged=list(finding.flagged),
+        confirmed=[ValueConfirmationView(**c.model_dump()) for c in finding.confirmed],
         expected=_words(finding.expected, prices.amounts),
         actual=_words(finding.actual, prices.amounts),
         rule_versions=list(finding.rule_versions),
@@ -886,6 +905,15 @@ class QuoteLineView(BaseModel):
     target_price: Amount | None
     needed_by: date | None
     anchors: dict[str, SourceAnchor]
+    # The fields a model read, which Sales confirms (ticket 29).
+    model_read: list[str] = []
+    # A target price the customer stated and a model read: the customer's
+    # words, never price evidence. Price-bearing.
+    stated_target_price: Amount | None = None
+    # The items ticket 28's reading of the description fits, for Sales and
+    # Design to weigh, and the reading itself.
+    candidates: list[str] = []
+    description_reading: DescriptionReading | None = None
 
 
 class DesignLineView(BaseModel):
@@ -1095,7 +1123,7 @@ class QuoteSummaryView(BaseModel):
     case_version: int
     status: str
     customer_code: str
-    rfq_no: str
+    rfq_no: str | None
     received_at: datetime
     quote_due: date | None
     overdue: bool
@@ -1116,13 +1144,24 @@ class QuoteCaseView(BaseModel):
     received_at: datetime
     sender: str
     assigned_to: uuid.UUID | None
-    rfq_no: str
-    rfq_date: date
+    rfq_no: str | None
+    rfq_date: date | None
     quote_due: date | None
     overdue: bool
     currency: Currency
-    attachment_id: str
-    attachment_sha256: str
+    # The request's file; None for a request a model read from the mail alone.
+    attachment_id: str | None
+    attachment_sha256: str | None
+    # Where the request's own values were read, by field.
+    anchors: dict[str, SourceAnchor] = {}
+    # The request's own fields a model read (ticket 29).
+    model_read: list[str] = []
+    # The message's newest part a model read, which body anchors index into,
+    # and how the model was asked: None for the fixed-label form. The text may
+    # state a price, so it is shown as a source is: to a holder of
+    # `sales.price.read`.
+    message_text: Words | None = None
+    reading: RequestReading | None = None
     rules_version: str
     parser_version: str
     catalog_as_of: datetime
@@ -1158,7 +1197,7 @@ def quote_summary(case: QuoteCase, assigned_to: uuid.UUID | None, today: date) -
         case_version=case.case_version,
         status=case.status.value,
         customer_code=case.customer_code,
-        rfq_no=document.rfq_no.value,
+        rfq_no=case.request.rfq_no,
         received_at=case.request.received_at,
         quote_due=document.quote_due.value if document.quote_due else None,
         overdue=case.is_overdue(today),
@@ -1193,13 +1232,22 @@ def quote_case(
         received_at=request.received_at,
         sender=request.sender.address,
         assigned_to=assigned_to,
-        rfq_no=document.rfq_no.value,
-        rfq_date=document.rfq_date.value,
+        rfq_no=request.rfq_no,
+        rfq_date=document.rfq_date.value if document.rfq_date else None,
         quote_due=document.quote_due.value if document.quote_due else None,
         overdue=case.is_overdue(today),
         currency=request.currency,
-        attachment_id=request.attachment.attachment_id,
-        attachment_sha256=request.attachment.sha256,
+        attachment_id=request.attachment.attachment_id if request.attachment else None,
+        attachment_sha256=request.attachment.sha256 if request.attachment else None,
+        anchors=_anchors(
+            rfq_no=document.rfq_no.source if document.rfq_no else None,
+            rfq_date=document.rfq_date.source if document.rfq_date else None,
+            quote_due=document.quote_due.source if document.quote_due else None,
+            currency=document.currency.source,
+        ),
+        model_read=sorted(document.model_read),
+        message_text=_words(request.body.text, prices.amounts) if request.body else None,
+        reading=request.reading,
         rules_version=case.rules_version,
         parser_version=case.parser_version,
         catalog_as_of=case.catalog_as_of,
@@ -1225,8 +1273,21 @@ def quote_case(
                     quantity=item.quantity.source,
                     uom=item.uom.source,
                     target_price=item.target_price.source if item.target_price else None,
+                    stated_target_price=(
+                        item.stated_target_price.source
+                        if item.stated_target_price and prices.amounts
+                        else None
+                    ),
                     needed_by=item.needed_by.source,
                 ),
+                model_read=sorted(item.model_read),
+                stated_target_price=(
+                    _amount(item.stated_target_price.value, prices.amounts)
+                    if item.stated_target_price
+                    else None
+                ),
+                candidates=list(item.candidates),
+                description_reading=item.description_reading,
             )
             for item in document.items
         ],
@@ -1334,6 +1395,9 @@ class MessageDispositionView(BaseModel):
     owner: str | None = None
     customer_code: str | None = None
     processed_at: datetime | None = None
+    # What a model reading of the message's intent did (ticket 31): the kind
+    # and language read, the numbers code resolved, and the call's stamp.
+    reading: IntentReading | None = None
 
 
 def message_disposition(
@@ -1348,6 +1412,7 @@ def message_disposition(
         owner=disposition.owner,
         customer_code=disposition.customer_code,
         processed_at=processed_at,
+        reading=disposition.reading,
     )
 
 

@@ -134,6 +134,9 @@ class SourceView(BaseModel):
 
 
 def _region(anchor: SourceAnchor) -> SourceRegion | None:
+    if anchor.attachment_id is None:
+        # The message's own text: the case shows it, no file is served.
+        return None
     if anchor.page is not None:
         return SourceRegion(anchor.attachment_id, anchor.page, None)
     if anchor.sheet is not None:
@@ -160,15 +163,20 @@ def _order_anchors(document: PoDocument) -> list[LabelledAnchor]:
 def _quote_anchors(case: QuoteCase, attachment_id: str) -> list[LabelledAnchor]:
     document = case.request.document
     found: list[LabelledAnchor] = []
-    if attachment_id == case.request.attachment.attachment_id:
+    request_file = case.request.attachment
+    if request_file is not None and attachment_id == request_file.attachment_id:
         header = {
-            "rfq_no": document.rfq_no.source,
-            "rfq_date": document.rfq_date.source,
-            "currency": document.currency.source,
-            "quote_due": document.quote_due.source if document.quote_due else None,
-            "buyer": document.buyer.source if document.buyer else None,
+            "rfq_no": document.rfq_no,
+            "rfq_date": document.rfq_date,
+            "currency": document.currency,
+            "quote_due": document.quote_due,
+            "buyer": document.buyer,
         }
-        found += [LabelledAnchor(field=k, anchor=v) for k, v in header.items() if v is not None]
+        found += [
+            LabelledAnchor(field=k, anchor=v.source)
+            for k, v in header.items()
+            if v is not None and v.source.attachment_id == attachment_id
+        ]
         for item in document.items:
             fields = {
                 "customer_item_code": item.customer_item_code,
@@ -176,12 +184,15 @@ def _quote_anchors(case: QuoteCase, attachment_id: str) -> list[LabelledAnchor]:
                 "quantity": item.quantity,
                 "uom": item.uom,
                 "target_price": item.target_price,
+                "stated_target_price": item.stated_target_price,
                 "needed_by": item.needed_by,
             }
+            # A request a model read may hold values from the message's own
+            # text beside the file's: only the file's are on it.
             found += [
                 LabelledAnchor(field=k, line_no=item.line_no, anchor=v.source)
                 for k, v in fields.items()
-                if v is not None
+                if v is not None and v.source.attachment_id == attachment_id
             ]
     for reply in case.design_replies:
         if reply.attachment.attachment_id != attachment_id:
@@ -323,9 +334,9 @@ class SourceService:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             case = (await stored_quote(work, case_id)).case
-        files = [(case.request.message_id, case.request.attachment)] + [
-            (reply.message_id, reply.attachment) for reply in case.design_replies
-        ]
+        request_file = case.request.attachment
+        files = [(case.request.message_id, request_file)] if request_file is not None else []
+        files += [(reply.message_id, reply.attachment) for reply in case.design_replies]
         found = next(
             (
                 _Source(

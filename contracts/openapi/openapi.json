@@ -82,6 +82,18 @@
             ],
             "title": "Customer Code"
           },
+          "field": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z_]{1,32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
           "needed_by": {
             "anyOf": [
               {
@@ -123,6 +135,19 @@
               }
             ],
             "title": "Quantity"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
           }
         },
         "required": [
@@ -1538,6 +1563,76 @@
         "title": "DemoUser",
         "type": "object"
       },
+      "DescriptionReading": {
+        "additionalProperties": false,
+        "description": "What a model reading did for one line, stamped on its check basis.\n\n``read``: every check passed, and ``spans`` are what the candidates were\ncomputed from. ``not_understood``: a check refused it (``reason``).\n``unavailable``: no usable answer (the model down, timed out, or its\noutput invalid); the line is unmapped exactly as without the model.",
+        "properties": {
+          "model_profile": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "read",
+              "not_understood",
+              "unavailable"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "prompt": {
+            "pattern": "^[a-z][a-z0-9_.]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "line_missing",
+                  "no_attribute",
+                  "span_not_found",
+                  "span_repeated",
+                  "spans_overlap",
+                  "value_unparsed",
+                  "text_uncovered",
+                  "digit_in_label",
+                  "value_refused"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "route": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Route",
+            "type": "string"
+          },
+          "spans": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SpanRead"
+            },
+            "title": "Spans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "prompt",
+          "model_profile",
+          "route",
+          "outcome"
+        ],
+        "title": "DescriptionReading",
+        "type": "object"
+      },
       "DescriptionReadingView": {
         "description": "What a model reading of the description did (dw_sales ADR 0005).\n``outcome``: ``read``, ``not_understood`` (``reason`` says which check\nrefused it) or ``unavailable`` (no usable answer: DW1 could not read it).",
         "properties": {
@@ -2610,6 +2705,98 @@
           "required_scopes"
         ],
         "title": "IntegrationView",
+        "type": "object"
+      },
+      "IntentReading": {
+        "additionalProperties": false,
+        "description": "What the model reading of a message's intent did, stamped on its\ndisposition: the prompt, profile and route of the call, the rules whose\nswitch asked for it, and the outcome. ``unavailable``: no usable answer\nwithin the retry window, so the message went to Sales as `other`.",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "po",
+                  "quote_request",
+                  "design_reply",
+                  "reply_to_case",
+                  "delivery_change",
+                  "complaint",
+                  "sample_request",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vi",
+                  "en",
+                  "ja",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "model_profile": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "read",
+              "unavailable"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "prompt": {
+            "pattern": "^[a-z][a-z0-9_.]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "references": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResolvedReference"
+            },
+            "maxItems": 5,
+            "title": "References",
+            "type": "array"
+          },
+          "route": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Route",
+            "type": "string"
+          },
+          "rules": {
+            "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Rules",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt",
+          "model_profile",
+          "route",
+          "rules",
+          "outcome"
+        ],
+        "title": "IntentReading",
         "type": "object"
       },
       "InviteMemberRequest": {
@@ -3713,6 +3900,16 @@
               }
             ],
             "title": "Processed At"
+          },
+          "reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntentReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reason": {
             "anyOf": [
@@ -5762,6 +5959,14 @@
       },
       "QuoteCaseView": {
         "properties": {
+          "anchors": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceAnchor"
+            },
+            "default": {},
+            "title": "Anchors",
+            "type": "object"
+          },
           "approval": {
             "anyOf": [
               {
@@ -5785,12 +5990,26 @@
             "title": "Assigned To"
           },
           "attachment_id": {
-            "title": "Attachment Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Id"
           },
           "attachment_sha256": {
-            "title": "Attachment Sha256",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Sha256"
           },
           "case_id": {
             "format": "uuid",
@@ -5906,6 +6125,24 @@
             "title": "Message Id",
             "type": "string"
           },
+          "message_text": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Words"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_read": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Model Read",
+            "type": "array"
+          },
           "overdue": {
             "title": "Overdue",
             "type": "boolean"
@@ -5936,6 +6173,16 @@
             ],
             "title": "Quote Due"
           },
+          "reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "received_at": {
             "format": "date-time",
             "title": "Received At",
@@ -5960,13 +6207,27 @@
             "type": "array"
           },
           "rfq_date": {
-            "format": "date",
-            "title": "Rfq Date",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rfq Date"
           },
           "rfq_no": {
-            "title": "Rfq No",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rfq No"
           },
           "rules_version": {
             "title": "Rules Version",
@@ -6191,6 +6452,14 @@
             "title": "Code",
             "type": "string"
           },
+          "confirmed": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ValueConfirmationView"
+            },
+            "title": "Confirmed",
+            "type": "array"
+          },
           "disposition": {
             "$ref": "#/components/schemas/QuoteDispositionView"
           },
@@ -6203,6 +6472,14 @@
                 "type": "null"
               }
             ]
+          },
+          "flagged": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Flagged",
+            "type": "array"
           },
           "key": {
             "title": "Key",
@@ -6257,6 +6534,14 @@
             "title": "Anchors",
             "type": "object"
           },
+          "candidates": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
           "customer_item_code": {
             "anyOf": [
               {
@@ -6272,9 +6557,27 @@
             "title": "Description",
             "type": "string"
           },
+          "description_reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DescriptionReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "line_no": {
             "title": "Line No",
             "type": "integer"
+          },
+          "model_read": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Model Read",
+            "type": "array"
           },
           "needed_by": {
             "anyOf": [
@@ -6299,6 +6602,16 @@
               }
             ],
             "title": "Quantity"
+          },
+          "stated_target_price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "target_price": {
             "anyOf": [
@@ -6381,8 +6694,15 @@
             "type": "string"
           },
           "rfq_no": {
-            "title": "Rfq No",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rfq No"
           },
           "status": {
             "title": "Status",
@@ -6444,7 +6764,8 @@
           "hidden_row",
           "hidden_column",
           "font_matches_fill",
-          "formula_without_cached_value"
+          "formula_without_cached_value",
+          "model_read"
         ],
         "title": "RegionFlag",
         "type": "string"
@@ -6532,6 +6853,56 @@
         "title": "RenderedView",
         "type": "object"
       },
+      "RequestReading": {
+        "additionalProperties": false,
+        "description": "How a model read the request (ticket 29): the prompt, profile and route\nof the calls, the rules whose switch asked, and how many calls it took.",
+        "properties": {
+          "calls": {
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "model_profile": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "prompt": {
+            "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "refused": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Refused",
+            "type": "object"
+          },
+          "route": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Route",
+            "type": "string"
+          },
+          "rules": {
+            "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Rules",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt",
+          "model_profile",
+          "route",
+          "rules",
+          "calls"
+        ],
+        "title": "RequestReading",
+        "type": "object"
+      },
       "RequestSupportGrantBody": {
         "additionalProperties": false,
         "properties": {
@@ -6579,6 +6950,43 @@
           "duration_hours"
         ],
         "title": "RequestSupportGrantBody",
+        "type": "object"
+      },
+      "ResolvedReference": {
+        "additionalProperties": false,
+        "description": "A number the message names that code found in it and resolved to\nexactly one record of the sender's customer.",
+        "properties": {
+          "number": {
+            "pattern": "^[A-Z0-9][A-Z0-9/-]{1,31}$",
+            "title": "Number",
+            "type": "string"
+          },
+          "order_case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Case Id"
+          },
+          "record": {
+            "enum": [
+              "purchase_order",
+              "quote_request"
+            ],
+            "title": "Record",
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "record"
+        ],
+        "title": "ResolvedReference",
         "type": "object"
       },
       "ResumeBody": {
@@ -7034,12 +7442,19 @@
       },
       "SourceAnchor": {
         "additionalProperties": false,
-        "description": "The place in one attachment a value was read from.\n\nAt least one of: ``cell_ref`` (``Sheet!B10``), ``page`` with its\n``boxes``, or ``quote``, the words as the file prints them. More than one\nmay be given when the reader knows more than one.",
+        "description": "The place in one attachment, or in the message's own text, a value was\nread from.\n\nAt least one of: ``cell_ref`` (``Sheet!B10``), ``page`` (with its\n``boxes`` where the reader knows them), ``quote``, the words as the file\nprints them, or ``chars``, where they are in the text DW1 read. More than\none may be given when the reader knows more than one. ``attachment_id``\nNone points into the message's newest part, by ``chars`` alone.",
         "properties": {
           "attachment_id": {
-            "pattern": "^[A-Za-z0-9._-]{1,128}$",
-            "title": "Attachment Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9._-]{1,128}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Id"
           },
           "attachment_sha256": {
             "pattern": "^[0-9a-f]{64}$",
@@ -7065,6 +7480,16 @@
               }
             ],
             "title": "Cell Ref"
+          },
+          "chars": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TextRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "page": {
             "anyOf": [
@@ -7215,6 +7640,68 @@
           "served_at"
         ],
         "title": "SourceView",
+        "type": "object"
+      },
+      "SpanRead": {
+        "additionalProperties": false,
+        "description": "One attribute as code accepted it: the text, where it sits in the\nNFKC-normalised description, the value, and who read the value.",
+        "properties": {
+          "attribute": {
+            "enum": [
+              "family",
+              "stranding",
+              "conductor",
+              "shield",
+              "colour",
+              "packaging",
+              "cores",
+              "gauge",
+              "pack_length_m",
+              "spec_no"
+            ],
+            "title": "Attribute",
+            "type": "string"
+          },
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "read_by": {
+            "enum": [
+              "code",
+              "model"
+            ],
+            "title": "Read By",
+            "type": "string"
+          },
+          "span": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Span",
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "value": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attribute",
+          "span",
+          "start",
+          "end",
+          "value",
+          "read_by"
+        ],
+        "title": "SpanRead",
         "type": "object"
       },
       "SpanReadView": {
@@ -7994,6 +8481,28 @@
         "title": "TenantView",
         "type": "object"
       },
+      "TextRange": {
+        "additionalProperties": false,
+        "description": "Characters ``start`` (inclusive) to ``end`` (exclusive) of a text.",
+        "properties": {
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "TextRange",
+        "type": "object"
+      },
       "TimeStat": {
         "properties": {
           "cases": {
@@ -8309,6 +8818,42 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ValueConfirmationView": {
+        "description": "One value a model read, as Sales confirmed it (ticket 29).",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "format": "uuid",
+            "title": "By",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "read": {
+            "title": "Read",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "read",
+          "value",
+          "by",
+          "at"
+        ],
+        "title": "ValueConfirmationView",
         "type": "object"
       },
       "ValueCorrectionView": {

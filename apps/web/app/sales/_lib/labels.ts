@@ -106,6 +106,7 @@ export const ROUTING_REASON = {
   sample_request: "Yêu cầu hàng mẫu",
   customer_unknown: "Chưa xác định được khách hàng",
   attachment_unreadable: "Không đọc được file",
+  reply_to_case: "Trả lời về hồ sơ đang xử lý",
   other: "Khác",
 } as const;
 
@@ -178,6 +179,18 @@ export const GLOSSARY_LISTS = {
 } as const;
 
 // ------------------------------------------------- the screen's own words --
+
+/** The kinds a model reads a message no reader accepted as (ticket 31). */
+export const INTENT_KIND = {
+  po: "Đặt hàng",
+  quote_request: "Yêu cầu báo giá",
+  design_reply: "Phản hồi Design",
+  reply_to_case: "Trả lời về hồ sơ",
+  delivery_change: "Đổi lịch giao",
+  complaint: "Khiếu nại",
+  sample_request: "Yêu cầu hàng mẫu",
+  other: "Khác",
+} as const;
 
 /** Who read a value of a model reading of a description (ticket 28). */
 export const READ_BY = {
@@ -252,6 +265,7 @@ export const REGION_FLAG = {
   hidden_column: "Cột ẩn",
   font_matches_fill: "Chữ trùng màu nền",
   formula_without_cached_value: "Công thức chưa có giá trị",
+  model_read: "Mô hình đọc, cần xác nhận",
 } as const;
 
 /** The fields a source anchor names, as a person reads them. */

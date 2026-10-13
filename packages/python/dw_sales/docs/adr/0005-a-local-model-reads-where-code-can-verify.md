@@ -119,3 +119,30 @@ delivery dates, export control.
   approves tenant versions, the demo tenant's own version ships in the mock
   sample set, as its master data does, and carries its own version number so
   the case stamp says which applied.
+
+## Applied to tickets 29 and 31 (2026-10-13, by the agent, Đạt away)
+
+Two more steps follow this decision unchanged; what they add is recorded here
+rather than in a new ADR, because no rule above moved.
+
+- **Field confusion is flagged, not refused.** A request for quotation (ticket 29) is span text code locates (whole tokens only, inside the item's line)
+  and parses, but which field the words fill is the model's reading: a reel
+  length or the send date can pass every check. So every value a model read
+  is `model_read` and raises `value_uncertain`, which Sales confirms value by
+  value before the YCBG; nothing a model read is used unconfirmed.
+- **A kind is not a route.** A message's intent (ticket 31) is a closed-set
+  kind; code maps it to the route through one table, a readable document
+  decides first, and a number the model names is used only when code finds it
+  in the newest part and it resolves to one record of the sender's own
+  customer. The Design-mailbox gate and the order flow's own refusals stand
+  behind the kind.
+- **The newest part only.** What a model is shown of a mail is its subject and
+  newest part, history cut by the message's own structure, so quoted or
+  forwarded text never reaches it and a value found only there is not found.
+- **Bounded input.** Each call is cut or split under the route's declared
+  `max_input_tokens`; a request needing more calls than the step allows goes
+  to a person unread rather than read in part.
+- **One switch block.** All three steps are switched in
+  `sales_order_rules.model_assist`, the one tenant-versioned place that says
+  which model steps a tenant has on (ticket 29 had named `sales_quote_rules`,
+  which has no tenant layer).

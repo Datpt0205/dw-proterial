@@ -18,10 +18,16 @@ import { ActionError } from "../../_lib/errors";
 import { DECLINE_REASON, FINDING_CODE, label } from "../../_lib/labels";
 import type { Offer, Viewer } from "../../_lib/order-actions";
 import { usePeople } from "../../_lib/people";
-import { quoteOffers, type QuoteAction } from "../../_lib/quote-actions";
+import {
+  INTAKE_CODES,
+  quoteOffers,
+  quoteTitle,
+  type QuoteAction,
+} from "../../_lib/quote-actions";
 import { useAction } from "../../_lib/use-action";
 import { AmountInput } from "../../_components/amount-input";
 import { GuardedButton } from "../../_components/guarded-button";
+import { ModelReadFinding, type OpenSource } from "./model-read";
 
 type Quote = SalesSchemas["QuoteCaseView"];
 type Finding = SalesSchemas["QuoteFindingView"];
@@ -51,10 +57,13 @@ export function QuoteActions({
   quote,
   viewer,
   onDone,
+  onSource,
 }: {
   quote: Quote;
   viewer: Viewer;
   onDone: () => void;
+  /** Opens where a model-read value was read (ticket 29). */
+  onSource?: OpenSource;
 }) {
   const offers = quoteOffers(quote, viewer);
   const { run, pending } = useAction();
@@ -156,7 +165,12 @@ export function QuoteActions({
 
   return (
     <div className="space-y-3">
-      <IntakeFindings quote={quote} viewer={viewer} onDone={onDone} />
+      <IntakeFindings
+        quote={quote}
+        viewer={viewer}
+        onDone={onDone}
+        onSource={onSource}
+      />
       {shown.length ? (
         <Space wrap align="start" size="middle">
           {shown.map(([action, offer]) => (
@@ -326,7 +340,7 @@ function DeclineDialog({
   return (
     <Modal
       open={open}
-      title={`Từ chối báo giá RFQ ${quote.rfq_no}`}
+      title={`Từ chối báo giá ${quoteTitle(quote)}`}
       okText="Từ chối báo giá"
       cancelText="Hủy"
       okButtonProps={{ danger: true, loading }}
@@ -371,36 +385,55 @@ function DeclineDialog({
 }
 
 /**
- * What the request lacked (`rfq_incomplete`) or whose customer is not known
- * yet (`customer_unknown`): Sales types the customer's answer, one finding at
- * a time, before the YCBG is drafted.
+ * What the request lacked (`rfq_incomplete`), whose customer is not known
+ * yet (`customer_unknown`), or what a model read (`value_uncertain`, ticket
+ * 29): Sales types the customer's answer, or confirms each value, one at a
+ * time, before the YCBG is drafted.
  */
 function IntakeFindings({
   quote,
   viewer,
   onDone,
+  onSource,
 }: {
   quote: Quote;
   viewer: Viewer;
   onDone: () => void;
+  onSource?: OpenSource;
 }) {
   const name = usePeople();
-  const intake = quote.findings.filter((f) =>
-    ["rfq_incomplete", "customer_unknown"].includes(f.code),
-  );
+  const intake = quote.findings.filter((f) => INTAKE_CODES.includes(f.code));
   if (!intake.length) return null;
   return (
     <div className="space-y-2">
-      {intake.map((f) => (
-        <IntakeFinding
-          key={f.key}
-          quote={quote}
-          finding={f}
-          viewer={viewer}
-          onDone={onDone}
-          name={name}
-        />
-      ))}
+      {intake.map((f) =>
+        f.code === "value_uncertain" ? (
+          <Card
+            key={f.key}
+            size="small"
+            type="inner"
+            title={`${label(FINDING_CODE, f.code)}${f.line_no ? ` · dòng ${f.line_no}` : ""}`}
+          >
+            <ModelReadFinding
+              quote={quote}
+              finding={f}
+              viewer={viewer}
+              onDone={onDone}
+              onSource={onSource}
+              name={name}
+            />
+          </Card>
+        ) : (
+          <IntakeFinding
+            key={f.key}
+            quote={quote}
+            finding={f}
+            viewer={viewer}
+            onDone={onDone}
+            name={name}
+          />
+        ),
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { SalesSchemas } from "@dw/api-client";
+import { formatDate } from "../../../lib/dates";
 import { label, SALES_ROLE } from "./labels";
 import type { Offer, Viewer } from "./order-actions";
 
@@ -67,6 +68,28 @@ export function approvalReason(quote: Quote, viewer: Viewer): string | null {
   return null;
 }
 
+/**
+ * The request's own findings, answered by Sales before the YCBG is drafted:
+ * what the customer left blank, whose customer a forwarded request is, and
+ * every value a model read (`INTAKE_FINDINGS` in `domain/quotes.py`).
+ */
+/** What a request is called: its number, or, for one a model read from a
+ * mail that states none (ticket 29), the mail it came in. */
+export function quoteTitle(quote: {
+  rfq_no: string | null;
+  received_at: string;
+}): string {
+  return quote.rfq_no
+    ? `RFQ ${quote.rfq_no}`
+    : `Yêu cầu trong thư ${formatDate(quote.received_at.slice(0, 10))}`;
+}
+
+export const INTAKE_CODES: readonly string[] = [
+  "rfq_incomplete",
+  "customer_unknown",
+  "value_uncertain",
+];
+
 export function quoteOffers(
   quote: Quote,
   viewer: Viewer,
@@ -77,9 +100,7 @@ export function quoteOffers(
     ? null
     : `Bạn không có quyền làm bước này của báo giá (cần vai ${PIC}).`;
   const intake = quote.findings.filter(
-    (f) =>
-      ["rfq_incomplete", "customer_unknown"].includes(f.code) &&
-      f.disposition.kind === "open",
+    (f) => INTAKE_CODES.includes(f.code) && f.disposition.kind === "open",
   );
   const intakeReason = intake.length
     ? `Còn ${intake.length} thông tin của yêu cầu báo giá chưa đủ: bổ sung trước khi soạn YCBG.`

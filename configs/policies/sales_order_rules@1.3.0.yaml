@@ -1,0 +1,151 @@
+schema_version: "1.0"
+policy_id: sales_order_rules
+policy_version: "1.3.0"
+
+# How DW1 checks a customer PO before Sales reviews it (WIV-03-012 steps 1, 2,
+# 4 and 6). Code reads this file and computes every number in a finding from
+# it, the master data and the PO's own cells; no model reads it.
+#
+# Platform layer: every value here is a fictional default. The fine print the
+# Sales requirements leave to the company to confirm (the copper/LME rule, the
+# short lead-time criterion, cross-check, export control) is still owed; a
+# tenant's own answers arrive as its own version of this policy, never as an
+# edit to this file.
+#
+# A finding is stamped with this file's id and version when it is raised, and
+# a case stamps cross_check_required and export_control_mode when it is
+# checked. Later steps read the stamps, so editing this file never changes
+# what an existing case may do; a new version changes the cases checked after
+# it.
+#
+# 1.1.0 (ticket 20): legacy_encoding, a value read from text typed in a TCVN3
+# or VNI font. Nothing else changed from 1.0.0.
+# 1.2.0 (ticket 28, dw_sales ADR 0005): model_assist, the switches for the
+# steps a model may take part in, every one off. Nothing else changed.
+# 1.3.0 (tickets 29 and 31, dw_sales ADR 0005): model_assist gains
+# message_intent, rfq_extraction and unread_retry_hours, the two steps off.
+# Nothing else changed.
+
+# A PO unit price passes when it is within this fraction of the quoted unit
+# price, in the quotation's currency. "0": it must equal the quotation. A
+# price that differs is Sales' to accept or send back, never DW1's to absorb.
+# Quoted as a string so the number is read exactly.
+price:
+  relative_tolerance: "0"
+
+# A banded quotation holds while LME copper is inside its band. The band is
+# checked against the monthly LME price this many months before the month of
+# the PO date: 0 is that month, 1 the month before, which is the last month
+# already published when the PO arrives. A month with no price on record is a
+# mismatch: a band nobody can check is not a band that holds.
+lme_band:
+  months_before_po_date: 1
+
+# A requested date earlier than <from> + lead time is short.
+# from: received_date (the day the PO arrived, Asia/Ho_Chi_Minh) or po_date.
+# lead_time: item_standard (the item master's standard lead time, what
+#   WIV-03-012 step 4 names) or quotation (the lead time quoted to this
+#   customer, or the item's standard one when the line has no quotation).
+# day_basis: calendar. Working days need a holiday calendar nobody has
+#   supplied, so no other value is accepted yet.
+short_lead_time:
+  from: received_date
+  lead_time: item_standard
+  day_basis: calendar
+
+# WIV-03-012 step 9: a Sales member who made none of the case cross-checks
+# it against the Bravo entry before it is confirmed. false lets an order go
+# from uploaded_to_bravo straight to confirmed.
+cross_check_required: true
+
+# missing_noc_esf is a warning the export-control PIC acknowledges.
+# warn: once acknowledged, the order may be confirmed.
+# block_confirmation: its presence refuses confirmation even when acknowledged.
+export_control_mode: warn
+export_control:
+  # A denial-list screening older than this on the day the PO arrives counts
+  # as none.
+  denial_list_max_age_days: 90
+
+# How much of a sender's file a reader opens (spec decision 13). Past any of
+# these the file is not read and the message goes to Sales as unreadable.
+intake:
+  max_attachment_bytes: 10000000
+  max_unpacked_bytes: 20000000
+  max_sheets: 50
+  max_pages: 20
+  max_cells: 200000
+
+# The fiscal year starts on the first of this month and is named by the
+# calendar year it starts in (4: FY2026 is April 2026 to March 2027). A
+# customer's ESF is checked against the fiscal year of the PO date.
+fiscal_year_start_month: 4
+
+# Which steps a model takes part in for this tenant (dw_sales ADR 0005). The
+# platform ships every one off; a tenant turns one on in its own version of
+# these rules, once that step's live eval meets its bar.
+# description_attributes: a local model reads an item description DW1's own
+#   vocabulary does not, for a line the convert list does not map. Code checks
+#   every span, parses every number and computes coverage; the model's labels
+#   are flagged and Sales confirms the PRV code (ticket 28).
+# message_intent: a local model gives the kind of a message no reader
+#   accepted (no attachment read as a PO, a request form or a Design reply),
+#   in place of the keyword tables; code maps the kind to the route, and
+#   resolves a number it names only against the sender's own records
+#   (ticket 31). A readable document decides its message's kind first,
+#   whatever this says, and no model is asked.
+# rfq_extraction: a local model reads a request for quotation from the mail
+#   body, a PDF's text layer or a customer's own Excel, when the fixed-label
+#   reader reads none. Every value is span text code locates and parses, and
+#   is flagged for Sales to confirm; a stated target price never reaches
+#   price evidence (ticket 29).
+# unread_retry_hours: while a message is younger than this, a model that is
+#   down or answers outside the schema leaves it not yet processed, for the
+#   next processing to try again; after it, the message is routed `other`
+#   with "DW1 did not understand". A budget or quota refusal is never this:
+#   it stops the run.
+model_assist:
+  description_attributes: false
+  message_intent: false
+  rfq_extraction: false
+  unread_retry_hours: 24
+
+# error is blocking: what is wrong with the order as printed, accepted only
+# where the findings table allows it and with a reason. warning is shown and
+# acknowledged. Either way the case cannot be prepared while a finding is open
+# (missing_noc_esf: confirmed), so a severity changes how a finding is shown,
+# never whether it needs a decision. Every finding code must be listed; a
+# policy that leaves one out is refused when it loads.
+findings:
+  # Nothing to enter in the ERP until the line names a known item.
+  code_unmapped: error
+  code_ambiguous: error
+  # No price the order can be confirmed at.
+  quotation_missing: error
+  price_mismatch: error
+  currency_mismatch: error
+  uom_mismatch: error
+  lme_band_mismatch: error
+  # A quantity the factory does not produce as ordered.
+  moq_violation: error
+  pack_multiple: error
+  # What was read is not all that was printed, or not read for certain.
+  line_total_mismatch: error
+  value_uncertain: error
+  # The customer was taken from the document and Sales has not confirmed it.
+  customer_unknown: error
+  # The order is already in hand: entering it again would double it.
+  duplicate_po: error
+  # The date is Sales' and production control's to agree; the order stands.
+  requested_date_short_lt: warning
+  # Export control decides elsewhere (WIV-03-032); DW1 only warns.
+  missing_noc_esf: warning
+  # Sales updates the order already entered, or reads the diff.
+  revised_po: warning
+  revision_without_base: warning
+  customer_temporary: warning
+  sender_unverified: warning
+  # Text typed in a TCVN3 or VNI font is not what the customer sees; the
+  # customer sends the PO again in Unicode. Converting it is ADR 0010
+  # decision 3, later.
+  legacy_encoding: error

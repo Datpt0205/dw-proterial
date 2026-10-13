@@ -43,6 +43,7 @@ class _MessageFixture(BaseModel):
     subject: str
     received_at: AwareDatetime
     body_text: str
+    body_html: str | None = None
     attachments: tuple[_AttachmentFixture, ...] = ()
     # Required here although the message model defaults it to "unverified":
     # a fixture states what the mail system concluded, so a scenario never
@@ -120,6 +121,7 @@ class MockInbox:
                     subject=fixture.subject,
                     received_at=fixture.received_at,
                     body_text=fixture.body_text,
+                    body_html=fixture.body_html,
                     attachments=tuple(attachments),
                     authentication=fixture.authentication,
                 )

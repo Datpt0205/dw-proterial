@@ -19,6 +19,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dw_sales.domain.catalog import Compliance, CustomerCode
+from dw_sales.domain.message_intent import IntentReading
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -38,6 +39,9 @@ class CaseKind(StrEnum):
 class RoutingReason(StrEnum):
     DELIVERY_CHANGE = "delivery_change"
     COMPLAINT = "complaint"
+    # A reply about a case or an order already in hand that is none of the
+    # reasons above (ticket 31: only a model reading gives it).
+    REPLY_TO_CASE = "reply_to_case"
     DESIGN_REPLY_UNMATCHED = "design_reply_unmatched"
     SAMPLE_REQUEST = "sample_request"
     CUSTOMER_UNKNOWN = "customer_unknown"
@@ -68,6 +72,9 @@ class MessageDisposition(BaseModel):
     # A sample request carries the customer's export-control status, so the
     # PIC who handles it sees what an order would have been warned about.
     compliance: Compliance | None = None
+    # What a model reading of the message's intent did, where the tenant's
+    # rules asked for one (ticket 31): ids, codes and numbers, never words.
+    reading: IntentReading | None = None
 
     @model_validator(mode="after")
     def _kind_says_what_is_there(self) -> Self:

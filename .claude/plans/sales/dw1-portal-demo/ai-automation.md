@@ -1,7 +1,7 @@
 # DW1: where a model takes work off people
 
-Status: proposal, 2026-10-12. Đạt decides (tickets 28-33 are
-`needs-triage`).
+Status: proposal, 2026-10-12. Đạt decides. Tickets 28, 29 and 31 are
+built (2026-10-13); 30, 32 and 33 are `needs-triage`.
 
 Until 2026-10-13 DW1 called no model. Reading, mapping, checks, files and
 emails are deterministic code, and anything unusual is routed to a person.
@@ -23,7 +23,24 @@ Qwen3.5-9B (thinking off, GTX 1080 Max-Q):
   suggested correctly and confirmed through the API.
 
 Detail, the run-by-run table and the decisions taken: ticket 28's "As built"
-and Comments. Next: ticket 29.
+and Comments.
+
+**Built next (2026-10-13, same footing):** ticket 29 (Q1, a request for
+quotation in the mail body, a PDF's text or the customer's own sheet) and
+ticket 31 (O1/Q1 routing, the intent of a message no reader accepted), on
+the same local model:
+
+- Ticket 29, 34 golden requests: 94.6% of the stated VI/EN values read into
+  the right field (bar 85%), JA 96.0%; every value flagged and confirmed by
+  Sales one by one; 0 target prices in price evidence, 0 injection effects;
+  p50 15 s, p95 24 s per request.
+- Ticket 31, 88 golden messages: 90.9% kind accuracy (bar 90%) against
+  27.3% for the keyword tables; 97.6% on the 42 phrasings the tables miss;
+  every miss lands on a person; p50 2.7 s per message.
+- Live portal flow: the 40-message mailbox in 149.7 s, 15 model calls,
+  14,317 input tokens in the one run.
+
+Next: ticket 30, then 32 and 33 (Đạt's order).
 
 ## The rule every candidate follows
 
@@ -93,8 +110,10 @@ removing them; shadow measurement only).
    PRV code). No model. It removes most O2 lookups for repeat items, and the
    same pairs are the free gold labels for ticket 28.
 2. **Deterministic fixes the model tickets lean on:** content-first ordering
-   in `_kind`; thread headers on `InboundMessage`; the RFQ `.xlsx` filename
-   gate; the PO reader fixes listed in ticket 30.
+   in `_kind` (done with ticket 31); thread headers on `InboundMessage`
+   (open; the newest part is cut by structure instead, `mail_parts`); the
+   RFQ `.xlsx` filename gate (done with ticket 29: the bytes decide); the PO
+   reader fixes listed in ticket 30.
 3. **A layout-onboarding screen** with layouts stored as tenant data and an
    approval record (the larger half of ticket 30's value, no model).
 4. **Before any model step** (one change, shared by tickets 28-33):
@@ -120,11 +139,13 @@ removing them; shadow measurement only).
     - The local server is its own provider (`onprem`), apart from the gateway.
     - `max_input_tokens` is not declared, because nothing reads it; code
       bounds each call instead (10 lines). The context-overflow item stays
-      open for that reason.
+      open for that reason. **Closed with ticket 29:** `onprem` declares
+      6,000 on its structured route, the composition root reads it, and
+      tickets 29 and 31 cut or split every call under it.
     - Latency was measured on GPU only, not on CPU.
 
-5. Tickets **28** (done 2026-10-13), then **29** (it uses 28 for item
-   lines), then **30**, **31**, **32**, **33**.
+5. Tickets **28**, **29** and **31** (done 2026-10-13), then **30**,
+   **32**, **33**.
 
 Each ticket ships with its switch off for every tenant. A tenant turns one
 on through an approved version of its own rules (ticket 19) once that

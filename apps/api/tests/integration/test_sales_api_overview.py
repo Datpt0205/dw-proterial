@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
-from sales_api_harness import AN, DIEU, GIANG, HA, KHOA, Api, user_id
+from sales_api_harness import AN, DIEU, GIANG, HA, KHOA, MOCK_DATA, Api, user_id
 from sales_flow import order_of, replied, submitted, uploaded
 
 pytestmark = pytest.mark.integration
@@ -17,11 +18,15 @@ def _step(overview: dict[str, Any], step_id: str) -> int:
     return count
 
 
+# The mock mailbox's size, counted from its fixture rather than typed here.
+MAILBOX = len(json.loads((MOCK_DATA / "inbox.json").read_text(encoding="utf-8")))
+
+
 async def test_the_overview_counts_the_mailbox_and_the_steps(api: Api) -> None:
     an, ha = api.as_(AN), api.as_(HA)
     before = (await ha.get("/overview")).json()
-    assert before["messages"]["total"] == 36
-    assert before["messages"]["without_disposition"] == 36
+    assert before["messages"]["total"] == MAILBOX
+    assert before["messages"]["without_disposition"] == MAILBOX
     assert before["messages"]["oldest_waiting_seconds"] > 0
     assert before["kpi_policy"] == "sales_kpi@1.0.0"
     assert before["quotation_time"]["target_seconds"] == 86400.0

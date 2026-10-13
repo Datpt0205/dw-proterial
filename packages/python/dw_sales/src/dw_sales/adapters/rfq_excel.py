@@ -27,7 +27,9 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from pydantic import ValidationError
 
+from dw_sales.adapters.readers.documents import sniff
 from dw_sales.adapters.readers.excel import MACROS_PART
+from dw_sales.application.order_ports import QuoteForm
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Currency, CustomerItemCode, DocumentNo, Name, PrvCode, Uom
@@ -47,7 +49,6 @@ from dw_sales.domain.quotes import (
 
 # Stamped on every request it reads (`RfqDocument.parser_version`).
 PARSER_VERSION: Final = "excel_rfq_reader@1.0.0"
-_SUFFIX: Final = ".xlsx"
 # A request for quotation is a few kilobytes. The bound is on what the archive
 # declares it holds uncompressed, which zipfile holds an entry to as it inflates.
 _MAX_UNCOMPRESSED_BYTES: Final = 16 * 1024 * 1024
@@ -102,13 +103,37 @@ class ExcelDesignReplyReader:
         return None if sheet is None else _reply(sheet)
 
 
+class ExcelQuoteForms:
+    """Implements `QuoteFormPort`: which of the seller's quotation forms a
+    workbook is, by the marker its one marked sheet carries. Recognition
+    only: the quotation flow reads the values, and refuses a form it cannot."""
+
+    def form(self, content: AttachmentContent) -> QuoteForm | None:
+        found: list[QuoteForm] = []
+        forms: tuple[tuple[str, QuoteForm], ...] = (
+            (_RFQ_NO, "quote_request"),
+            (_YCBG_NO, "design_reply"),
+        )
+        for marker, form in forms:
+            try:
+                marked = _the_marked_sheet(content, marker) is not None
+            except QuoteFileUnreadableError:
+                # Two sheets carry the marker: it is that form, and the flow
+                # that reads it says why it cannot.
+                marked = True
+            if marked:
+                found.append(form)
+        return found[0] if len(found) == 1 else None
+
+
 def _the_marked_sheet(content: AttachmentContent, marker: str) -> _Sheet | None:
     """The one sheet carrying ``marker``, or None when the file has none.
 
     Two such sheets are refused: which one is the document would be a guess.
     """
     attachment = content.attachment
-    if not attachment.name.lower().endswith(_SUFFIX):
+    # What the bytes are, never the name the sender gave the file.
+    if sniff(content.data) != "xlsx":
         return None
     sheets = _read_cells(content.data)
     if sheets is None:

@@ -1,0 +1,35 @@
+{
+  "_comment": "M37-M40 in a DW1 run on the recorded model (tickets 29, 31).",
+  "cases": {
+    "M37": {
+      "lines": 2,
+      "value_uncertain": 3,
+      "rfq_incomplete": [],
+      "stated_targets": 0,
+      "reading": "sales.rfq_extraction@1.0.0"
+    },
+    "M38": {
+      "lines": 2,
+      "value_uncertain": 3,
+      "rfq_incomplete": [],
+      "stated_targets": 1,
+      "reading": "sales.rfq_extraction@1.0.0"
+    },
+    "M39": {
+      "lines": 2,
+      "value_uncertain": 3,
+      "rfq_incomplete": [
+        2
+      ],
+      "stated_targets": 0,
+      "reading": "sales.rfq_extraction@1.0.0"
+    },
+    "M40": {
+      "reason": "delivery_change",
+      "kind": "delivery_change",
+      "references": [
+        "BRN-PO-2609-052"
+      ]
+    }
+  }
+}

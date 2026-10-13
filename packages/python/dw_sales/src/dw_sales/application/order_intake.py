@@ -7,10 +7,15 @@ quote request or a Design reply is handed to the quotation flow, which gives
 it its disposition (ticket 03); `IntakeOutcome.disposition` is then None and
 the outcome says so.
 
-**Code rules, not a model, for routing.** Routing is keywords over the
-subject and the attachment names, then the body. Keywords miss any phrasing nobody listed;
-what keeps that safe is where a miss lands: routed to Sales as ``other``. No
-keyword sets a value.
+**A readable document decides first.** An attachment the seller's request
+form or Design's reply form recognises, or one that reads as a PO, decides the
+message's kind whatever its subject says, and no model is asked (ticket 31).
+Only a message no reader accepted is classified by its words: by a local
+model's typed intent where the tenant's rules turn it on (`message_intent`,
+dw_sales ADR 0005), which code maps to the route (`INTENT_ROUTES`), else by
+the keyword tables over the subject and the attachment names, then the body.
+A miss lands where it is safe: routed to Sales as ``other``. Neither a
+keyword nor the model sets a value.
 
 **The body never changes a value.** Customer, items, quantities, prices and
 dates come from the sender's domain (or, for a forwarded PO, the buyer the
@@ -27,18 +32,21 @@ from __future__ import annotations
 import re
 import unicodedata
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import StrEnum
+from typing import Final
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
+from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (
     OrderCaseLookupPort,
     OrderRulesPort,
     PoDocumentReaderPort,
+    QuoteFormPort,
 )
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.support import decided
@@ -50,6 +58,8 @@ from dw_sales.domain.dispositions import (
     MessageDisposition,
     RoutingReason,
 )
+from dw_sales.domain.mail_parts import newest_part
+from dw_sales.domain.message_intent import IntentKind, IntentReading
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import (
     CUSTOMER_CHECK_CODES,
@@ -93,6 +103,24 @@ class MessageKind(StrEnum):
 # Handed to the quotation flow, which gives them their disposition.
 QUOTATION_KINDS = frozenset({MessageKind.QUOTE_REQUEST, MessageKind.DESIGN_REPLY})
 
+# Where each kind a model reads goes (ticket 31). The order and quotation
+# flows still decide for themselves: a PO without a readable file, or a
+# Design reply from a sender the mail system did not verify, is routed as it
+# would be anyway. The rest go to the customer's Sales PIC with the reason.
+# One table: a kind is a row, never a branch.
+INTENT_ROUTES: Final[Mapping[IntentKind, MessageKind | RoutingReason]] = {
+    "po": MessageKind.PO,
+    "quote_request": MessageKind.QUOTE_REQUEST,
+    "design_reply": MessageKind.DESIGN_REPLY,
+    "reply_to_case": RoutingReason.REPLY_TO_CASE,
+    "delivery_change": RoutingReason.DELIVERY_CHANGE,
+    "complaint": RoutingReason.COMPLAINT,
+    "sample_request": RoutingReason.SAMPLE_REQUEST,
+    "other": RoutingReason.OTHER,
+}
+# Why a message no model could read goes to Sales once its retries are over.
+NOT_UNDERSTOOD: Final = "DW1 did not understand the message: no usable model answer"
+
 # Matched against NFKC-normalised, casefolded text, in English, Vietnamese and
 # the Japanese the customers' own systems print.
 _QUOTE_REQUEST = re.compile(
@@ -113,6 +141,25 @@ _ROUTES: tuple[tuple[RoutingReason, re.Pattern[str]], ...] = (
         re.compile(r"lịch giao|giao sớm|delivery (?:schedule|date)|reschedul|納期"),
     ),
 )
+
+
+@dataclass(frozen=True)
+class Classification:
+    """What a message is, and what decided it.
+
+    ``reason`` and ``detail`` say why an ``other`` message goes to Sales when
+    the classification already knows (a model's kind, two kinds of document);
+    otherwise the keyword reasons apply. ``reading`` is the model reading's
+    stamp, for the disposition. ``retry``: the model gave no usable answer
+    and the message is young enough to try again, so it stays not yet
+    processed (`ModelAssist.unread_retry_hours`).
+    """
+
+    kind: MessageKind
+    reason: RoutingReason | None = None
+    detail: str | None = None
+    reading: IntentReading | None = None
+    retry: bool = False
 
 
 @dataclass(frozen=True)
@@ -144,31 +191,165 @@ class OrderIntake:
     rules: OrderRulesPort
     cases: OrderCaseLookupPort
     new_case_id: Callable[[], uuid.UUID]
+    # Recognises the seller's request and Design-reply forms, so that a
+    # readable document decides its message's kind first (ticket 31).
+    quote_forms: QuoteFormPort
     # A model reading of the descriptions DW1's vocabulary does not read
     # (dw_sales ADR 0005), for a tenant whose rules turn it on. None: no model
     # is wired in this process, and those lines stay unmapped as before.
     descriptions: DescriptionReader | None = None
+    # A model reading of the intent of a message no reader accepted (ticket
+    # 31), for a tenant whose rules turn it on. None: no model is wired, and
+    # the keyword tables classify those messages as before.
+    intents: IntentReader | None = None
 
-    async def classify(self, scope: SalesScope, message: InboundMessage) -> MessageKind:
-        return self._kind(message, await self._attachments(scope, message))
+    async def classify(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        *,
+        run: RunContext | None = None,
+        now: datetime | None = None,
+    ) -> Classification:
+        """What the message is (module docstring). ``run`` is the DW1 run
+        processing it: a model is asked only inside one. ``now`` is when it is
+        processed, which says whether a message the model could not read is
+        still young enough to try again; without it, it is not."""
+        return await self._classified(
+            scope, message, await self._attachments(scope, message), run, now
+        )
 
     async def process(
-        self, scope: SalesScope, message: InboundMessage, *, run: RunContext | None = None
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        *,
+        run: RunContext | None = None,
+        now: datetime | None = None,
+        classified: Classification | None = None,
     ) -> IntakeOutcome:
         """The message's disposition, and the order case it created or revised.
 
         Refused with a conflict when this message already has a case: that is
         processing twice, not a duplicate PO. ``run`` is the DW1 run doing the
         processing: a model call is made only inside one, attributed to it.
+        ``classified`` is the classification the caller already made, so the
+        message is not read, and no model asked, twice.
         """
         attached = await self._attachments(scope, message)
-        kind = self._kind(message, attached)
+        classification = classified or await self._classified(scope, message, attached, run, now)
+        if classification.retry:
+            raise ValueError("a message left for a retry is not processed")
+        kind = classification.kind
         if kind in QUOTATION_KINDS:
             return IntakeOutcome(message.message_id, kind, None)
         sender = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
         if kind is MessageKind.OTHER:
-            return self._routed(message, kind, _other_reason(message), sender)
-        return await self._order(scope, message, kind, sender, attached, run)
+            reason = classification.reason or _other_reason(message)
+            outcome = self._routed(message, kind, reason, sender, classification.detail)
+        else:
+            outcome = await self._order(scope, message, kind, sender, attached, run)
+        return _stamped(outcome, classification.reading)
+
+    # ------------------------------------------------------ classification --
+
+    async def _classified(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        attached: Sequence[_Attached],
+        run: RunContext | None,
+        now: datetime | None,
+    ) -> Classification:
+        sender = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
+        rules = await self.rules.rules(scope)
+        by_content = await self._by_content(scope, attached, sender, rules.intake)
+        if len(by_content) > 1:
+            return Classification(
+                MessageKind.OTHER,
+                RoutingReason.OTHER,
+                "its attachments read as more than one kind of document",
+            )
+        if by_content:
+            (kind,) = by_content
+            return Classification(kind)
+        if self.intents is not None and run is not None and rules.model_assist.message_intent:
+            return await self._intent(scope, message, attached, sender, rules, run, now)
+        return Classification(self._kind(message, attached))
+
+    async def _by_content(
+        self,
+        scope: SalesScope,
+        attached: Sequence[_Attached],
+        sender: Customer | None,
+        caps: IntakeCaps,
+    ) -> set[MessageKind]:
+        """The kinds the attachments' content says: a request or Design-reply
+        form by its marker, a PO by the reader of the sender's (or the named
+        buyer's) layout. Several POs are one kind; intake decides on them."""
+        kinds: set[MessageKind] = set()
+        readable: list[AttachmentContent] = []
+        for item in attached:
+            content = item.content
+            if content is None:
+                continue
+            form = self.quote_forms.form(content)
+            if form is not None:
+                kinds.add(MessageKind(form))
+            elif (
+                self.reader.sniff(content.data) in ("pdf", "xlsx")
+                and content.attachment.size <= caps.max_attachment_bytes
+            ):
+                readable.append(content)
+        customer = sender or (await self._buyer(scope, readable, caps) if readable else None)
+        if customer is None:
+            return kinds
+        revised: list[bool] = []
+        for content in readable:
+            document = await self.reader.read(content, customer.code, caps)
+            if not isinstance(document, Unreadable):
+                revised.append(document.header.revision > 0)
+        if revised:
+            kinds.add(MessageKind.REVISED_PO if any(revised) else MessageKind.PO)
+        return kinds
+
+    async def _intent(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        attached: Sequence[_Attached],
+        sender: Customer | None,
+        rules: OrderRules,
+        run: RunContext,
+        now: datetime | None,
+    ) -> Classification:
+        """The kind a model reads (ticket 31), routed by `INTENT_ROUTES`."""
+        assert self.intents is not None  # asked only where one is wired
+        read = await self.intents.read(
+            scope, newest_part(message), sender, rules_version=rules.version, run=run
+        )
+        if read is None:
+            window = timedelta(hours=rules.model_assist.unread_retry_hours)
+            if now is not None and now - message.received_at < window:
+                return Classification(MessageKind.OTHER, retry=True)
+            return Classification(
+                MessageKind.OTHER,
+                RoutingReason.OTHER,
+                NOT_UNDERSTOOD,
+                self.intents.unavailable(rules.version),
+            )
+        route = INTENT_ROUTES[read.kind]
+        if isinstance(route, RoutingReason):
+            return Classification(MessageKind.OTHER, route, reading=read.reading)
+        if route is MessageKind.PO and not self._carries_document(attached):
+            # A message about a PO is not a PO: it has to carry one.
+            return Classification(
+                MessageKind.OTHER,
+                RoutingReason.OTHER,
+                "it names an order but carries no document",
+                read.reading,
+            )
+        return Classification(route, reading=read.reading)
 
     # ------------------------------------------------------------ orders --
 
@@ -601,11 +782,16 @@ class OrderIntake:
             for a in message.attachments
         ]
 
-    def _kind(self, message: InboundMessage, attached: Sequence[_Attached]) -> MessageKind:
-        carries_document = any(
+    def _carries_document(self, attached: Sequence[_Attached]) -> bool:
+        return any(
             item.content is not None and self.reader.sniff(item.content.data) is not None
             for item in attached
         )
+
+    def _kind(self, message: InboundMessage, attached: Sequence[_Attached]) -> MessageKind:
+        """The keyword tables: for a message no reader accepted, while the
+        tenant's rules leave the model reading off."""
+        carries_document = self._carries_document(attached)
         headline = " ".join([message.subject, *(a.name for a in message.attachments)])
         for text in (headline, message.body_text):
             words = _words(text)
@@ -655,6 +841,16 @@ class OrderIntake:
             customer_code=case.customer_code,
         )
         return IntakeOutcome(message.message_id, kind, disposition, case)
+
+
+def _stamped(outcome: IntakeOutcome, reading: IntentReading | None) -> IntakeOutcome:
+    """The outcome with the model reading's stamp on its disposition."""
+    if reading is None or outcome.disposition is None:
+        return outcome
+    disposition = MessageDisposition.model_validate(
+        {**outcome.disposition.model_dump(), "reading": reading}
+    )
+    return IntakeOutcome(outcome.message_id, outcome.kind, disposition, outcome.case)
 
 
 def _words(text: str) -> str:

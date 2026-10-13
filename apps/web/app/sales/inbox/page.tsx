@@ -32,7 +32,7 @@ import { compareVi, matches } from "../../../lib/search";
 import { useNow } from "../../../lib/use-now";
 import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
-import { label, ROUTING_REASON } from "../_lib/labels";
+import { INTENT_KIND, label, ROUTING_REASON } from "../_lib/labels";
 import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
@@ -380,6 +380,9 @@ function Inbox() {
                         Lý do: {label(ROUTING_REASON, m.disposition.reason)}
                       </Typography.Text>
                     ) : null}
+                    {m.disposition.reading ? (
+                      <IntentTag reading={m.disposition.reading} />
+                    ) : null}
                     {m.disposition.case_id ? (
                       <Link
                         href={`/sales/${m.disposition.case_kind === "quote" ? "quotes" : "orders"}/${m.disposition.case_id}`}
@@ -474,5 +477,39 @@ function Inbox() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * What a model read the message as (ticket 31): the kind, beside the reason
+ * code routed it with, and the numbers code resolved against the sender's
+ * own records. A machine's reading, so it says so.
+ */
+function IntentTag({
+  reading,
+}: {
+  reading: NonNullable<SalesSchemas["MessageDispositionView"]["reading"]>;
+}) {
+  if (reading.outcome !== "read" || !reading.kind)
+    return (
+      <StatusTag tone="unk">Mô hình không đọc được: DW1 không hiểu</StatusTag>
+    );
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <StatusTag tone="warn">
+        Mô hình đọc: {label(INTENT_KIND, reading.kind)}
+      </StatusTag>
+      {reading.references.length ? (
+        <Typography.Text>
+          Nhắc tới:{" "}
+          {reading.references
+            .map(
+              (r) =>
+                `${r.record === "purchase_order" ? "PO" : "YCBG/RFQ"} ${r.number}`,
+            )
+            .join(", ")}
+        </Typography.Text>
+      ) : null}
+    </span>
   );
 }

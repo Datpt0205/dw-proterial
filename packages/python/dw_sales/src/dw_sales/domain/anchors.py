@@ -7,9 +7,18 @@ original itself: a cell on the sheet grid, boxes on the rendered page, or the
 words quoted from it. Never a line of extracted text, which is the parser's
 reading and not the customer's file.
 
-The anchor carries the file's sha256. A file that changed, or was parsed again
-into different bytes, no longer matches, so an anchor can never point into a
-file other than the one its value was read from. dw_sales ADR 0002 records why
+One exception, and it is the customer's own text: a request for quotation a
+model read from the mail body (ticket 29). The body has no file; its newest
+part, as DW1 stores it on the case (`mail_parts.newest_part`), is what the
+customer wrote, so an anchor into it is the message part and the characters
+(``attachment_id`` None, ``chars``), and the screen highlights them there. A
+value a model read from a PDF's text layer names its page and the words,
+with no box: the text layer says which page, not where on it.
+
+The anchor carries the file's sha256 (the message part's, for the body). A
+file that changed, or was parsed again into different bytes, no longer
+matches, so an anchor can never point into a file other than the one its
+value was read from. dw_sales ADR 0002 records why
 the type lives here until a second context needs it.
 """
 
@@ -55,33 +64,63 @@ class PageBox(BaseModel):
         return self
 
 
-class SourceAnchor(BaseModel):
-    """The place in one attachment a value was read from.
+class TextRange(BaseModel):
+    """Characters ``start`` (inclusive) to ``end`` (exclusive) of a text."""
 
-    At least one of: ``cell_ref`` (``Sheet!B10``), ``page`` with its
-    ``boxes``, or ``quote``, the words as the file prints them. More than one
-    may be given when the reader knows more than one.
+    model_config = _FROZEN
+
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _ends_after_it_starts(self) -> Self:
+        if self.end <= self.start:
+            raise ValueError("a range ends after it starts")
+        return self
+
+
+class SourceAnchor(BaseModel):
+    """The place in one attachment, or in the message's own text, a value was
+    read from.
+
+    At least one of: ``cell_ref`` (``Sheet!B10``), ``page`` (with its
+    ``boxes`` where the reader knows them), ``quote``, the words as the file
+    prints them, or ``chars``, where they are in the text DW1 read. More than
+    one may be given when the reader knows more than one. ``attachment_id``
+    None points into the message's newest part, by ``chars`` alone.
     """
 
     model_config = _FROZEN
 
-    # The `Attachment` it points into, held to that attachment's own rules.
-    attachment_id: AttachmentId
+    # The `Attachment` it points into, held to that attachment's own rules;
+    # None for the message's newest part.
+    attachment_id: AttachmentId | None
+    # The attachment's bytes' sha256; for the message part, its text's.
     attachment_sha256: Sha256Hex
     cell_ref: str | None = Field(default=None, max_length=64)
     page: int | None = Field(default=None, ge=1)
     boxes: tuple[PageBox, ...] = ()
     quote: str | None = Field(default=None, min_length=1, max_length=500, pattern=r"\S")
+    chars: TextRange | None = None
 
     @model_validator(mode="after")
     def _points_somewhere(self) -> Self:
         if self.cell_ref is not None and _CELL_REF.fullmatch(self.cell_ref) is None:
             raise ValueError("cell_ref is not Sheet!A1")
-        if (self.page is None) != (not self.boxes):
-            raise ValueError("page and boxes go together")
-        if self.cell_ref is None and self.page is None and self.quote is None:
-            raise ValueError("an anchor needs a cell_ref, a page with boxes, or a quote")
+        if self.boxes and self.page is None:
+            raise ValueError("boxes are on a page")
+        if self.attachment_id is None and (
+            self.chars is None or self.cell_ref is not None or self.page is not None
+        ):
+            raise ValueError("an anchor into the message's text is a range of it")
+        if self.cell_ref is None and self.page is None and self.quote is None and not self.chars:
+            raise ValueError("an anchor needs a cell_ref, a page, a quote or a range")
         return self
+
+    @property
+    def in_message(self) -> bool:
+        """Whether it points into the message's own text, not an attachment."""
+        return self.attachment_id is None
 
     @property
     def sheet(self) -> str | None:

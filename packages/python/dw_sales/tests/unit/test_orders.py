@@ -52,7 +52,7 @@ from dw_sales.domain.process import WIV_STEPS, Coverage, Procedure, step
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.2.0"
+RULES = "sales_order_rules@1.3.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 # Principal ids, as `AccessContext.principal_id` carries them (fictional).

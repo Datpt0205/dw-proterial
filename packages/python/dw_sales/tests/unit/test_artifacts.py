@@ -51,7 +51,7 @@ from dw_sales.adapters.policy_files import (
     load_quote_rules,
 )
 from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.application.access import Gate
 from dw_sales.application.artifact_content import EML, PDF, XLSX, SalesEmailCopy
 from dw_sales.application.artifacts_service import (
@@ -310,7 +310,7 @@ def service(world: World, copy: ArtifactCopy = ARTIFACT_COPY) -> ArtifactService
 
 # ------------------------------------------------------------ order cases --
 
-_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml"))
+_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.3.0.yaml"))
 
 
 def intake(cases: OrderCases) -> OrderIntake:
@@ -318,6 +318,7 @@ def intake(cases: OrderCases) -> OrderIntake:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=MockInbox.load(SCOPE),
         reader=mock_po_readers(),
+        quote_forms=ExcelQuoteForms(),
         rules=_INTAKE_RULES,
         cases=cases,
         new_case_id=uuid.uuid4,

@@ -113,7 +113,7 @@ async function persona(
 
 let roster: string[] | null = null;
 
-/** Sign in on /dev-login by pressing that persona's "Sign in". */
+/** Sign in on /dev-login by pressing that persona's "Đăng nhập". */
 async function signIn(
   page: Page,
   request: APIRequestContext,
@@ -127,7 +127,7 @@ async function signIn(
   const index = roster.indexOf(subject);
   expect(index, `${subject} is on the demo roster`).toBeGreaterThanOrEqual(0);
   await page.goto("/dev-login");
-  const buttons = page.getByRole("button", { name: "Sign in", exact: true });
+  const buttons = page.getByRole("button", { name: "Đăng nhập", exact: true });
   await buttons.first().waitFor({ state: "visible" });
   await buttons.nth(index).click();
   await page.waitForURL("**/");
@@ -404,9 +404,9 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
   const an = await persona(request, AN);
   await signIn(page, request, AN);
   await page.goto("/sales/inbox");
-  await page.getByRole("button", { name: /DW xử lý tất cả \(34\)/ }).click();
+  await page.getByRole("button", { name: /DW xử lý tất cả \(39\)/ }).click();
   await expect(
-    page.getByText(/^36 thư · 0 chưa xử lý · \d+ chuyển Sales/),
+    page.getByText(/^40 thư · 0 chưa xử lý · \d+ chuyển Sales/),
   ).toBeVisible({
     timeout: 480_000,
   });
@@ -428,7 +428,7 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
       case_id: string | null;
     };
   }[] = await (await an.get("/inbox")).json();
-  expect(inbox).toHaveLength(36);
+  expect(inbox).toHaveLength(40);
   expect(
     inbox.filter((m) => m.disposition.kind === "not_yet_processed"),
   ).toEqual([]);
@@ -477,6 +477,59 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
     revised.superseded.map((s: { message_id: string }) => s.message_id),
   ).toEqual(["M04"]);
   await expect(page.getByText("Chờ PIC tự kiểm").first()).toBeVisible();
+});
+
+test("2b. With a model server, M37 is a quote case a model read; Diệu confirms a value against the mail", async ({
+  page,
+  request,
+}) => {
+  const an = await persona(request, AN);
+  const dieu = await persona(request, DIEU);
+  const inbox: {
+    message_id: string;
+    disposition: { kind: string; case_id: string | null };
+  }[] = await (await an.get("/inbox")).json();
+  const m37 = inbox.find((m) => m.message_id === "M37")!.disposition;
+  // Without a model server (CI), M37 is routed to Sales as before: the step
+  // a model takes is the API's and the evals' to hold there (ticket 29).
+  test.skip(
+    m37.kind !== "case_created",
+    "no model server: M37 is routed to Sales as before",
+  );
+  await signIn(page, request, DIEU);
+  await page.goto(`/sales/quotes/${m37.case_id}`);
+  await expect(
+    page.getByText("Mô hình đọc yêu cầu này từ thư hoặc tệp riêng của khách"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Yêu cầu trong thư/ }),
+  ).toBeVisible();
+
+  // The value is shown where it was read: highlighted in the mail.
+  await page.getByRole("button", { name: "Xem nguồn Số lượng dòng 1" }).click();
+  await expect(page.locator("mark")).toHaveText(/^1\.200 m$/);
+  await page.keyboard.press("Escape");
+
+  // Refusal first: the YCBG waits until every value a model read is confirmed.
+  const open = await (await dieu.get(`/quotes/${m37.case_id}`)).json();
+  const refused = await dieu.post(`/quotes/${m37.case_id}/ycbg`, {
+    case_version: open.case_version,
+  });
+  expect(refused.status()).toBe(422);
+
+  const quantity = page.getByRole("group", { name: "Số lượng dòng 1" });
+  await quantity
+    .getByRole("textbox", { name: "Số lượng xác nhận" })
+    .fill("1250");
+  await quantity.getByRole("button", { name: "Xác nhận" }).click();
+  await expect(quantity.getByText(/Đã xác nhận: 1250/)).toBeVisible();
+  const after = await (await dieu.get(`/quotes/${m37.case_id}`)).json();
+  const line = after.findings.find(
+    (f: { key: string }) => f.key === "value_uncertain:1",
+  );
+  expect(line.confirmed).toMatchObject([
+    { field: "quantity", read: "1200", value: "1250" },
+  ]);
 });
 
 test("3. An takes M03 from the source to the Bravo number; Diệu may not acknowledge NOC/ESF; An may not cross-check his own order", async ({

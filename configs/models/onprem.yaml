@@ -29,6 +29,11 @@ structured_extraction:
   timeout_seconds: 120
   reasoning_effort: none
   temperature: 0.0
+  # The most input one call is sent, prompt included: the server's context
+  # (num_ctx 8192) less room for the answer. A DW1 step cuts or splits what it
+  # reads under this (tickets 29, 31), so no call is refused as too long and
+  # retried for nothing.
+  max_input_tokens: 6000
 reasoning:
   provider: onprem
   model: qwen3.5-9b-dw

@@ -57,15 +57,50 @@ def test_a_quote_anchor_and_several_kinds_at_once_are_accepted() -> None:
     "fields",
     [
         {},
-        {"page": 1},
         {"boxes": [{"x": 0, "y": 0, "w": 1, "h": 1}]},
         {"quote": "   "},
+        {"chars": {"start": 5, "end": 5}},
     ],
-    ids=["nothing", "page_without_boxes", "boxes_without_page", "blank_quote"],
+    ids=["nothing", "boxes_without_page", "blank_quote", "empty_range"],
 )
 def test_an_anchor_that_points_nowhere_is_refused(fields: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         SourceAnchor.model_validate(_anchor(**fields))
+
+
+def test_a_value_read_from_a_pdf_text_layer_names_its_page_and_words() -> None:
+    """Ticket 29: the text layer says which page, not where on it."""
+    anchor = SourceAnchor.model_validate(
+        _anchor(page=2, quote="1,200 m", chars={"start": 40, "end": 47})
+    )
+
+    assert (anchor.page, anchor.boxes, anchor.in_message) == (2, (), False)
+
+
+def test_an_anchor_into_the_message_is_a_range_of_its_text() -> None:
+    text_sha = hashlib.sha256(b"newest part").hexdigest()
+    anchor = SourceAnchor(
+        attachment_id=None,
+        attachment_sha256=text_sha,
+        chars={"start": 3, "end": 9},
+        quote="1,200",
+    )
+
+    assert anchor.in_message and anchor.chars is not None and anchor.chars.end == 9
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"quote": "1,200"},
+        {"chars": {"start": 0, "end": 4}, "cell_ref": "PO!B10"},
+        {"chars": {"start": 0, "end": 4}, "page": 1},
+    ],
+    ids=["no_range", "a_cell_of_no_file", "a_page_of_no_file"],
+)
+def test_an_anchor_into_the_message_is_refused_without_its_range(fields: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError, match="a range of it"):
+        SourceAnchor.model_validate({"attachment_id": None, "attachment_sha256": SHA} | fields)
 
 
 @pytest.mark.parametrize(

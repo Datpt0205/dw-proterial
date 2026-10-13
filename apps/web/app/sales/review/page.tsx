@@ -13,7 +13,7 @@ import { salesApi } from "../_lib/api";
 import { label, SALES_ROLE } from "../_lib/labels";
 import { MAKER_CHECKER } from "../_lib/order-actions";
 import { usePeople } from "../_lib/people";
-import { PRICER_APPROVER } from "../_lib/quote-actions";
+import { PRICER_APPROVER, quoteTitle } from "../_lib/quote-actions";
 import { useResource } from "../_lib/use-resource";
 import { useSalesViewer } from "../_lib/viewer";
 import { SCOPE } from "../_components/sales-frame";
@@ -177,7 +177,9 @@ function Review() {
                 title: "Số RFQ",
                 key: "rfq",
                 render: (_, q) => (
-                  <Link href={`/sales/quotes/${q.case_id}`}>{q.rfq_no}</Link>
+                  <Link href={`/sales/quotes/${q.case_id}`}>
+                    {quoteTitle(q)}
+                  </Link>
                 ),
               },
               { title: "Khách", dataIndex: "customer_code" },

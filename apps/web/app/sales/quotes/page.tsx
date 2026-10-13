@@ -19,6 +19,7 @@ import { useNow } from "../../../lib/use-now";
 import { salesApi } from "../_lib/api";
 import { useCustomerName } from "../_lib/customers";
 import { label, QUOTE_STATE } from "../_lib/labels";
+import { quoteTitle } from "../_lib/quote-actions";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
 import { useListView, useStatusFilter } from "../_lib/use-status-filter";
@@ -97,7 +98,7 @@ function Quotes() {
       .filter((q) => !status.length || status.includes(q.status))
       .filter((q) =>
         matches(view.query, [
-          q.rfq_no,
+          q.rfq_no ?? "",
           q.ycbg_no,
           q.customer_code,
           customerName(q.customer_code),
@@ -131,7 +132,7 @@ function Quotes() {
       key: "overdue",
       tone: "err",
       lead: `${overdue.length} báo giá quá hạn`,
-      text: `RFQ ${firstLate.rfq_no} · ${label(QUOTE_STATE, firstLate.status)}`,
+      text: `${quoteTitle(firstLate)} · ${label(QUOTE_STATE, firstLate.status)}`,
       sub: d ? `${d.withZone} · ${d.relative}` : undefined,
       href: `/sales/quotes/${firstLate.case_id}`,
     });
@@ -151,7 +152,7 @@ function Quotes() {
       lead: `${pending.length} báo giá chờ duyệt`,
       text: pending
         .slice(0, 3)
-        .map((q) => q.rfq_no)
+        .map((q) => quoteTitle(q))
         .join(", "),
       href: "/sales/review",
     });
@@ -285,7 +286,7 @@ function Quotes() {
                       customerName(q.customer_code) ||
                       `Khách ${q.customer_code}`
                     }
-                    code={`RFQ ${q.rfq_no}`}
+                    code={quoteTitle(q)}
                     sub={q.ycbg_no ? `YCBG ${q.ycbg_no}` : "YCBG chưa lập"}
                   />
                 ),

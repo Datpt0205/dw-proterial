@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) read 0.946 of the 204 VI/EN values the golden requests state into the right field (0.949 of all 254; JA 0.960). The replay is deterministic, so a lower score means the verification changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "min_right_field_vi_en": 0.94
+}

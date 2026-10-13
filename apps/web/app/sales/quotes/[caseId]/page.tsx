@@ -41,8 +41,10 @@ import {
   label,
   LANGUAGE,
   QUOTE_STATE,
+  REGION_FLAG,
 } from "../../_lib/labels";
 import { usePeople } from "../../_lib/people";
+import { INTAKE_CODES, quoteTitle } from "../../_lib/quote-actions";
 import { anchorRegion } from "../../_lib/served";
 import { useResource } from "../../_lib/use-resource";
 import { useSalesViewer } from "../../_lib/viewer";
@@ -63,6 +65,7 @@ import {
 } from "../../_components/source-drawer";
 import { QuoteStateTag, SeverityTag } from "../../_components/tags";
 import { QuoteActions } from "./actions";
+import { MessageTextDrawer } from "./model-read";
 import { ApprovalPanel } from "./approval";
 import { EvidencePanel } from "./evidence";
 import { PricingForm } from "./pricing";
@@ -97,11 +100,17 @@ function QuoteDetail() {
   const [source, setSource] = useState<
     (SourceTarget & { attachmentId: string }) | null
   >(null);
+  const [mailSource, setMailSource] = useState<{
+    field: string;
+    lineNo: number | null;
+    start: number;
+    end: number;
+  } | null>(null);
 
   const data = quote.data;
   const artifacts = useCaseArtifacts("quote", caseId, data?.case_version);
   useEffect(() => {
-    if (data) document.title = `RFQ ${data.rfq_no} · Báo giá · Sales`;
+    if (data) document.title = `${quoteTitle(data)} · Báo giá · Sales`;
   }, [data]);
 
   const reload = useCallback(() => {
@@ -140,7 +149,7 @@ function QuoteDetail() {
     : null;
   const firstRegion: SourceRegion | null = anchorRegion(firstAnchor);
   const otherFindings = data.findings.filter(
-    (f) => !["rfq_incomplete", "customer_unknown"].includes(f.code),
+    (f) => !INTAKE_CODES.includes(f.code),
   );
   const showPricing = [
     "design_replied",
@@ -150,19 +159,39 @@ function QuoteDetail() {
     "approved",
   ].includes(data.status);
 
-  const openLine = (field: string, lineNo: number) => {
+  // Where a value was read: a page or a sheet of the request's file, or,
+  // for a request a model read from the mail (ticket 29), the mail itself.
+  const openField = (field: string, lineNo: number | null) => {
     const line = data.lines.find((l) => l.line_no === lineNo);
-    const region = anchorRegion(line?.anchors[field] ?? firstAnchor);
-    if (region)
-      setSource({ region, field, lineNo, attachmentId: data.attachment_id });
+    const anchor =
+      (lineNo === null ? data.anchors[field] : line?.anchors[field]) ??
+      firstAnchor;
+    if (anchor && anchor.attachment_id === null && anchor.chars) {
+      setMailSource({
+        field,
+        lineNo,
+        start: anchor.chars.start,
+        end: anchor.chars.end,
+      });
+      return;
+    }
+    const region = anchorRegion(anchor);
+    if (region && data.attachment_id)
+      setSource({
+        region,
+        field,
+        lineNo: lineNo ?? undefined,
+        attachmentId: data.attachment_id,
+      });
   };
+  const openLine = (field: string, lineNo: number) => openField(field, lineNo);
 
   return (
     <div className="space-y-4">
       <PageHeader
         breadcrumb={salesCrumbs(
           { title: "Báo giá", href: "/sales/quotes" },
-          `RFQ ${data.rfq_no}`,
+          quoteTitle(data),
         )}
         tags={
           <>
@@ -182,14 +211,15 @@ function QuoteDetail() {
             ) : null}
           </>
         }
-        title={`RFQ ${data.rfq_no}`}
+        title={quoteTitle(data)}
         subtitle={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · gửi từ ${data.sender}`}
         actions={
           <>
-            {firstRegion ? (
+            {firstRegion && data.attachment_id ? (
               <Button
                 icon={<FileSearchOutlined aria-hidden />}
                 onClick={() =>
+                  data.attachment_id &&
                   setSource({
                     region: firstRegion,
                     attachmentId: data.attachment_id,
@@ -316,8 +346,22 @@ function QuoteDetail() {
 
       <CaseTimeline procedure="WIV-03-023" status={data.status} next={next} />
 
+      {data.reading ? (
+        <Alert
+          type="warning"
+          showIcon
+          title="Mô hình đọc yêu cầu này từ thư hoặc tệp riêng của khách"
+          description={`Mọi giá trị gắn "${label(REGION_FLAG, "model_read")}" là chữ của khách do mô hình chỉ ra và DW1 đọc lại: mở nguồn, xác nhận từng giá trị trước khi soạn YCBG. Khách hàng lấy theo tên miền người gửi; giá khách nêu chỉ để tham khảo, không vào căn cứ giá.`}
+        />
+      ) : null}
+
       <Card size="small" title="Bước tiếp theo">
-        <QuoteActions quote={data} viewer={viewer} onDone={reload} />
+        <QuoteActions
+          quote={data}
+          viewer={viewer}
+          onDone={reload}
+          onSource={openField}
+        />
       </Card>
 
       {data.status === "pending_approval" ? (
@@ -346,13 +390,27 @@ function QuoteDetail() {
             {
               title: "Mô tả",
               dataIndex: "description",
-              render: (text: string) => (
-                <Typography.Text
-                  ellipsis={{ tooltip: text }}
-                  className="max-w-[22rem]"
-                >
-                  {text}
-                </Typography.Text>
+              render: (text: string, l) => (
+                <span className="flex flex-col items-start gap-1">
+                  <Typography.Text
+                    ellipsis={{ tooltip: text }}
+                    className="max-w-[22rem]"
+                  >
+                    {text}
+                  </Typography.Text>
+                  {l.model_read.length ? (
+                    <StatusTag tone="warn">
+                      {label(REGION_FLAG, "model_read")}:{" "}
+                      {l.model_read.map((f) => label(FIELD, f)).join(", ")}
+                    </StatusTag>
+                  ) : null}
+                  {l.candidates.length ? (
+                    <Typography.Text>
+                      Mã có thể khớp (gợi ý, Design quyết định):{" "}
+                      {l.candidates.join(", ")}
+                    </Typography.Text>
+                  ) : null}
+                </span>
               ),
             },
             {
@@ -381,10 +439,17 @@ function QuoteDetail() {
               key: "t",
               align: "right",
               render: (_, l) =>
-                l.target_price === null ? (
-                  "Không ghi"
-                ) : (
+                l.target_price !== null ? (
                   <Money value={l.target_price} currency={currency} />
+                ) : l.stated_target_price ? (
+                  <span className="flex flex-col items-end gap-1">
+                    <Money value={l.stated_target_price} currency={currency} />
+                    <StatusTag tone="outline">
+                      Khách nêu, mô hình đọc · không vào căn cứ giá
+                    </StatusTag>
+                  </span>
+                ) : (
+                  "Không ghi"
                 ),
             },
             {
@@ -607,7 +672,17 @@ function QuoteDetail() {
                   {
                     key: "file",
                     label: "Tệp",
-                    children: `${data.attachment_id} · ${data.attachment_sha256.slice(0, 16)}…`,
+                    children:
+                      data.attachment_id && data.attachment_sha256
+                        ? `${data.attachment_id} · ${data.attachment_sha256.slice(0, 16)}…`
+                        : "Không có tệp: đọc từ thư",
+                  },
+                  {
+                    key: "reading",
+                    label: "Mô hình đọc",
+                    children: data.reading
+                      ? `${data.reading.prompt} · ${data.reading.model_profile}/${data.reading.route} · ${data.reading.rules} · ${data.reading.calls} lần gọi`
+                      : "Không (bộ đọc theo nhãn cố định)",
                   },
                   {
                     key: "release",
@@ -651,9 +726,14 @@ function QuoteDetail() {
         kind="quote"
         caseId={data.case_id}
         caseVersion={data.case_version}
-        attachmentId={source?.attachmentId ?? data.attachment_id}
+        attachmentId={source?.attachmentId ?? data.attachment_id ?? ""}
         target={source}
         onClose={() => setSource(null)}
+      />
+      <MessageTextDrawer
+        quote={data}
+        target={mailSource}
+        onClose={() => setMailSource(null)}
       />
     </div>
   );

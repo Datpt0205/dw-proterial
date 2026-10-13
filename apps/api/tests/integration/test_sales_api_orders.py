@@ -47,7 +47,7 @@ async def test_an_and_dieu_walk_m01_from_the_mailbox_to_confirmed(
     case = await order_of(an, "M01")
     # DW1 read and checked it, and handed it to An's self-check.
     assert (case["status"], case["assigned_to"]) == ("in_review", str(user_id(AN)))
-    assert case["findings"] == [] and case["rules_version"] == "sales_order_rules@1.2.1"
+    assert case["findings"] == [] and case["rules_version"] == "sales_order_rules@1.3.1"
     assert case["release_manifest_ref"].startswith("sha256:")
 
     up = await uploaded(an, case)

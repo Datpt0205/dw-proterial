@@ -182,6 +182,9 @@ def anchor_text(anchor: SourceAnchor | None) -> str | None:
     """Where a value was read, as a person finds it in the original."""
     if anchor is None:
         return None
+    if anchor.attachment_id is None:
+        assert anchor.chars is not None  # SourceAnchor: a range of the message's text
+        return f"mail {anchor.chars.start}-{anchor.chars.end}"
     if anchor.cell_ref is not None:
         return f"{anchor.attachment_id} {anchor.cell_ref}"
     if anchor.page is not None:

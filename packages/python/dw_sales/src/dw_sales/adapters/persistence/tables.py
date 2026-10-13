@@ -162,6 +162,7 @@ messages = sa.Table(
     sa.Column("owner", sa.Text),
     sa.Column("customer_code", sa.Text),
     sa.Column("compliance", JSONB(none_as_null=True)),
+    sa.Column("model_reading", JSONB(none_as_null=True)),
     sa.Column("processed_at", _TS, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),

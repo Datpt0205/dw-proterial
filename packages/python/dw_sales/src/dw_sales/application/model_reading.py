@@ -39,7 +39,6 @@ from dw_sales.domain.description_reading import (
     vocabulary,
 )
 from dw_sales.domain.order_checks import MappedLine, map_read_line
-from dw_sales.domain.orders import PoLine
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +59,16 @@ DESCRIPTION_ATTRIBUTES: Final = PromptRef("sales.description_attributes", "1.0.0
 # Generous for one line's reading (about 120 tokens measured), and a cap on
 # what a confused model can spend.
 _OUTPUT_TOKENS_PER_LINE: Final = 300
+
+
+def estimated_tokens(text: str) -> int:
+    """An upper estimate of the tokens ``text`` costs a local model: a wide
+    character (CJK, kana) or any other non-ASCII letter as one token, ASCII
+    as one per three characters. Generous on purpose: a step that sends less
+    than it could costs one more call; one that sends more than fits is
+    refused by the server."""
+    wide = sum(1 for char in text if not char.isascii())
+    return wide + (len(text) - wide + 2) // 3
 
 
 class ModelUnavailableError(Exception):
@@ -87,6 +96,14 @@ class InterpretationPort(Protocol):
         """The profile's route every call runs on."""
         ...
 
+    @property
+    def max_input_tokens(self) -> int:
+        """The most input one call on the route is sent, as the route declares
+        it (`ModelRoute.max_input_tokens`). A step cuts or splits what it sends
+        under this: an input the server refuses as too long is not retried
+        into success, it only costs the retries."""
+        ...
+
     async def interpret[OutputT: BaseModel](
         self,
         prompt: PromptRef,
@@ -98,6 +115,17 @@ class InterpretationPort(Protocol):
     ) -> OutputT: ...
 
 
+class Described(Protocol):
+    """A line with the customer's description of its item: a PO line, or an
+    item a request for quotation lists (ticket 29)."""
+
+    @property
+    def line_no(self) -> int: ...
+
+    @property
+    def description(self) -> str: ...
+
+
 @dataclass(frozen=True)
 class DescriptionReader:
     """Reads the descriptions DW1's vocabulary could not, through a model, and
@@ -106,7 +134,7 @@ class DescriptionReader:
     model: InterpretationPort
 
     async def read(
-        self, lines: Sequence[PoLine], items: Sequence[Item], *, run: RunContext
+        self, lines: Sequence[Described], items: Sequence[Item], *, run: RunContext
     ) -> dict[int, MappedLine]:
         """Each line's mapping by its reading: a candidate or an ambiguous set
         where the verified attributes fit, unmapped otherwise, and never
@@ -118,7 +146,7 @@ class DescriptionReader:
         return mapped
 
     async def _batch(
-        self, batch: Sequence[PoLine], items: Sequence[Item], run: RunContext
+        self, batch: Sequence[Described], items: Sequence[Item], run: RunContext
     ) -> dict[int, MappedLine]:
         inputs = {
             # Code-built JSON inside the untrusted block: a description cannot

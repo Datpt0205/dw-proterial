@@ -5,7 +5,9 @@
 The files stand in for what customers' own systems print, so the layouts and
 the wording of item descriptions are theirs (documented in `README.md`), not
 this context's. Purchase orders come from `data/purchase_orders.json`,
-requests for quotation from `data/quote_requests.json` and Design's replies
+requests for quotation from `data/quote_requests.json` (the fixed-label
+form) and `data/free_requests.json` (a customer's own PDF or spreadsheet,
+which no reader reads and a model may, ticket 29), and Design's replies
 from `data/design_replies.json`. A line that states no attributes is described
 the way the catalogue describes the item its code maps to, so a description
 never disagrees with the item it stands for, unless the fixture gives the
@@ -318,6 +320,45 @@ class QuoteRequestDocument(BaseModel):
     lines: tuple[QuoteRequestLine, ...] = Field(min_length=1)
 
 
+class FreeRequestLine(BaseModel):
+    model_config = _FROZEN
+
+    no: int = Field(ge=1)
+    customer_item_code: str | None = None
+    description: str
+    # None: the request leaves it blank (`rfq_incomplete`).
+    quantity: Decimal | None = Field(default=None, gt=0)
+    required_date: date | None = None
+    target_price: Decimal | None = Field(default=None, gt=0)
+    # A spreadsheet row the customer hid: not part of the request a person
+    # sees, and not sent to a model (`readers.text_parts`).
+    hidden: bool = False
+
+
+class FreeRequestDocument(BaseModel):
+    """A request for quotation in the customer's own form (ticket 29): the
+    mail body of message ``message_id``, or an attachment ``name`` printed as
+    a text PDF or the customer's own spreadsheet. No reader reads it; where a
+    tenant turns it on, a model does, and this is what it states."""
+
+    model_config = _FROZEN
+
+    message_id: str
+    form: Literal["body", "pdf", "xlsx"]
+    name: str | None
+    customer_code: str
+    rfq_no: str | None
+    quote_due: date | None
+    currency: Currency
+    lines: tuple[FreeRequestLine, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _a_file_has_a_name(self) -> Self:
+        if (self.form == "body") != (self.name is None):
+            raise ValueError(f"{self.message_id}: an attachment is named, a body is not")
+        return self
+
+
 class DesignReplyLine(BaseModel):
     model_config = _FROZEN
 
@@ -401,6 +442,10 @@ def load_design_replies(data_dir: Path = DATA_DIR) -> tuple[DesignReplyDocument,
     return read_records(data_dir / "design_replies.json", DesignReplyDocument)
 
 
+def load_free_requests(data_dir: Path = DATA_DIR) -> tuple[FreeRequestDocument, ...]:
+    return read_records(data_dir / "free_requests.json", FreeRequestDocument)
+
+
 def render_attachments(data_dir: Path = DATA_DIR) -> dict[str, bytes]:
     """Every attachment's bytes, by its file name in `attachments/`."""
     catalogue = _Catalogue(data_dir)
@@ -421,6 +466,16 @@ def render_attachments(data_dir: Path = DATA_DIR) -> dict[str, bytes]:
         )
     for reply in load_design_replies(data_dir):
         rendered[attachment_file_name(reply.message_id, reply.name)] = _design_reply_xlsx(reply)
+    for free in load_free_requests(data_dir):
+        customer = catalogue.customers[free.customer_code]
+        if free.form == "pdf":
+            data = _free_request_pdf(free, customer)
+        elif free.form == "xlsx":
+            data = _free_request_xlsx(free, customer)
+        else:
+            continue
+        assert free.name is not None  # the document's validator
+        rendered[attachment_file_name(free.message_id, free.name)] = data
     return rendered
 
 
@@ -630,6 +685,84 @@ def _rfq_xlsx(rfq: QuoteRequestDocument, customer: Customer, catalogue: _Catalog
         (None, None, None, "#,##0", None, _PRICE_FORMAT[rfq.currency], "yyyy-mm-dd"),
     )
     return _xlsx_bytes(workbook, creator=customer.name, stamp=rfq.rfq_date)
+
+
+def _free_request_xlsx(request: FreeRequestDocument, customer: Customer) -> bytes:
+    """The customer's own Japanese request sheet: no "RFQ No." label, its own
+    column titles, and a hidden row (an instruction a person would not see)."""
+    workbook = _new_workbook()
+    sheet: Worksheet = workbook.create_sheet("見積依頼")
+    sheet["A1"] = f"{customer.name} 見積依頼書"
+    sheet["A3"], sheet["B3"] = "依頼番号", request.rfq_no
+    sheet["A4"], sheet["B4"] = "回答期限", request.quote_due
+    sheet["B4"].number_format = "yyyy/mm/dd"
+    sheet["A5"], sheet["B5"] = "通貨", request.currency
+    for column, title in enumerate(("No", "品番", "品名", "数量", "単位", "希望納期"), start=1):
+        sheet.cell(row=7, column=column, value=title).font = Font(bold=True)
+    for offset, line in enumerate(request.lines):
+        row = 8 + offset
+        values: tuple[_CellValue, ...] = (
+            line.no,
+            line.customer_item_code,
+            line.description,
+            line.quantity,
+            "m",
+            line.required_date,
+        )
+        for column, value in enumerate(values, start=1):
+            _set(sheet, row, column, value)
+        sheet.cell(row=row, column=4).number_format = "#,##0"
+        sheet.cell(row=row, column=6).number_format = "yyyy/mm/dd"
+        if line.hidden:
+            sheet.row_dimensions[row].hidden = True
+    return _xlsx_bytes(workbook, creator=customer.name, stamp=date(2026, 10, 2))
+
+
+def _free_request_pdf(request: FreeRequestDocument, customer: Customer) -> bytes:
+    """The customer's own English request, printed as a text PDF: a header,
+    the items as text rows, and a line on reels that is no quantity."""
+    pdfmetrics.registerFont(TTFont(_FONT, str(FONT_PATH)))
+    buffer = io.BytesIO()
+    width, height = A4
+    canvas = Canvas(buffer, pagesize=(width, height), invariant=1, pageCompression=0)
+    canvas.setTitle(f"Request for quotation {request.rfq_no}")
+    canvas.setAuthor(customer.name)
+
+    def text(x: float, y: float, value: str, size: float = 9) -> None:
+        canvas.setFont(_FONT, size)
+        canvas.drawString(x, y, value)
+
+    y = height - 50
+    text(40, y, customer.name.upper(), 11)
+    y -= 26
+    text(40, y, "REQUEST FOR QUOTATION", 14)
+    due = request.quote_due.strftime("%d %b %Y") if request.quote_due else "-"
+    for line in (
+        f"RFQ No.: {request.rfq_no}",
+        f"To: {SELLER_NAME}",
+        f"Please quote in {request.currency} and reply by {due}.",
+    ):
+        y -= 16
+        text(40, y, line)
+    y -= 26
+    text(40, y, "Item / Our part no. / Description / Quantity / Required by / Target price", 8)
+    for item in request.lines:
+        y -= 16
+        quantity = f"{item.quantity:,.0f} m" if item.quantity is not None else "-"
+        needed = item.required_date.strftime("%d %b %Y") if item.required_date else "-"
+        target = f"USD {item.target_price}" if item.target_price is not None else "-"
+        text(
+            40,
+            y,
+            f"{item.no}. {item.customer_item_code} {item.description} - {quantity}"
+            f" - by {needed} - target {target}",
+            8,
+        )
+    y -= 24
+    text(40, y, "Packing: 305 m reels preferred where the item allows.", 8)
+    canvas.showPage()
+    canvas.save()
+    return buffer.getvalue()
 
 
 def _design_reply_xlsx(reply: DesignReplyDocument) -> bytes:
