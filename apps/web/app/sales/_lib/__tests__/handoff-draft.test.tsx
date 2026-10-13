@@ -21,7 +21,7 @@ function handoff(overrides: Partial<Handoff> = {}): Handoff {
     prompt: "sales.request_handoff@1.0.0",
     model_profile: "onprem",
     route: "structured_extraction",
-    rules: "sales_order_rules@1.4.1",
+    rules: "sales_order_rules@1.5.1",
     outcome: "read",
     po_no: "VLX-PO-2608-0102",
     po: { text: "VLX-PO-2608-0102", start: 40, end: 56 },

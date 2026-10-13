@@ -121,6 +121,10 @@ class RegionFlag(StrEnum):
     # POs a new or changed layout reads are confirmed value by value, so a
     # wrong mapping cannot repeat silently (`layout_onboarding`).
     NEW_LAYOUT = "new_layout"
+    # The PDF print attached beside the workbook in the same mail prints this
+    # value differently (ticket 34): the workbook is the source of record, the
+    # print is kept beside it, and a person decides which the customer meant.
+    PRINT_DIFFERS = "print_differs"
 
 
 class FlaggedValue(BaseModel):
@@ -260,6 +264,10 @@ class PoLine(BaseModel):
     quantity as printed, which the schedules are checked to add up to
     (`order_checks.check_document`), and ``requested_date`` is the first
     schedule's date, read from its cell.
+
+    A line whose date cell is blank, "date to follow", has ``requested_date``
+    None and no schedule (ticket 34): its anchor is the blank cell, or the
+    line's row on a PDF, and the checks raise `requested_date_missing`.
     """
 
     model_config = _FROZEN
@@ -276,7 +284,8 @@ class PoLine(BaseModel):
     unit_price: Decimal = Field(ge=0)
     # The line amount as printed: what `line_total_mismatch` adds up.
     amount: Decimal = Field(ge=0)
-    requested_date: date
+    # None: printed blank (ticket 34).
+    requested_date: date | None
     anchors: PoLineAnchors
     flags: tuple[FlaggedValue, ...] = ()
     legacy: tuple[LegacyText, ...] = ()
@@ -311,9 +320,12 @@ class PoLine(BaseModel):
     @property
     def schedules(self) -> tuple[DeliverySchedule, ...]:
         """When and how much the line is to be delivered, earliest first: a
-        line with one quantity and one date is a list of one."""
+        line with one quantity and one date is a list of one, a line printed
+        with no date has none yet."""
         if self.printed_schedules:
             return self.printed_schedules
+        if self.requested_date is None:
+            return ()
         only = DeliverySchedule(
             quantity=self.quantity,
             requested_date=self.requested_date,
@@ -358,6 +370,42 @@ class PrintedTotal(BaseModel):
         return self
 
 
+class PrintDifference(BaseModel):
+    """One value a PDF print shows differently from its workbook (ticket 34):
+    which, and where the print shows it. The workbook's own value carries a
+    `print_differs` flag beside it."""
+
+    model_config = _FROZEN
+
+    # None: the header's value, or the total (``total``).
+    line_no: int | None = Field(default=None, ge=1)
+    field: str = Field(pattern=r"^[a-z_]{1,32}$")
+    anchor: SourceAnchor
+
+
+class PrintCopy(BaseModel):
+    """The PDF print of a PO attached beside its workbook in the same mail
+    (ticket 34): kept as a second source, never read as a second PO."""
+
+    model_config = _FROZEN
+
+    attachment_id: AttachmentId
+    attachment_sha256: Sha256Hex
+    parser_version: VersionRef
+    differences: tuple[PrintDifference, ...] = ()
+
+    @model_validator(mode="after")
+    def _anchors_point_into_the_print(self) -> Self:
+        for difference in self.differences:
+            anchor = difference.anchor
+            if (anchor.attachment_id, anchor.attachment_sha256) != (
+                self.attachment_id,
+                self.attachment_sha256,
+            ):
+                raise ValueError(f"a print anchor points outside attachment {self.attachment_id}")
+        return self
+
+
 class PoDocument(BaseModel):
     """What a reader got out of one attachment, and how it read it."""
 
@@ -382,6 +430,8 @@ class PoDocument(BaseModel):
     # The tenant's own approved layout the reader read it with (ticket 30):
     # `po_layout:<id>@<version>`. None: the platform's layout for the customer.
     layout_ref: str | None = Field(default=None, pattern=r"^po_layout:[0-9a-f-]{36}@\d+$")
+    # Its PDF print, attached to the same mail (ticket 34); None: none was.
+    print_copy: PrintCopy | None = None
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
@@ -396,6 +446,8 @@ class PoDocument(BaseModel):
                 self.attachment_sha256,
             ):
                 raise ValueError(f"an anchor points outside attachment {self.attachment_id}")
+        if self.print_copy is not None and self.print_copy.attachment_id == self.attachment_id:
+            raise ValueError("a PO's print is another attachment than the PO")
         return self
 
     def first_legacy_text(self) -> tuple[SourceAnchor, LegacyEncoding] | None:
@@ -470,6 +522,7 @@ class FindingCode(StrEnum):
     CUSTOMER_TEMPORARY = "customer_temporary"
     SENDER_UNVERIFIED = "sender_unverified"
     LEGACY_ENCODING = "legacy_encoding"
+    REQUESTED_DATE_MISSING = "requested_date_missing"
 
 
 # About the PO as a whole.
@@ -599,6 +652,10 @@ ALLOWED_DISPOSITIONS: Final[Mapping[FindingCode, frozenset[DispositionKind]]] = 
         # revision of the case and is read afresh (ticket 20): nobody types
         # over text DW1 cannot read, and nobody accepts it as read.
         FindingCode.LEGACY_ENCODING: frozenset({DispositionKind.ASK_CUSTOMER}),
+        # A line printed with no date, "date to follow" (ticket 34): Sales asks
+        # the customer for it, or goes ahead with the date to follow, DW1
+        # suggesting the first day the lead time allows and PC confirming one.
+        FindingCode.REQUESTED_DATE_MISSING: _ACCEPT_OR_ASK,
     }
 )
 

@@ -31,7 +31,7 @@ from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.views import order_case, order_finding
 from dw_sales.domain.anchors import SourceAnchor
-from dw_sales.domain.order_checks import DOCUMENT_CHECK_CODES
+from dw_sales.domain.order_checks import DOCUMENT_CHECK_CODES, check_document
 from dw_sales.domain.orders import (
     Accepted,
     Actor,
@@ -63,7 +63,7 @@ from dw_sales.domain.orders import (
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.4.0"
+RULES = "sales_order_rules@1.5.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -457,7 +457,7 @@ def _intake() -> OrderIntake:
         inbox=MockInbox.load(SCOPE),
         reader=mock_po_readers(),
         quote_forms=ExcelQuoteForms(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.4.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.5.0.yaml")),
         cases=_NoCases(),
         new_case_id=uuid.uuid4,
     )
@@ -582,6 +582,25 @@ def test_the_dates_of_a_line_split_over_several_schedules_are_asked_not_typed() 
     assert typed.finding(KEY).is_open
     asked = typed.dispose(KEY, AskCustomer(by=AN.user_id, at=T0), AN)
     assert asked.finding(KEY).disposition.kind == "ask_customer"
+
+
+def test_a_typed_quantity_its_schedules_do_not_add_up_to_is_line_total_mismatch() -> None:
+    """The PO-level checks run again on the PO as entered, so a quantity typed
+    over a split line is held against its printed schedules: the upload file
+    writes the schedules, and they must say the quantity Sales confirmed."""
+    rules = load_order_rules(POLICIES / "sales_order_rules@1.5.0.yaml")
+    case = _case(flagged=("quantity", "requested_date"), split=True)
+
+    entered = case.corrected(KEY, _typed("quantity", "7000"), AN).document
+    as_read = case.corrected(KEY, _typed("quantity", "6100"), AN).document
+
+    (mismatch,) = [
+        f for f in check_document(entered, rules) if f.code is FindingCode.LINE_TOTAL_MISMATCH
+    ]
+    assert (mismatch.expected, mismatch.actual) == ("line 2 quantity 7000", "line 2 schedules 6100")
+    assert not [
+        f for f in check_document(as_read, rules) if f.code is FindingCode.LINE_TOTAL_MISMATCH
+    ]
 
 
 def test_a_line_printing_one_date_still_has_its_date_typed() -> None:

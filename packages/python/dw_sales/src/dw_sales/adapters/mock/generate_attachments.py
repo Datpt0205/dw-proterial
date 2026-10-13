@@ -188,7 +188,8 @@ class OrderLine(BaseModel):
     uom: str = Field(default="m", min_length=1, max_length=8)
     unit_price: Decimal = Field(gt=0)
     # The line's date; for a line split over several dates, the first one.
-    requested_date: date
+    # None: printed blank, "date to follow" (ticket 34).
+    requested_date: date | None
     # The dates and quantities a split line prints apart from the line, in
     # date order, as the document's `schedule_layout` says. They need not add
     # up to ``quantity``: a fixture may print a split that does not.
@@ -316,6 +317,10 @@ class PurchaseOrderDocument(BaseModel):
     # The customer's own form (ticket 30), for a PO no platform layout reads:
     # printed with its labels instead of the fixed ones, as an .xlsx or a PDF.
     form: PoForm | None = None
+    # A PDF print of the workbook of this name attached to the same message
+    # (ticket 34): read beside it as one PO, never as a second one. It may
+    # print a value differently, which is what the pair is checked for.
+    print_of: str | None = Field(default=None, min_length=1)
     lines: tuple[OrderLine, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -351,6 +356,8 @@ class PurchaseOrderDocument(BaseModel):
             self.layout not in ("xlsx", "pdf") or self.schedule_layout or self.lines_per_page
         ):
             raise ValueError(f"{self.name}: a customer's form is one .xlsx sheet or one PDF page")
+        if self.print_of is not None and self.layout != "pdf":
+            raise ValueError(f"{self.name}: a print of a workbook is a text PDF")
         pages = len(self.pages())
         if not all(1 <= page < pages for page in self.hidden_pages):
             # The last page carries the TOTAL, which stays visible.
@@ -1105,7 +1112,10 @@ _PDF_LIST_COLUMNS: tuple[tuple[str, float, bool], ...] = (
 
 
 def _pdf_date_cell(line: OrderLine) -> str:
-    """``16/11/2026: 3.050; 30/11/2026: 3.050`` for a line with schedules."""
+    """``16/11/2026: 3.050; 30/11/2026: 3.050`` for a line with schedules;
+    nothing for a line printed with no date (ticket 34)."""
+    if line.requested_date is None:
+        return ""
     if not line.schedules:
         return _vi_date(line.requested_date)
     return "; ".join(

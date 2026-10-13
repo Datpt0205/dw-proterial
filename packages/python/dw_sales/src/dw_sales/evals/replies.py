@@ -63,7 +63,7 @@ from dw_sales.evals.world import ALPHA, BETA, SampleSet, SampleWith, World, open
 # kind, and none of those two read as `accepts_spec`. Reported, not enforced.
 PROPOSED_BAR = 0.85
 RECORDED = "evals/fixtures/cases/sales_reply_recorded.json"
-RULES = "sales_order_rules@1.4.1"
+RULES = "sales_order_rules@1.5.1"
 _RUN = RunContext(
     run_id=uuid.UUID(int=0x32),
     tenant_id=ALPHA.tenant_id.value,

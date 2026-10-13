@@ -50,9 +50,9 @@ async def test_the_head_gives_an_order_to_another_pic(api: Api, migrator: AsyncE
     assert now["assigned_to"] == str(dieu.id)
     assert now["case_version"] == case["case_version"] + 1
     # My work follows the new assignee.
-    mine = {i["id"] for i in (await dieu.get("/my-work")).json()}
+    mine = {i["id"] for i in (await dieu.get("/my-work")).json()["items"]}
     assert case["case_id"] in mine
-    assert case["case_id"] not in {i["id"] for i in (await an.get("/my-work")).json()}
+    assert case["case_id"] not in {i["id"] for i in (await an.get("/my-work")).json()["items"]}
     async with migrator.connect() as conn:
         (row,) = (
             await conn.execute(

@@ -5,6 +5,7 @@ import {
   BookOutlined,
   BulbOutlined,
   ControlOutlined,
+  CustomerServiceOutlined,
   CheckSquareOutlined,
   ClusterOutlined,
   ApiOutlined,
@@ -129,6 +130,13 @@ const platformNav: NavEntry[] = [
     icon: BankOutlined,
     operatorOnly: true,
     administration: true,
+  },
+  {
+    href: "/support",
+    label: "Quyền hỗ trợ",
+    hint: "Quyền hỗ trợ khách cấp cho bạn: phạm vi, chế độ và hạn",
+    icon: CustomerServiceOutlined,
+    supportStaffOnly: true,
   },
 ];
 

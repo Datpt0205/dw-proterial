@@ -12,6 +12,7 @@ import {
 function viewer(scopes: string[], roles: string[] = ["member"]): NavViewer {
   return {
     isPlatformOperator: false,
+    isSupportStaff: false,
     roles,
     hasScope: (scope) => scopes.includes(scope),
   };

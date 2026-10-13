@@ -188,6 +188,27 @@ const assignedSupportGrantSchema = z.object({
 });
 export type AssignedSupportGrant = z.infer<typeof assignedSupportGrantSchema>;
 
+// The staff member's own side: the grants assigned to them (ADR 0024).
+const mySupportGrantSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  tenant_id: z.string(),
+  tenant_name: z.string(),
+  workspace_id: z.string(),
+  workspace_name: z.string(),
+  resource_type: z.string(),
+  resource_id: z.string().nullable(),
+  resource_label: z.string(),
+  scope_set_key: z.string(),
+  scope_set_label: z.string(),
+  scopes: z.array(z.string()),
+  activated_at: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  revoked_at: z.string().nullable(),
+  state: z.string(),
+});
+export type MySupportGrant = z.infer<typeof mySupportGrantSchema>;
+
 /** True only when A and B are the same type, both ways. */
 type SameType<A, B> = [A] extends [B]
   ? [B] extends [A]
@@ -240,7 +261,9 @@ const _supportOperatorsMirrorTheRoutes: [
   SameType<SupportRequest, Generated["SupportRequestView"]>,
   SameType<keyof SupportRequest, keyof Generated["SupportRequestView"]>,
   SameType<AssignedSupportGrant, Generated["AssignedSupportGrantView"]>,
-] = [true, true, true, true, true];
+  SameType<MySupportGrant, Generated["MySupportGrantModel"]>,
+  SameType<keyof MySupportGrant, keyof Generated["MySupportGrantModel"]>,
+] = [true, true, true, true, true, true, true];
 void _supportOperatorsMirrorTheRoutes;
 
 export class ApiClient {
@@ -717,6 +740,16 @@ export class ApiClient {
       `/api/v1/platform/support-requests/${grantId}/assign`,
       assignedSupportGrantSchema,
       { body: { staff_user_id: staffUserId } },
+    );
+  }
+
+  /** The grants assigned to the caller, a support staff member, ended
+   * within the last 30 days included (`GET /support/my-grants`). */
+  listMySupportGrants(): Promise<MySupportGrant[]> {
+    return this.request(
+      "GET",
+      "/api/v1/support/my-grants",
+      z.array(mySupportGrantSchema),
     );
   }
 

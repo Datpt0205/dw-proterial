@@ -406,7 +406,7 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
   await page.goto("/sales/inbox");
   await page.getByRole("button", { name: /DW xử lý tất cả \(42\)/ }).click();
   await expect(
-    page.getByText(/^43 thư · 0 chưa xử lý · \d+ chuyển Sales/),
+    page.getByText(/^45 thư · 0 chưa xử lý · \d+ chuyển Sales/),
   ).toBeVisible({
     timeout: 480_000,
   });
@@ -428,7 +428,7 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
       case_id: string | null;
     };
   }[] = await (await an.get("/inbox")).json();
-  expect(inbox).toHaveLength(43);
+  expect(inbox).toHaveLength(45);
   expect(
     inbox.filter((m) => m.disposition.kind === "not_yet_processed"),
   ).toEqual([]);

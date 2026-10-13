@@ -59,7 +59,7 @@ from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
 PROPOSED_BAR = 0.85
 RECORDED = "evals/fixtures/cases/sales_handoff_recorded.json"
 INTENTS = "evals/fixtures/cases/sales_intent_recorded.json"
-RULES = "sales_order_rules@1.4.1"
+RULES = "sales_order_rules@1.5.1"
 RECEIVED_ON = date(2026, 10, 10)
 _RUN = RunContext(
     run_id=uuid.UUID(int=0x33),

@@ -340,6 +340,10 @@ def _schedule_rows(
     ]
 
 
+def _day_or_dash(day: date | None) -> str:
+    return "—" if day is None else day_text(day, INTERNAL)
+
+
 def _day_value(value: Value) -> str:
     return value.isoformat() if isinstance(value, date) else str(value)
 
@@ -600,7 +604,8 @@ def design_code_request(d: OrderDrafting) -> tuple[Rendered, ...]:
                 "description": line.effective.description,
                 "quantity": line.effective.quantity,
                 "uom": line.effective.uom,
-                "requested_date": day_text(line.effective.requested_date, INTERNAL),
+                # A line printed with no date (ticket 34) says so with a dash.
+                "requested_date": _day_or_dash(line.effective.requested_date),
             },
         )
         for line in waiting

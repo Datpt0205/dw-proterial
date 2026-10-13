@@ -260,7 +260,8 @@ on an overlapping step is counted in the "Promises" figures.
     `case_created(order|quote)`, `attached_to_case` (a revision, or a Design
     reply), `routed_to_sales(reason)`, or `not_yet_processed`. The reasons
     are `delivery_change`, `complaint`, `design_reply_unmatched`,
-    `sample_request`, `customer_unknown`, `attachment_unreadable` and
+    `sample_request`, `customer_unknown`, `attachment_unreadable`,
+    `malware_detected` (ticket 25: nothing in the message is read) and
     `other`. Each routed message has an owner. "No message missed" becomes a measured
     count: messages `not_yet_processed`, and routed messages with no owner.
 11. **A check's basis is stamped on the case and never re-read.** For each
@@ -334,6 +335,7 @@ is an acknowledgement.
 | `customer_temporary`      | no       | The customer holds a temporary code (WIV-03-031)                                                                                                                                                                                                                                                                                                                                                                               | `accepted`                                                                                                                                                                        |
 | `sender_unverified`       | no       | The mail system's SPF/DKIM/DMARC result for the sender is not `pass`. It would block any later auto-confirmation                                                                                                                                                                                                                                                                                                               | `accepted`                                                                                                                                                                        |
 | `legacy_encoding`         | yes      | A value read from a cell or a PDF text run typed in a TCVN3 (`.VnTime`, `.VnArial`, …) or VNI (`VNI-Times`, …) font: its letters are not what the customer sees. Raised on the PO, naming the first such cell or page; nothing is matched on that text (ticket 20). Converting it is ADR 0010 decision 3, later                                                                                                                | `ask_customer` (the customer sends the PO again in Unicode, which arrives as a revision of the case); no typed value, no acceptance                                               |
+| `requested_date_missing`  | yes      | A line printed with its requested-date cell blank, or a dash where the date goes ("date to follow"). The line reads with no date and no schedule; DW1 suggests the first day the lead time allows (ticket 34)                                                                                                                                                                                                                  | `ask_customer` (the customer sends the date), or `accepted` with a reason (the order goes ahead with the date to follow; PC confirms one)                                         |
 
 Quotation findings (ticket 03), computed from `sales_pricing` and the decision:
 

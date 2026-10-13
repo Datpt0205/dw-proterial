@@ -1960,6 +1960,8 @@ export interface components {
             scope_set_key: string;
             /** Scope Set Label */
             scope_set_label: string;
+            /** Scopes */
+            scopes: string[];
             /** State */
             state: string;
             /**

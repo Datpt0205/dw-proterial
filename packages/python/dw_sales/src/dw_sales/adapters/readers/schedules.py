@@ -1,4 +1,5 @@
-"""A line split over several delivery dates, read the way both readers read it (ticket 21).
+"""A date cell, read the way both readers read it: a line split over several
+delivery dates (ticket 21), or a line whose date is still to follow (ticket 34).
 
 A PO prints a split line in one of two shapes the readers know: rows under the
 line, each with a quantity and a date and nothing else (Excel); or a list in
@@ -13,13 +14,26 @@ import re
 from collections.abc import Callable, Sequence
 from datetime import date
 from decimal import Decimal
+from typing import Final
 
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.orders import DeliverySchedule
 
-# Entries apart by ";" or a line break, each "date: quantity".
+# Entries apart by ";" or a line break, each "date: quantity". An entry is
+# split at its one colon, not matched by a pattern: the text is the
+# customer's, and a pattern of lazy groups between optional spaces took 75 s
+# on one 2,000-character entry (ticket 21's review).
 _ENTRIES = re.compile(r"[;\n]")
-_ENTRY = re.compile(r"\s*(?P<day>[^:]+?)\s*:\s*(?P<quantity>[^:]+?)\s*")
+
+
+# What a form prints in a cell it leaves empty: no date can read as one.
+_NOTHING: Final = frozenset({"-", "\u2013", "\u2014"})  # hyphen, en and em dash
+
+
+def no_date(text: str) -> bool:
+    """A date cell that gives no date yet, "date to follow" (ticket 34):
+    blank, or the dash a form prints for an empty cell."""
+    return not text.strip() or text.strip() in _NOTHING
 
 
 def listed_schedules(
@@ -38,14 +52,14 @@ def listed_schedules(
         return None
     schedules: list[DeliverySchedule] = []
     for entry in (e for e in _ENTRIES.split(text) if e.strip()):
-        match = _ENTRY.fullmatch(entry)
-        if match is None:
+        when, _, how_much = (part.strip() for part in entry.partition(":"))
+        if not when or not how_much or ":" in how_much:
             raise ValueError("is not a list of 'date: quantity'")
         try:
             schedules.append(
                 DeliverySchedule(
-                    quantity=number(match["quantity"]),
-                    requested_date=day(match["day"]),
+                    quantity=number(how_much),
+                    requested_date=day(when),
                     anchor=anchor,
                 )
             )

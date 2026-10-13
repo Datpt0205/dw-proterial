@@ -46,7 +46,7 @@ async def _case(message_id: str) -> OrderCase:
         inbox=inbox,
         reader=mock_po_readers(),
         quote_forms=ExcelQuoteForms(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.4.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.5.0.yaml")),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),
     )

@@ -41,19 +41,20 @@ from dw_agent_runtime.registry import (
 )
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.adapters.artifact_files import ArtifactFiles
+from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
-from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.model_interpretation import GatewayInterpretation
-from dw_sales.adapters.order_rules import TenantOrderRules, load_tenant_order_rules
+from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
+from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.persistence.uow import (
     ApprovalsFactory,
     AuditFactory,
     SqlSalesUnitOfWorkFactory,
 )
-from dw_sales.adapters.policy_files import load_sales_policies
+from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.adapters.readers.text_parts import AttachmentTexts
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
@@ -63,6 +64,7 @@ from dw_sales.application.access import SalesAuthorizationPort
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
+from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
@@ -78,6 +80,7 @@ from dw_sales.application.ports import (
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import ModelRequests, RfqModelReader
+from dw_sales.application.rules import RuleBookOrderRules
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.telemetry import SpanPort
 from dw_sales.application.threads import ThreadLinks
@@ -127,6 +130,7 @@ def build_dw1(
     release_manifest_ref: str | None,
     runtime: Dw1Runtime,
     telemetry: SpanPort,
+    scanner: MalwareScanPort,
     lane_access: ServiceAccessPort | None = None,
     model: ModelGateway | None = None,
 ) -> Dw1Mount:
@@ -135,11 +139,17 @@ def build_dw1(
     approval made strict and checked by the context before it is recorded
     (`dw_sales.workflows.graph.register`); its spans through ``telemetry``,
     the process's own, cut to Sales' allowlist (`dw_sales.application.telemetry`);
-    and, given ``lane_access``, the mailbox lane over the same services."""
+    and, given ``lane_access``, the mailbox lane over the same services.
+    Every attachment is scanned by ``scanner`` before anything reads it
+    (ticket 25): the mailbox each service holds is the scanned one."""
     catalog = MockSalesCatalog.load(scope)
-    inbox = MockInbox.load(scope)
+    readers = mock_po_readers()
+    inbox = ScannedInbox(MockInbox.load(scope), scanner, readers)
     policies = load_sales_policies(configs / "policies", configs / "copy")
-    tenant_rules = demo_order_rules(policies.order_rules, scope, DATA_DIR / "policies")
+    # The platform's rules, with a tenant's own approved version where it has
+    # one (ticket 19): stored, proposed and approved through `/sales/rules`.
+    book = rule_book(policies, SqlRuleVersionLookup(session_factory))
+    tenant_rules = RuleBookOrderRules(book)
     worker_file = configs / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     order_cases = SqlOrderCaseLookup(session_factory)
@@ -147,7 +157,6 @@ def build_dw1(
         None if model is None else interpretation_for(model, configs, worker.default_model_profile)
     )
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
-    readers = mock_po_readers()
     layout_checks = LayoutChecks(readers, catalog)
     quotation = QuotationService(
         catalog=catalog,
@@ -204,7 +213,7 @@ def build_dw1(
         intake=intake,
         quotation=quotation,
         files=FileSourceView(policies.order_rules.intake),
-        kpi=policies.kpi,
+        book=book,
         directory=directory,
         holders=holders,
         notifications=notifications,
@@ -273,8 +282,14 @@ def interpretation_for(model: ModelGateway, configs: Path, profile: str) -> Gate
     return GatewayInterpretation(model, profile, route.max_input_tokens)
 
 
-def demo_order_rules(platform: OrderRules, scope: SalesScope, tenant_dir: Path) -> TenantOrderRules:
+def demo_order_rules(
+    platform: OrderRules, scope: SalesScope, tenant_dir: Path
+) -> RuleBookOrderRules:
     """The platform's order rules, with the demo tenant's own version where
-    the sample set holds one (`TenantOrderRules`)."""
-    own = load_tenant_order_rules(tenant_dir)
-    return TenantOrderRules(platform, {} if own is None else {scope.tenant_id.value: own})
+    the sample set holds one, for an eval with no database: the version is
+    held as approved in memory (`static_rule_book`). A process with a
+    database stores it through the propose and approve route instead
+    (`dw_sales.testing.seed_rules`)."""
+    return RuleBookOrderRules(
+        static_rule_book(platform, scope, load_tenant_order_rules(tenant_dir))
+    )

@@ -94,8 +94,30 @@ export class SalesApi {
     return this.get<"/api/v1/sales/overview">("/api/v1/sales/overview");
   }
 
-  myWork() {
-    return this.get<"/api/v1/sales/my-work">("/api/v1/sales/my-work");
+  /** One page of the caller's work, by due date then by when it came in. */
+  myWorkPage(cursor: string | null = null, limit = 200) {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (cursor !== null) query.set("cursor", cursor);
+    return this.get<"/api/v1/sales/my-work">(`/api/v1/sales/my-work?${query}`);
+  }
+
+  /**
+   * Every page of the caller's work (ticket 24 pages it on the server). The
+   * screens count across the whole list (overdue, due soon, per tab) and ask
+   * whether one case is the caller's, so they read it all; what bounds it is
+   * the caller's open work, no longer the workspace's history.
+   * `next_cursor === null` is the only stop condition.
+   */
+  async myWork(): Promise<SalesSchemas["WorkItem"][]> {
+    const items: SalesSchemas["WorkItem"][] = [];
+    let cursor: string | null = null;
+    do {
+      const page: Json<"/api/v1/sales/my-work", "get"> =
+        await this.myWorkPage(cursor);
+      items.push(...page.items);
+      cursor = page.next_cursor ?? null;
+    } while (cursor !== null);
+    return items;
   }
 
   // ---- inbox --------------------------------------------------------------

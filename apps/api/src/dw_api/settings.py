@@ -121,6 +121,22 @@ class ApiSettings(BaseSettings):
         validation_alias=AliasChoices("DW_API_SALES_DEMO_WORKSPACE_ID", "SALES_DEMO_WORKSPACE_ID"),
     )
 
+    # --- Sales: the malware scanner (ticket 25) ---
+    # `clamd`: every attachment is scanned by the `clamav` compose service
+    # before anything reads it. `skip`: files are handed over unscanned, for a
+    # host-run local process that cannot reach a scanner publishing no port;
+    # refused in a deployed profile (`dw_sales.adapters.clamd.malware_scanner`,
+    # the one rule both processes read).
+    sales_malware_scan: Literal["clamd", "skip"] = Field(
+        default="clamd", validation_alias=AliasChoices("DW_SALES_MALWARE_SCAN")
+    )
+    sales_clamd_host: str = Field(
+        default="clamav", validation_alias=AliasChoices("DW_SALES_CLAMD_HOST")
+    )
+    sales_clamd_port: int = Field(
+        default=3310, validation_alias=AliasChoices("DW_SALES_CLAMD_PORT")
+    )
+
     # --- artifact storage (MinIO/S3) ---
     s3_endpoint_url: str | None = Field(
         default=None, validation_alias=AliasChoices("DW_API_S3_ENDPOINT_URL", "S3_ENDPOINT_URL")
@@ -383,6 +399,14 @@ class ApiSettings(BaseSettings):
         if self.is_deployed:
             if self.auth_mode == "dev":
                 raise RuntimeError(f"dev auth mode is forbidden in the {self.profile} profile")
+            if self.sales_malware_scan == "skip" and self.sales_demo_scope() is not None:
+                # Where this process reads a mailbox. Also refused where the
+                # scanner is built (`malware_scanner`); here it fails at
+                # startup, before anything is wired.
+                raise RuntimeError(
+                    f"unscanned attachments are forbidden in the {self.profile} profile:"
+                    " DW_SALES_MALWARE_SCAN=skip"
+                )
             if not self.oidc_issuer_url:
                 raise RuntimeError(f"an OIDC issuer is required in the {self.profile} profile")
             self.require_database_url()

@@ -216,9 +216,15 @@ async def seed_demo(database_url: str) -> None:
     await seed_test_env(database_url)
     written = await seed_sales_personas(database_url)
     await seed_dw1_accounts(database_url)
+    # Imported here: it builds the Sales services, which this module's other
+    # callers (the API's test conftest at import time) do not need.
+    from dw_sales.testing.seed_rules import seed_demo_rules
+
+    rules = await seed_demo_rules(database_url)
     print(
         f"platform seed done; {written} Sales persona membership(s) written;"
-        f" DW1's service account in {', '.join(DW1_ACCOUNT_TENANTS)}"
+        f" DW1's service account in {', '.join(DW1_ACCOUNT_TENANTS)};"
+        f" the demo tenant's own rules in force: {rules}"
     )
 
 

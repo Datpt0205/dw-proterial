@@ -16,10 +16,12 @@ the success response that shows the case to a price holder contains them.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
+import re
 import uuid
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -37,14 +39,18 @@ from pydantic import BaseModel
 
 from dw_agent_runtime.adapters.telemetry_usage import TelemetryUsageRecorder
 from dw_agent_runtime.contracts import RunContext
-from dw_agent_runtime.model.gateway import ModelUsage
+from dw_agent_runtime.model.gateway import ModelUsage, RoutingModelGateway
+from dw_agent_runtime.model.profiles import ModelProfileRegistry, ModelRoute
+from dw_agent_runtime.model.prompts import PromptRegistry, RenderedPrompt
 from dw_agent_runtime.ports import ModelRequest
 from dw_api.exception_handlers import register_exception_handlers
 from dw_observability.metrics import DW_MODEL_COST_USD_TOTAL, DW_MODEL_TOKENS_TOTAL
 from dw_observability.otel import OtelTelemetry
 from dw_platform.application.access_context import AccessContext
+from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.application.support import DW1_WORKER_ID, DW1_WORKER_VERSION
 from dw_sales.application.telemetry import SPAN_ATTRIBUTES, SalesSpan
+from dw_sales.domain.description_reading import ModelDescriptionLine
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS, DIEU
 from dw_sales.evals.world import ALPHA, SampleSet, World, open_world
@@ -351,3 +357,117 @@ async def test_a_model_call_for_sales_exports_counts_and_cost_never_its_text() -
     (cost,) = exported.metric_points(DW_MODEL_COST_USD_TOTAL)
     assert cost.value == pytest.approx(0.0123)
     assert _leaks({secret, "PO VLX-PO-2609-0118"}, exported.span_text()) == {}
+
+
+RECORDED: Mapping[str, Mapping[str, Any] | None] = json.loads(
+    (REPO / "evals/fixtures/cases/sales_descriptions_recorded.json").read_text(encoding="utf-8")
+)["answers"]
+_LINES_INPUT = re.compile(r'<input name="lines">\n(.*?)\n</input>', re.DOTALL)
+
+
+class _OnPremServer:
+    """The ``onprem`` provider as the model server answers it: the recorded
+    answers for the descriptions the rendered prompt carries, or, with
+    ``refuse_schema``, the descriptions echoed back where the schema wants
+    lines (what a pydantic error then holds as its ``input``)."""
+
+    provider_name = "onprem"
+
+    def __init__(self, *, refuse_schema: bool) -> None:
+        self.refuse_schema = refuse_schema
+        self.prompts: list[RenderedPrompt] = []
+
+    async def complete_json(
+        self,
+        prompt: RenderedPrompt,
+        json_schema: dict[str, object],
+        route: ModelRoute,
+        *,
+        max_output_tokens: int | None,
+    ) -> tuple[dict[str, object], ModelUsage, str | None]:
+        self.prompts.append(prompt)
+        match = _LINES_INPUT.search(prompt.user)
+        assert match is not None, "the prompt no longer carries its lines"
+        sent = json.loads(html.unescape(match.group(1)))
+        usage = ModelUsage(provider="onprem", model=route.model, input_tokens=640, output_tokens=88)
+        if self.refuse_schema:
+            return {"lines": " / ".join(line["description"] for line in sent)}, usage, None
+        unread = dict.fromkeys(set(ModelDescriptionLine.model_fields) - {"line_no"})
+        lines = [
+            {"line_no": line["line_no"], **unread, **answer}
+            for line in sent
+            if (answer := RECORDED[line["description"]]) is not None
+        ]
+        return {"lines": lines}, usage, None
+
+
+def _model(exported: _Exported, server: _OnPremServer) -> GatewayInterpretation:
+    """DW1's model step as the API wires it: the real gateway, its usage
+    recorded to the process's telemetry, on the ``onprem`` profile."""
+    profiles = ModelProfileRegistry()
+    profiles.load_directory(REPO / "configs" / "models")
+    prompts = PromptRegistry()
+    prompts.load_directory(REPO / "configs" / "prompts")
+    gateway = RoutingModelGateway(
+        profiles=profiles,
+        prompts=prompts,
+        adapters={"onprem": server},
+        usage_recorder=TelemetryUsageRecorder(exported.telemetry),
+        default_profile="onprem",
+    )
+    return GatewayInterpretation(gateway, model_profile="onprem", max_input_tokens=6000)
+
+
+@pytest.mark.parametrize("refuse_schema", [False, True], ids=["answered", "outside_schema"])
+async def test_a_model_reading_for_sales_exports_no_prompt_or_answer(
+    caplog: pytest.LogCaptureFixture, refuse_schema: bool
+) -> None:
+    """Acceptance 2 through DW1's own model step (ticket 28's description
+    reading of M36), not the recorder alone: what the model was sent and
+    what it answered, including an answer the schema refuses (whose pydantic
+    error holds it), reach no span, event, log record or response body."""
+    caplog.set_level(logging.DEBUG)
+    exported = _Exported()
+    server = _OnPremServer(refuse_schema=refuse_schema)
+    world = open_world(
+        REPO,
+        SampleSet.of(REPO, None),
+        CALLERS,
+        telemetry=exported.telemetry,
+        model=_model(exported, server),
+    )
+    async with _client(_app(world)) as client:
+        processed = await client.post("/api/v1/sales/inbox/M36/process")
+        assert processed.status_code == 200, processed.text
+        case = world.order(uuid.UUID(processed.json()["case_id"]))
+        shown = await client.get(f"/api/v1/sales/orders/{case.case_id}")
+        assert shown.status_code == 200
+
+    # The model was called, through the gateway, as DW1's run.
+    assert server.prompts, "M36 was processed without its model step"
+    names = [span.name for span in exported.spans.get_finished_spans()]
+    assert "dw.model.call" in names
+    needles = await _document_values(world, "M36", case)
+    sent = {line.po_line.description for line in case.lines}
+    assert sent <= needles
+    assert all(html.escape(text, quote=False) in server.prompts[0].user for text in sent)
+    # What the model answered, span by span, where a span is long enough to
+    # be told from a code (``BLACK`` is the colour code ``black`` in capitals).
+    answered = {
+        str(value)
+        for answer in RECORDED.values()
+        if answer is not None
+        for key, value in answer.items()
+        if key.endswith("_span") and isinstance(value, str) and len(value) >= 5
+    }
+    if not refuse_schema:
+        readings = [line.basis.description_reading for line in case.lines]
+        assert any(r is not None and r.outcome == "read" for r in readings)
+        needles |= {text for text in answered if any(text in s for s in sent)}
+    # And every 12 characters of a description: an error that quotes what it
+    # refused (pydantic's ``input_value``) shortens it to its two ends, which
+    # a search for the whole description does not find.
+    needles |= {text[i : i + 12] for text in sent for i in range(len(text) - 11)}
+
+    assert _leaks(needles, exported.span_text()) == {}
+    assert _leaks(needles, _log_text(caplog.records)) == {}

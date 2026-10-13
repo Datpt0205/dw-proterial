@@ -141,6 +141,16 @@ async def test_every_foreign_key_says_what_a_delete_does_and_is_indexed(
     assert [f"{r.tbl}.{r.conname}" for r in rows if not r.indexed] == []
 
 
+# Tables whose rows belong to the whole tenant, not to one workspace, with why:
+# policed by tenant alone, unique keys led by `tenant_id` alone. Every other
+# Sales table is narrowed by workspace as well.
+_TENANT_WIDE = {
+    # A tenant's own rule version applies in every workspace of the tenant,
+    # whichever it was proposed in (ticket 19, migration 57a241ea182b).
+    "rule_versions",
+}
+
+
 async def test_every_table_is_policed_by_tenant_and_workspace_under_its_own_name(
     catalog: AsyncConnection,
 ) -> None:
@@ -170,7 +180,8 @@ async def test_every_table_is_policed_by_tenant_and_workspace_under_its_own_name
         for predicate in policies[named[0]]:
             assert predicate is not None
             assert "current_setting('app.tenant_id'" in predicate, table.relname
-            assert "current_setting('app.workspace_id'" in predicate, table.relname
+            narrowed = "current_setting('app.workspace_id'" in predicate
+            assert narrowed is (table.relname not in _TENANT_WIDE), table.relname
 
 
 async def test_every_unique_key_leads_with_tenant_and_workspace(catalog: AsyncConnection) -> None:
@@ -194,7 +205,12 @@ async def test_every_unique_key_leads_with_tenant_and_workspace(catalog: AsyncCo
         )
     ).all()
     assert len(rows) >= 10
-    assert [r.index for r in rows if list(r.columns[:2]) != ["tenant_id", "workspace_id"]] == []
+    assert [
+        r.index
+        for r in rows
+        if list(r.columns[:2]) != ["tenant_id", "workspace_id"]
+        and not (r.tbl in _TENANT_WIDE and r.columns[0] == "tenant_id")
+    ] == []
 
 
 async def test_times_are_timestamptz_and_updated_at_is_kept_by_the_yielding_trigger(

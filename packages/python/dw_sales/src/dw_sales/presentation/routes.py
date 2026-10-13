@@ -47,14 +47,16 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel, ConfigDict, Field
 
 from dw_kernel.errors import InfrastructureError
+from dw_kernel.pagination import MAX_PAGE_SIZE, Page
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
-from dw_sales.application.overview_service import OverviewView, WorkItem
+from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
+from dw_sales.application.rules import RuleDecision, RuleKey, RulesInForceView, RuleVersionView
 from dw_sales.application.services import SalesServices
 from dw_sales.application.source import SourceView
 from dw_sales.application.views import (
@@ -98,6 +100,14 @@ class LayoutBody(BaseModel):
     message_id: _MessageId
     attachment_id: _AttachmentId
     mapping: LayoutMapping
+
+
+class RuleProposalBody(BaseModel):
+    """A whole policy document for one key, validated by that key's schema."""
+
+    model_config = _BODY
+
+    document: dict[str, Any]
 
 
 class VersionBody(BaseModel):
@@ -300,9 +310,14 @@ def build_router(
     async def overview(context: ReadCtx, svc: ReadSvc) -> OverviewView:
         return await svc.overview.overview(context)
 
-    @router.get("/my-work", response_model=list[WorkItem])
-    async def my_work(context: Ctx, svc: Svc) -> list[WorkItem]:
-        return await svc.overview.my_work(context)
+    @router.get("/my-work", response_model=Page[WorkItem])
+    async def my_work(
+        context: Ctx,
+        svc: Svc,
+        limit: int = Query(default=WORK_PAGE, ge=1, le=MAX_PAGE_SIZE),
+        cursor: str | None = Query(default=None, description="Opaque cursor from a previous page."),
+    ) -> Page[WorkItem]:
+        return await svc.overview.my_work(context, limit=limit, cursor=cursor)
 
     # --------------------------------------------------------------- inbox --
 
@@ -876,6 +891,40 @@ def build_router(
         return await idem.record(
             await svc.layouts.propose(context, body.message_id, body.attachment_id, body.mapping)
         )
+
+    # ---------------------------------- a tenant's own rules (ticket 19) --
+    # A PIC or the head proposes a version of one key (`sales.rules.propose`);
+    # the head, who did not propose it, approves or rejects it
+    # (`sales.rules.approve`). An unknown key, or one no reader resolves per
+    # tenant yet, is not a path this router has: 422.
+
+    @router.get(
+        "/rules",
+        response_model=RulesInForceView,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def rules_in_force(context: Ctx, svc: Svc) -> RulesInForceView:
+        return await svc.rules.list(context)
+
+    @router.post(
+        "/rules/{key}/versions",
+        response_model=RuleVersionView,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def propose_rules(
+        key: RuleKey, body: RuleProposalBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> RuleVersionView:
+        return await idem.record(await svc.rules.propose(context, key, body.document))
+
+    @router.post(
+        "/rules/versions/{version_id}/decision",
+        response_model=RuleVersionView,
+        dependencies=[scopes(SalesScopes.RULES_APPROVE)],
+    )
+    async def decide_rules(
+        version_id: uuid.UUID, body: RuleDecision, context: Ctx, svc: Svc, idem: Idem
+    ) -> RuleVersionView:
+        return await idem.record(await svc.rules.decide(context, version_id, body))
 
     return router
 

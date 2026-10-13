@@ -180,7 +180,7 @@ async def read_messages(model: Any, messages: Sequence[Mapping[str, Any]]) -> li
         customer = (await catalog.customer_by_email_domain(ALPHA, message.sender.domain)).data
         run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
         read = await reader.read(
-            ALPHA, newest_part(message), customer, rules_version="sales_order_rules@1.4.1", run=run
+            ALPHA, newest_part(message), customer, rules_version="sales_order_rules@1.5.1", run=run
         )
         result.append(
             Classified(
@@ -462,7 +462,7 @@ async def _references(cases: Sequence[Mapping[str, Any]]) -> dict[str, list[str]
         reader = IntentReader(scripted, catalog, _NoCases())
         customer = (await catalog.customer_by_email_domain(scope, message.sender.domain)).data
         read = await reader.read(
-            scope, newest_part(message), customer, rules_version="sales_order_rules@1.4.1", run=_RUN
+            scope, newest_part(message), customer, rules_version="sales_order_rules@1.5.1", run=_RUN
         )
         assert read is not None  # scripted
         seen[str(case["id"])] = sorted(r.number for r in read.reading.references)

@@ -10,7 +10,8 @@ from __future__ import annotations
 import hashlib
 import io
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -158,6 +159,37 @@ async def test_an_renders_the_upload_file_and_downloads_exactly_what_was_recorde
     assert [line["line_no"] for line in ready["lines"]] == [
         row[4] for row in sheet.iter_rows(min_row=2, values_only=True)
     ]
+
+
+async def test_a_line_split_over_several_dates_keeps_each_through_the_store_and_the_file(
+    api: Api,
+) -> None:
+    """Ticket 21, read back from PostgreSQL: M34 prints lines 1 and 3 over
+    two and three dates, and the order and its upload file keep every one."""
+    an = api.as_(AN)
+    case = await order_of(an, "M34")
+
+    assert [(line["printed_schedules"], len(line["schedules"])) for line in case["lines"]] == [
+        (True, 2),
+        (False, 1),
+        (True, 3),
+    ]
+    ready = await prepared(an, case)
+    (rendered,) = await _render(an, "orders", ready, "bravo_upload")
+    served = await an.get(f"/orders/{ready['case_id']}/artifacts/{rendered['artifact_id']}")
+
+    assert served.status_code == 200
+    sheet = load_workbook(io.BytesIO(served.content)).worksheets[0]
+    rows = [
+        (r[4], Decimal(str(r[8])), r[13].date())  # Dong, SoLuong, NgayYeuCau
+        for r in sheet.iter_rows(min_row=2, values_only=True)
+    ]
+    assert rows == [
+        (line["line_no"], Decimal(s["quantity"]), date.fromisoformat(s["requested_date"]))
+        for line in ready["lines"]
+        for s in line["schedules"]
+    ]
+    assert len(rows) == 6
 
 
 async def test_the_upload_file_is_refused_once_an_edit_bumped_the_case(api: Api) -> None:

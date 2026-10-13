@@ -19,6 +19,7 @@ import {
   purgeLegacyDemoTokens,
   setActiveWorkspace,
 } from "../session";
+import { useSupportGrant } from "../support/session";
 
 export interface Membership {
   tenantId: string;
@@ -52,6 +53,8 @@ interface AuthContextValue {
   scopes: string[];
   /** ADR-002: a global provisioning authority. May hold no tenant membership. */
   isPlatformOperator: boolean;
+  /** ADR 0024: a member of the support team. May hold no tenant membership. */
+  isSupportStaff: boolean;
   hasScope: (scope: string) => boolean;
   hasRole: (role: string) => boolean;
   login: () => void;
@@ -80,6 +83,7 @@ interface BootstrapResponse {
   display_name: string;
   memberships: BootstrapMembership[];
   is_platform_operator?: boolean;
+  is_support_staff?: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -118,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [active, setActive] = useState<Membership | null>(null);
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
+  const [isSupportStaff, setIsSupportStaff] = useState(false);
   const initStarted = useRef(false);
 
   const activate = useCallback(
@@ -146,11 +151,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMemberships(list);
       const operator = data.is_platform_operator ?? false;
       setIsPlatformOperator(operator);
+      const support = data.is_support_staff ?? false;
+      setIsSupportStaff(support);
       if (list.length === 0) {
-        // A Platform Operator commonly holds no tenant membership (ADR-002);
-        // still let them in so they can reach /platform. Everyone else lands
-        // on the "no workspace, contact an admin" screen.
-        setStatus(operator ? "ready" : "no-workspace");
+        // A Platform Operator (ADR-002) or a support staff member (ADR 0024)
+        // commonly holds no tenant membership; still let them in, to
+        // /platform or /support. Everyone else lands on the "no workspace,
+        // contact an admin" screen.
+        setStatus(operator || support ? "ready" : "no-workspace");
         return;
       }
       const previous =
@@ -267,9 +275,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [memberships, activate, subject, displayName],
   );
 
+  // Under an open support grant the server acts on the grant alone: no role,
+  // the grant's stamped scopes (ADR 0024). The screens show the same.
+  const grant = useSupportGrant();
   const value = useMemo<AuthContextValue>(() => {
-    const roles = active?.roles ?? [];
-    const scopes = active?.scopes ?? [];
+    const roles = grant ? [] : (active?.roles ?? []);
+    const scopes = grant ? grant.scopes : (active?.scopes ?? []);
     return {
       mode: AUTH_MODE,
       status,
@@ -283,6 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles,
       scopes,
       isPlatformOperator,
+      isSupportStaff,
       hasScope: (scope: string) =>
         roles.includes("platform_admin") || scopes.includes(scope),
       hasRole: (role: string) => roles.includes(role),
@@ -301,7 +313,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email,
     memberships,
     active,
+    grant,
     isPlatformOperator,
+    isSupportStaff,
     login,
     register,
     logout,

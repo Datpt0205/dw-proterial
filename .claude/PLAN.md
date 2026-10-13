@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed            |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–18, 20, 22, 26, 28–33 done |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–24, 26, 28–34 done         |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
 
 After working in an area, update its file. Update this index only when an
@@ -29,11 +29,11 @@ own file and a row here.
   `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.2.0`.
 - dw_sales ADR 0004 (checker decisions on the runtime) is Proposed, Đạt to
   review. Platform pieces waiting for a first caller: `platform-runtime.md`.
-- 2026-10-13: sales 13–18, 20, 22, 26 done; 21 in progress, 23 built but
-  unreviewed (committed so Đạt could push). Platform: eval-grader-registry
-  closed, support-access 02 step 10 built (review owed).
-- **Next:** model steps 28–33 built on the local Qwen3.5-9B (uncommitted, for
-  Đạt's review); then 34, 21/23, 24, 25, 27, 19, support-access 03.
+- 2026-10-13 (agent, Đạt away, uncommitted): sales 21, 23 (reviewed), 24,
+  19 (order rules and KPI; the rest is ticket 36) and 34 done;
+  support-access 02 step 10 reviewed, 03 (web session) built. Spans no
+  longer carry exception text (platform).
+- **Next:** 35, 36; 25 and 27 are needs-info (sandbox, WSL); Đạt reviews 28–33.
 
 ## Decisions Đạt owes
 
@@ -57,6 +57,7 @@ own file and a row here.
       94.5%, 30 98.2%; ADR 0004's amendment (run-less layout approval);
     - the interim defaults listed in `sales.md` Open;
     - whether pausing DW1 also stops rendering drafts and files.
+    - the reader sandbox for 25/27 (docgen or its own); restart WSL (admin).
 
 ## How a feature is checked here
 

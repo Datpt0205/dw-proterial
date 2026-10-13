@@ -48,6 +48,7 @@ const FINDING_FIELD: Record<string, string> = {
   pack_multiple: "quantity",
   value_uncertain: "quantity",
   requested_date_short_lt: "requested_date",
+  requested_date_missing: "requested_date",
   line_total_mismatch: "amount",
 };
 

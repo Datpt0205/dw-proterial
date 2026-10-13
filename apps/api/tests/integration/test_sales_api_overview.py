@@ -73,10 +73,10 @@ async def test_my_work_routes_each_step_to_who_may_take_it(api: Api) -> None:
     def ids(items: list[dict[str, Any]], action: str) -> set[str]:
         return {i["id"] for i in items if i["action"] == action}
 
-    an_work = (await an.get("/my-work")).json()
-    dieu_work = (await dieu.get("/my-work")).json()
-    giang_work = (await giang.get("/my-work")).json()
-    khoa_work = (await khoa.get("/my-work")).json()
+    an_work = (await an.get("/my-work")).json()["items"]
+    dieu_work = (await dieu.get("/my-work")).json()["items"]
+    giang_work = (await giang.get("/my-work")).json()["items"]
+    khoa_work = (await khoa.get("/my-work")).json()["items"]
 
     # The cross-check is for a PIC who made none of the order, not its maker.
     assert up["case_id"] in ids(dieu_work, "cross_check")

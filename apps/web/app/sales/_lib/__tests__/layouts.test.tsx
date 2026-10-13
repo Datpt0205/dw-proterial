@@ -88,7 +88,7 @@ const SOURCE: Source = {
     prompt: "sales.po_layout_proposal@1.0.0",
     model_profile: "onprem",
     route: "structured_extraction",
-    rules: "sales_order_rules@1.4.1",
+    rules: "sales_order_rules@1.5.1",
     outcome: "proposed",
     attachment_id: "M43-A1",
     mapping: MAPPING,

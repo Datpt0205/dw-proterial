@@ -321,6 +321,22 @@ class WorkerSettings(BaseSettings):
         default=True, validation_alias=AliasChoices("DW_WORKER_SALES_INBOX_LANE")
     )
 
+    # --- Sales: the malware scanner (ticket 25) ---
+    # `clamd`: every attachment is scanned by the `clamav` compose service
+    # before anything reads it. `skip`: files are handed over unscanned, for a
+    # host-run local process that cannot reach a scanner publishing no port;
+    # refused in a deployed profile (`dw_sales.adapters.clamd.malware_scanner`,
+    # the one rule both processes read).
+    sales_malware_scan: Literal["clamd", "skip"] = Field(
+        default="clamd", validation_alias=AliasChoices("DW_SALES_MALWARE_SCAN")
+    )
+    sales_clamd_host: str = Field(
+        default="clamav", validation_alias=AliasChoices("DW_SALES_CLAMD_HOST")
+    )
+    sales_clamd_port: int = Field(
+        default=3310, validation_alias=AliasChoices("DW_SALES_CLAMD_PORT")
+    )
+
     def sales_demo_scope(self) -> tuple[uuid.UUID, uuid.UUID] | None:
         """The one (tenant, workspace) DW1's mocks stand in for, or None.
 
@@ -392,6 +408,11 @@ class WorkerSettings(BaseSettings):
             return
         if not self.database_url:
             raise RuntimeError(f"a database is required in the {self.profile} profile")
+        if self.sales_malware_scan == "skip" and self.sales_demo_scope() is not None:
+            raise RuntimeError(
+                f"unscanned attachments are forbidden in the {self.profile} profile:"
+                " DW_SALES_MALWARE_SCAN=skip"
+            )
         if self.embedding_provider == "hash":
             raise RuntimeError(
                 "the hash embedding provider carries no meaning and is forbidden in the "

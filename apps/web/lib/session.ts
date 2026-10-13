@@ -3,6 +3,13 @@
 import { ApiClient, type ApiClientOptions } from "@dw/api-client";
 import { API_BASE_URL, AUTH_MODE } from "./auth/config";
 import { getKeycloak } from "./auth/keycloak";
+import {
+  endSupportGrant,
+  openSupportGrant,
+  SUPPORT_GRANT_ENDED,
+  SUPPORT_GRANT_HEADER,
+  SUPPORT_MFA_REQUIRED,
+} from "./support/session";
 
 /**
  * Session bridge. The access token is never persisted: in `oidc` mode it lives
@@ -139,7 +146,15 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
     getAccessToken: currentAccessToken,
     fetchImpl: async (input, init) => {
       const headers = new Headers(init?.headers);
-      if (typeof window !== "undefined") {
+      const grant = openSupportGrant();
+      if (grant) {
+        // Under a support grant the grant names the tenant and workspace,
+        // never the switcher: the server builds the context from the grant
+        // (support-access ticket 03).
+        headers.set(SUPPORT_GRANT_HEADER, grant.id);
+        headers.set("X-Tenant-Id", grant.tenantId);
+        headers.set("X-Workspace-Id", grant.workspaceId);
+      } else if (typeof window !== "undefined") {
         const tenantId = window.localStorage.getItem(KEYS.tenant);
         const workspaceId = window.localStorage.getItem(KEYS.workspace);
         if (tenantId && workspaceId) {
@@ -148,6 +163,15 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
         }
       }
       const res = await fetch(input, { ...init, headers });
+      // The grant expired, was revoked or lost its granter, or the sign-in
+      // has no second factor: close it here, so the next request is made as
+      // the person again, not refused again; /support says why.
+      if (grant && res.status === 403) {
+        const reason = await refusalReason(res);
+        if (reason === SUPPORT_GRANT_ENDED) endSupportGrant();
+        if (reason === SUPPORT_MFA_REQUIRED)
+          endSupportGrant({ mfaRequired: true });
+      }
       // 401 = the session is no longer authenticated (token died mid-use).
       // Clear local state and bounce to the login screen instead of leaving the
       // user staring at a failed action. (403 = permission, handled per-call.)
@@ -167,6 +191,17 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
       return res;
     },
   };
+}
+
+/** The support refusal a 403 names (`details.reason_code`), if any. */
+async function refusalReason(res: Response): Promise<unknown> {
+  try {
+    const body: unknown = await res.clone().json();
+    return (body as { details?: { reason_code?: unknown } } | null)?.details
+      ?.reason_code;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

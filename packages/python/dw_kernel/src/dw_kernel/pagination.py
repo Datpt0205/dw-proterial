@@ -117,6 +117,11 @@ class CursorPosition:
 
     sort_value: datetime
     tiebreaker: uuid.UUID
+    # A sort component before ``sort_value``, for a listing whose order leads
+    # with something that is not a timestamp (a due date, as text that sorts
+    # the way the dates do). Empty for every listing that has none, and then
+    # not written into the cursor, so those cursors are unchanged.
+    group: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +181,8 @@ def encode_cursor(position: CursorPosition, query: PageQuery) -> str:
         "i": str(position.tiebreaker),
         "q": query.fingerprint,
     }
+    if position.group:
+        payload["g"] = position.group
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     # Padding is stripped so the cursor survives a query string without
     # percent-encoding; :func:`decode_cursor` puts it back.
@@ -218,7 +225,10 @@ def decode_cursor(cursor: str, query: PageQuery) -> CursorPosition:
         raise InvalidCursorError(
             "cursor is not readable; drop it and request the first page again"
         ) from exc
-    return CursorPosition(sort_value=sort_value, tiebreaker=tiebreaker)
+    group = payload.get("g", "")
+    if not isinstance(group, str):
+        raise InvalidCursorError("cursor is not readable; drop it and request the first page again")
+    return CursorPosition(sort_value=sort_value, tiebreaker=tiebreaker, group=group)
 
 
 def page_request(*, limit: int, cursor: str | None, query: PageQuery) -> PageRequest:

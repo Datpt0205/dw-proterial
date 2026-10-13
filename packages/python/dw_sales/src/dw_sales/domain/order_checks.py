@@ -196,7 +196,7 @@ class OrderRules(BaseModel):
 
     @property
     def version(self) -> str:
-        """What a finding is stamped with: ``sales_order_rules@1.4.0``."""
+        """What a finding is stamped with: ``sales_order_rules@1.5.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
     def finding(
@@ -376,6 +376,10 @@ def check_line(
         )
     if flags := sorted({flag.flag.value for flag in po_line.flags}):
         found.append(_on(rules, FindingCode.VALUE_UNCERTAIN, number, None, ",".join(flags)))
+    if po_line.requested_date is None:
+        # "Date to follow" (ticket 34): the line reads, and Sales asks for the
+        # date or goes ahead without it.
+        found.append(_on(rules, FindingCode.REQUESTED_DATE_MISSING, number, "a date", None))
 
     item = mapped.item
     uom = known_uom(po_line.uom)
@@ -497,8 +501,11 @@ def check_line(
         mapping=mapping,
         basis=basis,
         # DW1's proposal, labelled as one: the requested date when the lead
-        # time allows it, else the first day it does.
-        suggested_delivery_date=max(po_line.requested_date, earliest),
+        # time allows it, else the first day it does, which is also the
+        # proposal for a line printed with no date.
+        suggested_delivery_date=(
+            earliest if po_line.requested_date is None else max(po_line.requested_date, earliest)
+        ),
     )
     return LineCheck(line=line, findings=tuple(found))
 
@@ -619,7 +626,7 @@ def check_document(document: PoDocument, rules: OrderRules) -> tuple[Finding, ..
             expected.append(f"total {document.total.amount}")
             actual.append(f"sum of lines {added}")
     for line in document.lines:
-        if line.scheduled_quantity != line.quantity:
+        if line.prints_schedules and line.scheduled_quantity != line.quantity:
             expected.append(f"line {line.line_no} quantity {line.quantity}")
             actual.append(f"line {line.line_no} schedules {line.scheduled_quantity}")
     if expected:
@@ -836,12 +843,20 @@ def check_history(
     return History(finding, base_so_no=latest_so.so_no)
 
 
+def _deliveries(line: PoLine) -> list[tuple[Decimal, date | None]]:
+    """A line's quantity per requested date; one with no date when it prints none."""
+    if not line.schedules:
+        return [(line.quantity, None)]
+    return [(s.quantity, s.requested_date) for s in line.schedules]
+
+
 def _same_entry(
     order: BravoOrder, document: PoDocument, prv_codes: Mapping[int, str | None]
 ) -> bool:
     """The Bravo order holds this PO's lines: number, PRV code, quantity, price,
-    date; a line split over several dates as one entry per schedule."""
-    entered = {
+    date; a line split over several dates as one entry per schedule, and a line
+    printed with no date as one entry with none, which no Bravo line matches."""
+    entered: set[tuple[int, str | None, Decimal, Decimal, date | None]] = {
         (line.line_no, line.prv_code, line.quantity, line.unit_price, line.delivery_date)
         for line in order.lines
     }
@@ -849,11 +864,11 @@ def _same_entry(
         (
             line.line_no,
             prv_codes.get(line.line_no),
-            schedule.quantity,
+            quantity,
             line.unit_price,
-            schedule.requested_date,
+            day,
         )
         for line in document.lines
-        for schedule in line.schedules
+        for quantity, day in _deliveries(line)
     }
     return order.currency == document.header.currency and entered == printed

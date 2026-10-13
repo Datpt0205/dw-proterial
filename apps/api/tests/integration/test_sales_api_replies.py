@@ -143,7 +143,7 @@ async def test_the_model_reads_the_reply_and_the_case_proposes_what_sales_confir
     assert (reading["kind"], reading["prompt"], reading["rules"]) == (
         "accepts_spec",
         "sales.reply_intent@1.0.0",
-        "sales_order_rules@1.4.1",
+        "sales_order_rules@1.5.1",
     )
     assert [q["text"] for q in reading["quotes"]] == [ACCEPT]
     ((request, run),) = gateway.calls

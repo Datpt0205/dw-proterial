@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from typing import cast
 
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import (
@@ -419,6 +420,7 @@ def build_sales(
     runtime: SalesRuntime,
     telemetry: TelemetryPort,
     model: ModelGateway | None = None,
+    scanner: object | None = None,
 ) -> object:
     """The Sales context's mount, part of the seam above.
 
@@ -441,6 +443,8 @@ def build_sales(
         SqlAuditRepository,
     )
     from dw_sales.adapters.assembly import build_dw1
+    from dw_sales.adapters.clamd import malware_scanner
+    from dw_sales.application.malware import MalwareScanPort
     from dw_sales.application.ports import SalesScope
     from dw_sales.presentation.routes import SalesMount
 
@@ -465,6 +469,17 @@ def build_sales(
         runtime=runtime,
         telemetry=telemetry,
         model=model,
+        # The settings' scanner (ticket 25); a test hands in its own.
+        scanner=(
+            cast(MalwareScanPort, scanner)
+            if scanner is not None
+            else malware_scanner(
+                settings.sales_malware_scan,
+                host=settings.sales_clamd_host,
+                port=settings.sales_clamd_port,
+                deployed=settings.is_deployed,
+            )
+        ),
     )
     return SalesMount(services=mount.services)
 

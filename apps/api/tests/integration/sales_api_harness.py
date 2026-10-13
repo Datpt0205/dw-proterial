@@ -64,6 +64,7 @@ from dw_platform.application.support_access import (
     SupportGrantService,
 )
 from dw_platform.testing.seed_env import sid
+from dw_sales.testing.scanners import NoMalware
 
 SECRET = "sales-api-integration-secret-0123456789"
 REPO = Path(__file__).resolve().parents[4]
@@ -284,6 +285,9 @@ async def build_app(
         ),
         telemetry=NullTelemetry(),
         model=model,
+        # No clamd beside this suite (ticket 25): every file is clean here,
+        # and the scan is the unit suite's and clamd's integration test's.
+        scanner=NoMalware(),
     )
     app = create_app(container)
     try:

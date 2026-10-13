@@ -27,6 +27,7 @@ from sqlalchemy.pool import NullPool
 
 from dw_platform.testing.seed_env import seed_test_env
 from dw_sales.testing.seed_personas import seed_sales_personas
+from dw_sales.testing.seed_rules import seed_demo_rules
 
 TEST_DB = "dw_test_sales_api"
 
@@ -57,6 +58,9 @@ def sales_api_db() -> DatabaseUrls:
     async def seed() -> None:
         await seed_test_env(urls.migrator)
         await seed_sales_personas(urls.migrator)
+        # The demo tenant's own order rules, proposed and approved through
+        # the service as the app role (ticket 19), as `make demo-reset` does.
+        await seed_demo_rules(urls.app)
 
     asyncio.run(seed())
     return urls

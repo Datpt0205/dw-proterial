@@ -1,6 +1,6 @@
 # Người dùng toàn tenant, sửa vai theo workspace, lời mời
 
-Status: ready-for-agent
+Status: resolved (ticket 01, `a05c2cc`, 2026-10-08)
 Area: platform-runtime · Nhánh: `main` (worktree `codebase-main`) · Viết: 3/10/2026
 
 Lát nền tảng, trung tính với sản phẩm. Quản trị viên tổ chức cần thấy mọi người của tenant

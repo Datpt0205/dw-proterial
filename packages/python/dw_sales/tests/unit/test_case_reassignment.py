@@ -58,7 +58,7 @@ async def _reassign(
 
 
 async def _work(world: World, caller: Caller, case_id: uuid.UUID) -> set[str]:
-    items = await world.services.overview.my_work(caller.context())
+    items = (await world.services.overview.my_work(caller.context())).items
     return {i.action for i in items if i.id == str(case_id)}
 
 

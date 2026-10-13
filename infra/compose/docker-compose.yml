@@ -25,6 +25,12 @@ networks:
   # the forwarder in front of it - nothing else.
   dw-sandbox:
     internal: true
+  # The malware scanner's network (sales ticket 25): clamd, and the two
+  # processes that hand it attachments (api, worker), nothing else. clamd's
+  # port takes SHUTDOWN and RELOAD as readily as a scan, unauthenticated, so
+  # it is not on dw-internal. Internal: the signatures come with the image.
+  dw-scan:
+    internal: true
   dw-edge: {}
 
 volumes:
@@ -304,10 +310,17 @@ services:
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      # Every attachment scanned by `clamav` before anything reads it (ticket
+      # 25). Fixed here, never from .env: a host-run API's `skip` there must
+      # not switch the scan off for a container that can reach clamd.
+      DW_SALES_MALWARE_SCAN: clamd
+      DW_SALES_CLAMD_HOST: clamav
     ports:
       - "127.0.0.1:${DW_API_HOST_PORT:-8000}:8000"
-    networks: [dw-internal, dw-edge]
+    networks: [dw-internal, dw-edge, dw-scan]
     depends_on:
+      clamav:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -320,6 +333,52 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_started
+    restart: unless-stopped
+
+  # -------------------------------------------------------- malware scan --
+  # ClamAV's clamd (sales ticket 25, ADR 0010 decision 6): every attachment
+  # is scanned before the API or the worker reads it.
+  #
+  # Pinned by tag AND digest: a tag can be re-pointed or withdrawn from a
+  # registry (failure-modes #4); the digest is what was scanned with trivy.
+  # The signatures are inside the image (main, daily, bytecode; 107.6 MB in
+  # 1.5.4, dated 2026-10-11) and are never fetched: no freshclam, no egress, an internal
+  # network. Newer signatures are a newer image, pulled, scanned and pinned
+  # like any other.
+  #
+  # The image's init script chowns and writes under /etc, /run and /var, so
+  # it is skipped: clamd runs in the foreground as the image's clamav user,
+  # on a config mounted read-only (`clamd.conf` beside this file), with a
+  # read-only root, no capabilities and a tmpfs /tmp.
+  #
+  # Measured 2026-10-13 on the dev machine: 944 MiB resident once the
+  # signatures are loaded, flat across scans; about 110 ms per mock
+  # attachment. `full` only: a host-run API (the `infra` profile) cannot reach
+  # a scanner that publishes no port, and scans with DW_SALES_MALWARE_SCAN=skip
+  # (refused in a deployed profile). `scan` starts it alone.
+  clamav:
+    image: clamav/clamav:1.5.4@sha256:638d90201ee7ee6a82d249a2fc23b132e578673b5f1f2766852b127676ca1ef6
+    profiles: ["full", "scan"]
+    entrypoint: ["clamd", "--config-file=/etc/dw/clamd.conf"]
+    volumes:
+      - ./clamd.conf:/etc/dw/clamd.conf:ro
+    networks: [dw-scan]
+    user: "100:101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:mode=1777,size=64m,nosuid,nodev,noexec
+    mem_limit: 1536m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "clamdscan", "--config-file=/etc/dw/clamd.conf", "--ping", "3"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # Loading the signatures takes about a minute on the dev machine.
+      start_period: 180s
     restart: unless-stopped
 
   # ------------------------------------------------------------- sandbox --
@@ -464,8 +523,13 @@ services:
       DW_PRODUCT_NAME: ${DW_PRODUCT_NAME:-Digital Worker}
       # The `channel_delivery` lane: notifications to linked Zalo chats.
       DW_WORKER_CHANNEL_DELIVERY_INTERVAL_SECONDS: ${DW_WORKER_CHANNEL_DELIVERY_INTERVAL_SECONDS:-30}
-    networks: [dw-internal, dw-edge]
+      # The mailbox lane scans as the API does (ticket 25), fixed likewise.
+      DW_SALES_MALWARE_SCAN: clamd
+      DW_SALES_CLAMD_HOST: clamav
+    networks: [dw-internal, dw-edge, dw-scan]
     depends_on:
+      clamav:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       postgres:

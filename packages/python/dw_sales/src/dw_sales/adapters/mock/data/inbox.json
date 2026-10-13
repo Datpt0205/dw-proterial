@@ -988,5 +988,58 @@
       }
     ],
     "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M44",
+    "sender": {
+      "address": "an.trinh@velatrix.example",
+      "display_name": "Trịnh Mỹ An"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO VLX-PO-2610-0011",
+    "received_at": "2026-10-02T17:56:00+07:00",
+    "body_text": "Chào chị,\n\nVelatrix gửi PO VLX-PO-2610-0011 (2 dòng) đính kèm. Ngày giao của dòng 2 bên em sẽ báo sau.\n\nTrân trọng,\nTrịnh Mỹ An",
+    "attachments": [
+      {
+        "attachment_id": "M44-A1",
+        "name": "VLX-PO-2610-0011.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M45",
+    "sender": {
+      "address": "thu.vo@brennic.example",
+      "display_name": "Võ Minh Thư"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Đơn đặt hàng BRN-PO-2610-018",
+    "received_at": "2026-10-02T17:57:00+07:00",
+    "body_text": "Kính gửi Phòng Kinh doanh,\n\nBrennic gửi đơn đặt hàng BRN-PO-2610-018, file Excel kèm bản in PDF để đối chiếu.\n\nTrân trọng,\nVõ Minh Thư",
+    "attachments": [
+      {
+        "attachment_id": "M45-A1",
+        "name": "BRN-PO-2610-018.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      },
+      {
+        "attachment_id": "M45-A2",
+        "name": "BRN-PO-2610-018.pdf",
+        "media_type": "application/pdf"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   }
 ]

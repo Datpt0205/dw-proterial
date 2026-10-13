@@ -76,6 +76,9 @@ MOCK_EXCEL_LAYOUTS: Mapping[str, ExcelLayout] = MappingProxyType(
         "QRL": ONE_SHEET,
         "TZ2609": ONE_SHEET,
         "CVG": SHEET_PER_PAGE,
+        # Brennic's system exports the workbook too, and mails it with the
+        # PDF print beside it (M45, ticket 34).
+        "BRN": ONE_SHEET,
     }
 )
 MOCK_PDF_LAYOUTS: Mapping[str, PdfLayout] = MappingProxyType({"BRN": VIETNAMESE_PDF})

@@ -209,7 +209,7 @@ async def test_the_model_reads_the_reply_and_code_keeps_only_what_it_located() -
     reading = disposition.reply.reading
     assert reading is not None and reading.kind == "accepts_spec"
     assert [q.text for q in reading.quotes] == [ACCEPT]
-    assert (reading.prompt, reading.rules) == (str(REPLY_INTENT), "sales_order_rules@1.4.1")
+    assert (reading.prompt, reading.rules) == (str(REPLY_INTENT), "sales_order_rules@1.5.1")
     ((_, run, inputs),) = [c for c in model.calls if c[0] == REPLY_INTENT]
     assert run.tenant_id == ALPHA.tenant_id.value and run.worker_id == "sales-dw1"
     # The quoted older message was cut before the call, and the case's
@@ -344,7 +344,7 @@ def test_a_reading_that_names_a_kind_without_a_quote_is_refused() -> None:
         "prompt": "sales.reply_intent@1.0.0",
         "model_profile": "onprem",
         "route": "structured_extraction",
-        "rules": "sales_order_rules@1.4.1",
+        "rules": "sales_order_rules@1.5.1",
     }
     ReplyReading.model_validate({**stamp, "outcome": "read", "kind": "unclear"})
     with pytest.raises(ValidationError):
@@ -398,7 +398,7 @@ async def test_a_long_body_is_cut_to_the_routes_room_before_it_is_sent() -> None
     thread = ThreadedCase(CaseKind.ORDER, uuid.UUID(int=1), "NRV", "in_review", "M04", "Q")
 
     await ReplyReader(model).read(
-        newest_part(message), thread, rules_version="sales_order_rules@1.4.1", run=RUN
+        newest_part(message), thread, rules_version="sales_order_rules@1.5.1", run=RUN
     )
 
     ((_, _, inputs),) = model.calls
@@ -415,7 +415,7 @@ def _read(kind: ReplyKind) -> ReplyReading:
             "prompt": "sales.reply_intent@1.0.0",
             "model_profile": "onprem",
             "route": "structured_extraction",
-            "rules": "sales_order_rules@1.4.1",
+            "rules": "sales_order_rules@1.5.1",
             "outcome": "read",
             "kind": kind,
             "quotes": quotes,

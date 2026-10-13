@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import time
 import zipfile
 from collections.abc import Callable
 from datetime import date, datetime
@@ -42,6 +43,8 @@ from dw_sales.adapters.readers.layouts import (
     ONE_SHEET,
     VIETNAMESE_PDF,
 )
+from dw_sales.adapters.readers.pdf import _without_trailing_words
+from dw_sales.adapters.readers.schedules import listed_schedules
 from dw_sales.application.order_ports import PoDocumentReaderPort
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.messages import Attachment, AttachmentContent
@@ -51,7 +54,7 @@ from dw_sales.domain.orders import PoDocument, PoLine, RegionFlag, Unreadable
 pytestmark = pytest.mark.unit
 
 CAPS = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.4.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.5.0.yaml"
 ).intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)
@@ -156,7 +159,7 @@ def test_every_anchor_names_the_file_by_its_sha256_and_the_reader_by_its_version
     digest = hashlib.sha256(data).hexdigest()
     assert po.attachment_sha256 == digest
     assert {(a.attachment_id, a.attachment_sha256) for a in po.anchors()} == {("A1", digest)}
-    assert po.parser_version == "excel_po_reader@1.4.0"
+    assert po.parser_version == "excel_po_reader@1.5.0"
 
 
 def test_the_coverage_facts_are_read_with_the_lines() -> None:
@@ -405,6 +408,116 @@ def test_line_numbers_are_read_as_printed_even_when_they_skip() -> None:
     assert [line.line_no for line in po.lines] == [1, 2, 3, 4, 6, 7, 8]
 
 
+# ------------------------------------------- a blank date (ticket 34) --
+
+
+@pytest.mark.parametrize("blank", [None, "   ", "-"], ids=["empty", "spaces", "dash"])
+def test_a_blank_date_cell_reads_as_date_to_follow_anchored_at_the_cell(
+    blank: str | None,
+) -> None:
+    def put(workbook: Workbook) -> None:
+        workbook["PO"]["H11"] = blank
+
+    po = _po(_read(_edited(M01, put)))
+
+    second = next(line for line in po.lines if line.anchors.requested_date.cell_ref == "PO!H11")
+    assert (second.requested_date, second.schedules) == (None, ())
+    assert [line.requested_date is None for line in po.lines].count(True) == 1
+
+
+def test_a_pdf_row_with_its_date_left_blank_reads_with_no_date_at_its_row() -> None:
+    blank = (*_ROW[:-1], "")
+
+    po = _po(_read_pdf(_vietnamese_pdf(blank)))
+
+    (line,) = po.lines
+    assert (line.requested_date, line.schedules, line.quantity) == (None, (), Decimal(6100))
+    assert line.anchors.requested_date == line.anchors.line_no
+    assert line.anchors.requested_date.page == 1
+
+
+def test_a_pdf_date_printed_as_a_dash_reads_with_no_date_at_the_dash() -> None:
+    po = _po(_read_pdf(_vietnamese_pdf((*_ROW[:-1], "-"))))
+
+    (line,) = po.lines
+    assert line.requested_date is None
+    assert (line.anchors.requested_date.quote, line.anchors.requested_date.page) == ("-", 1)
+
+
+# The Vietnamese layout with a note column after the date, as a customer's
+# own form may print one (M43's prints "Buyer Note").
+_NOTED = PdfLayout(
+    header_labels=VIETNAMESE_PDF.header_labels,
+    columns=(*VIETNAMESE_PDF.columns, ("Ghi chú", None)),
+    thousands_separator=".",
+    decimal_separator=",",
+    date_format="%d/%m/%Y",
+)
+_NOTED_X = (
+    (55, True),
+    (62, False),
+    (140, False),
+    (400, True),
+    (406, False),
+    (470, True),
+    (550, True),
+    (560, False),
+    (700, False),
+)
+
+
+def _noted_pdf(*rows: tuple[str, ...]) -> bytes:
+    pdfmetrics.registerFont(TTFont("ReaderTest", str(FONT_PATH)))
+    buffer = io.BytesIO()
+    width, height = landscape(A4)
+    canvas = Canvas(buffer, pagesize=(width, height), invariant=1)
+    y = height - 50
+    canvas.setFont("ReaderTest", 9)
+    for text in (
+        "Số đơn hàng: BRN-PO-2610-001",
+        "Lần sửa đổi: 0",
+        "Ngày đặt hàng: 01/10/2026",
+        "Đơn vị tiền tệ: VND",
+    ):
+        y -= 15
+        canvas.drawString(40, y, text)
+    for row in ((*_TITLES, "Ghi chú"), *rows):
+        y -= 14
+        canvas.setFont("ReaderTest", 7.5)
+        for (x, right), value in zip(_NOTED_X, row, strict=True):
+            (canvas.drawRightString if right else canvas.drawString)(x, y, value)
+    canvas.showPage()
+    canvas.save()
+    return buffer.getvalue()
+
+
+def test_a_short_row_is_read_with_its_date_blank_only_where_no_date_follows_the_gap() -> None:
+    """The gap is the date's when what follows it is no date: a row with no
+    date and a note reads with no date; a row with a date and no note is not
+    read with its date taken for the note."""
+    no_date = (*_ROW[:-1], "", "giao sau")
+    no_note = (*_ROW[:-1], _ROW[-1], "")
+    read = PdfPoReader({"BRN": _NOTED})
+
+    with_note = _po(read.read(_content(_noted_pdf(no_date)), "BRN", CAPS))
+    without_note = _po(read.read(_content(_noted_pdf((*_ROW, "x"), no_note)), "BRN", CAPS))
+
+    assert [line.requested_date for line in with_note.lines] == [None]
+    assert [line.requested_date for line in without_note.lines] == [date(2026, 11, 16)]
+
+
+def test_a_pdf_row_short_of_another_cell_is_not_read_shifted() -> None:
+    """Only a blank date, printed last, makes a short row a row: a row missing
+    its unit is not read with the price as its unit and the date as its
+    amount, which would refuse the whole PO. It stays what it was before
+    ticket 34, a line that is not a table row."""
+    no_unit = (*_ROW[:4], "", *_ROW[5:])
+
+    po = _po(_read_pdf(_vietnamese_pdf(_ROW, no_unit)))
+
+    assert [line.line_no for line in po.lines] == [1]
+
+
 # ---------------------------------------------------------------- refusals --
 
 
@@ -467,7 +580,7 @@ def test_a_request_for_quotation_is_not_a_po() -> None:
 
 
 def test_a_customer_without_a_layout_is_not_read() -> None:
-    assert _refused(_read(_fixture(M01), "BRN")).reason == "no Excel PO layout for customer BRN"
+    assert _refused(_read(_fixture(M01), "ZZZ")).reason == "no Excel PO layout for customer ZZZ"
 
 
 def test_a_file_that_is_not_a_workbook_is_refused() -> None:
@@ -631,7 +744,7 @@ def test_a_text_pdf_is_read_with_every_value_at_its_page_and_box() -> None:
     assert (po.rows_printed, po.regions, po.parser_version) == (
         3,
         ("page 1",),
-        "pdf_po_reader@1.4.0",
+        "pdf_po_reader@1.5.0",
     )
 
 
@@ -877,6 +990,43 @@ def test_a_schedule_that_cannot_be_read_names_its_cell_and_not_its_value(
     assert _ref(refused.anchor) == f"PO!{cell}"
     if isinstance(value, str):
         assert "many" not in refused.reason and "6100" not in refused.reason
+
+
+def test_a_long_padded_list_entry_is_refused_in_time_linear_in_its_length() -> None:
+    """The list is the customer's text: a cell of spaces around a colon is
+    refused at once, not after a backtracking pattern spends minutes on it
+    (the first build's pattern took 9 s on this entry and 75 s at twice it)."""
+    anchor = SourceAnchor(attachment_id="A1", attachment_sha256="a" * 64, cell_ref="PO!H10")
+    entry = "1" + " " * 1000 + ": 5" + " " * 1000 + "x:"
+
+    started = time.perf_counter()
+    with pytest.raises(ValueError, match="is not a list of 'date: quantity'"):
+        listed_schedules(entry, anchor, date.fromisoformat, Decimal)
+
+    assert time.perf_counter() - started < 1.0
+
+
+@pytest.mark.parametrize(
+    ("printed", "amount"),
+    [("1 443.80 USD", "1 443.80"), ("10.530,40 VND", "10.530,40"), ("256.2", "256.2"), ("", "")],
+)
+def test_the_pdf_totals_currency_words_go_and_its_grouped_digits_stay(
+    printed: str, amount: str
+) -> None:
+    assert _without_trailing_words(printed) == amount
+
+
+def test_a_long_run_of_words_on_the_total_line_is_cut_in_linear_time() -> None:
+    """The total line is the customer's text; the pattern this replaced spent
+    3 s on 16,000 characters of words ending in a digit, and four times that
+    at twice the length."""
+    printed = "a " * 8000 + "1"
+
+    started = time.perf_counter()
+    assert _without_trailing_words(printed) == printed
+    assert _without_trailing_words(printed + " USD" * 8000) == printed
+
+    assert time.perf_counter() - started < 1.0
 
 
 def test_a_pdf_date_cell_listing_dates_and_quantities_is_the_lines_schedules() -> None:

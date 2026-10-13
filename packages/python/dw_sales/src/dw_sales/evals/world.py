@@ -51,10 +51,12 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
-from dw_sales.adapters.assembly import demo_order_rules, model_requests
+from dw_sales.adapters.assembly import model_requests
+from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
-from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies
+from dw_sales.adapters.order_rules import load_tenant_order_rules
+from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies, rule_book
 from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.adapters.runtime import RuntimeDw1Runs
@@ -78,12 +80,14 @@ from dw_sales.application.layouts import (
     LayoutPrefiller,
     LayoutSettlement,
 )
+from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
+from dw_sales.application.rules import RuleBookOrderRules
 from dw_sales.application.runs import subject_of
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.source import required_regions
@@ -93,6 +97,8 @@ from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDispo
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
+from dw_sales.evals.overview_memory import PythonOverviewReader
+from dw_sales.testing.scanners import NoMalware
 from dw_sales.workflows.graph import register
 
 ALPHA = SalesScope(TenantId(uuid.UUID(int=0xA1FA)), WorkspaceId(uuid.UUID(int=0xA1FB)))
@@ -322,14 +328,6 @@ class _Messages:
         return list(reversed(self._held.values()))
 
 
-class _Events:
-    def __init__(self, held: list[LoggedEvent]) -> None:
-        self._held = held
-
-    async def list_all(self) -> Sequence[LoggedEvent]:
-        return list(self._held)
-
-
 class _Served:
     def __init__(self, held: set[ServedSource]) -> None:
         self._held = held
@@ -448,7 +446,6 @@ class _Work:
         self.orders: _Cases[OrderCase] = _Cases(state.orders, state.events, CaseKind.ORDER)
         self.quotes: _Cases[QuoteCase] = _Cases(state.quotes, state.events, CaseKind.QUOTE)
         self.messages = _Messages(state.messages)
-        self.events = _Events(state.events)
         self.served = _Served(state.served)
         self.artifacts = _Artifacts(state.artifacts)
         self.worker = _Worker(state)
@@ -457,6 +454,20 @@ class _Work:
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)
+        # Written at once, like the approvals: a tenant's, whatever workspace.
+        self.rule_versions = store.rule_versions.for_tenant(scope.tenant_id.value)
+
+    @property
+    def overview(self) -> PythonOverviewReader:
+        """The overview and the work list, computed in Python over what this
+        transaction holds (the SQL reader is held to the same answers)."""
+        state = self._state
+        return PythonOverviewReader(
+            orders=list(state.orders.values()),
+            quotes=list(state.quotes.values()),
+            messages=list(state.messages.values()),
+            events=list(state.events),
+        )
 
     async def commit(self) -> None:
         self._store.states[self._scope] = self._state
@@ -482,6 +493,8 @@ class MemoryStore:
     def __init__(self, approvals: MemoryApprovals | None = None) -> None:
         self.states: dict[SalesScope, _ScopeState] = {}
         self.approvals = approvals or MemoryApprovals(FixedClock(NOW))
+        # A tenant's own rule versions: per tenant, not per workspace (ticket 19).
+        self.rule_versions = MemoryRuleVersions()
 
     def state(self, scope: SalesScope) -> _ScopeState:
         return self.states.setdefault(scope, _ScopeState())
@@ -596,7 +609,7 @@ class World:
     services: SalesServices
     store: MemoryStore
     catalog: MockSalesCatalog
-    inbox: MockInbox
+    inbox: InboxPort
     notifications: Notifications
     objects: Objects
     policies: SalesPolicies
@@ -772,6 +785,7 @@ def open_world(
     allowance: RunAllowancePort | None = None,
     telemetry: TelemetryPort | None = None,
     model: InterpretationPort | None = None,
+    scanner: MalwareScanPort | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -792,8 +806,22 @@ def open_world(
     runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance, telemetry=telemetry)
     store = MemoryStore(runtime.approvals)
     catalog = MockSalesCatalog.load(bound_to, sample.data_dir)
-    inbox = MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir)
     readers = mock_po_readers()
+    # The mailbox every service reads, at the door `build_dw1` puts in front of
+    # it (ticket 25): scanned, then held to its names. Nothing is found in the
+    # sample set unless ``scanner`` says so.
+    inbox = ScannedInbox(
+        MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir),
+        scanner or NoMalware(),
+        readers,
+    )
+    # The bound tenant's own order rules, where the sample set holds them, as
+    # a version two people approved (the API stores it through `/sales/rules`).
+    own = load_tenant_order_rules(sample.data_dir / "policies")
+    if own is not None:
+        store.rule_versions.seed_approved(bound_to.tenant_id.value, own)
+    book = rule_book(policies, store.rule_versions)
+    order_rules = RuleBookOrderRules(book)
     layout_checks = LayoutChecks(readers, catalog)
     quotation = QuotationService(
         catalog=catalog,
@@ -804,22 +832,14 @@ def open_world(
         ledger=catalog,
         rules=policies.quote_rules,
         pricing=policies.pricing,
-        requests=(
-            None
-            if model is None
-            else model_requests(
-                model,
-                catalog,
-                demo_order_rules(policies.order_rules, bound_to, sample.data_dir / "policies"),
-            )
-        ),
+        requests=(None if model is None else model_requests(model, catalog, order_rules)),
     )
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
         reader=readers,
         quote_forms=ExcelQuoteForms(),
-        rules=demo_order_rules(policies.order_rules, bound_to, sample.data_dir / "policies"),
+        rules=order_rules,
         cases=store,
         new_case_id=ids.new_uuid,
         descriptions=None if model is None else DescriptionReader(model),
@@ -853,7 +873,7 @@ def open_world(
         intake=intake,
         quotation=quotation,
         files=FileSourceView(policies.order_rules.intake),
-        kpi=policies.kpi,
+        book=book,
         directory=directory,
         holders=directory,
         notifications=notifications,
