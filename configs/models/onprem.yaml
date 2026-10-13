@@ -1,0 +1,39 @@
+schema_version: "1.0"
+profile_id: onprem
+routing_policy_version: "1.0.0"
+# A model server the deployment runs itself, for a step whose input must not
+# leave it: DW1 reading a customer's item description (dw_sales ADR 0005).
+# Reached as provider `onprem`, at DW_ONPREM_MODEL_BASE_URL (Ollama, vLLM or
+# llama.cpp speaking /v1/chat/completions), apart from the gateway every other
+# profile uses. On a developer machine:
+#   DW_ONPREM_MODEL_BASE_URL=http://localhost:11434/v1
+# Localhost is admitted only outside a deployed profile; a deployed server is
+# named in DW_API_OUTBOUND_ALLOWED_HOSTS like any other host.
+#
+# Thinking OFF on every route (`reasoning_effort: none`). Measured 2026-10-12
+# on a GTX 1080 8 GB: about 80 s and 1,400 tokens for a one-line extraction
+# with thinking on, about 4 s without. Thinking off is also what makes the
+# model miss a field more often, which is why code re-parses every number from
+# the span the model points at and computes coverage itself.
+#
+# NO fallback route on purpose: a step on this profile is one whose input may
+# not go to an external model, so when the server is down the step degrades
+# to a person rather than to someone else's model.
+#
+# Unpriced: the server is the deployment's own, so a run is bounded by the
+# token ceiling below, not by cost.
+structured_extraction:
+  provider: onprem
+  # Qwen3.5-9B Q4_K_M with num_ctx 8192 (an Ollama Modelfile over qwen3.5:9b).
+  model: qwen3.5-9b-dw
+  timeout_seconds: 120
+  reasoning_effort: none
+  temperature: 0.0
+reasoning:
+  provider: onprem
+  model: qwen3.5-9b-dw
+  timeout_seconds: 180
+  reasoning_effort: none
+budgets:
+  max_input_tokens_per_run: 60000
+  max_cost_usd_per_run: 0.01

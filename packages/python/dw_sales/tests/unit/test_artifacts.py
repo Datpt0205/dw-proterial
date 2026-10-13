@@ -310,7 +310,7 @@ def service(world: World, copy: ArtifactCopy = ARTIFACT_COPY) -> ArtifactService
 
 # ------------------------------------------------------------ order cases --
 
-_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.1.0.yaml"))
+_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml"))
 
 
 def intake(cases: OrderCases) -> OrderIntake:

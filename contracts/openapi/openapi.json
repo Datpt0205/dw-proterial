@@ -1538,6 +1538,55 @@
         "title": "DemoUser",
         "type": "object"
       },
+      "DescriptionReadingView": {
+        "description": "What a model reading of the description did (dw_sales ADR 0005).\n``outcome``: ``read``, ``not_understood`` (``reason`` says which check\nrefused it) or ``unavailable`` (no usable answer: DW1 could not read it).",
+        "properties": {
+          "model_profile": {
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "read",
+              "not_understood",
+              "unavailable"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/SpanReadView"
+            },
+            "title": "Spans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "reason",
+          "prompt",
+          "model_profile",
+          "spans"
+        ],
+        "title": "DescriptionReadingView",
+        "type": "object"
+      },
       "DesignLineView": {
         "properties": {
           "anchors": {
@@ -2824,6 +2873,16 @@
             ],
             "title": "Convert Prv Code"
           },
+          "description_reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DescriptionReadingView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "item": {
             "anyOf": [
               {
@@ -2885,7 +2944,8 @@
           "lme",
           "lead_time_days",
           "lead_time_source",
-          "checks_run"
+          "checks_run",
+          "description_reading"
         ],
         "title": "LineBasisView",
         "type": "object"
@@ -7155,6 +7215,49 @@
           "served_at"
         ],
         "title": "SourceView",
+        "type": "object"
+      },
+      "SpanReadView": {
+        "description": "One attribute a model reading located: the text, where it sits in the\nnormalised description, the value, and whether code parsed the value\n(``code``) or it is the model's label (``model``), which Sales checks.",
+        "properties": {
+          "attribute": {
+            "title": "Attribute",
+            "type": "string"
+          },
+          "end": {
+            "title": "End",
+            "type": "integer"
+          },
+          "read_by": {
+            "enum": [
+              "code",
+              "model"
+            ],
+            "title": "Read By",
+            "type": "string"
+          },
+          "span": {
+            "title": "Span",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attribute",
+          "span",
+          "start",
+          "end",
+          "value",
+          "read_by"
+        ],
+        "title": "SpanReadView",
         "type": "object"
       },
       "SpecBody": {

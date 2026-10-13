@@ -61,6 +61,16 @@ API and the plan use the English terms. The spec is
 - **DW1 run** (Lượt chạy DW1): one thing DW1 is asked to do ("DW xử lý", a
   quotation submitted, a Bravo entry recorded), on the agent runtime,
   counted against the tenant's plan.
+- **Model reading** (Mô hình đọc): what a local model read from a customer's
+  words, under dw_sales ADR 0005: closed-set labels and the exact text each
+  came from. Code locates every text once, parses every number from its text
+  and refuses a reading that leaves a word uncovered; a label is the model's
+  ("Mô hình đọc, cần kiểm"), a number is DW1's ("DW1 tính từ chữ"). Stamped on
+  the line's check basis with the prompt, profile and route, as `read`,
+  `not_understood` (with the check that refused it) or `unavailable` (no
+  usable answer: "DW1 không đọc được mô tả"). A line read this way is at best
+  a candidate Sales confirms, never `exact`. Turned on per tenant by
+  `sales_order_rules.model_assist` (ticket 28).
 
 ## Roles and permission sets
 

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
 
+from dw_kernel.overlay import TenantOverlay
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.order_checks import OrderRules
 
@@ -36,3 +39,45 @@ class PlatformOrderRules:
 
     async def rules(self, scope: SalesScope) -> OrderRules:
         return self._rules
+
+
+class TenantOrderRules:
+    """Implements `OrderRulesPort` with a tenant layer over the platform's.
+
+    A tenant's own version where it has one, the platform's otherwise, and
+    never another tenant's (`TenantOverlay`). The tenant comes from the scope
+    the service resolved from the verified access context, never from a
+    request. A tenant version must carry its own version number: the case
+    stamps ``id@version``, and two documents under one stamp would make the
+    stamp say nothing about which was applied.
+
+    Today the tenant layer holds what a composition root hands it (the demo
+    tenant's version in the mock sample set); the stored, proposed and
+    approved versions are ticket 19's.
+    """
+
+    def __init__(self, platform: OrderRules, tenants: Mapping[uuid.UUID, OrderRules]) -> None:
+        self._overlay: TenantOverlay[str, OrderRules] = TenantOverlay()
+        self._overlay.put(platform.policy_id, platform)
+        for tenant_id, rules in tenants.items():
+            if rules.version == platform.version:
+                raise ValueError(
+                    f"tenant rules reuse the platform's version {platform.version}:"
+                    " a tenant version needs a number of its own"
+                )
+            self._overlay.put(rules.policy_id, rules, tenant_id=tenant_id)
+
+    async def rules(self, scope: SalesScope) -> OrderRules:
+        rules = self._overlay.get("sales_order_rules", tenant_id=scope.tenant_id.value)
+        assert rules is not None  # the platform layer is put in __init__
+        return rules
+
+
+def load_tenant_order_rules(directory: Path) -> OrderRules | None:
+    """The one `sales_order_rules@<version>.yaml` a tenant's directory holds,
+    or None when it holds none. Two are refused: which applies is a decision,
+    not a file-system order."""
+    found = sorted(directory.glob("sales_order_rules@*.yaml")) if directory.is_dir() else []
+    if len(found) > 1:
+        raise ValueError(f"{directory.name} holds {len(found)} versions of sales_order_rules")
+    return load_order_rules(found[0]) if found else None

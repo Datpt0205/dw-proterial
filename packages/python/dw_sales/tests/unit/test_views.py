@@ -90,7 +90,7 @@ async def _order(message_id: str, kept: _Kept | None = None) -> OrderCase:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.1.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml")),
         cases=kept if kept is not None else _NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),
     )

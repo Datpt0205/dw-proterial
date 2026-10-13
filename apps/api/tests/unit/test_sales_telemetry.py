@@ -272,7 +272,8 @@ async def test_a_fixture_po_leaves_no_document_value_in_spans_logs_or_errors(
     assert _leaks(needles, _log_text(caplog.records)) == {}
     error_text = [json.dumps(r.json(), ensure_ascii=False) for r in errors]
     assert _leaks(needles, error_text) == {}
-    # DW1 calls no model (spec decision 13): nothing for Langfuse to receive.
+    # No model is wired into this world (dw_sales ADR 0005: a process without
+    # a model server calls none): nothing for Langfuse to receive.
     assert "dw.model.call" not in names
 
 
@@ -305,8 +306,8 @@ async def test_a_sales_span_carries_only_listed_attributes() -> None:
 
 
 async def test_a_model_call_for_sales_exports_counts_and_cost_never_its_text() -> None:
-    """DW1 calls no model today; the day it does, the call goes through the
-    runtime's gateway, whose usage recorder is what reaches OTLP and Langfuse.
+    """DW1's model step (dw_sales ADR 0005) goes through the runtime's
+    gateway, whose usage recorder is what reaches OTLP and Langfuse.
     What it exports is the profile, the model and the counts: no prompt
     variable and no completion, whatever the tenant (no tenant opts into
     content export; there is no such switch to turn)."""

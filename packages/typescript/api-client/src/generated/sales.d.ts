@@ -1140,6 +1140,27 @@ export interface components {
             /** Suggested Delivery Date */
             suggested_delivery_date: string | null;
         };
+        /**
+         * DescriptionReadingView
+         * @description What a model reading of the description did (dw_sales ADR 0005).
+         *     ``outcome``: ``read``, ``not_understood`` (``reason`` says which check
+         *     refused it) or ``unavailable`` (no usable answer: DW1 could not read it).
+         */
+        DescriptionReadingView: {
+            /** Model Profile */
+            model_profile: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "read" | "not_understood" | "unavailable";
+            /** Prompt */
+            prompt: string;
+            /** Reason */
+            reason: string | null;
+            /** Spans */
+            spans: components["schemas"]["SpanReadView"][];
+        };
         /** DesignLineView */
         DesignLineView: {
             /** Anchors */
@@ -1374,6 +1395,7 @@ export interface components {
             checks_run: string[];
             /** Convert Prv Code */
             convert_prv_code: string | null;
+            description_reading: components["schemas"]["DescriptionReadingView"] | null;
             item: components["schemas"]["ItemBasisView"] | null;
             /** Lead Time Days */
             lead_time_days: number | null;
@@ -2367,6 +2389,29 @@ export interface components {
             sheet?: string | null;
             /** Sheets */
             sheets?: string[];
+        };
+        /**
+         * SpanReadView
+         * @description One attribute a model reading located: the text, where it sits in the
+         *     normalised description, the value, and whether code parsed the value
+         *     (``code``) or it is the model's label (``model``), which Sales checks.
+         */
+        SpanReadView: {
+            /** Attribute */
+            attribute: string;
+            /** End */
+            end: number;
+            /**
+             * Read By
+             * @enum {string}
+             */
+            read_by: "code" | "model";
+            /** Span */
+            span: string;
+            /** Start */
+            start: number;
+            /** Value */
+            value: string;
         };
         /** SpecBody */
         SpecBody: {

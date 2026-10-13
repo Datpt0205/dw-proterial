@@ -8,6 +8,26 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-13, ticket 28 built (uncommitted; Đạt away, on his
+  pre-authorisation; "As built" in the ticket):
+    - **What.** DW1 reads an item description its own vocabulary does not
+      through the local Qwen3.5-9B (provider `onprem`, Ollama, thinking off)
+      for a tenant whose `sales_order_rules.model_assist` turns it on.
+    - **Where it is on.** The platform's 1.2.0 ships it off; the demo
+      tenant's own 1.2.1 has it on.
+    - **Rules.** dw_sales ADR 0005 (Proposed) replaces spec decision 13's "no
+      model": typed output that code verifies (spans found once, numbers
+      parsed from their span, coverage), labels flagged, never exact, and
+      degrading to a person.
+    - **Measured.** VI/EN gold code among the candidates 71.1% (bar 80%,
+      Đạt's to set), JA 50.0%; 0 wrong single candidates, 0 injection
+      effects; about 77 s per 10-line call.
+    - **Live portal flow.** The whole mailbox in 57.5 s; M36 lines 1 and 3
+      suggested correctly and confirmable.
+    - **Shipped with it.** Migration `a9977d62e09b`, mock `M36` (the mailbox
+      is 36 messages), eval `sales_descriptions@1.0.0`, and the live lane
+      `run_evals.py --live onprem`.
+    - **Next.** Ticket 29.
 - Context `dw_sales` scaffolded with `scripts/new_context.py` (14 seams).
 - Feature in progress: `sales/dw1-portal-demo/` — DW1 end to end on mock data
   behind real ports. Spec: `sales/dw1-portal-demo/spec.md`. Tickets 01–27 in

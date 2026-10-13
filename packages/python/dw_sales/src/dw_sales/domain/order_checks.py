@@ -34,7 +34,8 @@ from dw_sales.domain.catalog import (
     fiscal_year,
     month_key,
 )
-from dw_sales.domain.descriptions import candidates, read_description
+from dw_sales.domain.description_reading import DescriptionReading, Verified
+from dw_sales.domain.descriptions import StatedAttributes, candidates, read_description
 from dw_sales.domain.messages import MailAuthentication
 from dw_sales.domain.orders import (
     CheckName,
@@ -113,6 +114,22 @@ class IntakeCaps(BaseModel):
     max_cells: int = Field(ge=1)
 
 
+class ModelAssist(BaseModel):
+    """Which DW1 steps a model takes part in for the tenant (dw_sales ADR 0005).
+
+    Each is a switch the platform ships off; a tenant turns one on in its own
+    version of these rules. The case stamps the version it was checked under,
+    so what a case was read with never changes after.
+    """
+
+    model_config = _FROZEN
+
+    # A local model reads an item description DW1's own vocabulary does not,
+    # for a line the convert list does not map (ticket 28). Its labels are
+    # flagged; Sales confirms the PRV code.
+    description_attributes: bool
+
+
 class OrderRules(BaseModel):
     """`sales_order_rules`: the fine print of the order checks, versioned.
 
@@ -137,6 +154,7 @@ class OrderRules(BaseModel):
     intake: IntakeCaps
     # The month the fiscal year starts in; the ESF is renewed per fiscal year.
     fiscal_year_start_month: int = Field(ge=1, le=12)
+    model_assist: ModelAssist
     findings: Mapping[FindingCode, Severity]
 
     @model_validator(mode="after")
@@ -147,7 +165,7 @@ class OrderRules(BaseModel):
 
     @property
     def version(self) -> str:
-        """What a finding is stamped with: ``sales_order_rules@1.1.0``."""
+        """What a finding is stamped with: ``sales_order_rules@1.2.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
     def finding(
@@ -198,6 +216,9 @@ class MappedLine(NamedTuple):
     item: Item | None
     # The convert list's code for the customer's code, when it had one.
     convert_prv_code: str | None = None
+    # A model's reading of the description, when one was asked for
+    # (`map_read_line`); stamped on the line's basis.
+    reading: DescriptionReading | None = None
 
 
 def map_line(po_line: PoLine, *, entry: ConvertEntry | None, items: Sequence[Item]) -> MappedLine:
@@ -220,13 +241,50 @@ def map_line(po_line: PoLine, *, entry: ConvertEntry | None, items: Sequence[Ite
         )
     typed_legacy = "description" in po_line.legacy_fields
     stated = None if typed_legacy else read_description(po_line.description)
+    return _by_description(stated, items, None)
+
+
+def wants_reading(po_line: PoLine, *, entry: ConvertEntry | None) -> bool:
+    """Whether a model may read the line's description (dw_sales ADR 0005):
+    the convert list has no code for it, DW1's own vocabulary does not read
+    it, and it is not text typed in a legacy font. A deterministic reading is
+    never replaced by a model's, and a convert entry decides on its own."""
+    return (
+        entry is None
+        and bool(po_line.description.strip())
+        and "description" not in po_line.legacy_fields
+        and read_description(po_line.description) is None
+    )
+
+
+def map_read_line(
+    verified: Verified | None, reading: DescriptionReading, items: Sequence[Item]
+) -> MappedLine:
+    """The candidates a model reading code verified fits, as `map_line` maps a
+    description it reads itself: one fit is a candidate Sales confirms,
+    several are ambiguous, none is unmapped. Never exact. ``verified`` is
+    None for a reading that was refused or never came (``reading`` says
+    which); the line is then unmapped, as without a model."""
+    stated = verified.stated if verified is not None else None
+    return _by_description(stated, items, reading)
+
+
+def _by_description(
+    stated: StatedAttributes | None, items: Sequence[Item], reading: DescriptionReading | None
+) -> MappedLine:
     fitting = candidates(stated, items) if stated is not None else ()
     if not fitting:
-        return MappedLine(LineMapping(status=MappingStatus.UNMAPPED), None)
+        return MappedLine(LineMapping(status=MappingStatus.UNMAPPED), None, reading=reading)
     codes = tuple(i.prv_code for i in fitting)
     if len(fitting) == 1:
-        return MappedLine(LineMapping(status=MappingStatus.CANDIDATE, candidates=codes), fitting[0])
-    return MappedLine(LineMapping(status=MappingStatus.AMBIGUOUS, candidates=codes), None)
+        return MappedLine(
+            LineMapping(status=MappingStatus.CANDIDATE, candidates=codes),
+            fitting[0],
+            reading=reading,
+        )
+    return MappedLine(
+        LineMapping(status=MappingStatus.AMBIGUOUS, candidates=codes), None, reading=reading
+    )
 
 
 def current_quotation(
@@ -310,6 +368,7 @@ def check_line(
         convert_prv_code=mapped.convert_prv_code,
         candidates=mapping.candidates,
         checks_run=tuple(run),
+        description_reading=mapped.reading,
     )
     if item is None:
         return LineCheck(
@@ -400,6 +459,7 @@ def check_line(
         lead_time_days=lead_time,
         lead_time_source=source,
         checks_run=tuple(run),
+        description_reading=mapped.reading,
     )
     line = OrderLine(
         po_line=po_line,

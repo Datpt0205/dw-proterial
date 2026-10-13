@@ -23,6 +23,11 @@ class Provider(StrEnum):
     MOCK = "mock"
     OPENAI_COMPATIBLE = "openai_compatible"
     OPENAI_RESPONSES = "openai_responses"
+    # An OpenAI-compatible server the deployment runs itself (Ollama, vLLM,
+    # llama.cpp): its own endpoint, apart from the gateway `openai_compatible`
+    # reaches, so a profile can keep a step on a local model while every other
+    # route stays on the gateway. Same adapter, same SSRF guard.
+    ONPREM = "onprem"
 
 
 class ModelRoute(BaseModel):
@@ -31,7 +36,13 @@ class ModelRoute(BaseModel):
     provider: str
     model: str
     timeout_seconds: int = Field(default=60, gt=0, le=600)
-    reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = None
+    # How much a reasoning model thinks before it answers. ``None`` sends
+    # nothing and leaves the server's default. ``"none"`` switches thinking off,
+    # which a local model needs on every structured route: a thinking call on
+    # a 9B model measured about 80 s for a one-line extraction, against about
+    # 4 s without (2026-10-12, Ollama, qwen3.5-9b). Sent by both dialects, so a
+    # route says it once (`openai_compatible`, `openai_responses`).
+    reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = None
     # Chat routes on the Responses dialect only: ask the provider to return a
     # readable summary of the reasoning it already did and charged for. Off by
     # default because the summary is extra output tokens on every call, and it

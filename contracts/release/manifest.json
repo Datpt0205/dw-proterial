@@ -58,9 +58,14 @@
       "checksum": "00e48ebcfefacba2c4c356d14594d9320572ca8da5446b44a1c5d75b15c52666",
       "dataset_id": "sales",
       "version": "1.2.0"
+    },
+    {
+      "checksum": "ab96c8413892c34e6e2f9b135b5d133d615876bb92211f5c1f740b58f407ba42",
+      "dataset_id": "sales_descriptions",
+      "version": "1.0.0"
     }
   ],
-  "git_sha": "8ac3d33c1db71d6a282fe65d012d3cb2ea005183",
+  "git_sha": "dd5ef1dceb382fa9541aa9747a70d1430f230a32",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",
@@ -96,6 +101,11 @@
       "version": "1.1.0"
     },
     {
+      "checksum": "24444d00e5f67716d9ba336b39fd6f6293db1ee19f8446715317b74f59ba2b00",
+      "policy_id": "sales_order_rules",
+      "version": "1.2.0"
+    },
+    {
       "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",
       "policy_id": "sales_pricing",
       "version": "1.0.0"
@@ -116,6 +126,11 @@
       "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
       "prompt_id": "platform.untrusted_demo",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "40b7dcacc569ed4fc4050054058fc39e2d4148144d3f85362bde04e25243ff75",
+      "prompt_id": "sales.description_attributes",
+      "version": "1.0.0"
     }
   ],
   "rubrics": [],
@@ -130,7 +145,7 @@
       "graph_version": "1.0.0",
       "memory_policy_version": "1.0.0",
       "policy_version": "1.0.0",
-      "prompt_bundle_version": "1.0.0",
+      "prompt_bundle_version": "1.1.0",
       "toolset_version": null,
       "worker_id": "sales-dw1",
       "worker_version": "1.0.0"

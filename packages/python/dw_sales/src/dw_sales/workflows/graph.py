@@ -15,12 +15,15 @@ version it started on and a resume replays that exact one.
   case (`CaseDecisions.apply`). The pause is the node's first line, so the
   replay on resume does nothing twice.
 
-No model is called here, and no tool is offered: DW1 reads documents with
-deterministic parsers (spec decision 13), and its worker declares no
-toolset, which is how ADR 0007's rule (a turn that reads a document gets no
-outbound tool) holds today; `test_dw1_worker.py` turns red the day either
-changes. Nodes take what they need by injection (`Dw1Steps`): no SQL, no
-adapter.
+No tool is offered: DW1's worker declares no toolset, which is how ADR
+0007's rule (a turn that reads a document gets no outbound tool) holds for
+a worker whose every run reads customer mail. A model may read part of a
+document (dw_sales ADR 0005): never from here, but from a step, through the
+port its application declares, with the run's `RunContext` handed down so
+the call is attributed to this run's tenant, worker and release, and its
+answer validated into a schema and verified by code before anything is
+mapped. `test_dw1_runtime.py` holds both. Nodes take what they need by
+injection (`Dw1Steps`): no SQL, no adapter, no gateway.
 
 The state keeps ids, versions, a hash and outcome codes. It is the run's
 result row, so a comment or a reason a person typed is applied to the case
@@ -50,7 +53,7 @@ class Dw1Steps(Protocol):
     """What the graph calls; `CaseDecisions` satisfies it."""
 
     async def process(
-        self, context: AccessContext, message_id: str | None
+        self, context: AccessContext, message_id: str | None, *, run: RunContext
     ) -> list[dict[str, str | None]]: ...
 
     async def submit_quote(
@@ -111,7 +114,7 @@ def build_graph(steps: Dw1Steps) -> Any:
         context = access_context_from_run(runtime.context)
         asked: DecisionAsked | None
         if task.kind == "process":
-            processed = await steps.process(context, task.message_id)
+            processed = await steps.process(context, task.message_id, run=runtime.context)
             return {"processed": processed, "outcome": "processed"}
         if task.case_id is None or task.case_version is None:
             raise ValueError("a decision task names its case and the version it was made on")

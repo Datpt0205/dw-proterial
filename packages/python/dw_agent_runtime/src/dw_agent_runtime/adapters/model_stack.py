@@ -72,6 +72,13 @@ class ModelProviderConfig:
     openai_structured_mode: str = "json_schema"
     openai_strict_schema: bool = True
     outbound_allowed_hosts: tuple[str, ...] = field(default_factory=tuple)
+    # A model server the deployment runs itself, reached as provider
+    # ``onprem`` (`Provider.ONPREM`). Unset: no ``onprem`` adapter, and a route
+    # naming it fails as "provider not configured", which a caller that
+    # degrades to a person treats as the model being down.
+    onprem_base_url: str | None = None
+    # Ollama ignores the key; vLLM and a proxy in front of either may not.
+    onprem_api_key: str | None = None
 
     @property
     def allow_private_endpoints(self) -> bool:
@@ -110,6 +117,24 @@ def build_model_adapters(
             api_key=config.openai_api_key,
             strict_schema=config.openai_strict_schema,
             breaker=CircuitBreaker(clock=SystemClock(), name="model.openai_responses"),
+        )
+    if config.onprem_base_url:
+        # The same guard as the gateway's: localhost and private addresses
+        # only outside a deployed profile, or a host the deployment
+        # allow-lists. A deployed on-prem server is named in
+        # `outbound_allowed_hosts`, never admitted by being private.
+        adapters[Provider.ONPREM] = OpenAICompatibleAdapter(
+            base_url=ensure_allowed_outbound_url(
+                config.onprem_base_url,
+                allow_private=config.allow_private_endpoints,
+                allowed_hosts=config.outbound_allowed_hosts,
+            ),
+            api_key=config.onprem_api_key or "onprem",
+            provider=Provider.ONPREM,
+            # Guided decoding against the schema; a local server that lacks it
+            # is not one this provider supports.
+            structured_mode="json_schema",
+            breaker=CircuitBreaker(clock=SystemClock(), name="model.onprem"),
         )
     if config.is_deployed and Provider.OPENAI_COMPATIBLE not in adapters:
         raise RuntimeError(f"the {config.profile} profile requires a real model provider")

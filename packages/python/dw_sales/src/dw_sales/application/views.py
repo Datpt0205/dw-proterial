@@ -45,6 +45,7 @@ from dw_sales.domain.catalog import (
     OpenYcbg,
     Quotation,
 )
+from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import (
@@ -360,6 +361,35 @@ class ItemBasisView(BaseModel):
     standard_lead_time_days: int
 
 
+class SpanReadView(BaseModel):
+    """One attribute a model reading located: the text, where it sits in the
+    normalised description, the value, and whether code parsed the value
+    (``code``) or it is the model's label (``model``), which Sales checks."""
+
+    model_config = _VIEW
+
+    attribute: str
+    span: str
+    start: int
+    end: int
+    value: str
+    read_by: Literal["code", "model"]
+
+
+class DescriptionReadingView(BaseModel):
+    """What a model reading of the description did (dw_sales ADR 0005).
+    ``outcome``: ``read``, ``not_understood`` (``reason`` says which check
+    refused it) or ``unavailable`` (no usable answer: DW1 could not read it)."""
+
+    model_config = _VIEW
+
+    outcome: Literal["read", "not_understood", "unavailable"]
+    reason: str | None
+    prompt: str
+    model_profile: str
+    spans: list[SpanReadView]
+
+
 class LineBasisView(BaseModel):
     model_config = _VIEW
 
@@ -371,6 +401,8 @@ class LineBasisView(BaseModel):
     lead_time_days: int | None
     lead_time_source: str | None
     checks_run: list[str]
+    # None: no model was asked about this line.
+    description_reading: DescriptionReadingView | None
 
 
 class DeliveryScheduleView(BaseModel):
@@ -469,6 +501,19 @@ def _basis(line: OrderLine, prices: PriceView) -> LineBasisView:
         lead_time_days=basis.lead_time_days,
         lead_time_source=basis.lead_time_source,
         checks_run=list(basis.checks_run),
+        description_reading=_reading(basis.description_reading),
+    )
+
+
+def _reading(reading: DescriptionReading | None) -> DescriptionReadingView | None:
+    if reading is None:
+        return None
+    return DescriptionReadingView(
+        outcome=reading.outcome,
+        reason=reading.reason,
+        prompt=reading.prompt,
+        model_profile=reading.model_profile,
+        spans=[SpanReadView(**span.model_dump()) for span in reading.spans],
     )
 
 

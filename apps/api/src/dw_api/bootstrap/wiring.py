@@ -42,7 +42,9 @@ from dw_agent_runtime.adapters.run_events import RunStateListener
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.approval_codes import ApprovalViewService
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
+from dw_agent_runtime.model.profiles import Provider
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
+from dw_agent_runtime.ports import ModelGateway
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_api.bootstrap.container import ApiContainer
 from dw_api.bootstrap.identity import build_token_verifier
@@ -375,6 +377,10 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
             approval_flow=wiring.approval_flow,
         ),
         telemetry=wiring.seam.telemetry,
+        # DW1 reads a description through a model only where this process
+        # reaches a model server of its own (dw_sales ADR 0005); otherwise no
+        # model is called at all.
+        model=(wiring.seam.gateway if Provider.ONPREM in wiring.seam.gateway.adapters else None),
     )
     register_sales_support(container.support_catalog)
 
@@ -412,6 +418,7 @@ def build_sales(
     release_manifest_ref: str | None,
     runtime: SalesRuntime,
     telemetry: TelemetryPort,
+    model: ModelGateway | None = None,
 ) -> object:
     """The Sales context's mount, part of the seam above.
 
@@ -453,6 +460,7 @@ def build_sales(
         release_manifest_ref=release_manifest_ref,
         runtime=runtime,
         telemetry=telemetry,
+        model=model,
     )
     return SalesMount(services=mount.services)
 

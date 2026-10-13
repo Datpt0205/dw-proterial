@@ -31,6 +31,7 @@ from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardStore
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
+from dw_agent_runtime.model.gateway import RoutingModelGateway
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
@@ -226,6 +227,8 @@ def model_provider_config(settings: WorkerSettings) -> ModelProviderConfig:
         openai_structured_mode=settings.openai_structured_mode,
         openai_strict_schema=settings.openai_strict_schema,
         outbound_allowed_hosts=tuple(settings.outbound_allowed_hosts),
+        onprem_base_url=settings.onprem_model_base_url or None,
+        onprem_api_key=settings.onprem_model_api_key or None,
     )
 
 
@@ -282,6 +285,9 @@ class WorkflowRuntime:
     workers: WorkerRegistry
     runner: LangGraphWorkflowRunner
     approval_flow: ApproveAndResumeService
+    # The process's model gateway, the one whose ledger the runner frees: a
+    # context's step that reads a document through a model calls this one.
+    gateway: RoutingModelGateway
 
 
 def build_workflow_runtime(
@@ -333,4 +339,4 @@ def build_workflow_runtime(
         clock=clock,
         id_generator=ids,
     )
-    return WorkflowRuntime(graphs, workers, runner, approval_flow)
+    return WorkflowRuntime(graphs, workers, runner, approval_flow, stack.gateway)

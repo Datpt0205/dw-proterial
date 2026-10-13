@@ -78,8 +78,12 @@ Out (this slice):
 
 - Real email, Zalo, customer portals, Bravo API or database access. Bravo
   order history and the open-YCBG list are a mock export.
-- Any model call on real Proterial documents. Parsing is deterministic; a
-  model step, if added, runs only on the fictional mock data.
+- Any model call on real Proterial documents, until Proterial agrees and the
+  step's live eval meets its bar. Parsing is deterministic; a model step runs
+  only under dw_sales ADR 0005 (amended 2026-10-13, Proposed): typed output
+  that code verifies, flagged for a person, degrading to a person, on the
+  deployment's own model, switched on per tenant. Today one step does
+  (ticket 28), on the fictional mock data and the local demo tenant only.
 - Scanned or image PDFs, `.xls`/`.doc`, archives, and password-protected or
   macro-enabled files. They are routed to Sales with the reason and nothing
   is extracted (ticket 12 reads them).
@@ -286,11 +290,13 @@ on an overlapping step is counted in the "Promises" figures.
     the API process, and only the repo-generated fixtures. Readers sniff the
     type from the bytes, refuse encrypted and macro-enabled files, and
     enforce byte/sheet/page/cell caps from `sales_order_rules`. Production
-    parses in the worker sandbox after a malware scan (ticket 12). No model
-    turn reads document content in this slice: DW1's worker declares no
-    toolset and its graph takes no model, so ADR 0007's rule holds by
-    construction, and `test_dw1_runtime.py` turns red the day either changes
-    (ticket 10).
+    parses in the worker sandbox after a malware scan (ticket 12). A model
+    turn reads document content only under dw_sales ADR 0005 (amended
+    2026-10-13; was: no model turn at all): DW1's worker declares no toolset
+    and its graph holds no model, so ADR 0007's rule holds by construction; a
+    step reads through the port its application declares, with the run's
+    context, and code verifies the typed answer before anything is mapped.
+    `test_dw1_runtime.py` turns red the day any of that changes.
 14. **Proterial's rules, templates and wording arrive only as tenant
     overrides in storage.** Nothing of theirs is committed. `configs/`
     carries the platform layer with fictional defaults, read through

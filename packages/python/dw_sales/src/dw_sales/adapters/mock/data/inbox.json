@@ -817,5 +817,29 @@
       }
     ],
     "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M36",
+    "sender": {
+      "address": "an.trinh@velatrix.example",
+      "display_name": "Trịnh Mỹ An"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO VLX-PO-2610-0009 (mã hàng mới)",
+    "received_at": "2026-10-02T16:30:00+07:00",
+    "body_text": "Chào chị,\n\nVelatrix gửi PO VLX-PO-2610-0009 (3 dòng) đính kèm. Cả 3 dòng là mã hàng mới bên em, mô tả theo cách kho ghi.\n\nTrân trọng,\nTrịnh Mỹ An",
+    "attachments": [
+      {
+        "attachment_id": "M36-A1",
+        "name": "VLX-PO-2610-0009.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   }
 ]

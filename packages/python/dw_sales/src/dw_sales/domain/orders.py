@@ -46,6 +46,7 @@ from dw_sales.domain.catalog import (
     PrvCode,
     Uom,
 )
+from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.legacy_fonts import LegacyEncoding
 from dw_sales.domain.messages import AttachmentId, Sha256Hex
 
@@ -803,6 +804,12 @@ class LineBasis(BaseModel):
     lead_time_days: int | None = None
     lead_time_source: LeadTimeSource | None = None
     checks_run: tuple[CheckName, ...] = Field(min_length=1)
+    # What a model reading of the description did, when the tenant's rules
+    # asked for one (dw_sales ADR 0005): the prompt, profile and route it ran
+    # on, and the spans the candidates were computed from. None: no model was
+    # asked, because the convert list or DW1's own vocabulary mapped the line,
+    # or the tenant has it off.
+    description_reading: DescriptionReading | None = None
 
     @model_validator(mode="after")
     def _lead_time_names_its_source(self) -> Self:
@@ -835,6 +842,16 @@ class OrderLine(BaseModel):
     def _pc_confirmation_names_who_and_when(self) -> Self:
         if (self.pc_confirmed_by is None) != (self.pc_confirmed_at is None):
             raise ValueError("a PC confirmation names who and when")
+        return self
+
+    @model_validator(mode="after")
+    def _a_model_reading_is_never_exact(self) -> Self:
+        # A model-read label is a judgement, so the code it narrows to is a
+        # candidate Sales confirms, never a line entered as it stands.
+        reading = self.basis.description_reading
+        read = reading is not None and reading.outcome == "read"
+        if read and self.mapping.status is MappingStatus.EXACT:
+            raise ValueError(f"line {self.line_no}: a model-read description is never exact")
         return self
 
     @model_validator(mode="after")

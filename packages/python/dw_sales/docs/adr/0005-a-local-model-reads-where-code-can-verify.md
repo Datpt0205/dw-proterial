@@ -1,0 +1,121 @@
+---
+status: Proposed
+date: 2026-10-13
+supersedes: spec decision 13's "no model turn reads document content" and the spec's "no model call" non-goal
+---
+
+# A local model reads where code can verify what it read
+
+Proposed by the agent while Đạt was away (he pre-authorised the work on
+2026-10-12/13: "turn the tasks a model can take off people over to the local
+Qwen3.5-9B and run them"). Đạt accepts or amends it; until then it is the
+rule the code follows, recorded rather than assumed.
+
+## Context
+
+Until now DW1 called no model. Spec decision 13 said no model turn reads
+document content in this slice, the spec listed "any model call on real
+Proterial documents" as out of scope, and `test_dw1_runtime.py` asserted
+that DW1's graph takes no model. That was the right default while nothing
+needed one: every value was read by deterministic code, and anything unusual
+went to a person.
+
+It now costs people work that recurs per line. An item description outside
+DW1's own vocabulary (`domain/descriptions.py`) leaves the line
+`code_unmapped`, and Sales looks the PRV code up by hand, for every line of
+every PO whose customer code is not in the convert list
+(`.claude/plans/sales/dw1-portal-demo/ai-automation.md` lists six such
+steps; ticket 28 is the first). A model reads "2芯 AWG24 黒" or "4C AWG22 TC
+BRD GRY" without a vocabulary table; code cannot, and a keyword table to
+make it would be the synonym list Đạt's rule §6 forbids.
+
+The risk is the usual one with a model in a document flow: it is confident
+and sometimes wrong, the document is untrusted input that can carry
+instructions, and a value it produces can look like a value a person
+checked.
+
+## Decision
+
+A DW1 step may call a model only under all of the following, each held by
+code and a test:
+
+1. **Typed output, nothing else.** The model turns language into a reading
+   validated into a frozen Pydantic schema that refuses undeclared keys. Its
+   values come only from closed `Literal` sets built by code; everything else
+   it gives is span text copied from the document. It never gives a number, a
+   date, an identifier (customer, PRV code, quote, case, recipient), a price,
+   a threshold, a route or a choice among candidates.
+2. **Code verifies before anything is mapped.** Code locates every span in
+   the NFKC-normalised document, exactly once; re-parses every number from its
+   span with a deterministic parser that requires the unit (the model's value
+   for a number does not exist to disagree with); computes coverage itself
+   (every non-space, non-punctuation character inside a span, or the reading
+   is refused); and refuses a label span holding a digit. Then the existing
+   deterministic rules run unchanged (`descriptions.candidates`).
+3. **Flagged, and a person confirms.** A value the model chose is stamped as
+   the model's (`SpanRead.read_by = "model"`) on the case's evidence and shown
+   beside the text it came from. A line a model read is at best a `candidate`
+   Sales confirms, never `exact` (`OrderLine` refuses it). No approval, no
+   finding disposition and no checker role is taken over.
+4. **Degrade to a person.** Model down, timed out, an answer outside the
+   schema, a line it was not sent, or any check refusing: the line is what it
+   is today (`code_unmapped`), stamped `unavailable` or `not_understood` with
+   the reason, and the screen says DW1 could not read it. A budget or quota
+   refusal is not that: it stops the run and is reported as a stop.
+5. **No tools in a document turn** (ADR 0007). DW1's worker declares no
+   toolset; the port a step calls (`InterpretationPort`) offers none.
+6. **One door, attributed to the run.** The step's application declares the
+   port; the composition root satisfies it with the platform's model gateway.
+   The graph holds no model: it hands the run's `RunContext` down, so the call
+   renders the tenant's prompt, spends against the run's budget and is
+   recorded against its tenant, worker and release.
+7. **Versioned and contained.** Each step's prompt is
+   `configs/prompts/sales/<id>@<semver>.yaml`, pinned in the release manifest;
+   every interpolated value is contained by `PromptRegistry` (ADR 0010), and
+   the prompt carries no master data (no item codes, spec numbers or convert
+   list: another tenant's or this one's).
+8. **On the deployment's own model, switch per tenant, off by default.** The
+   profile is DW1's worker's `default_model_profile`, `onprem`: an
+   OpenAI-compatible server the deployment runs itself (provider `onprem`, its
+   own endpoint, localhost admitted only outside a deployed profile), thinking
+   off on every route, no external fallback. Each step has a switch in the
+   tenant's rules (`sales_order_rules.model_assist.<step>`); the platform ships
+   it off, a tenant turns it on in its own version, and the case stamps the
+   version. A process without such a server composes no model and calls none.
+9. **Measured before it is trusted.** Each step ships evals with injection,
+   missing-evidence and cross-tenant cases, a smoke that replays the recorded
+   answers of the real model in CI, and a live lane outside CI
+   (`run_evals.py --live onprem`) reporting accuracy, the share routed to a
+   person and latency.
+
+What stays human is listed in `ai-automation.md` ("What stays human"): any
+price, every approval and checker role, finding dispositions, hidden
+content, identifiers, numbers and dates as values, revision status,
+thresholds, tenancy and roles, outbound effects and customer-facing prose,
+delivery dates, export control.
+
+## Consequences
+
+- Spec decision 13 keeps its parsing rules and loses its last sentence: "No
+  model turn reads document content" becomes "a model reads only under ADR
+  0005". The non-goal becomes: no model on real Proterial documents until
+  Proterial agrees and a step's live eval meets its bar; on the fictional
+  mock data, under this ADR.
+- ADR 0004's "No model turn, no tool" keeps "no tool"; a model turn is now
+  allowed under this ADR.
+- `test_dw1_runtime.py` asserts the real invariant instead of "no model": no
+  toolset, no model in the graph, the run handed down, typed output, model
+  values flagged.
+- A categorical label is the one judgement left to a model, and no check can
+  tell `BLK` read as red from `BLK` read as black. That is accepted because it
+  can only narrow to a candidate a person confirms beside the highlighted
+  text; auto-accepting a single fit would need every attribute from a
+  deterministic parse, and is a future rules key, not this ADR.
+- Strict checks cost recall: a reading with one word the model could not
+  place is refused, so the model's share of the work is what the live eval
+  measures, not what it could be with looser checks. Loosening a check is a
+  new version of this decision.
+- The switch lives in rules a tenant versions. Until ticket 19 stores and
+  approves tenant versions, the demo tenant's own version ships in the mock
+  sample set, as its master data does, and carries its own version number so
+  the case stamp says which applied.

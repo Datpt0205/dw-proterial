@@ -1,9 +1,11 @@
 # 28 — A model reads a free-text item description into typed attributes; code finds the PRV code, Sales confirms
 
-Status: needs-triage
-Blocked by: the shared model prerequisites (`../ai-automation.md`, "Before
-any model step"). The deterministic convert-list seed from Bravo sales
-history comes first (same file, step 1).
+Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
+his pre-authorisation). O2 only; Q1 deferred (Comments). Below the proposed
+bar on VI/EN (71% against 80%): measured, not claimed. dw_sales ADR 0005 is
+Proposed, Đạt to accept.
+Blocked by: — (the shared model prerequisites were built with it; the
+convert-list seed from Bravo history still waits on Proterial's data)
 Category: enhancement
 
 Candidate C2 in `../ai-automation.md`, priority 1. Steps O2 (PRV code
@@ -146,4 +148,165 @@ share falls as the convert list fills.
   decision 13 and the "no model call" non-goal (both replaced by the new
   ADR first).
 
+## As built (2026-10-13)
+
+**Shared prerequisites** (`../ai-automation.md`, "Before any model step"):
+
+- dw_sales ADR 0005 (Proposed),
+  `packages/python/dw_sales/docs/adr/0005-a-local-model-reads-where-code-can-verify.md`:
+  which steps may call a model and under which rules. Spec decision 13 and
+  the "no model call" non-goal now point at it; `configs/workers/sales.yaml`
+  names `default_model_profile: onprem` and `prompt_bundle_version: 1.1.0`.
+- Provider `onprem` (`Provider.ONPREM`): its own OpenAI-compatible endpoint
+  (`DW_ONPREM_MODEL_BASE_URL`, read by the API and the worker), apart from the
+  gateway, behind the same SSRF guard (localhost only outside a deployed
+  profile; a deployed server must be allow-listed).
+  `configs/models/onprem.yaml`: `qwen3.5-9b-dw`, every route
+  `reasoning_effort: none`, temperature 0, no fallback. `reasoning_effort`
+  gained `"none"`, and the `openai_compatible` adapter now sends it.
+  `max_input_tokens` is not declared, because nothing would read it
+  (failure-modes #1); code bounds a call instead (10 lines of at most 500
+  characters).
+- The seam: `dw_sales.application.model_reading.InterpretationPort`
+  (declared by its consumer: prompt ref, inputs, schema, run), satisfied by
+  `dw_sales.adapters.model_interpretation.GatewayInterpretation` over the
+  platform gateway, the profile read from the worker config. The graph hands
+  `runtime.context` down (`Dw1Steps.process(..., run=)` → `InboxProcessing`
+  → `OrderIntake.process`), so a call renders the run's tenant's prompt,
+  spends the run's budget and is recorded against the run. A process
+  composes a model only when it has an `onprem` adapter (API wiring, worker
+  lane); otherwise none is called.
+- `test_dw1s_graph_takes_no_model` became
+  `test_a_dw1_turn_that_reads_a_document_gets_no_tool_and_a_typed_flagged_answer`.
+- Prompt `configs/prompts/sales/description_attributes@1.0.0.yaml`: both
+  variables contained by the registry; the value lists are built by code
+  from `catalog.py`. Pinned in the regenerated manifest (`sha256:cf4204e3…`).
+- Live lane outside CI: `uv run python scripts/run_evals.py --live onprem
+--dataset evals/datasets/sales_descriptions@1.0.0.json [--record]`
+  (`GraderContext.live_model`). `--record` writes the answers the smoke
+  replays (`evals/fixtures/cases/sales_descriptions_recorded.json`).
+
+**Ticket 28:**
+
+- `domain/description_reading.py` holds the model output and its check.
+  `ModelDescriptionLine` is flat, frozen and `extra="forbid"`; every key is
+  required and nullable, each text before its label. That was measured
+  necessary: with optional keys the model left every span out.
+  `verify_reading` drops a label without its text (measured: the model
+  "read" a conductor from descriptions naming none) and finds every span once
+  in the NFKC, case-folded text. It parses numbers from their span, with the
+  unit required: a bare "305" is no attribute, "1 KM" is no length. It
+  computes coverage, refuses a digit in a label span and refuses overlaps.
+  `SpanRead.read_by` is `model` for a label and `code` for a number, by
+  validator.
+- `order_checks.wants_reading` takes a line with no convert entry, a
+  description the vocabulary does not read, and no legacy text.
+  `map_read_line` leaves the candidates unchanged and is never exact, and
+  `OrderLine` refuses `exact` on a model-read line.
+  `LineBasis.description_reading` stamps the prompt, profile and route, the
+  outcome (`read`, `not_understood` with its reason, or `unavailable`) and
+  the spans, and it survives confirmation. Migration `a9977d62e09b` lets
+  `ck_order_lines_check_basis` hold the key (object or null).
+- Switch `sales_order_rules.model_assist.description_attributes`:
+  `sales_order_rules@1.2.0` ships it off, as a required key (a policy without
+  it is refused). `TenantOrderRules` resolves a tenant's own version and never
+  another's. The demo tenant's `1.2.1` (on) is in the mock sample set
+  (`adapters/mock/data/policies/`), loaded for the bound demo scope by
+  `build_dw1` and the eval world. A tenant version must carry its own number.
+- Model down, timeout, invalid output, a line it was not sent, or a check
+  refusing: the line stays `code_unmapped`, stamped `unavailable` or
+  `not_understood`. A budget or quota refusal propagates and stops the run.
+- Web: the candidate picker shows the reading (attribute, the text on the
+  PO, the value, and "Mô hình đọc, cần kiểm" or "DW1 tính từ chữ"), or "DW1
+  không đọc được mô tả" with the reason; the lines table tags a model-read
+  line. CONTEXT.md term "Model reading".
+- Mock `M36` (VLX, three new codes in the store's Vietnamese and
+  abbreviations): three `code_unmapped` without a model (README table; eval
+  `sales@1.2.0` still 12/12; the mailbox is 36 messages).
+- Evals `sales_descriptions@1.0.0`, graders `sales.description_*` in
+  `dw_sales.evals.descriptions`:
+    - 67 golden lines (23 VI, 22 EN, 22 JA), gold codes checked against the
+      item master by `test_description_golden_set.py`;
+    - 4 injections (pick a code, mark exact, close `</input>`), 3 missing
+      evidence, 1 misleading word;
+    - cross-tenant: the prompt carries no PRV code, spec number or convert
+      entry, the demo tenant's rules never reach another tenant, and calls
+      carry the run's tenant;
+    - scripted guards, and M36 in a DW1 run.
+
+    Smoke 6/6 on the recorded answers.
+
+**Measured on the local model** (Ollama, `qwen3.5-9b-dw` Q4_K_M, num_ctx
+8192, thinking off, GTX 1080 Max-Q 8 GB, 2026-10-13). "Gold" is the share of
+lines whose gold code is among the candidates; p50/p95 are per call of up to
+10 lines.
+
+| Run                   | What changed                                        | Gold VI/EN | VI    | EN    | JA    | To a person (VI/EN) | Wrong single | p50 / p95     |
+| --------------------- | --------------------------------------------------- | ---------- | ----- | ----- | ----- | ------------------- | ------------ | ------------- |
+| 1                     | First prompt; a label without text refused the line | 13.3%      | 4.3%  | 22.7% | 40.9% | 86.7%               | 0            | 78.6 / 89.5 s |
+| 1, re-scored          | Same answers; a label without text dropped          | 48.9%      | 39.1% | 59.1% | 90.9% | 51.1%               | 0            | —             |
+| 2 (shipped, recorded) | Examples in VI/EN/JA; "no value without its words"  | **71.1%**  | 65.2% | 77.3% | 50.0% | 28.9%               | **0**        | 76.9 / 93.9 s |
+
+- Run 2 over all 67 lines: 64.2% gold among the candidates and 35.8% routed
+  to a person; every candidate is a single one and the right one.
+- Numbers taken from the model: 0, by structure and checked per span.
+- Injection effects: 0 of 4. Each injected line was refused by coverage, and
+  the line read beside it was unchanged or refused.
+- Missing evidence: 3 of 3 unmapped (`no_attribute`).
+- Run 2's refusals: 16 uncovered words, 5 texts not in the description (the
+  model invented "AW 24", "0,75mm2", "610M"), 2 overlaps.
+- About 7.7 s per line.
+
+**Portal flow, live.** A fresh database, the API as `build_sales` composes
+it, and the real gateway to Ollama, driven by the calls the web makes:
+
+- An's "DW xử lý tất cả" processed 36 messages in 57.5 s, 36 dispositions,
+  with one model call (M36, 3 lines, 1,329 in / 559 out tokens, 43.6 s).
+- M36 line 1 became candidate `HW-1002` and line 3 `CB-2001`, labels flagged
+  as the model's and numbers as DW1's. Line 2 was refused (`digit_in_label`)
+  and left to Sales.
+- An confirmed line 1: 200, `candidate_confirmed`, the reading kept as
+  evidence.
+- Not walked in a browser: Keycloak and the web were not started on this
+  16 GB machine. The screen is covered by `description-reading.test.tsx` and
+  the typecheck.
+
+**Guards shown red when removed.** Each mutation was applied, its test run,
+and the code restored; 15 of 15 went red:
+
+- the span found exactly once, and the span must be found;
+- the parser result ignored, and the unit required on a number;
+- coverage, no digit in a label, and overlaps;
+- never exact;
+- degrade on no answer, and an answer naming a line it was not sent;
+- the tenant switch, and tenant rules never resolving sideways;
+- the adapter's failure translation;
+- thinking off sent on the route;
+- localhost refused in a deployed profile.
+
 ## Comments
+
+- 2026-10-13, decided by the agent (Đạt away): the profile is `onprem`, not
+  `local`. This ticket and `ai-automation.md` name it, and a deployed on-prem
+  server is the same shape. It is reached as its own provider so the gateway
+  profile (`luna`) keeps serving every other route.
+- 2026-10-13, decided by the agent (Đạt away): O2 only. Q1 reads no
+  description today (Design answers which item, `RequestedItem`), so there
+  is no `code_unmapped` to degrade to; RFQ lines are ticket 29's. The switch
+  is therefore only in `sales_order_rules`.
+- 2026-10-13, decided by the agent (Đạt away): the demo tenant's switch is a
+  tenant version (`1.2.1`) in the mock sample set, not a host setting, so it
+  is a tenant fact the case stamps. Storing and approving tenant versions
+  stays ticket 19's, which will also have to put the layer in the stamp.
+- 2026-10-13, decided by the agent (Đạt away): a label with no text is
+  dropped instead of refusing the line. It narrows nothing, and coverage
+  still refuses words left unaccounted for. Measured: +35 points VI/EN, zero
+  wrong candidates. A label's span may hold no digit.
+- 2026-10-13, decided by the agent (Đạt away): the smoke replays the local
+  model's recorded answers and fails below the recorded score (0.71 VI/EN),
+  so a change to the verification shows. The 80% bar is reported, not
+  enforced, until Đạt sets it.
+- Open for Đạt: the bar (71% VI/EN measured; JA swung from 91% to 50%
+  between two prompt versions, so JA is not claimed); whether to try
+  thinking on for this step (about 10× slower, measured 2026-10-12); ADR
+  0005's status.

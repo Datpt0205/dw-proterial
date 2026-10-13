@@ -22,6 +22,7 @@ import {
   MESSAGE_DISPOSITION,
   ORDER_STATE,
   QUOTE_STATE,
+  READ_BY,
   VALUE_STATE,
 } from "../_lib/labels";
 
@@ -164,4 +165,15 @@ export function MessageDispositionTag({ kind }: { kind: string }) {
   return (
     <Chip look={MESSAGE_LOOK[kind]}>{label(MESSAGE_DISPOSITION, kind)}</Chip>
   );
+}
+
+const READ_BY_LOOK: Record<string, Look> = {
+  code: ["outline", i.robot],
+  model: ["warn", i.question],
+};
+
+/** Who read a value of a description reading: DW1 parsed it from the text,
+ * or it is the model's label, which Sales checks against the text (ticket 28). */
+export function ReadByTag({ by }: { by: string }) {
+  return <Chip look={READ_BY_LOOK[by]}>{label(READ_BY, by)}</Chip>;
 }

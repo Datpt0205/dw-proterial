@@ -28,7 +28,7 @@ from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.model.budget import RunBudgetLedger
-from dw_agent_runtime.ports import RunAllowancePort
+from dw_agent_runtime.ports import ModelGateway, RunAllowancePort
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_api.bootstrap import ApiContainer
 from dw_api.bootstrap.wiring import (
@@ -191,14 +191,19 @@ class Api:
 
 @asynccontextmanager
 async def build_app(
-    app_url: str, *, allowance: RunAllowancePort | None = None
+    app_url: str,
+    *,
+    allowance: RunAllowancePort | None = None,
+    model: ModelGateway | None = None,
 ) -> AsyncIterator[Api]:
     """The API with the Sales mount the seam builds, over the app role.
 
     With the runtime DW1 runs on, as `build_container` wires it: the runner
     over the run store and checkpoints, the approval flow behind
     `/api/v1/approvals`, and the plans' run allowance (``allowance`` replaces
-    it for a test that spends a plan's runs)."""
+    it for a test that spends a plan's runs). ``model`` is the gateway of a
+    process with a model server (dw_sales ADR 0005); None, as by default, is
+    one without, where DW1 calls no model."""
     engine = create_async_engine(app_url, poolclass=NullPool)
     sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     settings = ApiSettings(profile="test", dev_secret=SECRET, database_url=app_url)
@@ -278,6 +283,7 @@ async def build_app(
             graphs=graphs, workers=workers, runner=runner, approval_flow=approval_flow
         ),
         telemetry=NullTelemetry(),
+        model=model,
     )
     app = create_app(container)
     try:

@@ -1,0 +1,881 @@
+{
+  "_comment": "Fictional item descriptions in VI/EN/JA wording DW1's own vocabulary does not read, each with the PRV code of the fictional item master (adapters/mock/data/items.json) it describes and the reading intended. Ticket 28. test_description_golden_set.py checks every line against the item master and the deterministic reader.",
+  "lines": [
+    {
+      "id": "vi01",
+      "lang": "vi",
+      "description": "Dây điện AWG24 lõi xoắn đồng mạ thiếc màu đỏ cuộn reel 610m",
+      "gold": "HW-1002",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "stranding": "stranded",
+        "conductor": "tinned_copper",
+        "colour": "red",
+        "packaging": "reel",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "vi02",
+      "lang": "vi",
+      "description": "Dây điện 24AWG, đồng mạ thiếc, không chống nhiễu, màu đen",
+      "gold": "HW-1001",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "conductor": "tinned_copper",
+        "shield": "none",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "vi03",
+      "lang": "vi",
+      "description": "Dây điện lõi xoắn AWG 24 màu trắng, đồng mạ thiếc",
+      "gold": "HW-1003",
+      "intended": {
+        "family": "hook_up_wire",
+        "stranding": "stranded",
+        "gauge": "AWG24",
+        "colour": "white",
+        "conductor": "tinned_copper"
+      }
+    },
+    {
+      "id": "vi04",
+      "lang": "vi",
+      "description": "Dây điện AWG22 màu đen, lõi xoắn, đóng cuộn reel 610 mét",
+      "gold": "HW-1004",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG22",
+        "colour": "black",
+        "stranding": "stranded",
+        "packaging": "reel",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "vi05",
+      "lang": "vi",
+      "description": "Dây AWG22 đỏ đồng mạ thiếc",
+      "gold": "HW-1005",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG22",
+        "colour": "red",
+        "conductor": "tinned_copper"
+      }
+    },
+    {
+      "id": "vi06",
+      "lang": "vi",
+      "description": "Dây điện 1 lõi AWG20 màu đen",
+      "gold": "HW-1006",
+      "intended": {
+        "family": "hook_up_wire",
+        "cores": 1,
+        "gauge": "AWG20",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "vi07",
+      "lang": "vi",
+      "description": "Dây điện AWG26 màu xanh dương",
+      "gold": "HW-1007",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG26",
+        "colour": "blue"
+      }
+    },
+    {
+      "id": "vi08",
+      "lang": "vi",
+      "description": "Dây điện AWG18 màu đen lõi xoắn",
+      "gold": "HW-1008",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG18",
+        "colour": "black",
+        "stranding": "stranded"
+      }
+    },
+    {
+      "id": "vi09",
+      "lang": "vi",
+      "description": "Dây điện AWG24 đồng trần màu đen",
+      "gold": "HW-1009",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "conductor": "bare_copper",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "vi10",
+      "lang": "vi",
+      "description": "Dây điện lõi đơn AWG22 màu vàng, cuộn tròn 305m",
+      "gold": "HW-1010",
+      "intended": {
+        "family": "hook_up_wire",
+        "stranding": "single",
+        "gauge": "AWG22",
+        "colour": "yellow",
+        "packaging": "coil",
+        "pack_length_m": "305"
+      }
+    },
+    {
+      "id": "vi11",
+      "lang": "vi",
+      "description": "Dây điện AWG20 xanh lá đồng mạ thiếc",
+      "gold": "HW-1011",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG20",
+        "colour": "green",
+        "conductor": "tinned_copper"
+      }
+    },
+    {
+      "id": "vi12",
+      "lang": "vi",
+      "description": "Dây điện AWG18 màu đỏ, reel 610m",
+      "gold": "HW-1012",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG18",
+        "colour": "red",
+        "packaging": "reel",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "vi13",
+      "lang": "vi",
+      "description": "Cáp 2 lõi 0,5mm2 đồng mạ thiếc chống nhiễu lá nhôm màu đen, cuộn reel 300m",
+      "gold": "CB-2001",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 2,
+        "gauge": "0.5mm2",
+        "conductor": "tinned_copper",
+        "shield": "foil",
+        "colour": "black",
+        "packaging": "reel",
+        "pack_length_m": "300"
+      }
+    },
+    {
+      "id": "vi14",
+      "lang": "vi",
+      "description": "Cáp nhiều lõi 2 lõi 0,5 mm2 chống nhiễu lá nhôm màu đen, rulô drum 1000m",
+      "gold": "CB-2002",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 2,
+        "gauge": "0.5mm2",
+        "shield": "foil",
+        "colour": "black",
+        "packaging": "drum",
+        "pack_length_m": "1000"
+      }
+    },
+    {
+      "id": "vi15",
+      "lang": "vi",
+      "description": "Cáp 2 lõi 0,75mm2 đồng trần không chống nhiễu màu xám",
+      "gold": "CB-2003",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 2,
+        "gauge": "0.75mm2",
+        "conductor": "bare_copper",
+        "shield": "none",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "vi16",
+      "lang": "vi",
+      "description": "Cáp 3 lõi 0,75mm2 chống nhiễu lưới màu xám",
+      "gold": "CB-2004",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 3,
+        "gauge": "0.75mm2",
+        "shield": "braid",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "vi17",
+      "lang": "vi",
+      "description": "Cáp 4 lõi 0,5mm2 chống nhiễu lá nhôm màu xám cuộn reel 500m",
+      "gold": "CB-2005",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 4,
+        "gauge": "0.5mm2",
+        "shield": "foil",
+        "colour": "grey",
+        "packaging": "reel",
+        "pack_length_m": "500"
+      }
+    },
+    {
+      "id": "vi18",
+      "lang": "vi",
+      "description": "Cáp 4 ruột 0,75mm2 bọc lưới chống nhiễu màu đen",
+      "gold": "CB-2006",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 4,
+        "gauge": "0.75mm2",
+        "shield": "braid",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "vi19",
+      "lang": "vi",
+      "description": "Cáp 6 lõi AWG24 chống nhiễu lá nhôm màu xám",
+      "gold": "CB-2008",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 6,
+        "gauge": "AWG24",
+        "shield": "foil",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "vi20",
+      "lang": "vi",
+      "description": "Cáp 3 lõi 1,25mm2 đồng trần màu đen, rulô drum 500m",
+      "gold": "CB-2011",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 3,
+        "gauge": "1.25mm2",
+        "conductor": "bare_copper",
+        "colour": "black",
+        "packaging": "drum",
+        "pack_length_m": "500"
+      }
+    },
+    {
+      "id": "vi21",
+      "lang": "vi",
+      "description": "Cáp 6 lõi 0,5mm2 chống nhiễu lưới màu đen drum 1000m",
+      "gold": "CB-2015",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 6,
+        "gauge": "0.5mm2",
+        "shield": "braid",
+        "colour": "black",
+        "packaging": "drum",
+        "pack_length_m": "1000"
+      }
+    },
+    {
+      "id": "vi22",
+      "lang": "vi",
+      "description": "Cáp 2 lõi 0,5mm2 không chống nhiễu màu đen",
+      "gold": "CB-2017",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 2,
+        "gauge": "0.5mm2",
+        "shield": "none",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "vi23",
+      "lang": "vi",
+      "description": "Dây điện AWG24 lõi xoắn, đồng mạ thiếc, không chống nhiễu, màu đỏ, reel 610m",
+      "gold": "HW-1002",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "stranding": "stranded",
+        "conductor": "tinned_copper",
+        "shield": "none",
+        "colour": "red",
+        "packaging": "reel",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "en01",
+      "lang": "en",
+      "description": "HOOKUP WIRE 24AWG STR TC BLK REEL 610M",
+      "gold": "HW-1001",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "stranding": "stranded",
+        "conductor": "tinned_copper",
+        "colour": "black",
+        "packaging": "reel",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "en02",
+      "lang": "en",
+      "description": "HUW AWG24 TC RED 610M RL",
+      "gold": "HW-1002",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "conductor": "tinned_copper",
+        "colour": "red",
+        "pack_length_m": "610",
+        "packaging": "reel"
+      }
+    },
+    {
+      "id": "en03",
+      "lang": "en",
+      "description": "WIRE 22AWG BLK STRANDED TINNED",
+      "gold": "HW-1004",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG22",
+        "colour": "black",
+        "stranding": "stranded",
+        "conductor": "tinned_copper"
+      }
+    },
+    {
+      "id": "en04",
+      "lang": "en",
+      "description": "HOOK-UP WIRE #26 AWG BLUE",
+      "gold": "HW-1007",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG26",
+        "colour": "blue"
+      }
+    },
+    {
+      "id": "en05",
+      "lang": "en",
+      "description": "18AWG HOOK UP WIRE BLACK TC",
+      "gold": "HW-1008",
+      "intended": {
+        "gauge": "AWG18",
+        "family": "hook_up_wire",
+        "colour": "black",
+        "conductor": "tinned_copper"
+      }
+    },
+    {
+      "id": "en06",
+      "lang": "en",
+      "description": "WIRE AWG24 BARE CU BLK",
+      "gold": "HW-1009",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "conductor": "bare_copper",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "en07",
+      "lang": "en",
+      "description": "SOLID WIRE 22AWG YEL COIL 305M",
+      "gold": "HW-1010",
+      "intended": {
+        "stranding": "single",
+        "family": "hook_up_wire",
+        "gauge": "AWG22",
+        "colour": "yellow",
+        "packaging": "coil",
+        "pack_length_m": "305"
+      }
+    },
+    {
+      "id": "en08",
+      "lang": "en",
+      "description": "HUW 20AWG GRN TC",
+      "gold": "HW-1011",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG20",
+        "colour": "green",
+        "conductor": "tinned_copper"
+      }
+    },
+    {
+      "id": "en09",
+      "lang": "en",
+      "description": "HOOKUP WIRE AWG18 RED TINNED CU 610M",
+      "gold": "HW-1012",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG18",
+        "colour": "red",
+        "conductor": "tinned_copper",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "en10",
+      "lang": "en",
+      "description": "1C AWG20 BLK HOOKUP",
+      "gold": "HW-1006",
+      "intended": {
+        "cores": 1,
+        "gauge": "AWG20",
+        "colour": "black",
+        "family": "hook_up_wire"
+      }
+    },
+    {
+      "id": "en11",
+      "lang": "en",
+      "description": "2C 0.5SQ TC FOIL SHLD BLK RL 300M",
+      "gold": "CB-2001",
+      "intended": {
+        "cores": 2,
+        "gauge": "0.5mm2",
+        "conductor": "tinned_copper",
+        "shield": "foil",
+        "colour": "black",
+        "packaging": "reel",
+        "pack_length_m": "300"
+      }
+    },
+    {
+      "id": "en12",
+      "lang": "en",
+      "description": "2C 0.5SQ FOIL BLK DRUM 1000M",
+      "gold": "CB-2002",
+      "intended": {
+        "cores": 2,
+        "gauge": "0.5mm2",
+        "shield": "foil",
+        "colour": "black",
+        "packaging": "drum",
+        "pack_length_m": "1000"
+      }
+    },
+    {
+      "id": "en13",
+      "lang": "en",
+      "description": "MULTICORE 2C 0.75MM2 BC UNSHLD GRY",
+      "gold": "CB-2003",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 2,
+        "gauge": "0.75mm2",
+        "conductor": "bare_copper",
+        "shield": "none",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "en14",
+      "lang": "en",
+      "description": "3C 0.75SQ BRAID SHLD GREY",
+      "gold": "CB-2004",
+      "intended": {
+        "cores": 3,
+        "gauge": "0.75mm2",
+        "shield": "braid",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "en15",
+      "lang": "en",
+      "description": "4C 0.5SQ AL FOIL GRY 500M REEL",
+      "gold": "CB-2005",
+      "intended": {
+        "cores": 4,
+        "gauge": "0.5mm2",
+        "shield": "foil",
+        "colour": "grey",
+        "pack_length_m": "500",
+        "packaging": "reel"
+      }
+    },
+    {
+      "id": "en16",
+      "lang": "en",
+      "description": "4C AWG22 TC BRD GRY 300M RL",
+      "gold": "CB-2007",
+      "intended": {
+        "cores": 4,
+        "gauge": "AWG22",
+        "conductor": "tinned_copper",
+        "shield": "braid",
+        "colour": "grey",
+        "pack_length_m": "300",
+        "packaging": "reel"
+      }
+    },
+    {
+      "id": "en17",
+      "lang": "en",
+      "description": "8C 24AWG FOIL SHIELDED GRY",
+      "gold": "CB-2009",
+      "intended": {
+        "cores": 8,
+        "gauge": "AWG24",
+        "shield": "foil",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "en18",
+      "lang": "en",
+      "description": "2C 22AWG BRAIDED BLK 305M",
+      "gold": "CB-2010",
+      "intended": {
+        "cores": 2,
+        "gauge": "AWG22",
+        "shield": "braid",
+        "colour": "black",
+        "pack_length_m": "305"
+      }
+    },
+    {
+      "id": "en19",
+      "lang": "en",
+      "description": "2 COND 1.25MM2 BARE COPPER UNSHIELDED BLK DRUM",
+      "gold": "CB-2012",
+      "intended": {
+        "cores": 2,
+        "gauge": "1.25mm2",
+        "conductor": "bare_copper",
+        "shield": "none",
+        "colour": "black",
+        "packaging": "drum"
+      }
+    },
+    {
+      "id": "en20",
+      "lang": "en",
+      "description": "4C 0.3SQ FOIL WHT",
+      "gold": "CB-2013",
+      "intended": {
+        "cores": 4,
+        "gauge": "0.3mm2",
+        "shield": "foil",
+        "colour": "white"
+      }
+    },
+    {
+      "id": "en21",
+      "lang": "en",
+      "description": "5C 0.75 SQMM FOIL GREY REEL",
+      "gold": "CB-2016",
+      "intended": {
+        "cores": 5,
+        "gauge": "0.75mm2",
+        "shield": "foil",
+        "colour": "grey",
+        "packaging": "reel"
+      }
+    },
+    {
+      "id": "en22",
+      "lang": "en",
+      "description": "3C 20AWG BRD SHLD GRY",
+      "gold": "CB-2018",
+      "intended": {
+        "cores": 3,
+        "gauge": "AWG20",
+        "shield": "braid",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "ja01",
+      "lang": "ja",
+      "description": "電線 AWG24 撚線 錫メッキ銅 黒 610m リール",
+      "gold": "HW-1001",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "stranding": "stranded",
+        "conductor": "tinned_copper",
+        "colour": "black",
+        "pack_length_m": "610",
+        "packaging": "reel"
+      }
+    },
+    {
+      "id": "ja02",
+      "lang": "ja",
+      "description": "電線 AWG24 錫めっき 赤",
+      "gold": "HW-1002",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "conductor": "tinned_copper",
+        "colour": "red"
+      }
+    },
+    {
+      "id": "ja03",
+      "lang": "ja",
+      "description": "フックアップワイヤ ＡＷＧ２４ 白",
+      "gold": "HW-1003",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "colour": "white"
+      }
+    },
+    {
+      "id": "ja04",
+      "lang": "ja",
+      "description": "電線 AWG22 黒 撚線",
+      "gold": "HW-1004",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG22",
+        "colour": "black",
+        "stranding": "stranded"
+      }
+    },
+    {
+      "id": "ja05",
+      "lang": "ja",
+      "description": "電線 ＡＷＧ２２ 赤 リール ６１０ｍ",
+      "gold": "HW-1005",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG22",
+        "colour": "red",
+        "packaging": "reel",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "ja06",
+      "lang": "ja",
+      "description": "電線 AWG26 青",
+      "gold": "HW-1007",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG26",
+        "colour": "blue"
+      }
+    },
+    {
+      "id": "ja07",
+      "lang": "ja",
+      "description": "電線 AWG24 裸銅 黒",
+      "gold": "HW-1009",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG24",
+        "conductor": "bare_copper",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "ja08",
+      "lang": "ja",
+      "description": "単線 AWG22 黄 コイル 305m",
+      "gold": "HW-1010",
+      "intended": {
+        "stranding": "single",
+        "gauge": "AWG22",
+        "colour": "yellow",
+        "packaging": "coil",
+        "pack_length_m": "305"
+      }
+    },
+    {
+      "id": "ja09",
+      "lang": "ja",
+      "description": "電線 AWG20 緑",
+      "gold": "HW-1011",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG20",
+        "colour": "green"
+      }
+    },
+    {
+      "id": "ja10",
+      "lang": "ja",
+      "description": "電線 AWG18 赤 610メートル",
+      "gold": "HW-1012",
+      "intended": {
+        "family": "hook_up_wire",
+        "gauge": "AWG18",
+        "colour": "red",
+        "pack_length_m": "610"
+      }
+    },
+    {
+      "id": "ja11",
+      "lang": "ja",
+      "description": "2芯 0.5sq 錫メッキ アルミ箔シールド 黒 リール 300m",
+      "gold": "CB-2001",
+      "intended": {
+        "cores": 2,
+        "gauge": "0.5mm2",
+        "conductor": "tinned_copper",
+        "shield": "foil",
+        "colour": "black",
+        "packaging": "reel",
+        "pack_length_m": "300"
+      }
+    },
+    {
+      "id": "ja12",
+      "lang": "ja",
+      "description": "２芯 ０．５ｓｑ アルミ箔シールド 黒 ドラム １０００ｍ",
+      "gold": "CB-2002",
+      "intended": {
+        "cores": 2,
+        "gauge": "0.5mm2",
+        "shield": "foil",
+        "colour": "black",
+        "packaging": "drum",
+        "pack_length_m": "1000"
+      }
+    },
+    {
+      "id": "ja13",
+      "lang": "ja",
+      "description": "多芯ケーブル 2芯 0.75sq 裸銅 シールドなし グレー",
+      "gold": "CB-2003",
+      "intended": {
+        "family": "multi_core_cable",
+        "cores": 2,
+        "gauge": "0.75mm2",
+        "conductor": "bare_copper",
+        "shield": "none",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "ja14",
+      "lang": "ja",
+      "description": "3芯 0.75sq 編組シールド 灰色",
+      "gold": "CB-2004",
+      "intended": {
+        "cores": 3,
+        "gauge": "0.75mm2",
+        "shield": "braid",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "ja15",
+      "lang": "ja",
+      "description": "4芯 0.5sq アルミ箔シールド グレー 500m",
+      "gold": "CB-2005",
+      "intended": {
+        "cores": 4,
+        "gauge": "0.5mm2",
+        "shield": "foil",
+        "colour": "grey",
+        "pack_length_m": "500"
+      }
+    },
+    {
+      "id": "ja16",
+      "lang": "ja",
+      "description": "4芯 0.75sq 編組シールド 黒",
+      "gold": "CB-2006",
+      "intended": {
+        "cores": 4,
+        "gauge": "0.75mm2",
+        "shield": "braid",
+        "colour": "black"
+      }
+    },
+    {
+      "id": "ja17",
+      "lang": "ja",
+      "description": "6芯 AWG24 アルミ箔シールド 灰色",
+      "gold": "CB-2008",
+      "intended": {
+        "cores": 6,
+        "gauge": "AWG24",
+        "shield": "foil",
+        "colour": "grey"
+      }
+    },
+    {
+      "id": "ja18",
+      "lang": "ja",
+      "description": "3芯 1.25sq 裸銅 黒 ドラム",
+      "gold": "CB-2011",
+      "intended": {
+        "cores": 3,
+        "gauge": "1.25mm2",
+        "conductor": "bare_copper",
+        "colour": "black",
+        "packaging": "drum"
+      }
+    },
+    {
+      "id": "ja19",
+      "lang": "ja",
+      "description": "４芯 ０．３ｓｑ アルミ箔シールド 白",
+      "gold": "CB-2013",
+      "intended": {
+        "cores": 4,
+        "gauge": "0.3mm2",
+        "shield": "foil",
+        "colour": "white"
+      }
+    },
+    {
+      "id": "ja20",
+      "lang": "ja",
+      "description": "2芯 0.3sq アルミ箔 白",
+      "gold": "CB-2014",
+      "intended": {
+        "cores": 2,
+        "gauge": "0.3mm2",
+        "shield": "foil",
+        "colour": "white"
+      }
+    },
+    {
+      "id": "ja21",
+      "lang": "ja",
+      "description": "6芯 0.5sq 編組 黒 ドラム 1000m",
+      "gold": "CB-2015",
+      "intended": {
+        "cores": 6,
+        "gauge": "0.5mm2",
+        "shield": "braid",
+        "colour": "black",
+        "packaging": "drum",
+        "pack_length_m": "1000"
+      }
+    },
+    {
+      "id": "ja22",
+      "lang": "ja",
+      "description": "3芯 AWG20 編組シールド グレー",
+      "gold": "CB-2018",
+      "intended": {
+        "cores": 3,
+        "gauge": "AWG20",
+        "shield": "braid",
+        "colour": "grey"
+      }
+    }
+  ]
+}

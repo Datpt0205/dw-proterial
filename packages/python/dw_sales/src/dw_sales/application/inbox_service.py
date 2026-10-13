@@ -27,6 +27,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -123,8 +124,10 @@ class InboxProcessing:
     release_manifest_ref: str | None
     spans: SalesSpans
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
-        """One message processed by DW1, at the caller's request."""
+    async def process(
+        self, context: AccessContext, message_id: str, *, run: RunContext
+    ) -> MessageDispositionView:
+        """One message processed by DW1, at the caller's request, in ``run``."""
         await self._authorize(context, message_id)
         scope = sales_scope(context)
         async with self.uow(scope) as work:
@@ -135,9 +138,11 @@ class InboxProcessing:
                 "the message is already on a case",
                 details={"message_id": message_id, "disposition": existing.kind.value},
             )
-        return await self._process(context, scope, message_id)
+        return await self._process(context, scope, message_id, run)
 
-    async def process_all(self, context: AccessContext) -> list[MessageDispositionView]:
+    async def process_all(
+        self, context: AccessContext, *, run: RunContext
+    ) -> list[MessageDispositionView]:
         """Every message still without a disposition, oldest first."""
         await self._authorize(context, None)
         scope = sales_scope(context)
@@ -147,7 +152,7 @@ class InboxProcessing:
         results = []
         for message in await self.inbox.list_messages(scope):
             if message.message_id not in done:
-                results.append(await self._process(context, scope, message.message_id))
+                results.append(await self._process(context, scope, message.message_id, run))
         return results
 
     # ------------------------------------------------------------- helpers --
@@ -161,7 +166,7 @@ class InboxProcessing:
         )
 
     async def _process(
-        self, context: AccessContext, scope: SalesScope, message_id: str
+        self, context: AccessContext, scope: SalesScope, message_id: str, run: RunContext
     ) -> MessageDispositionView:
         started = time.perf_counter()
         message = await self.inbox.get_message(scope, message_id)
@@ -175,7 +180,7 @@ class InboxProcessing:
             disposition, case = await self._design_reply(context, scope, message_id, ingest)
         else:
             assert kind not in QUOTATION_KINDS
-            disposition, case = await self._order(context, scope, message, ingest)
+            disposition, case = await self._order(context, scope, message, ingest, run)
         # Ids, codes and counts only (`dw_sales.application.telemetry`).
         self.spans.emit(
             SalesSpan.MESSAGE_PROCESSED,
@@ -191,9 +196,14 @@ class InboxProcessing:
         return message_disposition(disposition, ingest)
 
     async def _order(
-        self, context: AccessContext, scope: SalesScope, message: InboundMessage, ingest: datetime
+        self,
+        context: AccessContext,
+        scope: SalesScope,
+        message: InboundMessage,
+        ingest: datetime,
+        run: RunContext,
     ) -> _Processed:
-        outcome = await self.intake.process(scope, message)
+        outcome = await self.intake.process(scope, message, run=run)
         disposition = outcome.disposition
         assert disposition is not None  # quotation kinds are handled above
         case = outcome.case

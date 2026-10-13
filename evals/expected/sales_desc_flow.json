@@ -1,0 +1,22 @@
+{
+  "lines": {
+    "1": [
+      "unmapped",
+      []
+    ],
+    "2": [
+      "unmapped",
+      []
+    ],
+    "3": [
+      "candidate",
+      [
+        "CB-2001"
+      ]
+    ]
+  },
+  "confirm": {
+    "line": 3,
+    "prv_code": "CB-2001"
+  }
+}

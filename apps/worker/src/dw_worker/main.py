@@ -36,6 +36,7 @@ from dw_agent_runtime.channel_decisions import (
     ChannelApprovalDecisionService,
     ChannelDecisionCommand,
 )
+from dw_agent_runtime.model.profiles import Provider
 from dw_connectors.adapters.zalo_bot import ZaloBotClient
 from dw_connectors.adapters.zalo_inbound import ZaloInbound
 from dw_connectors.adapters.zalo_link import link_help
@@ -283,6 +284,7 @@ def build_sales_inbox_lane(
     if demo is None:
         return None
     scope = SalesScope(TenantId(demo[0]), WorkspaceId(demo[1]))
+    runtime = build_workflow_runtime(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
     mount = build_dw1(
         scope=scope,
         configs=REPO_ROOT / "configs",
@@ -296,11 +298,12 @@ def build_sales_inbox_lane(
         notifications=SqlNotificationRepository(sessions),
         artifact_bytes=build_object_storage(settings),
         release_manifest_ref=release_manifest_ref(),
-        runtime=build_workflow_runtime(
-            settings, sessions, clock=clock, ids=ids, telemetry=telemetry
-        ),
+        runtime=runtime,
         telemetry=telemetry,
         lane_access=SqlMembershipLookup(sessions),
+        # As the API passes it: only a process that reaches a model server of
+        # its own reads a description through one (dw_sales ADR 0005).
+        model=runtime.gateway if Provider.ONPREM in runtime.gateway.adapters else None,
     )
     assert mount.lane is not None  # built with lane_access
     return mount.lane, scope
