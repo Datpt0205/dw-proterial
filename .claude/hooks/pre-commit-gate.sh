@@ -56,6 +56,24 @@ if ! invariants=$(uv run python scripts/verify_invariants.py 2>&1); then
   exit 2
 fi
 
+# The repo is public: no customer data in what is staged (sales ticket 26). This
+# sees the index as it stands BEFORE the command runs, so `git add -A && git
+# commit` is checked by the git pre-commit hook (.pre-commit-config.yaml), not
+# here. Without a deny-list on this machine the script skips and says so.
+if ! public_repo=$(uv run python scripts/check_public_repo.py --staged 2>&1); then
+  {
+    echo "Public-repo guard FAILED — this would publish customer data. Do not commit."
+    echo
+    printf '%s\n' "$public_repo"
+  } >&2
+  exit 2
+fi
+# A skip passes, and a passing hook's stderr is shown to nobody: say it to the
+# person as a system message instead, so a skip is never mistaken for a pass.
+if printf '%s' "$public_repo" | grep -q 'PUBLIC-REPO GUARD SKIPPED'; then
+  printf '%s\n' '{"systemMessage": "Public-repo guard SKIPPED: no deny-list on this machine (DW_PUBLIC_REPO_DENYLIST), so this commit was NOT checked for customer data. CI only finds a term after a push has published it."}'
+fi
+
 # --- the judgement half: only the questions this diff actually raises ---------
 staged=$(git diff --cached --name-only 2>/dev/null)
 [ -z "$staged" ] && staged=$(git diff --name-only HEAD 2>/dev/null)

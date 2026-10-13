@@ -40,7 +40,12 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.identity import DbAccessContextFactory, MembershipAccess
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import (
+    SUPPORT_GRANT_DETAIL,
+    AuditActorKind,
+    AuditEntry,
+    AuditEvent,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -123,26 +128,37 @@ class FakeRunStore:
         return _record(run_id, run_context.workspace_id)
 
 
-def _event(workspace: uuid.UUID, run_id: uuid.UUID | None = None) -> AuditEvent:
+def _event(
+    workspace: uuid.UUID,
+    run_id: uuid.UUID | None = None,
+    *,
+    actor: uuid.UUID = PRINCIPAL,
+    action: str = "run.completed",
+    details: dict[str, object] | None = None,
+) -> AuditEvent:
     return AuditEvent(
         id=uuid.uuid4(),
         tenant_id=TenantId(TENANT),
         workspace_id=WorkspaceId(workspace),
-        actor_id=UserId(PRINCIPAL),
-        action="run.completed",
+        actor_id=UserId(actor),
+        action=action,
         resource_type="worker_run",
         resource_id=str(run_id),
         run_id=run_id,
-        details={"secret": f"of {workspace}"},
+        details={"secret": f"of {workspace}"} if details is None else details,
         occurred_at=NOW,
     )
 
 
 @dataclass
 class FakeAuditRepo:
-    """Honours the port: the asked workspace's rows only."""
+    """Honours the port: the asked workspace's rows only, narrowed to one
+    grant's when asked; an actor's name from `names`, and `support` only for
+    the staff member a grant was assigned to (`staff_of`), as the SQL one."""
 
     events: list[AuditEvent]
+    names: dict[uuid.UUID, str] = field(default_factory=dict)
+    staff_of: dict[str, uuid.UUID] = field(default_factory=dict)
     asked_workspaces: list[uuid.UUID] = field(default_factory=list)
 
     def _in(self, workspace_id: uuid.UUID) -> list[AuditEvent]:
@@ -152,12 +168,32 @@ class FakeAuditRepo:
     async def append(self, event: AuditEvent) -> None:
         raise NotImplementedError("not exercised by the read routes")
 
-    async def list_page(self, request: PageRequest, *, workspace_id: uuid.UUID) -> Page[AuditEvent]:
+    def _entry(self, event: AuditEvent) -> AuditEntry:
+        grant = event.details.get(SUPPORT_GRANT_DETAIL)
+        by_its_staff = grant is not None and self.staff_of.get(str(grant)) == event.actor_id.value
+        return AuditEntry(
+            event=event,
+            actor_display_name=self.names.get(event.actor_id.value),
+            actor_kind=AuditActorKind.SUPPORT if by_its_staff else AuditActorKind.USER,
+        )
+
+    async def list_page(
+        self,
+        request: PageRequest,
+        *,
+        workspace_id: uuid.UUID,
+        support_grant_id: uuid.UUID | None = None,
+    ) -> Page[AuditEntry]:
         return build_page(
-            self._in(workspace_id),
+            [
+                self._entry(event)
+                for event in self._in(workspace_id)
+                if support_grant_id is None
+                or event.details.get(SUPPORT_GRANT_DETAIL) == str(support_grant_id)
+            ],
             request=request,
-            position_of=lambda event: CursorPosition(
-                sort_value=event.occurred_at, tiebreaker=event.id
+            position_of=lambda entry: CursorPosition(
+                sort_value=entry.event.occurred_at, tiebreaker=entry.event.id
             ),
         )
 
@@ -307,5 +343,81 @@ async def test_an_audit_cursor_is_bound_to_the_workspace_it_was_issued_in(
     response = await _get(
         make_container(DIRECTOR_READS), "/audit/events", params={"cursor": cursor}
     )
+
+    assert response.status_code == status
+
+
+GRANT = uuid.uuid4()
+STAFF = uuid.uuid4()
+
+
+def _grant_trail() -> FakeAuditRepo:
+    """One grant's request by the customer, two accesses by its staff member,
+    and an unrelated event."""
+    on_grant = {SUPPORT_GRANT_DETAIL: str(GRANT)}
+    return FakeAuditRepo(
+        events=[
+            _event(WORKSPACE, action="support.grant.requested", details=on_grant),
+            _event(WORKSPACE, actor=STAFF, action="support.access", details=on_grant),
+            _event(WORKSPACE, actor=STAFF, action="support.access", details=on_grant),
+            _event(WORKSPACE),
+        ],
+        names={PRINCIPAL: "Lan Director", STAFF: "Support Minh"},
+        staff_of={str(GRANT): STAFF},
+    )
+
+
+async def test_the_audit_trail_names_the_actor_and_says_who_acted_under_a_grant() -> None:
+    response = await _get(make_container(DIRECTOR_READS, audit=_grant_trail()), "/audit/events")
+
+    assert response.status_code == 200
+    rows = [
+        (item["action"], item["actor_display_name"], item["actor_kind"])
+        for item in response.json()["items"]
+    ]
+    assert rows == [
+        # The customer's own step on a grant carries the grant id and is not support.
+        ("support.grant.requested", "Lan Director", "user"),
+        ("support.access", "Support Minh", "support"),
+        ("support.access", "Support Minh", "support"),
+        ("run.completed", "Lan Director", "user"),
+    ]
+
+
+async def test_the_audit_trail_filters_by_support_grant() -> None:
+    container = make_container(DIRECTOR_READS, audit=_grant_trail())
+
+    mine = await _get(container, "/audit/events", params={"support_grant_id": str(GRANT)})
+    other = await _get(container, "/audit/events", params={"support_grant_id": str(uuid.uuid4())})
+    malformed = await _get(container, "/audit/events", params={"support_grant_id": "SG-0001"})
+
+    assert [item["action"] for item in mine.json()["items"]] == [
+        "support.grant.requested",
+        "support.access",
+        "support.access",
+    ]
+    assert other.json()["items"] == []
+    assert malformed.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("issued_for", "asked_for", "status"),
+    [(None, None, 200), (GRANT, GRANT, 200), (None, GRANT, 422), (GRANT, None, 422)],
+)
+async def test_an_audit_cursor_is_bound_to_the_grant_filter_it_was_issued_for(
+    issued_for: uuid.UUID | None, asked_for: uuid.UUID | None, status: int
+) -> None:
+    filters: dict[str, object] = {"tenant": TENANT, "workspace": WORKSPACE}
+    if issued_for is not None:
+        filters["support_grant"] = issued_for
+    cursor = encode_cursor(
+        CursorPosition(sort_value=NOW, tiebreaker=uuid.uuid4()),
+        PageQuery(key="audit.events", filters=filters),
+    )
+    params = {"cursor": cursor}
+    if asked_for is not None:
+        params["support_grant_id"] = str(asked_for)
+
+    response = await _get(make_container(DIRECTOR_READS), "/audit/events", params=params)
 
     assert response.status_code == status

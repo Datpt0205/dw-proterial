@@ -46,12 +46,12 @@ from dw_sales.application.order_ports import PoDocumentReaderPort
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
-from dw_sales.domain.orders import PoDocument, RegionFlag, Unreadable
+from dw_sales.domain.orders import PoDocument, PoLine, RegionFlag, Unreadable
 
 pytestmark = pytest.mark.unit
 
 CAPS = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.0.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.1.0.yaml"
 ).intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)
@@ -124,7 +124,7 @@ def test_an_excel_po_is_read_with_every_value_at_its_cell() -> None:
     assert [_ref(a) for _, a in header.anchors] == ["PO!B4", "PO!E4", "PO!B5", "PO!E5"]
     assert [line.line_no for line in po.lines] == [1, 2, 3, 4]
     third = po.lines[2]
-    assert third.model_dump(exclude={"anchors", "flags"}) == {
+    assert third.model_dump(exclude={"anchors", "flags", "legacy"}) == {
         "line_no": 3,
         "customer_item_code": "VX-C2F05",
         "description": "MULTI-CORE CABLE 2C 0.5mm2 STRANDED TINNED CU FOIL SHIELD BLACK"
@@ -134,6 +134,7 @@ def test_an_excel_po_is_read_with_every_value_at_its_cell() -> None:
         "unit_price": Decimal("0.485"),
         "amount": Decimal(2910),
         "requested_date": date(2026, 11, 27),
+        "printed_schedules": (),
     }
     assert [_ref(a) for _, a in third.anchors] == [
         "PO!A12",
@@ -155,7 +156,7 @@ def test_every_anchor_names_the_file_by_its_sha256_and_the_reader_by_its_version
     digest = hashlib.sha256(data).hexdigest()
     assert po.attachment_sha256 == digest
     assert {(a.attachment_id, a.attachment_sha256) for a in po.anchors()} == {("A1", digest)}
-    assert po.parser_version == "excel_po_reader@1.1.0"
+    assert po.parser_version == "excel_po_reader@1.3.0"
 
 
 def test_the_coverage_facts_are_read_with_the_lines() -> None:
@@ -630,7 +631,7 @@ def test_a_text_pdf_is_read_with_every_value_at_its_page_and_box() -> None:
     assert (po.rows_printed, po.regions, po.parser_version) == (
         3,
         ("page 1",),
-        "pdf_po_reader@1.1.0",
+        "pdf_po_reader@1.3.0",
     )
 
 
@@ -788,3 +789,118 @@ async def test_the_buyer_is_read_only_from_a_workbook() -> None:
     assert await readers.buyer(_content(_fixture(M03)), CAPS) is None
     buyer = await readers.buyer(_content(_fixture("M13_NRV-PO-26-0471.xlsx")), CAPS)
     assert buyer is not None and buyer.name.startswith("NORVANTA")
+
+
+# ---------------------------------------- delivery schedules (ticket 21) --
+
+M34 = "M34_VLX-PO-2610-0007.xlsx"
+M35 = "M35_BRN-PO-2609-052.pdf"
+
+
+def _schedules(line: PoLine) -> list[tuple[Decimal, date, str | None]]:
+    return [(s.quantity, s.requested_date, _ref(s.anchor)) for s in line.schedules]
+
+
+def test_schedule_rows_under_a_line_are_its_schedules_each_at_its_row() -> None:
+    po = _po(_read(_fixture(M34)))
+
+    first, second, third = po.lines
+    assert [line.line_no for line in po.lines] == [1, 2, 3]
+    assert _schedules(first) == [
+        (Decimal(6100), date(2026, 11, 16), "PO!H11"),
+        (Decimal(6100), date(2026, 12, 1), "PO!H12"),
+    ]
+    assert (first.quantity, _ref(first.anchors.quantity)) == (Decimal(12200), "PO!D10")
+    assert (first.requested_date, _ref(first.anchors.requested_date)) == (
+        date(2026, 11, 16),
+        "PO!H11",
+    )
+    # A line between two split ones prints one date: a list of one, not printed apart.
+    assert not second.prints_schedules
+    assert _schedules(second) == [(Decimal(6000), date(2026, 11, 27), "PO!H13")]
+    assert [s.requested_date for s in third.schedules] == [
+        date(2026, 11, 27),
+        date(2026, 12, 11),
+        date(2026, 12, 28),
+    ]
+    assert third.scheduled_quantity == third.quantity == Decimal(3000)
+    assert po.rows_printed == 3 and po.total is not None
+
+
+def test_a_hidden_schedule_row_flags_the_lines_requested_date() -> None:
+    """Read, never skipped: its quantity still counts, and its line's
+    `value_uncertain` names the requested date."""
+
+    def hide(workbook: Workbook) -> None:
+        workbook["PO"].row_dimensions[12].hidden = True
+
+    first = _po(_read(_edited(M34, hide))).lines[0]
+
+    assert first.scheduled_quantity == Decimal(12200)
+    assert {(f.field, f.flag) for f in first.flags} == {("requested_date", RegionFlag.HIDDEN_ROW)}
+
+
+def test_a_date_and_quantity_list_in_the_date_cell_is_the_lines_schedules() -> None:
+    def listed(workbook: Workbook) -> None:
+        # Printed later date first: a line holds its schedules earliest first.
+        workbook["PO"]["H10"] = "20/11/2026: 6100;\n06/11/2026: 6100"
+
+    first = _po(_read(_edited(M01, listed))).lines[0]
+
+    assert _schedules(first) == [
+        (Decimal(6100), date(2026, 11, 6), "PO!H10"),
+        (Decimal(6100), date(2026, 11, 20), "PO!H10"),
+    ]
+    assert first.requested_date == date(2026, 11, 6)
+
+
+@pytest.mark.parametrize(
+    ("source", "cell", "value", "reason"),
+    [
+        (M01, "H10", "06/11/2026: many; 20/11/2026: 6100", "is not a list of 'date: quantity'"),
+        (M01, "H10", "2026-11-06: 6100", "is not a list of 'date: quantity'"),
+        (M34, "H10", date(2026, 11, 6), "is printed on the schedule rows under the line"),
+        (M34, "D12", "many", "row 12: a schedule's quantity is not a number"),
+        (M34, "D12", 0, "row 12: quantity"),
+    ],
+    ids=["quantity", "date format", "a date beside schedule rows", "row quantity", "row zero"],
+)
+def test_a_schedule_that_cannot_be_read_names_its_cell_and_not_its_value(
+    source: str, cell: str, value: str | date, reason: str
+) -> None:
+    def put(workbook: Workbook) -> None:
+        workbook["PO"][cell] = value
+
+    refused = _refused(_read(_edited(source, put)))
+
+    assert reason in refused.reason
+    assert _ref(refused.anchor) == f"PO!{cell}"
+    if isinstance(value, str):
+        assert "many" not in refused.reason and "6100" not in refused.reason
+
+
+def test_a_pdf_date_cell_listing_dates_and_quantities_is_the_lines_schedules() -> None:
+    po = _po(_read_pdf(_fixture(M35)))
+
+    first, second = po.lines
+    assert [(s.quantity, s.requested_date) for s in first.schedules] == [
+        (Decimal(3050), date(2026, 11, 16)),
+        (Decimal(2440), date(2026, 11, 30)),
+    ]
+    # The printed quantity is read as printed, whatever the schedules add up to.
+    assert (first.quantity, first.scheduled_quantity) == (Decimal(6100), Decimal(5490))
+    assert second.requested_date == date(2026, 10, 6)
+    for schedule in (*first.schedules, *second.schedules):
+        assert schedule.anchor.page == 1 and len(schedule.anchor.boxes) == 1
+    assert first.schedules[0].anchor == first.anchors.requested_date
+    assert first.anchors.requested_date.quote == "16/11/2026: 3.050; 30/11/2026: 2.440"
+
+
+def test_a_pdf_list_that_cannot_be_read_names_its_field_and_not_its_value() -> None:
+    row = (*_ROW[:7], "16/11/2026: lots")
+
+    refused = _refused(_read_pdf(_vietnamese_pdf(row)))
+
+    assert "requested date is not a list of 'date: quantity'" in refused.reason
+    assert "lots" not in refused.reason
+    assert refused.anchor is not None and refused.anchor.page == 1

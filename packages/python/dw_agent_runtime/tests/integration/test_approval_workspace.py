@@ -291,7 +291,7 @@ async def test_another_workspace_cannot_read_the_run_its_timeline_or_its_audit(
         timeline = await uow.audit.list_for_run(run.run_id, workspace_id=b.workspace_id)
         trail = await uow.audit.list_page(_PAGE, workspace_id=b.workspace_id)
     assert timeline == []
-    assert all(event.run_id != run.run_id for event in trail.items)
+    assert all(entry.event.run_id != run.run_id for entry in trail.items)
 
     # The run's own workspace still reads all of it.
     a = _member(WORKSPACE_A)

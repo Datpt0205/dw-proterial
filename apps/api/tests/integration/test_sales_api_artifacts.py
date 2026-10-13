@@ -138,7 +138,7 @@ async def test_an_renders_the_upload_file_and_downloads_exactly_what_was_recorde
     (record,) = body["artifacts"]
     assert record == rendered
     assert (record["template_ref"], record["case_version"]) == (
-        "sales_bravo_upload@1.0.0",
+        "sales_bravo_upload@1.1.0",
         ready["case_version"],
     )
     assert served.status_code == 200
@@ -265,7 +265,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
         for row in load_workbook(io.BytesIO(served[XLSX].content)).worksheets[0].iter_rows()
         for c in row
     )
-    assert draft["template_ref"] == "sales_emails.send_draft.ja@1.0.0"
+    assert draft["template_ref"] == "sales_emails.send_draft.ja@1.1.0"
     # A preview is for the pricer and approvers, and only while it waits.
     stale = await giang.get(f"/quotes/{final['case_id']}/artifacts/{previews[0]['artifact_id']}")
     assert stale.status_code == 409

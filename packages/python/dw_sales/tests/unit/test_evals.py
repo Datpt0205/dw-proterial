@@ -22,13 +22,13 @@ from dw_evals.graders import GraderContext, merge_graders
 from dw_evals.runner import load_dataset, run_dataset
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, MOCK_ROOT
-from dw_sales.application import access
+from dw_sales.application import access, order_artifacts
 from dw_sales.evals import GRADERS
 
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-DATASET = REPO / "evals" / "datasets" / "sales@1.0.0.json"
+DATASET = REPO / "evals" / "datasets" / "sales@1.2.0.json"
 CTX = GraderContext(repo_root=REPO)
 
 
@@ -74,6 +74,53 @@ def test_extraction_fails_when_a_value_differs_from_the_truth(tmp_path: Path) ->
     assert result.details["by_field"]["unit_price"] == 1
     # The report names the field, never the value.
     assert "9.9999" not in json.dumps(result.details)
+
+
+def test_extraction_fails_when_a_delivery_schedule_differs_from_the_truth(tmp_path: Path) -> None:
+    rows = json.loads((DATA_DIR / "purchase_orders.json").read_text(encoding="utf-8"))
+    m34 = next(row for row in rows if row["message_id"] == "M34")
+    m34["lines"][0]["schedules"][1]["requested_date"] = "2026-12-02"
+    (tmp_path / "purchase_orders.json").write_text(json.dumps(rows), encoding="utf-8")
+    case, expected = _case("sales_extraction")
+
+    result = GRADERS["sales.extraction_accuracy"](
+        CTX, case, expected | {"truth": str(tmp_path / "purchase_orders.json")}
+    )
+
+    assert not result.passed
+    assert result.details["by_field"]["schedules"] == 1
+    assert "2026-12-0" not in json.dumps(result.details)
+
+
+def test_schedules_kept_fails_when_the_upload_file_has_a_row_per_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The files before ticket 21: one upload row per line, its later dates
+    lost, and no schedule on the cross-check sheet."""
+    monkeypatch.setattr(
+        order_artifacts,
+        "upload_rows",
+        lambda case, line: (order_artifacts.upload_values(case, line),),
+    )
+    monkeypatch.setattr(order_artifacts, "_schedule_rows", lambda case, line, doc: [])
+    case, expected = _case("sales_delivery_schedules")
+
+    result = GRADERS["sales.schedules_kept"](CTX, case, expected)
+
+    assert not result.passed
+    assert result.details["problems"] == [
+        "M34: the upload file has 3 rows, not one per schedule (6)",
+        "M34: the cross-check sheet lists 0 of 5 schedules",
+    ]
+
+
+def test_schedules_kept_fails_when_a_short_schedule_is_named_otherwise() -> None:
+    case, expected = _case("sales_delivery_schedules")
+    claimed = {"M35": {"requested_date_short_lt:2": ["2026-10-06", "2026-11-30"]}}
+
+    result = GRADERS["sales.schedules_kept"](CTX, case, expected | {"short": claimed})
+
+    assert not result.passed
 
 
 def test_extraction_fails_when_a_routed_document_is_not_expected_routed() -> None:

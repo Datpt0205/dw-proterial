@@ -745,5 +745,77 @@
       }
     ],
     "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M33",
+    "sender": {
+      "address": "an.trinh@velatrix.example",
+      "display_name": "Trịnh Mỹ An"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO VLX-PO-2610-0004",
+    "received_at": "2026-10-02T14:20:00+07:00",
+    "body_text": "Chào chị,\n\nVelatrix gửi PO VLX-PO-2610-0004 (2 dòng) đính kèm. File lập trên máy kho cũ.\n\nTrân trọng,\nTrịnh Mỹ An",
+    "attachments": [
+      {
+        "attachment_id": "M33-A1",
+        "name": "VLX-PO-2610-0004.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M34",
+    "sender": {
+      "address": "an.trinh@velatrix.example",
+      "display_name": "Trịnh Mỹ An"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO VLX-PO-2610-0007 (giao nhiều đợt)",
+    "received_at": "2026-10-02T15:10:00+07:00",
+    "body_text": "Chào chị,\n\nVelatrix gửi PO VLX-PO-2610-0007 (3 dòng) đính kèm. Dòng 1 và dòng 3 giao làm nhiều đợt, lịch ghi ngay dưới mỗi dòng.\n\nTrân trọng,\nTrịnh Mỹ An",
+    "attachments": [
+      {
+        "attachment_id": "M34-A1",
+        "name": "VLX-PO-2610-0007.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M35",
+    "sender": {
+      "address": "thu.vo@brennic.example",
+      "display_name": "Võ Minh Thư"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Đơn đặt hàng BRN-PO-2609-052",
+    "received_at": "2026-10-02T15:40:00+07:00",
+    "body_text": "Kính gửi Phòng Kinh doanh,\n\nBrennic gửi đơn đặt hàng BRN-PO-2609-052 (file PDF đính kèm), giao theo lịch ghi ở cột Ngày giao.\n\nTrân trọng,\nVõ Minh Thư",
+    "attachments": [
+      {
+        "attachment_id": "M35-A1",
+        "name": "BRN-PO-2609-052.pdf",
+        "media_type": "application/pdf"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   }
 ]

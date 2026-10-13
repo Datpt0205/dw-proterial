@@ -61,3 +61,9 @@ reach the browser.
 - `platform_admin` still passes every check (ADR 0008 open point 2).
   Walk-throughs never use it, and ticket 12 tests the support context.
 - The demo personas (ticket 11) exercise each role, and each one's refusals.
+- Decision 5 as built (ticket 22, 2026-10-12): the set `sales.case_support`
+  is granted for the workspace; `sales_head` alone holds `support.grant`
+  (migration `7c8ba908575f`); five reads are open to it (the overview, the
+  order and quote lists and details) and every other Sales route refuses a
+  support context. The support ADR is platform ADR 0024 (it was 0008 when
+  this was written).

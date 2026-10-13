@@ -22,12 +22,21 @@ from support_world import SupportWorld, build_world, context_of, grant_service, 
 from test_provisioning import provisioner_engine  # noqa: F401  (a fixture, used by name)
 
 from dw_kernel.errors import NotFoundError, PermissionDeniedError
+from dw_kernel.ids import TenantId, UserId, WorkspaceId
+from dw_kernel.pagination import PageQuery, PageRequest
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.support_grants import SqlStaffGrants
+from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.application.support_access import (
     RequestSupportGrant,
     SupportAccessContextFactory,
+)
+from dw_platform.domain.audit import (
+    SUPPORT_GRANT_DETAIL,
+    AuditActorKind,
+    AuditEvent,
+    lane_audit_event,
 )
 
 pytestmark = pytest.mark.integration
@@ -58,6 +67,9 @@ async def world(migrator: AsyncEngine) -> SupportWorld:
 async def _active_grant(
     w: SupportWorld, app_engine: AsyncEngine, provisioner_engine: AsyncEngine
 ) -> uuid.UUID:
+    """A grant the granter of ws1 asked for and the operator assigned to
+    `staff`: its trail already holds `support.grant.requested` and
+    `support.grant.assigned`."""
     clock = FixedClock(NOW)
     granter = await context_of(app_engine, w, "granter", w.tenant_a, w.ws1)
     view = await grant_service(app_engine, clock).request(
@@ -127,6 +139,41 @@ async def test_sa12_the_functions_are_security_definer_and_not_public(
         assert row.app_exec, row.proname
 
 
+async def test_the_grant_filter_index_reads_the_key_the_writers_write(
+    migrator: AsyncEngine,
+) -> None:
+    """`?support_grant_id=`'s index names its `details` key in migration text;
+    the writers and the filter name it through `SUPPORT_GRANT_DETAIL`. Renaming
+    one side would leave the filter walking the whole trail with every other
+    test green, so the catalog is asked, partitions included (failure-modes #0,
+    #2)."""
+    async with migrator.connect() as conn:
+        partitions = set(
+            (
+                await conn.execute(
+                    sa.text(
+                        "SELECT c.relname FROM pg_inherits i"
+                        " JOIN pg_class c ON c.oid = i.inhrelid"
+                        " WHERE i.inhparent = 'platform.audit_events'::regclass"
+                    )
+                )
+            ).scalars()
+        )
+        indexed = set(
+            (
+                await conn.execute(
+                    sa.text(
+                        "SELECT tablename FROM pg_indexes WHERE schemaname = 'platform'"
+                        " AND indexdef LIKE :expr"
+                    ),
+                    {"expr": f"%(details ->> '{SUPPORT_GRANT_DETAIL}'::text)%"},
+                )
+            ).scalars()
+        )
+    assert "audit_events_default" in partitions
+    assert indexed == partitions | {"audit_events"}
+
+
 async def test_sa4_sa10_a_staff_context_and_its_trail(
     world: SupportWorld,
     app_engine: AsyncEngine,
@@ -179,3 +226,110 @@ async def test_sa4_sa10_a_staff_context_and_its_trail(
             {"t": world.tenant_a, "g": str(grant_id), "a": world.users["staff"]},
         )
     assert count == 3
+
+
+async def test_sa10_the_customer_reads_a_grants_trail_and_who_acted_under_it(
+    world: SupportWorld,
+    app_engine: AsyncEngine,
+    provisioner_engine: AsyncEngine,
+) -> None:
+    """`GET /audit/events`'s store: filtered by grant, each actor's name, and
+    `support` only for the staff member the grant was assigned to."""
+    grant_id = await _active_grant(world, app_engine, provisioner_engine)
+    staff = _staff(app_engine)
+    factory = SupportAccessContextFactory(
+        grants=staff,
+        member_scopes=SqlScopeHolders(async_sessionmaker(app_engine, expire_on_commit=False)),
+        clock=FixedClock(NOW),
+        ids=Uuid4Generator(),
+    )
+    context = await factory.build(
+        principal_id=world.users["staff"], auth_methods=OTP, grant_id=grant_id
+    )
+    for n in range(3):
+        await staff.record_access(
+            factory.access_event(
+                context, method="GET", route="/probe/{id}", path_ids={"id": str(n)}
+            )
+        )
+
+    def event(actor: uuid.UUID, grant: str | None) -> AuditEvent:
+        return AuditEvent(
+            id=uuid.uuid4(),
+            tenant_id=TenantId(world.tenant_a),
+            workspace_id=WorkspaceId(world.ws1),
+            actor_id=UserId(actor),
+            action="probe.touched",
+            resource_type="probe",
+            resource_id="p",
+            occurred_at=NOW,
+            details={} if grant is None else {SUPPORT_GRANT_DETAIL: grant},
+        )
+
+    other_grant = str(uuid.uuid4())
+    async with SqlPlatformUnitOfWorkFactory(async_sessionmaker(app_engine, expire_on_commit=False))(
+        context
+    ) as uow:
+        # The staff member naming a grant that is not theirs is not support;
+        # a grant id that is no id fails nothing; a lane has no name.
+        await uow.audit.append(event(world.users["staff"], other_grant))
+        await uow.audit.append(event(world.users["granter"], "not-a-uuid"))
+        await uow.audit.append(
+            lane_audit_event(
+                lane="probe_lane",
+                event_id=uuid.uuid4(),
+                tenant_id=TenantId(world.tenant_a),
+                workspace_id=WorkspaceId(world.ws1),
+                action="probe.swept",
+                resource_type="probe",
+                resource_id="p",
+                occurred_at=NOW,
+            )
+        )
+        await uow.commit()
+
+    granter = await context_of(app_engine, world, "granter", world.tenant_a, world.ws1)
+    page = PageRequest(limit=50, after=None, query=PageQuery(key="test.support_trail"))
+    sessions = async_sessionmaker(app_engine, expire_on_commit=False)
+    async with SqlPlatformUnitOfWorkFactory(sessions)(granter) as uow:
+        of_grant = await uow.audit.list_page(
+            page, workspace_id=world.ws1, support_grant_id=grant_id
+        )
+        whole = await uow.audit.list_page(page, workspace_id=world.ws1)
+    # ws2 of the same tenant reads none of it, filtered or not.
+    async with SqlPlatformUnitOfWorkFactory(sessions)(granter) as uow:
+        assert (
+            await uow.audit.list_page(page, workspace_id=world.ws2, support_grant_id=grant_id)
+        ).items == ()
+    # Tenant B naming tenant A's grant and workspace reads nothing: RLS, not the filter.
+    b_granter = await context_of(app_engine, world, "b_granter", world.tenant_b, world.ws_b)
+    async with SqlPlatformUnitOfWorkFactory(sessions)(b_granter) as uow:
+        assert (
+            await uow.audit.list_page(page, workspace_id=world.ws1, support_grant_id=grant_id)
+        ).items == ()
+
+    rows = sorted(
+        (e.event.action, e.actor_display_name, e.actor_kind.value) for e in of_grant.items
+    )
+    assert rows == [
+        ("support.access", "staff", AuditActorKind.SUPPORT.value),
+        ("support.access", "staff", AuditActorKind.SUPPORT.value),
+        ("support.access", "staff", AuditActorKind.SUPPORT.value),
+        ("support.grant.assigned", "operator", AuditActorKind.USER.value),
+        ("support.grant.requested", "granter", AuditActorKind.USER.value),
+    ]
+    assert all(e.event.details[SUPPORT_GRANT_DETAIL] == str(grant_id) for e in of_grant.items)
+
+    rest = sorted(
+        (str(e.event.details.get(SUPPORT_GRANT_DETAIL)), e.actor_display_name, e.actor_kind.value)
+        for e in whole.items
+        if e.event.action in {"probe.touched", "probe.swept"}
+    )
+    assert rest == sorted(
+        [
+            (other_grant, "staff", AuditActorKind.USER.value),
+            ("not-a-uuid", "granter", AuditActorKind.USER.value),
+            ("None", None, AuditActorKind.USER.value),
+        ]
+    )
+    assert len(whole.items) == len(of_grant.items) + 3

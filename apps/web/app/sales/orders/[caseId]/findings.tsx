@@ -51,6 +51,15 @@ const FINDING_FIELD: Record<string, string> = {
   line_total_mismatch: "amount",
 };
 
+/**
+ * Where a finding about the PO as a whole opens the source, when it names a
+ * place no value of the header does: the first value typed in a TCVN3 or VNI
+ * font (`legacy_text_anchor`).
+ */
+const PO_SOURCE: Record<string, string> = {
+  legacy_encoding: "legacy_text",
+};
+
 /** Exception-first: the open ones first, in the case's order otherwise. */
 export function sortFindings(findings: Finding[]): Finding[] {
   return [...findings.filter(isOpen), ...findings.filter((f) => !isOpen(f))];
@@ -202,6 +211,7 @@ function FindingCard({
   };
 
   const field = FINDING_FIELD[finding.code];
+  const poSource = finding.line_no ? undefined : PO_SOURCE[finding.code];
   // The prototype's findings row: a bar in the severity's colour while the
   // finding is open (the tags beside the title say it in words).
   const bar = decided
@@ -239,6 +249,14 @@ function FindingCard({
             >
               Xem nguồn
             </Button>
+          ) : poSource ? (
+            <Button
+              size="small"
+              icon={<EyeOutlined aria-hidden />}
+              onClick={() => onOpenSource(poSource, null)}
+            >
+              Xem nguồn
+            </Button>
           ) : null}
         </Space>
         <Typography.Text type="secondary">
@@ -251,6 +269,13 @@ function FindingCard({
             <FindingWords value={finding.actual} />
           </Typography.Text>
         </Typography.Text>
+        {finding.code === "legacy_encoding" ? (
+          <Typography.Text role="note">
+            PO gõ bằng font tiếng Việt cũ: chữ đọc ra không phải chữ khách thấy,
+            nên DW1 không dò mã theo mô tả. Không sửa tay được; khách gửi lại PO
+            bằng font Unicode thì bản đó vào cùng hồ sơ và được đọc lại.
+          </Typography.Text>
+        ) : null}
         {decided ? (
           <Typography.Text>
             {label(FINDING_DISPOSITION, finding.disposition.kind)}

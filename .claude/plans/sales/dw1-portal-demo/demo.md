@@ -45,7 +45,7 @@ như nhau:
 - cho mỗi persona một tài khoản Keycloak, mật khẩu là `DW_DEV_USER_PASSWORD`
   trong `.env` (không commit).
 
-Sau đó: hộp thư 32 thư đều "Chưa xử lý", không có hồ sơ nào, DW1 đang chạy
+Sau đó: hộp thư 35 thư đều "Chưa xử lý", không có hồ sơ nào, DW1 đang chạy
 (với làn hộp thư tắt; bật thì DW1 xử lý hết trong khoảng một phút). Chỉ chạy
 được ở profile `local`/`test`.
 
@@ -98,7 +98,7 @@ trước, đúng thứ tự WIV-03-012 bước 8.
 
 ### 3.2 An xử lý cả hộp thư
 
-1. Ở hộp thư, bấm **DW xử lý tất cả (31)**. Thanh "Cần xử lý" về 0 thư chưa xử
+1. Ở hộp thư, bấm **DW xử lý tất cả (32)**. Thanh "Cần xử lý" về 0 thư chưa xử
    lý: _không thư nào bị bỏ sót_ (spec quyết định 10); mỗi thư chuyển Sales có
    lý do và người phụ trách.
     - M07 (Rev.1) "Đã gắn vào hồ sơ" — **cùng hồ sơ** M04: hồ sơ hiện "Đang xem

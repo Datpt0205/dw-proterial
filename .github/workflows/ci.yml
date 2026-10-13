@@ -194,6 +194,17 @@ jobs:
           enable-cache: true
       - name: Sync workspace
         run: uv sync --all-packages
+      - name: Public-repo guard (no customer data in any tracked file)
+        # Sales ticket 26. The deny-list is customer data itself, so it is a
+        # secret written outside the checkout, and the script prints where a term
+        # was found, never the term. A missing or empty secret fails this step:
+        # the script refuses a deny-list with no terms, and in CI refuses none.
+        env:
+          PUBLIC_REPO_DENYLIST: ${{ secrets.PUBLIC_REPO_DENYLIST }}
+        run: |
+          printf '%s\n' "$PUBLIC_REPO_DENYLIST" > "$RUNNER_TEMP/public-repo-denylist.txt"
+          DW_PUBLIC_REPO_DENYLIST="$RUNNER_TEMP/public-repo-denylist.txt" \
+            uv run python scripts/check_public_repo.py
       - name: bandit (Python SAST, medium+)
         run: uvx --python 3.12 bandit@1.8.6 -r apps/api/src apps/docgen/src apps/worker/src packages/python/*/src -ll
       - name: pip-audit (Python dependencies, optional extras included)

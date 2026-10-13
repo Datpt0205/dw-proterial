@@ -33,9 +33,19 @@
       "version": "1.1.0"
     },
     {
+      "checksum": "a61185efa41caa79ba3ccb5bec201038008c23661fd20b689de99ef359f50eed",
+      "copy_id": "sales_documents",
+      "version": "1.2.0"
+    },
+    {
       "checksum": "b95c6c69ad61aa72716e6ba750f203733839ce5476384724b4cedb2f6af1677e",
       "copy_id": "sales_emails",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "ea318214f4439ce3bb6847b1c821cab54d9e41e6b4c4860676501f02091cd5b5",
+      "copy_id": "sales_emails",
+      "version": "1.1.0"
     }
   ],
   "eval_datasets": [
@@ -45,12 +55,12 @@
       "version": "1.2.0"
     },
     {
-      "checksum": "371fe5c19f09669a6b304966e7c2c880bdb8f1a0b7e869580b860227084a5ee8",
+      "checksum": "00e48ebcfefacba2c4c356d14594d9320572ca8da5446b44a1c5d75b15c52666",
       "dataset_id": "sales",
-      "version": "1.0.0"
+      "version": "1.2.0"
     }
   ],
-  "git_sha": "ab751f8f5615a888f56665013854e3c2085c2a60",
+  "git_sha": "8ac3d33c1db71d6a282fe65d012d3cb2ea005183",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",
@@ -71,14 +81,19 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "ac58b074437b025af24f2be7ee5b93d789004f53d42a07883c6844793f2bd689",
+      "policy_id": "sales_bravo_upload",
+      "version": "1.1.0"
+    },
+    {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
       "policy_id": "sales_kpi",
       "version": "1.0.0"
     },
     {
-      "checksum": "f314c9825e2330fd097a7d3181b19fed33e4f2b6370ca5eaa73c95e7727de3e6",
+      "checksum": "21647449c62ab1c35dd24ba5b954c3cffab439dd584d616584fe3e7220fe4cf7",
       "policy_id": "sales_order_rules",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",

@@ -22,6 +22,7 @@ so the overview can tell DW1's time from the people's.
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,6 +52,7 @@ from dw_sales.application.support import (
     save_quote,
     worker_event,
 )
+from dw_sales.application.telemetry import SalesSpan, SalesSpans, case_attributes
 from dw_sales.application.views import (
     InboxMessageView,
     MessageDispositionView,
@@ -69,6 +71,9 @@ from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 
 _ON_A_CASE = frozenset({DispositionKind.CASE_CREATED, DispositionKind.ATTACHED_TO_CASE})
+
+# A message's disposition, and the case it left as stored, if it is on one.
+type _Processed = tuple[MessageDisposition, OrderCase | QuoteCase | None]
 
 
 @dataclass(frozen=True)
@@ -116,6 +121,7 @@ class InboxProcessing:
     directory: MemberDirectoryPort
     decisions: PendingDecisionsPort
     release_manifest_ref: str | None
+    spans: SalesSpans
 
     async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
         """One message processed by DW1, at the caller's request."""
@@ -157,23 +163,36 @@ class InboxProcessing:
     async def _process(
         self, context: AccessContext, scope: SalesScope, message_id: str
     ) -> MessageDispositionView:
+        started = time.perf_counter()
         message = await self.inbox.get_message(scope, message_id)
         if message is None:
             raise NotFoundError("no such message", details={"message_id": message_id})
         ingest = self.clock.now()
         kind = await self.intake.classify(scope, message)
         if kind is MessageKind.QUOTE_REQUEST:
-            disposition = await self._quote_request(context, scope, message_id, ingest)
+            disposition, case = await self._quote_request(context, scope, message_id, ingest)
         elif kind is MessageKind.DESIGN_REPLY:
-            disposition = await self._design_reply(context, scope, message_id, ingest)
+            disposition, case = await self._design_reply(context, scope, message_id, ingest)
         else:
             assert kind not in QUOTATION_KINDS
-            disposition = await self._order(context, scope, message, ingest)
+            disposition, case = await self._order(context, scope, message, ingest)
+        # Ids, codes and counts only (`dw_sales.application.telemetry`).
+        self.spans.emit(
+            SalesSpan.MESSAGE_PROCESSED,
+            {
+                "dw.tenant_id": context.tenant_id,
+                "dw.workspace_id": context.workspace_id,
+                "sales.disposition": disposition.kind,
+                "sales.routing_reason": disposition.reason,
+                **({} if case is None else case_attributes(case)),
+                "sales.duration_ms": (time.perf_counter() - started) * 1000,
+            },
+        )
         return message_disposition(disposition, ingest)
 
     async def _order(
         self, context: AccessContext, scope: SalesScope, message: InboundMessage, ingest: datetime
-    ) -> MessageDisposition:
+    ) -> _Processed:
         outcome = await self.intake.process(scope, message)
         disposition = outcome.disposition
         assert disposition is not None  # quotation kinds are handled above
@@ -184,23 +203,23 @@ class InboxProcessing:
             if case is not None:
                 stored = await work.orders.get(case.case_id)
                 if stored is None:
-                    await self._open_order(work, context, case)
+                    case = await self._open_order(work, context, case)
                 else:
                     before = stored.case
                     revised = worker_event("order.revised", context, self.clock.now())
                     await save_order(work, context, self.ids, stored.case, case, revised)
-                    await self._start_review(work, context, case)
+                    case = await self._start_review(work, context, case)
             await self._record(work, context, disposition, ingest)
             await work.commit()
         if before is not None and case is not None:
             # A revision of an order awaiting its cross-check: that check
             # was of the revision it replaced.
             await withdraw_if_left(self.decisions, context, before, case)
-        return disposition
+        return disposition, case
 
     async def _open_order(
         self, work: SalesUnitOfWork, context: AccessContext, case: OrderCase
-    ) -> None:
+    ) -> OrderCase:
         origin = CaseOrigin(
             assigned_to=await self._assignee(context, case.customer_code),
             release_manifest_ref=self.release_manifest_ref,
@@ -219,20 +238,22 @@ class InboxProcessing:
                 event=event,
             )
         )
-        await self._start_review(work, context, case)
+        return await self._start_review(work, context, case)
 
     async def _start_review(
         self, work: SalesUnitOfWork, context: AccessContext, case: OrderCase
-    ) -> None:
-        """DW1 hands a checked case to the PIC's self-check."""
+    ) -> OrderCase:
+        """DW1 hands a checked case to the PIC's self-check; the case as stored."""
         if case.status is not OrderStatus.CHECKED:
-            return
+            return case
         event = worker_event("order.review_started", context, self.clock.now())
-        await save_order(work, context, self.ids, case, case.start_review(), event)
+        reviewed = case.start_review()
+        await save_order(work, context, self.ids, case, reviewed, event)
+        return reviewed
 
     async def _quote_request(
         self, context: AccessContext, scope: SalesScope, message_id: str, ingest: datetime
-    ) -> MessageDisposition:
+    ) -> _Processed:
         try:
             case = await self.quotes.open_case(scope, message_id, self.ids.new_uuid())
         except RequestNotExtractedError as refused:
@@ -241,12 +262,14 @@ class InboxProcessing:
                 if refused.reason == "customer_unknown"
                 else RoutingReason.ATTACHMENT_UNREADABLE
             )
-            return await self._routed(context, scope, message_id, reason, refused.reason, ingest)
+            routed = await self._routed(context, scope, message_id, reason, refused.reason, ingest)
+            return routed, None
         except QuoteFileUnreadableError as refused:
             detail = str(refused.details.get("problem", "unreadable"))
-            return await self._routed(
+            routed = await self._routed(
                 context, scope, message_id, RoutingReason.ATTACHMENT_UNREADABLE, detail, ingest
             )
+            return routed, None
         disposition = MessageDisposition(
             message_id=message_id,
             kind=DispositionKind.CASE_CREATED,
@@ -276,15 +299,15 @@ class InboxProcessing:
             )
             await self._record(work, context, disposition, ingest)
             await work.commit()
-        return disposition
+        return disposition, case
 
     async def _design_reply(
         self, context: AccessContext, scope: SalesScope, message_id: str, ingest: datetime
-    ) -> MessageDisposition:
+    ) -> _Processed:
         try:
             outcome = await self.quotes.take_design_reply(scope, message_id)
         except (NotADesignReplyError, QuoteFileUnreadableError):
-            return await self._routed(
+            routed = await self._routed(
                 context,
                 scope,
                 message_id,
@@ -292,7 +315,9 @@ class InboxProcessing:
                 "no single Design reply could be read",
                 ingest,
             )
+            return routed, None
         disposition = outcome.disposition
+        replied: QuoteCase | None = None
         async with self.uow(scope) as work:
             await _running(work)
             if isinstance(outcome, ReplyAttached):
@@ -302,12 +327,11 @@ class InboxProcessing:
                         "no such quote case", details={"case_id": str(outcome.case.case_id)}
                     )
                 event = worker_event("quote.design_replied", context, self.clock.now())
-                await save_quote(
-                    work, context, self.ids, stored.case, _replied(stored.case, outcome), event
-                )
+                replied = _replied(stored.case, outcome)
+                await save_quote(work, context, self.ids, stored.case, replied, event)
             await self._record(work, context, disposition, ingest)
             await work.commit()
-        return disposition
+        return disposition, replied
 
     async def _routed(
         self,

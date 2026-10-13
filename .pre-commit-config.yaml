@@ -19,3 +19,18 @@ repos:
         args: [--maxkb=2048]
       - id: check-merge-conflict
       - id: detect-private-key
+
+  - repo: local
+    hooks:
+      # Sales ticket 26: no customer data in a staged file of this public repo.
+      # The deny-list lives outside git (DW_PUBLIC_REPO_DENYLIST); without one
+      # the script skips and says so, and CI runs it over the whole tree.
+      - id: public-repo-guard
+        name: public-repo guard (deny-list outside git)
+        entry: uv run python scripts/check_public_repo.py --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        # pre-commit hides a passing hook's output, and a skip passes: without
+        # this the "SKIPPED, customer data was NOT checked" banner never shows.
+        verbose: true

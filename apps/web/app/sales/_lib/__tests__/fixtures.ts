@@ -56,6 +56,15 @@ export function order(overrides: Partial<Order> = {}): Order {
     unit_price: "1150",
     amount: "7015000",
     requested_date: "2026-11-16",
+    schedules: [
+      {
+        quantity: "6100",
+        requested_date: "2026-11-16",
+        anchor: anchor(4),
+        suggested_delivery_date: "2026-11-16",
+      },
+    ],
+    printed_schedules: false,
     anchors: {
       line_no: anchor(1),
       description: anchor(2),
@@ -114,6 +123,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     buyer_anchor: null,
     total: "94115000",
     total_anchor: anchor(4),
+    legacy_text_anchor: null,
     coverage: {
       lines_printed: 1,
       lines_read: 1,

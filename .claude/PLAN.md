@@ -9,34 +9,32 @@ git: every slice's commit message, and the pre-split narrative at
 
 ## Areas
 
-| Area                               | File                                | State                         |
-| ---------------------------------- | ----------------------------------- | ----------------------------- |
-| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed            |
-| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13, 14, 17 built; 12, 15–27   |
-| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
+| Area                               | File                                | State                           |
+| ---------------------------------- | ----------------------------------- | ------------------------------- |
+| Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed              |
+| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps         |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP   |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–18, 20, 22, 26 done; AI next |
+| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed       |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-10-08)
+## Now (2026-10-13)
 
-- **This repo is now the Proterial product repo** (`origin`
-  `Datpt0205/dw-proterial`; the platform seed stays in `Datpt0205/codebase`).
-  Context `dw_sales` is scaffolded; DW1 (Đơn hàng & Báo giá) is being built
-  end to end on mock data: `sales.md`, spec and tickets under
-  `sales/dw1-portal-demo/`.
-- DW1's demo is built (tickets 01–09, 11): eval `sales@1.0.0` in the eval
-  smoke, runbook `sales/dw1-portal-demo/demo.md`, `make demo-reset`,
-  `make test-web-sales`. All committed and pushed (`2284d3c`).
-- Platform pieces still waiting for a first caller: `platform-runtime.md`.
-- Sales ticket 10 (`8d098b3`, dw_sales ADR 0004 Proposed, Đạt to review).
-  Platform merges: `96f95ad`, `2ebd50f`, `ab33703` (2026-10-08: security
-  debts, antd-only web, CSP, support access; `web-ui.md`, `sales.md`).
-- **Next:** CI for 13–18 (all built 2026-10-12, not yet committed:
-  `sales.md`), then 19–27. Proterial has the requirements doc; 12 waits on it.
+- **Proterial product repo** (`origin` `Datpt0205/dw-proterial`; platform
+  seed in `Datpt0205/codebase`). DW1 (Đơn hàng & Báo giá) on mock data:
+  `sales.md`, spec and tickets under `sales/dw1-portal-demo/`; demo runbook
+  `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.2.0`.
+- dw_sales ADR 0004 (checker decisions on the runtime) is Proposed, Đạt to
+  review. Platform pieces waiting for a first caller: `platform-runtime.md`.
+- 2026-10-13: sales 13–18, 20, 22, 26 done; 21 in progress, 23 built but
+  unreviewed (committed so Đạt could push). Platform: eval-grader-registry
+  closed, support-access 02 step 10 built (review owed).
+- **Next (Đạt's priority):** model steps 28–33 run on the local Qwen3.5-9B
+  (Ollama) and measured on the portal flows (no chat); then finish 21/23,
+  24, 25, 27, 19, support-access 03. Ticket 12 waits on Proterial.
 
 ## Decisions Đạt owes
 

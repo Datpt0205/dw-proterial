@@ -123,6 +123,29 @@ def upload_values(case: OrderCase, line: OrderLine) -> dict[UploadField, Value]:
     }
 
 
+def upload_rows(case: OrderCase, line: OrderLine) -> tuple[dict[UploadField, Value], ...]:
+    """The upload file's rows for ``line``: one per delivery schedule (ticket
+    21). A line printing one quantity and one date is one row, its values
+    `upload_values`'. A line whose PO prints its schedules is a row per
+    schedule, each with the schedule's quantity and date, DW1's suggestion for
+    that date, and its amount as the quantity times the unit price: the PO
+    prints no amount per schedule."""
+    values = upload_values(case, line)
+    po = line.effective
+    if not po.prints_schedules:
+        return (values,)
+    return tuple(
+        {
+            **values,
+            "quantity": schedule.quantity,
+            "amount": schedule.quantity * po.unit_price,
+            "requested_date": schedule.requested_date,
+            "suggested_delivery_date": line.suggested_date(schedule),
+        }
+        for schedule in po.schedules
+    )
+
+
 def _po_value(line: OrderLine, field: str) -> Value:
     """The value as the PO prints it; Sales' PRV code is none of the PO's."""
     return None if field == "prv_code" else getattr(line.po_line, field)
@@ -139,6 +162,9 @@ def _anchor(line: OrderLine, field: str) -> SourceAnchor:
 
 
 def _finding_anchor(case: OrderCase, finding: Finding) -> SourceAnchor | None:
+    if finding.code is FindingCode.LEGACY_ENCODING:
+        legacy = case.document.first_legacy_text()
+        return legacy[0] if legacy is not None else None
     if finding.line_no is None:
         total = case.document.total
         return total.anchor if total is not None else None
@@ -197,7 +223,9 @@ def bravo_upload(d: OrderDrafting) -> tuple[Rendered, ...]:
     case, layout = d.case, d.copy.upload
     doc = d.internal("bravo_upload")
     rows = tuple(
-        tuple(upload_values(case, line)[c.field] for c in layout.columns) for line in case.lines
+        tuple(row[c.field] for c in layout.columns)
+        for line in case.lines
+        for row in upload_rows(case, line)
     )
     upload = Sheet(
         name=layout.sheet_name, columns=tuple(c.header for c in layout.columns), rows=rows
@@ -250,6 +278,7 @@ def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:
                     ", ".join(sorted({d.people.name(by) for by in typed})) or None,
                 )
             )
+        rows += _schedule_rows(case, line, doc)
     heading: tuple[tuple[str, Value], ...] = (
         (label(doc, "customer"), f"{case.customer_code} — {d.customer.name}"),
         (label(doc, "po_no"), case.header.po_no),
@@ -283,6 +312,36 @@ def cross_check_sheet(d: OrderDrafting) -> tuple[Rendered, ...]:
         rows=tuple(rows),
     )
     return (d.xlsx(doc.ref, Workbook((sheet,), INTERNAL, d.at)),)
+
+
+def _schedule_rows(
+    case: OrderCase, line: OrderLine, doc: Bound[DocumentTemplate]
+) -> list[tuple[Value, ...]]:
+    """A line whose PO prints its schedules: each one as printed, where, and
+    as the upload file's row holds it (ticket 21). None for a line printing
+    one quantity and one date, whose values above are its one row."""
+    if not line.po_line.prints_schedules:
+        return []
+    printed = line.po_line.schedules
+    entered = upload_rows(case, line)
+    return [
+        (
+            line.line_no,
+            f"{column(doc, 'schedule')} {number}/{len(printed)}",
+            f"{schedule.requested_date.isoformat()}: {schedule.quantity}",
+            None,
+            anchor_text(schedule.anchor),
+            f"{_day_value(row['requested_date'])}: {row['quantity']}",
+            None,
+            None,
+            None,
+        )
+        for number, (schedule, row) in enumerate(zip(printed, entered, strict=True), start=1)
+    ]
+
+
+def _day_value(value: Value) -> str:
+    return value.isoformat() if isinstance(value, date) else str(value)
 
 
 def _header_rows(d: OrderDrafting, doc: Bound[DocumentTemplate]) -> list[tuple[Value, ...]]:

@@ -42,10 +42,11 @@ from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.pagination import Page, PageRequest
 from dw_kernel.ports import FixedClock, Uuid4Generator
+from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
@@ -339,7 +340,13 @@ class _Audit:
     async def append(self, event: AuditEvent) -> None:
         self._held.append(event)
 
-    async def list_page(self, request: PageRequest, *, workspace_id: uuid.UUID) -> Page[AuditEvent]:
+    async def list_page(
+        self,
+        request: PageRequest,
+        *,
+        workspace_id: uuid.UUID,
+        support_grant_id: uuid.UUID | None = None,
+    ) -> Page[AuditEntry]:
         raise NotImplementedError("not exercised by the Sales services")
 
     async def list_for_run(
@@ -616,10 +623,13 @@ def open_world(
     *,
     bound_to: SalesScope = ALPHA,
     allowance: RunAllowancePort | None = None,
+    telemetry: TelemetryPort | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
-    names a plan's limits."""
+    names a plan's limits, and spans go nowhere unless ``telemetry`` takes
+    them (the runtime's and Sales' alike)."""
+    telemetry = telemetry or NullTelemetry()
     policies = load_sales_policies(
         repo_root / "configs" / "policies", repo_root / "configs" / "copy"
     )
@@ -649,7 +659,7 @@ def open_world(
     directory = Directory(tuple(callers))
     notifications = Notifications()
     objects = Objects()
-    runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance)
+    runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance, telemetry=telemetry)
     worker_file = repo_root / "configs" / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     runs = RuntimeDw1Runs(
@@ -680,6 +690,7 @@ def open_world(
         release_manifest_ref="sha256:eval",
         runs=runs,
         pending=runs,
+        telemetry=telemetry,
     )
     register(
         graphs=runtime.graphs,

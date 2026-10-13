@@ -31,23 +31,38 @@ from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_api.bootstrap import ApiContainer
-from dw_api.bootstrap.wiring import SalesRuntime, build_sales
+from dw_api.bootstrap.wiring import (
+    SUPPORT_ALLOWED_ROUTES,
+    SalesRuntime,
+    build_sales,
+    register_sales_support,
+)
 from dw_api.health import HealthService
 from dw_api.main import create_app
 from dw_api.settings import ApiSettings
 from dw_kernel.ports import SystemClock, Uuid7Generator
+from dw_observability.telemetry import NullTelemetry
 from dw_platform.adapters.identity.dev_token import DevTokenVerifier
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.idempotency_store import SqlIdempotencyStore
+from dw_platform.adapters.persistence.identity_provisioning import SqlIdentityBootstrap
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
 from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
+from dw_platform.adapters.persistence.support_grants import (
+    SqlStaffGrants,
+    SqlSupportGrantRepository,
+)
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.idempotency import HttpIdempotency
 from dw_platform.application.identity import DbAccessContextFactory
 from dw_platform.application.notifications import NotificationService
+from dw_platform.application.support_access import (
+    SupportAccessContextFactory,
+    SupportGrantService,
+)
 from dw_platform.testing.seed_env import sid
 
 SECRET = "sales-api-integration-secret-0123456789"
@@ -201,6 +216,28 @@ async def build_app(
         entitlement=PlanEntitlementService(DEFAULT_PLANS),
     )
     container.idempotency = HttpIdempotency(SqlIdempotencyStore(sessions), clock)
+    # Customer-granted support access as `build_container` wires it, with
+    # Sales' scope set registered and its reads open (ticket 22).
+    container.identity_bootstrap = SqlIdentityBootstrap(
+        session_factory=sessions,
+        default_tenant_id=uuid.UUID(settings.default_tenant_id),
+        default_workspace_id=uuid.UUID(settings.default_workspace_id),
+    )
+    register_sales_support(container.support_catalog)
+    container.support_catalog.freeze()
+    container.support_grants = SupportGrantService(
+        repo=SqlSupportGrantRepository(sessions),
+        member_scopes=SqlScopeHolders(sessions),
+        catalog=container.support_catalog,
+        clock=clock,
+        ids=ids,
+    )
+    staff_grants = SqlStaffGrants(sessions)
+    container.support_access = SupportAccessContextFactory(
+        grants=staff_grants, member_scopes=SqlScopeHolders(sessions), clock=clock, ids=ids
+    )
+    container.support_access_audit = staff_grants
+    container.support_allowed_routes = SUPPORT_ALLOWED_ROUTES
     container.workspace_directory = SqlWorkspaceDirectory(sessions)
     container.notifications = NotificationService(SqlNotificationRepository(sessions))
     platform_uow = SqlPlatformUnitOfWorkFactory(sessions)
@@ -240,6 +277,7 @@ async def build_app(
         runtime=SalesRuntime(
             graphs=graphs, workers=workers, runner=runner, approval_flow=approval_flow
         ),
+        telemetry=NullTelemetry(),
     )
     app = create_app(container)
     try:

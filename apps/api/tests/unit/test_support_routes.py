@@ -3,23 +3,24 @@
 Default deny is the real gate: a missing scope only stops a route that checks
 one, and `GET /runs/{id}` checks none. So `RequireAccessContext` refuses the
 support header outright, and the set of routes taking
-`RequireAccessContextOrSupport` must equal `SUPPORT_ALLOWED_ROUTES` (empty on
-the platform). A context opening a route adds it there with its own negative
-test.
+`RequireAccessContextOrSupport` must equal `SUPPORT_ALLOWED_ROUTES`, read off
+the app with every context mounted. A context opening a route adds it there
+with its own negative test (Sales: `test_sales_support.py`).
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 import httpx
 import pytest
 from asgi_lifespan import LifespanManager
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.dependencies.models import Dependant
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, RouteContext, iter_route_contexts
+from starlette.routing import BaseRoute
 from test_support_endpoint import ENABLED, GRANTER, SECRET, TENANT, WORKSPACE, _container
 
 from dw_api.bootstrap.wiring import SUPPORT_ALLOWED_ROUTES
@@ -30,6 +31,7 @@ from dw_api.dependencies.auth import (
 )
 from dw_api.main import create_app
 from dw_platform.adapters.identity.dev_token import DevTokenVerifier
+from dw_sales.presentation.routes import SalesMount
 
 pytestmark = pytest.mark.unit
 
@@ -41,30 +43,87 @@ def _calls(dependant: Dependant) -> Iterator[Callable[..., Any]]:
         yield from _calls(sub)
 
 
+def api_routes(routes: Iterable[BaseRoute]) -> Iterator[RouteContext]:
+    """Every API route, inside the included routers too, by FastAPI's own walk.
+
+    FastAPI 0.141 keeps an included router as one `_IncludedRouter` entry in
+    `app.routes`, so a walk of `app.routes` alone finds no included route at
+    all (this test compared two empty sets until 2026-10-12).
+    `iter_route_contexts` (as `test_platform_endpoint.py` walks the app) yields
+    each route with the dependencies an `include_router(dependencies=...)`
+    adds, which the route's own `dependant` does not carry (measured), so a
+    route opted in at the include is seen too. ``.path`` is the URL; the
+    template the dependency matches is `template`.
+    """
+    for route in iter_route_contexts(list(routes)):
+        if isinstance(route.original_route, APIRoute):
+            yield route
+
+
+def template(route: RouteContext) -> str:
+    """What `request.scope["route"].path` is at request time, which is what the
+    dependency matches against `SUPPORT_ALLOWED_ROUTES`: a router's own prefix
+    is in it (Sales' `/api/v1/sales`), an `include_router(prefix=...)` is not
+    (measured)."""
+    original = route.original_route
+    assert isinstance(original, APIRoute)
+    return original.path
+
+
 def support_routes(app: FastAPI) -> set[tuple[str, str]]:
-    """Every (method, path) whose dependency tree builds a support context."""
+    """Every (method, template) whose dependency tree builds a support context."""
     found: set[tuple[str, str]] = set()
-    for route in app.routes:
-        if isinstance(route, APIRoute) and get_access_context_or_support in set(
-            _calls(route.dependant)
-        ):
-            found |= {(method, route.path) for method in route.methods}
+    for route in api_routes(app.routes):
+        if get_access_context_or_support in set(_calls(route.dependant)):
+            found |= {(method, template(route)) for method in route.methods or ()}
     return found
 
 
+def mounted_app() -> FastAPI:
+    """The app with every context mounted, as the composition root mounts
+    them (a context's services need not be wired for its routes to exist)."""
+    container = _container(GRANTER, ENABLED)
+    container.sales = SalesMount(services=None)
+    return create_app(container)
+
+
 def test_the_walker_sees_a_route_that_opts_in() -> None:
-    # The guard below can fail: a route taking the dependency is found.
+    # The guard below can fail: a route taking the dependency is found, on
+    # the app itself, inside an included router, and opted in by the include
+    # itself; each as the template the dependency matches at request time.
     app = FastAPI()
+    router = APIRouter(prefix="/api/v1/ctx")
+    included = APIRouter(prefix="/other")
 
     @app.get("/probe/{item_id}")
     async def probe(item_id: str, context: RequireAccessContextOrSupport) -> None: ...
 
-    assert support_routes(app) == {("GET", "/probe/{item_id}")}
+    @router.get("/items/{item_id}")
+    async def item(item_id: str, context: RequireAccessContextOrSupport) -> None: ...
+
+    @included.get("/things")
+    async def things() -> None: ...
+
+    app.include_router(router)
+    app.include_router(
+        included, prefix="/api/v1", dependencies=[Depends(get_access_context_or_support)]
+    )
+
+    assert support_routes(app) == {
+        ("GET", "/probe/{item_id}"),
+        ("GET", "/api/v1/ctx/items/{item_id}"),
+        ("GET", "/other/things"),
+    }
+
+
+def test_the_walker_reads_the_whole_mounted_app() -> None:
+    paths = {template(route) for route in api_routes(mounted_app().routes)}
+    assert len(paths) >= 80
+    assert {"/support/grants", "/api/v1/sales/orders/{case_id}"} <= paths
 
 
 def test_only_the_allowed_routes_take_a_support_context() -> None:
-    app = create_app(_container(GRANTER, ENABLED))
-    assert support_routes(app) == set(SUPPORT_ALLOWED_ROUTES)
+    assert support_routes(mounted_app()) == set(SUPPORT_ALLOWED_ROUTES)
 
 
 @pytest.mark.parametrize(

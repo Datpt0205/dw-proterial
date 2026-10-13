@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
+from dw_kernel.pagination import Page, PageRequest
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.ports import PlatformUnitOfWork
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import AuditEntry, AuditEvent
 
 NOW = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
 
@@ -43,16 +43,16 @@ class FakeAuditRepo:
     async def append(self, event: AuditEvent) -> None:
         self.events.append(event)
 
-    async def list_page(self, request: PageRequest, *, workspace_id: UUID) -> Page[AuditEvent]:
-        # Newest first and the caller's workspace only, like the SQL repository
-        # this stands in for.
-        return build_page(
-            [event for event in reversed(self.events) if event.workspace_id.value == workspace_id],
-            request=request,
-            position_of=lambda event: CursorPosition(
-                sort_value=event.occurred_at, tiebreaker=event.id
-            ),
-        )
+    async def list_page(
+        self,
+        request: PageRequest,
+        *,
+        workspace_id: UUID,
+        support_grant_id: UUID | None = None,
+    ) -> Page[AuditEntry]:
+        # The trail's actor names and kinds come from tables this double does
+        # not have; the runtime's unit tests read `events` instead.
+        raise NotImplementedError("not exercised by the runtime's unit tests")
 
 
 @dataclass

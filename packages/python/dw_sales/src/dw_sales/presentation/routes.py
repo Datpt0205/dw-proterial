@@ -14,6 +14,12 @@ names neither implementation (it may not import the app).
 - **Every mutation takes `case_version`** (409 when stale) and honours
   `Idempotency-Key`, and answers with ids only (`CaseChangeView`): the
   response the idempotency store keeps holds no amount.
+- **FPT support reads five routes, and only these** (dw_sales ADR 0003 §5,
+  ADR 0024): the overview and the order and quote lists and details take
+  ``support_access_context``, which also admits a support staff member under a
+  customer's grant. The composition root lists the same five in
+  `SUPPORT_ALLOWED_ROUTES`; every other route refuses a support context. The
+  grant carries no price scope, so `PriceView` marks every amount hidden.
 - **No data source configured** (a deployed profile without the demo tenant):
   every route answers 503 "chưa cấu hình nguồn dữ liệu".
 - **No decision of a checker is made here.** Approving or returning a
@@ -234,21 +240,34 @@ def build_router(
     *,
     access_context: Callable[..., Any],
     idempotency: Callable[..., Any],
+    support_access_context: Callable[..., Any] | None = None,
 ) -> APIRouter:
-    """The Sales router; ``services`` None answers 503 on every route."""
-    router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
+    """The Sales router; ``services`` None answers 503 on every route.
 
-    def _services(
-        context: Annotated[AccessContext, Depends(access_context)],
-    ) -> SalesServices:
-        # Depends on the access context first, so an unauthenticated caller
-        # learns nothing, not even that the source is unconfigured.
-        if services is None:
-            raise InfrastructureError(NOT_CONFIGURED, details={"context": "sales"})
-        return services
+    ``support_access_context`` is the dependency the support reads take (a
+    member's context, or a support staff member's under a grant); without
+    one they take ``access_context`` like every other route.
+    """
+    router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
+    read_context = support_access_context or access_context
+
+    def services_after(context_dependency: Callable[..., Any]) -> Callable[..., SalesServices]:
+        def _services(
+            context: Annotated[AccessContext, Depends(context_dependency)],
+        ) -> SalesServices:
+            # Depends on the access context first, so an unauthenticated caller
+            # learns nothing, not even that the source is unconfigured.
+            if services is None:
+                raise InfrastructureError(NOT_CONFIGURED, details={"context": "sales"})
+            return services
+
+        return _services
 
     Ctx = Annotated[AccessContext, Depends(access_context)]  # noqa: N806 (a type alias)
-    Svc = Annotated[SalesServices, Depends(_services)]  # noqa: N806 (a type alias)
+    Svc = Annotated[SalesServices, Depends(services_after(access_context))]  # noqa: N806 (a type alias)
+    # The support reads (module docstring): the same context, or a support one.
+    ReadCtx = Annotated[AccessContext, Depends(read_context)]  # noqa: N806 (a type alias)
+    ReadSvc = Annotated[SalesServices, Depends(services_after(read_context))]  # noqa: N806 (a type alias)
     Idem = Annotated[IdempotentRecorder, Depends(idempotency)]  # noqa: N806 (a type alias)
 
     def scopes(*needed: SalesScopes) -> Any:
@@ -263,7 +282,7 @@ def build_router(
     # ------------------------------------------------------------ overview --
 
     @router.get("/overview", response_model=OverviewView)
-    async def overview(context: Ctx, svc: Svc) -> OverviewView:
+    async def overview(context: ReadCtx, svc: ReadSvc) -> OverviewView:
         return await svc.overview.overview(context)
 
     @router.get("/my-work", response_model=list[WorkItem])
@@ -298,11 +317,11 @@ def build_router(
     # -------------------------------------------------------------- orders --
 
     @router.get("/orders", response_model=list[OrderSummaryView])
-    async def orders(context: Ctx, svc: Svc) -> list[OrderSummaryView]:
+    async def orders(context: ReadCtx, svc: ReadSvc) -> list[OrderSummaryView]:
         return await svc.orders.summaries(context)
 
     @router.get("/orders/{case_id}", response_model=OrderCaseView)
-    async def order(case_id: uuid.UUID, context: Ctx, svc: Svc) -> OrderCaseView:
+    async def order(case_id: uuid.UUID, context: ReadCtx, svc: ReadSvc) -> OrderCaseView:
         return await svc.orders.get(context, case_id)
 
     @router.get(
@@ -563,7 +582,7 @@ def build_router(
     # -------------------------------------------------------------- quotes --
 
     @router.get("/quotes", response_model=list[QuoteSummaryView])
-    async def quotes(context: Ctx, svc: Svc) -> list[QuoteSummaryView]:
+    async def quotes(context: ReadCtx, svc: ReadSvc) -> list[QuoteSummaryView]:
         return await svc.quotes.summaries(context)
 
     @router.get("/quotes/screening", response_model=list[ScreeningRow])
@@ -575,8 +594,8 @@ def build_router(
     @router.get("/quotes/{case_id}", response_model=QuoteCaseView)
     async def quote(
         case_id: uuid.UUID,
-        context: Ctx,
-        svc: Svc,
+        context: ReadCtx,
+        svc: ReadSvc,
         incoterm: Annotated[Incoterm | None, Query()] = None,
         destination: Annotated[str | None, Query(pattern=r"^[a-z][a-z0-9_]{1,31}$")] = None,
     ) -> QuoteCaseView:

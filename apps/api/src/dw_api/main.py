@@ -180,7 +180,7 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     # Guarded on the dependency it needs: a context whose wiring is absent
     # mounts nothing rather than mounting a route that 500s on every call.
     if container.sales is not None:
-        from dw_api.dependencies.auth import get_access_context
+        from dw_api.dependencies.auth import get_access_context, get_access_context_or_support
         from dw_api.dependencies.idempotency import get_idempotent_operation
         from dw_sales.presentation.routes import SalesMount
         from dw_sales.presentation.routes import build_router as build_sales_router
@@ -191,6 +191,8 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
                 container.sales.services,
                 access_context=get_access_context,
                 idempotency=get_idempotent_operation,
+                # Its five support reads (SUPPORT_ALLOWED_ROUTES, ticket 22).
+                support_access_context=get_access_context_or_support,
             )
         )
 

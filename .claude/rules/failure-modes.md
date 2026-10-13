@@ -16,7 +16,7 @@ checklist as sufficient would miss exactly the dangerous half.
 
 ---
 
-## 0. A check that cannot see the thing it checks (found 1×)
+## 0. A check that cannot see the thing it checks (found 2×)
 
 Numbered zero because it comes before the rest: a check you trust that is blind
 to part of what it covers makes every finding below it unreliable.
@@ -31,6 +31,13 @@ spend were one table name away from any connection, with no `app.tenant_id` set.
 Enabling RLS on a partitioned parent applies its policies to rows reached THROUGH
 the parent. A partition addressed by its own name is an ordinary table using its
 own settings.
+
+The second was a test over FastAPI's route table: `test_support_routes.py`
+walked `app.routes` for routes open to a support context and compared the
+result with `SUPPORT_ALLOWED_ROUTES`. FastAPI 0.141 keeps an included router as
+one `_IncludedRouter` entry, so the walk found no included route at all and the
+test compared two empty sets for as long as both were empty. It went unnoticed
+until the first route was opened (sales ticket 22).
 
 **Ask:** what can this check NOT see? A check over source text cannot see what the
 database creates on its own. Where the truth lives in a running system, ask the

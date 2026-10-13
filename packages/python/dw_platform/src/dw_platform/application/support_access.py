@@ -46,7 +46,7 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext, SupportScope
 from dw_platform.application.authorization import permission_denied
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import SUPPORT_GRANT_DETAIL, AuditEvent
 
 SUPPORT_GRANT_SCOPE = "support.grant"
 SUPPORT_REQUEST_SCOPE = "support.request"
@@ -631,7 +631,7 @@ def support_grant_audit(
         resource_id=str(grant.id),
         occurred_at=occurred_at,
         details={
-            "support_grant_id": str(grant.id),
+            SUPPORT_GRANT_DETAIL: str(grant.id),
             "code": grant.code,
             "scope_set_key": grant.scope_set_key,
             "resource_type": grant.resource_type,
@@ -886,7 +886,7 @@ def support_access_audit(
         resource_id=str(context.support.grant_id),
         occurred_at=occurred_at,
         details={
-            "support_grant_id": str(context.support.grant_id),
+            SUPPORT_GRANT_DETAIL: str(context.support.grant_id),
             "code": context.support.code,
             "method": method,
             "route": route,

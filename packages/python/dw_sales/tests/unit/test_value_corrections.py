@@ -36,6 +36,7 @@ from dw_sales.domain.orders import (
     Actor,
     AskCustomer,
     CorrectedBySales,
+    DeliverySchedule,
     Finding,
     FindingCode,
     FlaggedValue,
@@ -61,7 +62,7 @@ from dw_sales.domain.orders import (
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.0.0"
+RULES = "sales_order_rules@1.1.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -136,10 +137,21 @@ def _case(
     price: Decimal | None = None,
     revision: int = 0,
     review: bool = True,
+    split: bool = False,
 ) -> OrderCase:
     second = _po_line(2, flagged)
     if price is not None:
         second = second.model_copy(update={"unit_price": price})
+    if split:
+        # Line 2's 6100 m over two dates, on the schedule rows under it.
+        printed = tuple(
+            DeliverySchedule(quantity=Decimal(3050), requested_date=day, anchor=_anchor(cell))
+            for day, cell in ((date(2026, 11, 27), "H12"), (date(2026, 12, 11), "H13"))
+        )
+        anchors = second.anchors.model_copy(update={"requested_date": printed[0].anchor})
+        second = PoLine.model_validate(
+            {**dict(second), "anchors": anchors, "printed_schedules": printed}
+        )
     lines = (_line(_po_line(1)), _line(second))
     header = PoHeader(
         po_no="VLX-PO-2609-0118",
@@ -443,7 +455,7 @@ def _intake() -> OrderIntake:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=MockInbox.load(SCOPE),
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.0.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.1.0.yaml")),
         cases=_NoCases(),
         new_case_id=uuid.uuid4,
     )
@@ -547,3 +559,33 @@ async def test_a_corrected_price_is_hidden_from_who_may_not_read_prices() -> Non
     )
     finding = next(f for f in hidden["findings"] if f["key"] == KEY)
     assert finding["fields"] == sorted(case.line(2).po_line.flagged)
+
+
+# ---------------------------------------- delivery schedules (ticket 21) --
+
+
+def test_the_dates_of_a_line_split_over_several_schedules_are_asked_not_typed() -> None:
+    """One typed date cannot say which printed schedule it is: a flagged date
+    on a split line goes back to the customer. Its other values are typed as
+    on any line, and the screen offers only those."""
+    prices = PriceView(amounts=True, other_customers=False)
+    case = _case(flagged=("quantity", "requested_date"), split=True)
+
+    with pytest.raises(ConflictError, match="asked of the customer") as refused:
+        case.corrected(KEY, _typed("requested_date", "2026-11-27"), AN)
+    assert refused.value.details["rule"] == "printed_schedules"
+    assert order_finding(case, case.finding(KEY), prices).fields == ["quantity"]
+
+    typed = _correct(case, "quantity", "6100")
+    assert typed.finding(KEY).is_open
+    asked = typed.dispose(KEY, AskCustomer(by=AN.user_id, at=T0), AN)
+    assert asked.finding(KEY).disposition.kind == "ask_customer"
+
+
+def test_a_line_printing_one_date_still_has_its_date_typed() -> None:
+    prices = PriceView(amounts=True, other_customers=False)
+    case = _case(flagged=("quantity", "requested_date"))
+
+    assert order_finding(case, case.finding(KEY), prices).fields == ["quantity", "requested_date"]
+    typed = _correct(case, "requested_date", "2026-12-01")
+    assert [s.requested_date for s in typed.line(2).effective.schedules] == [date(2026, 12, 1)]

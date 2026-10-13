@@ -1122,6 +1122,24 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * DeliveryScheduleView
+         * @description One delivery of a line's quantity (ticket 21), as the line is entered
+         *     (a schedule the PO prints is never typed over): where it is printed, and
+         *     DW1's suggested date for it.
+         */
+        DeliveryScheduleView: {
+            anchor: components["schemas"]["SourceAnchor"];
+            /** Quantity */
+            quantity: string;
+            /**
+             * Requested Date
+             * Format: date
+             */
+            requested_date: string;
+            /** Suggested Delivery Date */
+            suggested_delivery_date: string | null;
+        };
         /** DesignLineView */
         DesignLineView: {
             /** Anchors */
@@ -1242,7 +1260,7 @@ export interface components {
          * @description The order checks of the spec's findings table, one code each.
          * @enum {string}
          */
-        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified";
+        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding";
         /**
          * FixedCopper
          * @description The price does not move with copper.
@@ -1625,6 +1643,7 @@ export interface components {
             header_corrections: components["schemas"]["ValueCorrectionView"][];
             /** Header Flags */
             header_flags: components["schemas"]["FlaggedValue"][];
+            legacy_text_anchor: components["schemas"]["SourceAnchor"] | null;
             /** Lines */
             lines: components["schemas"]["OrderLineView"][];
             /** Makers */
@@ -1717,6 +1736,8 @@ export interface components {
             pc_confirmed_at: string | null;
             /** Pc Confirmed By */
             pc_confirmed_by: string | null;
+            /** Printed Schedules */
+            printed_schedules: boolean;
             /** Quantity */
             quantity: string;
             /**
@@ -1724,6 +1745,8 @@ export interface components {
              * Format: date
              */
             requested_date: string;
+            /** Schedules */
+            schedules: components["schemas"]["DeliveryScheduleView"][];
             /** Suggested Delivery Date */
             suggested_delivery_date: string | null;
             unit_price: components["schemas"]["Amount"];

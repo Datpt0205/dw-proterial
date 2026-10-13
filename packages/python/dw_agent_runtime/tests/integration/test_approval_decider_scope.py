@@ -179,7 +179,7 @@ async def _audit_actions(stack: Stack, run: RunContext) -> list[str]:
             PageRequest(limit=50, after=None, query=PageQuery(key="test.audit")),
             workspace_id=run.workspace_id,
         )
-    return [event.action for event in page.items if event.run_id == run.run_id]
+    return [e.event.action for e in page.items if e.event.run_id == run.run_id]
 
 
 def _assert_no_driver_text(error: dict[str, Any] | None) -> None:

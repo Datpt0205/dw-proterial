@@ -11,6 +11,18 @@ with no cached value, carries a `RegionFlag`; the checks raise
 `value_uncertain` on it. Skipping it would make the lines read differ from the
 lines the file holds, and refusing the file would hide the rest of the PO.
 
+**A value typed in a TCVN3 or VNI font is read and marked**, by the font of
+its cell (`legacy_fonts`): its letters are not what the customer sees, so the
+checks raise `legacy_encoding` and nothing is matched on it (ticket 20). The
+cell's font is the one openpyxl reports; a font set on part of a cell's text
+(rich text) is not read.
+
+**A line split over several delivery dates** (ticket 21) prints its schedules
+as rows under it, each with a quantity and a date and nothing else, its own
+date cell left blank; or as a "date: quantity" list in its date cell. Either
+way each schedule is read with its anchor, and a schedule row's flags are the
+line's requested date's.
+
 The reader refuses (`Unreadable`) only what it cannot read at all: no PO table,
 a value that does not parse, pages missing or repeated, a page showing another
 PO's header, a macro-enabled workbook, or a file past the policy's caps. The
@@ -37,11 +49,15 @@ from openpyxl.worksheet.cell_range import CellRange
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import ValidationError
 
+from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules
 from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.legacy_fonts import legacy_encoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import (
+    DeliverySchedule,
     FlaggedValue,
+    LegacyText,
     PoDocument,
     PoHeader,
     PoHeaderAnchors,
@@ -55,7 +71,7 @@ from dw_sales.domain.orders import (
     Unreadable,
 )
 
-PARSER_VERSION = "excel_po_reader@1.1.0"
+PARSER_VERSION = "excel_po_reader@1.3.0"
 _PAGE_NUMBER = re.compile(r"(\d{1,3})\s*/\s*(\d{1,3})")
 _PLAIN_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 # The part a macro-enabled workbook carries its VBA in: such a file is not read (decision 13).
@@ -70,13 +86,15 @@ class ExcelLayout:
     the title above each table column. ``page_label``: for a customer printing
     one sheet per page, the label beside the sheet's ``n / N``.
     ``total_label``: the label in the row under the lines whose amount column
-    holds the printed total.
+    holds the printed total. ``date_format``: how a date typed as text reads,
+    in a "date: quantity" list (a `datetime.strptime` format).
     """
 
     header_labels: Mapping[PoHeaderField, str]
     column_labels: Mapping[PoLineField, str]
     page_label: str | None = None
     total_label: str = "TOTAL"
+    date_format: str = "%d/%m/%Y"
 
     def __post_init__(self) -> None:
         if set(self.header_labels) != set(get_args(PoHeaderField)):
@@ -190,6 +208,7 @@ class _Table:
     sheet: _Sheet
     columns: Mapping[PoLineField, int]
     first_row: int
+    date_format: str
 
 
 def _read(book: _Book, layout: ExcelLayout, buyer: PrintedBuyer | None) -> PoDocument:
@@ -321,6 +340,11 @@ class _Sheet:
             found.append(RegionFlag.FORMULA_WITHOUT_CACHED_VALUE)
         return tuple(found)
 
+    def legacy(self, field: str, cell: Cell) -> tuple[LegacyText, ...]:
+        """``field``'s value, when ``cell`` is typed in a TCVN3 or VNI font."""
+        encoding = legacy_encoding(cell.font.name if cell.font is not None else None)
+        return () if encoding is None else (LegacyText(field=field, encoding=encoding),)
+
     def _merged(self, row: int, column: int) -> CellRange | None:
         ranges: Iterable[CellRange] = self.worksheet.merged_cells.ranges
         for merged in ranges:
@@ -352,6 +376,7 @@ def _table(sheet: _Sheet, layout: ExcelLayout) -> _Table | None:
         sheet=sheet,
         columns={field: cell.column for field, cell in found.items()},
         first_row=max(sheet.bottom(cell) for cell in found.values()) + 1,
+        date_format=layout.date_format,
     )
 
 
@@ -383,6 +408,7 @@ def _header(sheet: _Sheet, layout: ExcelLayout) -> PoHeader:
     values: dict[str, object] = {}
     anchors: dict[str, SourceAnchor] = {}
     flags: list[FlaggedValue] = []
+    legacy: list[LegacyText] = []
     for field, label in layout.header_labels.items():
         label_cell = sheet.find(label)
         if label_cell is None:
@@ -395,9 +421,15 @@ def _header(sheet: _Sheet, layout: ExcelLayout) -> PoHeader:
             raise _RefusedError(f"{field.replace('_', ' ')} {exc}", anchor) from exc
         anchors[field] = anchor
         flags.extend(FlaggedValue(field=field, flag=flag) for flag in sheet.flags(cell))
+        legacy.extend(sheet.legacy(field, cell))
     try:
         return PoHeader.model_validate(
-            {**values, "anchors": PoHeaderAnchors(**anchors), "flags": tuple(flags)}
+            {
+                **values,
+                "anchors": PoHeaderAnchors(**anchors),
+                "flags": tuple(flags),
+                "legacy": tuple(legacy),
+            }
         )
     except ValidationError as exc:
         failed = str(exc.errors()[0]["loc"][0])
@@ -411,8 +443,11 @@ def _lines(table: _Table) -> tuple[list[PoLine], int]:
     lines: list[PoLine] = []
     row = table.first_row
     while row <= sheet.worksheet.max_row and not _blank(sheet.at(row, number_column).value):
-        lines.append(_line(table, row))
-        row += 1
+        below = row + 1
+        while below <= sheet.worksheet.max_row and _is_schedule_row(table, below):
+            below += 1
+        lines.append(_line(table, row, range(row + 1, below)))
+        row = below
     # A numbered row under the end: the table had a gap, and what follows it
     # is counted as printed and not read, which `line_total_mismatch` reports.
     later = sum(
@@ -423,27 +458,95 @@ def _lines(table: _Table) -> tuple[list[PoLine], int]:
     return lines, len(lines) + later
 
 
-def _line(table: _Table, row: int) -> PoLine:
+def _is_schedule_row(table: _Table, row: int) -> bool:
+    """A row under a line holding a quantity and a date and nothing else."""
+    filled = {
+        field
+        for field, column in table.columns.items()
+        if not _blank(table.sheet.at(row, column).value)
+    }
+    return filled == {"quantity", "requested_date"}
+
+
+def _line(table: _Table, row: int, schedule_rows: range) -> PoLine:
+    """The line on ``row``, with the schedules printed in its rows below or
+    listed in its date cell."""
     sheet = table.sheet
     values: dict[str, object] = {}
     anchors: dict[str, SourceAnchor] = {}
     flags: list[FlaggedValue] = []
+    legacy: list[LegacyText] = []
+    schedules: tuple[DeliverySchedule, ...] = ()
     for field, column in table.columns.items():
         cell = sheet.at(row, column)
         anchor = sheet.anchor(cell)
         try:
-            values[field] = _LINE_VALUES[field](cell.value)
+            if field == "requested_date" and schedule_rows:
+                if not _blank(cell.value):
+                    raise ValueError("is printed on the schedule rows under the line")
+                schedules = tuple(_schedule_row(table, below, flags) for below in schedule_rows)
+                anchor = schedules[0].anchor
+            elif field == "requested_date" and isinstance(cell.value, str):
+                listed = listed_schedules(
+                    cell.value, anchor, lambda text: _typed_day(text, table), _number
+                )
+                schedules = listed if listed is not None else schedules
+            if field != "requested_date" or not schedules:
+                values[field] = _LINE_VALUES[field](cell.value)
         except ValueError as exc:
             raise _RefusedError(f"row {row}: {field.replace('_', ' ')} {exc}", anchor) from exc
         anchors[field] = anchor
         flags.extend(FlaggedValue(field=field, flag=flag) for flag in sheet.flags(cell))
+        legacy.extend(sheet.legacy(field, cell))
+    if schedules:
+        schedules = in_date_order(schedules)
+        values["requested_date"] = schedules[0].requested_date
+        anchors["requested_date"] = schedules[0].anchor
     try:
         return PoLine.model_validate(
-            {**values, "anchors": PoLineAnchors(**anchors), "flags": tuple(flags)}
+            {
+                **values,
+                "anchors": PoLineAnchors(**anchors),
+                "flags": tuple(flags),
+                "legacy": tuple(legacy),
+                "printed_schedules": schedules,
+            }
         )
     except ValidationError as exc:
         failed = str(exc.errors()[0]["loc"][0])
         raise _RefusedError(f"row {row}: {_first_error(exc)}", anchors.get(failed)) from exc
+
+
+def _schedule_row(table: _Table, row: int, flags: list[FlaggedValue]) -> DeliverySchedule:
+    """One schedule row under a line; what hides its cells flags the line's
+    requested date, which its schedules are."""
+    sheet = table.sheet
+    quantity = sheet.at(row, table.columns["quantity"])
+    day = sheet.at(row, table.columns["requested_date"])
+    try:
+        amount = _number(quantity.value)
+    except ValueError as exc:
+        raise _RefusedError(
+            f"row {row}: a schedule's quantity {exc}", sheet.anchor(quantity)
+        ) from exc
+    try:
+        when = _day(day.value)
+    except ValueError as exc:
+        raise _RefusedError(f"row {row}: a schedule's date {exc}", sheet.anchor(day)) from exc
+    try:
+        schedule = DeliverySchedule(quantity=amount, requested_date=when, anchor=sheet.anchor(day))
+    except ValidationError as exc:
+        raise _RefusedError(f"row {row}: {_first_error(exc)}", sheet.anchor(quantity)) from exc
+    for cell in (quantity, day):
+        flags.extend(FlaggedValue(field="requested_date", flag=flag) for flag in sheet.flags(cell))
+    return schedule
+
+
+def _typed_day(text: str, table: _Table) -> date:
+    try:
+        return datetime.strptime(text.strip(), table.date_format).date()
+    except ValueError as exc:
+        raise ValueError("is not a date in the layout's format") from exc
 
 
 def _total(table: _Table, layout: ExcelLayout) -> PrintedTotal | None:
@@ -461,6 +564,7 @@ def _total(table: _Table, layout: ExcelLayout) -> PrintedTotal | None:
         amount=amount,
         anchor=sheet.anchor(cell),
         flags=tuple(FlaggedValue(field="amount", flag=flag) for flag in sheet.flags(cell)),
+        legacy=sheet.legacy("amount", cell),
     )
 
 

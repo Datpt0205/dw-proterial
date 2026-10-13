@@ -555,16 +555,39 @@
         "title": "AttachmentView",
         "type": "object"
       },
+      "AuditActorKind": {
+        "description": "Who the actor of an event was, as the customer's trail shows it.\n\n`support` is a member of the support team acting under a grant: the event\nnames the grant (`details.support_grant_id`) AND its actor is the person\nthat grant was assigned to. The grant id alone is not enough, because the\ncustomer's own request, approval and revocation of a grant carry it too and\nwere done by the customer's people.",
+        "enum": [
+          "user",
+          "support"
+        ],
+        "title": "AuditActorKind",
+        "type": "string"
+      },
       "AuditEventView": {
-        "description": "One audit row as the screen shows it.\n\n``actor_id`` is here because it was the one thing the table could not show:\nthe column exists on the row and is not inside ``details``, so dropping it\nfrom this view made \"who did this\" unanswerable from the UI for every action,\nnot only sharing (spec 03.1 BR10 names it explicitly).",
+        "description": "One audit row as the screen shows it.\n\n``actor_id`` is here because it was the one thing the table could not show:\nthe column exists on the row and is not inside ``details``, so dropping it\nfrom this view made \"who did this\" unanswerable from the UI for every action,\nnot only sharing (spec 03.1 BR10 names it explicitly).\n\n``actor_display_name`` is the actor's name today (``None`` for an actor\nthat is no user, such as a background lane), and ``actor_kind`` says\nwhether the actor was the support team acting under a grant: support\nstaff are no member of the customer's, so a name alone would not say it.",
         "properties": {
           "action": {
             "title": "Action",
             "type": "string"
           },
+          "actor_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Display Name"
+          },
           "actor_id": {
             "title": "Actor Id",
             "type": "string"
+          },
+          "actor_kind": {
+            "$ref": "#/components/schemas/AuditActorKind"
           },
           "details": {
             "additionalProperties": true,
@@ -609,6 +632,8 @@
         },
         "required": [
           "actor_id",
+          "actor_display_name",
+          "actor_kind",
           "action",
           "resource_type",
           "resource_id",
@@ -1427,6 +1452,44 @@
         "title": "DeclineView",
         "type": "object"
       },
+      "DeliveryScheduleView": {
+        "description": "One delivery of a line's quantity (ticket 21), as the line is entered\n(a schedule the PO prints is never typed over): where it is printed, and\nDW1's suggested date for it.",
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/SourceAnchor"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "requested_date": {
+            "format": "date",
+            "title": "Requested Date",
+            "type": "string"
+          },
+          "suggested_delivery_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Delivery Date"
+          }
+        },
+        "required": [
+          "quantity",
+          "requested_date",
+          "anchor",
+          "suggested_delivery_date"
+        ],
+        "title": "DeliveryScheduleView",
+        "type": "object"
+      },
       "DemoUser": {
         "properties": {
           "description": {
@@ -2065,7 +2128,8 @@
           "revised_po",
           "revision_without_base",
           "customer_temporary",
-          "sender_unverified"
+          "sender_unverified",
+          "legacy_encoding"
         ],
         "title": "FindingCode",
         "type": "string"
@@ -4304,6 +4368,16 @@
             "title": "Header Flags",
             "type": "array"
           },
+          "legacy_text_anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/OrderLineView"
@@ -4501,6 +4575,7 @@
           "buyer_anchor",
           "total",
           "total_anchor",
+          "legacy_text_anchor",
           "coverage",
           "lines",
           "findings",
@@ -4705,6 +4780,10 @@
             ],
             "title": "Pc Confirmed By"
           },
+          "printed_schedules": {
+            "title": "Printed Schedules",
+            "type": "boolean"
+          },
           "quantity": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Quantity",
@@ -4714,6 +4793,13 @@
             "format": "date",
             "title": "Requested Date",
             "type": "string"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryScheduleView"
+            },
+            "title": "Schedules",
+            "type": "array"
           },
           "suggested_delivery_date": {
             "anyOf": [
@@ -4751,6 +4837,8 @@
           "unit_price",
           "amount",
           "requested_date",
+          "schedules",
+          "printed_schedules",
           "anchors",
           "flags",
           "corrections",
@@ -9770,6 +9858,25 @@
               ],
               "description": "Opaque cursor from a previous page.",
               "title": "Cursor"
+            }
+          },
+          {
+            "description": "Only the events of this support grant.",
+            "in": "query",
+            "name": "support_grant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the events of this support grant.",
+              "title": "Support Grant Id"
             }
           }
         ],

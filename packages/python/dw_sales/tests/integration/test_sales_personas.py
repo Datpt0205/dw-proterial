@@ -17,12 +17,12 @@ import sqlalchemy as sa
 import yaml
 from pg_test_db import DatabaseUrls
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.testing.seed_env import seed_test_env, sid
-from dw_sales.testing.seed_personas import Persona, seed_sales_personas
+from dw_sales.testing.seed_personas import Persona, seed_dw1_accounts, seed_sales_personas
 
 pytestmark = pytest.mark.integration
 
@@ -114,15 +114,20 @@ async def test_each_persona_holds_the_spec_scopes_and_nothing_else_changes(
     access = personas[subject, tenant]
     assert _sales(access.scopes) == SPEC[subject, tenant]
     # What the platform seed gave (Diệu's approver_boost included) is all
-    # still there. The one platform scope the Sales roles add is
+    # still there. The platform scopes the Sales roles add are
     # `approvals.decide` (ac31ff0f2087: the platform asks every decider for it
-    # besides the request's stamp), and only to someone who decides a Sales
-    # request.
+    # besides the request's stamp), only to someone who decides a Sales
+    # request, and `support.grant` (7c8ba908575f), only to the head, who
+    # grants FPT support Sales' set (ticket 22).
     before = platform_only[subject, tenant].scopes - _sales(platform_only[subject, tenant].scopes)
     after = access.scopes - _sales(access.scopes)
     decides_sales = bool(_sales(access.scopes) & {"sales.order.cross_check", "sales.quote.approve"})
+    grants_support = (subject, tenant) == ("dev|giang.do", ALPHA)
     assert before <= after
-    assert after - before <= ({"approvals.decide"} if decides_sales else set())
+    assert after - before <= ({"approvals.decide"} if decides_sales else set()) | (
+        {"support.grant"} if grants_support else set()
+    )
+    assert ("support.grant" in after) is grants_support
 
 
 async def test_the_quote_pic_cannot_approve_whatever_approver_boost_gives_her(
@@ -189,6 +194,50 @@ async def test_no_walk_through_step_needs_platform_admin(
     assert not [
         s for (s, _), a in personas.items() if "platform_admin" in a.roles and _sales(a.scopes)
     ]
+
+
+_HOLDING = sa.text(
+    "SELECT u.subject, m.role_keys || m.permission_set_keys AS keys"
+    " FROM platform.support_staff s"
+    " JOIN platform.users u ON u.id = s.user_id"
+    " JOIN platform.memberships m ON m.user_id = s.user_id"
+)
+
+
+async def _fpt_holding(conn: AsyncConnection) -> dict[str, list[str]]:
+    """Each support staff member holding a `sales_*` key or `platform_admin`
+    in any tenant, with those keys."""
+    held: dict[str, list[str]] = {}
+    for row in await conn.execute(_HOLDING):
+        keys = sorted(k for k in row.keys if k.startswith("sales_") or k == "platform_admin")
+        if keys:
+            held.setdefault(row.subject, []).extend(keys)
+    return held
+
+
+async def test_no_fpt_identity_holds_a_sales_role_or_platform_admin(
+    personas: SignedIn, sales_db: DatabaseUrls, migrator: AsyncEngine
+) -> None:
+    """dw_sales ADR 0003 §5 (ticket 22): FPT support works in a customer's
+    tenant under a grant only, never as a member. An FPT identity is a person
+    the operators list as support staff (`platform.support_staff`, ADR 0024).
+    After the whole demo seed none of them holds a `sales_*` role or
+    permission set, or `platform_admin`, in any tenant. The membership
+    trigger refuses a membership to someone already listed, but not listing
+    someone who already holds one: this is the check on that order."""
+    await seed_dw1_accounts(sales_db.migrator)
+
+    # The search can fail: the head listed as support staff is found.
+    async with migrator.connect() as conn, conn.begin() as listing:
+        await conn.execute(
+            sa.text("INSERT INTO platform.support_staff (user_id) VALUES (:u)"),
+            {"u": sid("user", "dev|giang.do")},
+        )
+        assert await _fpt_holding(conn) == {"dev|giang.do": ["sales_head"]}
+        await listing.rollback()
+
+    async with migrator.connect() as conn:
+        assert await _fpt_holding(conn) == {}
 
 
 async def test_reseeding_writes_nothing(personas: SignedIn, sales_db: DatabaseUrls) -> None:

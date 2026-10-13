@@ -1,6 +1,6 @@
 # 21 — A PO line with several delivery schedules keeps all of them (G36)
 
-Status: ready-for-agent
+Status: in progress (2026-10-13): partly built by an agent and committed unreviewed so Đạt could push; the implementation and its adversarial review are still to finish
 Blocked by: —
 Category: enhancement
 

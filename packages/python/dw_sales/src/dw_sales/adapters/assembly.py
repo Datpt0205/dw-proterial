@@ -47,6 +47,7 @@ from dw_sales.application.ports import (
 )
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.telemetry import SpanPort
 from dw_sales.workflows.graph import register
 
 
@@ -90,13 +91,15 @@ def build_dw1(
     artifact_bytes: ArtifactBytesPort,
     release_manifest_ref: str | None,
     runtime: Dw1Runtime,
+    telemetry: SpanPort,
     lane_access: ServiceAccessPort | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
     approval made strict and checked by the context before it is recorded
-    (`dw_sales.workflows.graph.register`); and, given ``lane_access``, the
-    mailbox lane over the same services."""
+    (`dw_sales.workflows.graph.register`); its spans through ``telemetry``,
+    the process's own, cut to Sales' allowlist (`dw_sales.application.telemetry`);
+    and, given ``lane_access``, the mailbox lane over the same services."""
     catalog = MockSalesCatalog.load(scope)
     inbox = MockInbox.load(scope)
     policies = load_sales_policies(configs / "policies", configs / "copy")
@@ -149,6 +152,7 @@ def build_dw1(
         release_manifest_ref=release_manifest_ref,
         runs=runs,
         pending=runs,
+        telemetry=telemetry,
     )
     register(
         graphs=runtime.graphs,

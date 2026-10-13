@@ -20,8 +20,8 @@ def _step(overview: dict[str, Any], step_id: str) -> int:
 async def test_the_overview_counts_the_mailbox_and_the_steps(api: Api) -> None:
     an, ha = api.as_(AN), api.as_(HA)
     before = (await ha.get("/overview")).json()
-    assert before["messages"]["total"] == 32
-    assert before["messages"]["without_disposition"] == 32
+    assert before["messages"]["total"] == 35
+    assert before["messages"]["without_disposition"] == 35
     assert before["messages"]["oldest_waiting_seconds"] > 0
     assert before["kpi_policy"] == "sales_kpi@1.0.0"
     assert before["quotation_time"]["target_seconds"] == 86400.0

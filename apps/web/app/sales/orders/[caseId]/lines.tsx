@@ -67,6 +67,28 @@ function Entered({
   );
 }
 
+/**
+ * A line the PO splits over several delivery dates (ticket 21): each date
+ * with its quantity, and DW1's suggestion where the lead time moves it.
+ */
+function Schedules({ line }: { line: Line }) {
+  return (
+    <Space orientation="vertical" size={0}>
+      <Typography.Text>{line.schedules.length} đợt giao</Typography.Text>
+      {line.schedules.map((s, index) => (
+        <Typography.Text key={`${index}:${s.requested_date}`}>
+          {formatDate(s.requested_date)} ·{" "}
+          <Quantity value={s.quantity} uom={line.uom} />
+          {s.suggested_delivery_date &&
+          s.suggested_delivery_date !== s.requested_date
+            ? ` → gợi ý ${formatDate(s.suggested_delivery_date)}`
+            : null}
+        </Typography.Text>
+      ))}
+    </Space>
+  );
+}
+
 /** Past this many lines the table renders only the rows in view (G23). */
 const VIRTUAL_FROM = 200;
 
@@ -236,13 +258,16 @@ export function LinesTable({
           {
             title: "Ngày yêu cầu",
             key: "requested_date",
-            render: (_, line) => (
-              <Entered
-                line={line}
-                field="requested_date"
-                show={(v) => formatDate(typeof v === "string" ? v : null)}
-              />
-            ),
+            render: (_, line) =>
+              line.printed_schedules ? (
+                <Schedules line={line} />
+              ) : (
+                <Entered
+                  line={line}
+                  field="requested_date"
+                  show={(v) => formatDate(typeof v === "string" ? v : null)}
+                />
+              ),
           },
           {
             title: "Ngày giao",
@@ -387,6 +412,23 @@ function LineDetail({
             <StatusTag tone="unk" key={`${flag.field}:${flag.flag}`}>
               {label(FIELD, flag.field)}: {label(REGION_FLAG, flag.flag)}
             </StatusTag>
+          ))}
+        </Space>
+      ) : null}
+      {line.printed_schedules ? (
+        <Space wrap size={[8, 4]}>
+          <Typography.Text strong>Lịch giao trên PO:</Typography.Text>
+          {line.schedules.map((s, index) => (
+            <Button
+              key={`${index}:${s.requested_date}`}
+              size="small"
+              type="text"
+              onClick={() => onOpenSource(`schedule:${index}`, line.line_no)}
+              aria-label={`Xem nguồn đợt giao ${index + 1} của dòng ${line.line_no}`}
+            >
+              Đợt {index + 1}: {formatDate(s.requested_date)} ·{" "}
+              <Quantity value={s.quantity} uom={line.uom} />
+            </Button>
           ))}
         </Space>
       ) : null}

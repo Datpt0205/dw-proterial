@@ -101,6 +101,29 @@ for tool in Bash PowerShell; do
   done
 done
 
+# The public-repo guard (sales ticket 26): invariants pass, the deny-list scan of
+# the index fails, and the commit is blocked. A `uv` that fails only for that
+# script stands in for a staged file holding customer data.
+mkdir -p "$work/bin-guard"
+printf '#!/usr/bin/env bash\ncase "$*" in *check_public_repo.py*) echo "x.txt:1: deny-list line 1"; exit 1;; esac\nexit 0\n' \
+  > "$work/bin-guard/uv"
+chmod +x "$work/bin-guard/uv"
+printf '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}' \
+  | CLAUDE_PROJECT_DIR="$work/gate" PATH="$work/bin-guard:$PATH" bash "$hooks/pre-commit-gate.sh" \
+    >/dev/null 2>"$work/guard.err"
+check "a staged file on the deny-list blocks the commit" 2 $?
+check "...and says where" yes "$(grep -qF 'x.txt:1: deny-list line 1' "$work/guard.err" && echo yes || echo no)"
+
+# No deny-list on this machine: the guard passes with a banner on stderr, which a
+# passing hook shows nobody. The gate repeats it as a system message to the person.
+printf '#!/usr/bin/env bash\ncase "$*" in *check_public_repo.py*) echo "*** PUBLIC-REPO GUARD SKIPPED: x ***" >&2;; esac\nexit 0\n' \
+  > "$work/bin-guard/uv"
+skip_out=$(printf '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}' \
+  | CLAUDE_PROJECT_DIR="$work/gate" PATH="$work/bin-guard:$PATH" bash "$hooks/pre-commit-gate.sh" 2>/dev/null)
+check "a skipped guard lets the commit through" 0 $?
+check "...and tells the person it was skipped" yes \
+  "$(printf '%s' "$skip_out" | grep -qF '"systemMessage": "Public-repo guard SKIPPED' && echo yes || echo no)"
+
 # A payload the hook cannot parse (here: the string never closes) is gated on its
 # raw text, never let through because no command could be read from it.
 unreadable=$(printf '{"tool_name":"Bash","tool_input":{"command":"git commit -m x' \

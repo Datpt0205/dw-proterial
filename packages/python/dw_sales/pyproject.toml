@@ -7,6 +7,9 @@ dependencies = [
     "dw-kernel",
     "dw-platform",
     "dw-agent-runtime",
+    # The platform's telemetry port, which the eval world (`dw_sales.evals.world`)
+    # hands to DW1's spans and to the runtime's alike (ticket 23).
+    "dw-observability",
     # Pinned to match the packages that already own these: `apps/api` for
     # FastAPI and `dw_agent_runtime` for LangGraph. A context that picked its own
     # range would be a second opinion about one fact, and uv would refuse the

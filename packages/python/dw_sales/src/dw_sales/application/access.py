@@ -47,6 +47,19 @@ class SalesScopes(StrEnum):
     CASE_ASSIGN = "sales.case.assign"
 
 
+# What a customer may grant FPT support in Sales (dw_sales ADR 0003 §5, ADR
+# 0024): the overview and the cases, never a price and never a write, for the
+# whole workspace. The composition root registers it in the platform's support
+# catalog; the platform stamps these scopes on the grant, so a support context
+# holds exactly them and `PriceView` hides every amount from it, as from any
+# caller without `sales.price.read`. Only `sales_head` holds `support.grant`
+# (migration 7c8ba908575f), so only the head can issue it.
+SUPPORT_SCOPE_SET_KEY: Final = "sales.case_support"
+SUPPORT_SCOPE_SET_LABEL: Final = "Xem hồ sơ Sales (không xem giá)"
+SUPPORT_SCOPES: Final = frozenset({SalesScopes.OVERVIEW_READ.value, SalesScopes.CASE_READ.value})
+SUPPORT_RESOURCE_TYPES: Final = frozenset({"workspace"})
+
+
 class SalesAuthorizationPort(Protocol):
     """The platform's scope check, as this context uses it.
 

@@ -127,6 +127,7 @@ def test_build_sales_in_a_deployed_profile_without_the_demo_tenant_mounts_nothin
         artifact_bytes=unused,
         release_manifest_ref=None,
         runtime=unused,
+        telemetry=unused,
     )
     assert mount == SalesMount(services=None)
 

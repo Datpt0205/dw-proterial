@@ -64,7 +64,7 @@ async def _recorded_actions(uow: Any, workspace_id: uuid.UUID) -> list[str]:
         PageRequest(limit=50, after=None, query=PageQuery(key="test.audit")),
         workspace_id=workspace_id,
     )
-    return [event.action for event in page.items]
+    return [entry.event.action for entry in page.items]
 
 
 def build_exploding_graph() -> StateGraph:  # type: ignore[type-arg]

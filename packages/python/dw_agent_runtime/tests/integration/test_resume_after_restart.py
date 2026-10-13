@@ -138,7 +138,7 @@ async def test_pause_restart_resume_approved(urls: RuntimeUrls, worker_config: P
     # Audit trail covers the full lifecycle.
     async with stack2.uow_factory(access_context_from_run(context)) as uow:
         actions = [
-            e.action
+            e.event.action
             for e in (
                 await uow.audit.list_page(
                     PageRequest(limit=50, after=None, query=PageQuery(key="test.audit")),
