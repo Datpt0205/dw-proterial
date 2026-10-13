@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from dw_platform.application.authorization import ApprovalAudience
     from dw_platform.application.directory import IdentityRef, WorkspaceMember
     from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
-    from dw_platform.domain.audit import AuditEvent
+    from dw_platform.domain.audit import AuditEntry, AuditEvent
     from dw_platform.domain.feedback import Feedback, FeedbackAttachment
     from dw_platform.domain.outbox import OutboxBacklog, OutboxEvent
 
@@ -190,9 +190,16 @@ class AuditRepositoryPort(Protocol):
 
     async def append(self, event: AuditEvent) -> None: ...
 
-    async def list_page(self, request: PageRequest, *, workspace_id: UUID) -> Page[AuditEvent]:
+    async def list_page(
+        self,
+        request: PageRequest,
+        *,
+        workspace_id: UUID,
+        support_grant_id: UUID | None = None,
+    ) -> Page[AuditEntry]:
         """Newest first, resumable. The audit trail is the table that grows
-        without bound, so it is the one a bare ``limit`` truncates soonest."""
+        without bound, so it is the one a bare ``limit`` truncates soonest.
+        ``support_grant_id`` narrows it to the events that name that grant."""
         ...
 
     async def list_for_run(

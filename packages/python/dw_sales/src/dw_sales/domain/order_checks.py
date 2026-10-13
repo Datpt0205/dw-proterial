@@ -147,7 +147,7 @@ class OrderRules(BaseModel):
 
     @property
     def version(self) -> str:
-        """What a finding is stamped with: ``sales_order_rules@1.0.0``."""
+        """What a finding is stamped with: ``sales_order_rules@1.1.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
     def finding(
@@ -207,6 +207,9 @@ def map_line(po_line: PoLine, *, entry: ConvertEntry | None, items: Sequence[Ite
     the line is unmapped, not matched by description instead: the convert list
     has said which item this is, and a different item that happens to fit the
     words would be a guess against it.
+
+    A description typed in a TCVN3 or VNI font is not matched at all: its
+    letters are not what the customer sees (`legacy_encoding`, ticket 20).
     """
     if entry is not None:
         item = next((i for i in items if i.prv_code == entry.prv_code), None)
@@ -215,7 +218,8 @@ def map_line(po_line: PoLine, *, entry: ConvertEntry | None, items: Sequence[Ite
         return MappedLine(
             LineMapping(status=MappingStatus.EXACT, prv_code=item.prv_code), item, entry.prv_code
         )
-    stated = read_description(po_line.description)
+    typed_legacy = "description" in po_line.legacy_fields
+    stated = None if typed_legacy else read_description(po_line.description)
     fitting = candidates(stated, items) if stated is not None else ()
     if not fitting:
         return MappedLine(LineMapping(status=MappingStatus.UNMAPPED), None)
@@ -369,14 +373,16 @@ def check_line(
     earliest = rules.lead_time_start(po_date=po_date, received_at=received_at) + timedelta(
         days=lead_time
     )
-    if po_line.requested_date < earliest:
+    # Per schedule (ticket 21): one finding on the line, naming each date
+    # requested sooner than the lead time allows.
+    if short := [s.requested_date for s in po_line.schedules if s.requested_date < earliest]:
         found.append(
             _on(
                 rules,
                 FindingCode.REQUESTED_DATE_SHORT_LT,
                 number,
                 earliest.isoformat(),
-                po_line.requested_date.isoformat(),
+                ", ".join(day.isoformat() for day in short),
             )
         )
     basis = LineBasis(
@@ -485,7 +491,7 @@ def _quotation_basis(quotation: Quotation | None) -> QuotationBasis | None:
 # The codes each PO-level check raises: what running it again replaces on a
 # case (`OrderCase.correct_value`), which refuses a finding outside them.
 DOCUMENT_CHECK_CODES: Final = frozenset(
-    {FindingCode.LINE_TOTAL_MISMATCH, FindingCode.VALUE_UNCERTAIN}
+    {FindingCode.LINE_TOTAL_MISMATCH, FindingCode.VALUE_UNCERTAIN, FindingCode.LEGACY_ENCODING}
 )
 CUSTOMER_CHECK_CODES: Final = frozenset(
     {
@@ -501,10 +507,13 @@ def check_document(document: PoDocument, rules: OrderRules) -> tuple[Finding, ..
     """Whether every line printed was read, and read from a place a person sees.
 
     `line_total_mismatch`: the line numbers are not 1..N in reading order, a
-    numbered row was not read, or the line amounts do not add up to the
-    printed total. `value_uncertain` (PO level): a header value or the total
-    read from a flagged region, or a sheet nothing reads. A line's own flags
-    are its line's finding (`check_line`).
+    numbered row was not read, the line amounts do not add up to the printed
+    total, or a line's schedules do not add up to its quantity (ticket 21).
+    `value_uncertain` (PO level): a header value or the total read from a
+    flagged region, or a sheet nothing reads. A line's own flags are its
+    line's finding (`check_line`). `legacy_encoding`: a value was read from
+    text typed in a TCVN3 or VNI font; the document says where the first one
+    is (`PoDocument.first_legacy_text`).
     """
     found: list[Finding] = []
     numbers = [line.line_no for line in document.lines]
@@ -518,6 +527,10 @@ def check_document(document: PoDocument, rules: OrderRules) -> tuple[Finding, ..
         if added != document.total.amount:
             expected.append(f"total {document.total.amount}")
             actual.append(f"sum of lines {added}")
+    for line in document.lines:
+        if line.scheduled_quantity != line.quantity:
+            expected.append(f"line {line.line_no} quantity {line.quantity}")
+            actual.append(f"line {line.line_no} schedules {line.scheduled_quantity}")
     if expected:
         found.append(
             rules.finding(
@@ -533,6 +546,13 @@ def check_document(document: PoDocument, rules: OrderRules) -> tuple[Finding, ..
         flags.add("unchecked_region")
     if flags:
         found.append(rules.finding(FindingCode.VALUE_UNCERTAIN, actual=",".join(sorted(flags))))
+    if (legacy := document.first_legacy_text()) is not None:
+        _, encoding = legacy
+        found.append(
+            rules.finding(
+                FindingCode.LEGACY_ENCODING, expected="Unicode", actual=encoding.value.upper()
+            )
+        )
     return tuple(found)
 
 
@@ -728,7 +748,8 @@ def check_history(
 def _same_entry(
     order: BravoOrder, document: PoDocument, prv_codes: Mapping[int, str | None]
 ) -> bool:
-    """The Bravo order holds this PO's lines: number, PRV code, quantity, price, date."""
+    """The Bravo order holds this PO's lines: number, PRV code, quantity, price,
+    date; a line split over several dates as one entry per schedule."""
     entered = {
         (line.line_no, line.prv_code, line.quantity, line.unit_price, line.delivery_date)
         for line in order.lines
@@ -737,10 +758,11 @@ def _same_entry(
         (
             line.line_no,
             prv_codes.get(line.line_no),
-            line.quantity,
+            schedule.quantity,
             line.unit_price,
-            line.requested_date,
+            schedule.requested_date,
         )
         for line in document.lines
+        for schedule in line.schedules
     }
     return order.currency == document.header.currency and entered == printed

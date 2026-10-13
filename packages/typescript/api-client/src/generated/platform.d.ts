@@ -1362,6 +1362,18 @@ export interface components {
             tenant_id: string;
         };
         /**
+         * AuditActorKind
+         * @description Who the actor of an event was, as the customer's trail shows it.
+         *
+         *     `support` is a member of the support team acting under a grant: the event
+         *     names the grant (`details.support_grant_id`) AND its actor is the person
+         *     that grant was assigned to. The grant id alone is not enough, because the
+         *     customer's own request, approval and revocation of a grant carry it too and
+         *     were done by the customer's people.
+         * @enum {string}
+         */
+        AuditActorKind: "user" | "support";
+        /**
          * AuditEventView
          * @description One audit row as the screen shows it.
          *
@@ -1369,12 +1381,20 @@ export interface components {
          *     the column exists on the row and is not inside ``details``, so dropping it
          *     from this view made "who did this" unanswerable from the UI for every action,
          *     not only sharing (spec 03.1 BR10 names it explicitly).
+         *
+         *     ``actor_display_name`` is the actor's name today (``None`` for an actor
+         *     that is no user, such as a background lane), and ``actor_kind`` says
+         *     whether the actor was the support team acting under a grant: support
+         *     staff are no member of the customer's, so a name alone would not say it.
          */
         AuditEventView: {
             /** Action */
             action: string;
+            /** Actor Display Name */
+            actor_display_name: string | null;
             /** Actor Id */
             actor_id: string;
+            actor_kind: components["schemas"]["AuditActorKind"];
             /** Details */
             details: {
                 [key: string]: unknown;
@@ -3377,6 +3397,8 @@ export interface operations {
                 limit?: number;
                 /** @description Opaque cursor from a previous page. */
                 cursor?: string | null;
+                /** @description Only the events of this support grant. */
+                support_grant_id?: string | null;
             };
             header?: never;
             path?: never;

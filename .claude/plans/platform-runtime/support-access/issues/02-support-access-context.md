@@ -1,6 +1,6 @@
 # 02 — Ngữ cảnh hỗ trợ: MFA, route mặc định từ chối, audit
 
-Status: ready-for-agent (lõi xong 8/10/2026; còn bước 10, xem Comments)
+Status: resolved (bước 10 xong 12/10/2026; ngoài code còn áp realm cho môi trường đã chạy và bản token che chữ ký, xem Comments)
 Blocked by: 01
 Area: platform-runtime
 
@@ -151,3 +151,53 @@ FROM PUBLIC`, `dw_app` EXECUTE. `GET /support/my-grants` (chỉ nhân viên hỗ
   "nhân viên gọi `/audit/events` → 403" — ca 403 đã có trong SA7); áp realm cho
   môi trường đã chạy; kiểm xung đột lợi ích khi giao người (spec, câu hỏi 2).
   Web (ticket 03) chưa làm.
+- 12/10/2026 (sales ticket 22, Sales mở năm route đọc cho hỗ trợ). **Test bảng
+  route trước đó không thấy gì:** FastAPI 0.141 giữ một router được include
+  thành một mục `_IncludedRouter` trong `app.routes`, nên vòng duyệt cũ không
+  thấy route nào của router được include và test so hai tập rỗng. Nay duyệt
+  bằng `iter_route_contexts` của FastAPI (`api_routes`, thấy cả dependency
+  thêm ở `include_router`) và khẳng định đã đọc app đã mount (≥ 80 path). **Đo:** `request.scope["route"].path` là path của chính route,
+  có prefix của router đó (`/api/v1/sales/...`) nhưng không có prefix truyền
+  vào `include_router(prefix=...)`. Các router nền tảng được include với
+  `prefix="/api/v1"`, nên một route nền tảng mở cho hỗ trợ sau này phải ghi
+  vào `SUPPORT_ALLOWED_ROUTES` dạng `/support/...`, và audit `support.access`
+  của nó cũng ghi mẫu route không có `/api/v1`.
+- 12/10/2026, bước 10 (route audit). **Decided by the agent (Đạt away),
+  2026-10-12:** `actor_kind` là `support` khi sự kiện mang
+  `details.support_grant_id` **và** `actor_id` là `staff_user_id` của chính
+  quyền đó, không phải chỉ khi có `support_grant_id` như bước 10 ghi: theo
+  spec mọi sự kiện vòng đời (`support.grant.requested`, `.approved`,
+  `.rejected`, `.revoked` do người của khách làm, `.assigned` do đội vận hành)
+  cũng mang mã quyền, nên luật chữ nghĩa sẽ ghi người của khách là "hỗ trợ"
+  trong nhật ký của chính khách. Nhân viên được giao là sự thật đóng dấu trên
+  quyền (`staff_user_id`, không đổi sau khi giao), nên quá khứ không đổi khi
+  danh sách nhân viên đổi. Ngoại lệ đã biết: người vận hành tự giao cho chính
+  mình thì sự kiện `.assigned` của họ đọc là `support`. Lọc `support_grant_id`
+  trả mọi sự kiện của quyền (vòng đời và mọi `support.access`), nên "lọc thấy
+  đúng ba dòng" của SA10 là ba dòng `support.access` cộng hai sự kiện vòng đời
+  của quyền trong test (`requested`, `assigned`).
+- **Đã làm:** `GET /audit/events?support_grant_id=<uuid>` (sai dạng → 422; có
+  lọc thì lọc nằm trong dấu vân tay của cursor, không lọc thì dấu vân tay như
+  cũ nên cursor cũ vẫn dùng được). `AuditEventView` thêm `actor_display_name`
+  (LEFT JOIN `platform.users`, không khớp → `null`, ví dụ actor của lane) và
+  `actor_kind` (`AuditActorKind`). `AuditRepositoryPort.list_page` nhận
+  `support_grant_id` và trả `Page[AuditEntry]` (sự kiện, tên, loại actor; một
+  câu SQL, `EXISTS` trên `support_grants` dưới RLS tenant, so mã dạng text để
+  một `details` hỏng không làm hỏng cả trang). Khóa `details` là hằng
+  `SUPPORT_GRANT_DETAIL` (`domain/audit.py`), bên ghi
+  (`support_grant_audit`, `support_access_audit`) và bên lọc cùng đọc. Migration
+  `f1980035d8de`: index một phần `ix_audit_events_support_grant` (tenant,
+  workspace, mã quyền, `occurred_at DESC`, `id DESC`) trên bảng cha phân vùng.
+  **Đo** (`EXPLAIN`, 20k dòng): trang có lọc dùng index này trên mọi phân vùng
+  kể cả DEFAULT; `downgrade -1` rồi `upgrade head` chạy sạch. Kiểm scope và
+  lọc workspace của route không đổi (ticket 02 của
+  `approval-audit-and-workspace`). Web trang `/audit` chưa dùng hai trường mới
+  (zod `auditEventSchema` bỏ qua trường lạ): việc của web.
+- **Test, mutation:** integration
+  `test_sa10_the_customer_reads_a_grants_trail_and_who_acted_under_it`
+  (quyền thật, ba `support.access`; nhân viên ghi mã quyền khác → `user`; mã
+  hỏng không làm hỏng trang; lane → tên `null`; ws2 và tenant B đọc 0 dòng,
+  test đỏ khi tenant B được đọc như tenant A). Gỡ điều kiện
+  `staff_user_id`, gỡ so mã quyền, gỡ lọc, gỡ lọc workspace → mỗi lần đỏ. Unit
+  `test_run_and_audit_reads.py`: tên và loại actor, lọc, mã sai dạng 422, cursor
+  gắn với lọc (bốn ca); route bỏ lọc → đỏ, cursor bỏ lọc → đỏ hai ca.

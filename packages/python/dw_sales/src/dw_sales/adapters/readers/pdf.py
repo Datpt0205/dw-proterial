@@ -12,6 +12,18 @@ the quote. pypdf gives a run's start and font size but no glyph widths, so a
 box's width is estimated from the run's length; it marks where to look on the
 original, it is not a measurement anyone decides on.
 
+**A value drawn in a TCVN3 or VNI font is read and marked** by the font pypdf
+reports for its run (`legacy_fonts`), or, when no run matched it, by any such
+font on its page: its letters are not what the customer sees, so the checks
+raise `legacy_encoding` and nothing is matched on it (ticket 20).
+
+**A line split over several delivery dates** (ticket 21) is read from a
+"date: quantity" list in its date cell (``16/11/2026: 3.050; 30/11/2026:
+3.050``), each schedule anchored where the cell is printed. A PDF printing
+schedules as rows under the line is a layout no customer has sent yet: such a
+row is no table row, so it ends the table, and the printed total does not add
+up to what was read.
+
 Scans are not read: a PDF with no text layer comes back `Unreadable`, and the
 message is routed to Sales. A numbered row-shaped line outside the table (a
 wrapped description, a page without the table header) is counted as printed
@@ -33,10 +45,14 @@ from typing import get_args
 from pydantic import ValidationError
 from pypdf import PdfReader
 
+from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules
 from dw_sales.domain.anchors import PageBox, SourceAnchor
+from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import (
+    DeliverySchedule,
+    LegacyText,
     PoDocument,
     PoHeader,
     PoHeaderAnchors,
@@ -48,8 +64,10 @@ from dw_sales.domain.orders import (
     Unreadable,
 )
 
-PARSER_VERSION = "pdf_po_reader@1.1.0"
+PARSER_VERSION = "pdf_po_reader@1.3.0"
 _CELL_GAP = re.compile(r"\s{2,}")
+# The tag a PDF puts before an embedded subset's font name: ``ABCDEF+``.
+_SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 # Average glyph advance as a share of the font size: the width estimate.
 _ADVANCE = 0.55
 
@@ -87,12 +105,14 @@ class PdfLayout:
 
 @dataclass(frozen=True)
 class _Run:
-    """One text run as pypdf drew it: its words, baseline origin and font size."""
+    """One text run as pypdf drew it: its words, baseline origin and font
+    size, and the legacy encoding its font types Vietnamese in, if any."""
 
     text: str
     x: float
     y: float
     size: float
+    legacy: LegacyEncoding | None = None
 
 
 @dataclass
@@ -104,6 +124,17 @@ class _Page:
     # Runs grouped by baseline, top of the page first, each row left to right.
     rows: list[list[_Run]] = field(default_factory=list)
     used: set[int] = field(default_factory=set)
+
+    @property
+    def legacy(self) -> LegacyEncoding | None:
+        """A legacy encoding some run on the page is drawn in."""
+        return next((run.legacy for row in self.rows for run in row if run.legacy), None)
+
+    def legacy_text(self, name: str, run: _Run | None) -> tuple[LegacyText, ...]:
+        """``name``'s value, when the run that drew it is in a TCVN3 or VNI
+        font, or no run matched it on a page that has one."""
+        encoding = run.legacy if run is not None else self.legacy
+        return () if encoding is None else (LegacyText(field=name, encoding=encoding),)
 
     def box(self, run: _Run) -> PageBox:
         """Where ``run`` sits on the page, in 0-1 of the page from its top-left."""
@@ -171,7 +202,7 @@ def _pages(data: bytes, caps: IntakeCaps) -> list[_Page]:
                 text: str,
                 cm: Sequence[float],
                 tm: Sequence[float],
-                _font: object,
+                font: object,
                 size: float,
                 runs: list[_Run] = runs,
                 left: float = left,
@@ -180,7 +211,8 @@ def _pages(data: bytes, caps: IntakeCaps) -> list[_Page]:
                 if text.strip():
                     x = cm[0] * tm[4] + cm[2] * tm[5] + cm[4] - left
                     y = cm[1] * tm[4] + cm[3] * tm[5] + cm[5] - bottom
-                    runs.append(_Run(text.strip(), x, y, float(size) or 1.0))
+                    encoding = legacy_encoding(_base_font(font))
+                    runs.append(_Run(text.strip(), x, y, float(size) or 1.0, encoding))
 
             page.extract_text(visitor_text=visit)
             layout_text = page.extract_text(extraction_mode="layout")
@@ -194,6 +226,14 @@ def _pages(data: bytes, caps: IntakeCaps) -> list[_Page]:
     if not any(line.strip() for page in pages for line in page.lines):
         raise _RefusedError("the PDF has no text layer: a scan or an image")
     return pages
+
+
+def _base_font(font: object) -> str | None:
+    """A PDF font's family name: its ``/BaseFont`` without the subset tag."""
+    if not isinstance(font, dict):
+        return None
+    name = str(font.get("/BaseFont", "")).lstrip("/")
+    return _SUBSET_TAG.sub("", name) or None
 
 
 def _rows(runs: list[_Run]) -> list[list[_Run]]:
@@ -271,35 +311,41 @@ class _Pdf:
         except ValidationError as exc:
             raise _RefusedError(f"the lines do not form one PO: {_first_error(exc)}") from exc
 
-    def _labelled(self, label: str) -> list[tuple[SourceAnchor, str]]:
-        """Every ``label: value`` line, with the anchor of what printed it."""
-        found: list[tuple[SourceAnchor, str]] = []
+    def _labelled(self, label: str) -> list[tuple[SourceAnchor, str, _Run | None, _Page]]:
+        """Every ``label: value`` line, with the anchor of what printed it, the
+        run that did when one matched, and its page."""
+        found: list[tuple[SourceAnchor, str, _Run | None, _Page]] = []
         for page in self._pages:
             for text in page.lines:
                 value = _labelled(text, label)
                 if value is None:
                     continue
                 row = page.find_row([text.strip()])
-                found.append((self._anchor(page, row[0] if row else None, value), value))
+                run = row[0] if row else None
+                found.append((self._anchor(page, run, value), value, run, page))
         return found
 
     def _header(self) -> PoHeader:
         values: dict[str, object] = {}
         anchors: dict[str, SourceAnchor] = {}
+        legacy: list[LegacyText] = []
         for name, label in self._layout.header_labels.items():
             found = self._labelled(label)
             if not found:
                 raise _RefusedError(f"no line holds the {name.replace('_', ' ')}")
-            anchor, value = found[0]
-            if len({v for _, v in found}) > 1:
+            anchor, value, run, page = found[0]
+            if len({v for _, v, _, _ in found}) > 1:
                 raise _RefusedError(f"the {name.replace('_', ' ')} has two values", found[1][0])
             try:
                 values[name] = self._header_values[name](value)
             except ValueError as exc:
                 raise _RefusedError(f"{name.replace('_', ' ')} {exc}", anchor) from exc
             anchors[name] = anchor
+            legacy.extend(page.legacy_text(name, run))
         try:
-            return PoHeader.model_validate({**values, "anchors": PoHeaderAnchors(**anchors)})
+            return PoHeader.model_validate(
+                {**values, "anchors": PoHeaderAnchors(**anchors), "legacy": tuple(legacy)}
+            )
         except ValidationError as exc:
             failed = str(exc.errors()[0]["loc"][0])
             raise _RefusedError(f"header: {_first_error(exc)}", anchors.get(failed)) from exc
@@ -310,11 +356,15 @@ class _Pdf:
         found = self._labelled(self._layout.total_label)
         if not found:
             return None
-        anchor, value = found[-1]
+        anchor, value, run, page = found[-1]
         # The amount, then the currency it is printed in.
         amount = value.split()[0] if value.split() else value
         try:
-            return PrintedTotal(amount=self._decimal(amount), anchor=anchor)
+            return PrintedTotal(
+                amount=self._decimal(amount),
+                anchor=anchor,
+                legacy=page.legacy_text("amount", run),
+            )
         except ValueError as exc:
             raise _RefusedError(f"the total {exc}", anchor) from exc
 
@@ -334,17 +384,33 @@ class _Pdf:
         drawn = page.find_row(cells)
         values: dict[str, object] = {}
         anchors: dict[str, SourceAnchor] = {}
+        legacy: list[LegacyText] = []
+        schedules: tuple[DeliverySchedule, ...] = ()
         for index, ((_, name), cell) in enumerate(zip(self._layout.columns, cells, strict=True)):
-            anchor = self._anchor(page, drawn[index] if drawn else None, cell)
+            run = drawn[index] if drawn else None
+            anchor = self._anchor(page, run, cell)
             if name is None:
                 continue
             try:
-                values[name] = self._line_values[name](cell)
+                if name == "requested_date":
+                    listed = listed_schedules(cell, anchor, self._day, self._decimal)
+                    schedules = in_date_order(listed) if listed is not None else ()
+                values[name] = (
+                    schedules[0].requested_date if schedules else self._line_values[name](cell)
+                )
             except ValueError as exc:
                 raise _RefusedError(f"{name.replace('_', ' ')} {exc}", anchor) from exc
             anchors[name] = anchor
+            legacy.extend(page.legacy_text(name, run))
         try:
-            return PoLine.model_validate({**values, "anchors": PoLineAnchors(**anchors)})
+            return PoLine.model_validate(
+                {
+                    **values,
+                    "anchors": PoLineAnchors(**anchors),
+                    "legacy": tuple(legacy),
+                    "printed_schedules": schedules,
+                }
+            )
         except ValidationError as exc:
             failed = str(exc.errors()[0]["loc"][0])
             raise _RefusedError(f"row: {_first_error(exc)}", anchors.get(failed)) from exc

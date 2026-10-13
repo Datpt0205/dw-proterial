@@ -6,9 +6,10 @@ runner's composition root (`scripts/run_evals.py`) hands `GRADERS` to it.
 
 Two of them score DW1 against what the sample set says is true:
 
-- `sales.extraction_accuracy`: PRV code, quantity, unit price and requested
-  date of every PO line, against the file the attachments were written from
-  (`purchase_orders.json`, the same layout for any sample set).
+- `sales.extraction_accuracy`: PRV code, quantity, unit price, requested
+  date and delivery schedules of every PO line, against the file the
+  attachments were written from (`purchase_orders.json`, the same layout for
+  any sample set).
 - `sales.findings_recall`: the disposition and the findings of every message,
   against the README's "Messages" table.
 
@@ -20,26 +21,33 @@ from a document: an eval report is a file anyone with the repository reads.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import re
 import uuid
-from collections.abc import Awaitable, Callable, Coroutine, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Iterable, Mapping
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from email import message_from_bytes, policy
 from email.utils import getaddresses
 from pathlib import Path
 from typing import Any, cast
 
+from openpyxl import load_workbook
+
 from dw_evals.graders import Grader, GraderContext, GradeResult
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
+from dw_sales.adapters.mock.generate_attachments import (
+    OrderLine as PrintedLine,
+)
 from dw_sales.adapters.mock.generate_attachments import (
     PurchaseOrderDocument,
     load_purchase_orders,
 )
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifact_content import EML
+from dw_sales.application.orders_service import DispositionChoice
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.catalog import LmeBand
@@ -132,7 +140,15 @@ def _file(ctx: GraderContext, value: str) -> Path:
 
 # --------------------------------------------------- extraction accuracy --
 
-_FIELDS = ("prv_code", "quantity", "unit_price", "requested_date")
+_FIELDS = ("prv_code", "quantity", "unit_price", "requested_date", "schedules")
+
+
+def _printed_schedules(line: PrintedLine) -> list[tuple[Decimal, date]]:
+    """When and how much a sample line is to be delivered: its schedules,
+    or its one quantity on its one date."""
+    return [(s.quantity, s.requested_date) for s in line.schedules] or [
+        (line.quantity, line.requested_date)
+    ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +191,11 @@ async def _score_document(
             ("quantity", line.quantity, got.po_line.quantity),
             ("unit_price", line.unit_price, got.po_line.unit_price),
             ("requested_date", line.requested_date, got.po_line.requested_date),
+            (
+                "schedules",
+                _printed_schedules(line),
+                [(s.quantity, s.requested_date) for s in got.po_line.schedules],
+            ),
         ):
             if want != have:
                 misses.append(_Miss(po.message_id, line.no, name))
@@ -835,12 +856,161 @@ async def grade_price_confidentiality(
     return GradeResult.ok(prices_shown_to_price_reader=len(shown), **details)
 
 
+# --------------------------------------------- legacy Vietnamese fonts --
+
+
+@_sync
+async def grade_legacy_encoding_held(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """A PO typed in a TCVN3 or VNI font is never read as text (ticket 20):
+    it raises the blocking finding on that PO and no other, matches no item on
+    a description typed in that font, is refused `prepare` naming the finding
+    even with every source opened, and takes no decision but asking the
+    customer, so nobody types over or accepts text DW1 cannot read."""
+    world = _world(ctx, input_data)
+    seen = await world.process_each(AN)
+    message_id: str = input_data["message"]
+    key: str = expected["finding"]
+    code = key.split(":", 1)[0]
+    problems: list[str] = []
+    raised = sorted(
+        other
+        for other, (_, case) in seen.items()
+        if isinstance(case, OrderCase) and code in {f.code.value for f in case.findings}
+    )
+    if raised != [message_id]:
+        problems.append(f"{code} raised on {raised}, not on {message_id} alone")
+    disposition, case = seen[message_id]
+    if not isinstance(case, OrderCase):
+        return GradeResult.fail("the message opened no order case", disposition=disposition.kind)
+    if key not in {f.key for f in case.blocking_findings}:
+        problems.append(f"{key} is not a blocking finding of {message_id}")
+    for line_no in expected.get("unmatched_lines", []):
+        mapping = case.line(line_no).mapping
+        if mapping.status is not MappingStatus.UNMAPPED or mapping.candidates:
+            problems.append(f"line {line_no} was matched on text typed in a legacy font")
+    await world.open_sources(AN, case.case_id)
+    commands, context = world.services.order_commands, AN.context()
+    try:
+        await commands.prepare(context, case.case_id, case_version=case.case_version)
+    except ConflictError as refused:
+        named = {str(k) for k in cast(list[object], refused.details.get("open_findings", []))}
+        if key not in named:
+            problems.append(f"prepare refused without naming {key}")
+    else:
+        problems.append(f"{message_id} prepared with {key} open")
+    overrides: tuple[tuple[DispositionChoice, dict[str, str]], ...] = (
+        ("accepted", {"reason": "Đọc được trên màn hình"}),
+        ("corrected_by_sales", {"value": "Dây điện", "source": "Đọc trên màn hình"}),
+    )
+    for kind, words in overrides:
+        version = world.order(case.case_id).case_version
+        if (
+            await _rule(
+                commands.dispose(
+                    context, case.case_id, key, case_version=version, disposition=kind, **words
+                )
+            )
+            == "ok"
+        ):
+            problems.append(f"{key} took {kind}")
+    allowed: list[DispositionChoice] = expected.get("allowed", [])
+    for kind in allowed:
+        version = world.order(case.case_id).case_version
+        outcome = await _rule(
+            commands.dispose(context, case.case_id, key, case_version=version, disposition=kind)
+        )
+        if outcome != "ok":
+            problems.append(f"{key} refused {kind}: {outcome}")
+    if problems:
+        return GradeResult.fail("a PO typed in a legacy font was read as text", problems=problems)
+    return GradeResult.ok(message=message_id, finding=key)
+
+
+# ------------------------------------------- delivery schedules (ticket 21) --
+
+
+def _upload_rows(data: bytes, headers: Mapping[str, str]) -> list[tuple[int, Decimal, date]]:
+    """(line, quantity, requested date) of each row of an upload file's first
+    sheet, read by the template's column headers."""
+    sheet = load_workbook(io.BytesIO(data)).worksheets[0]
+    header, *rows = ([cell.value for cell in row] for row in sheet.iter_rows())
+    at = {name: header.index(title) for name, title in headers.items()}
+    read: list[tuple[int, Decimal, date]] = []
+    for row in rows:
+        day = row[at["requested_date"]]
+        when = day.date() if isinstance(day, datetime) else date.fromisoformat(str(day))
+        read.append((int(str(row[at["line_no"]])), Decimal(str(row[at["quantity"]])), when))
+    return read
+
+
+@_sync
+async def grade_schedules_kept(
+    ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """A PO line split over several delivery dates keeps every one of them
+    (ticket 21): the order uploaded to Bravo has one row per schedule, each
+    with its quantity and date, and its cross-check sheet lists each schedule;
+    a schedule requested too soon is named on its line's finding, and only
+    the dates that are too soon."""
+    world = _world(ctx, input_data)
+    seen = await world.process_each(AN)
+    truth = {po.message_id: po for po in load_purchase_orders(_file(ctx, expected["truth"]).parent)}
+    problems: list[str] = []
+    message_id: str = input_data["uploaded"]
+    _, case = seen[message_id]
+    if not isinstance(case, OrderCase):
+        return GradeResult.fail("the message opened no order case", message=message_id)
+    up = await world.walk_to_uploaded(AN, case.case_id)
+    services, context = world.services.artifacts, AN.context()
+    layout = world.policies.artifact_copy.upload
+    headers: dict[str, str] = {c.field: c.header for c in layout.columns}
+    downloads: dict[str, bytes] = {}
+    for kind in ("bravo_upload", "cross_check_sheet"):
+        (view,) = await services.render_order(
+            context, case.case_id, kind=kind, case_version=up.case_version
+        )
+        download = await services.order_artifact(context, case.case_id, view.artifact_id)
+        downloads[kind] = download.data
+    printed = truth[message_id].lines
+    wanted = [(line.no, q, d) for line in printed for q, d in _printed_schedules(line)]
+    got = _upload_rows(downloads["bravo_upload"], headers)
+    if got != wanted:
+        problems.append(
+            f"{message_id}: the upload file has {len(got)} rows, not one per schedule"
+            f" ({len(wanted)})"
+        )
+    sheet = load_workbook(io.BytesIO(downloads["cross_check_sheet"])).worksheets[0]
+    listed = sum(
+        1 for row in sheet.iter_rows() for cell in row[1:2] if str(cell.value).startswith("Đợt")
+    )
+    split = sum(len(line.schedules) for line in printed)
+    if listed != split:
+        problems.append(f"{message_id}: the cross-check sheet lists {listed} of {split} schedules")
+    for other, keys in expected.get("short", {}).items():
+        _, short_case = seen[other]
+        if not isinstance(short_case, OrderCase):
+            problems.append(f"{other} opened no order case")
+            continue
+        findings = {f.key: f for f in short_case.findings}
+        for key, dates in keys.items():
+            finding = findings.get(key)
+            if finding is None or finding.actual != ", ".join(dates):
+                problems.append(f"{other}: {key} does not name exactly the schedules too soon")
+    if problems:
+        return GradeResult.fail("a delivery schedule was lost", problems=problems)
+    return GradeResult.ok(message=message_id, rows=len(got), schedules_listed=listed)
+
+
 GRADERS: dict[str, Grader] = {
     "sales.extraction_accuracy": grade_extraction_accuracy,
     "sales.findings_recall": grade_findings_recall,
     "sales.injection_contained": grade_injection_contained,
     "sales.scope_binding": grade_scope_binding,
     "sales.never_clean": grade_never_clean,
+    "sales.legacy_encoding_held": grade_legacy_encoding_held,
+    "sales.schedules_kept": grade_schedules_kept,
     "sales.separation_of_duties": grade_separation_of_duties,
     "sales.price_confidentiality": grade_price_confidentiality,
 }

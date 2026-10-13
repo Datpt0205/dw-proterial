@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: sales_order_rules
-policy_version: "1.0.0"
+policy_version: "1.1.0"
 
 # How DW1 checks a customer PO before Sales reviews it (WIV-03-012 steps 1, 2,
 # 4 and 6). Code reads this file and computes every number in a finding from
@@ -17,6 +17,9 @@ policy_version: "1.0.0"
 # checked. Later steps read the stamps, so editing this file never changes
 # what an existing case may do; a new version changes the cases checked after
 # it.
+#
+# 1.1.0 (ticket 20): legacy_encoding, a value read from text typed in a TCVN3
+# or VNI font. Nothing else changed from 1.0.0.
 
 # A PO unit price passes when it is within this fraction of the quoted unit
 # price, in the quotation's currency. "0": it must equal the quotation. A
@@ -108,3 +111,7 @@ findings:
   revision_without_base: warning
   customer_temporary: warning
   sender_unverified: warning
+  # Text typed in a TCVN3 or VNI font is not what the customer sees; the
+  # customer sends the PO again in Unicode. Converting it is ADR 0010
+  # decision 3, later.
+  legacy_encoding: error

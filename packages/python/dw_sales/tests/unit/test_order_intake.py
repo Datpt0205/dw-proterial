@@ -62,7 +62,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 CATALOG = MockSalesCatalog.load(SCOPE)
 INBOX = MockInbox.load(SCOPE)
 RULES = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.0.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.1.0.yaml"
 )
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -227,6 +227,35 @@ GOLDEN: dict[str, Expected] = {
     "M30": (MessageKind.DESIGN_REPLY, None, None, ()),
     "M31": (MessageKind.OTHER, "routed_to_sales", "complaint", ()),
     "M32": (MessageKind.DESIGN_REPLY, None, None, ()),
+    "M33": (
+        MessageKind.PO,
+        "case_created",
+        None,
+        (
+            ("legacy_encoding", "error", None, "Unicode", "TCVN3"),
+            ("code_unmapped", "error", 2, None, "VX-C4F05-GY"),
+        ),
+    ),
+    # Ticket 21: schedule rows under lines 1 and 3, each checked for lead time.
+    "M34": (MessageKind.PO, "case_created", None, ()),
+    # A "date: quantity" list per line: line 1's do not add up to its
+    # quantity, and line 2's first date is short of the lead time.
+    "M35": (
+        MessageKind.PO,
+        "case_created",
+        None,
+        (
+            (
+                "missing_noc_esf",
+                "warning",
+                None,
+                _NOC,
+                "no NOC, ESF FY2025, denial-list check 2026-09-01",
+            ),
+            ("line_total_mismatch", "error", None, "line 1 quantity 6100", "line 1 schedules 5490"),
+            ("requested_date_short_lt", "warning", 2, "2026-10-30", "2026-10-06"),
+        ),
+    ),
 }
 
 INJECTION = (
@@ -553,8 +582,8 @@ def test_a_case_stamps_the_rules_parser_file_and_snapshot_it_was_checked_with(
     case = _case(outcomes, "M01")
     data = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
 
-    assert case.rules_version == "sales_order_rules@1.0.0"
-    assert case.document.parser_version == "excel_po_reader@1.1.0"
+    assert case.rules_version == "sales_order_rules@1.1.0"
+    assert case.document.parser_version == "excel_po_reader@1.3.0"
     assert case.document.attachment_sha256 == hashlib.sha256(data).hexdigest()
     assert case.catalog_as_of == asyncio.run(CATALOG.items(SCOPE)).as_of
     assert (case.cross_check_required, case.export_control_mode) == (True, "warn")
@@ -964,7 +993,7 @@ async def test_a_code_is_looked_up_in_the_callers_item_master_only() -> None:
 
 async def test_a_line_is_not_checked_again_under_rules_the_case_was_not_checked_under() -> None:
     _, case = await _in_review("M05")
-    newer = RULES.model_copy(update={"policy_version": "1.1.0"})
+    newer = RULES.model_copy(update={"policy_version": "1.2.0"})
 
     with pytest.raises(ConflictError, match="no longer apply"):
         await _intake(rules=newer).confirm_mapping(SCOPE, case, 2, "CB-2005", AN, T0)

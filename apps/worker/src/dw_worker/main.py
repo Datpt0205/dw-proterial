@@ -299,6 +299,7 @@ def build_sales_inbox_lane(
         runtime=build_workflow_runtime(
             settings, sessions, clock=clock, ids=ids, telemetry=telemetry
         ),
+        telemetry=telemetry,
         lane_access=SqlMembershipLookup(sessions),
     )
     assert mount.lane is not None  # built with lane_access

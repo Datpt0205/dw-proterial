@@ -16,6 +16,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 
@@ -91,3 +92,33 @@ def lane_audit_event(
         # Last, so a caller cannot label the lane as somebody else.
         details={**(details or {}), "actor": system_actor_label(lane)},
     )
+
+
+# The `details` key naming the support grant an event belongs to: on every step
+# of a grant's lifecycle and on every `support.access` under it. Writers and the
+# trail's filter read this one name.
+SUPPORT_GRANT_DETAIL = "support_grant_id"
+
+
+class AuditActorKind(StrEnum):
+    """Who the actor of an event was, as the customer's trail shows it.
+
+    `support` is a member of the support team acting under a grant: the event
+    names the grant (`details.support_grant_id`) AND its actor is the person
+    that grant was assigned to. The grant id alone is not enough, because the
+    customer's own request, approval and revocation of a grant carry it too and
+    were done by the customer's people."""
+
+    USER = "user"
+    SUPPORT = "support"
+
+
+@dataclass(frozen=True, slots=True)
+class AuditEntry:
+    """One event as the audit trail reads it: the stamped event, the actor's
+    current display name (`None` when the actor is no user, such as a
+    background lane), and who the actor was."""
+
+    event: AuditEvent
+    actor_display_name: str | None
+    actor_kind: AuditActorKind

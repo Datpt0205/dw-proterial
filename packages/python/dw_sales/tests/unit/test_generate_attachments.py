@@ -66,7 +66,7 @@ async def test_every_attachment_in_the_inbox_has_a_document_and_no_document_is_o
 
 
 def test_the_pdf_text_layer_carries_vietnamese_one_row_per_line() -> None:
-    (po,) = [p for p in load_purchase_orders() if p.layout == "pdf"]
+    (po,) = [p for p in load_purchase_orders() if p.message_id == "M03"]
     reader = PdfReader(ATTACHMENTS_DIR / attachment_file_name(po.message_id, po.name))
     first, terms = (page.extract_text(extraction_mode="layout") for page in reader.pages)
     # Layout mode puts each printed row on one line, cells two or more spaces apart.

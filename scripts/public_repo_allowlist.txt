@@ -1,0 +1,14 @@
+# Names this public repository carries ON PURPOSE (Đạt, 2026-10-05: keep the
+# repo public and do not alias them). A deny-list entry that matches one of
+# these whole is not searched for, so the deny-list can be built from
+# Proterial's own documents without first removing the names the repo already
+# says out loud. Read by scripts/check_public_repo.py (ticket 26).
+#
+# One Python regular expression per line, matched in FULL against a deny-list
+# entry after it is lower-cased and its diacritics are removed. A name only
+# belongs here when the repo is meant to say it; a person, a price or a
+# customer never does.
+proterial
+proterial vietnam
+prv
+wiv-03-0\d\d

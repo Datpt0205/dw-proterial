@@ -311,7 +311,7 @@ def order_finding(case: OrderCase, finding: Finding, prices: PriceView) -> Order
         rule_version=finding.rule_version,
         disposition=_order_disposition(finding.code, finding.disposition, prices),
         allowed=sorted(kind.value for kind in _offered(case, finding)),
-        fields=sorted(case.flagged_fields(finding)),
+        fields=sorted(case.correctable_fields(finding)),
     )
 
 
@@ -373,6 +373,19 @@ class LineBasisView(BaseModel):
     checks_run: list[str]
 
 
+class DeliveryScheduleView(BaseModel):
+    """One delivery of a line's quantity (ticket 21), as the line is entered
+    (a schedule the PO prints is never typed over): where it is printed, and
+    DW1's suggested date for it."""
+
+    model_config = _VIEW
+
+    quantity: Decimal
+    requested_date: date
+    anchor: SourceAnchor
+    suggested_delivery_date: date | None
+
+
 class OrderLineView(BaseModel):
     model_config = _VIEW
 
@@ -384,6 +397,10 @@ class OrderLineView(BaseModel):
     unit_price: Amount
     amount: Amount
     requested_date: date
+    # Earliest first; a line with one quantity and one date is a list of one,
+    # and `printed_schedules` says whether the PO prints them apart.
+    schedules: list[DeliveryScheduleView]
+    printed_schedules: bool
     anchors: dict[str, SourceAnchor]
     flags: list[FlaggedValue]
     # What Sales typed for flagged values; the values above stay as read.
@@ -467,6 +484,16 @@ def order_line(case: OrderCase, line: OrderLine, prices: PriceView) -> OrderLine
         unit_price=_shown(po.unit_price, prices.amounts),
         amount=_shown(po.amount, prices.amounts),
         requested_date=po.requested_date,
+        schedules=[
+            DeliveryScheduleView(
+                quantity=s.quantity,
+                requested_date=s.requested_date,
+                anchor=s.anchor,
+                suggested_delivery_date=line.suggested_date(s),
+            )
+            for s in line.effective.schedules
+        ],
+        printed_schedules=po.prints_schedules,
         anchors=dict(po.anchors),
         flags=list(po.flags),
         corrections=_corrections(line.corrections, prices),
@@ -570,6 +597,9 @@ class OrderCaseView(BaseModel):
     buyer_anchor: SourceAnchor | None
     total: Amount | None
     total_anchor: SourceAnchor | None
+    # The first value read from text typed in a TCVN3 or VNI font, which
+    # `legacy_encoding` opens the source at; None when there is none.
+    legacy_text_anchor: SourceAnchor | None
     coverage: CoverageView
     lines: list[OrderLineView]
     findings: list[OrderFindingView]
@@ -667,6 +697,7 @@ def order_case(
         buyer_anchor=document.buyer_anchor,
         total=_amount(total.amount, prices.amounts) if total else None,
         total_anchor=total.anchor if total else None,
+        legacy_text_anchor=legacy[0] if (legacy := document.first_legacy_text()) else None,
         coverage=CoverageView(
             lines_printed=coverage.lines_printed,
             lines_read=coverage.lines_read,

@@ -26,6 +26,7 @@ from dw_sales.domain.orders import (
     Capability,
     CloseReason,
     CorrectedBySales,
+    DeliverySchedule,
     Finding,
     FindingCode,
     ItemBasis,
@@ -43,13 +44,15 @@ from dw_sales.domain.orders import (
     PoLine,
     PoLineAnchors,
     Severity,
+    diff_lines,
+    rebase_changes,
     transition,
 )
 from dw_sales.domain.process import WIV_STEPS, Coverage, Procedure, step
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.0.0"
+RULES = "sales_order_rules@1.1.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 # Principal ids, as `AccessContext.principal_id` carries them (fictional).
@@ -775,3 +778,81 @@ def test_every_surveyed_step_is_mapped_once_and_names_real_order_states() -> Non
     assert step("O9").states == ("cross_checked",)
     with pytest.raises(KeyError):
         step("O12")
+
+
+# ------------------------------------------------- delivery schedules (21) --
+
+
+def _split(number: int, *schedules: tuple[date, int], quantity: int = 6100) -> PoLine:
+    """Line ``number`` with its schedules on the rows under it (H column)."""
+    row = 9 + number
+    printed = tuple(
+        DeliverySchedule(quantity=Decimal(q), requested_date=d, anchor=_anchor(f"H{row + offset}"))
+        for offset, (d, q) in enumerate(schedules, start=1)
+    )
+    line = _po_line(number, quantity=Decimal(quantity), requested_date=schedules[0][0])
+    anchors = line.anchors.model_copy(update={"requested_date": printed[0].anchor})
+    return PoLine.model_validate({**dict(line), "anchors": anchors, "printed_schedules": printed})
+
+
+def test_a_line_with_one_date_is_a_list_of_one_schedule() -> None:
+    line = _po_line(1)
+
+    (only,) = line.schedules
+    assert (only.quantity, only.requested_date, only.anchor) == (
+        Decimal(6100),
+        date(2026, 11, 27),
+        line.anchors.requested_date,
+    )
+    assert not line.prints_schedules and line.scheduled_quantity == line.quantity
+
+
+def test_a_split_lines_requested_date_is_its_first_schedule_and_they_run_in_date_order() -> None:
+    line = _split(1, (date(2026, 11, 27), 3050), (date(2026, 12, 11), 3050))
+    assert [s.requested_date for s in line.schedules] == [date(2026, 11, 27), date(2026, 12, 11)]
+    assert line.scheduled_quantity == Decimal(6100)
+
+    with pytest.raises(ValidationError, match="not in date order"):
+        PoLine.model_validate(
+            {**dict(line), "printed_schedules": tuple(reversed(line.printed_schedules))}
+        )
+    with pytest.raises(ValidationError, match="first schedule's"):
+        PoLine.model_validate({**dict(line), "requested_date": date(2026, 12, 11)})
+    with pytest.raises(ValidationError, match="first schedule's"):
+        PoLine.model_validate(
+            {**dict(line), "anchors": _po_line(1).anchors}  # the line row's own date cell
+        )
+
+
+def test_a_revision_that_moves_a_schedule_lists_the_schedules_as_changed() -> None:
+    before = _split(1, (date(2026, 11, 27), 3050), (date(2026, 12, 11), 3050))
+    moved = _split(1, (date(2026, 11, 27), 3050), (date(2026, 12, 18), 3050))
+    resplit = _split(1, (date(2026, 11, 27), 2050), (date(2026, 12, 11), 4050))
+
+    assert [(c.field, c.before, c.after) for c in diff_lines([before], [moved])] == [
+        ("schedules", "2026-11-27: 3050; 2026-12-11: 3050", "2026-11-27: 3050; 2026-12-18: 3050")
+    ]
+    assert [c.field for c in diff_lines([before], [resplit])] == ["schedules"]
+    # Split where it printed one date: the date list says so, beside the date.
+    assert [(c.field, c.before) for c in diff_lines([_po_line(1)], [before])] == [
+        ("schedules", "2026-11-27: 6100")
+    ]
+    # Two lines that each print one date compare as before: no schedules entry.
+    assert [c.field for c in diff_lines([_po_line(1)], [_po_line(1, quantity=Decimal(6710))])] == [
+        "quantity"
+    ]
+    assert diff_lines([before], [before]) == ()
+
+
+def test_a_correction_after_a_resplit_keeps_the_schedules_change_against_the_order() -> None:
+    before = _split(1, (date(2026, 11, 27), 3050), (date(2026, 12, 11), 3050))
+    now = _split(1, (date(2026, 11, 27), 2050), (date(2026, 12, 11), 4050))
+    changes = diff_lines([before], [now])
+    typed = PoLine.model_validate({**dict(now), "unit_price": Decimal("0.043")})
+
+    rebased = rebase_changes(changes, [now], [typed])
+
+    assert [(c.field, c.before, c.after) for c in rebased] == [
+        ("unit_price", "0.042", "0.043"),
+        ("schedules", "2026-11-27: 3050; 2026-12-11: 3050", "2026-11-27: 2050; 2026-12-11: 4050"),
+    ]

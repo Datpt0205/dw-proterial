@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
+from dw_sales.application.access import SUPPORT_SCOPES
 
 pytestmark = pytest.mark.integration
 
@@ -53,6 +54,9 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         "sales.order.resend_cross_check",
         # Gives a case to another member (934101cde272).
         "sales.case.assign",
+        # Grants FPT support Sales' set, and decides support requests
+        # (7c8ba908575f, ticket 22).
+        "support.grant",
     }
     assert pic <= head
     # Both decide a Sales request (cross-check, quote approval), so both carry
@@ -75,6 +79,17 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
             sa.text("SELECT name FROM platform.roles WHERE key = 'sales_head'")
         )
     assert name == "Trưởng bộ phận Sales"
+
+
+async def test_only_the_sales_head_may_grant_support_access(migrator: AsyncEngine) -> None:
+    """dw_sales ADR 0003 §5: the head grants Sales' support set. A granter
+    must hold `support.grant` and every scope of the set (ADR 0024), and no
+    other catalogue row carries `support.grant`, so nobody else can issue it."""
+    roles = await _scopes(migrator, "roles")
+    permission_sets = await _scopes(migrator, "permission_sets")
+    assert {key for key, scopes in roles.items() if "support.grant" in scopes} == {"sales_head"}
+    assert {key for key, scopes in permission_sets.items() if "support.grant" in scopes} == set()
+    assert roles["sales_head"] >= SUPPORT_SCOPES
 
 
 async def _grant(

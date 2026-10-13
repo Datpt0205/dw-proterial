@@ -53,7 +53,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.0.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.1.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -215,15 +215,25 @@ def _states(stated: StatedAttributes, item: Item) -> bool:
 
 
 async def _resolve(
-    catalog: MockSalesCatalog, customer: Customer, code: str, stated: StatedAttributes | None
+    catalog: MockSalesCatalog,
+    customer: Customer,
+    code: str,
+    stated: StatedAttributes | None,
+    *,
+    typed_legacy: bool = False,
 ) -> Item | str:
-    """The item a line names, or the finding code that says why it names none."""
+    """The item a line names, or the finding code that says why it names none.
+
+    A description typed in a legacy font is matched on nothing (ticket 20).
+    """
     entry = (await catalog.convert_entry(SCOPE, customer.code, code)).data
     if entry is not None:
         item = (await catalog.item_by_prv_code(SCOPE, entry.prv_code)).data
         assert item is not None
         assert stated is None or _states(stated, item), f"{code} describes another item"
         return item
+    if typed_legacy:
+        return "code_unmapped"
     assert stated is not None, f"{code} has no convert entry and states nothing"
     candidates = [item for item in (await catalog.items(SCOPE)).data if _states(stated, item)]
     if not candidates:
@@ -313,12 +323,14 @@ async def _line_findings(
     if line.quantity % item.pack_multiple:
         found.add("pack_multiple")
     lead_times = [item.standard_lead_time_days] + ([quotation.lead_time_days] if quotation else [])
-    if line.requested_date < po.po_date + timedelta(days=min(lead_times)):
-        found.add("requested_date_short_lt")
-    else:
-        working_days = math.ceil(max(lead_times) * 7 / 5) + 3
-        clear = max(po.po_date, received) + timedelta(days=working_days)
-        assert line.requested_date >= clear, f"{label}: depends on how lead time is counted"
+    # Each schedule's date on its own (ticket 21); a line with one date has one.
+    for requested in [s.requested_date for s in line.schedules] or [line.requested_date]:
+        if requested < po.po_date + timedelta(days=min(lead_times)):
+            found.add("requested_date_short_lt")
+        else:
+            working_days = math.ceil(max(lead_times) * 7 / 5) + 3
+            clear = max(po.po_date, received) + timedelta(days=working_days)
+            assert requested >= clear, f"{label}: depends on how lead time is counted"
     units = {item.uom} | ({quotation.uom} if quotation else set())
     if units != {line.uom}:
         # Whether the other checks run on a line in another unit is the
@@ -337,7 +349,12 @@ def _po_total_findings(po: PurchaseOrderDocument) -> set[Finding]:
     )
     if po.printed_total is not None:
         assert po.printed_total != lines_sum, f"{po.message_id}: printed_total changes nothing"
-    if numbers != list(range(1, len(numbers) + 1)) or po.printed_total is not None:
+    # A line's printed schedules that do not add up to its quantity (ticket 21).
+    split_short = any(
+        line.schedules and sum(s.quantity for s in line.schedules) != line.quantity
+        for line in po.lines
+    )
+    if numbers != list(range(1, len(numbers) + 1)) or po.printed_total is not None or split_short:
         return {("line_total_mismatch", None)}
     return set()
 
@@ -424,7 +441,13 @@ async def _order_outcome(
     findings: set[Finding] = set()
     resolved: dict[int, Item] = {}
     for line in po.lines:
-        item = await _resolve(catalog, customer, line.customer_item_code, line.attributes)
+        item = await _resolve(
+            catalog,
+            customer,
+            line.customer_item_code,
+            line.attributes,
+            typed_legacy=line.no in po.legacy_font_lines,
+        )
         if isinstance(item, str):
             findings.add((item, line.no))
             continue
@@ -436,6 +459,8 @@ async def _order_outcome(
     findings |= _compliance_findings(customer, po.po_date, received)
     findings |= _po_total_findings(po)
     findings |= _uncertain_lines(po)
+    if po.legacy_font_lines:
+        findings.add(("legacy_encoding", None))
     if forwarded:
         findings.add(("customer_unknown", None))
     if customer.status == "temporary":

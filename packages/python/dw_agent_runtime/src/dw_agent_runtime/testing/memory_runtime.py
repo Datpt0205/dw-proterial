@@ -41,6 +41,7 @@ from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.ports import PlatformUnitOfWork
@@ -49,7 +50,7 @@ from dw_platform.domain.approval import (
     ApprovalRequest,
     ApprovalStatus,
 )
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import AuditEntry, AuditEvent
 
 
 @dataclass
@@ -258,7 +259,13 @@ class MemoryAudit:
     async def append(self, event: AuditEvent) -> None:
         self.events.append(event)
 
-    async def list_page(self, request: PageRequest, *, workspace_id: uuid.UUID) -> Page[AuditEvent]:
+    async def list_page(
+        self,
+        request: PageRequest,
+        *,
+        workspace_id: uuid.UUID,
+        support_grant_id: uuid.UUID | None = None,
+    ) -> Page[AuditEntry]:
         raise NotImplementedError("not exercised by the runner or the approval flow")
 
     async def list_for_run(
@@ -324,6 +331,7 @@ class MemoryRuntime:
         clock: UtcClock,
         ids: IdGenerator,
         allowance: RunAllowancePort | None = None,
+        telemetry: TelemetryPort | None = None,
     ) -> MemoryRuntime:
         graphs = GraphRegistry()
         workers = WorkerRegistry(graph_registry=graphs)
@@ -347,6 +355,7 @@ class MemoryRuntime:
             budget=RunBudgetLedger(),
             approval_policy=AutonomyApprovalPolicy(),
             release_manifest_ref="sha256:memory",
+            telemetry=telemetry or NullTelemetry(),
         )
         flow = ApproveAndResumeService(
             uow_factory=uow_factory,

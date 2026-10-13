@@ -1,0 +1,8 @@
+{
+  "truth": "packages/python/dw_sales/src/dw_sales/adapters/mock/data/purchase_orders.json",
+  "short": {
+    "M35": {
+      "requested_date_short_lt:2": ["2026-10-06"]
+    }
+  }
+}

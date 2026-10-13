@@ -1240,5 +1240,128 @@
         "requested_date": "2026-12-04"
       }
     ]
+  },
+  {
+    "message_id": "M33",
+    "name": "VLX-PO-2610-0004.xlsx",
+    "layout": "xlsx",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2610-0004",
+    "revision": 0,
+    "po_date": "2026-10-01",
+    "currency": "USD",
+    "remarks": "Giao một đợt / Single delivery",
+    "legacy_font_lines": [1, 2],
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "VX-W24-BK",
+        "description": "D©y ®iÖn 24AWG mµu ®en",
+        "quantity": "6100",
+        "unit_price": "0.0420",
+        "requested_date": "2026-12-04"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "VX-C4F05-GY",
+        "attributes": {
+          "family": "multi_core_cable",
+          "cores": 4,
+          "gauge": "0.5mm2",
+          "stranding": "stranded",
+          "conductor": "tinned_copper",
+          "shield": "foil",
+          "colour": "grey",
+          "packaging": "reel",
+          "pack_length_m": "500"
+        },
+        "quantity": "5000",
+        "unit_price": "0.6150",
+        "requested_date": "2026-12-11"
+      }
+    ]
+  },
+  {
+    "message_id": "M34",
+    "name": "VLX-PO-2610-0007.xlsx",
+    "layout": "xlsx",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2610-0007",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "remarks": "Giao theo từng đợt bên dưới mỗi dòng / Deliver in the lots under each line",
+    "schedule_layout": "rows",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "VX-W24-BK",
+        "quantity": "12200",
+        "unit_price": "0.0420",
+        "requested_date": "2026-11-16",
+        "schedules": [
+          { "requested_date": "2026-11-16", "quantity": "6100" },
+          { "requested_date": "2026-12-01", "quantity": "6100" }
+        ]
+      },
+      {
+        "no": 2,
+        "customer_item_code": "VX-C2F05",
+        "quantity": "6000",
+        "unit_price": "0.4850",
+        "requested_date": "2026-11-27"
+      },
+      {
+        "no": 3,
+        "customer_item_code": "VX-C4B22",
+        "quantity": "3000",
+        "unit_price": "0.7120",
+        "requested_date": "2026-11-27",
+        "schedules": [
+          { "requested_date": "2026-11-27", "quantity": "1500" },
+          { "requested_date": "2026-12-11", "quantity": "900" },
+          { "requested_date": "2026-12-28", "quantity": "600" }
+        ]
+      }
+    ]
+  },
+  {
+    "message_id": "M35",
+    "name": "BRN-PO-2609-052.pdf",
+    "layout": "pdf",
+    "customer_code": "BRN",
+    "po_no": "BRN-PO-2609-052",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "VND",
+    "remarks": "Giao theo lịch ghi ở cột Ngày giao.",
+    "buyer_address": "Lô C-12, Khu công nghiệp Thử Nghiệm, phường Mẫu Thử, tỉnh Giả Lập (địa chỉ giả lập)",
+    "schedule_layout": "cell",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "BRN-W-0007",
+        "description": "Dây điện 24AWG đen, cuộn 610m",
+        "quantity": "6100",
+        "unit_price": "1150",
+        "requested_date": "2026-11-16",
+        "schedules": [
+          { "requested_date": "2026-11-16", "quantity": "3050" },
+          { "requested_date": "2026-11-30", "quantity": "2440" }
+        ]
+      },
+      {
+        "no": 2,
+        "customer_item_code": "BRN-C-0118",
+        "description": "Cáp nhiều lõi, cuộn 500m",
+        "quantity": "2000",
+        "unit_price": "21800",
+        "requested_date": "2026-10-06",
+        "schedules": [
+          { "requested_date": "2026-10-06", "quantity": "1000" },
+          { "requested_date": "2026-11-30", "quantity": "1000" }
+        ]
+      }
+    ]
   }
 ]

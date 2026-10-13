@@ -117,9 +117,9 @@ GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
 ARTIFACT_COPY = load_artifact_copy(
-    emails=COPY / "sales_emails@1.0.0.yaml",
-    documents=COPY / "sales_documents@1.1.0.yaml",
-    upload=POLICIES / "sales_bravo_upload@1.0.0.yaml",
+    emails=COPY / "sales_emails@1.1.0.yaml",
+    documents=COPY / "sales_documents@1.2.0.yaml",
+    upload=POLICIES / "sales_bravo_upload@1.1.0.yaml",
     quote_rules=QUOTE_RULES,
 )
 WRITER = ArtifactFiles()
@@ -310,7 +310,7 @@ def service(world: World, copy: ArtifactCopy = ARTIFACT_COPY) -> ArtifactService
 
 # ------------------------------------------------------------ order cases --
 
-_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.0.0.yaml"))
+_INTAKE_RULES = PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.1.0.yaml"))
 
 
 def intake(cases: OrderCases) -> OrderIntake:
@@ -925,6 +925,24 @@ async def test_the_cross_check_sheet_names_who_typed_and_who_recorded_the_entry(
         assert (prices[line.line_no][3] is None) == (line.line_no not in {4, 5, 6})
 
 
+async def test_the_cross_check_sheet_lists_each_schedule_beside_its_upload_row() -> None:
+    """Ticket 21: a line the PO splits over several dates has a row per
+    schedule, as printed, where, and as the upload file's row holds it."""
+    case = uploaded(await in_review("M34"))
+    rows = _sheet_rows(await _one(case, "cross_check_sheet"))
+    header_at = next(i for i, row in enumerate(rows) if row[:2] == ["Dòng", "Giá trị"])
+
+    schedules = [row for row in rows[header_at + 1 :] if str(row[1]).startswith("Đợt giao")]
+
+    assert [(row[0], row[1], row[2], row[4], row[5]) for row in schedules] == [
+        (1, "Đợt giao 1/2", "2026-11-16: 6100", "M34-A1 PO!H11", "2026-11-16: 6100"),
+        (1, "Đợt giao 2/2", "2026-12-01: 6100", "M34-A1 PO!H12", "2026-12-01: 6100"),
+        (3, "Đợt giao 1/3", "2026-11-27: 1500", "M34-A1 PO!H15", "2026-11-27: 1500"),
+        (3, "Đợt giao 2/3", "2026-12-11: 900", "M34-A1 PO!H16", "2026-12-11: 900"),
+        (3, "Đợt giao 3/3", "2026-12-28: 600", "M34-A1 PO!H17", "2026-12-28: 600"),
+    ]
+
+
 async def test_the_upload_file_prints_the_value_sales_corrected_not_the_value_read() -> None:
     """Ticket 15: a corrected value reaches the upload file; the value as read
     stays on the line as the evidence."""
@@ -981,6 +999,20 @@ async def test_the_correction_request_lists_exactly_the_findings_sent_back() -> 
     assert body.count("\n- ") == 1
 
 
+async def test_the_correction_request_asks_for_a_po_typed_in_a_legacy_font_in_unicode() -> None:
+    """Ticket 20: M33 (VLX writes Vietnamese) is typed in `.VnTime`; the draft
+    names the whole PO and the first cell typed in that font."""
+    case = await in_review("M33")
+    asked = case.dispose(
+        "legacy_encoding:-", AskCustomer(by=AN, at=T0), Actor(user_id=AN)
+    ).request_correction()
+    body = _body(await _one(asked, "correction_request"))
+
+    assert "Toàn bộ PO" in body and "font tiếng Việt cũ (TCVN3/VNI)" in body
+    assert "Trên PO: TCVN3; giá trị đúng: Unicode" in body
+    assert "PO!C10" in body
+
+
 async def test_the_change_summary_lists_what_the_revision_changed() -> None:
     case = await change_review_m07()
     rows = _sheet_rows(await _one(case, "change_summary"))
@@ -1029,7 +1061,7 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
     assert refused.value.details == {
         "kind": "send_draft",
         "language": "ja",
-        "copy": "sales_emails@1.0.0",
+        "copy": "sales_emails@1.1.0",
         "reason": "template_missing",
     }
     assert not world.objects and not world.artifacts
@@ -1071,7 +1103,7 @@ async def test_m10_quotation_is_japanese_and_from_the_submitted_document_only() 
         assert case.submission.document_sha256 in text
         assert "Đỗ Minh Giang" in text  # the approver, by name
     assert {r.template_ref for r, _ in await _rendered(case, "quotation_final")} == {
-        "sales_documents.quotation.ja@1.1.0"
+        "sales_documents.quotation.ja@1.2.0"
     }
 
 

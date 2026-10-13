@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Literal, NamedTuple, Self
 
 from openpyxl import Workbook
+from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.writer.excel import ExcelWriter
 from openpyxl.xml import LXML
@@ -67,6 +68,9 @@ SELLER_NAME = "Demo Wire & Cable Vietnam Co., Ltd."
 # Vietnamese characters rather than whatever a viewer substitutes.
 FONT_PATH = MOCK_ROOT / "fonts" / "DejaVuSans-LatinVi.ttf"
 _FONT = "DejaVuSans-LatinVi"
+# The TCVN3 (ABC) font a customer still typing Vietnamese the pre-Unicode way
+# sets on a cell: its letters are stored as other characters (ticket 20).
+LEGACY_FONT = ".VnTime"
 
 _FAMILY_WORDS: dict[ItemFamily, str] = {
     "hook_up_wire": "HOOK-UP WIRE",
@@ -158,6 +162,15 @@ class StatedAttributes(BaseModel):
         return " ".join(words)
 
 
+class FixtureSchedule(BaseModel):
+    """One delivery of a line's quantity, as the PO prints it (ticket 21)."""
+
+    model_config = _FROZEN
+
+    requested_date: date
+    quantity: Decimal = Field(gt=0)
+
+
 class OrderLine(BaseModel):
     model_config = _FROZEN
 
@@ -172,7 +185,12 @@ class OrderLine(BaseModel):
     # The unit as the customer prints it; DW1's vocabulary has only ``m``.
     uom: str = Field(default="m", min_length=1, max_length=8)
     unit_price: Decimal = Field(gt=0)
+    # The line's date; for a line split over several dates, the first one.
     requested_date: date
+    # The dates and quantities a split line prints apart from the line, in
+    # date order, as the document's `schedule_layout` says. They need not add
+    # up to ``quantity``: a fixture may print a split that does not.
+    schedules: tuple[FixtureSchedule, ...] = ()
 
     @model_validator(mode="after")
     def _described_one_way(self) -> Self:
@@ -180,8 +198,21 @@ class OrderLine(BaseModel):
             raise ValueError(f"line {self.no}: attributes or a verbatim description, not both")
         return self
 
+    @model_validator(mode="after")
+    def _schedules_start_at_the_date(self) -> Self:
+        days = [s.requested_date for s in self.schedules]
+        if days and (len(days) < 2 or days != sorted(days) or days[0] != self.requested_date):
+            raise ValueError(
+                f"line {self.no}: schedules are two or more, in date order, from requested_date"
+            )
+        return self
+
 
 Layout = Literal["xlsx", "xlsx_sheet_per_page", "pdf", "pdf_image"]
+# How a PO prints a line's schedules (ticket 21): rows under the line, each
+# with a quantity and a date and nothing else, the line's own date cell left
+# blank; or a "date: quantity; ..." list in the line's date cell.
+ScheduleLayout = Literal["rows", "cell"]
 
 
 class PurchaseOrderDocument(BaseModel):
@@ -211,6 +242,11 @@ class PurchaseOrderDocument(BaseModel):
     # The Excel layouts only: lines whose row is hidden, and pages (sheets) hidden.
     hidden_lines: tuple[int, ...] = ()
     hidden_pages: tuple[int, ...] = ()
+    # The Excel layouts only: lines whose description cell is set in
+    # `LEGACY_FONT`, a TCVN3 font (`legacy_encoding`).
+    legacy_font_lines: tuple[int, ...] = ()
+    # How the lines with schedules print them; set exactly when one has some.
+    schedule_layout: ScheduleLayout | None = None
     lines: tuple[OrderLine, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -226,9 +262,9 @@ class PurchaseOrderDocument(BaseModel):
         if self.layout != "pdf" and (self.buyer_address or self.terms):
             raise ValueError(f"{self.name}: buyer_address and terms are printed by the PDF only")
         if self.layout not in ("xlsx", "xlsx_sheet_per_page") and (
-            self.hidden_lines or self.hidden_pages
+            self.hidden_lines or self.hidden_pages or self.legacy_font_lines
         ):
-            raise ValueError(f"{self.name}: only an Excel layout hides rows or sheets")
+            raise ValueError(f"{self.name}: only an Excel layout hides rows or sets cell fonts")
         numbers = [line.no for line in self.lines]
         # Increasing, so a README line number names one printed line. Gaps are
         # allowed: a PO that skips a number is a fixture (`line_total_mismatch`).
@@ -236,6 +272,12 @@ class PurchaseOrderDocument(BaseModel):
             raise ValueError(f"{self.name}: lines are numbered in increasing order")
         if not set(self.hidden_lines) <= set(numbers):
             raise ValueError(f"{self.name}: hidden_lines names a line the PO lacks")
+        if not set(self.legacy_font_lines) <= set(numbers):
+            raise ValueError(f"{self.name}: legacy_font_lines names a line the PO lacks")
+        if (self.schedule_layout is None) == any(line.schedules for line in self.lines):
+            raise ValueError(f"{self.name}: schedule_layout goes with lines that have schedules")
+        if self.schedule_layout == "rows" and self.layout not in ("xlsx", "xlsx_sheet_per_page"):
+            raise ValueError(f"{self.name}: only an Excel layout prints schedule rows")
         pages = len(self.pages())
         if not all(1 <= page < pages for page in self.hidden_pages):
             # The last page carries the TOTAL, which stays visible.
@@ -477,21 +519,30 @@ def _po_xlsx(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
                 ("Remarks", po.remarks, "", ""),
             ],
         )
-        rows: list[list[_CellValue]] = [
-            [
-                line.no,
-                line.customer_item_code,
-                catalogue.describe(
-                    po.customer_code, line.customer_item_code, line.attributes, line.description
-                ),
-                line.quantity,
-                line.uom,
-                line.unit_price,
-                _amount(line.quantity, line.unit_price, po.currency),
-                line.requested_date,
-            ]
-            for line in lines
-        ]
+        rows: list[list[_CellValue]] = []
+        # The row each line starts on, from row 10.
+        first_rows: dict[int, int] = {}
+        for line in lines:
+            first_rows[line.no] = 10 + len(rows)
+            rows.append(
+                [
+                    line.no,
+                    line.customer_item_code,
+                    catalogue.describe(
+                        po.customer_code, line.customer_item_code, line.attributes, line.description
+                    ),
+                    line.quantity,
+                    line.uom,
+                    line.unit_price,
+                    _amount(line.quantity, line.unit_price, po.currency),
+                    _excel_date_cell(po, line),
+                ]
+            )
+            if line.schedules and po.schedule_layout == "rows":
+                rows += [
+                    [None, None, None, s.quantity, None, None, None, s.requested_date]
+                    for s in line.schedules
+                ]
         next_row = _table(
             sheet,
             (
@@ -516,14 +567,26 @@ def _po_xlsx(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
                 "yyyy-mm-dd",
             ),
         )
-        for offset, line in enumerate(lines):
+        for line in lines:
             if line.no in po.hidden_lines:
-                sheet.row_dimensions[10 + offset].hidden = True
+                sheet.row_dimensions[first_rows[line.no]].hidden = True
+            if line.no in po.legacy_font_lines:
+                sheet.cell(row=first_rows[line.no], column=3).font = Font(name=LEGACY_FONT)
         if number == len(pages):
             sheet.cell(row=next_row, column=6, value="TOTAL")
             total_cell = sheet.cell(row=next_row, column=7, value=_total(po))
             total_cell.number_format = _AMOUNT_FORMAT[po.currency]
     return _xlsx_bytes(workbook, creator=buyer.name, stamp=po.po_date)
+
+
+def _excel_date_cell(po: PurchaseOrderDocument, line: OrderLine) -> _CellValue:
+    """A line's date cell: its date; blank above schedule rows; or the
+    schedules as ``15/11/2026: 6100; 01/12/2026: 6100``."""
+    if not line.schedules:
+        return line.requested_date
+    if po.schedule_layout == "rows":
+        return None
+    return "; ".join(f"{_vi_date(s.requested_date)}: {s.quantity}" for s in line.schedules)
 
 
 def _rfq_xlsx(rfq: QuoteRequestDocument, customer: Customer, catalogue: _Catalogue) -> bytes:
@@ -656,6 +719,39 @@ def _vi_date(day: date) -> str:
     return day.strftime("%d/%m/%Y")
 
 
+# x of each column; numbers are right-aligned on theirs.
+_PDF_COLUMNS: tuple[tuple[str, float, bool], ...] = (
+    ("STT", 55, True),
+    ("Mã hàng KH", 62, False),
+    ("Mô tả hàng hóa", 140, False),
+    ("Số lượng", 612, True),
+    ("ĐVT", 618, False),
+    ("Đơn giá", 690, True),
+    ("Thành tiền", 770, True),
+    ("Ngày giao", 778, False),
+)
+# The same columns with room for a "date: quantity" list in the last one.
+_PDF_LIST_COLUMNS: tuple[tuple[str, float, bool], ...] = (
+    ("STT", 55, True),
+    ("Mã hàng KH", 62, False),
+    ("Mô tả hàng hóa", 140, False),
+    ("Số lượng", 400, True),
+    ("ĐVT", 406, False),
+    ("Đơn giá", 470, True),
+    ("Thành tiền", 550, True),
+    ("Ngày giao", 560, False),
+)
+
+
+def _pdf_date_cell(line: OrderLine) -> str:
+    """``16/11/2026: 3.050; 30/11/2026: 3.050`` for a line with schedules."""
+    if not line.schedules:
+        return _vi_date(line.requested_date)
+    return "; ".join(
+        f"{_vi_date(s.requested_date)}: {_vi_number(s.quantity)}" for s in line.schedules
+    )
+
+
 def _po_pdf(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
     """A Vietnamese text PDF: header and lines on page 1, terms on page 2."""
     buyer = catalogue.buyer(po)
@@ -693,17 +789,8 @@ def _po_pdf(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
         y -= 15
         text(40, y, f"{label}: {value}")
 
-    # x of each column; numbers are right-aligned on theirs.
-    columns: tuple[tuple[str, float, bool], ...] = (
-        ("STT", 55, True),
-        ("Mã hàng KH", 62, False),
-        ("Mô tả hàng hóa", 140, False),
-        ("Số lượng", 612, True),
-        ("ĐVT", 618, False),
-        ("Đơn giá", 690, True),
-        ("Thành tiền", 770, True),
-        ("Ngày giao", 778, False),
-    )
+    # A "date: quantity" list needs a wide date column.
+    columns = _PDF_LIST_COLUMNS if po.schedule_layout == "cell" else _PDF_COLUMNS
     y -= 26
     for title, x, right in columns:
         text(x, y, title, 8, right)
@@ -719,7 +806,7 @@ def _po_pdf(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
             line.uom,
             _vi_number(line.unit_price),
             _vi_number(_amount(line.quantity, line.unit_price, po.currency)),
-            _vi_date(line.requested_date),
+            _pdf_date_cell(line),
         )
         for (_, x, right), value in zip(columns, values, strict=True):
             text(x, y, value, 7.5, right)

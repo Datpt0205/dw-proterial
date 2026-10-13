@@ -46,6 +46,7 @@ from dw_sales.domain.catalog import (
     PrvCode,
     Uom,
 )
+from dw_sales.domain.legacy_fonts import LegacyEncoding
 from dw_sales.domain.messages import AttachmentId, Sha256Hex
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
@@ -121,7 +122,20 @@ class FlaggedValue(BaseModel):
     flag: RegionFlag
 
 
-def _require_fields(flags: Iterable[FlaggedValue], allowed: Iterable[str], owner: str) -> None:
+class LegacyText(BaseModel):
+    """One value read from text typed in a TCVN3 or VNI font, by the field it
+    fills: its letters are not what the customer sees (`legacy_encoding`), so
+    nothing is matched on it."""
+
+    model_config = _FROZEN
+
+    field: str = Field(pattern=r"^[a-z_]{1,32}$")
+    encoding: LegacyEncoding
+
+
+def _require_fields(
+    flags: Iterable[FlaggedValue | LegacyText], allowed: Iterable[str], owner: str
+) -> None:
     known = set(allowed)
     if unknown := sorted({f.field for f in flags} - known):
         raise ValueError(f"{owner} flags fields it does not have: {unknown}")
@@ -188,10 +202,11 @@ class PoHeader(BaseModel):
     currency: Currency
     anchors: PoHeaderAnchors
     flags: tuple[FlaggedValue, ...] = ()
+    legacy: tuple[LegacyText, ...] = ()
 
     @model_validator(mode="after")
     def _flags_name_header_fields(self) -> Self:
-        _require_fields(self.flags, PoHeaderAnchors.model_fields, "a header")
+        _require_fields((*self.flags, *self.legacy), PoHeaderAnchors.model_fields, "a header")
         return self
 
     @property
@@ -213,8 +228,29 @@ class PoLineAnchors(BaseModel):
     requested_date: SourceAnchor
 
 
+class DeliverySchedule(BaseModel):
+    """One delivery of a line's quantity: how much, on which requested date,
+    and where the PO prints it (ticket 21). A schedule row under the line, or
+    one entry of a "date: quantity" list in its date cell: the date's cell."""
+
+    model_config = _FROZEN
+
+    quantity: Decimal = Field(gt=0)
+    requested_date: date
+    anchor: SourceAnchor
+
+
 class PoLine(BaseModel):
-    """One line as the PO states it, before anything is mapped or checked."""
+    """One line as the PO states it, before anything is mapped or checked.
+
+    Its delivery schedules are `schedules`: the one ``quantity`` on the one
+    ``requested_date`` the line prints, or the ones the PO prints apart from
+    the line, as rows under it or a "date: quantity" list in its date cell
+    (``printed_schedules``, ticket 21). Then ``quantity`` stays the line
+    quantity as printed, which the schedules are checked to add up to
+    (`order_checks.check_document`), and ``requested_date`` is the first
+    schedule's date, read from its cell.
+    """
 
     model_config = _FROZEN
 
@@ -233,16 +269,67 @@ class PoLine(BaseModel):
     requested_date: date
     anchors: PoLineAnchors
     flags: tuple[FlaggedValue, ...] = ()
+    legacy: tuple[LegacyText, ...] = ()
+    # Earliest first; empty when the line prints one quantity and one date,
+    # which are its one schedule. A flag on a schedule's cells is the line's
+    # `requested_date`'s: its dates are asked of the customer, never typed.
+    printed_schedules: tuple[DeliverySchedule, ...] = ()
 
     @model_validator(mode="after")
     def _flags_name_line_fields(self) -> Self:
-        _require_fields(self.flags, PoLineAnchors.model_fields, f"line {self.line_no}")
+        _require_fields(
+            (*self.flags, *self.legacy), PoLineAnchors.model_fields, f"line {self.line_no}"
+        )
         return self
+
+    @model_validator(mode="after")
+    def _requested_date_is_the_first_schedules(self) -> Self:
+        printed = self.printed_schedules
+        if not printed:
+            return self
+        days = [s.requested_date for s in printed]
+        if days != sorted(days):
+            raise ValueError(f"line {self.line_no}'s schedules are not in date order")
+        first = printed[0]
+        if (first.requested_date, first.anchor) != (
+            self.requested_date,
+            self.anchors.requested_date,
+        ):
+            raise ValueError(f"line {self.line_no}'s requested date is not its first schedule's")
+        return self
+
+    @property
+    def schedules(self) -> tuple[DeliverySchedule, ...]:
+        """When and how much the line is to be delivered, earliest first: a
+        line with one quantity and one date is a list of one."""
+        if self.printed_schedules:
+            return self.printed_schedules
+        only = DeliverySchedule(
+            quantity=self.quantity,
+            requested_date=self.requested_date,
+            anchor=self.anchors.requested_date,
+        )
+        return (only,)
+
+    @property
+    def prints_schedules(self) -> bool:
+        """Whether the PO prints the line's schedules apart from the line."""
+        return bool(self.printed_schedules)
+
+    @property
+    def scheduled_quantity(self) -> Decimal:
+        """What the line's schedules add up to."""
+        return sum((s.quantity for s in self.schedules), Decimal(0))
 
     @property
     def flagged(self) -> frozenset[str]:
         """The fields read from a flagged region."""
         return frozenset(flag.field for flag in self.flags)
+
+    @property
+    def legacy_fields(self) -> frozenset[str]:
+        """The fields read from text typed in a TCVN3 or VNI font."""
+        return frozenset(text.field for text in self.legacy)
 
 
 class PrintedTotal(BaseModel):
@@ -253,10 +340,11 @@ class PrintedTotal(BaseModel):
     amount: Decimal = Field(ge=0)
     anchor: SourceAnchor
     flags: tuple[FlaggedValue, ...] = ()
+    legacy: tuple[LegacyText, ...] = ()
 
     @model_validator(mode="after")
     def _flags_name_the_amount(self) -> Self:
-        _require_fields(self.flags, ("amount",), "a total")
+        _require_fields((*self.flags, *self.legacy), ("amount",), "a total")
         return self
 
 
@@ -296,6 +384,18 @@ class PoDocument(BaseModel):
             ):
                 raise ValueError(f"an anchor points outside attachment {self.attachment_id}")
         return self
+
+    def first_legacy_text(self) -> tuple[SourceAnchor, LegacyEncoding] | None:
+        """Where the first value read from text typed in a TCVN3 or VNI font
+        is (header, then the lines, then the total), and its encoding; None
+        when every value was read from Unicode text (`legacy_encoding`)."""
+        header = self.header
+        found = [(getattr(header.anchors, t.field), t.encoding) for t in header.legacy]
+        for line in self.lines:
+            found += [(getattr(line.anchors, t.field), t.encoding) for t in line.legacy]
+        if self.total is not None:
+            found += [(self.total.anchor, t.encoding) for t in self.total.legacy]
+        return found[0] if found else None
 
     def anchors(self) -> Iterable[SourceAnchor]:
         """Every anchor the document holds."""
@@ -356,6 +456,7 @@ class FindingCode(StrEnum):
     REVISION_WITHOUT_BASE = "revision_without_base"
     CUSTOMER_TEMPORARY = "customer_temporary"
     SENDER_UNVERIFIED = "sender_unverified"
+    LEGACY_ENCODING = "legacy_encoding"
 
 
 # About the PO as a whole.
@@ -369,6 +470,7 @@ PO_LEVEL_FINDINGS: Final = frozenset(
         FindingCode.REVISION_WITHOUT_BASE,
         FindingCode.CUSTOMER_TEMPORARY,
         FindingCode.SENDER_UNVERIFIED,
+        FindingCode.LEGACY_ENCODING,
     }
 )
 # About one line or the PO as a whole: a value in a line or in the header.
@@ -480,6 +582,10 @@ ALLOWED_DISPOSITIONS: Final[Mapping[FindingCode, frozenset[DispositionKind]]] = 
         FindingCode.REVISION_WITHOUT_BASE: _ACCEPT,
         FindingCode.CUSTOMER_TEMPORARY: _ACCEPT,
         FindingCode.SENDER_UNVERIFIED: _ACCEPT,
+        # The customer sends the PO again in Unicode, which arrives as a
+        # revision of the case and is read afresh (ticket 20): nobody types
+        # over text DW1 cannot read, and nobody accepts it as read.
+        FindingCode.LEGACY_ENCODING: frozenset({DispositionKind.ASK_CUSTOMER}),
     }
 )
 
@@ -752,6 +858,15 @@ class OrderLine(BaseModel):
     def correction(self, field: str) -> ValueCorrection | None:
         return next((c for c in self.corrections if c.field == field), None)
 
+    def suggested_date(self, schedule: DeliverySchedule) -> date | None:
+        """DW1's proposal for one of the line's schedules: its date when the
+        lead time allows it, else the first day it does. The line's own
+        suggestion is its first schedule's, and a later one is never earlier
+        than that first day."""
+        if self.suggested_delivery_date is None:
+            return None
+        return max(schedule.requested_date, self.suggested_delivery_date)
+
 
 class LineCheck(BaseModel):
     """One line's checks: what it maps to, what it was compared with, what failed."""
@@ -808,6 +923,20 @@ _COMPARED: Final[tuple[PoLineField, ...]] = (
     "unit_price",
     "requested_date",
 )
+# A line's schedules, compared as their text (`schedules_text`) when either
+# revision prints them apart from the line (ticket 21); otherwise its quantity
+# and date say all there is.
+SCHEDULES_FIELD: Final = "schedules"
+LineChangeField = PoLineField | Literal["schedules"]
+
+
+def schedules_text(line: PoLine) -> str:
+    """``2026-11-15: 2000; 2026-12-01: 3000``: a line's schedules as one
+    value, each quantity as a value (``2000.0`` is ``2000``)."""
+    return "; ".join(
+        f"{s.requested_date.isoformat()}: {format(s.quantity.normalize(), 'f')}"
+        for s in line.schedules
+    )
 
 
 class LineChange(BaseModel):
@@ -820,7 +949,7 @@ class LineChange(BaseModel):
     model_config = _FROZEN
 
     line_no: int = Field(ge=1)
-    field: PoLineField
+    field: LineChangeField
     before: str | None
     after: str | None
 
@@ -829,6 +958,16 @@ class LineChange(BaseModel):
         if self.before == self.after:
             raise ValueError("a change needs a before and an after that differ")
         return self
+
+
+def _schedules_of(was: PoLine | None, now: PoLine | None) -> tuple[str | None, str | None] | None:
+    """Both revisions' schedules as text, when either prints them; else None."""
+    if not any(line is not None and line.prints_schedules for line in (was, now)):
+        return None
+    return (
+        schedules_text(was) if was is not None else None,
+        schedules_text(now) if now is not None else None,
+    )
 
 
 def diff_lines(before: Sequence[PoLine], after: Sequence[PoLine]) -> tuple[LineChange, ...]:
@@ -853,6 +992,13 @@ def diff_lines(before: Sequence[PoLine], after: Sequence[PoLine]) -> tuple[LineC
                         after=_text(value_after),
                     )
                 )
+        schedules = _schedules_of(was, now)
+        if schedules is not None and schedules[0] != schedules[1]:
+            changes.append(
+                LineChange(
+                    line_no=line_no, field=SCHEDULES_FIELD, before=schedules[0], after=schedules[1]
+                )
+            )
     return tuple(changes)
 
 
@@ -891,6 +1037,22 @@ def rebase_changes(
                         line_no=line_no, field=field, before=change.before, after=_text(value)
                     )
                 )
+        change = listed.get((line_no, SCHEDULES_FIELD))
+        schedules = _schedules_of(old[line_no], new[line_no])
+        if change is not None:
+            entered = schedules_text(new[line_no])
+            if change.before != entered:
+                rebased.append(
+                    LineChange(
+                        line_no=line_no, field=SCHEDULES_FIELD, before=change.before, after=entered
+                    )
+                )
+        elif schedules is not None and schedules[0] != schedules[1]:
+            rebased.append(
+                LineChange(
+                    line_no=line_no, field=SCHEDULES_FIELD, before=schedules[0], after=schedules[1]
+                )
+            )
     return tuple(rebased)
 
 
@@ -1230,6 +1392,15 @@ class OrderCase(BaseModel):
             return self._header_flagged
         return self.line(finding.line_no).po_line.flagged
 
+    def correctable_fields(self, finding: Finding) -> frozenset[str]:
+        """The flagged values Sales may type (`corrected`): all of them, but
+        the dates of a line whose PO prints its schedules, which are asked of
+        the customer. What the screen offers reads this too."""
+        flagged = self.flagged_fields(finding)
+        if finding.line_no is not None and self.line(finding.line_no).po_line.prints_schedules:
+            return flagged - {"requested_date"}
+        return flagged
+
     @property
     def _header_flagged(self) -> frozenset[str]:
         total = self.document.total
@@ -1492,6 +1663,12 @@ class OrderCase(BaseModel):
             raise DomainError("a decision is recorded as its actor's", details=details)
         if field not in self.flagged_fields(finding):
             raise DomainError("the finding did not flag this field", details=details)
+        if field not in self.correctable_fields(finding):
+            # One typed date cannot say which of the printed schedules it is.
+            raise ConflictError(
+                "the dates of a line with several schedules are asked of the customer",
+                details={**details, "rule": "printed_schedules"},
+            )
         lines, header_corrections = self.lines, self.header_corrections
         read: BaseModel
         typed: BaseModel

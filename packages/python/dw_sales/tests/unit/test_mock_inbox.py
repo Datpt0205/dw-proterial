@@ -37,7 +37,7 @@ def test_the_mock_satisfies_the_port(inbox: MockInbox) -> None:
 async def test_messages_are_listed_oldest_first_by_instant(inbox: MockInbox) -> None:
     messages = await inbox.list_messages(SCOPE)
 
-    assert len(messages) == 32
+    assert len(messages) == 35
     instants = [m.received_at for m in messages]
     assert instants == sorted(instants)
     # The fixture mixes offsets (M02 is sent from +09:00). Its file order and
@@ -103,7 +103,7 @@ async def test_every_attachment_reads_back_as_the_file_its_digest_describes(
             assert attachment.size == len(content.data)
             assert attachment.sha256 == hashlib.sha256(content.data).hexdigest()
             read += 1
-    assert read == 29
+    assert read == 32
 
 
 @pytest.mark.parametrize(

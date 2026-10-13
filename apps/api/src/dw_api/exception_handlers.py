@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from dw_api.dependencies.idempotency import IDEMPOTENCY_HEADER, ReplayedResponse
@@ -24,6 +26,22 @@ def register_exception_handlers(app: FastAPI) -> None:
         if stored.body is None:
             return Response(status_code=stored.status_code, headers=headers)
         return JSONResponse(status_code=stored.status_code, content=stored.body, headers=headers)
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """FastAPI's own 422, without the value that failed (Sales ticket 23).
+
+        FastAPI echoes each refused value back as ``input``, so a body a
+        model refused (a price typed into a correction, a field the model
+        forbids) returned the price in the error. The caller sent it and has
+        it; a proxy log, an error tracker or a screenshot of the response
+        need not. Where it failed (``loc``), why (``type``, ``msg``) and the
+        constraint (``ctx``) stay: they are the schema's, not the caller's.
+        """
+        errors = [{k: v for k, v in error.items() if k != "input"} for error in exc.errors()]
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
     @app.exception_handler(DWError)
     async def handle_dw_error(request: Request, exc: DWError) -> JSONResponse:

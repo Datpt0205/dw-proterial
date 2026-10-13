@@ -35,7 +35,12 @@ from dw_platform.domain.approval import (
     ApprovalRequest,
     ApprovalStatus,
 )
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.audit import (
+    SUPPORT_GRANT_DETAIL,
+    AuditActorKind,
+    AuditEntry,
+    AuditEvent,
+)
 from dw_platform.domain.feedback import Feedback, FeedbackAttachment
 from dw_platform.domain.outbox import OutboxEvent
 
@@ -245,45 +250,75 @@ class SqlAuditRepository:
         )
         return self._map_rows(result)
 
-    async def list_page(self, request: PageRequest, *, workspace_id: uuid.UUID) -> Page[AuditEvent]:
-        result = await self.session.execute(
-            sa.select(tables.audit_events)
+    async def list_page(
+        self,
+        request: PageRequest,
+        *,
+        workspace_id: uuid.UUID,
+        support_grant_id: uuid.UUID | None = None,
+    ) -> Page[AuditEntry]:
+        events, users, grants = tables.audit_events, tables.users, tables.support_grants
+        grant_ref = events.c.details[SUPPORT_GRANT_DETAIL].astext
+        # Compared as text, so a malformed id in one row's details matches
+        # nothing instead of failing the whole page on a cast. RLS bounds the
+        # grants to the caller's tenant, as it bounds the events.
+        by_its_staff = (
+            sa.exists()
             .where(
-                tables.audit_events.c.workspace_id == workspace_id,
-                after_position(
-                    tables.audit_events.c.occurred_at, tables.audit_events.c.id, request.after
-                ),
+                grants.c.staff_user_id == events.c.actor_id,
+                sa.cast(grants.c.id, sa.Text) == grant_ref,
             )
-            .order_by(*newest_first(tables.audit_events.c.occurred_at, tables.audit_events.c.id))
+            .label("by_support")
+        )
+        query = (
+            sa.select(events, users.c.display_name.label("actor_display_name"), by_its_staff)
+            .select_from(events.outerjoin(users, users.c.id == events.c.actor_id))
+            .where(
+                events.c.workspace_id == workspace_id,
+                after_position(events.c.occurred_at, events.c.id, request.after),
+            )
+            .order_by(*newest_first(events.c.occurred_at, events.c.id))
             .limit(request.fetch_limit)
         )
+        if support_grant_id is not None:
+            query = query.where(grant_ref == str(support_grant_id))
+        rows = (await self.session.execute(query)).all()
+        entries = [
+            AuditEntry(
+                event=self._event_from_row(row),
+                actor_display_name=row.actor_display_name,
+                actor_kind=AuditActorKind.SUPPORT if row.by_support else AuditActorKind.USER,
+            )
+            for row in rows
+        ]
         return build_page(
-            self._map_rows(result),
+            entries,
             request=request,
-            position_of=lambda event: CursorPosition(
-                sort_value=event.occurred_at, tiebreaker=event.id
+            position_of=lambda entry: CursorPosition(
+                sort_value=entry.event.occurred_at, tiebreaker=entry.event.id
             ),
         )
 
     @staticmethod
     def _map_rows(result: sa.engine.Result[tuple]) -> list[AuditEvent]:  # type: ignore[type-arg]
-        return [
-            AuditEvent(
-                id=row.id,
-                tenant_id=TenantId(row.tenant_id),
-                workspace_id=WorkspaceId(row.workspace_id),
-                actor_id=UserId(row.actor_id),
-                action=row.action,
-                resource_type=row.resource_type,
-                resource_id=row.resource_id,
-                run_id=row.run_id,
-                policy_decision=row.policy_decision,
-                trace_id=row.trace_id,
-                details=dict(row.details),
-                occurred_at=row.occurred_at,
-            )
-            for row in result
-        ]
+        return [SqlAuditRepository._event_from_row(row) for row in result]
+
+    @staticmethod
+    def _event_from_row(row: Row[Any]) -> AuditEvent:
+        return AuditEvent(
+            id=row.id,
+            tenant_id=TenantId(row.tenant_id),
+            workspace_id=WorkspaceId(row.workspace_id),
+            actor_id=UserId(row.actor_id),
+            action=row.action,
+            resource_type=row.resource_type,
+            resource_id=row.resource_id,
+            run_id=row.run_id,
+            policy_decision=row.policy_decision,
+            trace_id=row.trace_id,
+            details=dict(row.details),
+            occurred_at=row.occurred_at,
+        )
 
 
 @dataclass

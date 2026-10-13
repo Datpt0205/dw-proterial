@@ -34,6 +34,20 @@ API and the plan use the English terms. The spec is
   value as read, which stays the evidence; the order is entered, uploaded and
   confirmed with the corrected value. A line's number and the PO's number and
   revision are only confirmed as read, never changed.
+- **Delivery schedule** (Đợt giao): one delivery of a PO line's quantity, a
+  quantity on a requested date, with where the PO prints it. A line printing
+  one quantity and one date has one; a line the PO splits over several dates
+  (rows under the line, or a "date: quantity" list in its date cell) has one
+  per date, which must add up to the line's printed quantity
+  (`line_total_mismatch` otherwise). The lead time is checked per schedule,
+  the MOQ, pack and price per line; the upload file has a row per schedule
+  (ticket 21). A split line's dates are asked of the customer, never typed.
+- **Legacy encoding** (Font tiếng Việt cũ): Vietnamese typed in a TCVN3
+  (`.VnTime`, `.VnArial`, …) or VNI (`VNI-Times`, …) font, whose letters are
+  stored as other characters ("Cña hµng" for "Cửa hàng"). DW1 detects it by
+  the font of a cell or a PDF text run, raises `legacy_encoding` and matches
+  nothing on that text; the customer is asked to send the PO again in
+  Unicode. Converting it is ADR 0010 decision 3, later.
 - **Source anchor** (Neo nguồn): where a value was read: `sheet!cell`, or a
   page plus boxes on the rendered page, or a quote. It always carries the
   attachment's sha256.
@@ -68,6 +82,12 @@ user with a membership holding the role `sales_dw1` (`sales.inbox.process`
 only), resolved by the platform like any member. It signs in nowhere. The
 **mailbox lane** (DW1 tự xử lý thư, the worker's `sales_inbox` lane, ticket 16) acts under it: every new message processed in a DW1 run of its own, as if
 "DW xử lý" had been pressed, except while DW1 is paused.
+
+**Support access** (Quyền hỗ trợ, set `sales.case_support`): FPT support
+staff reading a tenant's Sales cases under a grant the head issued (platform
+ADR 0024, dw_sales ADR 0003 §5, ticket 22): the overview and the order and
+quote lists and details, for the workspace, every amount hidden. Never a
+price, never a write; no other Sales route admits it.
 
 ## Value states
 
@@ -197,6 +217,7 @@ YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác
 | `revision_without_base`    | PO sửa đổi chưa thấy bản gốc         |
 | `customer_temporary`       | Khách hàng mã tạm thời               |
 | `sender_unverified`        | Chưa xác thực người gửi              |
+| `legacy_encoding`          | Font tiếng Việt cũ (TCVN3/VNI)       |
 | `rfq_incomplete`           | Yêu cầu báo giá thiếu thông tin      |
 | `price_below_policy_floor` | Giá dưới mức sàn                     |
 | `price_floor_unknown`      | Không tính được giá sàn              |

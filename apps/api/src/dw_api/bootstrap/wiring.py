@@ -63,6 +63,7 @@ from dw_api.settings import ApiSettings
 from dw_connectors.adapters.zalo_link import ZaloLinking
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.ports import ObjectStoragePort
+from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.cache import NullCache, ValkeyCache
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.approval_codes import SqlApprovalCodeStore
@@ -106,6 +107,7 @@ from dw_platform.application.separation_of_duties import SeparationOfDutiesServi
 from dw_platform.application.support_access import (
     SupportAccessContextFactory,
     SupportGrantService,
+    SupportScopeCatalog,
 )
 from dw_platform.application.tenant_members import TenantMembersService
 
@@ -117,7 +119,18 @@ _RUN_POLICY = load_worker_run_policy(WORKER_RUN_POLICY)
 # Empty on the platform: a context adds a route here in the same change as
 # that route's negative test under a support grant. `test_support_routes.py`
 # fails when RequireAccessContextOrSupport appears on any route not listed.
-SUPPORT_ALLOWED_ROUTES: frozenset[tuple[str, str]] = frozenset()
+SUPPORT_ALLOWED_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Sales (ticket 22, dw_sales ADR 0003 §5): the overview and the order
+        # and quote lists and details, every amount hidden. The source view,
+        # evidence and downloads stay closed. `test_sales_api_support.py`.
+        ("GET", "/api/v1/sales/overview"),
+        ("GET", "/api/v1/sales/orders"),
+        ("GET", "/api/v1/sales/orders/{case_id}"),
+        ("GET", "/api/v1/sales/quotes"),
+        ("GET", "/api/v1/sales/quotes/{case_id}"),
+    }
+)
 
 
 def _asyncpg_dsn(url: str) -> str:
@@ -361,7 +374,9 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
             runner=wiring.runner,
             approval_flow=wiring.approval_flow,
         ),
+        telemetry=wiring.seam.telemetry,
     )
+    register_sales_support(container.support_catalog)
 
     # Build your context from `container.runtime` (the RuntimeSeam) and attach
     # its handlers, then mount its router in `main.create_app`. Nothing above
@@ -396,6 +411,7 @@ def build_sales(
     artifact_bytes: ObjectStoragePort,
     release_manifest_ref: str | None,
     runtime: SalesRuntime,
+    telemetry: TelemetryPort,
 ) -> object:
     """The Sales context's mount, part of the seam above.
 
@@ -436,8 +452,29 @@ def build_sales(
         artifact_bytes=artifact_bytes,
         release_manifest_ref=release_manifest_ref,
         runtime=runtime,
+        telemetry=telemetry,
     )
     return SalesMount(services=mount.services)
+
+
+def register_sales_support(catalog: SupportScopeCatalog) -> None:
+    """Sales' support scope set, part of the seam above (dw_sales ADR 0003 §5).
+
+    `{sales.overview.read, sales.case.read}` for the workspace: never a price,
+    never a write. Only `sales_head` holds `support.grant`, so only the head
+    can issue it; the routes it opens are Sales' entries in
+    `SUPPORT_ALLOWED_ROUTES`.
+    """
+    from dw_sales.application.access import (
+        SUPPORT_RESOURCE_TYPES,
+        SUPPORT_SCOPE_SET_KEY,
+        SUPPORT_SCOPE_SET_LABEL,
+        SUPPORT_SCOPES,
+    )
+
+    catalog.register(
+        SUPPORT_SCOPE_SET_KEY, SUPPORT_SCOPE_SET_LABEL, SUPPORT_SCOPES, SUPPORT_RESOURCE_TYPES
+    )
 
 
 def build_engine(url: str, *, pool_pre_ping: bool = True) -> AsyncEngine:

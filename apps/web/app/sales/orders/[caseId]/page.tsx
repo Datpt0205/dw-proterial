@@ -85,10 +85,15 @@ function anchorOf(
         ? order.total_anchor
         : field === "buyer"
           ? order.buyer_anchor
-          : null) ??
+          : field === "legacy_text"
+            ? order.legacy_text_anchor
+            : null) ??
       null
     );
   const line = order.lines.find((l) => l.line_no === lineNo);
+  // `schedule:<n>`: one delivery schedule of a split line (ticket 21).
+  const schedule = /^schedule:(\d+)$/.exec(field);
+  if (schedule) return line?.schedules[Number(schedule[1])]?.anchor ?? null;
   return line?.anchors[field] ?? line?.anchors.description ?? null;
 }
 

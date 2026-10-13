@@ -168,11 +168,11 @@ async def test_the_audit_trail_lists_only_the_callers_workspace(
 
     async with SqlPlatformUnitOfWorkFactory(sessions)(b) as uow:
         page = await uow.audit.list_page(_PAGE, workspace_id=b.workspace_id)
-    assert [event.id for event in page.items] == [mine.id]
+    assert [entry.event.id for entry in page.items] == [mine.id]
 
     async with SqlPlatformUnitOfWorkFactory(sessions)(a) as uow:
         page = await uow.audit.list_page(_PAGE, workspace_id=a.workspace_id)
-    assert [event.id for event in page.items] == [theirs.id]
+    assert [entry.event.id for entry in page.items] == [theirs.id]
 
 
 async def test_another_workspaces_run_timeline_is_empty(

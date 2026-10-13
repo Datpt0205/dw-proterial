@@ -19,6 +19,42 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   12 keeps what waits on the requirements doc (needs-info). Đạt sent the
   requirements doc to Proterial (confirmed 2026-10-12). Order agreed with Đạt:
   13 → 14 → 17, then 19–27.
+- 2026-10-12, ticket 23 built (uncommitted; "As built" in the ticket): no
+  price, customer name or mail text reaches a span, a log line or an error.
+  Sales spans go through one helper (`dw_sales.application.telemetry`) whose
+  allowlist checks each key and its value's shape; DW1 emits
+  `sales.message.processed` per message. The API's 422 for a request body no
+  longer echoes `input` (platform-wide). Tested end to end: three fixture
+  POs (one walked to `confirmed`), real OTel exporter, root logs, five
+  refusals, 43 document values searched for. Left for the platform: a span
+  records `str(exc)` of any exception that crosses it.
+- 2026-10-12, ticket 22 built (uncommitted; "As built" in the ticket): FPT
+  support reads the overview and the order and quote lists and details
+  under a customer's grant, every amount hidden; every other Sales route
+  refuses a support context. Set `sales.case_support` =
+  `{sales.overview.read, sales.case.read}` for the workspace; `sales_head`
+  alone holds `support.grant` (migration `7c8ba908575f`). Found on the way:
+  the platform's route-table test saw no included router (FastAPI 0.141),
+  fixed. Open for Đạt: whether platform operators count as FPT identities
+  (`dev|chi.le` holds `platform_admin` in the demo tenant). Adversarially
+  reviewed 2026-10-12: support is the first caller with `sales.case.read`
+  and no `sales.price.read`, so the leak search now walks every case the
+  inbox opens (it caught a mutation the two-case walk missed); a revocation
+  is tested end to end; the route walker is FastAPI's `iter_route_contexts`,
+  which also sees a dependency added at `include_router`.
+- 2026-10-12, ticket 20 built (uncommitted; "As built" in the ticket): a PO
+  value typed in a TCVN3/VNI font (`.VnTime`, `VNI-Times`) is detected by the
+  readers. It raises a blocking PO-level `legacy_encoding` whose only decision
+  is `ask_customer` (the Unicode re-send arrives as a revision), and no
+  attribute is matched on that text. Migration `0d7fd21052a4`,
+  `sales_order_rules@1.1.0`, `sales_emails@1.1.0`, readers `@1.2.0`, fixture
+  `M33` (the mailbox is 33 messages), eval `sales@1.1.0` 11/11. Reviewed the
+  same day. Two guards had no test that could fail, and each now has one:
+  the PDF page fallback, and a typed `value_uncertain` value over legacy
+  text, which must not clear the finding. The review also found a problem
+  that predates this ticket and belongs to ticket 22. A PDF anchor's `quote`
+  is the printed text, so for a price field it shows the price to a viewer
+  whose amounts are hidden.
 - 2026-10-12, ticket 15 built (uncommitted; "As built" in the ticket): a
   `value_uncertain` is corrected per field with a typed value
   (`POST /orders/{id}/findings/{key}/corrections`), kept beside the value as
@@ -319,7 +355,12 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 - Public repo: the repo name and these plan files name Proterial and its
   procedure codes (WIV-03-0xx). Đạt decided on 2026-10-05 to keep the repo
   public and not alias them. Mock data, people and figures stay fictional,
-  and Proterial's documents stay outside git.
+  and Proterial's documents stay outside git. Guarded since 2026-10-12
+  (ticket 26, `scripts/check_public_repo.py`; done and reviewed, uncommitted):
+  owed by a person, the `PUBLIC_REPO_DENYLIST` repository secret (the CI step
+  fails until it exists) and, on each machine that commits, a deny-list file
+  named by `DW_PUBLIC_REPO_DENYLIST`. Without one the hooks only say they
+  skipped, and CI finds a term only after the push has published it.
 - Defaults adopted until Proterial answers, taken from the requirements
   doc's own interim answers (Đạt may overrule); the spec's "Interim
   behaviour" table names the policy key or role each answer changes:

@@ -66,4 +66,6 @@ def test_a_grader_name_the_table_lacks_fails_its_case() -> None:
         }
     )
     report = run_dataset(dataset, REPO_ROOT, _load_script().grader_table())
+    assert not report.results[0].passed
+    assert not report.ok
     assert report.results[0].details["reason"] == "unknown grader"

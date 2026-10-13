@@ -41,6 +41,7 @@ from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
 from dw_sales.application.source import SourceService, SourceViewPort
+from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.worker_service import WorkerService
 from dw_sales.domain.kpi import SalesKpi
 
@@ -89,6 +90,7 @@ def assemble(
     release_manifest_ref: str | None,
     runs: Dw1RunsPort,
     pending: PendingDecisionsPort,
+    telemetry: SpanPort,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     processing = InboxProcessing(
@@ -103,6 +105,7 @@ def assemble(
         directory,
         pending,
         release_manifest_ref,
+        SalesSpans(telemetry),
     )
     services = SalesServices(
         overview=OverviewService(uow, gate, clock, inbox, kpi, directory, pending),

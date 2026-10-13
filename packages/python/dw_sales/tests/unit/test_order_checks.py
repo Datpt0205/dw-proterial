@@ -35,6 +35,7 @@ from dw_sales.domain.order_checks import (
     received_date,
 )
 from dw_sales.domain.orders import (
+    DeliverySchedule,
     FindingCode,
     FlaggedValue,
     LineBasis,
@@ -56,7 +57,7 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 POLICY = Path(__file__).resolve().parents[5] / "configs" / "policies"
-SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.0.0.yaml")
+SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.1.0.yaml")
 PO_DATE = date(2026, 9, 24)
 # 2026-09-24 20:00 UTC is already 25 September in Hanoi.
 RECEIVED = datetime(2026, 9, 24, 20, 0, tzinfo=UTC)
@@ -201,7 +202,7 @@ def _codes(check: Any) -> list[tuple[str, str | None, str | None]]:
 def test_the_shipped_rules_stamp_their_version_and_severity_on_a_finding() -> None:
     finding = SHIPPED.finding(FindingCode.REVISED_PO)
 
-    assert (finding.rule_version, finding.severity) == ("sales_order_rules@1.0.0", Severity.WARNING)
+    assert (finding.rule_version, finding.severity) == ("sales_order_rules@1.1.0", Severity.WARNING)
     assert SHIPPED.cross_check_required is True
     assert SHIPPED.export_control_mode == "warn"
 
@@ -814,3 +815,98 @@ def test_another_customers_po_with_the_same_number_is_not_history() -> None:
     other = _bravo().model_copy(update={"customer_code": "VLX"})
 
     assert check_history("NRV", _document(), CODES, [], [other], rules=SHIPPED).finding is None
+
+
+# ---------------------------------------- delivery schedules (ticket 21) --
+
+
+def _split(*schedules: tuple[date, int], quantity: int = 3600) -> PoLine:
+    """The line split over ``schedules`` (date, quantity), printed apart."""
+    printed = tuple(
+        DeliverySchedule(quantity=Decimal(q), requested_date=d, anchor=_anchor())
+        for d, q in schedules
+    )
+    return _po_line(
+        quantity=Decimal(quantity), requested_date=schedules[0][0], printed_schedules=printed
+    )
+
+
+def test_the_lead_time_is_checked_per_schedule_naming_each_date_too_soon() -> None:
+    # Received 25 September (Hanoi) + 35 days = 30 October.
+    one_short = _run(
+        _split((date(2026, 10, 29), 1800), (date(2026, 11, 30), 1800)), quotation=_quotation()
+    )
+    two_short = _run(
+        _split((date(2026, 10, 20), 1200), (date(2026, 10, 29), 1200), (date(2026, 12, 1), 1200)),
+        quotation=_quotation(),
+    )
+    on_time = _run(
+        _split((date(2026, 10, 30), 1800), (date(2026, 11, 30), 1800)), quotation=_quotation()
+    )
+
+    assert _codes(one_short) == [("requested_date_short_lt", "2026-10-30", "2026-10-29")]
+    assert _codes(two_short) == [
+        ("requested_date_short_lt", "2026-10-30", "2026-10-20, 2026-10-29")
+    ]
+    assert on_time.findings == ()
+    line = one_short.line
+    assert line.suggested_delivery_date == date(2026, 10, 30)
+    assert [line.suggested_date(s) for s in line.po_line.schedules] == [
+        date(2026, 10, 30),
+        date(2026, 11, 30),
+    ]
+
+
+def test_moq_and_pack_are_checked_on_the_line_quantity_not_per_schedule() -> None:
+    """3600 m meets the 3000 m MOQ in 300 m reels; 1800 m alone would not."""
+    check = _run(
+        _split((date(2026, 11, 30), 1800), (date(2026, 12, 7), 1800)), quotation=_quotation()
+    )
+
+    assert check.findings == ()
+    assert {"moq", "pack", "price"} <= set(check.line.basis.checks_run)
+
+
+@pytest.mark.parametrize(
+    ("schedules", "expected"),
+    [
+        (((date(2026, 12, 4), 1800), (date(2026, 12, 11), 1200)), "3000"),
+        (((date(2026, 12, 4), 1800), (date(2026, 12, 11), 2400)), "4200"),
+    ],
+    ids=["short of the line", "over the line"],
+)
+def test_schedules_that_do_not_add_up_to_the_line_are_line_total_mismatch(
+    schedules: tuple[tuple[date, int], ...], expected: str
+) -> None:
+    total = PrintedTotal(amount=Decimal("5025.6"), anchor=_anchor("G12"))
+    document = _document(_split(*schedules), _po_line(2), total=total)
+
+    (finding,) = check_document(document, SHIPPED)
+
+    assert (finding.code, finding.line_no, finding.expected, finding.actual) == (
+        FindingCode.LINE_TOTAL_MISMATCH,
+        None,
+        "line 1 quantity 3600",
+        f"line 1 schedules {expected}",
+    )
+
+
+def test_schedules_that_add_up_raise_nothing() -> None:
+    total = PrintedTotal(amount=Decimal("5025.6"), anchor=_anchor("G12"))
+    split = _split((date(2026, 12, 4), 1800), (date(2026, 12, 11), 1800))
+
+    assert check_document(_document(split, _po_line(2), total=total), SHIPPED) == ()
+
+
+def test_a_split_po_is_never_a_duplicate_of_an_erp_order_holding_the_line_once() -> None:
+    """The mock ERP export holds one entry per line; a PO splitting that line
+    matches it only schedule by schedule, so it is a revision Sales reads,
+    never a duplicate closed unread, until the real export says how the ERP
+    holds schedules (ticket 12)."""
+    split = _split((date(2026, 12, 4), 1800), (date(2026, 12, 11), 1800))
+
+    history = _history(_document(split), orders=(_bravo(),))
+
+    assert history.finding is not None
+    assert (history.finding.code, history.duplicate_of_so) == (FindingCode.REVISED_PO, None)
+    assert _history(_document(), orders=(_bravo(),)).finding.code is FindingCode.DUPLICATE_PO

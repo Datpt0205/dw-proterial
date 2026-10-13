@@ -56,9 +56,11 @@ của nó.
 1. **`CLAUDE.md` bước 5** ghi grader "in `dw_evals`". Sau ticket 01, grader của context nằm
    trong package của context và đăng ký ở seam của `scripts/run_evals.py`. Đề xuất: sửa câu
    đó trong cùng thay đổi (đây là đổi kiến trúc ghi lại, không lệch thầm lặng).
+   **Đã đóng** trong `5643634`: bước 5 nay ghi `dw_<name>.testing` và seam ở `run_evals.py`.
+   Còn lệch: DW1 đặt grader ở `dw_sales.evals` (xem Comments của ticket 01).
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                       | Status          | Blocked by |
-| --- | ------------------------------------------------------------------------------------------------------------ | --------------- | ---------- |
-| 01  | [`run_dataset` nhận bảng grader; seam đăng ký ở `run_evals.py`](issues/01-run-dataset-takes-grader-table.md) | ready-for-agent | —          |
+| #   | Ticket                                                                                                       | Status | Blocked by |
+| --- | ------------------------------------------------------------------------------------------------------------ | ------ | ---------- |
+| 01  | [`run_dataset` nhận bảng grader; seam đăng ký ở `run_evals.py`](issues/01-run-dataset-takes-grader-table.md) | done   | —          |

@@ -1,0 +1,9 @@
+{
+  "finding": "legacy_encoding:-",
+  "unmatched_lines": [
+    2
+  ],
+  "allowed": [
+    "ask_customer"
+  ]
+}

@@ -1222,6 +1222,7 @@ source = { editable = "packages/python/dw_sales" }
 dependencies = [
     { name = "dw-agent-runtime" },
     { name = "dw-kernel" },
+    { name = "dw-observability" },
     { name = "dw-platform" },
     { name = "fastapi" },
     { name = "langgraph" },
@@ -1243,6 +1244,7 @@ requires-dist = [
     { name = "dw-agent-runtime", editable = "packages/python/dw_agent_runtime" },
     { name = "dw-evals", marker = "extra == 'evals'", editable = "packages/python/dw_evals" },
     { name = "dw-kernel", editable = "packages/python/dw_kernel" },
+    { name = "dw-observability", editable = "packages/python/dw_observability" },
     { name = "dw-platform", editable = "packages/python/dw_platform" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "langgraph", specifier = ">=0.6,<2" },

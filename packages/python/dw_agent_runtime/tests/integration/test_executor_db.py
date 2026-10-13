@@ -126,7 +126,7 @@ async def test_denied_tool_call_is_audited(urls: RuntimeUrls) -> None:
                 workspace_id=context.workspace_id,
             )
         ).items
-    denied = [e for e in events if e.action == "tool.denied"]
+    denied = [entry.event for entry in events if entry.event.action == "tool.denied"]
     assert denied, "denied tool call must leave an audit event"
     assert denied[0].policy_decision == "deny_missing_scope"
     assert denied[0].resource_id == "task.dispatch@1.0.0"

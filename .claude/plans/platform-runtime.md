@@ -120,7 +120,8 @@ Mốc 6 (running many customers) is half done:
   `ready-for-agent`, product-neutral), each under `platform-runtime/<folder>/`:
   `scope-holder-check` (ask whether a user holds a scope without an
   `AccessContext`, for apply-time checks and worker lanes), `eval-grader-registry`
-  (a context registers its own graders), `approval-inbox-link` (`/approvals`
+  (a context registers its own graders; ticket 01 **done**, code from
+  `5643634`, reviewed 2026-10-12), `approval-inbox-link` (`/approvals`
   links a context's approval to that context's own inbox), `nav-any-scope` (a
   menu item shown for any of several scopes), `support-access` (support access
   the customer grants, ADR 0008), `tenant-members-and-invitations` (tenant-wide
@@ -256,6 +257,13 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   `details.reason_code`. `SqlScopeHolders` now has its first caller
   (`scopes_of`, the granter's current scopes). Open: the `/platform` console
   tables (web), conflict of interest at assignment.
+
+- **`support-access/02`** (resolved 2026-10-12): the support context (MFA from
+  `amr`, deny-by-default routes, `support.access` audit) and, step 10,
+  `GET /audit/events?support_grant_id=` with `actor_display_name` and
+  `actor_kind` (`support` only for the grant's own staff member; index
+  `f1980035d8de`). Open: the web `/audit` page does not show the two fields
+  yet; the realm change is applied by hand to a running Keycloak.
 
 - **`tenant-members-and-invitations/01`:** `GET /admin/members` (tenant-wide,
   `vi-VN-x-icu` order, measured present), `PUT /admin/members/{id}/memberships`
