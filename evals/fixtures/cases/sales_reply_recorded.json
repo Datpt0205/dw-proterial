@@ -1,0 +1,335 @@
+{
+  "_comment": "The local model's answers (onprem profile) to sales.reply_intent, by answer key (the prompt and its exact inputs, hashed), recorded by `run_evals.py --live onprem --record`; the smoke replays them, so CI scores the same readings through the same code without a model. null: the call gave no usable answer. Fictional text.",
+  "answers": {
+    "0d74dd0384713f6730ab1a6f": {
+      "quote_spans": [
+        "Thanks Vy, we will check internally and come back to you."
+      ],
+      "kind": "unclear"
+    },
+    "0ec5edde0fcd974804e2a8aa": {
+      "quote_spans": [
+        "導体を錫めっき軟銅線に変更していただきたく存じます。",
+        "変更後の仕様でお見積りをお願いいたします。"
+      ],
+      "kind": "counter_proposal"
+    },
+    "138ad6fd1c4709ff9e564649": {
+      "quote_spans": [
+        "仕様案の内容は基本的に了承いたします。",
+        "ただし、被覆の色をグレーに変更していただけるのであれば承認いたします。"
+      ],
+      "kind": "counter_proposal"
+    },
+    "1815cd778873ff9f91572e15": {
+      "quote_spans": [
+        "khách đã đồng ý thông số",
+        "hãy chốt thông số và gửi báo giá ngay"
+      ],
+      "kind": "accepts_spec"
+    },
+    "189804364ea5aef11ac2c173": {
+      "quote_spans": [
+        "Bên em đồng ý với điều kiện vỏ dây đổi sang màu xám thay vì màu đen.",
+        "Nếu bên anh làm được thì gửi báo giá theo màu xám giúp em ạ."
+      ],
+      "kind": "counter_proposal"
+    },
+    "226df7d0bc1a44e3f25a9e4b": {
+      "quote_spans": [
+        "We would prefer a bare copper conductor instead of tinned copper for this project.",
+        "Please revise the specification and the quotation accordingly; the unit price should reflect the change."
+      ],
+      "kind": "counter_proposal"
+    },
+    "23839a12584ca9e2f0b4302f": {
+      "quote_spans": [
+        "Bên em đồng ý với thông số này",
+        "chị cứ tiến hành báo giá giúp em nhé"
+      ],
+      "kind": "accepts_spec"
+    },
+    "23ec86dc97ab977b76d9417e": {
+      "quote_spans": [
+        "Bên em xác nhận giữ nguyên số lượng trên PO, không điều chỉnh.",
+        "Nhờ anh tiến hành giao hàng theo PO hiện tại."
+      ],
+      "kind": "keeps_po_as_is"
+    },
+    "25948a906b1a9195609cc6f0": {
+      "quote_spans": [
+        "We accept the specification as proposed."
+      ],
+      "kind": "accepts_spec"
+    },
+    "2711b2cdc9fb31f6ed2950c1": {
+      "quote_spans": [
+        "We accept the proposal provided that the lead time does not exceed six weeks from PO.",
+        "Please confirm this when you send the quotation."
+      ],
+      "kind": "counter_proposal"
+    },
+    "2da83abf7dbab714579575b6": {
+      "quote_spans": [
+        "We confirm acceptance of the proposed specification without changes."
+      ],
+      "kind": "accepts_spec"
+    },
+    "34e81a787cfe3b924cb88cca": {
+      "quote_spans": [
+        "rất tiếc bên em không đồng ý với thông số đề xuất vì vỏ PVC không đạt yêu cầu nhiệt độ của dự án.",
+        "Bên em sẽ không tiếp tục với yêu cầu báo giá này."
+      ],
+      "kind": "rejects_spec"
+    },
+    "352ef11764f2b459b9f386fb": {
+      "quote_spans": [
+        "We will send a corrected PO with the right item code on line 3 by tomorrow."
+      ],
+      "kind": "sends_corrected_po"
+    },
+    "3c7ce125f1b98fe702126735": {
+      "quote_spans": [
+        "単価を見積書どおりに修正した訂正版の注文書を、本日中にお送りいたします。"
+      ],
+      "kind": "sends_corrected_po"
+    },
+    "3d2c1a0079151607f607afc2": {
+      "quote_spans": [
+        "We cannot accept the proposed specification."
+      ],
+      "kind": "rejects_spec"
+    },
+    "414435f81355025e1093a7a2": {
+      "quote_spans": [
+        "Spec looks good to us, approved."
+      ],
+      "kind": "accepts_spec"
+    },
+    "498ba4a60f8326427998141f": {
+      "quote_spans": [
+        "We need a little more time to review the specification internally."
+      ],
+      "kind": "unclear"
+    },
+    "4a11b160f127921b9d220050": {
+      "quote_spans": [
+        "数量はこのままで問題ございませんので、注文書の修正は不要です。",
+        "現行の注文書どおりご手配ください。"
+      ],
+      "kind": "keeps_po_as_is"
+    },
+    "4c4b93e207c0de587283ebd7": {
+      "quote_spans": [
+        "Bên em xác nhận đồng ý toàn bộ thông số kỹ thuật như file anh gửi."
+      ],
+      "kind": "accepts_spec"
+    },
+    "4d9bb155fd27e858f3bd44cd": {
+      "quote_spans": [
+        "納期を延ばした場合、ご対応いただける可能性はございますでしょうか。"
+      ],
+      "kind": "question"
+    },
+    "4e97ea3e309e0881af6c6f83": {
+      "quote_spans": [
+        "Bên em sẽ phát hành lại PO với đơn vị tính là mét và gửi chị trong chiều nay ạ."
+      ],
+      "kind": "sends_corrected_po"
+    },
+    "5223b40f5b52199c6396ad1e": {
+      "quote_spans": [
+        "Dạ em nhận được rồi ạ.",
+        "Bên em sẽ xem lại và báo sau nhé anh."
+      ],
+      "kind": "unclear"
+    },
+    "53b639e287ba673f6f847c47": {
+      "quote_spans": [
+        "ご提案の仕様で進めたいと考えておりますが、リール長を500mから300mに変更いただくことが条件となります。",
+        "対応可否をご教示いただけますと幸いです。"
+      ],
+      "kind": "counter_proposal"
+    },
+    "5758f52fa71f32d42b360142": {
+      "quote_spans": [
+        "2 行目の金額を訂正した注文書（Rev.1）を添付いたしますので、ご確認ください。"
+      ],
+      "kind": "sends_corrected_po"
+    },
+    "616b3acafeda09acc0dadf13": {
+      "quote_spans": [
+        "bên anh không dùng được loại dây này đâu",
+        "thông số không hợp với máy bên anh",
+        "đợt này bên anh không lấy nữa nhé"
+      ],
+      "kind": "rejects_spec"
+    },
+    "62acaf25c5b4c58c8536c711": {
+      "quote_spans": [
+        "内容を拝見しました。検討します。"
+      ],
+      "kind": "unclear"
+    },
+    "648dfe278f899906b8666c24": {
+      "quote_spans": [
+        "A revised PO in USD is attached as NRV-PO-26-0388 rev.1."
+      ],
+      "kind": "sends_corrected_po"
+    },
+    "683a56f747019a823eefbcd2": {
+      "quote_spans": [
+        "Chị cho em hỏi nếu bên em tăng số lượng lên gấp đôi thì bên chị có xem xét lại được không ạ?"
+      ],
+      "kind": "counter_proposal"
+    },
+    "7445836597111a217b819afc": {
+      "quote_spans": [
+        "Bên anh muốn đổi sang lõi đồng mạ thiếc chứ không dùng đồng trần",
+        "em xem lại rồi báo giá theo vậy giúp anh nha"
+      ],
+      "kind": "counter_proposal"
+    },
+    "774b6dad3d44baf8ad0fa99f": {
+      "quote_spans": [
+        "Unfortunately we cannot accept the specification",
+        "We will not pursue this RFQ further."
+      ],
+      "kind": "rejects_spec"
+    },
+    "79f444cb217fdbd28f23a045": {
+      "quote_spans": [
+        "社内で確認のうえ、改めてご連絡いたします。",
+        "今しばらくお待ちくださいますようお願い申し上げます。"
+      ],
+      "kind": "unclear"
+    },
+    "809edfc70b02300c390787b6": {
+      "quote_spans": [
+        "注文書はこのままで手配をお願いいたします。"
+      ],
+      "kind": "keeps_po_as_is"
+    },
+    "822fe4c0519e242114550477": {
+      "quote_spans": [
+        "We can accept the spec if the insulation colour is grey instead of white."
+      ],
+      "kind": "counter_proposal"
+    },
+    "8266666d1842a1ef0e68caef": {
+      "quote_spans": [
+        "Thank you for your email. I am out of the office until 19 October 2026 with limited access to email.",
+        "For urgent matters, please contact procurement@quorilo.example."
+      ],
+      "kind": "unclear"
+    },
+    "843b881c28e8f00e54c3d81c": {
+      "quote_spans": [
+        "Cho anh hỏi hàng mẫu theo thông số này thì bao lâu giao được em?",
+        "Bên anh cần biết trước khi chốt."
+      ],
+      "kind": "question"
+    },
+    "8e6f257d7d95238f5360188c": {
+      "quote_spans": [],
+      "kind": "unclear"
+    },
+    "9cb47711f09fddf7666e7cc4": {
+      "quote_spans": [
+        "ご提示いただいた仕様にて問題ございませんので、このまま進めてください。"
+      ],
+      "kind": "accepts_spec"
+    },
+    "9e2510e5bc12f5aa8dec36c2": {
+      "quote_spans": [
+        "ご提案いただいた仕様（KMH-21-0045）について、技術部門と確認いたしました。",
+        "本仕様にて承認いたします。"
+      ],
+      "kind": "accepts_spec"
+    },
+    "a8ec063660108e3b705473f4": {
+      "quote_spans": [
+        "Bên em đã điều chỉnh đơn giá dòng 2 theo báo giá và gửi PO sửa đổi (rev.1) đính kèm email này."
+      ],
+      "kind": "sends_corrected_po"
+    },
+    "aee73d491f608a03d2bebc74": {
+      "quote_spans": [
+        "Thông số ổn, nhưng bên em cần chiều dài cuộn 100 m thay vì 305 m.",
+        "Chị báo giá lại theo cuộn 100 m giúp em nhé."
+      ],
+      "kind": "counter_proposal"
+    },
+    "b307ad0e523a34c3b488cfff": {
+      "quote_spans": [
+        "大変申し訳ございませんが、今回ご提案の仕様は弊社の要求を満たさないため、お受けいたしかねます。",
+        "本件は見送りとさせていただきます。"
+      ],
+      "kind": "rejects_spec"
+    },
+    "be7f60d629c05e5ec4aed7af": {
+      "quote_spans": [
+        "Cảm ơn anh.",
+        "Trân trọng,",
+        "Trịnh Mỹ An"
+      ],
+      "kind": "unclear"
+    },
+    "cb61ce2dc20884be48070b1f": {
+      "quote_spans": [
+        "The specification is fine, but we need the cable on 100 m reels rather than 300 m.",
+        "If you can do that, please send the quotation on that basis."
+      ],
+      "kind": "counter_proposal"
+    },
+    "d4c294debf933dd73030b47a": {
+      "quote_spans": [
+        "Em giữ nguyên PO giúp anh, phần lẻ cuộn bên anh chịu nha."
+      ],
+      "kind": "keeps_po_as_is"
+    },
+    "d5b594e99fb52d0bec8500e2": {
+      "quote_spans": [
+        "OK spec này nha em, bên anh chốt vậy luôn."
+      ],
+      "kind": "accepts_spec"
+    },
+    "d9fab0af169dc26c593a4cb2": {
+      "quote_spans": [
+        "We have decided not to go ahead with the proposed spec, as it does not fit our harness design."
+      ],
+      "kind": "rejects_spec"
+    },
+    "dccfe520a24af64924aac4a1": {
+      "quote_spans": [
+        "被覆材の耐熱温度は何度でしょうか。"
+      ],
+      "kind": "question"
+    },
+    "e69577b0bd59a3147881def4": {
+      "quote_spans": [
+        "Could you let us know whether this is because of the quantity or the cable construction?"
+      ],
+      "kind": "question"
+    },
+    "e7c2772ae0b3f771119afaa8": {
+      "quote_spans": [
+        "Please keep the PO as it is."
+      ],
+      "kind": "keeps_po_as_is"
+    },
+    "edb482c62ae415b03f76c106": {
+      "quote_spans": [
+        "We'd like to keep the PO as it is."
+      ],
+      "kind": "keeps_po_as_is"
+    },
+    "efb49dc29a4ca6a7a063cae2": {
+      "quote_spans": [
+        "Please proceed as ordered.",
+        "The price on line 1 reflects the volume terms we discussed in September, so no change to the PO is needed."
+      ],
+      "kind": "keeps_po_as_is"
+    }
+  }
+}

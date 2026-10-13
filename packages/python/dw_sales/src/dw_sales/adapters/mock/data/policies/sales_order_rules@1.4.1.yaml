@@ -1,14 +1,15 @@
 schema_version: "1.0"
 policy_id: sales_order_rules
-policy_version: "1.3.1"
+policy_version: "1.4.1"
 
 # THE DEMO TENANT'S OWN VERSION of sales_order_rules, in the fictional mock
 # sample set: what the tenant the mock data is bound to (SALES_DEMO_*) checks
-# its orders under. Platform 1.3.0 with the model steps on: model_assist.
-# description_attributes (ticket 28), message_intent (ticket 31) and
-# rfq_extraction (ticket 29), so the local demo shows a model reading what
-# DW1's own code does not (dw_sales ADR 0005). Every other tenant reads the
-# platform's 1.3.0, where all three are off.
+# its orders under. Platform 1.4.0 with the model steps on: model_assist.
+# description_attributes (ticket 28), message_intent (ticket 31),
+# rfq_extraction (ticket 29), reply_intent (ticket 32), request_handoff
+# (ticket 33) and layout_proposal (ticket 30), so the local demo shows a model
+# reading what DW1's own code does not (dw_sales ADR 0005). Every other tenant
+# reads the platform's 1.4.0, where all six are off.
 #
 # A tenant version carries its own number (TenantOrderRules refuses one that
 # reuses the platform's), so a case's rules stamp says which was applied.
@@ -33,6 +34,10 @@ policy_version: "1.3.1"
 # 1.3.0 (tickets 29 and 31, dw_sales ADR 0005): model_assist gains
 # message_intent, rfq_extraction and unread_retry_hours, the two steps off.
 # Nothing else changed.
+# 1.4.0 (tickets 30, 32 and 33, dw_sales ADR 0005): model_assist gains
+# reply_intent, request_handoff and layout_proposal, the three steps off; a
+# new key, layout_onboarding, holds how many POs a newly approved PO layout
+# reads with every value flagged. Nothing else changed.
 
 # A PO unit price passes when it is within this fraction of the quoted unit
 # price, in the quotation's currency. "0": it must equal the quotation. A
@@ -112,11 +117,39 @@ fiscal_year_start_month: 4
 #   next processing to try again; after it, the message is routed `other`
 #   with "DW1 did not understand". A budget or quota refusal is never this:
 #   it stops the run.
+# reply_intent: a local model reads what a customer's reply in the thread of
+#   a case says (accepts the spec, rejects it, keeps the PO as is, ...) and
+#   quotes the sentences it read that from. Code finds the case from the
+#   mail's thread headers, never from the model, locates every quote, and
+#   proposes the next step only where the case's status allows it; Sales
+#   confirms it (ticket 32). Off: the reply is attached to its case, unread.
+# request_handoff: a local model copies, from a delivery-change, complaint or
+#   sample-request mail, the PO number, lines, quantities, dates, lot and the
+#   customer's own sentences into a hand-off Sales reviews and sends to PC or
+#   QA. Code locates each span, parses every number and date, resolves the PO
+#   only against the sender's own orders and writes the hand-off from a
+#   versioned template; the model writes no sentence of it (ticket 33).
+# layout_proposal: a local model proposes which label on a new customer PO
+#   form names which field, for the layout-onboarding screen a person
+#   completes; code checks every label and runs the reader over the proposal,
+#   and a second person approves the layout. Values are only ever read by the
+#   reader through an approved layout (ticket 30).
 model_assist:
   description_attributes: true
   message_intent: true
   rfq_extraction: true
   unread_retry_hours: 24
+  reply_intent: true
+  request_handoff: true
+  layout_proposal: true
+
+# A PO layout a person approved (ticket 30) is trusted only after people have
+# confirmed what it read: the first this-many POs read through a new or
+# changed layout keep every value `value_uncertain`, for Sales to confirm
+# field by field, so an approved but wrong mapping cannot repeat silently.
+# Interim default, Proterial's to set.
+layout_onboarding:
+  uncertain_first_pos: 3
 
 # error is blocking: what is wrong with the order as printed, accepted only
 # where the findings table allows it and with a reason. warning is shown and

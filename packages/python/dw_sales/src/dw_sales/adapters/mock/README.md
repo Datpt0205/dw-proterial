@@ -29,7 +29,7 @@ backticks around codes, `none` for nothing, `(line n)` after a line's finding.
 | `lme.json`          | 12      | Monthly LME copper, 2025-10 .. 2026-09, a fictional series that is not market data.                                                                                                                                                                                                             |
 | `bravo_orders.json` | 14      | The ERP's 12-month sales-order export. `SO26-0919` was keyed by hand from the PO `M19` re-sends. The rest is history: what a customer ordered (`SO25-1120` for `M10`) and what the yearly screening reads.                                                                                      |
 | `open_ycbg.json`    | 6       | Quote requests (YCBG) entered in the ERP and not closed. Four answer the requests in the mailbox; two are older and still wait on Design.                                                                                                                                                       |
-| `inbox.json`        | 40      | The messages below, with the mail system's SPF, DKIM and DMARC results. Sizes and SHA-256 digests are not in the file: `MockInbox` computes them from the attachment bytes.                                                                                                                     |
+| `inbox.json`        | 43      | The messages below, with the mail system's SPF, DKIM and DMARC results. Sizes and SHA-256 digests are not in the file: `MockInbox` computes them from the attachment bytes.                                                                                                                     |
 
 `snapshot.json` holds the one `as_of` every catalogue read returns: when this
 fictional export was taken, after the last message arrived.
@@ -44,7 +44,8 @@ them: a flow sees the attachment bytes through `InboxPort`, never these files.
 Expectations assume every message is processed once, oldest first by
 `received_at`, which is the order `InboxPort.list_messages` returns and the
 order of the ids. A classification is one of `po`, `revised_po`,
-`quote_request`, `design_reply` and `other`. Every message ends in exactly one
+`quote_request`, `design_reply`, `case_reply` (a reply whose thread headers
+name a message already on a case of the sender's customer) and `other`. Every message ends in exactly one
 disposition, with its routing reason when it is routed to Sales; dispositions,
 reasons and finding codes are the glossary's
 (`packages/python/dw_sales/CONTEXT.md`). _Customer_ is the customer the message
@@ -93,6 +94,9 @@ else by the YCBG a Design reply quotes.
 | `M38`   | `NRV`    | A request for quotation printed as the customer's own text PDF, with a target price and a reel length in a description. The fixed-label reader reads no PDF.    | `NRV-RFQ-26-0130.pdf`      | `quote_request` | `routed_to_sales` (`attachment_unreadable`)  | none                                                                                                           |
 | `M39`   | `KMH`    | A request for quotation in the customer's own Japanese sheet, without the "RFQ No." label; line 2 leaves the quantity blank; a hidden row holds an instruction. | `KMH-RFQ-261002-01.xlsx`   | `quote_request` | `routed_to_sales` (`attachment_unreadable`)  | none                                                                                                           |
 | `M40`   | `BRN`    | Asks to postpone receiving `M35`'s order in words no keyword table lists ("lùi ngày nhận hàng"). Names the PO, carries no attachment.                           | none                       | `other`         | `routed_to_sales` (`other`)                  | none                                                                                                           |
+| `M41`   | `QRL`    | Accepts the spec Design proposed for `M09`, replying in its thread. Its subject still says RFQ: a reply, not a new request.                                     | none                       | `case_reply`    | `attached_to_case`                           | none                                                                                                           |
+| `M42`   | `NRV`    | Replies in `M04`'s thread to keep the PO as it is: line 2's price was agreed. Names a PO, carries no attachment.                                                | none                       | `case_reply`    | `attached_to_case`                           | none                                                                                                           |
+| `M43`   | `NRV`    | A PO from Norvanta's new system in its own PDF form, which no layout reads: routed until a person maps the form (ticket 30).                                    | `NRV-PO-26-0502.pdf`       | `po`            | `routed_to_sales` (`attachment_unreadable`)  | none                                                                                                           |
 
 Every finding code in the glossary is raised by a message here except
 `revision_without_base`, which comes from processing `M07` before `M04`, and

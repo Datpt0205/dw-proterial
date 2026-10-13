@@ -47,6 +47,7 @@ from pypdf import PdfReader
 
 from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules
 from dw_sales.domain.anchors import PageBox, SourceAnchor
+from dw_sales.domain.layouts import LabelCell
 from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
@@ -63,9 +64,13 @@ from dw_sales.domain.orders import (
     PrintedTotal,
     Unreadable,
 )
+from dw_sales.domain.rfq_reading import parse_currency
 
-PARSER_VERSION = "pdf_po_reader@1.3.0"
+PARSER_VERSION = "pdf_po_reader@1.4.0"
+# A form need not print its revision: its POs then read as revision 0 (ticket 30).
+REQUIRED_HEADER = frozenset({"po_no", "po_date", "currency"})
 _CELL_GAP = re.compile(r"\s{2,}")
+_TRAILING_WORDS = re.compile(r"(?:\s+[^\d\s]+)+$")
 # The tag a PDF puts before an embedded subset's font name: ``ABCDEF+``.
 _SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 # Average glyph advance as a share of the font size: the width estimate.
@@ -89,8 +94,8 @@ class PdfLayout:
     total_label: str | None = None
 
     def __post_init__(self) -> None:
-        if set(self.header_labels) != set(get_args(PoHeaderField)):
-            raise ValueError(f"a PDF layout labels every header field {get_args(PoHeaderField)}")
+        if not REQUIRED_HEADER <= set(self.header_labels) <= set(get_args(PoHeaderField)):
+            raise ValueError(f"a PDF layout labels the header fields {sorted(REQUIRED_HEADER)}")
         fields = [f for _, f in self.columns if f is not None]
         if sorted(fields) != sorted(get_args(PoLineField)):
             raise ValueError(
@@ -182,6 +187,73 @@ class PdfPoReader:
         except _RefusedError as refused:
             return Unreadable(reason=refused.reason, anchor=refused.anchor)
 
+    def has_layout(self, customer_code: str) -> bool:
+        """Whether this reader holds the customer's layout."""
+        return customer_code in self._layouts
+
+    def read_with(
+        self,
+        document: AttachmentContent,
+        layout: PdfLayout,
+        caps: IntakeCaps,
+        *,
+        layout_ref: str,
+    ) -> PoDocument | Unreadable:
+        """``document`` read with a tenant's own approved layout (ticket 30),
+        the PO stamped with which one."""
+        try:
+            read = _Pdf(_pages(document.data, caps), layout, document.attachment).read()
+        except _RefusedError as refused:
+            return Unreadable(reason=refused.reason, anchor=refused.anchor)
+        return read.model_copy(update={"layout_ref": layout_ref})
+
+    def label_cells(self, document: AttachmentContent, caps: IntakeCaps) -> list[LabelCell]:
+        """The first page's text a label may be (ticket 30): each line split
+        into its cells as the reader splits a table row, and a ``Label: value``
+        line as its label alone."""
+        try:
+            pages = _pages(document.data, caps)
+        except _RefusedError:
+            return []
+        page = pages[0]
+        cells: list[LabelCell] = []
+        for row, text in enumerate(page.lines, start=1):
+            head, colon, _ = text.strip().partition(":")
+            single = colon and len(_cells(head)) == 1 and len(head) <= _LABEL_LENGTH
+            for column, cell in enumerate([head.strip()] if single else _cells(text), start=1):
+                if not cell or len(cell) > _LABEL_LENGTH:
+                    continue
+                cells.append(
+                    LabelCell(
+                        ref=f"p{page.number}:{row}:{column}",
+                        sheet=f"page {page.number}",
+                        row=row,
+                        column=column,
+                        text=" ".join(cell.split()),
+                        labelled=bool(single),
+                    )
+                )
+        return cells
+
+    def form_rows(self, document: AttachmentContent, caps: IntakeCaps) -> list[list[str]]:
+        """The first page's lines as a person reads them: a ``Label: value``
+        line as its label and its value, any other line as its cells."""
+        try:
+            pages = _pages(document.data, caps)
+        except _RefusedError:
+            return []
+        rows: list[list[str]] = []
+        for text in pages[0].lines:
+            head, colon, value = text.strip().partition(":")
+            if colon and len(_cells(head)) == 1 and len(head) <= _LABEL_LENGTH:
+                rows.append([head.strip(), value.strip()][: 2 if value.strip() else 1])
+            elif cells := _cells(text):
+                rows.append([" ".join(cell.split())[:200] for cell in cells])
+        return rows
+
+
+_LABEL_LENGTH = 80
+
 
 def _pages(data: bytes, caps: IntakeCaps) -> list[_Page]:
     if len(data) > caps.max_attachment_bytes:
@@ -263,7 +335,7 @@ class _Pdf:
             "po_no": _one_line,
             "revision": _whole_number,
             "po_date": self._day,
-            "currency": str.upper,
+            "currency": _currency,
         }
         self._line_values: Mapping[PoLineField, Callable[[str], object]] = {
             "line_no": _whole_number,
@@ -342,6 +414,9 @@ class _Pdf:
                 raise _RefusedError(f"{name.replace('_', ' ')} {exc}", anchor) from exc
             anchors[name] = anchor
             legacy.extend(page.legacy_text(name, run))
+        if "revision" not in values:
+            values["revision"] = 0
+            anchors["revision"] = anchors["po_no"]
         try:
             return PoHeader.model_validate(
                 {**values, "anchors": PoHeaderAnchors(**anchors), "legacy": tuple(legacy)}
@@ -357,8 +432,9 @@ class _Pdf:
         if not found:
             return None
         anchor, value, run, page = found[-1]
-        # The amount, then the currency it is printed in.
-        amount = value.split()[0] if value.split() else value
+        # The amount, then the currency it is printed in: the words after the
+        # number go, a space that groups thousands stays (`1 443.80 USD`).
+        amount = _TRAILING_WORDS.sub("", value).strip()
         try:
             return PrintedTotal(
                 amount=self._decimal(amount),
@@ -462,6 +538,12 @@ def _labelled(text: str, label: str) -> str | None:
 
 def _one_line(text: str) -> str:
     return " ".join(text.split())
+
+
+def _currency(text: str) -> str:
+    """The currency as ISO: a symbol or a word customers write for one
+    (`rfq_reading.parse_currency`, the one table of them), else as printed."""
+    return parse_currency(text) or text.strip().upper()
 
 
 def _whole_number(text: str) -> int:

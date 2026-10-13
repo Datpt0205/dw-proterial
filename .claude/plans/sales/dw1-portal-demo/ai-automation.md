@@ -1,7 +1,7 @@
 # DW1: where a model takes work off people
 
-Status: proposal, 2026-10-12. Đạt decides. Tickets 28, 29 and 31 are
-built (2026-10-13); 30, 32 and 33 are `needs-triage`.
+Status: proposal, 2026-10-12. Đạt decides. All six candidates are built
+(2026-10-13, uncommitted, Đạt away): 28, 29 and 31, then 30, 32 and 33.
 
 Until 2026-10-13 DW1 called no model. Reading, mapping, checks, files and
 emails are deterministic code, and anything unusual is routed to a person.
@@ -40,7 +40,27 @@ the same local model:
 - Live portal flow: the 40-message mailbox in 149.7 s, 15 model calls,
   14,317 input tokens in the one run.
 
-Next: ticket 30, then 32 and 33 (Đạt's order).
+**Built last (2026-10-13, same footing):** tickets 32 (Q5, Q6, O8: a reply in
+a case's thread), 33 (O5, CL1, samples: a hand-off draft) and 30 (O3: a new
+customer's PO form), on the same local model:
+
+- Ticket 32, 46 golden replies: 95.7% kind accuracy, 0 false
+  `accepts_spec` on 11 conditional or non-answer replies (bar: zero, and
+  85% on the rest: 94.3%); every quote located; 52.2% propose a step, 47.8%
+  go to Sales with no proposal; p50 3.6 s, p95 4.7 s. The thread link that
+  attaches the reply needs no model.
+- Ticket 33, 33 golden mails (73 fields): 94.5% of fields right (bar 85%),
+  0 invented, 0 injected text in a hand-off, 0 POs of another customer;
+  12.1% open an empty form; p50 5.0 s, p95 7.2 s.
+- Ticket 30, 12 golden forms (171 fields): 98.2% of fields right (bar 90%),
+  11 of 12 pre-fills kept, 0 kept with a wrong label, swaps and the order
+  date as delivery date refused; p50 9.4 s, p95 9.9 s, once per form. The
+  onboarding screen and the approval (a run-less platform approval, dw_sales
+  ADR 0004 amendment) work with no model.
+- Live portal flow: M41/M42 proposals taken through the case's own steps,
+  four hand-off drafts, M43 pre-filled, approved and read with every value
+  flagged; the 43-message mailbox processed, 23 model calls, 21,444 input
+  tokens.
 
 ## The rule every candidate follows
 
@@ -111,11 +131,14 @@ removing them; shadow measurement only).
    same pairs are the free gold labels for ticket 28.
 2. **Deterministic fixes the model tickets lean on:** content-first ordering
    in `_kind` (done with ticket 31); thread headers on `InboundMessage`
-   (open; the newest part is cut by structure instead, `mail_parts`); the
-   RFQ `.xlsx` filename gate (done with ticket 29: the bytes decide); the PO
-   reader fixes listed in ticket 30.
+   (done with ticket 32: `internet_message_id` and `references`); the RFQ
+   `.xlsx` filename gate (done with ticket 29: the bytes decide); the PO
+   reader fixes listed in ticket 30 (an optional revision and a currency
+   alias done; a blank date and an .xlsx with its PDF print are ticket 34).
 3. **A layout-onboarding screen** with layouts stored as tenant data and an
-   approval record (the larger half of ticket 30's value, no model).
+   approval record (the larger half of ticket 30's value, no model). Done
+   with ticket 30: `/sales/layouts/new`, `sales.po_layouts`, the
+   `sales.layout` approval.
 4. **Before any model step** (one change, shared by tickets 28-33):
     - a `dw_sales` ADR that replaces spec decision 13 and the "no model
       call" non-goal;
@@ -144,8 +167,8 @@ removing them; shadow measurement only).
       tickets 29 and 31 cut or split every call under it.
     - Latency was measured on GPU only, not on CPU.
 
-5. Tickets **28**, **29** and **31** (done 2026-10-13), then **30**,
-   **32**, **33**.
+5. Tickets **28**, **29** and **31**, then **30**, **32**, **33** (all done
+   2026-10-13).
 
 Each ticket ships with its switch off for every tenant. A tenant turns one
 on through an approved version of its own rules (ticket 19) once that

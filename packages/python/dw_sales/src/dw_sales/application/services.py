@@ -24,7 +24,9 @@ from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.drafting import ArtifactCopy
+from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
+from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
@@ -60,6 +62,7 @@ class SalesServices:
     master_data: MasterDataService
     worker: WorkerService
     assignment: AssignmentService
+    layouts: LayoutService
     gate: Gate
 
 
@@ -67,6 +70,8 @@ class SalesServices:
 class SalesAssembly:
     services: SalesServices
     decisions: CaseDecisions
+    # The decision guard of a PO layout's approval (`sales.layout`, ticket 30).
+    layout_decisions: LayoutDecisions
 
 
 def assemble(
@@ -87,6 +92,8 @@ def assemble(
     artifact_bytes: ArtifactBytesPort,
     artifact_writer: ArtifactWriterPort,
     artifact_copy: ArtifactCopy,
+    handoff_copy: HandoffCopy,
+    layout_checks: LayoutChecks,
     release_manifest_ref: str | None,
     runs: Dw1RunsPort,
     pending: PendingDecisionsPort,
@@ -109,7 +116,7 @@ def assemble(
     )
     services = SalesServices(
         overview=OverviewService(uow, gate, clock, inbox, kpi, directory, pending),
-        inbox=InboxQueries(uow, gate, inbox),
+        inbox=InboxQueries(uow, gate, inbox, handoff_copy),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=OrderQueries(uow, gate, pending),
         order_commands=OrderCommands(uow, gate, clock, ids, intake, pending),
@@ -131,7 +138,10 @@ def assemble(
         master_data=MasterDataService(gate, catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
+        layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing)
-    return SalesAssembly(services=services, decisions=decisions)
+    return SalesAssembly(
+        services=services, decisions=decisions, layout_decisions=LayoutDecisions(uow, clock)
+    )

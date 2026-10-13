@@ -51,7 +51,7 @@ from dw_sales.domain.orders import PoDocument, PoLine, RegionFlag, Unreadable
 pytestmark = pytest.mark.unit
 
 CAPS = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.3.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.4.0.yaml"
 ).intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)
@@ -156,7 +156,7 @@ def test_every_anchor_names_the_file_by_its_sha256_and_the_reader_by_its_version
     digest = hashlib.sha256(data).hexdigest()
     assert po.attachment_sha256 == digest
     assert {(a.attachment_id, a.attachment_sha256) for a in po.anchors()} == {("A1", digest)}
-    assert po.parser_version == "excel_po_reader@1.3.0"
+    assert po.parser_version == "excel_po_reader@1.4.0"
 
 
 def test_the_coverage_facts_are_read_with_the_lines() -> None:
@@ -631,7 +631,7 @@ def test_a_text_pdf_is_read_with_every_value_at_its_page_and_box() -> None:
     assert (po.rows_printed, po.regions, po.parser_version) == (
         3,
         ("page 1",),
-        "pdf_po_reader@1.3.0",
+        "pdf_po_reader@1.4.0",
     )
 
 

@@ -61,7 +61,7 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(ROOT / "configs" / "policies" / "sales_order_rules@1.3.0.yaml")
+RULES = load_order_rules(ROOT / "configs" / "policies" / "sales_order_rules@1.4.0.yaml")
 CAPS = RULES.intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)
@@ -195,7 +195,7 @@ def test_no_mock_po_but_m33_holds_text_typed_in_a_legacy_font() -> None:
     """The existing fixtures raise no `legacy_encoding`."""
     affected = set()
     for po in load_purchase_orders():
-        if po.layout == "pdf_image" or po.customer_code is None:
+        if po.layout == "pdf_image" or po.customer_code is None or po.form is not None:
             continue
         data = _content(
             (ATTACHMENTS_DIR / attachment_file_name(po.message_id, po.name)).read_bytes()
@@ -347,7 +347,7 @@ def test_the_document_check_raises_a_blocking_po_level_legacy_encoding() -> None
 
     assert (finding.line_no, finding.severity, finding.blocking) == (None, Severity.ERROR, True)
     assert (finding.expected, finding.actual) == ("Unicode", "TCVN3")
-    assert finding.rule_version == "sales_order_rules@1.3.0"
+    assert finding.rule_version == "sales_order_rules@1.4.0"
     assert not [
         f
         for f in check_document(_excel(_fixture(M01)), RULES)

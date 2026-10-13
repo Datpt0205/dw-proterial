@@ -29,7 +29,10 @@ from sales_flow import (
 )
 
 from dw_kernel.ids import TenantId, WorkspaceId
-from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.adapters.persistence.repositories import (
+    SqlApprovalRepository,
+    SqlAuditRepository,
+)
 from dw_platform.testing.seed_env import sid
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.application.artifacts_service import ORDER_GATES, QUOTE_GATES
@@ -60,7 +63,9 @@ async def _artifact(api: Api, kind: str, case_kind: CaseKind, case: dict[str, An
         created_by=user_id(AN),
         created_at=datetime.now(UTC),
     )
-    uow = SqlSalesUnitOfWorkFactory(api.sessions, audit=SqlAuditRepository)
+    uow = SqlSalesUnitOfWorkFactory(
+        api.sessions, audit=SqlAuditRepository, approvals=SqlApprovalRepository
+    )
     async with uow(ALPHA) as work:
         await work.artifacts.add(record)
         await work.commit()

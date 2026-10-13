@@ -35,6 +35,13 @@ _LOCAL_PART = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}")
 # so an id one accepts is never an id the other refuses.
 AttachmentId = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,128}$")]
 Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+# An Internet Message-ID as the headers print it (RFC 5322 msg-id):
+# ``<left@right>``, printable ASCII, no space. What a reply's `In-Reply-To`
+# and `References` name, so a reply is matched to its thread by exact value.
+InternetMessageId = Annotated[str, Field(pattern=r"^<[!-;=?-~]{1,994}>$")]
+# At most this many thread references are kept from one message: a long
+# thread's `References` lists every ancestor; the nearest ones are enough.
+MAX_REFERENCES = 50
 
 
 def is_domain(value: str) -> bool:
@@ -179,6 +186,13 @@ class InboundMessage(BaseModel):
     body_html: str | None = None
     attachments: tuple[Attachment, ...] = ()
     authentication: MailAuthentication = MailAuthentication()
+    # The message's own `Message-ID` header, when the mailbox reports one.
+    internet_message_id: InternetMessageId | None = None
+    # The `In-Reply-To` and `References` headers, nearest ancestor first: the
+    # messages this one answers. Written by the sender's mail client, so a
+    # claim: a thread reference links a reply to a case only when it names a
+    # message already on a case of the sender's own customer (ticket 32).
+    references: tuple[InternetMessageId, ...] = Field(default=(), max_length=MAX_REFERENCES)
 
     @model_validator(mode="after")
     def _attachment_ids_are_unique(self) -> Self:

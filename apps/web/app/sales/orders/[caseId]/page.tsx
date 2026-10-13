@@ -44,6 +44,7 @@ import {
   ArtifactsPanel,
   useCaseArtifacts,
 } from "../../_components/artifacts-panel";
+import { CaseReplies } from "../../_components/case-replies";
 import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
 import { CaseTimeline } from "../../_components/case-timeline";
@@ -376,6 +377,8 @@ function OrderDetail() {
           ) : null}
         </Space>
       </Card>
+
+      <CaseReplies replies={data.replies} />
 
       <Alert
         type={data.coverage.unchecked_regions.length ? "warning" : "info"}

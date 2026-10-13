@@ -125,6 +125,9 @@ RECORDED = _CASES / "sales_descriptions_recorded.json"
 RECORDED_BY_PROMPT = {
     "sales.message_intent": _CASES / "sales_intent_recorded.json",
     "sales.rfq_extraction": _CASES / "sales_rfq_recorded.json",
+    "sales.reply_intent": _CASES / "sales_reply_recorded.json",
+    "sales.request_handoff": _CASES / "sales_handoff_recorded.json",
+    "sales.po_layout_proposal": _CASES / "sales_layout_recorded.json",
 }
 
 

@@ -57,6 +57,8 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         # Grants FPT support Sales' set, and decides support requests
         # (7c8ba908575f, ticket 22).
         "support.grant",
+        # Decides a PO layout a PIC mapped (63242ec52c4b, ticket 30).
+        "sales.layout.approve",
     }
     assert pic <= head
     # Both decide a Sales request (cross-check, quote approval), so both carry
@@ -65,6 +67,7 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
     assert "sales.quote.approve" not in pic and "sales.worker.resume" not in pic
     assert "sales.order.resend_cross_check" not in pic
     assert "sales.case.assign" not in pic
+    assert "sales.layout.approve" not in pic
     assert roles["sales_viewer"] == {"sales.overview.read"}
     # DW1's service account (af154486381e): it processes the mailbox and
     # nothing else; it decides nothing, so not `approvals.decide` either.

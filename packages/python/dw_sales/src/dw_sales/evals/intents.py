@@ -35,8 +35,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import shutil
-import tempfile
 import uuid
 from collections.abc import Coroutine, Mapping, Sequence
 from dataclasses import dataclass
@@ -75,7 +73,7 @@ from dw_sales.domain.messages import (
 )
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded, latency, load_answers
-from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
+from dw_sales.evals.world import ALPHA, BETA, SampleWith, open_world
 
 # The proposed bar (ticket 31; Đạt sets the final one): at least this share of
 # the golden residue read as its kind. Reported, not enforced.
@@ -182,7 +180,7 @@ async def read_messages(model: Any, messages: Sequence[Mapping[str, Any]]) -> li
         customer = (await catalog.customer_by_email_domain(ALPHA, message.sender.domain)).data
         run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
         read = await reader.read(
-            ALPHA, newest_part(message), customer, rules_version="sales_order_rules@1.3.1", run=run
+            ALPHA, newest_part(message), customer, rules_version="sales_order_rules@1.4.1", run=run
         )
         result.append(
             Classified(
@@ -414,7 +412,7 @@ async def _design_sender(ctx: GraderContext) -> GradeResult:
         },
         prompts=ctx.prompt_registry,
     )
-    with _SampleWith([spec]) as sample:
+    with SampleWith([spec]) as sample:
         world = open_world(ctx.repo_root, sample, CALLERS, model=scripted)
         seen = await world.process_each(AN, [spec["message_id"]])
     disposition, case = seen[spec["message_id"]]
@@ -464,7 +462,7 @@ async def _references(cases: Sequence[Mapping[str, Any]]) -> dict[str, list[str]
         reader = IntentReader(scripted, catalog, _NoCases())
         customer = (await catalog.customer_by_email_domain(scope, message.sender.domain)).data
         read = await reader.read(
-            scope, newest_part(message), customer, rules_version="sales_order_rules@1.3.1", run=_RUN
+            scope, newest_part(message), customer, rules_version="sales_order_rules@1.4.1", run=_RUN
         )
         assert read is not None  # scripted
         seen[str(case["id"])] = sorted(r.number for r in read.reading.references)
@@ -581,41 +579,6 @@ async def _degrade() -> GradeResult:
             "the step did not degrade as the ticket says", problems=problems, seen=seen
         )
     return GradeResult.ok(seen=seen, routes=sorted(str(v) for v in INTENT_ROUTES.values()))
-
-
-class _SampleWith:
-    """The fictional sample set with ``messages`` added to its mailbox, in a
-    temporary copy (a context manager)."""
-
-    def __init__(self, messages: Sequence[Mapping[str, Any]]) -> None:
-        self._messages = messages
-        self._dir: tempfile.TemporaryDirectory[str] | None = None
-
-    def __enter__(self) -> SampleSet:
-        self._dir = tempfile.TemporaryDirectory()
-        root = Path(self._dir.name)
-        shutil.copytree(DATA_DIR, root / "data")
-        shutil.copytree(ATTACHMENTS_DIR, root / "attachments")
-        inbox = root / "data" / "inbox.json"
-        listed = json.loads(inbox.read_text(encoding="utf-8"))
-        for spec in self._messages:
-            listed.append(
-                {
-                    "message_id": spec["message_id"],
-                    "sender": {"address": spec["sender"], "display_name": ""},
-                    "subject": spec["subject"],
-                    "received_at": spec["received_at"],
-                    "body_text": spec["body"],
-                    "attachments": [],
-                    "authentication": spec["authentication"],
-                }
-            )
-        inbox.write_text(json.dumps(listed, ensure_ascii=False), encoding="utf-8")
-        return SampleSet(root / "data", root / "attachments")
-
-    def __exit__(self, *exc: object) -> None:
-        assert self._dir is not None
-        self._dir.cleanup()
 
 
 GRADERS = {

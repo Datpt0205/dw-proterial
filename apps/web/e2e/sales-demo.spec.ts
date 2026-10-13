@@ -404,9 +404,9 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
   const an = await persona(request, AN);
   await signIn(page, request, AN);
   await page.goto("/sales/inbox");
-  await page.getByRole("button", { name: /DW xử lý tất cả \(39\)/ }).click();
+  await page.getByRole("button", { name: /DW xử lý tất cả \(42\)/ }).click();
   await expect(
-    page.getByText(/^40 thư · 0 chưa xử lý · \d+ chuyển Sales/),
+    page.getByText(/^43 thư · 0 chưa xử lý · \d+ chuyển Sales/),
   ).toBeVisible({
     timeout: 480_000,
   });
@@ -428,7 +428,7 @@ test("2. An processes the mailbox: every message ends in one disposition, and M0
       case_id: string | null;
     };
   }[] = await (await an.get("/inbox")).json();
-  expect(inbox).toHaveLength(40);
+  expect(inbox).toHaveLength(43);
   expect(
     inbox.filter((m) => m.disposition.kind === "not_yet_processed"),
   ).toEqual([]);
@@ -754,14 +754,16 @@ test("6. Diệu takes M10 from the YCBG to Design, prices it from the evidence a
   });
   expect(own.status()).toBe(403);
   // Nor may the purchasing manager, whose approvals.decide is not
-  // sales.quote.approve; and the request is not in his inbox at all.
+  // sales.quote.approve; and the request is not in his inbox at all. A
+  // stamped request he may not see answers 404, not 403 (dw_sales ADR 0004,
+  // amendment 2026-10-07).
   const binh = await persona(request, BINH);
   const outsider = await binh.decide(pending.decision.approval_id, {
     approve: true,
     comment: "Duyệt hộ",
     subject_version: pending.case_version,
   });
-  expect(outsider.status()).toBe(403);
+  expect(outsider.status()).toBe(404);
   expect((await (await binh.approvals()).json()).items).toEqual([]);
   // The context-side decide route is gone.
   const gone = await dieu.post(`/quotes/${ids.m10}/approval`, {
@@ -954,7 +956,9 @@ test("9. Who sees what: Hà the overview only, Bình and Tâm nothing, Bảo non
     `/sales/quotes/${ids.m10}`,
   ]) {
     await page.goto(url);
-    await expect(page.getByText("Bạn không có quyền mở mục này")).toBeVisible();
+    await expect(
+      page.getByText("Bạn không có quyền xem mục này"),
+    ).toBeVisible();
     expect(
       leaked(await page.locator("body").innerText(), SCREEN_PRICES),
     ).toEqual([]);
@@ -971,7 +975,7 @@ test("9. Who sees what: Hà the overview only, Bình and Tâm nothing, Bảo non
   }
   await signIn(page, request, TAM);
   await page.goto(`/sales/quotes/${ids.m10}`);
-  await expect(page.getByText("Bạn không có quyền mở mục này")).toBeVisible();
+  await expect(page.getByText("Bạn không có quyền xem mục này")).toBeVisible();
   expect(leaked(await page.locator("body").innerText(), SCREEN_PRICES)).toEqual(
     [],
   );

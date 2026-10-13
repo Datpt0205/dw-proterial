@@ -46,6 +46,11 @@
       "checksum": "ea318214f4439ce3bb6847b1c821cab54d9e41e6b4c4860676501f02091cd5b5",
       "copy_id": "sales_emails",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "b2de9c2a52c5860c7b10dc8740a9b0797af39f153f6602a791e704b87cca8aa2",
+      "copy_id": "sales_handoffs",
+      "version": "1.0.0"
     }
   ],
   "eval_datasets": [
@@ -65,8 +70,23 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "b63f78744909befe486740e4357f840bd6fb23b105f42c1796540816b0a06732",
+      "dataset_id": "sales_handoff",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "8bf3d30de9221cb371c03de43c267f47d6429352a86e4cce219090cf5f09e45c",
       "dataset_id": "sales_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "13eae6ce8f5dc17a882224d169f584f0b46879808e0c475ea32cc797c59e7b86",
+      "dataset_id": "sales_layout",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "571d54f37357dec46615e7de4d2c18c210978ea7ad877abe4e182b8d37880a30",
+      "dataset_id": "sales_reply",
       "version": "1.0.0"
     },
     {
@@ -75,7 +95,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "61a5ae5a6c6fa284009a47f2238dc816209269ce",
+  "git_sha": "100949111c1a36e531a96e60ce707e7b4f3f6392",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",
@@ -121,6 +141,11 @@
       "version": "1.3.0"
     },
     {
+      "checksum": "6e84ce584ebd76202516a8bb7a5ef4766c5e8744958869fabb4b3095f12c8d5a",
+      "policy_id": "sales_order_rules",
+      "version": "1.4.0"
+    },
+    {
       "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",
       "policy_id": "sales_pricing",
       "version": "1.0.0"
@@ -150,6 +175,21 @@
     {
       "checksum": "8d09212cc494ecdd4d1cbb1f7f7ebf3de9f91260d77eb3beb9cc6bfab5015c0f",
       "prompt_id": "sales.message_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "e6d0b5c04acea026f0708dbe42135b0b3e9f6b487609e6684d55b0c311cbcd2b",
+      "prompt_id": "sales.po_layout_proposal",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "bf2bae5ec7698fa474e690214153b0e75f7040f3e748103577652f5ae7e7b8e9",
+      "prompt_id": "sales.reply_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "5f033a5e6738e6892fda8ea499a90475ce2858f03063432808f804a1d9533138",
+      "prompt_id": "sales.request_handoff",
       "version": "1.0.0"
     },
     {

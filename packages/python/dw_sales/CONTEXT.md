@@ -63,9 +63,11 @@ API and the plan use the English terms. The spec is
   names the version it was made on.
 - **Checker's decision** (Quyết định của người kiểm): approving or returning
   a quotation (WIV-03-023 step 9), cross-checking or returning an order
-  (WIV-03-012 step 9). Made on the platform approval DW1's run pauses on
-  (`sales.quote`, `sales.order.cross_check`), never on a Sales route; a
-  maker's own steps are not checker's decisions (dw_sales ADR 0004).
+  (WIV-03-012 step 9), approving or rejecting a PO layout (ticket 30). Made
+  on a platform approval, never on a Sales route: the one DW1's run pauses on
+  (`sales.quote`, `sales.order.cross_check`), or the run-less one a layout's
+  proposal opens (`sales.layout`); a maker's own steps are not checker's
+  decisions (dw_sales ADR 0004).
 - **DW1 run** (Lượt chạy DW1): one thing DW1 is asked to do ("DW xử lý", a
   quotation submitted, a Bravo entry recorded), on the agent runtime,
   counted against the tenant's plan.
@@ -94,6 +96,25 @@ API and the plan use the English terms. The spec is
   case; Sales confirms each one, typing it as it should be, before the YCBG.
   The customer is the sender domain's; a target price the customer states
   is kept as their words only and never reaches price evidence (ticket 29).
+- **Reply in a case's thread** (Khách trả lời trong luồng thư): a message
+  whose `In-Reply-To`/`References` name a message already on one case of the
+  sender's own customer; it is attached to that case (`attached_to_case`)
+  with no model. Where the tenant turns it on, a model reads what it says
+  (accepts the spec, rejects it, keeps the PO as it is, ...), quoting the
+  sentences code then locates, and the case proposes its next step; Sales
+  takes the step, or another (ticket 32).
+- **Hand-off** (Bản chuyển PC/QA): the mail Sales sends PC or QA about a
+  delivery change, a complaint or a sample request, pre-filled by code from
+  a versioned template with the values a model copied and code located,
+  parsed and resolved, and the customer's own sentences in quotation marks.
+  Sales reviews, edits and sends it; DW1 sends nothing (ticket 33).
+- **PO layout** (Mẫu PO): which label on a customer's PO form names each
+  value, mapped once by a PIC on the onboarding screen and approved by
+  Trưởng bộ phận Sales, who did not map it, on the platform approval the
+  proposal opens (`sales.layout`). Tenant data: DW1 reads that
+  customer's later POs with it, the first few with every value flagged
+  `new_layout` for Sales to confirm. A model may pre-fill the mapping, label
+  names only (ticket 30).
 
 ## Roles and permission sets
 

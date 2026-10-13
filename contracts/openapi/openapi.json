@@ -987,6 +987,132 @@
         "title": "CaseKind",
         "type": "string"
       },
+      "CaseReply": {
+        "additionalProperties": false,
+        "description": "A message attached to a case because its thread headers name a message\nalready on that case, of the sender's own customer (ticket 32).",
+        "properties": {
+          "linked_to": {
+            "pattern": "^[!-~]{1,512}$",
+            "title": "Linked To",
+            "type": "string"
+          },
+          "reading": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplyReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "linked_to"
+        ],
+        "title": "CaseReply",
+        "type": "object"
+      },
+      "CaseReplyView": {
+        "description": "A customer's reply attached to the case by its thread (ticket 32), with\nwhat a model read of it and the step code proposes from that, now.\n\n``proposal`` is computed from the case's status as it is now, and only for\nthe newest reply: an older reply's reading does not pre-select anything.\nIt is a suggestion: the step is the existing one, which Sales confirms and\nthe server checks as for any other caller. The quotes are the customer's\nsentences, shown to a case reader as the inbox shows the whole mail.",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "accepts_spec",
+                  "rejects_spec",
+                  "counter_proposal",
+                  "sends_corrected_po",
+                  "keeps_po_as_is",
+                  "question",
+                  "unclear"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "linked_to": {
+            "title": "Linked To",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "read",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "processed_at": {
+            "format": "date-time",
+            "title": "Processed At",
+            "type": "string"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "enum": [
+                  "settle_spec",
+                  "decline_customer_rejected_spec",
+                  "resume_review",
+                  "await_revised_po"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal"
+          },
+          "quotes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quotes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "message_id",
+          "processed_at",
+          "linked_to",
+          "outcome",
+          "kind",
+          "quotes",
+          "prompt",
+          "proposal"
+        ],
+        "title": "CaseReplyView",
+        "type": "object"
+      },
       "CloseBody": {
         "additionalProperties": false,
         "properties": {
@@ -2358,6 +2484,275 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "Handoff": {
+        "additionalProperties": false,
+        "description": "The pre-filled hand-off stamped on a routed message's disposition.\n\n``read``: some value was located. ``nothing_located``: the model answered\nand code kept nothing of it. ``unavailable``: no usable answer. Either of\nthe last two is an empty form Sales fills by hand, as before.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "delivery_change",
+              "complaint",
+              "sample_request"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HandoffLine"
+            },
+            "maxItems": 20,
+            "title": "Lines",
+            "type": "array"
+          },
+          "lot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Located"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_profile": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "order_case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Case Id"
+          },
+          "outcome": {
+            "enum": [
+              "read",
+              "unavailable",
+              "nothing_located"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "po": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Located"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "po_no": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z0-9][A-Z0-9/-]{1,31}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Po No"
+          },
+          "prompt": {
+            "pattern": "^[a-z][a-z0-9_.]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Located"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quotes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Located"
+            },
+            "maxItems": 5,
+            "title": "Quotes",
+            "type": "array"
+          },
+          "refused": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Refused",
+            "type": "object"
+          },
+          "route": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Route",
+            "type": "string"
+          },
+          "rules": {
+            "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Rules",
+            "type": "string"
+          },
+          "sample_quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Quantity"
+          },
+          "so_no": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z0-9][A-Z0-9/-]{1,31}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "So No"
+          }
+        },
+        "required": [
+          "kind",
+          "prompt",
+          "model_profile",
+          "route",
+          "rules",
+          "outcome"
+        ],
+        "title": "Handoff",
+        "type": "object"
+      },
+      "HandoffDraftView": {
+        "description": "A routed message's hand-off as code wrote it from the template, for\nSales to review, edit and send from their own mailbox (ticket 33). ``to``\nnames the team, never an address: Sales picks the recipients.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "template_ref": {
+            "title": "Template Ref",
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "pc",
+              "qa"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "subject",
+          "body",
+          "template_ref"
+        ],
+        "title": "HandoffDraftView",
+        "type": "object"
+      },
+      "HandoffLine": {
+        "additionalProperties": false,
+        "description": "A line of the order the customer asks to change, resolved by code.",
+        "properties": {
+          "date_span": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Located"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "item": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
+          "line_no": {
+            "maximum": 9999.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "new_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Date"
+          },
+          "new_quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Quantity"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Located"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "$ref": "#/components/schemas/Located"
+          }
+        },
+        "required": [
+          "reference",
+          "line_no"
+        ],
+        "title": "HandoffLine",
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "api_version": {
@@ -2492,6 +2887,16 @@
           },
           "disposition": {
             "$ref": "#/components/schemas/MessageDispositionView"
+          },
+          "handoff_draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HandoffDraftView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "message_id": {
             "title": "Message Id",
@@ -3004,6 +3409,39 @@
         "title": "KnowledgeDocumentView",
         "type": "object"
       },
+      "LabelCellView": {
+        "properties": {
+          "column": {
+            "title": "Column",
+            "type": "integer"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "sheet",
+          "row",
+          "column",
+          "text"
+        ],
+        "title": "LabelCellView",
+        "type": "object"
+      },
       "LabelledAnchor": {
         "description": "Where one value was read, named by the field (and line) it fills.",
         "properties": {
@@ -3031,6 +3469,558 @@
           "anchor"
         ],
         "title": "LabelledAnchor",
+        "type": "object"
+      },
+      "LayoutBody": {
+        "additionalProperties": false,
+        "description": "A mapping of the form one message's attachment prints (ticket 30).",
+        "properties": {
+          "attachment_id": {
+            "pattern": "^[A-Za-z0-9._-]{1,128}$",
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/LayoutMapping"
+          },
+          "message_id": {
+            "pattern": "^[!-~]{1,512}$",
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "attachment_id",
+          "mapping"
+        ],
+        "title": "LayoutBody",
+        "type": "object"
+      },
+      "LayoutMapping": {
+        "additionalProperties": false,
+        "description": "Which label on the form names each value, and how its numbers and text\ndates are written. A person maps it on the onboarding screen; a model may\npre-fill it.",
+        "properties": {
+          "amount": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Amount",
+            "type": "string"
+          },
+          "currency": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Currency",
+            "type": "string"
+          },
+          "customer_item_code": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Customer Item Code",
+            "type": "string"
+          },
+          "date_format": {
+            "default": "%d/%m/%Y",
+            "enum": [
+              "%d/%m/%Y",
+              "%Y-%m-%d",
+              "%d-%m-%Y",
+              "%m/%d/%Y",
+              "%d.%m.%Y",
+              "%Y/%m/%d"
+            ],
+            "title": "Date Format",
+            "type": "string"
+          },
+          "decimal_separator": {
+            "default": ".",
+            "enum": [
+              ".",
+              ","
+            ],
+            "title": "Decimal Separator",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "excel",
+              "pdf"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "line_no": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Line No",
+            "type": "string"
+          },
+          "page_label": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Label"
+          },
+          "pdf_columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 80,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Columns"
+          },
+          "po_date": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Po Date",
+            "type": "string"
+          },
+          "po_no": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Po No",
+            "type": "string"
+          },
+          "quantity": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Quantity",
+            "type": "string"
+          },
+          "requested_date": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Requested Date",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "thousands_separator": {
+            "default": ",",
+            "enum": [
+              ",",
+              ".",
+              " ",
+              "none"
+            ],
+            "title": "Thousands Separator",
+            "type": "string"
+          },
+          "total_label": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Total Label",
+            "type": "string"
+          },
+          "unit_price": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Unit Price",
+            "type": "string"
+          },
+          "uom": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Uom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "po_no",
+          "po_date",
+          "currency",
+          "line_no",
+          "customer_item_code",
+          "description",
+          "quantity",
+          "uom",
+          "unit_price",
+          "amount",
+          "requested_date",
+          "total_label"
+        ],
+        "title": "LayoutMapping",
+        "type": "object"
+      },
+      "LayoutPrefill": {
+        "additionalProperties": false,
+        "description": "What the model pre-fill of a form did, stamped on the message it was\nasked for and on the layout a person proposed from it: the prompt,\nprofile and route of the call, the rules whose switch asked, and the\noutcome. ``proposed``: every check passed and the screen opens with the\nmapping; ``refused``: a check failed (the problems say which), and the\nscreen opens empty; ``unavailable``: no usable answer.",
+        "properties": {
+          "attachment_id": {
+            "pattern": "^[A-Za-z0-9._-]{1,128}$",
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LayoutMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_profile": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "proposed",
+              "refused",
+              "unavailable"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "problems": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 40,
+            "title": "Problems",
+            "type": "array"
+          },
+          "prompt": {
+            "pattern": "^[a-z][a-z0-9_.]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "route": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Route",
+            "type": "string"
+          },
+          "rules": {
+            "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Rules",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt",
+          "model_profile",
+          "route",
+          "rules",
+          "outcome",
+          "attachment_id"
+        ],
+        "title": "LayoutPrefill",
+        "type": "object"
+      },
+      "LayoutPreviewView": {
+        "description": "A mapping as code judged it: the problems, and what the reader read.",
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PreviewLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "po_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Po Date"
+          },
+          "po_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Po No"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "ok",
+          "problems"
+        ],
+        "title": "LayoutPreviewView",
+        "type": "object"
+      },
+      "LayoutSample": {
+        "additionalProperties": false,
+        "description": "The PO the form was mapped from: what the approver sees beside it.",
+        "properties": {
+          "attachment_id": {
+            "pattern": "^[A-Za-z0-9._-]{1,128}$",
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "attachment_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Attachment Sha256",
+            "type": "string"
+          },
+          "message_id": {
+            "pattern": "^[!-~]{1,512}$",
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "attachment_id",
+          "attachment_sha256"
+        ],
+        "title": "LayoutSample",
+        "type": "object"
+      },
+      "LayoutSourceView": {
+        "description": "What the onboarding screen maps from: the form's cells, the pre-fill\nDW1 stamped on the message (a model's, where the step is on), and the\ncustomer's layout of this kind already approved, if any.",
+        "properties": {
+          "approved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LayoutView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/LabelCellView"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "excel",
+              "pdf"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "prefill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LayoutPrefill"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "message_id",
+          "attachment_id",
+          "customer_code",
+          "kind",
+          "cells",
+          "prefill",
+          "approved"
+        ],
+        "title": "LayoutSourceView",
+        "type": "object"
+      },
+      "LayoutView": {
+        "description": "One layout: its mapping, the PO it was mapped from, who proposed and\nwho decided it, and the model pre-fill it started from, if any.",
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "layout_id": {
+            "format": "uuid",
+            "title": "Layout Id",
+            "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/LayoutMapping"
+          },
+          "prefill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LayoutPrefill"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "format": "uuid",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "sample": {
+            "$ref": "#/components/schemas/LayoutSample"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "layout_id",
+          "customer_code",
+          "kind",
+          "version",
+          "status",
+          "mapping",
+          "sample",
+          "proposed_by",
+          "proposed_at",
+          "approval_id",
+          "decided_by",
+          "decided_at",
+          "prefill"
+        ],
+        "title": "LayoutView",
         "type": "object"
       },
       "LineBasisView": {
@@ -3263,6 +4253,35 @@
           "usd_per_tonne"
         ],
         "title": "LmeView",
+        "type": "object"
+      },
+      "Located": {
+        "additionalProperties": false,
+        "description": "Text code found exactly once in the newest part, with its offsets\ninto the NFKC form of `MessagePart.text`.",
+        "properties": {
+          "end": {
+            "minimum": 1.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "start",
+          "end"
+        ],
+        "title": "Located",
         "type": "object"
       },
       "MappingBody": {
@@ -3874,9 +4893,29 @@
             ],
             "title": "Detail"
           },
+          "handoff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Handoff"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "kind": {
             "title": "Kind",
             "type": "string"
+          },
+          "layout_prefill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LayoutPrefill"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "owner": {
             "anyOf": [
@@ -3921,6 +4960,16 @@
               }
             ],
             "title": "Reason"
+          },
+          "reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseReply"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4706,6 +5755,14 @@
               }
             ],
             "title": "Release Manifest Ref"
+          },
+          "replies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CaseReplyView"
+            },
+            "title": "Replies",
+            "type": "array"
           },
           "returned_at": {
             "anyOf": [
@@ -5565,6 +6622,65 @@
         "title": "PermissionSetView",
         "type": "object"
       },
+      "PreviewLineView": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "customer_item_code": {
+            "title": "Customer Item Code",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "requested_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Date"
+          },
+          "unit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Price",
+            "type": "string"
+          },
+          "uom": {
+            "title": "Uom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "customer_item_code",
+          "description",
+          "quantity",
+          "uom",
+          "unit_price",
+          "amount",
+          "requested_date"
+        ],
+        "title": "PreviewLineView",
+        "type": "object"
+      },
       "PriceBody": {
         "additionalProperties": false,
         "properties": {
@@ -6199,6 +7315,14 @@
             ],
             "title": "Release Manifest Ref"
           },
+          "replies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CaseReplyView"
+            },
+            "title": "Replies",
+            "type": "array"
+          },
           "returns": {
             "items": {
               "$ref": "#/components/schemas/ReturnView"
@@ -6765,7 +7889,8 @@
           "hidden_column",
           "font_matches_fill",
           "formula_without_cached_value",
-          "model_read"
+          "model_read",
+          "new_layout"
         ],
         "title": "RegionFlag",
         "type": "string"
@@ -6851,6 +7976,109 @@
           "artifacts"
         ],
         "title": "RenderedView",
+        "type": "object"
+      },
+      "ReplyQuote": {
+        "additionalProperties": false,
+        "description": "A sentence of the reply that code found, once, in its newest part:\nthe text as the customer wrote it and where it is (offsets into the NFKC\nform of `MessagePart.text`).",
+        "properties": {
+          "end": {
+            "minimum": 1.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "start",
+          "end"
+        ],
+        "title": "ReplyQuote",
+        "type": "object"
+      },
+      "ReplyReading": {
+        "additionalProperties": false,
+        "description": "What the model reading of a reply did, stamped on its disposition: the\nprompt, profile and route of the call, the rules whose switch asked for\nit, and the outcome. ``unavailable``: no usable answer, so the reply is on\nits case with no proposal and Sales reads it.",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "accepts_spec",
+                  "rejects_spec",
+                  "counter_proposal",
+                  "sends_corrected_po",
+                  "keeps_po_as_is",
+                  "question",
+                  "unclear"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "model_profile": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "read",
+              "unavailable"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "prompt": {
+            "pattern": "^[a-z][a-z0-9_.]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "quotes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReplyQuote"
+            },
+            "maxItems": 3,
+            "title": "Quotes",
+            "type": "array"
+          },
+          "route": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Route",
+            "type": "string"
+          },
+          "rules": {
+            "pattern": "^[a-z][a-z0-9_.-]*@\\d+\\.\\d+\\.\\d+$",
+            "title": "Rules",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt",
+          "model_profile",
+          "route",
+          "rules",
+          "outcome"
+        ],
+        "title": "ReplyReading",
         "type": "object"
       },
       "RequestReading": {
@@ -12252,6 +13480,204 @@
         ]
       }
     },
+    "/api/v1/sales/layouts": {
+      "get": {
+        "operationId": "layouts_api_v1_sales_layouts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LayoutView"
+                  },
+                  "title": "Response Layouts Api V1 Sales Layouts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Layouts",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "propose_layout_api_v1_sales_layouts_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LayoutBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayoutView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Layout",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/layouts/preview": {
+      "post": {
+        "operationId": "layout_preview_api_v1_sales_layouts_preview_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LayoutBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayoutPreviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Layout Preview",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/layouts/source": {
+      "get": {
+        "operationId": "layout_source_api_v1_sales_layouts_source_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9._-]{1,128}$",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LayoutSourceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Layout Source",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/master-data/bravo-orders": {
       "get": {
         "operationId": "bravo_orders_api_v1_sales_master_data_bravo_orders_get",
@@ -13517,6 +14943,77 @@
           }
         },
         "summary": "Resend Cross Check",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/resume-review": {
+      "post": {
+        "operationId": "resume_review_api_v1_sales_orders__case_id__resume_review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Review",
         "tags": [
           "sales"
         ]

@@ -36,12 +36,13 @@ import uuid
 from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
-from dw_agent_runtime.approval_flow import ApproveAndResumeService
+from dw_agent_runtime.approval_flow import ApprovalDecisionGuard, ApproveAndResumeService
 from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
 from dw_agent_runtime.registry import ConfigError, GraphRegistry, WorkerRegistry
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.decisions import CaseDecisions
+from dw_sales.application.layouts import LAYOUT_APPROVAL
 from dw_sales.application.runs import APPROVAL_PREFIX, DecisionAsked, DecisionGiven, Dw1Task
 from dw_sales.application.support import DW1_WORKER_ID
 
@@ -170,6 +171,7 @@ def register(
     workers: WorkerRegistry,
     approvals: ApproveAndResumeService,
     steps: CaseDecisions,
+    layouts: ApprovalDecisionGuard,
     worker_file: Path,
 ) -> WorkerDefinition:
     """DW1 on a runtime: its graph, its worker, and its approvals' rules.
@@ -182,7 +184,8 @@ def register(
       not on the first run);
     - every `sales.` approval strict (a second person who made none of the
       case, and a written comment), and checked by this context before it is
-      recorded (`CaseDecisions.check`).
+      recorded (`CaseDecisions.check`); a PO layout's (`sales.layout`, no
+      run) by ``layouts`` (`LayoutDecisions.check`), the longer prefix.
     """
     graphs.register(DW1_WORKER_ID, GRAPH_VERSION, lambda: build_graph(steps))
     loaded = workers.load_file(worker_file).definition
@@ -193,4 +196,5 @@ def register(
         )
     approvals.strict_approval_prefixes |= {APPROVAL_PREFIX}
     approvals.decision_guards[APPROVAL_PREFIX] = steps
+    approvals.decision_guards[LAYOUT_APPROVAL] = layouts
     return loaded

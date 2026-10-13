@@ -64,6 +64,7 @@ import {
   type SourceTarget,
 } from "../../_components/source-drawer";
 import { QuoteStateTag, SeverityTag } from "../../_components/tags";
+import { CaseReplies } from "../../_components/case-replies";
 import { QuoteActions } from "./actions";
 import { MessageTextDrawer } from "./model-read";
 import { ApprovalPanel } from "./approval";
@@ -363,6 +364,8 @@ function QuoteDetail() {
           onSource={openField}
         />
       </Card>
+
+      <CaseReplies replies={data.replies} />
 
       {data.status === "pending_approval" ? (
         <ApprovalPanel

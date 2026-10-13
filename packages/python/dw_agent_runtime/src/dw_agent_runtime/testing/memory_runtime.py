@@ -51,6 +51,7 @@ from dw_platform.domain.approval import (
     ApprovalStatus,
 )
 from dw_platform.domain.audit import AuditEntry, AuditEvent
+from dw_platform.domain.outbox import OutboxEvent
 
 
 @dataclass
@@ -276,10 +277,33 @@ class MemoryAudit:
         ][:limit]
 
 
+@dataclass
+class MemoryOutbox:
+    """`OutboxRepositoryPort`'s write side: what a decision on a run-less
+    approval announces (`<approval_type>.decided`), held for a test to hand
+    to the handler the worker would."""
+
+    events: list[OutboxEvent] = field(default_factory=list)
+
+    async def add(self, event: OutboxEvent) -> None:
+        self.events.append(event)
+
+    async def list_unprocessed(self, limit: int = 100) -> list[OutboxEvent]:
+        return self.events[:limit]
+
+    async def has_unprocessed(self, event_type: str, aggregate_id: uuid.UUID) -> bool:
+        return any(
+            e.event_type == event_type and e.aggregate_id == aggregate_id for e in self.events
+        )
+
+
 class _Work:
-    def __init__(self, approvals: MemoryApprovals, audit: MemoryAudit) -> None:
+    def __init__(
+        self, approvals: MemoryApprovals, audit: MemoryAudit, outbox: MemoryOutbox
+    ) -> None:
         self.approvals = approvals
         self.audit = audit
+        self.outbox = outbox
 
     async def __aenter__(self) -> Self:
         return self
@@ -323,6 +347,7 @@ class MemoryRuntime:
     runs: MemoryRuns
     approvals: MemoryApprovals
     audit: MemoryAudit
+    outbox: MemoryOutbox
 
     @classmethod
     def build(
@@ -338,9 +363,12 @@ class MemoryRuntime:
         runs = MemoryRuns(clock)
         approvals = MemoryApprovals(clock)
         audit = MemoryAudit()
+        outbox = MemoryOutbox()
 
         def uow_factory(context: AccessContext) -> PlatformUnitOfWork:
-            return cast(PlatformUnitOfWork, _Work(approvals.scoped(context.tenant_id), audit))
+            return cast(
+                PlatformUnitOfWork, _Work(approvals.scoped(context.tenant_id), audit, outbox)
+            )
 
         runner = LangGraphWorkflowRunner(
             worker_registry=workers,
@@ -364,4 +392,4 @@ class MemoryRuntime:
             clock=clock,
             id_generator=ids,
         )
-        return cls(runner, flow, graphs, workers, runs, approvals, audit)
+        return cls(runner, flow, graphs, workers, runs, approvals, audit, outbox)

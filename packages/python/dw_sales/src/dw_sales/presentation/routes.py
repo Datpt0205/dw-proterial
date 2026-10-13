@@ -51,6 +51,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
+from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.overview_service import OverviewView, WorkItem
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
@@ -76,6 +77,7 @@ from dw_sales.application.views import (
 )
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.layouts import LayoutMapping
 from dw_sales.domain.orders import CloseReason, Note
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
@@ -86,6 +88,16 @@ _BODY = ConfigDict(extra="forbid", hide_input_in_errors=True)
 _FindingKey = Annotated[str, Field(pattern=r"^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$")]
 _MessageId = Annotated[str, Field(pattern=r"^[!-~]{1,512}$")]
 _AttachmentId = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,128}$")]
+
+
+class LayoutBody(BaseModel):
+    """A mapping of the form one message's attachment prints (ticket 30)."""
+
+    model_config = _BODY
+
+    message_id: _MessageId
+    attachment_id: _AttachmentId
+    mapping: LayoutMapping
 
 
 class VersionBody(BaseModel):
@@ -464,6 +476,19 @@ def build_router(
         return await idem.record(change)
 
     @router.post(
+        "/orders/{case_id}/resume-review",
+        response_model=CaseChangeView,
+        dependencies=prepare_scope,
+    )
+    async def resume_review(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.order_commands.resume_review(
+            context, case_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.post(
         "/orders/{case_id}/prepare", response_model=CaseChangeView, dependencies=prepare_scope
     )
     async def prepare(
@@ -812,6 +837,45 @@ def build_router(
     )
     async def resume(body: ResumeBody, context: Ctx, svc: Svc, idem: Idem) -> WorkerStateView:
         return await idem.record(await svc.worker.resume(context, body.reason))
+
+    # ------------------------------------------- PO layouts (ticket 30) --
+    # A PIC maps a customer's form (`sales.order.prepare`, and the prices a
+    # PO shows). The head, who did not map it, decides it on the platform
+    # approval the proposal opens (`sales.layout`, stamped with
+    # `sales.layout.approve`): no route here decides it (dw_sales ADR 0004).
+
+    mapper_scope = [scopes(SalesScopes.ORDER_PREPARE, SalesScopes.PRICE_READ)]
+
+    @router.get(
+        "/layouts", response_model=list[LayoutView], dependencies=[scopes(SalesScopes.CASE_READ)]
+    )
+    async def layouts(context: Ctx, svc: Svc) -> list[LayoutView]:
+        return await svc.layouts.list(context)
+
+    @router.get("/layouts/source", response_model=LayoutSourceView, dependencies=mapper_scope)
+    async def layout_source(
+        context: Ctx,
+        svc: Svc,
+        message_id: Annotated[str, Query(pattern=r"^[!-~]{1,512}$")],
+        attachment_id: Annotated[str, Query(pattern=r"^[A-Za-z0-9._-]{1,128}$")],
+    ) -> LayoutSourceView:
+        return await svc.layouts.source(context, message_id, attachment_id)
+
+    @router.post("/layouts/preview", response_model=LayoutPreviewView, dependencies=mapper_scope)
+    async def layout_preview(
+        body: LayoutBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> LayoutPreviewView:
+        # Writes nothing, but a POST like every other: a retried press is
+        # answered with the first answer.
+        return await idem.record(
+            await svc.layouts.preview(context, body.message_id, body.attachment_id, body.mapping)
+        )
+
+    @router.post("/layouts", response_model=LayoutView, dependencies=mapper_scope)
+    async def propose_layout(body: LayoutBody, context: Ctx, svc: Svc, idem: Idem) -> LayoutView:
+        return await idem.record(
+            await svc.layouts.propose(context, body.message_id, body.attachment_id, body.mapping)
+        )
 
     return router
 

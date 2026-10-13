@@ -48,6 +48,12 @@ describe("a DW1 approval in the generic inbox", () => {
     ).toMatchObject({ href: `/sales/orders/${CASE}` });
   });
 
+  it("links a PO layout's approval to the layouts page, where it carries the layout's version", () => {
+    expect(
+      approvalInbox(approval("sales.layout", { layout_id: CASE, version: 1 })),
+    ).toMatchObject({ kind: "link", href: "/sales/layouts" });
+  });
+
   it("never builds a path from a payload it does not recognise", () => {
     for (const payload of [
       {},

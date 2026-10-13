@@ -1400,5 +1400,62 @@
         "requested_date": "2026-12-04"
       }
     ]
+  },
+  {
+    "message_id": "M43",
+    "name": "NRV-PO-26-0502.pdf",
+    "layout": "pdf",
+    "customer_code": "NRV",
+    "po_no": "NRV-PO-26-0502",
+    "revision": 0,
+    "po_date": "2026-10-01",
+    "currency": "USD",
+    "form": {
+      "title": "PURCHASE ORDER",
+      "header": [
+        ["Order Number", "po_no"],
+        ["Order Date", "po_date"],
+        ["Supplier", "supplier"],
+        ["Currency", "currency"]
+      ],
+      "columns": [
+        ["Item", "line_no"],
+        ["Part Number", "customer_item_code"],
+        ["Part Description", "description"],
+        ["Order Qty", "quantity"],
+        ["Unit", "uom"],
+        ["Price", "unit_price"],
+        ["Extended", "amount"],
+        ["Need By", "requested_date"],
+        ["Buyer Note", "note"]
+      ],
+      "total": "Order Total",
+      "thousands": ",",
+      "decimal": ".",
+      "date_format": "%Y-%m-%d"
+    },
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "NV-HW22-BK",
+        "quantity": "6100",
+        "unit_price": "0.0510",
+        "requested_date": "2026-11-20"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "NV-CB4-22-GY",
+        "quantity": "3000",
+        "unit_price": "0.6980",
+        "requested_date": "2026-12-04"
+      },
+      {
+        "no": 3,
+        "customer_item_code": "NV-CB4-075-BK",
+        "quantity": "3000",
+        "unit_price": "0.8240",
+        "requested_date": "2026-12-04"
+      }
+    ]
   }
 ]

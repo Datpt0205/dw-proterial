@@ -436,7 +436,10 @@ def build_sales(
     makes too, so both read the same mailbox the same way.
     """
     from dw_kernel.ids import TenantId, WorkspaceId
-    from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+    from dw_platform.adapters.persistence.repositories import (
+        SqlApprovalRepository,
+        SqlAuditRepository,
+    )
     from dw_sales.adapters.assembly import build_dw1
     from dw_sales.application.ports import SalesScope
     from dw_sales.presentation.routes import SalesMount
@@ -450,6 +453,7 @@ def build_sales(
         configs=CONFIGS,
         session_factory=session_factory,
         audit=SqlAuditRepository,
+        approvals=SqlApprovalRepository,
         clock=clock,
         ids=ids,
         authorization=authorization,

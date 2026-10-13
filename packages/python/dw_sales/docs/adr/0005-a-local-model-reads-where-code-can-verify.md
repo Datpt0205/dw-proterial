@@ -146,3 +146,38 @@ rather than in a new ADR, because no rule above moved.
   `sales_order_rules.model_assist`, the one tenant-versioned place that says
   which model steps a tenant has on (ticket 29 had named `sales_quote_rules`,
   which has no tenant layer).
+
+## Applied to tickets 32, 33 and 30 (2026-10-13, by the agent, Đạt away)
+
+Three more steps follow the decision unchanged; what they add is recorded here.
+
+- **The case is code's, from the thread.** A reply is linked to its case by
+  its `In-Reply-To`/`References` headers naming a message already on one case
+  of the sender's own customer (ticket 32), with no model; a reply naming
+  another customer's message, two cases or none is classified as any other
+  message. The model reads only what the reply says, as a closed-set kind
+  standing on sentences code locates once; the step comes from one table by
+  the case's kind and status, is shown as a suggestion, and is the case's
+  ordinary step a person takes. Keeping a PO as it is resumes the review and
+  disposes no finding.
+- **Spans in, template out.** A hand-off to PC or QA (ticket 33) carries no
+  sentence a model wrote: code writes it from a versioned copy template, with
+  the values it located, parsed and resolved (a PO only among the sender's own
+  orders and cases) and the customer's sentences in quotation marks, dropping
+  any that names an address, a web address or a phone number. The kind is the
+  routing reason. Nothing is sent and nothing changes in the ERP.
+- **Labels, never values.** A PO layout's pre-fill (ticket 30) names labels
+  only, from the form's header pairs and table titles code splits out of the
+  form; every label must be one cell of the form, the reader reads the form
+  end to end with it, and each column must be plausible (a swapped quantity
+  and unit price passes the totals and fails here). A person maps or corrects
+  the form, a second person approves it, and later POs are read with no
+  model. The first POs of a new layout keep every value `value_uncertain`
+  (`layout_onboarding.uncertain_first_pos`). The approval is a checker's
+  decision, so it is a platform approval as ADR 0004 says: the proposal opens
+  a run-less `sales.layout` approval in its own transaction, stamped with
+  `sales.layout.approve` and naming the proposer as its maker (`sales.` is
+  strict); the layout's own guard checks it before it is recorded, and the
+  worker carries out the `sales.layout.decided` event (CLAUDE.md, "An
+  approval with no run announces its decision"). The domain and a CHECK
+  refuse the maker again. No Sales route decides it.

@@ -192,6 +192,25 @@ export const INTENT_KIND = {
   other: "Khác",
 } as const;
 
+/** What a model read a customer's reply in a case's thread as (ticket 32). */
+export const REPLY_KIND = {
+  accepts_spec: "Đồng ý thông số",
+  rejects_spec: "Không đồng ý thông số",
+  counter_proposal: "Đề nghị khác / đồng ý có điều kiện",
+  sends_corrected_po: "Gửi PO đã sửa",
+  keeps_po_as_is: "Giữ nguyên PO",
+  question: "Hỏi lại",
+  unclear: "Không rõ",
+} as const;
+
+/** The existing step a reply proposes; Sales confirms it (ticket 32). */
+export const REPLY_STEP = {
+  settle_spec: "Ghi khách đã đồng ý spec",
+  decline_customer_rejected_spec: "Từ chối báo giá vì khách không đồng ý spec",
+  resume_review: "Xem xét lại đơn, quyết lại từng cờ đã gửi khách",
+  await_revised_po: "Chờ PO đã sửa: DW1 đọc khi PO đến",
+} as const;
+
 /** Who read a value of a model reading of a description (ticket 28). */
 export const READ_BY = {
   code: "DW1 tính từ chữ",

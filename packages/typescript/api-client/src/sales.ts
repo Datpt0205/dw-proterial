@@ -200,6 +200,16 @@ export class SalesApi {
     );
   }
 
+  /** The customer answered the correction request without a corrected PO:
+   * the review resumes, every finding as it stood (ticket 32). */
+  resumeReview(caseId: string, caseVersion: number, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/resume-review">(
+      `/api/v1/sales/orders/${enc(caseId)}/resume-review`,
+      { case_version: caseVersion },
+      key,
+    );
+  }
+
   prepare(caseId: string, caseVersion: number, key: string) {
     return this.post<"/api/v1/sales/orders/{case_id}/prepare">(
       `/api/v1/sales/orders/${enc(caseId)}/prepare`,
@@ -514,6 +524,36 @@ export class SalesApi {
     return this.post<"/api/v1/sales/worker/resume">(
       "/api/v1/sales/worker/resume",
       { reason },
+      key,
+    );
+  }
+
+  // ---- PO layouts (ticket 30) -----------------------------------------------
+
+  layouts() {
+    return this.get<"/api/v1/sales/layouts">("/api/v1/sales/layouts");
+  }
+
+  /** The form's cells, the pre-fill DW1 stamped, the approved layout if any. */
+  layoutSource(messageId: string, attachmentId: string) {
+    return this.get<"/api/v1/sales/layouts/source">(
+      `/api/v1/sales/layouts/source?message_id=${enc(messageId)}&attachment_id=${enc(attachmentId)}`,
+    );
+  }
+
+  /** What the reader reads with a mapping, and every check it fails. */
+  previewLayout(body: Body<"/api/v1/sales/layouts/preview">, key: string) {
+    return this.post<"/api/v1/sales/layouts/preview">(
+      "/api/v1/sales/layouts/preview",
+      body,
+      key,
+    );
+  }
+
+  proposeLayout(body: Body<"/api/v1/sales/layouts">, key: string) {
+    return this.post<"/api/v1/sales/layouts">(
+      "/api/v1/sales/layouts",
+      body,
       key,
     );
   }

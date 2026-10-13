@@ -41,6 +41,7 @@ export const SCOPE = {
   pause: "sales.worker.pause",
   resume: "sales.worker.resume",
   assign: "sales.case.assign",
+  layoutApprove: "sales.layout.approve",
 } as const;
 
 interface SalesFrame {

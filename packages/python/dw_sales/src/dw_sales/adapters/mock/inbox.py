@@ -49,6 +49,8 @@ class _MessageFixture(BaseModel):
     # a fixture states what the mail system concluded, so a scenario never
     # depends on a default nobody wrote down.
     authentication: MailAuthentication
+    internet_message_id: str | None = None
+    references: tuple[str, ...] = ()
 
 
 class MockInbox:
@@ -124,6 +126,8 @@ class MockInbox:
                     body_html=fixture.body_html,
                     attachments=tuple(attachments),
                     authentication=fixture.authentication,
+                    internet_message_id=fixture.internet_message_id,
+                    references=fixture.references,
                 )
             )
         return cls(messages, contents, scope=scope)

@@ -21,6 +21,7 @@ from dw_sales.application.artifact_content import (
     SalesEmailCopy,
 )
 from dw_sales.application.drafting import ArtifactCopy
+from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
@@ -52,7 +53,7 @@ def load_bravo_upload(path: Path) -> BravoUploadLayout:
     return load_policy(path, BravoUploadLayout)
 
 
-def load_copy[T: (SalesEmailCopy, SalesDocumentCopy)](path: Path, model: type[T]) -> T:
+def load_copy[T: (SalesEmailCopy, SalesDocumentCopy, HandoffCopy)](path: Path, model: type[T]) -> T:
     """``configs/copy/<copy_id>@<version>.yaml``, refused when named for
     another copy or version."""
     loaded = model.model_validate(yaml.safe_load(path.read_bytes()))
@@ -83,6 +84,8 @@ class SalesPolicies:
     pricing: SalesPricing
     kpi: SalesKpi
     artifact_copy: ArtifactCopy
+    # The words of a hand-off to PC or QA (ticket 33).
+    handoff_copy: HandoffCopy
 
 
 def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
@@ -94,7 +97,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
     """
     quote_rules = load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml")
     return SalesPolicies(
-        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.3.0.yaml"),
+        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.4.0.yaml"),
         quote_rules=quote_rules,
         pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
@@ -104,4 +107,5 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
             upload=policies_dir / "sales_bravo_upload@1.1.0.yaml",
             quote_rules=quote_rules,
         ),
+        handoff_copy=load_copy(copy_dir / "sales_handoffs@1.0.0.yaml", HandoffCopy),
     )

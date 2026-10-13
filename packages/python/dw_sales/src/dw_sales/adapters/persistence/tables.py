@@ -163,6 +163,9 @@ messages = sa.Table(
     sa.Column("customer_code", sa.Text),
     sa.Column("compliance", JSONB(none_as_null=True)),
     sa.Column("model_reading", JSONB(none_as_null=True)),
+    sa.Column("case_reply", JSONB(none_as_null=True)),
+    sa.Column("handoff", JSONB(none_as_null=True)),
+    sa.Column("layout_prefill", JSONB(none_as_null=True)),
     sa.Column("processed_at", _TS, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
@@ -235,4 +238,25 @@ case_events = sa.Table(
     sa.Column("field", sa.Text),
     sa.Column("reason_code", sa.Text),
     sa.Column("occurred_at", _TS, primary_key=True),
+)
+
+# A customer's PO form as people mapped and decided it (ticket 30, migration
+# of `PoLayout`): the record in `body`, the columns constraints and lookups need.
+po_layouts = sa.Table(
+    "po_layouts",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("customer_code", sa.Text, nullable=False),
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("version", sa.Integer, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("proposed_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("decided_by", UUID(as_uuid=True)),
+    # The platform approval (`sales.layout`) the proposal waits on, of the
+    # same tenant and workspace (`fk_po_layouts_approval_requests`).
+    sa.Column("approval_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("body", JSONB, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

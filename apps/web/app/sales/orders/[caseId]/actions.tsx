@@ -17,6 +17,7 @@ import {
   Typography,
 } from "antd";
 import { StatusTag } from "@dw/ui";
+import { suggestedStep } from "../../_components/case-replies";
 import { CalendarOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import {
@@ -58,6 +59,7 @@ const DOCUMENT_NO_HELP =
 const BUTTON: Record<OrderAction, string> = {
   prepare: "Chuẩn bị xong",
   correction: "Gửi yêu cầu khách sửa",
+  resumeReview: "Khách giữ PO: xem xét lại",
   bravo: "Đã nhập Bravo",
   applyChange: "Đã áp dụng thay đổi trên Bravo",
   crossCheck: "Kiểm chéo đạt",
@@ -99,6 +101,22 @@ export function OrderActions({
     return result.ok;
   };
 
+  // The step the newest reply in the case's thread proposes (ticket 32):
+  // marked, never pressed for Sales.
+  const suggested =
+    suggestedStep(order.replies) === "resume_review" ? "resumeReview" : null;
+
+  const resumeReview = async () =>
+    done(
+      await run(
+        "resumeReview",
+        { v: order.case_version },
+        (key) =>
+          salesApi().resumeReview(order.case_id, order.case_version, key),
+        "Đã mở lại xem xét: quyết lại từng cờ đã gửi khách",
+      ),
+    );
+
   const prepare = async () =>
     done(
       await run(
@@ -131,26 +149,32 @@ export function OrderActions({
     <div className="space-y-3">
       <Space wrap align="start" size="middle">
         {entries.map(([action, offer]) => (
-          <GuardedButton
-            key={action}
-            type={
-              action === "close" || action === "returnOrder"
-                ? "default"
-                : "primary"
-            }
-            danger={action === "close"}
-            reason={offer.reason}
-            loading={pending === action}
-            onClick={() =>
-              action === "prepare"
-                ? prepare()
-                : action === "resendCrossCheck"
-                  ? resendCrossCheck()
-                  : setDialog(action)
-            }
-          >
-            {BUTTON[action]}
-          </GuardedButton>
+          <Space key={action} size="small" align="center">
+            <GuardedButton
+              type={
+                action === "close" || action === "returnOrder"
+                  ? "default"
+                  : "primary"
+              }
+              danger={action === "close"}
+              reason={offer.reason}
+              loading={pending === action}
+              onClick={() =>
+                action === "prepare"
+                  ? prepare()
+                  : action === "resendCrossCheck"
+                    ? resendCrossCheck()
+                    : action === "resumeReview"
+                      ? resumeReview()
+                      : setDialog(action as Dialog)
+              }
+            >
+              {BUTTON[action]}
+            </GuardedButton>
+            {suggested === action ? (
+              <StatusTag tone="warn">Đề xuất từ thư khách</StatusTag>
+            ) : null}
+          </Space>
         ))}
       </Space>
       <ActionError error={error} />

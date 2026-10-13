@@ -127,3 +127,30 @@ in the platform merge of 2026-10-07 (`chore/platform-merge-2`).
   `decision_guards` and called at the same point, after the scope and the
   strict rules and before the run is looked at), and the withdrawal of
   waiting approvals, which now reads the approval as the run's requester.
+
+## Amendment 2026-10-13: a checker's decision with no run (ticket 30)
+
+Recorded by the agent while Đạt was away; Proposed with the rest of this ADR.
+
+Approving or rejecting a PO layout a PIC mapped is a checker's decision on
+someone else's work, so it is a platform approval, but no DW1 run waits on it:
+mapping a form is a person's step on the onboarding screen, not something DW1
+is asked to do, and a run started only to pause would spend the plan's runs on
+nothing. It takes the platform's run-less path instead (CLAUDE.md, "An
+approval with no run announces its decision"):
+
+- the proposal opens `sales.layout` in its own transaction, stamped
+  `sales.layout.approve` (the head's), payload ids, codes and a version only,
+  `makers` the proposer; `sales.` is strict, so the maker is refused and a
+  written comment is wanted, as for every Sales approval;
+- `LayoutDecisions.check` is registered for `sales.layout` on the same
+  `decision_guards` (the longer prefix wins over `CaseDecisions` for
+  `sales.`) and refuses a decision the layout would refuse, including one
+  sent without the version the layouts page showed (`/approvals` sends none);
+- the decision's `sales.layout.decided` outbox event is carried out by the
+  worker (`LayoutSettlement.settle`), which reads the outcome from the
+  approval row and applies it as the decider; idempotent on redelivery.
+
+`test_no_sales_route_decides_what_a_checker_decides` holds the rule: the
+direct `/layouts/{id}/approve` route the first build of ticket 30 had failed
+it and is gone.

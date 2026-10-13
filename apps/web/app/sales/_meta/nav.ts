@@ -1,5 +1,6 @@
 import {
   AuditOutlined,
+  BuildOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   FileTextOutlined,
@@ -69,6 +70,13 @@ export const salesNav: NavEntry[] = [
         label: "Kiểm chéo & duyệt",
         hint: "Đơn chờ kiểm chéo và báo giá chờ duyệt: người làm không tự kiểm",
         icon: AuditOutlined,
+        scope: "sales.case.read",
+      },
+      {
+        href: "/sales/layouts",
+        label: "Mẫu PO",
+        hint: "Mẫu PO của từng khách: Sales lập một lần, Trưởng bộ phận duyệt, DW1 đọc các PO sau theo mẫu",
+        icon: BuildOutlined,
         scope: "sales.case.read",
       },
       {

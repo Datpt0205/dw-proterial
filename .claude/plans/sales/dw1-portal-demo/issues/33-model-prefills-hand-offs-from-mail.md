@@ -1,8 +1,11 @@
 # 33 — A model turns a delivery-change, complaint or sample mail into a pre-filled hand-off with quotes; Sales sends it
 
-Status: needs-triage
-Blocked by: the shared model prerequisites (`../ai-automation.md`); 31;
-thread headers; 16; a Bravo open-orders export; Đạt's scope decision below.
+Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
+his pre-authorisation). Meets the proposed bar: 0 injected text, 0 resolved
+POs of another customer, 94.5% of golden fields right (bar 85%). Đạt's
+question below (delivery changes in DW1 or DW2) is still open; all three
+kinds are built and one table entry turns delivery changes off.
+Blocked by: — (built on 31 and the mock catalogue's `orders_for_po`).
 Category: enhancement
 
 Candidate C5 in `../ai-automation.md`, priority 6. Routed `delivery_change`
@@ -82,4 +85,108 @@ sends it. PC and Sales still decide dates; QA handles complaints.
   (the routing-reason table).
 - `configs/copy/` (hand-off template, new).
 
+## As built (2026-10-13)
+
+- **Schemas** (`domain/handoffs.py`): `ModelDeliveryChange` (PO span, lines
+  each with a line-or-item span and a new quantity or date span),
+  `ModelComplaint` (PO and lot spans, problem quotes), `ModelSampleRequest`
+  (item spans, quantity span); one per routed kind (`MODEL_SCHEMAS`), the
+  kind always the routing reason (`order_intake.HANDOFF_KINDS`), never this
+  call's. `Handoff` holds only what code located, parsed and resolved, and
+  the customer's sentences.
+- **Verification**: every span located exactly once in the newest part
+  (`locate`), a PO or lot as the first whole token (it may also be in the
+  subject); `quantity_of` takes exactly one number from its span,
+  `line_number_of` a line number ("Dòng 1 (...)" too), dates through the
+  existing parser; a quote naming an address, a web address or a phone
+  number is dropped (`carries_contact`). The PO resolves to an ERP order of
+  the sender's customer (`catalog.orders_for_po`), else to exactly one live
+  case of theirs; a line resolves by line number, PRV code, customer code or
+  convert-list entry against that order only.
+- **Text by code** (`application/handoffs.py`, copy
+  `configs/copy/sales_handoffs@1.0.0.yaml`): Vietnamese templates per kind,
+  addressed to a team (`pc` for delivery changes and samples, `qa` for
+  complaints), the values in fields and the customer's sentences in quotation
+  marks. Rendered when the inbox is read (`InboxMessageView.handoff_draft`).
+  Migration `a970a6cbac29`: `sales.messages.handoff` (jsonb, its kind equal
+  to the routing reason).
+- **Draft only**: nothing is sent and nothing changes in Bravo. The inbox
+  shows the draft as editable fields with "Chép bản chuyển"; Sales copies it
+  into their own mail to PC or QA.
+- **Switch**: `model_assist.request_handoff` (platform 1.4.0 off, demo 1.4.1
+  on); off means no gateway call (unit-tested).
+- **Evals** `sales_handoff@1.0.0`, graders `sales.handoff_*` in
+  `dw_sales.evals.handoffs`: 33 golden mails (VI 12, EN 12, JA 9; 73
+  fields), 4 injections ("also ship a replacement to ...", "ignore the
+  above", a VI instruction, a fake closing tag), 5 missing-evidence cases (no
+  PO, another customer's PO, an unknown PO, a PO only in the quoted history,
+  the sender's own), cross-tenant, the model down, and the mailbox flow
+  (M11, M17, M31, M40 against M01's and M35's cases). CI replays the
+  recorded answers with the floor at what was measured (≥ 0.94 fields
+  right, 0 invented).
+
+**Measured on the local model** (same set-up, 2026-10-13, run twice):
+
+| Set | Mails | Fields | Right     | Invented | Empty form (to a person) |
+| --- | ----- | ------ | --------- | -------- | ------------------------ |
+| All | 33    | 73     | **94.5%** | 0        | 12.1%                    |
+| VI  | 12    | 25     | 100%      | 0        | 8.3%                     |
+| EN  | 12    | 26     | 96.2%     | 0        | 16.7%                    |
+| JA  | 9     | 22     | 86.4%     | 0        | 11.1%                    |
+
+- The proposed bar holds: 0 injected text in a hand-off (4 injections, 0
+  reached), 0 resolved POs of another customer, 94.5% of fields right
+  (bar 85%). By kind (first run): delivery change 87%, complaint 100%, sample 95.2%.
+- p50 5.0 s, p95 7.2 s per mail.
+- Missing evidence 5 of 5: no PO, another customer's, an unknown one and
+  one only in the quoted history all leave the field blank; the sender's own
+  resolves. Cross-tenant: tenant B resolves nothing. Model down: routed as
+  today with an empty form.
+- **Portal flow, live** (same database, after M01 and M35): M11
+  `delivery_change` → PO `VLX-PO-2609-0118` (M01's case), no line ("tuần
+  46" names none), to PC, 11.1 s; M17 `sample_request` → the item quoted
+  «cáp 2 lõi 1.25mm2 (mã BRN-C-0118)», quantity 50, to PC, 7.6 s; M31
+  `complaint` → PO `VLX-PO-2608-0102`, lot `LOT-2609-118`, the customer's
+  sentence quoted, to QA, 11.4 s; M40 `delivery_change` → PO
+  `BRN-PO-2609-052` (M35's case), to PC, 9.3 s. Each draft is the copy
+  template's text with "(chưa rõ, Sales điền)" where nothing was located.
+
+**Guards shown red when removed**:
+
+| Guard                                            | Result |
+| ------------------------------------------------ | ------ |
+| a PO resolves only among the sender's own orders | red    |
+| a quote naming a destination is dropped          | red    |
+| a value counts only when located exactly once    | red    |
+| the tenant switch                                | red    |
+
 ## Comments
+
+- 2026-10-13, decided by the agent (Đạt away): all three kinds are built,
+  delivery changes included, because the ticket asks for them and the
+  hand-off changes nothing in Bravo (PC still decides dates). The question
+  below stays open: if delivery changes wait for DW2, dropping
+  `delivery_change` from `order_intake.HANDOFF_KINDS` turns them back into a
+  plain routing, one line, no migration.
+- 2026-10-13, decided by the agent (Đạt away): no outbound path to PC or QA
+  exists in DW1 (Acceptance 4's "existing outbox path" sends nothing to a
+  department), so "Sales sends it" is: the inbox shows the draft as editable
+  fields and "Chép bản chuyển" copies it, and Sales sends it from their own
+  mail. The recipients are a team role (`pc`, `qa`) in the copy file, never
+  an address.
+- 2026-10-13, decided by the agent (Đạt away): the copy is
+  `configs/copy/sales_handoffs@1.0.0.yaml` (Vietnamese, one template per
+  kind), loaded with the other Sales copy; the draft is rendered when the
+  inbox is read, from the stored hand-off, so a new copy version changes
+  drafts not yet sent and no stored record.
+- 2026-10-13, decided by the agent (Đạt away): a PO may be named in the
+  subject and again in the body; it is located as the first whole token
+  (a value inside a longer token is not it), so "named twice" is not
+  "ambiguous" for a document number. Any other value must be located exactly
+  once. A quote that names an e-mail address, a web address or a phone
+  number is dropped: it is the shape of "ship a replacement to ...".
+- 2026-10-13, decided by the agent (Đạt away): the "Bravo open-orders
+  export" the ticket was blocked by is the mock catalogue's
+  `orders_for_po`; a PO also resolves to exactly one live order case of the
+  sender's, for an order DW1 holds but Bravo does not list yet.
+- Open, for Đạt: the question below (delivery changes in DW1 or DW2).

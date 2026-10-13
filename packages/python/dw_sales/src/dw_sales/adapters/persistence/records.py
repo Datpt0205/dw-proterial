@@ -72,6 +72,15 @@ class SqlMessageLog:
             "model_reading": (
                 disposition.reading.model_dump(mode="json") if disposition.reading else None
             ),
+            "case_reply": disposition.reply.model_dump(mode="json") if disposition.reply else None,
+            "handoff": (
+                disposition.handoff.model_dump(mode="json") if disposition.handoff else None
+            ),
+            "layout_prefill": (
+                disposition.layout_prefill.model_dump(mode="json")
+                if disposition.layout_prefill
+                else None
+            ),
             "processed_at": processed_at,
         }
         statement = pg_insert(_M).values(
@@ -132,6 +141,9 @@ def _disposition(row: RowMapping) -> MessageDisposition:
             "customer_code": row["customer_code"],
             "compliance": row["compliance"],
             "reading": row["model_reading"],
+            "reply": row["case_reply"],
+            "handoff": row["handoff"],
+            "layout_prefill": row["layout_prefill"],
         }
     )
 

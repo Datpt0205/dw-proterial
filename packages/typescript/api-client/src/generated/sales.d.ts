@@ -54,6 +54,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/layouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Layouts */
+        get: operations["layouts_api_v1_sales_layouts_get"];
+        put?: never;
+        /** Propose Layout */
+        post: operations["propose_layout_api_v1_sales_layouts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/layouts/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Layout Preview */
+        post: operations["layout_preview_api_v1_sales_layouts_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/layouts/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Layout Source */
+        get: operations["layout_source_api_v1_sales_layouts_source_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/master-data/bravo-orders": {
         parameters: {
             query?: never;
@@ -465,6 +517,23 @@ export interface paths {
          *     `sales.order.resend_cross_check`, which the case checks (403).
          */
         post: operations["resend_cross_check_api_v1_sales_orders__case_id__resend_cross_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/resume-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Review */
+        post: operations["resume_review_api_v1_sales_orders__case_id__resume_review_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1000,6 +1069,48 @@ export interface components {
          * @enum {string}
          */
         CaseKind: "order" | "quote";
+        /**
+         * CaseReply
+         * @description A message attached to a case because its thread headers name a message
+         *     already on that case, of the sender's own customer (ticket 32).
+         */
+        CaseReply: {
+            /** Linked To */
+            linked_to: string;
+            reading?: components["schemas"]["ReplyReading"] | null;
+        };
+        /**
+         * CaseReplyView
+         * @description A customer's reply attached to the case by its thread (ticket 32), with
+         *     what a model read of it and the step code proposes from that, now.
+         *
+         *     ``proposal`` is computed from the case's status as it is now, and only for
+         *     the newest reply: an older reply's reading does not pre-select anything.
+         *     It is a suggestion: the step is the existing one, which Sales confirms and
+         *     the server checks as for any other caller. The quotes are the customer's
+         *     sentences, shown to a case reader as the inbox shows the whole mail.
+         */
+        CaseReplyView: {
+            /** Kind */
+            kind: ("accepts_spec" | "rejects_spec" | "counter_proposal" | "sends_corrected_po" | "keeps_po_as_is" | "question" | "unclear") | null;
+            /** Linked To */
+            linked_to: string;
+            /** Message Id */
+            message_id: string;
+            /** Outcome */
+            outcome: ("read" | "unavailable") | null;
+            /**
+             * Processed At
+             * Format: date-time
+             */
+            processed_at: string;
+            /** Prompt */
+            prompt: string | null;
+            /** Proposal */
+            proposal: ("settle_spec" | "decline_customer_rejected_spec" | "resume_review" | "await_revised_po") | null;
+            /** Quotes */
+            quotes: string[];
+        };
         /** CloseBody */
         CloseBody: {
             /** Case Version */
@@ -1341,6 +1452,95 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * Handoff
+         * @description The pre-filled hand-off stamped on a routed message's disposition.
+         *
+         *     ``read``: some value was located. ``nothing_located``: the model answered
+         *     and code kept nothing of it. ``unavailable``: no usable answer. Either of
+         *     the last two is an empty form Sales fills by hand, as before.
+         */
+        Handoff: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "delivery_change" | "complaint" | "sample_request";
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["HandoffLine"][];
+            lot?: components["schemas"]["Located"] | null;
+            /** Model Profile */
+            model_profile: string;
+            /** Order Case Id */
+            order_case_id?: string | null;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "read" | "unavailable" | "nothing_located";
+            po?: components["schemas"]["Located"] | null;
+            /** Po No */
+            po_no?: string | null;
+            /** Prompt */
+            prompt: string;
+            quantity?: components["schemas"]["Located"] | null;
+            /**
+             * Quotes
+             * @default []
+             */
+            quotes: components["schemas"]["Located"][];
+            /** Refused */
+            refused?: {
+                [key: string]: number;
+            };
+            /** Route */
+            route: string;
+            /** Rules */
+            rules: string;
+            /** Sample Quantity */
+            sample_quantity?: string | null;
+            /** So No */
+            so_no?: string | null;
+        };
+        /**
+         * HandoffDraftView
+         * @description A routed message's hand-off as code wrote it from the template, for
+         *     Sales to review, edit and send from their own mailbox (ticket 33). ``to``
+         *     names the team, never an address: Sales picks the recipients.
+         */
+        HandoffDraftView: {
+            /** Body */
+            body: string;
+            /** Subject */
+            subject: string;
+            /** Template Ref */
+            template_ref: string;
+            /**
+             * To
+             * @enum {string}
+             */
+            to: "pc" | "qa";
+        };
+        /**
+         * HandoffLine
+         * @description A line of the order the customer asks to change, resolved by code.
+         */
+        HandoffLine: {
+            date_span?: components["schemas"]["Located"] | null;
+            /** Item */
+            item?: string | null;
+            /** Line No */
+            line_no: number;
+            /** New Date */
+            new_date?: string | null;
+            /** New Quantity */
+            new_quantity?: string | null;
+            quantity?: components["schemas"]["Located"] | null;
+            reference: components["schemas"]["Located"];
+        };
+        /**
          * Hidden
          * @description An amount the caller may not see: there, and not shown.
          */
@@ -1359,6 +1559,7 @@ export interface components {
             /** Body Text */
             body_text: string;
             disposition: components["schemas"]["MessageDispositionView"];
+            handoff_draft?: components["schemas"]["HandoffDraftView"] | null;
             /** Message Id */
             message_id: string;
             /**
@@ -1440,6 +1641,19 @@ export interface components {
             /** Uom */
             uom: string | null;
         };
+        /** LabelCellView */
+        LabelCellView: {
+            /** Column */
+            column: number;
+            /** Ref */
+            ref: string;
+            /** Row */
+            row: number;
+            /** Sheet */
+            sheet: string;
+            /** Text */
+            text: string;
+        };
         /**
          * LabelledAnchor
          * @description Where one value was read, named by the field (and line) it fills.
@@ -1450,6 +1664,212 @@ export interface components {
             field: string;
             /** Line No */
             line_no?: number | null;
+        };
+        /**
+         * LayoutBody
+         * @description A mapping of the form one message's attachment prints (ticket 30).
+         */
+        LayoutBody: {
+            /** Attachment Id */
+            attachment_id: string;
+            mapping: components["schemas"]["LayoutMapping"];
+            /** Message Id */
+            message_id: string;
+        };
+        /**
+         * LayoutMapping
+         * @description Which label on the form names each value, and how its numbers and text
+         *     dates are written. A person maps it on the onboarding screen; a model may
+         *     pre-fill it.
+         */
+        LayoutMapping: {
+            /** Amount */
+            amount: string;
+            /** Currency */
+            currency: string;
+            /** Customer Item Code */
+            customer_item_code: string;
+            /**
+             * Date Format
+             * @default %d/%m/%Y
+             * @enum {string}
+             */
+            date_format: "%d/%m/%Y" | "%Y-%m-%d" | "%d-%m-%Y" | "%m/%d/%Y" | "%d.%m.%Y" | "%Y/%m/%d";
+            /**
+             * Decimal Separator
+             * @default .
+             * @enum {string}
+             */
+            decimal_separator: "." | ",";
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "excel" | "pdf";
+            /** Line No */
+            line_no: string;
+            /** Page Label */
+            page_label?: string | null;
+            /** Pdf Columns */
+            pdf_columns?: string[] | null;
+            /** Po Date */
+            po_date: string;
+            /** Po No */
+            po_no: string;
+            /** Quantity */
+            quantity: string;
+            /** Requested Date */
+            requested_date: string;
+            /** Revision */
+            revision?: string | null;
+            /**
+             * Thousands Separator
+             * @default ,
+             * @enum {string}
+             */
+            thousands_separator: "," | "." | " " | "none";
+            /** Total Label */
+            total_label: string;
+            /** Unit Price */
+            unit_price: string;
+            /** Uom */
+            uom: string;
+        };
+        /**
+         * LayoutPrefill
+         * @description What the model pre-fill of a form did, stamped on the message it was
+         *     asked for and on the layout a person proposed from it: the prompt,
+         *     profile and route of the call, the rules whose switch asked, and the
+         *     outcome. ``proposed``: every check passed and the screen opens with the
+         *     mapping; ``refused``: a check failed (the problems say which), and the
+         *     screen opens empty; ``unavailable``: no usable answer.
+         */
+        LayoutPrefill: {
+            /** Attachment Id */
+            attachment_id: string;
+            mapping?: components["schemas"]["LayoutMapping"] | null;
+            /** Model Profile */
+            model_profile: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "proposed" | "refused" | "unavailable";
+            /**
+             * Problems
+             * @default []
+             */
+            problems: string[];
+            /** Prompt */
+            prompt: string;
+            /** Route */
+            route: string;
+            /** Rules */
+            rules: string;
+        };
+        /**
+         * LayoutPreviewView
+         * @description A mapping as code judged it: the problems, and what the reader read.
+         */
+        LayoutPreviewView: {
+            /** Currency */
+            currency?: string | null;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["PreviewLineView"][];
+            /** Ok */
+            ok: boolean;
+            /** Po Date */
+            po_date?: string | null;
+            /** Po No */
+            po_no?: string | null;
+            /** Problems */
+            problems: string[];
+            /** Revision */
+            revision?: number | null;
+            /** Total */
+            total?: string | null;
+        };
+        /**
+         * LayoutSample
+         * @description The PO the form was mapped from: what the approver sees beside it.
+         */
+        LayoutSample: {
+            /** Attachment Id */
+            attachment_id: string;
+            /** Attachment Sha256 */
+            attachment_sha256: string;
+            /** Message Id */
+            message_id: string;
+        };
+        /**
+         * LayoutSourceView
+         * @description What the onboarding screen maps from: the form's cells, the pre-fill
+         *     DW1 stamped on the message (a model's, where the step is on), and the
+         *     customer's layout of this kind already approved, if any.
+         */
+        LayoutSourceView: {
+            approved: components["schemas"]["LayoutView"] | null;
+            /** Attachment Id */
+            attachment_id: string;
+            /** Cells */
+            cells: components["schemas"]["LabelCellView"][];
+            /** Customer Code */
+            customer_code: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "excel" | "pdf";
+            /** Message Id */
+            message_id: string;
+            prefill: components["schemas"]["LayoutPrefill"] | null;
+        };
+        /**
+         * LayoutView
+         * @description One layout: its mapping, the PO it was mapped from, who proposed and
+         *     who decided it, and the model pre-fill it started from, if any.
+         */
+        LayoutView: {
+            /**
+             * Approval Id
+             * Format: uuid
+             */
+            approval_id: string;
+            /** Customer Code */
+            customer_code: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Kind */
+            kind: string;
+            /**
+             * Layout Id
+             * Format: uuid
+             */
+            layout_id: string;
+            mapping: components["schemas"]["LayoutMapping"];
+            prefill: components["schemas"]["LayoutPrefill"] | null;
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /**
+             * Proposed By
+             * Format: uuid
+             */
+            proposed_by: string;
+            sample: components["schemas"]["LayoutSample"];
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
         };
         /** LineBasisView */
         LineBasisView: {
@@ -1507,6 +1927,19 @@ export interface components {
             /** Month */
             month: string;
             usd_per_tonne: components["schemas"]["Amount"] | null;
+        };
+        /**
+         * Located
+         * @description Text code found exactly once in the newest part, with its offsets
+         *     into the NFKC form of `MessagePart.text`.
+         */
+        Located: {
+            /** End */
+            end: number;
+            /** Start */
+            start: number;
+            /** Text */
+            text: string;
         };
         /** MappingBody */
         MappingBody: {
@@ -1618,8 +2051,10 @@ export interface components {
             customer_code?: string | null;
             /** Detail */
             detail?: string | null;
+            handoff?: components["schemas"]["Handoff"] | null;
             /** Kind */
             kind: string;
+            layout_prefill?: components["schemas"]["LayoutPrefill"] | null;
             /** Owner */
             owner?: string | null;
             /** Processed At */
@@ -1627,6 +2062,7 @@ export interface components {
             reading?: components["schemas"]["IntentReading"] | null;
             /** Reason */
             reason?: string | null;
+            reply?: components["schemas"]["CaseReply"] | null;
         };
         /** MessagesView */
         MessagesView: {
@@ -1757,6 +2193,11 @@ export interface components {
             received_at: string;
             /** Release Manifest Ref */
             release_manifest_ref: string | null;
+            /**
+             * Replies
+             * @default []
+             */
+            replies: components["schemas"]["CaseReplyView"][];
             /** Returned At */
             returned_at: string | null;
             /** Returned By */
@@ -1966,6 +2407,25 @@ export interface components {
             approval_id: string;
             /** Approval Type */
             approval_type: string;
+        };
+        /** PreviewLineView */
+        PreviewLineView: {
+            /** Amount */
+            amount: string;
+            /** Customer Item Code */
+            customer_item_code: string;
+            /** Description */
+            description: string;
+            /** Line No */
+            line_no: number;
+            /** Quantity */
+            quantity: string;
+            /** Requested Date */
+            requested_date: string | null;
+            /** Unit Price */
+            unit_price: string;
+            /** Uom */
+            uom: string;
         };
         /** PriceBody */
         PriceBody: {
@@ -2178,6 +2638,11 @@ export interface components {
             received_at: string;
             /** Release Manifest Ref */
             release_manifest_ref: string | null;
+            /**
+             * Replies
+             * @default []
+             */
+            replies: components["schemas"]["CaseReplyView"][];
             /** Returns */
             returns: components["schemas"]["ReturnView"][];
             /** Rfq Date */
@@ -2317,7 +2782,7 @@ export interface components {
          *     would see something else than the reader read.
          * @enum {string}
          */
-        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read";
+        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout";
         /**
          * RenderBody
          * @description An artifact kind to render from the case at the version the caller saw;
@@ -2336,6 +2801,49 @@ export interface components {
         RenderedView: {
             /** Artifacts */
             artifacts: components["schemas"]["ArtifactView"][];
+        };
+        /**
+         * ReplyQuote
+         * @description A sentence of the reply that code found, once, in its newest part:
+         *     the text as the customer wrote it and where it is (offsets into the NFKC
+         *     form of `MessagePart.text`).
+         */
+        ReplyQuote: {
+            /** End */
+            end: number;
+            /** Start */
+            start: number;
+            /** Text */
+            text: string;
+        };
+        /**
+         * ReplyReading
+         * @description What the model reading of a reply did, stamped on its disposition: the
+         *     prompt, profile and route of the call, the rules whose switch asked for
+         *     it, and the outcome. ``unavailable``: no usable answer, so the reply is on
+         *     its case with no proposal and Sales reads it.
+         */
+        ReplyReading: {
+            /** Kind */
+            kind?: ("accepts_spec" | "rejects_spec" | "counter_proposal" | "sends_corrected_po" | "keeps_po_as_is" | "question" | "unclear") | null;
+            /** Model Profile */
+            model_profile: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "read" | "unavailable";
+            /** Prompt */
+            prompt: string;
+            /**
+             * Quotes
+             * @default []
+             */
+            quotes: components["schemas"]["ReplyQuote"][];
+            /** Route */
+            route: string;
+            /** Rules */
+            rules: string;
         };
         /**
          * RequestReading
@@ -2934,6 +3442,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageDispositionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    layouts_api_v1_sales_layouts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayoutView"][];
+                };
+            };
+        };
+    };
+    propose_layout_api_v1_sales_layouts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LayoutBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayoutView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    layout_preview_api_v1_sales_layouts_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LayoutBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayoutPreviewView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    layout_source_api_v1_sales_layouts_source_get: {
+        parameters: {
+            query: {
+                message_id: string;
+                attachment_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LayoutSourceView"];
                 };
             };
             /** @description Validation Error */
@@ -3673,6 +4305,44 @@ export interface operations {
         };
     };
     resend_cross_check_api_v1_sales_orders__case_id__resend_cross_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_review_api_v1_sales_orders__case_id__resume_review_post: {
         parameters: {
             query?: never;
             header?: {

@@ -38,6 +38,8 @@ from dw_sales.application.order_intake import (
     OrderIntake,
 )
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.threads import ThreadedCase
+from dw_sales.domain.catalog import Customer
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
     CaseKind,
@@ -63,7 +65,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 CATALOG = MockSalesCatalog.load(SCOPE)
 INBOX = MockInbox.load(SCOPE)
 RULES = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.3.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.4.0.yaml"
 )
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -277,6 +279,13 @@ GOLDEN: dict[str, Expected] = {
     # A postponement in words no keyword lists: `other` here, a model reads it
     # as `delivery_change` (ticket 31).
     "M40": (MessageKind.OTHER, "routed_to_sales", "other", ()),
+    # Replies in the thread of M09's request and M04's order (ticket 32): on
+    # the case, whatever "RFQ" or "PO" their subject repeats.
+    "M41": (MessageKind.CASE_REPLY, "attached_to_case", None, ()),
+    "M42": (MessageKind.CASE_REPLY, "attached_to_case", None, ()),
+    # Norvanta's new PDF form, which no layout reads until a person maps it
+    # (ticket 30).
+    "M43": (MessageKind.PO, "routed_to_sales", "attachment_unreadable", ()),
 }
 
 INJECTION = (
@@ -313,11 +322,43 @@ class InMemoryOrderCases:
         ]
 
 
+class _Threads:
+    """`ThreadLinkPort` over what this module processed: the case of the
+    message a reply's references name, of the sender's customer. A request is
+    handed to the quotation flow and opens no case here, so its message
+    stands in for its case. `ThreadLinks` itself, over the message log, is
+    `test_reply_intent.py`'s."""
+
+    def __init__(self, outcomes: dict[str, IntakeOutcome]) -> None:
+        self.outcomes = outcomes
+
+    async def linked_case(
+        self, scope: SalesScope, message: InboundMessage, sender: Customer | None
+    ) -> ThreadedCase | None:
+        for other in await INBOX.list_messages(scope):
+            outcome = self.outcomes.get(other.message_id)
+            if sender is None or outcome is None:
+                continue
+            if other.internet_message_id not in message.references:
+                continue
+            if outcome.case is not None and outcome.case.customer_code == sender.code:
+                case = outcome.case
+                return ThreadedCase(
+                    CaseKind.ORDER, case.case_id, sender.code, case.status, other.message_id, ""
+                )
+            if outcome.kind is MessageKind.QUOTE_REQUEST:
+                return ThreadedCase(
+                    CaseKind.QUOTE, uuid.UUID(int=9), sender.code, "", other.message_id, ""
+                )
+        return None
+
+
 def _intake(
     inbox: MockInbox = INBOX,
     cases: InMemoryOrderCases | None = None,
     rules: OrderRules = RULES,
     catalog: MockSalesCatalog = CATALOG,
+    threads: _Threads | None = None,
 ) -> OrderIntake:
     ids = itertools.count(1)
     return OrderIntake(
@@ -328,6 +369,7 @@ def _intake(
         rules=PlatformOrderRules(rules),
         cases=cases if cases is not None else InMemoryOrderCases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),
+        threads=threads,
     )
 
 
@@ -340,8 +382,8 @@ async def _message(message_id: str) -> InboundMessage:
 async def _process(
     message_ids: Iterable[str], cases: InMemoryOrderCases
 ) -> dict[str, IntakeOutcome]:
-    intake = _intake(cases=cases)
     outcomes: dict[str, IntakeOutcome] = {}
+    intake = _intake(cases=cases, threads=_Threads(outcomes))
     for message_id in message_ids:
         outcome = await intake.process(SCOPE, await _message(message_id))
         cases.keep(SCOPE, outcome)
@@ -604,8 +646,8 @@ def test_a_case_stamps_the_rules_parser_file_and_snapshot_it_was_checked_with(
     case = _case(outcomes, "M01")
     data = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
 
-    assert case.rules_version == "sales_order_rules@1.3.0"
-    assert case.document.parser_version == "excel_po_reader@1.3.0"
+    assert case.rules_version == "sales_order_rules@1.4.0"
+    assert case.document.parser_version == "excel_po_reader@1.4.0"
     assert case.document.attachment_sha256 == hashlib.sha256(data).hexdigest()
     assert case.catalog_as_of == asyncio.run(CATALOG.items(SCOPE)).as_of
     assert (case.cross_check_required, case.export_control_mode) == (True, "warn")
@@ -1025,7 +1067,7 @@ async def test_a_code_is_looked_up_in_the_callers_item_master_only() -> None:
 
 async def test_a_line_is_not_checked_again_under_rules_the_case_was_not_checked_under() -> None:
     _, case = await _in_review("M05")
-    newer = RULES.model_copy(update={"policy_version": "1.4.0"})
+    newer = RULES.model_copy(update={"policy_version": "1.5.0"})
 
     with pytest.raises(ConflictError, match="no longer apply"):
         await _intake(rules=newer).confirm_mapping(SCOPE, case, 2, "CB-2005", AN, T0)

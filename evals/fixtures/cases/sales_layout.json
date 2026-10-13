@@ -1,0 +1,4 @@
+{
+  "golden_ref": "evals/fixtures/cases/sales_layout_golden.json",
+  "security_ref": "evals/fixtures/cases/sales_layout_security.json"
+}

@@ -1,0 +1,604 @@
+{
+  "_comment": "Golden set for DW1 reading a customer's reply in a case thread (ticket 32): the newest part of each reply decides one kind, and gold is that kind. Every company, person, address and RFQ/PO number here is fictional.",
+  "replies": [
+    {
+      "id": "RP01",
+      "lang": "vi",
+      "case": "spec",
+      "number": "VLX-RFQ-2609-07",
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Re: Request for quotation VLX-RFQ-2609-07 - thông số đề xuất",
+      "body": "Chào chị Vy,\n\nBên em đã xem bản thông số chị gửi cho mã VX-C2N075. Bên em đồng ý với thông số này, chị cứ tiến hành báo giá giúp em nhé.\n\nTrân trọng,\nTrịnh Mỹ An\nVelatrix Electronics Vietnam",
+      "gold": "accepts_spec",
+      "tags": []
+    },
+    {
+      "id": "RP02",
+      "lang": "en",
+      "case": "spec",
+      "number": "QRL-RFQ-2609-03",
+      "sender": "ivy.tran@quorilo.example",
+      "subject": "RE: Request for quotation QRL-RFQ-2609-03 - proposed specification",
+      "body": "Hi Diệu,\n\nOur engineering team has reviewed the proposed specification for QR-NEW-3C26. We accept the specification as proposed.\nPlease go ahead with the quotation.\n\nBest regards,\nIvy Tran\nQuorilo Medical Devices",
+      "gold": "accepts_spec",
+      "tags": []
+    },
+    {
+      "id": "RP03",
+      "lang": "ja",
+      "case": "spec",
+      "number": "KMH-RFQ-260930-02",
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "Re: 見積依頼 KMH-RFQ-260930-02 仕様のご確認",
+      "body": "Demo Wire & Cable\nDiệu様\n\nいつもお世話になっております。Kumohana Devices Vietnamの新井です。\n\nご提案いただいた仕様（KMH-21-0045）について、技術部門と確認いたしました。\n本仕様にて承認いたします。\n\n引き続きお見積りのほど、よろしくお願いいたします。\n\n新井 匠",
+      "gold": "accepts_spec",
+      "tags": []
+    },
+    {
+      "id": "RP04",
+      "lang": "vi",
+      "case": "spec",
+      "number": "LMR-RFQ-2610-01",
+      "sender": "minh.dao@lumora.example",
+      "subject": "Re: RFQ LMR-RFQ-2610-01",
+      "body": "Chào An,\nOK spec này nha em, bên anh chốt vậy luôn.\nCó gì gửi báo giá qua sớm giúp anh.\nMinh",
+      "gold": "accepts_spec",
+      "tags": [
+        "regional"
+      ]
+    },
+    {
+      "id": "RP05",
+      "lang": "en",
+      "case": "spec",
+      "number": "NRV-RFQ-26-0112",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Request for quotation NRV-RFQ-26-0112 - proposed specification",
+      "body": "Hi An,\n\nSpec looks good to us, approved. Thanks for the quick turnaround.\n\nHana\n\nOn Tue, 6 Oct 2026 at 10:00, An (Demo Wire & Cable) <an@seller.example> wrote:\n> Hi Hana,\n> Please find our proposed specification for NV-HW24-WH: 24 AWG hook-up wire, white, 610 m spool.\n> If you would prefer a different colour or spool length, let us know and we will revise it.\n> Best regards,\n> An",
+      "gold": "accepts_spec",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP06",
+      "lang": "vi",
+      "case": "spec",
+      "number": "BRN-RFQ-2610-03",
+      "sender": "thu.vo@brennic.example",
+      "subject": "Re: Thông số đề xuất cho yêu cầu báo giá BRN-RFQ-2610-03",
+      "body": "Dạ chào anh Giang,\n\nBên em xác nhận đồng ý toàn bộ thông số kỹ thuật như file anh gửi.\n\nCảm ơn anh.\nVõ Minh Thư\n\nVào Th 3, 6 thg 10, 2026 lúc 10:00 Giang (Demo Wire & Cable) <giang@seller.example> đã viết:\n> Chào chị Thư,\n> Bên em gửi thông số đề xuất cho dây 2 lõi AWG22, vỏ màu đen, cuộn 305 m.\n> Nếu chị chưa đồng ý điểm nào, chị phản hồi giúp em để bên em điều chỉnh.\n> Trân trọng,\n> Giang",
+      "gold": "accepts_spec",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP07",
+      "lang": "en",
+      "case": "spec",
+      "number": "CVG-RFQ-261001-02",
+      "sender": "scm@corvane-group.example",
+      "subject": "RE: Request for quotation CVG-RFQ-261001-02",
+      "body": "Dear An,\n\nWe confirm acceptance of the proposed specification without changes.\n\nKind regards,\nCorvane Supply Chain Desk",
+      "gold": "accepts_spec",
+      "tags": []
+    },
+    {
+      "id": "RP08",
+      "lang": "ja",
+      "case": "spec",
+      "number": "CVG-RFQ-261005-01",
+      "sender": "haruka.ito@corvane-group.example",
+      "subject": "RE: CVG-RFQ-261005-01 仕様のご確認",
+      "body": "An様\n\nお世話になっております。Corvaneの伊藤です。\nご提示いただいた仕様にて問題ございませんので、このまま進めてください。\nどうぞよろしくお願いいたします。\n\n伊藤\n\n-----Original Message-----\nFrom: An (Demo Wire & Cable) <an@seller.example>\nSent: Wednesday, October 7, 2026 4:30 PM\nTo: haruka.ito@corvane-group.example\nSubject: CVG-RFQ-261005-01 仕様のご確認\n\n伊藤様\n仕様案を添付いたします。変更がございましたらお知らせください。\nAn",
+      "gold": "accepts_spec",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP09",
+      "lang": "vi",
+      "case": "spec",
+      "number": "VLX-RFQ-2610-02",
+      "sender": "purchasing@velatrix.example",
+      "subject": "Re: Thông số đề xuất cho RFQ VLX-RFQ-2610-02",
+      "body": "Chào chị Diệu,\n\nSau khi phòng kỹ thuật xem xét, rất tiếc bên em không đồng ý với thông số đề xuất vì vỏ PVC không đạt yêu cầu nhiệt độ của dự án. Bên em sẽ không tiếp tục với yêu cầu báo giá này.\n\nTrân trọng,\nPhòng Mua hàng Velatrix",
+      "gold": "rejects_spec",
+      "tags": []
+    },
+    {
+      "id": "RP10",
+      "lang": "en",
+      "case": "spec",
+      "number": "QRL-RFQ-2610-01",
+      "sender": "procurement@quorilo.example",
+      "subject": "RE: Request for quotation QRL-RFQ-2610-01 - proposed specification",
+      "body": "Hello Diệu,\n\nThank you for the proposal. Unfortunately we cannot accept the specification, as the jacket material does not meet our sterilisation requirements. We will not pursue this RFQ further.\n\nRegards,\nQuorilo Procurement",
+      "gold": "rejects_spec",
+      "tags": []
+    },
+    {
+      "id": "RP11",
+      "lang": "vi",
+      "case": "spec",
+      "number": "LMR-RFQ-2610-02",
+      "sender": "minh.dao@lumora.example",
+      "subject": "Re: Re: RFQ LMR-RFQ-2610-02 - xác nhận thông số",
+      "body": "An ơi, bên anh không dùng được loại dây này đâu, thông số không hợp với máy bên anh. Thôi đợt này bên anh không lấy nữa nhé.\nMinh\n\nVào Th 4, 7 thg 10, 2026 lúc 09:12 An (Demo Wire & Cable) <an@seller.example> đã viết:\n> Chào anh Minh,\n> Anh vui lòng xác nhận đồng ý thông số để bên em gửi báo giá ạ.\n> Cảm ơn anh,\n> An",
+      "gold": "rejects_spec",
+      "tags": [
+        "quoted_history",
+        "regional"
+      ]
+    },
+    {
+      "id": "RP12",
+      "lang": "en",
+      "case": "spec",
+      "number": "NRV-RFQ-26-0125",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "RE: RFQ NRV-RFQ-26-0125 - proposed specification",
+      "body": "Hi Vy,\n\nWe have decided not to go ahead with the proposed spec, as it does not fit our harness design. Please close this request on your side.\n\nRegards,\nHana\n\nFrom: Vy (Demo Wire & Cable) <vy@seller.example>\nSent: Tuesday, October 6, 2026 10:00 AM\nTo: Hana Westbrook <hana.westbrook@norvanta.example>\nSubject: RFQ NRV-RFQ-26-0125 - proposed specification\n\nHi Hana,\nPlease confirm you accept the proposed specification so we can send the quotation.\nBest regards,\nVy",
+      "gold": "rejects_spec",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP13",
+      "lang": "ja",
+      "case": "spec",
+      "number": "KMH-RFQ-261002-01",
+      "sender": "purchasing@kumohana.example",
+      "subject": "RE: 見積依頼 KMH-RFQ-261002-01 仕様案",
+      "body": "Diệu様\n\nお世話になっております。Kumohana購買部です。\n大変申し訳ございませんが、今回ご提案の仕様は弊社の要求を満たさないため、お受けいたしかねます。\n本件は見送りとさせていただきます。\n\nKumohana Purchasing\n\nOn Wed, 7 Oct 2026 at 15:20, Diệu (Demo Wire & Cable) <dieu@seller.example> wrote:\n> ご担当者様\n> 仕様案をお送りいたします。ご承認いただけましたら、このメールにご返信ください。\n> Diệu",
+      "gold": "rejects_spec",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP14",
+      "lang": "vi",
+      "case": "spec",
+      "number": "BRN-RFQ-2610-05",
+      "sender": "thu.vo@brennic.example",
+      "subject": "Re: Yêu cầu báo giá BRN-RFQ-2610-05 - thông số",
+      "body": "Dạ chào anh Giang,\n\nBên em đồng ý với điều kiện vỏ dây đổi sang màu xám thay vì màu đen. Nếu bên anh làm được thì gửi báo giá theo màu xám giúp em ạ.\n\nVõ Minh Thư",
+      "gold": "counter_proposal",
+      "tags": [
+        "conditional"
+      ]
+    },
+    {
+      "id": "RP15",
+      "lang": "en",
+      "case": "spec",
+      "number": "NRV-RFQ-26-0131",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Request for quotation NRV-RFQ-26-0131",
+      "body": "Hi An,\n\nWe can accept the spec if the insulation colour is grey instead of white.\n\nThanks,\nHana",
+      "gold": "counter_proposal",
+      "tags": [
+        "conditional"
+      ]
+    },
+    {
+      "id": "RP16",
+      "lang": "ja",
+      "case": "spec",
+      "number": "KMH-RFQ-261006-01",
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "Re: KMH-RFQ-261006-01 仕様案について",
+      "body": "Diệu様\n\nいつもお世話になっております。新井です。\n\n仕様案の内容は基本的に了承いたします。\nただし、被覆の色をグレーに変更していただけるのであれば承認いたします。\n\nご検討のほど、よろしくお願いいたします。\n新井",
+      "gold": "counter_proposal",
+      "tags": [
+        "conditional"
+      ]
+    },
+    {
+      "id": "RP17",
+      "lang": "vi",
+      "case": "spec",
+      "number": "VLX-RFQ-2610-04",
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Re: RFQ VLX-RFQ-2610-04 - thông số đề xuất",
+      "body": "Chào chị Vy,\n\nThông số ổn, nhưng bên em cần chiều dài cuộn 100 m thay vì 305 m. Chị báo giá lại theo cuộn 100 m giúp em nhé.\n\nTrân trọng,\nTrịnh Mỹ An",
+      "gold": "counter_proposal",
+      "tags": [
+        "conditional"
+      ]
+    },
+    {
+      "id": "RP18",
+      "lang": "en",
+      "case": "spec",
+      "number": "QRL-RFQ-2610-08",
+      "sender": "ivy.tran@quorilo.example",
+      "subject": "RE: QRL-RFQ-2610-08 - proposed specification",
+      "body": "Hi Diệu,\n\nThe specification is fine, but we need the cable on 100 m reels rather than 300 m. If you can do that, please send the quotation on that basis.\n\nBest regards,\nIvy",
+      "gold": "counter_proposal",
+      "tags": [
+        "conditional"
+      ]
+    },
+    {
+      "id": "RP19",
+      "lang": "en",
+      "case": "spec",
+      "number": "CVG-RFQ-261001-04",
+      "sender": "scm@corvane-group.example",
+      "subject": "RE: Request for quotation CVG-RFQ-261001-04 - proposed specification",
+      "body": "Dear Vy,\n\nWe accept the proposal provided that the lead time does not exceed six weeks from PO.\nPlease confirm this when you send the quotation.\n\nKind regards,\nCorvane Supply Chain Desk",
+      "gold": "counter_proposal",
+      "tags": [
+        "conditional"
+      ]
+    },
+    {
+      "id": "RP20",
+      "lang": "ja",
+      "case": "spec",
+      "number": "CVG-RFQ-261005-03",
+      "sender": "haruka.ito@corvane-group.example",
+      "subject": "RE: CVG-RFQ-261005-03 仕様案",
+      "body": "An様\n\nお世話になっております。伊藤でございます。\nご提案の仕様で進めたいと考えておりますが、リール長を500mから300mに変更いただくことが条件となります。\n対応可否をご教示いただけますと幸いです。\n\n伊藤",
+      "gold": "counter_proposal",
+      "tags": [
+        "conditional"
+      ]
+    },
+    {
+      "id": "RP21",
+      "lang": "vi",
+      "case": "spec",
+      "number": "LMR-RFQ-2610-03",
+      "sender": "minh.dao@lumora.example",
+      "subject": "Re: RFQ LMR-RFQ-2610-03 thông số",
+      "body": "An ơi,\nBên anh muốn đổi sang lõi đồng mạ thiếc chứ không dùng đồng trần, em xem lại rồi báo giá theo vậy giúp anh nha.\nMinh",
+      "gold": "counter_proposal",
+      "tags": [
+        "regional"
+      ]
+    },
+    {
+      "id": "RP22",
+      "lang": "en",
+      "case": "spec",
+      "number": "QRL-RFQ-2610-06",
+      "sender": "procurement@quorilo.example",
+      "subject": "RE: Request for quotation QRL-RFQ-2610-06 - proposed specification",
+      "body": "Hello Diệu,\n\nWe would prefer a bare copper conductor instead of tinned copper for this project. Please revise the specification and the quotation accordingly; the unit price should reflect the change.\n\nRegards,\nQuorilo Procurement\n\nOn Thu, 8 Oct 2026 at 14:05, Diệu (Demo Wire & Cable) <dieu@seller.example> wrote:\n> Dear Quorilo team,\n> Attached is our proposed specification: 4-core AWG24, tinned copper, foil shield, 300 m reel.\n> Please confirm you accept it as proposed and we will quote right away.\n> Best regards,\n> Diệu",
+      "gold": "counter_proposal",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP23",
+      "lang": "ja",
+      "case": "spec",
+      "number": "KMH-RFQ-261006-02",
+      "sender": "kenta.sato@vn.kumohana.example",
+      "subject": "Re: 見積依頼 KMH-RFQ-261006-02 仕様案",
+      "body": "Giang様\n\nお世話になっております。Kumohanaの佐藤です。\n導体を錫めっき軟銅線に変更していただきたく存じます。\n変更後の仕様でお見積りをお願いいたします。\n\n佐藤 健太",
+      "gold": "counter_proposal",
+      "tags": []
+    },
+    {
+      "id": "RP24",
+      "lang": "vi",
+      "case": "correction",
+      "number": "VLX-PO-2608-0102",
+      "asked": [
+        "price_mismatch (line 2)"
+      ],
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Re: PO VLX-PO-2608-0102 - cần xác nhận đơn giá",
+      "body": "Chào anh An,\n\nBên em đã điều chỉnh đơn giá dòng 2 theo báo giá và gửi PO sửa đổi (rev.1) đính kèm email này. Anh kiểm tra giúp em nhé.\n\nTrân trọng,\nTrịnh Mỹ An",
+      "gold": "sends_corrected_po",
+      "tags": []
+    },
+    {
+      "id": "RP25",
+      "lang": "en",
+      "case": "correction",
+      "number": "NRV-PO-26-0388",
+      "asked": [
+        "currency_mismatch"
+      ],
+      "sender": "po-desk@norvanta.example",
+      "subject": "RE: PO NRV-PO-26-0388 - currency",
+      "body": "Hi An,\n\nApologies, the currency on our PO was wrong. A revised PO in USD is attached as NRV-PO-26-0388 rev.1.\n\nRegards,\nNorvanta PO Desk",
+      "gold": "sends_corrected_po",
+      "tags": []
+    },
+    {
+      "id": "RP26",
+      "lang": "ja",
+      "case": "correction",
+      "number": "KMH-2026-0728-A",
+      "asked": [
+        "price_mismatch (line 1)"
+      ],
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "RE: 注文書 KMH-2026-0728-A 単価のご確認",
+      "body": "Vy様\n\nお世話になっております。新井です。\nご指摘いただきありがとうございます。\n単価を見積書どおりに修正した訂正版の注文書を、本日中にお送りいたします。\n\n新井 匠",
+      "gold": "sends_corrected_po",
+      "tags": []
+    },
+    {
+      "id": "RP27",
+      "lang": "vi",
+      "case": "correction",
+      "number": "BRN-PO-2608-022",
+      "asked": [
+        "uom_mismatch (line 1)"
+      ],
+      "sender": "thu.vo@brennic.example",
+      "subject": "RE: PO BRN-PO-2608-022 - cần xác nhận đơn vị tính",
+      "body": "Dạ em cảm ơn chị Vy.\nBên em sẽ phát hành lại PO với đơn vị tính là mét và gửi chị trong chiều nay ạ.\n\nThư\n\nFrom: Vy (Demo Wire & Cable) <vy@seller.example>\nSent: Monday, October 12, 2026 9:15 AM\nTo: thu.vo@brennic.example\nSubject: PO BRN-PO-2608-022 - cần xác nhận đơn vị tính\n\nChào chị Thư,\nDòng 1 của PO ghi đơn vị là cuộn nhưng báo giá tính theo mét.\nChị muốn giữ nguyên PO hay gửi PO đã sửa ạ?\nVy",
+      "gold": "sends_corrected_po",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP28",
+      "lang": "en",
+      "case": "correction",
+      "number": "QRL-PO-0918-07",
+      "asked": [
+        "code_unmapped (line 3)"
+      ],
+      "sender": "ivy.tran@quorilo.example",
+      "subject": "Re: PO QRL-PO-0918-07 - item code on line 3",
+      "body": "Hi Diệu,\n\nThanks for flagging this. We will send a corrected PO with the right item code on line 3 by tomorrow.\n\nIvy\n\nOn Mon, 12 Oct 2026 at 11:40, Diệu (Demo Wire & Cable) <dieu@seller.example> wrote:\n> Hi Ivy,\n> Line 3 of your PO carries an item code we cannot match to any quotation.\n> Should we proceed with the PO as it stands, or will you send a corrected one?\n> Best regards,\n> Diệu",
+      "gold": "sends_corrected_po",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP29",
+      "lang": "ja",
+      "case": "correction",
+      "number": "KMH-2026-1001-B",
+      "asked": [
+        "line_total_mismatch (line 2)"
+      ],
+      "sender": "purchasing@kumohana.example",
+      "subject": "RE: 注文書 KMH-2026-1001-B 金額のご確認",
+      "body": "Diệu様\n\nお世話になっております。Kumohana購買部です。\nご指摘ありがとうございます。2行目の金額を訂正した注文書（Rev.1）を添付いたしますので、ご確認ください。\n\nKumohana Purchasing\n\nFrom: Diệu (Demo Wire & Cable) <dieu@seller.example>\nSent: Friday, October 9, 2026 2:10 PM\nTo: purchasing@kumohana.example\nSubject: 注文書 KMH-2026-1001-B 金額のご確認\n\nご担当者様\n注文書2行目の金額が数量と単価の積と一致しておりません。\n現在の注文書のままでよろしいでしょうか。\nDiệu",
+      "gold": "sends_corrected_po",
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP30",
+      "lang": "vi",
+      "case": "correction",
+      "number": "LMR-PO-2608-001",
+      "asked": [
+        "pack_multiple (line 1)"
+      ],
+      "sender": "minh.dao@lumora.example",
+      "subject": "Re: PO LMR-PO-2608-001",
+      "body": "Chào em,\nSố lượng dòng 1 bên anh để vậy là đúng nhu cầu rồi. Em giữ nguyên PO giúp anh, phần lẻ cuộn bên anh chịu nha.\nMinh",
+      "gold": "keeps_po_as_is",
+      "tags": [
+        "regional"
+      ]
+    },
+    {
+      "id": "RP31",
+      "lang": "en",
+      "case": "correction",
+      "number": "CVG-260610-05",
+      "asked": [
+        "price_mismatch (line 1)"
+      ],
+      "sender": "scm@corvane-group.example",
+      "subject": "RE: PO CVG-260610-05 - price on line 1",
+      "body": "Dear An,\n\nPlease proceed as ordered. The price on line 1 reflects the volume terms we discussed in September, so no change to the PO is needed.\n\nKind regards,\nCorvane Supply Chain Desk",
+      "gold": "keeps_po_as_is",
+      "tags": []
+    },
+    {
+      "id": "RP32",
+      "lang": "ja",
+      "case": "correction",
+      "number": "CVG-261002-01",
+      "asked": [
+        "uom_mismatch (line 2)"
+      ],
+      "sender": "haruka.ito@corvane-group.example",
+      "subject": "RE: 注文書 CVG-261002-01 単位のご確認",
+      "body": "An様\n\nお世話になっております。伊藤です。\n2行目の単位は弊社の社内規定に基づくものです。\n注文書はこのままで手配をお願いいたします。\n\n伊藤",
+      "gold": "keeps_po_as_is",
+      "tags": []
+    },
+    {
+      "id": "RP33",
+      "lang": "vi",
+      "case": "correction",
+      "number": "VLX-PO-2610-0131",
+      "asked": [
+        "moq_violation (line 1)"
+      ],
+      "sender": "purchasing@velatrix.example",
+      "subject": "RE: PO VLX-PO-2610-0131 - số lượng dưới MOQ",
+      "body": "Kính gửi anh An,\n\nBên em xác nhận giữ nguyên số lượng trên PO, không điều chỉnh. Nhờ anh tiến hành giao hàng theo PO hiện tại.\n\nTrân trọng,\nPhòng Mua hàng Velatrix",
+      "gold": "keeps_po_as_is",
+      "tags": []
+    },
+    {
+      "id": "RP34",
+      "lang": "en",
+      "case": "correction",
+      "number": "NRV-PO-26-0402",
+      "asked": [
+        "moq_violation (line 1)",
+        "pack_multiple (line 1)"
+      ],
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: PO NRV-PO-26-0402 - quantity on line 1",
+      "body": "Hi Vy,\n\nWe'd like to keep the PO as it is. The quantity is what the line needs this month, and we understand a small-lot surcharge may apply.\n\nThanks,\nHana",
+      "gold": "keeps_po_as_is",
+      "tags": []
+    },
+    {
+      "id": "RP35",
+      "lang": "ja",
+      "case": "correction",
+      "number": "KMH-2026-1005-C",
+      "asked": [
+        "moq_violation (line 1)"
+      ],
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "RE: 注文書 KMH-2026-1005-C 数量のご確認",
+      "body": "Vy様\n\nいつもお世話になっております。新井です。\n数量はこのままで問題ございませんので、注文書の修正は不要です。\n現行の注文書どおりご手配ください。\n\n新井",
+      "gold": "keeps_po_as_is",
+      "tags": []
+    },
+    {
+      "id": "RP36",
+      "lang": "vi",
+      "case": "spec",
+      "number": "LMR-RFQ-2610-01",
+      "sender": "minh.dao@lumora.example",
+      "subject": "Re: RFQ LMR-RFQ-2610-01 - thông số",
+      "body": "Chào An,\nCho anh hỏi hàng mẫu theo thông số này thì bao lâu giao được em? Bên anh cần biết trước khi chốt.\nMinh",
+      "gold": "question",
+      "tags": []
+    },
+    {
+      "id": "RP37",
+      "lang": "vi",
+      "case": "decline",
+      "number": "VLX-RFQ-2610-05",
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Re: Thông báo không nhận báo giá RFQ VLX-RFQ-2610-05",
+      "body": "Chào chị Diệu,\n\nEm đã nhận được thông báo bên chị không nhận báo giá cho yêu cầu này. Chị cho em hỏi nếu bên em tăng số lượng lên gấp đôi thì bên chị có xem xét lại được không ạ?\n\nTrân trọng,\nTrịnh Mỹ An",
+      "gold": "question",
+      "tags": []
+    },
+    {
+      "id": "RP38",
+      "lang": "en",
+      "case": "decline",
+      "number": "QRL-RFQ-2610-04",
+      "sender": "procurement@quorilo.example",
+      "subject": "RE: Request for quotation QRL-RFQ-2610-04 - unable to quote",
+      "body": "Hello Diệu,\n\nWe received your note that you are unable to quote this request. Could you let us know whether this is because of the quantity or the cable construction?\n\nRegards,\nQuorilo Procurement",
+      "gold": "question",
+      "tags": []
+    },
+    {
+      "id": "RP39",
+      "lang": "ja",
+      "case": "spec",
+      "number": "KMH-RFQ-261006-02",
+      "sender": "kenta.sato@vn.kumohana.example",
+      "subject": "Re: KMH-RFQ-261006-02 仕様案のご確認",
+      "body": "Giang様\n\nお世話になっております。佐藤です。\nご提案の仕様について一点お伺いしたいことがございます。\n被覆材の耐熱温度は何度でしょうか。\n\n佐藤",
+      "gold": "question",
+      "tags": []
+    },
+    {
+      "id": "RP40",
+      "lang": "ja",
+      "case": "decline",
+      "number": "KMH-RFQ-261002-03",
+      "sender": "purchasing@kumohana.example",
+      "subject": "RE: KMH-RFQ-261002-03 お見積り辞退のご連絡",
+      "body": "Diệu様\n\nお世話になっております。Kumohana購買部です。\nお見積り辞退のご連絡をいただき、承知いたしました。\n納期を延ばした場合、ご対応いただける可能性はございますでしょうか。\n\nKumohana Purchasing",
+      "gold": "question",
+      "tags": []
+    },
+    {
+      "id": "RP41",
+      "lang": "vi",
+      "case": "spec",
+      "number": "BRN-RFQ-2610-05",
+      "sender": "thu.vo@brennic.example",
+      "subject": "Re: Yêu cầu báo giá BRN-RFQ-2610-05 - thông số",
+      "body": "Dạ em nhận được rồi ạ. Bên em sẽ xem lại và báo sau nhé anh.",
+      "gold": "unclear",
+      "tags": [
+        "non_answer"
+      ]
+    },
+    {
+      "id": "RP42",
+      "lang": "en",
+      "case": "correction",
+      "number": "NRV-PO-26-0388",
+      "asked": [
+        "currency_mismatch"
+      ],
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: PO NRV-PO-26-0388 - currency",
+      "body": "Thanks Vy, we will check internally and come back to you.\n\nHana",
+      "gold": "unclear",
+      "tags": [
+        "non_answer"
+      ]
+    },
+    {
+      "id": "RP43",
+      "lang": "ja",
+      "case": "spec",
+      "number": "KMH-RFQ-261006-04",
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "Re: KMH-RFQ-261006-04 仕様案",
+      "body": "Giang様\n\nご連絡ありがとうございます。\n内容を拝見しました。検討します。\n\n新井",
+      "gold": "unclear",
+      "tags": [
+        "non_answer"
+      ]
+    },
+    {
+      "id": "RP44",
+      "lang": "ja",
+      "case": "spec",
+      "number": "CVG-RFQ-261005-03",
+      "sender": "haruka.ito@corvane-group.example",
+      "subject": "RE: CVG-RFQ-261005-03 仕様案（改訂版）",
+      "body": "An様\n\nいつもお世話になっております。\n社内で確認のうえ、改めてご連絡いたします。\n今しばらくお待ちくださいますようお願い申し上げます。\n\n伊藤\n\nOn Mon, 12 Oct 2026 at 17:45, An (Demo Wire & Cable) <an@seller.example> wrote:\n> 伊藤様\n> 改訂版の仕様をお送りいたします。\n> ご承認いただける場合は「承認します」とご返信ください。\n> An",
+      "gold": "unclear",
+      "tags": [
+        "non_answer",
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "RP45",
+      "lang": "en",
+      "case": "spec",
+      "number": "QRL-RFQ-2609-03",
+      "sender": "ivy.tran@quorilo.example",
+      "subject": "Automatic reply: Request for quotation QRL-RFQ-2609-03 - proposed specification",
+      "body": "Thank you for your email. I am out of the office until 19 October 2026 with limited access to email.\nFor urgent matters, please contact procurement@quorilo.example.\n\nIvy Tran",
+      "gold": "unclear",
+      "tags": []
+    },
+    {
+      "id": "RP46",
+      "lang": "vi",
+      "case": "correction",
+      "number": "VLX-PO-2608-0102",
+      "asked": [
+        "price_mismatch (line 2)"
+      ],
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Re: PO VLX-PO-2608-0102 - cần xác nhận đơn giá",
+      "body": "Cảm ơn anh.\n\nTrân trọng,\nTrịnh Mỹ An",
+      "gold": "unclear",
+      "tags": []
+    }
+  ]
+}

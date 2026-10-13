@@ -74,7 +74,10 @@ from dw_platform.adapters.persistence.notifications import (
 from dw_platform.adapters.persistence.offboarding import SqlTenantOffboarding
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
-from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.adapters.persistence.repositories import (
+    SqlApprovalRepository,
+    SqlAuditRepository,
+)
 from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.adapters.persistence.zalo_link_repo import (
@@ -86,8 +89,9 @@ from dw_platform.application.approval_codes import ApprovalSubjectVersions, Deci
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.retention_policy import load_retention_policy
-from dw_sales.adapters.assembly import build_dw1
+from dw_sales.adapters.assembly import build_dw1, build_layout_settlement
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE, InboxLane
+from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.ports import SalesScope
 from dw_worker.composition import (
     REPO_ROOT,
@@ -113,6 +117,7 @@ from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
 from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTERVAL_SECONDS
 from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
+from dw_worker.consumers.sales_layouts import build_layout_decided_handler
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -290,6 +295,7 @@ def build_sales_inbox_lane(
         configs=REPO_ROOT / "configs",
         session_factory=sessions,
         audit=SqlAuditRepository,
+        approvals=SqlApprovalRepository,
         clock=clock,
         ids=ids,
         authorization=ScopeAuthorizationService(),
@@ -401,6 +407,19 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 ),
                 # Writes the vector that lets a later recall order a long list.
                 memory_vectors,
+            )
+        )
+        # A PO layout's decision (Sales ticket 30): a run-less `sales.layout`
+        # approval, carried out here once decided. Wired whether or not this
+        # host reads a mailbox: the layout and the approval are rows of the
+        # approval's own tenant, and an unhandled event would wait forever.
+        handlers[LAYOUT_DECIDED] = build_layout_decided_handler(
+            build_layout_settlement(
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                clock=clock,
+                ids=ids,
             )
         )
         # Pinned by filename, like every other versioned artifact here: the

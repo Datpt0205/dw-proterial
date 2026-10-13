@@ -89,6 +89,7 @@ class OrderQueries:
         )
         async with self.uow(sales_scope(context)) as work:
             stored = await stored_order(work, case_id)
+            logged = await work.messages.list_all()
         wait = await awaited(self.decisions, context, stored.case)
         waits_on = awaiting(stored.case)
         decision = None
@@ -101,6 +102,7 @@ class OrderQueries:
             prices=self.gate.prices(context),
             decision=decision,
             stalled=wait is not None and wait.stalled,
+            replies=logged,
         )
 
 
@@ -223,6 +225,19 @@ class OrderCommands:
             case_version,
             "order.correction_requested",
             lambda case, actor, at: case.request_correction(),
+        )
+
+    async def resume_review(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> CaseChangeView:
+        """The customer answered the correction request without a corrected
+        PO (ticket 32): the review resumes, every finding as it stood."""
+        return await self._decide(
+            context,
+            case_id,
+            case_version,
+            "order.review_resumed",
+            lambda case, actor, at: case.resume_review(),
         )
 
     async def prepare(
