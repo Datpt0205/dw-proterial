@@ -24,6 +24,7 @@ from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.readers import mock_po_readers
+from dw_sales.adapters.rfq_excel import ExcelQuoteForms
 from dw_sales.application.case_store import (
     ArtifactRecord,
     CaseEvent,
@@ -199,7 +200,8 @@ async def test_a_corrected_value_reads_back_beside_the_value_as_read(
         catalog=MockSalesCatalog.load(scope),
         inbox=MockInbox.load(scope),
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml")),
+        quote_forms=ExcelQuoteForms(),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.3.0.yaml")),
         cases=SqlOrderCaseLookup(app_sessions),
         new_case_id=uuid.uuid4,
     )

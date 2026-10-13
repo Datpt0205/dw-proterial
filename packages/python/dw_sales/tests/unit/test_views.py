@@ -23,7 +23,7 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.policy_files import load_pricing, load_quote_rules
 from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.application.access import PriceView
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -90,7 +90,8 @@ async def _order(message_id: str, kept: _Kept | None = None) -> OrderCase:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml")),
+        quote_forms=ExcelQuoteForms(),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.3.0.yaml")),
         cases=kept if kept is not None else _NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),
     )

@@ -50,7 +50,15 @@ API and the plan use the English terms. The spec is
   Unicode. Converting it is ADR 0010 decision 3, later.
 - **Source anchor** (Neo nguồn): where a value was read: `sheet!cell`, or a
   page plus boxes on the rendered page, or a quote. It always carries the
-  attachment's sha256.
+  attachment's sha256. A value a model read from a PDF's text layer names its
+  page and words without a box; one read from the mail itself points at the
+  characters of the mail's newest part, which the quote case keeps (its
+  sha256 in place of a file's).
+- **Newest part** (Đoạn mới nhất của thư): the subject and what the sender
+  wrote now, with quoted history and forwarded mail cut by the message's own
+  structure (HTML blockquote and reply containers, `>` lines, a client's
+  "On … wrote:" or "-----Original Message-----"). The only part of a body a
+  model is shown.
 - **Case version** (Phiên bản hồ sơ): bumped by every change. Every decision
   names the version it was made on.
 - **Checker's decision** (Quyết định của người kiểm): approving or returning
@@ -71,6 +79,21 @@ API and the plan use the English terms. The spec is
   usable answer: "DW1 không đọc được mô tả"). A line read this way is at best
   a candidate Sales confirms, never `exact`. Turned on per tenant by
   `sales_order_rules.model_assist` (ticket 28).
+- **Message intent** (Mô hình đọc loại thư): the kind a model reads a message
+  no reader accepted as (`po`, `quote_request`, `design_reply`,
+  `reply_to_case`, `delivery_change`, `complaint`, `sample_request`,
+  `other`), its language and the document numbers it names. Code maps the
+  kind to the route and takes a number only when it is in the newest part
+  and resolves to exactly one record of the sender's own customer. Stamped on
+  the disposition; a readable attachment decides its message's kind first,
+  and no model is asked (ticket 31).
+- **Model-read request** (Yêu cầu báo giá mô hình đọc): a request for
+  quotation in the mail body, a PDF's text or the customer's own sheet, read
+  by a model into span text that code locates and parses. Every value it
+  read is flagged `model_read` and raises `value_uncertain` on the quote
+  case; Sales confirms each one, typing it as it should be, before the YCBG.
+  The customer is the sender domain's; a target price the customer states
+  is kept as their words only and never reaches price evidence (ticket 29).
 
 ## Roles and permission sets
 
@@ -192,8 +215,8 @@ derived from the quote due date and is not a state.
 Routing reasons: `delivery_change` (Đổi lịch giao — PC, DW2), `complaint`
 (Khiếu nại — QA), `design_reply_unmatched` (Phản hồi Design không khớp
 YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác định
-được khách hàng), `attachment_unreadable` (Không đọc được file), `other`
-(Khác).
+được khách hàng), `attachment_unreadable` (Không đọc được file),
+`reply_to_case` (Trả lời về hồ sơ đang xử lý), `other` (Khác).
 
 ## Finding dispositions
 

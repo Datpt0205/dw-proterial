@@ -14,9 +14,10 @@ tenant's own version of the order rules, where the sample set holds one
 (`adapters/mock/data/policies`): every other tenant reads the platform's.
 
 Given ``model``, the gateway of a process with a model server for DW1's
-profile, DW1 reads the descriptions its own vocabulary does not through it,
-for a tenant whose rules turn that on (dw_sales ADR 0005). Without one, no
-model is called at all.
+profile, DW1 reads through it what its own code does not (dw_sales ADR 0005):
+item descriptions outside its vocabulary (ticket 28) and the intent of a
+message no reader accepted (ticket 31), each for a tenant whose rules turn it
+on. Without one, no model is called at all.
 """
 
 from __future__ import annotations
@@ -28,8 +29,14 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
+from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.ports import ModelGateway, WorkflowRunnerPort
-from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry, parse_worker_file
+from dw_agent_runtime.registry import (
+    ConfigError,
+    GraphRegistry,
+    WorkerRegistry,
+    parse_worker_file,
+)
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
@@ -41,21 +48,26 @@ from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.uow import AuditFactory, SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.readers.text_parts import AttachmentTexts
+from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.access import SalesAuthorizationPort
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
-from dw_sales.application.model_reading import DescriptionReader
+from dw_sales.application.message_intent import IntentReader
+from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import (
     ArtifactBytesPort,
     MemberDirectoryPort,
     NotificationSenderPort,
+    SalesCatalogPort,
     SalesScope,
     ScopeHoldersPort,
 )
 from dw_sales.application.quotation import QuotationService
+from dw_sales.application.rfq_reading import ModelRequests, RfqModelReader
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.telemetry import SpanPort
 from dw_sales.domain.order_checks import OrderRules
@@ -115,6 +127,13 @@ def build_dw1(
     catalog = MockSalesCatalog.load(scope)
     inbox = MockInbox.load(scope)
     policies = load_sales_policies(configs / "policies", configs / "copy")
+    tenant_rules = demo_order_rules(policies.order_rules, scope, DATA_DIR / "policies")
+    worker_file = configs / "workers" / "sales.yaml"
+    worker, _ = parse_worker_file(worker_file)
+    order_cases = SqlOrderCaseLookup(session_factory)
+    interpretation = (
+        None if model is None else interpretation_for(model, configs, worker.default_model_profile)
+    )
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
@@ -124,20 +143,23 @@ def build_dw1(
         ledger=catalog,
         rules=policies.quote_rules,
         pricing=policies.pricing,
+        requests=(
+            None
+            if interpretation is None
+            else model_requests(interpretation, catalog, tenant_rules)
+        ),
     )
-    worker_file = configs / "workers" / "sales.yaml"
-    worker, _ = parse_worker_file(worker_file)
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=demo_order_rules(policies.order_rules, scope, DATA_DIR / "policies"),
-        cases=SqlOrderCaseLookup(session_factory),
+        rules=tenant_rules,
+        cases=order_cases,
         new_case_id=ids.new_uuid,
-        descriptions=(
-            None
-            if model is None
-            else DescriptionReader(GatewayInterpretation(model, worker.default_model_profile))
+        quote_forms=ExcelQuoteForms(),
+        descriptions=None if interpretation is None else DescriptionReader(interpretation),
+        intents=(
+            None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
         ),
     )
     runs = RuntimeDw1Runs(
@@ -184,6 +206,29 @@ def build_dw1(
         else InboxLane(uow, inbox, assembly.services.dw1, lane_access, clock, ids)
     )
     return Dw1Mount(services=assembly.services, lane=lane)
+
+
+def model_requests(
+    model: InterpretationPort, catalog: SalesCatalogPort, rules: OrderRulesPort
+) -> ModelRequests:
+    """The quotation flow's model step over ``model`` (ticket 29): requests
+    read from the mail and the attachments' text, item descriptions as
+    ticket 28 reads them, switched by the tenant's rules."""
+    reader = RfqModelReader(model, AttachmentTexts(), catalog, DescriptionReader(model))
+    return ModelRequests(reader=reader, rules=rules)
+
+
+def interpretation_for(model: ModelGateway, configs: Path, profile: str) -> GatewayInterpretation:
+    """DW1's door to ``model`` on ``profile``, bounded by what the profile's
+    structured route declares it may be sent (`ModelRoute.max_input_tokens`):
+    read here, from the profile file, so the bound has one owner. A route
+    that declares none is refused at startup, not on the first long mail."""
+    profiles = ModelProfileRegistry()
+    profiles.load_directory(configs / "models")
+    route = profiles.resolve(profile).structured_extraction
+    if route.max_input_tokens is None:
+        raise ConfigError(f"model profile {profile} declares no max_input_tokens for DW1's route")
+    return GatewayInterpretation(model, profile, route.max_input_tokens)
 
 
 def demo_order_rules(platform: OrderRules, scope: SalesScope, tenant_dir: Path) -> TenantOrderRules:

@@ -112,6 +112,11 @@ class RegionFlag(StrEnum):
     HIDDEN_COLUMN = "hidden_column"
     FONT_MATCHES_FILL = "font_matches_fill"
     FORMULA_WITHOUT_CACHED_VALUE = "formula_without_cached_value"
+    # Read by a model (dw_sales ADR 0005): code found the words and parsed the
+    # value, but which field the words fill is the model's reading, and the
+    # residual risk is field confusion (`24` of `AWG24`, a reel length read as
+    # the quantity, the send date as the required date). Sales confirms each.
+    MODEL_READ = "model_read"
 
 
 class FlaggedValue(BaseModel):

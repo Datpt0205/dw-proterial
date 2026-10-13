@@ -221,6 +221,7 @@ async def test_m10_is_read_with_every_value_and_the_quote_due_date_anchored() ->
     )
     (item,) = document.items
     assert item.target_price is not None and item.target_price.value == Decimal("0.6500")
+    assert request.attachment is not None
     assert {a.attachment_sha256 for a in document.anchors()} == {request.attachment.sha256}
 
 
@@ -230,7 +231,7 @@ async def test_every_quote_request_in_the_mailbox_reads_back_as_its_fixture_says
         request = await service.extract_request(SCOPE, fixture.message_id)
         document = request.document
         assert request.customer_code == fixture.customer_code, fixture.message_id
-        assert document.rfq_no.value == fixture.rfq_no
+        assert request.rfq_no == fixture.rfq_no
         assert document.quote_due is not None and document.quote_due.value == fixture.quote_due
         assert [(i.line_no, i.quantity.value, i.needed_by.value) for i in document.items] == [
             (line.no, line.quantity, line.required_date) for line in fixture.lines

@@ -69,6 +69,9 @@ class SqlMessageLog:
             "compliance": (
                 disposition.compliance.model_dump(mode="json") if disposition.compliance else None
             ),
+            "model_reading": (
+                disposition.reading.model_dump(mode="json") if disposition.reading else None
+            ),
             "processed_at": processed_at,
         }
         statement = pg_insert(_M).values(
@@ -128,6 +131,7 @@ def _disposition(row: RowMapping) -> MessageDisposition:
             "owner": row["owner"],
             "customer_code": row["customer_code"],
             "compliance": row["compliance"],
+            "reading": row["model_reading"],
         }
     )
 

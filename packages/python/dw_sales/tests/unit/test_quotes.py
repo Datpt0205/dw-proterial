@@ -231,7 +231,7 @@ def _document(case: QuoteCase, *, quote_no: str = "Q26-0301") -> CustomerQuoteDo
         quote_no=quote_no,
         addressee=QuoteAddressee.of(KMH),
         recipients=(KMH.contacts[0],),
-        their_reference=case.request.document.rfq_no.value,
+        their_reference=case.request.rfq_no,
         issued_on=date(2026, 10, 2),
         valid_to=date(2026, 12, 30),
         currency=case.request.currency,
@@ -300,7 +300,7 @@ def test_every_anchor_names_an_attachment_of_this_message() -> None:
     raw = _request().model_dump(mode="json")
     raw["attachment"]["attachment_id"] = "M10-A2"
 
-    with pytest.raises(ValidationError, match="other than M10-A2"):
+    with pytest.raises(ValidationError, match="other than M10-A1"):
         QuoteRequest.model_validate(raw)
 
 

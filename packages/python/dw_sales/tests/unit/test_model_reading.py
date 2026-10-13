@@ -28,6 +28,7 @@ from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_tenant_order_rules
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.readers import mock_po_readers
+from dw_sales.adapters.rfq_excel import ExcelQuoteForms
 from dw_sales.application.model_reading import (
     DESCRIPTION_ATTRIBUTES,
     DescriptionReader,
@@ -108,6 +109,7 @@ def _intake(model: Any, rules: OrderRules | None = DEMO) -> OrderIntake:
         catalog=CATALOG,
         inbox=INBOX,
         reader=mock_po_readers(),
+        quote_forms=ExcelQuoteForms(),
         rules=PlatformOrderRules(rules),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),
@@ -243,7 +245,7 @@ class _Gateway:
 
 
 async def _interpret(gateway: _Gateway) -> BaseModel:
-    return await GatewayInterpretation(gateway, "onprem").interpret(
+    return await GatewayInterpretation(gateway, "onprem", 6000).interpret(
         DESCRIPTION_ATTRIBUTES,
         {"lines": "[]", "vocabulary": "{}"},
         ModelDescriptionReading,

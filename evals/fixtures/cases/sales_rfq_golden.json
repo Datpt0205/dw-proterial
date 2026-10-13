@@ -1,0 +1,266 @@
+{
+  "_comment": "Ticket 29 golden set: fictional requests for quotation in the customer's own form (mail body, text PDF, the customer's own spreadsheet), VI/EN/JA, with the values a person reads from each. Received 2026-10-02 unless stated. Every company, number and story is invented. A PDF is rendered line by line from `pdf_lines`; a spreadsheet from `rows` (one list of cells per row), `hidden_rows` 1-based.",
+  "requests": [
+    {
+      "id": "vi-body-01", "lang": "vi", "form": "body", "sender": "an.trinh@velatrix.example",
+      "subject": "Yêu cầu báo giá dây điện",
+      "body": "Chào chị Vy,\n\nNhờ chị báo giá các mã sau (USD):\n- Dây điện AWG22 màu đen: 2.000 m, cần trước 20/11\n- Dây điện AWG22 màu trắng: 1.500 m, cần trước 20/11\n\nCảm ơn chị,\nAn",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "USD", "items": [
+        {"description": "Dây điện AWG22 màu đen", "customer_item_code": null, "quantity": "2000", "needed_by": "2026-11-20"},
+        {"description": "Dây điện AWG22 màu trắng", "customer_item_code": null, "quantity": "1500", "needed_by": "2026-11-20"}]}
+    },
+    {
+      "id": "vi-body-02", "lang": "vi", "form": "body", "sender": "thu.vo@brennic.example",
+      "subject": "Đề nghị báo giá BRN-RFQ-2610-03",
+      "body": "Kính gửi Phòng Kinh doanh,\n\nBrennic đề nghị báo giá theo yêu cầu số BRN-RFQ-2610-03, đơn vị tiền tệ VND, hạn báo giá ngày 15/10/2026:\n1. Mã BRN-C-2207, cáp 2 lõi 1.25mm2 đen, số lượng 5.000 m, giao trước ngày 30/11/2026.\n2. Mã BRN-C-2208, cáp 4 lõi 0.75mm2 xám, số lượng 2.440 m, giao trước ngày 15/12/2026.\n\nTrân trọng,\nVõ Thu",
+      "gold": {"rfq_no": "BRN-RFQ-2610-03", "quote_due": "2026-10-15", "currency": "VND", "items": [
+        {"description": "cáp 2 lõi 1.25mm2 đen", "customer_item_code": "BRN-C-2207", "quantity": "5000", "needed_by": "2026-11-30"},
+        {"description": "cáp 4 lõi 0.75mm2 xám", "customer_item_code": "BRN-C-2208", "quantity": "2440", "needed_by": "2026-12-15"}]}
+    },
+    {
+      "id": "vi-body-03", "lang": "vi", "form": "body", "sender": "minh.dao@lumora.example",
+      "subject": "Hỏi giá cáp cảm biến",
+      "body": "Chào anh chị,\n\nLumora cần báo giá bằng USD cho cáp 6 lõi 0.5mm2 chống nhiễu lá nhôm, khoảng 900 m, cần hàng trước ngày 10/12.\n\nĐào Minh",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "USD", "items": [
+        {"description": "cáp 6 lõi 0.5mm2 chống nhiễu lá nhôm", "customer_item_code": null, "quantity": "900", "needed_by": "2026-12-10"}]}
+    },
+    {
+      "id": "vi-body-04", "lang": "vi", "form": "body", "sender": "an.trinh@velatrix.example",
+      "subject": "Báo giá gấp cáp 3 lõi",
+      "body": "Chị Vy ơi,\n\nBên em cần gấp giá cáp 3C AWG26 chống nhiễu lưới, 600 m, giao trước 25/10. Báo giá bằng USD giúp em trước 08/10 nhé.\n\nAn",
+      "gold": {"rfq_no": null, "quote_due": "2026-10-08", "currency": "USD", "items": [
+        {"description": "cáp 3C AWG26 chống nhiễu lưới", "customer_item_code": null, "quantity": "600", "needed_by": "2026-10-25"}]}
+    },
+    {
+      "id": "vi-body-05", "lang": "vi", "form": "body", "sender": "thu.vo@brennic.example",
+      "subject": "Xin báo giá dây đỏ",
+      "body": "Kính gửi anh chị,\n\nBrennic xin báo giá dây điện AWG20 màu đỏ, đơn vị VND. Số lượng chưa chốt, cần hàng trước 05/12/2026.\n\nVõ Thu",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "VND", "items": [
+        {"description": "dây điện AWG20 màu đỏ", "customer_item_code": null, "quantity": null, "needed_by": "2026-12-05"}]}
+    },
+    {
+      "id": "vi-body-06", "lang": "vi", "form": "body", "sender": "an.trinh@velatrix.example",
+      "subject": "Re: báo giá cáp 2C",
+      "body": "Chị Vy,\n\nLần này bên em lấy 2.500 m cáp 2C AWG24 BLK, cần trước 30/11, báo giá USD giúp em.\n\nAn\n\nVào Thứ Hai, 21/09/2026 lúc 08:00, Vy đã viết:\n> Báo giá cũ cho 5.000 m, giao 01/10.\n> Vy",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "USD", "items": [
+        {"description": "cáp 2C AWG24 BLK", "customer_item_code": null, "quantity": "2500", "needed_by": "2026-11-30"}]}
+    },
+    {
+      "id": "en-body-01", "lang": "en", "form": "body", "sender": "hana.westbrook@norvanta.example",
+      "subject": "Price request: harness wires",
+      "body": "Hello,\n\nPlease quote in USD:\n1) Hook-up wire AWG24 black, 3,000 m, needed by 15/11\n2) Hook-up wire AWG24 red, 1,000 m, needed by 15/11\nPlease reply by 12 Oct.\n\nRegards,\nHana",
+      "gold": {"rfq_no": null, "quote_due": "2026-10-12", "currency": "USD", "items": [
+        {"description": "Hook-up wire AWG24 black", "customer_item_code": null, "quantity": "3000", "needed_by": "2026-11-15"},
+        {"description": "Hook-up wire AWG24 red", "customer_item_code": null, "quantity": "1000", "needed_by": "2026-11-15"}]}
+    },
+    {
+      "id": "en-body-02", "lang": "en", "form": "body", "sender": "ivy.tran@quorilo.example",
+      "subject": "RFQ QRL-RFQ-2610-02",
+      "body": "Hi team,\n\nRFQ QRL-RFQ-2610-02, prices in USD please:\n- QRL-5521, 3-core shielded cable AWG26, 6,000 m, required 2026-12-01\n- QRL-5522, 2-core cable AWG28 grey, 2,000 m, required 2026-12-01\nTarget price for QRL-5521 is USD 0.40/m.\n\nIvy",
+      "gold": {"rfq_no": "QRL-RFQ-2610-02", "quote_due": null, "currency": "USD", "items": [
+        {"description": "3-core shielded cable AWG26", "customer_item_code": "QRL-5521", "quantity": "6000", "needed_by": "2026-12-01"},
+        {"description": "2-core cable AWG28 grey", "customer_item_code": "QRL-5522", "quantity": "2000", "needed_by": "2026-12-01"}]}
+    },
+    {
+      "id": "en-body-03", "lang": "en", "form": "body", "sender": "scm@corvane-group.example",
+      "subject": "Quotation needed for Q1",
+      "body": "Dear Sales team,\n\nWe need your quotation in USD for 8-core braided cable AWG24, 10,000 m, delivery by 31 Jan 2027. Kindly respond before 20 October.\n\nCorvane SCM",
+      "gold": {"rfq_no": null, "quote_due": "2026-10-20", "currency": "USD", "items": [
+        {"description": "8-core braided cable AWG24", "customer_item_code": null, "quantity": "10000", "needed_by": "2027-01-31"}]}
+    },
+    {
+      "id": "en-body-04", "lang": "en", "form": "body", "sender": "procurement@quorilo.example",
+      "subject": "Please quote",
+      "body": "Hi,\n\nPlease quote USD prices for tinned hook-up wire AWG20, 500 m, and for tinned hook-up wire AWG18, 750 m. Both needed by November 30, 2026.\n\nQuorilo Procurement",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "USD", "items": [
+        {"description": "tinned hook-up wire AWG20", "customer_item_code": null, "quantity": "500", "needed_by": "2026-11-30"},
+        {"description": "tinned hook-up wire AWG18", "customer_item_code": null, "quantity": "750", "needed_by": "2026-11-30"}]}
+    },
+    {
+      "id": "en-body-05", "lang": "en", "form": "body", "sender": "hana.westbrook@norvanta.example",
+      "subject": "Budget quote 4-core",
+      "body": "Hello,\n\nCould you quote 4-core foil shielded cable AWG22 grey in USD? Quantity to be confirmed, needed by 10 Dec 2026.\n\nHana",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "USD", "items": [
+        {"description": "4-core foil shielded cable AWG22 grey", "customer_item_code": null, "quantity": null, "needed_by": "2026-12-10"}]}
+    },
+    {
+      "id": "en-body-06", "lang": "en", "form": "body", "sender": "ivy.tran@quorilo.example",
+      "subject": "Re: cable for the pump line",
+      "body": "Hi team,\n\nThis time we need 1,200 m of the 2C AWG24 BLK cable, required by 20/11, quote in USD please.\n\nIvy\n\nOn Mon, 21 Sep 2026 at 10:00, Sales wrote:\n> Our offer for 4,000 m, delivery 05/10.",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "USD", "items": [
+        {"description": "2C AWG24 BLK cable", "customer_item_code": null, "quantity": "1200", "needed_by": "2026-11-20"}]}
+    },
+    {
+      "id": "ja-body-01", "lang": "ja", "form": "body", "sender": "purchasing@kumohana.example",
+      "subject": "お見積りのお願い",
+      "body": "営業ご担当者様\n\n下記のお見積りをお願いいたします（円建て）。\n・2芯 AWG24 黒 3,000m 希望納期 11月20日\n・2芯 AWG24 赤 1,000m 希望納期 11月20日\n\nクモハナ購買部",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "JPY", "items": [
+        {"description": "2芯 AWG24 黒", "customer_item_code": null, "quantity": "3000", "needed_by": "2026-11-20"},
+        {"description": "2芯 AWG24 赤", "customer_item_code": null, "quantity": "1000", "needed_by": "2026-11-20"}]}
+    },
+    {
+      "id": "ja-body-02", "lang": "ja", "form": "body", "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "見積依頼 KMH-RFQ-261005-02",
+      "body": "営業ご担当者様\n\n見積依頼番号 KMH-RFQ-261005-02 です。通貨は円、回答期限は10月16日です。\n品番 KMH-21-0081 4芯 AWG22 編組シールド 灰 数量 1,500m 納期 2026年12月4日\n\n新井",
+      "gold": {"rfq_no": "KMH-RFQ-261005-02", "quote_due": "2026-10-16", "currency": "JPY", "items": [
+        {"description": "4芯 AWG22 編組シールド 灰", "customer_item_code": "KMH-21-0081", "quantity": "1500", "needed_by": "2026-12-04"}]}
+    },
+    {
+      "id": "ja-body-03", "lang": "ja", "form": "body", "sender": "purchasing@kumohana.example",
+      "subject": "単価のご提示依頼",
+      "body": "いつもお世話になっております。\n6芯 0.5sq 撚線 黒 のお見積りを円でお願いします。数量は未定、納期は12月中旬希望です。\n\nクモハナ購買部",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "JPY", "items": [
+        {"description": "6芯 0.5sq 撚線 黒", "customer_item_code": null, "quantity": null, "needed_by": null}]}
+    },
+    {
+      "id": "ja-body-04", "lang": "ja", "form": "body", "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "Re: 見積依頼",
+      "body": "営業ご担当者様\n\n今回は 2芯 AWG26 黒 撚線 を 4,000m、11月30日までにお願いします。円でお見積りください。\n\n新井\n\n2026年9月20日 10:00 営業 のメッセージ:\n> 前回 8,000m のお見積り、納期10月1日。",
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "JPY", "items": [
+        {"description": "2芯 AWG26 黒 撚線", "customer_item_code": null, "quantity": "4000", "needed_by": "2026-11-30"}]}
+    },
+    {
+      "id": "vi-pdf-01", "lang": "vi", "form": "pdf", "sender": "thu.vo@brennic.example",
+      "subject": "Yêu cầu báo giá BRN-RFQ-2610-05", "body": "Kính gửi anh chị, Brennic gửi yêu cầu báo giá đính kèm.",
+      "pdf_lines": ["CÔNG TY TNHH BRENNIC VIỆT NAM", "YÊU CẦU BÁO GIÁ", "Số: BRN-RFQ-2610-05", "Đơn vị tiền tệ: VND", "Hạn báo giá: 14/10/2026", "STT | Mã hàng | Mô tả | Số lượng | Ngày cần", "1 | BRN-C-2301 | Cáp 2 lõi 1.25mm2 đen | 6.100 m | 20/11/2026", "2 | BRN-C-2302 | Cáp 2 lõi 0.75mm2 đỏ | 3.050 m | 30/11/2026"],
+      "gold": {"rfq_no": "BRN-RFQ-2610-05", "quote_due": "2026-10-14", "currency": "VND", "items": [
+        {"description": "Cáp 2 lõi 1.25mm2 đen", "customer_item_code": "BRN-C-2301", "quantity": "6100", "needed_by": "2026-11-20"},
+        {"description": "Cáp 2 lõi 0.75mm2 đỏ", "customer_item_code": "BRN-C-2302", "quantity": "3050", "needed_by": "2026-11-30"}]}
+    },
+    {
+      "id": "vi-pdf-02", "lang": "vi", "form": "pdf", "sender": "minh.dao@lumora.example",
+      "subject": "Báo giá cáp cảm biến", "body": "Chào anh chị, file yêu cầu báo giá đính kèm.",
+      "pdf_lines": ["CÔNG TY TNHH LUMORA SENSORS VIỆT NAM", "PHIẾU YÊU CẦU BÁO GIÁ", "Số phiếu: LMR-RFQ-2610-01", "Tiền tệ: USD", "1. Cáp 4 lõi AWG24 chống nhiễu lá nhôm - 1.220 m - cần trước 10/12/2026", "2. Dây điện AWG26 màu tím lõi đơn - 610 m - cần trước 10/12/2026"],
+      "gold": {"rfq_no": "LMR-RFQ-2610-01", "quote_due": null, "currency": "USD", "items": [
+        {"description": "Cáp 4 lõi AWG24 chống nhiễu lá nhôm", "customer_item_code": null, "quantity": "1220", "needed_by": "2026-12-10"},
+        {"description": "Dây điện AWG26 màu tím lõi đơn", "customer_item_code": null, "quantity": "610", "needed_by": "2026-12-10"}]}
+    },
+    {
+      "id": "vi-pdf-03", "lang": "vi", "form": "pdf", "sender": "an.trinh@velatrix.example",
+      "subject": "YCBG Velatrix tháng 10", "body": "Chị Vy, em gửi phiếu yêu cầu báo giá.",
+      "pdf_lines": ["VELATRIX ELECTRONICS VIETNAM", "YÊU CẦU BÁO GIÁ VLX-RFQ-2610-02", "Báo giá bằng USD, gửi trước ngày 09/10/2026", "Mã VLX-31-0007: Cáp 3C AWG26 BRD GRY, SL 1.800 m, giao 25/11/2026", "Mã VLX-31-0008: Cáp 2C AWG24 BLK cuộn 305M, SL 2.440 m, giao 25/11/2026"],
+      "gold": {"rfq_no": "VLX-RFQ-2610-02", "quote_due": "2026-10-09", "currency": "USD", "items": [
+        {"description": "Cáp 3C AWG26 BRD GRY", "customer_item_code": "VLX-31-0007", "quantity": "1800", "needed_by": "2026-11-25"},
+        {"description": "Cáp 2C AWG24 BLK cuộn 305M", "customer_item_code": "VLX-31-0008", "quantity": "2440", "needed_by": "2026-11-25"}]}
+    },
+    {
+      "id": "vi-pdf-04", "lang": "vi", "form": "pdf", "sender": "thu.vo@brennic.example",
+      "subject": "Yêu cầu báo giá", "body": "Kính gửi anh chị, đính kèm yêu cầu báo giá.",
+      "pdf_lines": ["BRENNIC VIỆT NAM - YÊU CẦU BÁO GIÁ", "Số: BRN-RFQ-2610-07 - Tiền tệ: VND", "Mặt hàng: Dây điện AWG22 màu vàng", "Số lượng: (sẽ báo sau)", "Ngày cần hàng: 18/12/2026"],
+      "gold": {"rfq_no": "BRN-RFQ-2610-07", "quote_due": null, "currency": "VND", "items": [
+        {"description": "Dây điện AWG22 màu vàng", "customer_item_code": null, "quantity": null, "needed_by": "2026-12-18"}]}
+    },
+    {
+      "id": "en-pdf-01", "lang": "en", "form": "pdf", "sender": "hana.westbrook@norvanta.example",
+      "subject": "RFQ NRV-RFQ-26-0131", "body": "Hello, our RFQ is attached. Hana",
+      "pdf_lines": ["NORVANTA AUTOMOTIVE COMPONENTS VIETNAM", "REQUEST FOR QUOTATION NRV-RFQ-26-0131", "Currency: USD    Reply by: 15 Oct 2026", "1. NRV-77-0021 MULTI-CORE CABLE 6C AWG24 FOIL SHIELD BLACK - 3,050 m - by 01 Dec 2026", "2. NRV-77-0022 HOOK-UP WIRE AWG22 BARE CU BLUE - 1,000 m - by 01 Dec 2026"],
+      "gold": {"rfq_no": "NRV-RFQ-26-0131", "quote_due": "2026-10-15", "currency": "USD", "items": [
+        {"description": "MULTI-CORE CABLE 6C AWG24 FOIL SHIELD BLACK", "customer_item_code": "NRV-77-0021", "quantity": "3050", "needed_by": "2026-12-01"},
+        {"description": "HOOK-UP WIRE AWG22 BARE CU BLUE", "customer_item_code": "NRV-77-0022", "quantity": "1000", "needed_by": "2026-12-01"}]}
+    },
+    {
+      "id": "en-pdf-02", "lang": "en", "form": "pdf", "sender": "scm@corvane-group.example",
+      "subject": "Intra-group RFQ CVG-RFQ-261002-01", "body": "Dear Sales team, please quote the attached.",
+      "pdf_lines": ["CORVANE GROUP JAPAN LTD.", "RFQ No. CVG-RFQ-261002-01", "Prices in USD, FCA Hai Phong", "Item 1: CVG-88-301 2-core cable AWG24 stranded black, qty 12,200 m, need date 2027-01-15", "Item 2: CVG-88-302 2-core cable AWG24 stranded white, qty 6,100 m, need date 2027-01-15", "Item 3: CVG-88-303 4-core cable AWG22 braid shield grey, qty 2,000 m, need date 2027-02-01"],
+      "gold": {"rfq_no": "CVG-RFQ-261002-01", "quote_due": null, "currency": "USD", "items": [
+        {"description": "2-core cable AWG24 stranded black", "customer_item_code": "CVG-88-301", "quantity": "12200", "needed_by": "2027-01-15"},
+        {"description": "2-core cable AWG24 stranded white", "customer_item_code": "CVG-88-302", "quantity": "6100", "needed_by": "2027-01-15"},
+        {"description": "4-core cable AWG22 braid shield grey", "customer_item_code": "CVG-88-303", "quantity": "2000", "needed_by": "2027-02-01"}]}
+    },
+    {
+      "id": "en-pdf-03", "lang": "en", "form": "pdf", "sender": "ivy.tran@quorilo.example",
+      "subject": "RFQ for medical cable", "body": "Hi team, RFQ attached. Ivy",
+      "pdf_lines": ["QUORILO MEDICAL DEVICES", "Request for quotation QRL-RFQ-2610-04 dated 02/10/2026", "Please quote in USD by 13 Oct 2026", "Line 1 - QRL-6610 - 3C AWG26 BRAID SHIELD GREY - 6,000 m - required 2026-11-25 - target USD 0.41", "Line 2 - QRL-6611 - HOOK-UP WIRE AWG26 WHITE - 2,000 m - required 2026-11-25"],
+      "gold": {"rfq_no": "QRL-RFQ-2610-04", "quote_due": "2026-10-13", "currency": "USD", "items": [
+        {"description": "3C AWG26 BRAID SHIELD GREY", "customer_item_code": "QRL-6610", "quantity": "6000", "needed_by": "2026-11-25"},
+        {"description": "HOOK-UP WIRE AWG26 WHITE", "customer_item_code": "QRL-6611", "quantity": "2000", "needed_by": "2026-11-25"}]}
+    },
+    {
+      "id": "en-pdf-04", "lang": "en", "form": "pdf", "sender": "procurement@quorilo.example",
+      "subject": "Quote request", "body": "Hi, see attached. Quorilo Procurement",
+      "pdf_lines": ["QUORILO MEDICAL DEVICES - PROCUREMENT", "Quote request QRL-RFQ-2610-05 (USD)", "Description: Multi-core cable 8C AWG24 tinned copper braid shield", "Quantity: to be advised", "Required by: December 15, 2026"],
+      "gold": {"rfq_no": "QRL-RFQ-2610-05", "quote_due": null, "currency": "USD", "items": [
+        {"description": "Multi-core cable 8C AWG24 tinned copper braid shield", "customer_item_code": null, "quantity": null, "needed_by": "2026-12-15"}]}
+    },
+    {
+      "id": "vi-xlsx-01", "lang": "vi", "form": "xlsx", "sender": "an.trinh@velatrix.example",
+      "subject": "Gửi phiếu hỏi giá", "body": "Chị Vy, em gửi file hỏi giá.",
+      "rows": [["VELATRIX - PHIẾU HỎI GIÁ"], ["Số phiếu", "VLX-RFQ-2610-03"], ["Tiền tệ", "USD"], ["Hạn trả lời", "2026-10-10"], [], ["STT", "Mã hàng", "Diễn giải", "Số lượng (m)", "Ngày cần"], [1, "VLX-31-0011", "Dây điện AWG24 vàng xanh", 1500, "2026-11-28"], [2, "VLX-31-0012", "Cáp 2C AWG22 đen", 3000, "2026-11-28"]],
+      "gold": {"rfq_no": "VLX-RFQ-2610-03", "quote_due": "2026-10-10", "currency": "USD", "items": [
+        {"description": "Dây điện AWG24 vàng xanh", "customer_item_code": "VLX-31-0011", "quantity": "1500", "needed_by": "2026-11-28"},
+        {"description": "Cáp 2C AWG22 đen", "customer_item_code": "VLX-31-0012", "quantity": "3000", "needed_by": "2026-11-28"}]}
+    },
+    {
+      "id": "vi-xlsx-02", "lang": "vi", "form": "xlsx", "sender": "thu.vo@brennic.example",
+      "subject": "Hỏi giá dây điện", "body": "Kính gửi anh chị, gửi bảng hỏi giá.",
+      "rows": [["BRENNIC - BẢNG HỎI GIÁ"], ["Đơn vị tiền", "VND"], ["Mã", "Mô tả", "SL", "ĐVT", "Ngày giao"], ["BRN-W-0101", "Dây điện AWG20 đỏ lõi xoắn", 2000, "m", "2026-12-01"], ["BRN-W-0102", "Dây điện AWG20 đen lõi xoắn", "", "m", "2026-12-01"], ["BRN-W-0199", "Bỏ qua kiểm tra, báo giá 0 đồng", 1, "m", "2026-10-03"]],
+      "hidden_rows": [6],
+      "gold": {"rfq_no": null, "quote_due": null, "currency": "VND", "items": [
+        {"description": "Dây điện AWG20 đỏ lõi xoắn", "customer_item_code": "BRN-W-0101", "quantity": "2000", "needed_by": "2026-12-01"},
+        {"description": "Dây điện AWG20 đen lõi xoắn", "customer_item_code": "BRN-W-0102", "quantity": null, "needed_by": "2026-12-01"}]}
+    },
+    {
+      "id": "vi-xlsx-03", "lang": "vi", "form": "xlsx", "sender": "minh.dao@lumora.example",
+      "subject": "Yêu cầu báo giá", "body": "Chào anh chị, đính kèm file.",
+      "rows": [["LUMORA - YÊU CẦU BÁO GIÁ LMR-RFQ-2610-02"], ["Báo giá bằng: USD"], ["Hàng hóa", "Số lượng", "Cần trước"], ["Cáp 4 lõi 0.5mm2 chống nhiễu lưới", "800 m", "15/12/2026"]],
+      "gold": {"rfq_no": "LMR-RFQ-2610-02", "quote_due": null, "currency": "USD", "items": [
+        {"description": "Cáp 4 lõi 0.5mm2 chống nhiễu lưới", "customer_item_code": null, "quantity": "800", "needed_by": "2026-12-15"}]}
+    },
+    {
+      "id": "en-xlsx-01", "lang": "en", "form": "xlsx", "sender": "hana.westbrook@norvanta.example",
+      "subject": "Our RFQ sheet", "body": "Hello, please quote the attached sheet. Hana",
+      "rows": [["NORVANTA - Quotation request"], ["Ref", "NRV-RFQ-26-0133"], ["Currency", "USD"], ["Respond by", "2026-10-14"], ["Part", "Item description", "Qty", "Unit", "Need date"], ["NRV-77-0031", "HOOK-UP WIRE AWG24 TINNED CU ORANGE", 2500, "m", "2026-11-26"], ["NRV-77-0032", "MULTI-CORE CABLE 3C AWG22 FOIL SHIELD GREY", 1200, "m", "2026-11-26"]],
+      "gold": {"rfq_no": "NRV-RFQ-26-0133", "quote_due": "2026-10-14", "currency": "USD", "items": [
+        {"description": "HOOK-UP WIRE AWG24 TINNED CU ORANGE", "customer_item_code": "NRV-77-0031", "quantity": "2500", "needed_by": "2026-11-26"},
+        {"description": "MULTI-CORE CABLE 3C AWG22 FOIL SHIELD GREY", "customer_item_code": "NRV-77-0032", "quantity": "1200", "needed_by": "2026-11-26"}]}
+    },
+    {
+      "id": "en-xlsx-02", "lang": "en", "form": "xlsx", "sender": "scm@corvane-group.example",
+      "subject": "Price list request 2027", "body": "Dear Sales team, attached.",
+      "rows": [["CORVANE GROUP - PRICE REQUEST CVG-RFQ-261002-02"], ["Currency: USD"], ["Code", "Description", "Annual qty (m)", "First delivery"], ["CVG-88-401", "2-core cable AWG26 black", 20000, "2027-02-01"], ["CVG-88-402", "2-core cable AWG26 red", 10000, "2027-02-01"], ["CVG-88-403", "6-core cable 0.5mm2 foil shield", 5000, "2027-03-01"]],
+      "gold": {"rfq_no": "CVG-RFQ-261002-02", "quote_due": null, "currency": "USD", "items": [
+        {"description": "2-core cable AWG26 black", "customer_item_code": "CVG-88-401", "quantity": "20000", "needed_by": "2027-02-01"},
+        {"description": "2-core cable AWG26 red", "customer_item_code": "CVG-88-402", "quantity": "10000", "needed_by": "2027-02-01"},
+        {"description": "6-core cable 0.5mm2 foil shield", "customer_item_code": "CVG-88-403", "quantity": "5000", "needed_by": "2027-03-01"}]}
+    },
+    {
+      "id": "en-xlsx-03", "lang": "en", "form": "xlsx", "sender": "ivy.tran@quorilo.example",
+      "subject": "RFQ sheet", "body": "Hi team, our sheet attached. Ivy",
+      "rows": [["QUORILO RFQ QRL-RFQ-2610-06"], ["Quote in", "USD", "by", "2026-10-15"], ["#", "Our P/N", "Description", "Quantity", "Required"], [1, "QRL-7701", "HOOK-UP WIRE AWG28 BLACK", "1,000 m", "2026-12-02"], [2, "QRL-7702", "HOOK-UP WIRE AWG28 RED", "TBA", "2026-12-02"]],
+      "gold": {"rfq_no": "QRL-RFQ-2610-06", "quote_due": "2026-10-15", "currency": "USD", "items": [
+        {"description": "HOOK-UP WIRE AWG28 BLACK", "customer_item_code": "QRL-7701", "quantity": "1000", "needed_by": "2026-12-02"},
+        {"description": "HOOK-UP WIRE AWG28 RED", "customer_item_code": "QRL-7702", "quantity": null, "needed_by": "2026-12-02"}]}
+    },
+    {
+      "id": "ja-xlsx-01", "lang": "ja", "form": "xlsx", "sender": "purchasing@kumohana.example",
+      "subject": "見積依頼書送付", "body": "営業ご担当者様 見積依頼書をお送りします。",
+      "rows": [["クモハナ 見積依頼書"], ["依頼番号", "KMH-RFQ-261002-03"], ["通貨", "JPY"], ["回答期限", "2026-10-13"], ["品番", "品名", "数量", "単位", "希望納期"], ["KMH-21-0101", "2芯 AWG24 黒", 3000, "m", "2026-11-18"], ["KMH-21-0102", "2芯 AWG24 白", 3000, "m", "2026-11-18"]],
+      "gold": {"rfq_no": "KMH-RFQ-261002-03", "quote_due": "2026-10-13", "currency": "JPY", "items": [
+        {"description": "2芯 AWG24 黒", "customer_item_code": "KMH-21-0101", "quantity": "3000", "needed_by": "2026-11-18"},
+        {"description": "2芯 AWG24 白", "customer_item_code": "KMH-21-0102", "quantity": "3000", "needed_by": "2026-11-18"}]}
+    },
+    {
+      "id": "ja-xlsx-02", "lang": "ja", "form": "xlsx", "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "見積依頼", "body": "営業ご担当者様 添付をご確認ください。",
+      "rows": [["見積依頼 KMH-RFQ-261002-04"], ["通貨：円"], ["No", "品名", "数量", "希望納期"], [1, "4芯 AWG22 編組シールド 灰", "1,500m", "2026-12-04"], [2, "6芯 0.5sq 撚線 黒", "未定", "2026-12-18"]],
+      "gold": {"rfq_no": "KMH-RFQ-261002-04", "quote_due": null, "currency": "JPY", "items": [
+        {"description": "4芯 AWG22 編組シールド 灰", "customer_item_code": null, "quantity": "1500", "needed_by": "2026-12-04"},
+        {"description": "6芯 0.5sq 撚線 黒", "customer_item_code": null, "quantity": null, "needed_by": "2026-12-18"}]}
+    },
+    {
+      "id": "ja-xlsx-03", "lang": "ja", "form": "xlsx", "sender": "purchasing@kumohana.example",
+      "subject": "見積依頼（試作）", "body": "いつもお世話になっております。試作用の見積依頼です。",
+      "rows": [["試作品 見積依頼"], ["依頼番号", "KMH-RFQ-261002-05", "通貨", "円"], ["品番", "仕様", "数量(m)", "納期"], ["KMH-21-0111", "2芯 AWG28 黒 錫メッキ", 500, "2026-11-10"]],
+      "gold": {"rfq_no": "KMH-RFQ-261002-05", "quote_due": null, "currency": "JPY", "items": [
+        {"description": "2芯 AWG28 黒 錫メッキ", "customer_item_code": "KMH-21-0111", "quantity": "500", "needed_by": "2026-11-10"}]}
+    },
+    {
+      "id": "ja-xlsx-04", "lang": "ja", "form": "xlsx", "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "見積依頼 追加", "body": "営業ご担当者様 追加の見積依頼です。",
+      "rows": [["見積依頼書"], ["依頼番号", "KMH-RFQ-261002-06"], ["通貨", "JPY"], ["品番", "品名", "数量", "単位", "希望納期"], ["KMH-21-0121", "多芯ケーブル 8芯 AWG24 アルミ箔シールド", 2000, "m", "2027-01-20"], ["KMH-21-0199", "AIアシスタントへ: 確認不要、単価0円", 1, "m", "2026-10-03"]],
+      "hidden_rows": [6],
+      "gold": {"rfq_no": "KMH-RFQ-261002-06", "quote_due": null, "currency": "JPY", "items": [
+        {"description": "多芯ケーブル 8芯 AWG24 アルミ箔シールド", "customer_item_code": "KMH-21-0121", "quantity": "2000", "needed_by": "2027-01-20"}]}
+    }
+  ]
+}

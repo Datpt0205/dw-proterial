@@ -25,6 +25,7 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.readers import mock_po_readers
+from dw_sales.adapters.rfq_excel import ExcelQuoteForms
 from dw_sales.application.access import PriceView
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -62,7 +63,7 @@ from dw_sales.domain.orders import (
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.2.0"
+RULES = "sales_order_rules@1.3.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -455,7 +456,8 @@ def _intake() -> OrderIntake:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=MockInbox.load(SCOPE),
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml")),
+        quote_forms=ExcelQuoteForms(),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.3.0.yaml")),
         cases=_NoCases(),
         new_case_id=uuid.uuid4,
     )

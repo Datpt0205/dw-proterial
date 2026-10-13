@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) read 0.909 of the 88 golden messages as their kind (keyword tables: 0.273). The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "min_kind_accuracy": 0.9
+}

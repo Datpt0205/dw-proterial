@@ -29,9 +29,17 @@ from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from decimal import ROUND_DOWN, ROUND_HALF_UP, ROUND_UP, Decimal
 from enum import StrEnum
-from typing import Annotated, Final, Literal, Self
+from typing import Annotated, Any, Final, Literal, Self, get_args
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 
 from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
 from dw_sales.domain.anchors import SourceAnchor
@@ -51,7 +59,9 @@ from dw_sales.domain.catalog import (
     Quotation,
     Uom,
 )
+from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.messages import Attachment, EmailAddress, Sha256Hex
+from dw_sales.domain.orders import FlaggedValue, RegionFlag
 from dw_sales.domain.pricing import FreightRate, Incoterm, SalesPricing
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
@@ -72,6 +82,12 @@ VersionRef = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_.-]*@\d+\.\d+\.\d+$")]
 
 # A requested value the customer may leave blank, and the case then asks for.
 RfqField = Literal["quantity", "needed_by"]
+# The values of a request a model may read, and Sales then confirms one by
+# one (`value_uncertain`, ticket 29): the request's own, and each line's.
+RequestValueField = Literal["rfq_no", "quote_due", "currency"]
+ItemValueField = Literal["customer_item_code", "description", "quantity", "uom", "needed_by"]
+_REQUEST_FIELDS: Final = frozenset(get_args(RequestValueField))
+_ITEM_FIELDS: Final = frozenset(get_args(ItemValueField))
 # How a quotation's price follows copper: what `sales_quote_rules` prescribes
 # and what a line's `CopperBasis.kind` is.
 CopperBasisKind = Literal["fixed", "lme_band"]
@@ -98,7 +114,19 @@ class Sourced[T](BaseModel):
 
 
 def _one_file(anchors: Iterable[SourceAnchor]) -> bool:
-    return len({(a.attachment_id, a.attachment_sha256) for a in anchors}) == 1
+    """Read from one file, and from the message's own text at most beside it."""
+    sources = {(a.attachment_id, a.attachment_sha256) for a in anchors}
+    files = {source for source in sources if source[0] is not None}
+    texts = sources - files
+    return len(files) <= 1 and len(texts) <= 1 and bool(sources)
+
+
+def _flags_name_fields(flags: Iterable[FlaggedValue], allowed: frozenset[str], owner: str) -> None:
+    fields = [flag.field for flag in flags]
+    if unknown := sorted(set(fields) - allowed):
+        raise ValueError(f"{owner} flags fields it does not have: {unknown}")
+    if len(fields) != len(set(fields)):
+        raise ValueError(f"{owner} flags a field twice")
 
 
 def _distinct(numbers: Iterable[int]) -> bool:
@@ -125,6 +153,35 @@ class RequestedItem(BaseModel):
     uom: Sourced[Uom]
     target_price: Sourced[UnitPrice] | None = None
     needed_by: Sourced[date | None]
+    # The values a model read (ticket 29), each `model_read`: Sales confirms
+    # every one before the YCBG is drafted (`value_uncertain`).
+    flags: tuple[FlaggedValue, ...] = ()
+    # A target price the customer stated and a model read. Kept as the
+    # customer's words only: it is not ``target_price``, so it never reaches
+    # price evidence, a quotation finding or any later prompt. Pricing stays
+    # with Sales.
+    stated_target_price: Sourced[UnitPrice] | None = None
+    # What ticket 28's reading of the description fits, for Sales and Design
+    # to weigh: never an item, which Design names.
+    candidates: tuple[PrvCode, ...] = ()
+    description_reading: DescriptionReading | None = None
+
+    @model_validator(mode="after")
+    def _model_values_are_flagged(self) -> Self:
+        _flags_name_fields(self.flags, _ITEM_FIELDS, f"line {self.line_no}")
+        for flag in self.flags:
+            if getattr(self, flag.field) is None or getattr(self, flag.field).value is None:
+                raise ValueError(f"line {self.line_no} flags {flag.field}, which holds nothing")
+        if self.stated_target_price is not None and self.target_price is not None:
+            raise ValueError("a target price is the form's or a model-read statement, not both")
+        if len(set(self.candidates)) != len(self.candidates):
+            raise ValueError("candidates repeat")
+        return self
+
+    @property
+    def model_read(self) -> frozenset[str]:
+        """The fields a model read."""
+        return frozenset(f.field for f in self.flags if f.flag is RegionFlag.MODEL_READ)
 
     def missing(self) -> tuple[RfqField, ...]:
         """What the customer left blank: the line's `rfq_incomplete`."""
@@ -136,7 +193,7 @@ class RequestedItem(BaseModel):
         return tuple(blank)
 
     def anchors(self) -> tuple[SourceAnchor, ...]:
-        optional = (self.customer_item_code, self.target_price)
+        optional = (self.customer_item_code, self.target_price, self.stated_target_price)
         return (
             self.description.source,
             self.quantity.source,
@@ -158,13 +215,18 @@ class RfqDocument(BaseModel):
     # The buyer the file names, as printed. Read for a request forwarded from
     # an internal address, whose sender names no customer.
     buyer: Sourced[Name] | None = None
-    rfq_no: Sourced[DocumentNo]
-    rfq_date: Sourced[date]
+    # The customer's number for the request and its date: None when a request
+    # read from the mail states none (ticket 29); the fixed-label form always
+    # prints both.
+    rfq_no: Sourced[DocumentNo] | None
+    rfq_date: Sourced[date] | None
     # When the customer wants the quotation by, when the file says. It drives
     # the due-date order of the work list and the derived "overdue".
     quote_due: Sourced[date] | None = None
     currency: Sourced[Currency]
     items: tuple[RequestedItem, ...] = Field(min_length=1)
+    # The request's own values a model read (ticket 29), each `model_read`.
+    flags: tuple[FlaggedValue, ...] = ()
 
     @model_validator(mode="after")
     def _one_file_and_distinct_lines(self) -> Self:
@@ -172,17 +234,49 @@ class RfqDocument(BaseModel):
             raise ValueError("a request's values are read from one file")
         if not _distinct(item.line_no for item in self.items):
             raise ValueError("a request repeats a line number")
+        _flags_name_fields(self.flags, _REQUEST_FIELDS, "the request")
+        for flag in self.flags:
+            if getattr(self, flag.field) is None:
+                raise ValueError(f"the request flags {flag.field}, which holds nothing")
         return self
 
     def anchors(self) -> tuple[SourceAnchor, ...]:
-        optional = (self.buyer, self.quote_due)
+        optional = (self.buyer, self.quote_due, self.rfq_no, self.rfq_date)
         return (
-            self.rfq_no.source,
-            self.rfq_date.source,
             self.currency.source,
             *(value.source for value in optional if value is not None),
             *(anchor for item in self.items for anchor in item.anchors()),
         )
+
+    @property
+    def model_read(self) -> frozenset[str]:
+        """The request's own fields a model read."""
+        return frozenset(f.field for f in self.flags if f.flag is RegionFlag.MODEL_READ)
+
+    def with_value(self, line_no: int | None, field: str, typed: str) -> tuple[RfqDocument, str]:
+        """The request with one value as Sales typed it, kept at the place it
+        was read from, and that value as it was before. Refused, naming the
+        field and never the value, when the text is not a value of the field."""
+        try:
+            value = _typed_value(field, typed)
+        except (ValidationError, ValueError, ArithmeticError):
+            raise DomainError("not a value of the field", details={"field": field}) from None
+        if line_no is None:
+            if field not in _REQUEST_FIELDS:
+                raise DomainError("not a field of the request", details={"field": field})
+            held: Sourced[Any] | None = getattr(self, field)
+            assert held is not None  # a flagged field holds a value (validator)
+            changed = self.model_copy(update={field: Sourced(value=value, source=held.source)})
+            return RfqDocument.model_validate(dict(changed)), _text(held.value)
+        if field not in _ITEM_FIELDS:
+            raise DomainError("not a field of a line", details={"field": field})
+        item = self.item(line_no)
+        current: Sourced[Any] | None = getattr(item, field)
+        assert current is not None  # a flagged field holds a value (validator)
+        replaced = item.model_copy(update={field: Sourced(value=value, source=current.source)})
+        items = tuple(replaced if i.line_no == line_no else i for i in self.items)
+        document = RfqDocument.model_validate({**dict(self), "items": items})
+        return document, _text(current.value)
 
     def line_numbers(self) -> frozenset[int]:
         return frozenset(item.line_no for item in self.items)
@@ -191,11 +285,46 @@ class RfqDocument(BaseModel):
         return next(item for item in self.items if item.line_no == line_no)
 
 
+class MessageText(BaseModel):
+    """The newest part of the message as a model read it (subject first,
+    history cut, `mail_parts.newest_part`), kept on the case: what a body
+    anchor's characters index into, and what the screen highlights them in."""
+
+    model_config = _FROZEN
+
+    text: str = Field(min_length=1, max_length=50_000)
+    sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def _digest_is_the_texts(self) -> Self:
+        if hashlib.sha256(self.text.encode("utf-8")).hexdigest() != self.sha256:
+            raise ValueError("the message text changed")
+        return self
+
+
+class RequestReading(BaseModel):
+    """How a model read the request (ticket 29): the prompt, profile and route
+    of the calls, the rules whose switch asked, and how many calls it took."""
+
+    model_config = _FROZEN
+
+    prompt: VersionRef
+    model_profile: str = Field(min_length=1, max_length=64)
+    route: str = Field(min_length=1, max_length=64)
+    rules: VersionRef
+    calls: int = Field(ge=1, le=10)
+    # Values the model gave that code did not take, by reason: counts only.
+    refused: Mapping[str, int] = Field(default_factory=dict)
+
+
 class QuoteRequest(BaseModel):
     """A customer's request for quotation: who sent it, when, and what it asks.
 
-    The subject and the body are never read for values, so text in them that
-    reads like an instruction changes nothing.
+    Read from one file by its fixed labels, or, where the tenant turns it on,
+    by a model from the message's newest part and at most one attachment
+    (``reading``; ticket 29). A model-read value is span text code located and
+    parsed, flagged for Sales to confirm; text in the message that reads like
+    an instruction is still only text.
     """
 
     model_config = _FROZEN
@@ -203,29 +332,59 @@ class QuoteRequest(BaseModel):
     message_id: MessageId
     received_at: AwareDatetime
     sender: EmailAddress
-    # The attachment of this message every value was read from.
-    attachment: Attachment
+    # The attachment of this message the values were read from; None for a
+    # request read from the message's text alone.
+    attachment: Attachment | None
     customer_code: CustomerCode
     customer_from: CustomerSource
     document: RfqDocument
+    # The message's newest part, when a value was read from it.
+    body: MessageText | None = None
+    reading: RequestReading | None = None
 
     @model_validator(mode="after")
-    def _read_from_this_messages_file(self) -> Self:
+    def _read_from_this_message(self) -> Self:
         for anchor in self.document.anchors():
-            if (anchor.attachment_id, anchor.attachment_sha256) != (
-                self.attachment.attachment_id,
-                self.attachment.sha256,
-            ):
+            if anchor.attachment_id is None:
+                if self.body is None or anchor.attachment_sha256 != self.body.sha256:
+                    raise ValueError("the request was read from text the case does not hold")
+                assert anchor.chars is not None  # SourceAnchor: a range of the text
+                if anchor.chars.end > len(self.body.text):
+                    raise ValueError("an anchor ends outside the message text")
+            elif self.attachment is None or (
+                anchor.attachment_id,
+                anchor.attachment_sha256,
+            ) != (self.attachment.attachment_id, self.attachment.sha256):
                 raise ValueError(
-                    f"the request was read from a file other than {self.attachment.attachment_id}"
+                    f"the request was read from a file other than {anchor.attachment_id}"
                 )
+        if self.attachment is None and self.body is None:
+            raise ValueError("a request is read from a file or from the message")
+        if (self.body is not None or self.document.flags or self._any_item_flag()) and (
+            self.reading is None
+        ):
+            raise ValueError("a request read by a model says how")
         if self.customer_from == "named_buyer" and self.document.buyer is None:
             raise ValueError("a customer found by the buyer's name needs the name the file prints")
         return self
 
+    def _any_item_flag(self) -> bool:
+        return any(item.flags for item in self.document.items)
+
     @property
     def currency(self) -> Currency:
         return self.document.currency.value
+
+    @property
+    def rfq_no(self) -> str | None:
+        """The customer's number for the request, when it states one."""
+        return self.document.rfq_no.value if self.document.rfq_no else None
+
+    @property
+    def reference(self) -> str:
+        """What the request is called where a name is needed: its number, or,
+        for a request that states none, the day it arrived."""
+        return self.rfq_no or self.received_at.date().isoformat()
 
 
 class DesignRequestLine(BaseModel):
@@ -254,7 +413,7 @@ class DesignRequestDraft(BaseModel):
 
     customer_code: CustomerCode
     customer_name: Name
-    rfq_no: DocumentNo
+    rfq_no: DocumentNo | None
     quote_due: date | None
     lines: tuple[DesignRequestLine, ...] = Field(min_length=1)
 
@@ -729,6 +888,9 @@ class QuoteFindingCode(StrEnum):
 
     RFQ_INCOMPLETE = "rfq_incomplete"
     CUSTOMER_UNKNOWN = "customer_unknown"
+    # A value a model read (ticket 29): Sales confirms each one, typing it as
+    # it should be, beside the place it was read from.
+    VALUE_UNCERTAIN = "value_uncertain"
     PRICE_BELOW_POLICY_FLOOR = "price_below_policy_floor"
     # The floor cannot be computed: the copper weight, the LME month, the
     # policy's adder for it or a USD rate is unknown. Fails closed, as an
@@ -741,7 +903,11 @@ class QuoteFindingCode(StrEnum):
 
 # Raised when the case opens and decided by Sales before the YCBG is drafted.
 INTAKE_FINDINGS: Final = frozenset(
-    {QuoteFindingCode.RFQ_INCOMPLETE, QuoteFindingCode.CUSTOMER_UNKNOWN}
+    {
+        QuoteFindingCode.RFQ_INCOMPLETE,
+        QuoteFindingCode.CUSTOMER_UNKNOWN,
+        QuoteFindingCode.VALUE_UNCERTAIN,
+    }
 )
 # Raised by a price decision and decided by the approver.
 PRICE_FINDINGS: Final = frozenset(
@@ -773,10 +939,24 @@ class FindingAccepted(BaseModel):
     reason: Reason | None = None
 
 
+class ValueConfirmation(BaseModel):
+    """One value a model read, as Sales typed it after checking it against the
+    place it was read from; ``read`` is what the model's words gave."""
+
+    model_config = _FROZEN
+
+    field: str = Field(pattern=r"^[a-z_]{1,32}$")
+    read: str = Field(max_length=500)
+    value: str = Field(min_length=1, max_length=500)
+    by: uuid.UUID
+    at: AwareDatetime
+
+
 class FindingCorrected(BaseModel):
     """Sales typed the answer: the customer's missing values, asked for in
-    Sales' own mail, or the customer a forwarded request is for. Shown as
-    hand-entered, naming who typed it."""
+    Sales' own mail, or the customer a forwarded request is for; or every value
+    a model read (`value_uncertain`, each in ``QuoteFinding.confirmed``). Shown
+    as hand-entered, naming who typed it."""
 
     model_config = _FROZEN
 
@@ -810,6 +990,10 @@ class QuoteFinding(BaseModel):
     line_no: LineNo | None = None
     # `rfq_incomplete` only: which values the customer left blank.
     missing: tuple[RfqField, ...] = ()
+    # `value_uncertain` only: which values a model read, and each one Sales
+    # has confirmed so far.
+    flagged: tuple[str, ...] = ()
+    confirmed: tuple[ValueConfirmation, ...] = ()
     expected: str | None = Field(default=None, max_length=200)
     actual: str | None = Field(default=None, max_length=200)
     # ``<policy_id>@<version>`` of every policy whose value raised it.
@@ -821,10 +1005,21 @@ class QuoteFinding(BaseModel):
         code = self.code
         if self.blocking != (code in BLOCKING_FINDINGS):
             raise ValueError(f"{code} is blocking only if the table says so")
-        if (code is QuoteFindingCode.CUSTOMER_UNKNOWN) != (self.line_no is None):
-            raise ValueError(f"{code}: only customer_unknown is about the request as a whole")
+        whole = self.line_no is None
+        if code is QuoteFindingCode.CUSTOMER_UNKNOWN and not whole:
+            raise ValueError(f"{code} is about the request as a whole")
+        if code not in (QuoteFindingCode.CUSTOMER_UNKNOWN, QuoteFindingCode.VALUE_UNCERTAIN) and (
+            whole
+        ):
+            raise ValueError(f"{code} is about a line")
         if (code is QuoteFindingCode.RFQ_INCOMPLETE) != bool(self.missing):
             raise ValueError(f"{code}: only rfq_incomplete names missing values")
+        uncertain = code is QuoteFindingCode.VALUE_UNCERTAIN
+        if uncertain != bool(self.flagged) or (self.confirmed and not uncertain):
+            raise ValueError(f"{code}: only value_uncertain names the values a model read")
+        confirmed = [c.field for c in self.confirmed]
+        if len(confirmed) != len(set(confirmed)) or not set(confirmed) <= set(self.flagged):
+            raise ValueError(f"{code}: each confirmation is of a flagged value, once")
         if (code in PRICE_FINDINGS) != bool(self.rule_versions):
             raise ValueError(f"{code}: a price finding names the policies it was raised under")
         for version in self.rule_versions:
@@ -848,8 +1043,17 @@ class QuoteFinding(BaseModel):
                     disposition.quantity is not None or disposition.needed_by is not None
                 ):
                     raise ValueError(f"{code}: the correction names the customer and only that")
+            elif uncertain:
+                if {c.field for c in self.confirmed} != set(self.flagged) or (
+                    disposition.quantity is not None
+                    or disposition.needed_by is not None
+                    or disposition.customer_code is not None
+                ):
+                    raise ValueError(f"{code}: corrected once every flagged value is confirmed")
             else:
                 raise ValueError(f"{code} is not corrected by Sales")
+        elif uncertain and {c.field for c in self.confirmed} == set(self.flagged):
+            raise ValueError(f"{code}: every value is confirmed, so it is corrected")
         if isinstance(disposition, FindingAccepted):
             if code in INTAKE_FINDINGS:
                 raise ValueError(f"{code} is not accepted: Sales types the answer")
@@ -871,7 +1075,20 @@ def intake_findings(request: QuoteRequest) -> tuple[QuoteFinding, ...]:
     findings = []
     if request.customer_from == "named_buyer":
         findings.append(QuoteFinding(code=QuoteFindingCode.CUSTOMER_UNKNOWN, blocking=True))
+    if read := sorted(request.document.model_read):
+        findings.append(
+            QuoteFinding(code=QuoteFindingCode.VALUE_UNCERTAIN, blocking=True, flagged=tuple(read))
+        )
     for item in request.document.items:
+        if read := sorted(item.model_read):
+            findings.append(
+                QuoteFinding(
+                    code=QuoteFindingCode.VALUE_UNCERTAIN,
+                    blocking=True,
+                    line_no=item.line_no,
+                    flagged=tuple(read),
+                )
+            )
         if missing := item.missing():
             findings.append(
                 QuoteFinding(
@@ -1078,8 +1295,8 @@ class CustomerQuoteDocument(BaseModel):
     quote_no: DocumentNo
     addressee: QuoteAddressee
     recipients: tuple[EmailAddress, ...] = Field(min_length=1)
-    # The customer's own request number.
-    their_reference: DocumentNo
+    # The customer's own request number; None when the request stated none.
+    their_reference: DocumentNo | None
     issued_on: date
     # The last day the prices hold.
     valid_to: date
@@ -1442,7 +1659,7 @@ class QuoteCase(BaseModel):
                 raise ValueError("priced_by is the decision's decided_by")
             if (
                 document.addressee.code != self.customer_code
-                or document.their_reference != self.request.document.rfq_no.value
+                or document.their_reference != self.request.rfq_no
                 or document.currency != self.request.currency
                 or document.lme != pricing.lme
                 or document.lines != self.document_lines()
@@ -1640,6 +1857,49 @@ class QuoteCase(BaseModel):
             FindingCorrected(by=by, at=at, quantity=quantity, needed_by=needed_by, note=note),
         )
 
+    def confirm_value(
+        self,
+        line_no: int | None,
+        field: str,
+        typed: str,
+        *,
+        by: uuid.UUID,
+        at: AwareDatetime,
+    ) -> QuoteCase:
+        """Sales confirms one value a model read (ticket 29), typing it as it
+        should be after checking the place it was read from. The request
+        carries the typed value from now on, at the same place; what the
+        model's words gave is kept on the confirmation. Once every flagged
+        value of the finding is confirmed, the finding is corrected."""
+        key = (QuoteFindingCode.VALUE_UNCERTAIN, line_no)
+        details: dict[str, object] = {"case_id": str(self.case_id), "line_no": line_no}
+        details["field"] = field
+        if self.status is not QuoteStatus.RECEIVED:
+            raise ConflictError(
+                "a request's own findings are answered while it is received",
+                details={**details, "status": self.status.value},
+            )
+        found = next((f for f in self.findings if f.key == key and f.is_open), None)
+        if found is None:
+            raise ConflictError("no such open finding", details=details)
+        if field not in found.flagged or field in {c.field for c in found.confirmed}:
+            raise ConflictError("the value is not one waiting to be confirmed", details=details)
+        document, read = self.request.document.with_value(line_no, field, typed)
+        confirmation = ValueConfirmation(
+            field=field, read=read, value=_text(_typed_value(field, typed)), by=by, at=at
+        )
+        confirmed = (*found.confirmed, confirmation)
+        done = {c.field for c in confirmed} == set(found.flagged)
+        answered = found.model_copy(
+            update={
+                "confirmed": confirmed,
+                "disposition": FindingCorrected(by=by, at=at) if done else FindingOpen(),
+            }
+        )
+        findings = tuple(answered if f is found else f for f in self.findings)
+        request = QuoteRequest.model_validate({**dict(self.request), "document": document})
+        return self._changed(request=request, findings=findings)
+
     def confirm_customer(
         self, customer_code: str, *, by: uuid.UUID, at: AwareDatetime
     ) -> QuoteCase:
@@ -1822,3 +2082,36 @@ class QuoteCase(BaseModel):
             QuoteStatus.DECLINED,
             decline=Decline(declined_by=by, declined_at=at, reason=reason, note=note),
         )
+
+
+_VALUE_TYPES: Final[Mapping[str, TypeAdapter[Any]]] = {
+    "rfq_no": TypeAdapter(DocumentNo),
+    "quote_due": TypeAdapter(date),
+    "currency": TypeAdapter(Currency),
+    "customer_item_code": TypeAdapter(CustomerItemCode),
+    "description": TypeAdapter(Description),
+    "quantity": TypeAdapter(Quantity),
+    "uom": TypeAdapter(Uom),
+    "needed_by": TypeAdapter(date),
+}
+
+
+def _typed_value(field: str, typed: str) -> Any:
+    """``typed`` as a value of ``field``: a date in ISO form, a number as
+    written with a point for decimals, a code or a word as it is."""
+    adapter = _VALUE_TYPES.get(field)
+    if adapter is None:
+        raise ValueError("no such field")
+    text = typed.strip()
+    if field in ("quote_due", "needed_by"):
+        return date.fromisoformat(text)
+    if field == "quantity":
+        return adapter.validate_python(Decimal(text))
+    return adapter.validate_python(text)
+
+
+def _text(value: object) -> str:
+    """A value as text, for the record of what was read and what was typed."""
+    if isinstance(value, date):
+        return value.isoformat()
+    return "" if value is None else str(value)

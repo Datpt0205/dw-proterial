@@ -841,5 +841,88 @@
       }
     ],
     "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M37",
+    "sender": {
+      "address": "an.trinh@velatrix.example",
+      "display_name": "Trịnh Mỹ An"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Yêu cầu báo giá cáp cho dây chuyền mới",
+    "received_at": "2026-10-02T16:45:00+07:00",
+    "body_text": "Chào chị Vy,\n\nBên em nhờ chị báo giá giúp 2 mã dưới đây, giá tính bằng USD:\n1. Cáp 2C AWG24 BLK, 1.200 m, cần trước 15/11\n2. Dây điện AWG22 màu đỏ lõi xoắn, 3.000 m, cần trước 30/11\nHạn gửi báo giá: 20/10/2026.\n\nTrân trọng,\nTrịnh Mỹ An\n\nVào Thứ Hai, 28/09/2026 lúc 09:00, Vy đã viết:\n> Chị gửi em báo giá cũ: 5.000 m cáp 2C AWG24, giao 01/10.\n> Vy",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M38",
+    "sender": {
+      "address": "hana.westbrook@norvanta.example",
+      "display_name": "Hana Westbrook"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "RFQ NRV-RFQ-26-0130 – harness cables",
+    "received_at": "2026-10-02T17:00:00+07:00",
+    "body_text": "Hello,\n\nPlease find our request for quotation NRV-RFQ-26-0130 attached.\n\nRegards,\nHana\n\nFrom: Sales\nSent: 25/09/2026\nSubject: Re: harness cables\nOur last offer was for 9,000 m of the 4-core cable.",
+    "body_html": "<html><body><div>Hello,</div><div><br></div><div>Please find our request for quotation NRV-RFQ-26-0130 attached.</div><div><br></div><div>Regards,<br>Hana</div><div id=\"appendonsend\"></div><hr><div id=\"divRplyFwdMsg\"><b>From:</b> Sales<br><b>Sent:</b> 25/09/2026<br><b>Subject:</b> Re: harness cables</div><div>Our last offer was for 9,000 m of the 4-core cable.</div></body></html>",
+    "attachments": [
+      {
+        "attachment_id": "M38-A1",
+        "name": "NRV-RFQ-26-0130.pdf",
+        "media_type": "application/pdf"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M39",
+    "sender": {
+      "address": "takumi.arai@vn.kumohana.example",
+      "display_name": "新井 拓海"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "見積依頼 KMH-RFQ-261002-01",
+    "received_at": "2026-10-02T17:15:00+07:00",
+    "body_text": "営業ご担当者様\n\nいつもお世話になっております。弊社様式の見積依頼書を添付いたします。2行目の数量は未定です。\n\nよろしくお願いいたします。\n新井",
+    "attachments": [
+      {
+        "attachment_id": "M39-A1",
+        "name": "KMH-RFQ-261002-01.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    ],
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M40",
+    "sender": {
+      "address": "thu.vo@brennic.example",
+      "display_name": "Võ Thị Thu"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Đề nghị lùi ngày nhận hàng",
+    "received_at": "2026-10-02T17:30:00+07:00",
+    "body_text": "Kính gửi Phòng Kinh doanh,\n\nDo kho Brennic đang sửa chữa, bên em đề nghị lùi ngày nhận hàng của đơn BRN-PO-2609-052 sang tuần sau.\n\nTrân trọng,\nVõ Thị Thu",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   }
 ]

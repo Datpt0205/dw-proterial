@@ -41,6 +41,10 @@ class GatewayInterpretation:
 
     gateway: ModelGateway
     model_profile: str
+    # The route's own declaration (`configs/models/<profile>.yaml`,
+    # ``structured_extraction.max_input_tokens``), read by the composition
+    # root so the bound has one owner.
+    max_input_tokens: int
 
     @property
     def route(self) -> str:

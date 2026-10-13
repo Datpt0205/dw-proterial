@@ -18,6 +18,7 @@ from typing import Final, Literal, Protocol
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
+from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.quote_ports import (
@@ -26,6 +27,7 @@ from dw_sales.application.quote_ports import (
     QuoteCaseLookupPort,
     RfqReaderPort,
 )
+from dw_sales.application.rfq_reading import ModelRequests, NotRead
 from dw_sales.domain.catalog import Customer, Item, LmeMonth, customers_named, month_key
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
@@ -113,14 +115,32 @@ class QuoteRules(BaseModel):
         return f"{self.policy_id}@{self.policy_version}"
 
 
-type NotExtractedReason = Literal["no_request_file", "several_request_files", "customer_unknown"]
+type NotExtractedReason = Literal[
+    "no_request_file",
+    "several_request_files",
+    "customer_unknown",
+    # A model was asked (ticket 29) and gave nothing code took: why, by kind.
+    "model_unavailable",
+    "model_not_understood",
+    "request_too_long",
+    "currency_missing",
+]
+# Why a model reading of a request came to nothing, as the refusal says it.
+_NOT_READ: Final[dict[NotRead, NotExtractedReason]] = {
+    "too_long": "request_too_long",
+    "unavailable": "model_unavailable",
+    "not_understood": "model_not_understood",
+    "currency_missing": "currency_missing",
+    "several_files": "several_request_files",
+}
 
 
 class RequestNotExtractedError(DomainError):
     """The message holds no request for quotation this code can open a case for.
 
     A person reads it instead. Nothing is guessed from the subject or the
-    body: reading free text is a model's work, and none runs here.
+    body: where the tenant turns it on, a model reads them under ADR 0005
+    (`rfq_reading`), and what it read is flagged; otherwise none does.
     ``customer_unknown``: neither the sender's domain nor the buyer the file
     names is exactly one customer, so the message is routed to Sales with that
     reason rather than matched to the nearest customer.
@@ -225,6 +245,10 @@ class QuotationService:
     ledger: QuotationLedgerPort
     rules: QuoteRules
     pricing: SalesPricing
+    # A model reading of a request the fixed-label reader does not read
+    # (ticket 29), for a tenant whose rules turn it on. None: no model is
+    # wired in this process, and such a request goes to a person as before.
+    requests: ModelRequests | None = None
 
     # ---------------------------------------------------------- step 1 --
 
@@ -237,24 +261,35 @@ class QuotationService:
         file prints, and the case raises `customer_unknown` until Sales
         confirms it. With neither, no case is opened.
         """
-        request, _ = await self._extract(scope, message_id)
+        request, _ = await self._extract(scope, message_id, None)
         return request
 
-    async def open_case(self, scope: SalesScope, message_id: str, case_id: uuid.UUID) -> QuoteCase:
+    async def open_case(
+        self,
+        scope: SalesScope,
+        message_id: str,
+        case_id: uuid.UUID,
+        *,
+        run: RunContext | None = None,
+    ) -> QuoteCase:
         """A new case for the message's request, stamped with the quote rules
-        and the oldest master-data snapshot read to open it (decision 11)."""
-        request, as_of = await self._extract(scope, message_id)
+        and the oldest master-data snapshot read to open it (decision 11).
+        ``run`` is the DW1 run opening it: a model reads a request only
+        inside one (ticket 29)."""
+        request, as_of = await self._extract(scope, message_id, run)
         return QuoteCase.open(
             case_id, request, rules_version=self.rules.version, catalog_as_of=as_of
         )
 
-    async def _extract(self, scope: SalesScope, message_id: str) -> tuple[QuoteRequest, datetime]:
+    async def _extract(
+        self, scope: SalesScope, message_id: str, run: RunContext | None
+    ) -> tuple[QuoteRequest, datetime]:
         message = await self._message(scope, message_id)
         found = await self._files(scope, message, self.rfq_reader.read)
-        if not found:
-            raise RequestNotExtractedError(message_id, "no_request_file")
         if len(found) > 1:
             raise RequestNotExtractedError(message_id, "several_request_files")
+        if not found:
+            return await self._model_read(scope, message, run)
         ((attachment, document),) = found
         customer, found_by, as_of = await self._requester(scope, message, document)
         request = QuoteRequest(
@@ -302,7 +337,7 @@ class QuotationService:
         return DesignRequestDraft(
             customer_code=customer.code,
             customer_name=customer.name,
-            rfq_no=document.rfq_no.value,
+            rfq_no=case.request.rfq_no,
             quote_due=document.quote_due.value if document.quote_due else None,
             lines=tuple(lines),
         )
@@ -501,7 +536,7 @@ class QuotationService:
             quote_no=quote_no,
             addressee=QuoteAddressee.of(customer),
             recipients=recipients or customer.contacts,
-            their_reference=case.request.document.rfq_no.value,
+            their_reference=case.request.rfq_no,
             issued_on=issued_on,
             valid_to=issued_on + timedelta(days=self.rules.validity_days - 1),
             currency=case.request.currency,
@@ -594,6 +629,47 @@ class QuotationService:
             if document is not None:
                 found.append((attachment, document))
         return found
+
+    async def _model_read(
+        self, scope: SalesScope, message: InboundMessage, run: RunContext | None
+    ) -> tuple[QuoteRequest, datetime]:
+        """The request as a model reads it (ticket 29), where the tenant's rules
+        turn that on, a model is wired and a DW1 run is opening the case. The
+        customer is the sender domain's, never anything the model read: a
+        sender on no customer's domain (a request forwarded from an internal
+        address) is `customer_unknown`, and no model is asked."""
+        message_id = message.message_id
+        step = self.requests
+        if step is None or run is None:
+            raise RequestNotExtractedError(message_id, "no_request_file")
+        rules = await step.rules.rules(scope)
+        if not rules.model_assist.rfq_extraction:
+            raise RequestNotExtractedError(message_id, "no_request_file")
+        by_domain = await self.catalog.customer_by_email_domain(scope, message.sender.domain)
+        customer = by_domain.data
+        if customer is None:
+            raise RequestNotExtractedError(message_id, "customer_unknown")
+        contents = []
+        for attachment in message.attachments:
+            content = await self.inbox.read_attachment(scope, message_id, attachment.attachment_id)
+            if content is not None:
+                contents.append(content)
+        read = await step.reader.read(scope, message, contents, customer, rules, run=run)
+        if isinstance(read, str):
+            raise RequestNotExtractedError(message_id, _NOT_READ[read])
+        items = await self.catalog.items(scope)
+        request = QuoteRequest(
+            message_id=message_id,
+            received_at=message.received_at,
+            sender=message.sender,
+            attachment=read.attachment,
+            customer_code=customer.code,
+            customer_from="sender_domain",
+            document=read.document,
+            body=read.body,
+            reading=read.reading,
+        )
+        return request, min(by_domain.as_of, items.as_of)
 
     async def _requester(
         self, scope: SalesScope, message: InboundMessage, document: RfqDocument

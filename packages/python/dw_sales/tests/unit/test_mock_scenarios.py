@@ -32,6 +32,7 @@ from dw_sales.adapters.mock.generate_attachments import (
     QuoteRequestDocument,
     StatedAttributes,
     load_design_replies,
+    load_free_requests,
     load_purchase_orders,
     load_quote_requests,
 )
@@ -54,7 +55,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.2.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.3.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -491,6 +492,10 @@ def _buyer_name(catalog_customers: dict[str, Customer], po: PurchaseOrderDocumen
 async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Outcome]:
     orders = {po.message_id: po for po in load_purchase_orders()}
     requests = {rfq.message_id: rfq for rfq in load_quote_requests()}
+    # Requests in the customer's own form: no reader reads one, so without a
+    # model each is routed (ticket 29; what a model makes of them is the
+    # model step's evals).
+    free = {request.message_id: request for request in load_free_requests()}
     replies = {reply.message_id: reply for reply in load_design_replies()}
     customers = {c.code: c for c in (await catalog.customers(SCOPE)).data}
     open_ycbg = {y.ycbg_no: y for y in (await catalog.open_ycbg(SCOPE)).data}
@@ -540,6 +545,15 @@ async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Ou
                 outcome = Outcome(
                     None, "design_reply", ("routed_to_sales", "design_reply_unmatched"), frozenset()
                 )
+        elif (own := free.get(mid)) is not None:
+            customer, _ = await _attribute(catalog, message, None)
+            assert customer is not None and customer.code == own.customer_code, mid
+            outcome = Outcome(
+                customer.code,
+                "quote_request",
+                ("routed_to_sales", "attachment_unreadable"),
+                frozenset(),
+            )
         else:
             assert not message.attachments, f"{mid} carries no known document"
             customer, _ = await _attribute(catalog, message, None)
@@ -743,7 +757,10 @@ def test_every_routing_reason_but_other_and_every_disposition_is_given() -> None
 
     assert reasons >= {"customer_unknown", "complaint", "other"}, "the glossary was misread"
     assert {kind for kind, _ in claimed} <= dispositions
-    assert {reason for _, reason in claimed if reason} == reasons - {"other"}
+    # `reply_to_case` is given by a model's reading alone (ticket 31), which
+    # this table, what DW1 does without a model, never runs.
+    given = {reason for _, reason in claimed if reason}
+    assert given - {"other"} == reasons - {"other", "reply_to_case"}
     # Not one message is left without a decision.
     assert "not_yet_processed" not in {kind for kind, _ in claimed}
 

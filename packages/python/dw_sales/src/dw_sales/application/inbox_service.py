@@ -35,7 +35,12 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import CaseOrigin, SalesUnitOfWork, SalesUnitOfWorkFactory
-from dw_sales.application.order_intake import QUOTATION_KINDS, MessageKind, OrderIntake
+from dw_sales.application.order_intake import (
+    QUOTATION_KINDS,
+    Classification,
+    MessageKind,
+    OrderIntake,
+)
 from dw_sales.application.ports import InboxPort, MemberDirectoryPort, SalesCatalogPort, SalesScope
 from dw_sales.application.quotation import (
     NotADesignReplyError,
@@ -67,6 +72,7 @@ from dw_sales.domain.dispositions import (
     MessageDisposition,
     RoutingReason,
 )
+from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
@@ -173,14 +179,23 @@ class InboxProcessing:
         if message is None:
             raise NotFoundError("no such message", details={"message_id": message_id})
         ingest = self.clock.now()
-        kind = await self.intake.classify(scope, message)
+        classified = await self.intake.classify(scope, message, run=run, now=ingest)
+        if classified.retry:
+            # The model gave no usable answer and the message is young enough
+            # to try again: it stays not yet processed, and nothing is written.
+            return message_disposition(MessageDisposition.pending(message_id), None)
+        kind, reading = classified.kind, classified.reading
         if kind is MessageKind.QUOTE_REQUEST:
-            disposition, case = await self._quote_request(context, scope, message_id, ingest)
+            disposition, case = await self._quote_request(
+                context, scope, message_id, ingest, run, reading
+            )
         elif kind is MessageKind.DESIGN_REPLY:
-            disposition, case = await self._design_reply(context, scope, message_id, ingest)
+            disposition, case = await self._design_reply(
+                context, scope, message_id, ingest, reading
+            )
         else:
             assert kind not in QUOTATION_KINDS
-            disposition, case = await self._order(context, scope, message, ingest, run)
+            disposition, case = await self._order(context, scope, message, ingest, run, classified)
         # Ids, codes and counts only (`dw_sales.application.telemetry`).
         self.spans.emit(
             SalesSpan.MESSAGE_PROCESSED,
@@ -202,8 +217,9 @@ class InboxProcessing:
         message: InboundMessage,
         ingest: datetime,
         run: RunContext,
+        classified: Classification,
     ) -> _Processed:
-        outcome = await self.intake.process(scope, message, run=run)
+        outcome = await self.intake.process(scope, message, run=run, classified=classified)
         disposition = outcome.disposition
         assert disposition is not None  # quotation kinds are handled above
         case = outcome.case
@@ -262,22 +278,36 @@ class InboxProcessing:
         return reviewed
 
     async def _quote_request(
-        self, context: AccessContext, scope: SalesScope, message_id: str, ingest: datetime
+        self,
+        context: AccessContext,
+        scope: SalesScope,
+        message_id: str,
+        ingest: datetime,
+        run: RunContext,
+        reading: IntentReading | None,
     ) -> _Processed:
         try:
-            case = await self.quotes.open_case(scope, message_id, self.ids.new_uuid())
+            case = await self.quotes.open_case(scope, message_id, self.ids.new_uuid(), run=run)
         except RequestNotExtractedError as refused:
             reason = (
                 RoutingReason.CUSTOMER_UNKNOWN
                 if refused.reason == "customer_unknown"
                 else RoutingReason.ATTACHMENT_UNREADABLE
             )
-            routed = await self._routed(context, scope, message_id, reason, refused.reason, ingest)
+            routed = await self._routed(
+                context, scope, message_id, reason, refused.reason, ingest, reading
+            )
             return routed, None
         except QuoteFileUnreadableError as refused:
             detail = str(refused.details.get("problem", "unreadable"))
             routed = await self._routed(
-                context, scope, message_id, RoutingReason.ATTACHMENT_UNREADABLE, detail, ingest
+                context,
+                scope,
+                message_id,
+                RoutingReason.ATTACHMENT_UNREADABLE,
+                detail,
+                ingest,
+                reading,
             )
             return routed, None
         disposition = MessageDisposition(
@@ -286,6 +316,7 @@ class InboxProcessing:
             case_kind=CaseKind.QUOTE,
             case_id=case.case_id,
             customer_code=case.customer_code,
+            reading=reading,
         )
         async with self.uow(scope) as work:
             await _running(work)
@@ -312,7 +343,12 @@ class InboxProcessing:
         return disposition, case
 
     async def _design_reply(
-        self, context: AccessContext, scope: SalesScope, message_id: str, ingest: datetime
+        self,
+        context: AccessContext,
+        scope: SalesScope,
+        message_id: str,
+        ingest: datetime,
+        reading: IntentReading | None,
     ) -> _Processed:
         try:
             outcome = await self.quotes.take_design_reply(scope, message_id)
@@ -324,9 +360,14 @@ class InboxProcessing:
                 RoutingReason.ATTACHMENT_UNREADABLE,
                 "no single Design reply could be read",
                 ingest,
+                reading,
             )
             return routed, None
         disposition = outcome.disposition
+        if reading is not None:
+            disposition = MessageDisposition.model_validate(
+                {**disposition.model_dump(), "reading": reading}
+            )
         replied: QuoteCase | None = None
         async with self.uow(scope) as work:
             await _running(work)
@@ -351,6 +392,7 @@ class InboxProcessing:
         reason: RoutingReason,
         detail: str,
         ingest: datetime,
+        reading: IntentReading | None,
     ) -> MessageDisposition:
         disposition = MessageDisposition(
             message_id=message_id,
@@ -358,6 +400,7 @@ class InboxProcessing:
             reason=reason,
             detail=detail[:500],
             owner=SALES_PIC_POOL,
+            reading=reading,
         )
         async with self.uow(scope) as work:
             await _running(work)

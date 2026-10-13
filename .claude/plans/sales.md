@@ -8,6 +8,29 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-13, tickets 29 and 31 built (uncommitted; Đạt away, on his
+  pre-authorisation; "As built" and Comments in each ticket):
+    - **What.** A local model reads a request for quotation no reader reads
+      (mail body, a PDF's text, the customer's own sheet; ticket 29) and the
+      intent of a message no reader accepted (ticket 31). A readable
+      document now decides its message's kind first, for every tenant.
+    - **Where it is on.** `sales_order_rules@1.3.0` ships `rfq_extraction`
+      and `message_intent` off; the demo tenant's `1.3.1` has all three
+      model steps on.
+    - **Rules.** dw_sales ADR 0005 unchanged; its addendum records how both
+      steps apply it (field confusion flagged, a kind is not a route, the
+      newest part only, bounded input, one switch block).
+    - **Measured.** RFQ: 94.6% VI/EN values in the right field (bar 85%),
+      JA 96.0%, p50 15 s per request. Intent: 90.9% kind accuracy (bar 90%)
+      against 27.3% for the keyword tables, p50 2.7 s.
+    - **Live portal flow.** 40 messages in 149.7 s; M37-M39 quote cases with
+      every value flagged; M40 `delivery_change` naming M35's PO; a value
+      confirmed through the API.
+    - **Shipped with it.** Migration `dab4fd83b8cb` (messages stamp the
+      reading; `reply_to_case`), mock M37-M40 (the mailbox is 40 messages),
+      evals `sales_rfq@1.0.0` and `sales_intent@1.0.0`, prompts
+      `rfq_extraction@1.0.0` and `message_intent@1.0.0`.
+    - **Next.** Ticket 30, then 32 and 33.
 - 2026-10-13, ticket 28 built (uncommitted; Đạt away, on his
   pre-authorisation; "As built" in the ticket):
     - **What.** DW1 reads an item description its own vocabulary does not
@@ -310,6 +333,23 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 | 10     | (pending) | DW1 on the runtime: checker decisions are platform approvals, decide scope stamped, makers refused       |
 
 ## Open
+
+- From tickets 29 and 31 (2026-10-13, agent, Đạt away):
+    - Đạt to accept ADR 0005 with its addendum, the two bars (85% and 90%),
+      and `model_assist.unread_retry_hours` (24 h, an interim value).
+    - Confirming a model-read value is not gated on the server on the person
+      having opened its source, as an order's prepare is (`require_served`):
+      the mail text has no served record yet.
+    - A request stating no currency goes to a person (`currency_missing`);
+      a quantity whose unit is only in a column header is asked for. Both
+      by design, both cost recall (ticket 29's misses).
+    - Thread headers on `InboundMessage` are still owed; the newest part is
+      cut by the message's structure instead.
+    - The browser walk's sign-in step had looked for "Sign in" since the
+      antd sweep (`3d1f9a5`); fixed here to "Đăng nhập". The nightly walk
+      cannot have passed in between.
+    - The intent's resolved references are stamped and shown, and read by no
+      route yet: tickets 32 and 33.
 
 - **Sales roles decide unstamped approvals** (owed, Đạt; from
   `ac31ff0f2087`). Every Sales approval type is stamped, and since the

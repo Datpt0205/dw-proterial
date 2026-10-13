@@ -16,6 +16,7 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.readers import mock_po_readers
+from dw_sales.adapters.rfq_excel import ExcelQuoteForms
 from dw_sales.application.case_store import SourceRegion
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -44,7 +45,8 @@ async def _case(message_id: str) -> OrderCase:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml")),
+        quote_forms=ExcelQuoteForms(),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.3.0.yaml")),
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),
     )
@@ -62,6 +64,7 @@ def _sheet(case: OrderCase, line_no: int) -> str | None:
 async def test_a_clean_order_needs_only_its_own_source() -> None:
     case = await _case("M01")
     anchor = case.header.anchors.po_no
+    assert anchor.attachment_id is not None
 
     assert required_regions(case) == {SourceRegion(anchor.attachment_id, None, anchor.sheet)}
 
@@ -96,6 +99,7 @@ async def test_the_sheet_of_a_typed_value_is_needed() -> None:
         AN,
     )
 
+    assert total.anchor.attachment_id is not None
     assert SourceRegion(total.anchor.attachment_id, None, total.anchor.sheet) in required_regions(
         typed
     )

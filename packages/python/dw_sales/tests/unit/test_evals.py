@@ -29,7 +29,7 @@ pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
 DATASET = REPO / "evals" / "datasets" / "sales@1.2.0.json"
-DESCRIPTIONS = REPO / "evals" / "datasets" / "sales_descriptions@1.0.0.json"
+MODEL_STEPS = sorted((REPO / "evals" / "datasets").glob("sales_*@*.json"))
 CTX = GraderContext(repo_root=REPO)
 
 
@@ -53,9 +53,11 @@ def test_the_sales_dataset_passes_with_full_security_coverage() -> None:
 
 
 def test_every_sales_grader_is_run_by_a_sales_dataset() -> None:
-    # Ticket 28's graders run in their own dataset, which the smoke runs too.
-    used = {c.grader for c in load_dataset(DATASET).cases}
-    used |= {c.grader for c in load_dataset(DESCRIPTIONS).cases}
+    # The model steps' graders (tickets 28, 29, 31) run in their own
+    # datasets, which the smoke runs too.
+    used: set[str] = set()
+    for dataset in (DATASET, *MODEL_STEPS):
+        used |= {c.grader for c in load_dataset(dataset).cases}
     assert used == set(GRADERS)
 
 

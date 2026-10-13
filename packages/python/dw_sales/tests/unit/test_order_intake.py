@@ -30,6 +30,7 @@ from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, MOCK_ROOT
 from dw_sales.adapters.mock.generate_attachments import load_purchase_orders
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.readers import mock_po_readers
+from dw_sales.adapters.rfq_excel import ExcelQuoteForms
 from dw_sales.application.order_intake import (
     QUOTATION_KINDS,
     IntakeOutcome,
@@ -62,7 +63,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 CATALOG = MockSalesCatalog.load(SCOPE)
 INBOX = MockInbox.load(SCOPE)
 RULES = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.2.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.3.0.yaml"
 )
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -268,6 +269,14 @@ GOLDEN: dict[str, Expected] = {
             ("code_unmapped", "error", 3, None, "VX-N-0103"),
         ),
     ),
+    # Requests in the customer's own form (ticket 29): handed to the
+    # quotation flow, which a model may read them in.
+    "M37": (MessageKind.QUOTE_REQUEST, None, None, ()),
+    "M38": (MessageKind.QUOTE_REQUEST, None, None, ()),
+    "M39": (MessageKind.QUOTE_REQUEST, None, None, ()),
+    # A postponement in words no keyword lists: `other` here, a model reads it
+    # as `delivery_change` (ticket 31).
+    "M40": (MessageKind.OTHER, "routed_to_sales", "other", ()),
 }
 
 INJECTION = (
@@ -315,6 +324,7 @@ def _intake(
         catalog=catalog,
         inbox=inbox,
         reader=mock_po_readers(),
+        quote_forms=ExcelQuoteForms(),
         rules=PlatformOrderRules(rules),
         cases=cases if cases is not None else InMemoryOrderCases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),
@@ -594,7 +604,7 @@ def test_a_case_stamps_the_rules_parser_file_and_snapshot_it_was_checked_with(
     case = _case(outcomes, "M01")
     data = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
 
-    assert case.rules_version == "sales_order_rules@1.2.0"
+    assert case.rules_version == "sales_order_rules@1.3.0"
     assert case.document.parser_version == "excel_po_reader@1.3.0"
     assert case.document.attachment_sha256 == hashlib.sha256(data).hexdigest()
     assert case.catalog_as_of == asyncio.run(CATALOG.items(SCOPE)).as_of
@@ -706,13 +716,17 @@ async def test_instructions_in_a_body_leave_the_case_as_the_attachment_says() ->
     }
 
 
-async def test_the_subject_decides_the_kind_before_the_body() -> None:
+async def test_a_readable_po_decides_the_kind_whatever_the_words_say() -> None:
     m12 = await _message("M12")
     claims_rfq = InboundMessage.model_validate(
-        {**dict(m12), "body_text": "This is a request for quotation (RFQ), not a PO."}
+        {
+            **dict(m12),
+            "subject": "Quote request QRL-PO-0930-15",
+            "body_text": "This is a request for quotation (RFQ), not a PO.",
+        }
     )
 
-    assert await _intake().classify(SCOPE, claims_rfq) is MessageKind.PO
+    assert (await _intake().classify(SCOPE, claims_rfq)).kind is MessageKind.PO
 
 
 # ----------------------------------------------------------- classification --
@@ -766,14 +780,20 @@ NOTE = ("note.dat", b"just some text")
         ("Đơn đặt hàng tháng 10", "", (XLSX,), MessageKind.PO),
         ("ĐƠN ĐẶT HÀNG SỐ 7", "", (PDF,), MessageKind.PO),
         ("注文書 KMH-77", "", (XLSX,), MessageKind.PO),
-        ("PO 123 - sửa đổi lần 2", "", (XLSX,), MessageKind.REVISED_PO),
-        ("Amended purchase order 77", "", (XLSX,), MessageKind.REVISED_PO),
+        # A readable PO's revision is a fact of the document, not the words.
+        ("PO 123 - sửa đổi lần 2", "", (XLSX,), MessageKind.PO),
+        # No reader accepted the file: the keyword tables decide.
+        ("PO 123 - sửa đổi lần 2", "", (PNG,), MessageKind.REVISED_PO),
+        ("Amended purchase order 77", "", (PNG,), MessageKind.REVISED_PO),
         ("Review of PO 123", "", (XLSX,), MessageKind.PO),
         ("Fwd: documents", "Please find our purchase order attached.", (XLSX,), MessageKind.PO),
-        ("Fwd: documents", "Kindly send us your quotation.", (XLSX,), MessageKind.OTHER),
+        # The attachment reads as the sender's PO: the content decides
+        # (ticket 31), whatever the words ask for.
+        ("Fwd: documents", "Kindly send us your quotation.", (XLSX,), MessageKind.PO),
         ("Yêu cầu báo giá cáp 3 lõi", "", (), MessageKind.QUOTE_REQUEST),
         ("見積依頼 4芯ケーブル", "", (), MessageKind.QUOTE_REQUEST),
-        ("Re: YCBG-2610-009", "", (XLSX,), MessageKind.DESIGN_REPLY),
+        ("Re: YCBG-2610-009", "", (XLSX,), MessageKind.PO),
+        ("Re: YCBG-2610-009", "", (PDF,), MessageKind.DESIGN_REPLY),
         ("PO 123", "", (PNG,), MessageKind.PO),
         ("PO 123", "", (NOTE,), MessageKind.OTHER),
         ("PO 123", "", (), MessageKind.OTHER),
@@ -784,7 +804,7 @@ async def test_a_message_is_classified_by_its_words_and_the_bytes_it_carries(
 ) -> None:
     message, inbox = _built(subject, *files, body=body)
 
-    assert await _intake(inbox).classify(SCOPE, message) is kind
+    assert (await _intake(inbox).classify(SCOPE, message)).kind is kind
 
 
 @pytest.mark.parametrize(
@@ -1005,7 +1025,7 @@ async def test_a_code_is_looked_up_in_the_callers_item_master_only() -> None:
 
 async def test_a_line_is_not_checked_again_under_rules_the_case_was_not_checked_under() -> None:
     _, case = await _in_review("M05")
-    newer = RULES.model_copy(update={"policy_version": "1.3.0"})
+    newer = RULES.model_copy(update={"policy_version": "1.4.0"})
 
     with pytest.raises(ConflictError, match="no longer apply"):
         await _intake(rules=newer).confirm_mapping(SCOPE, case, 2, "CB-2005", AN, T0)

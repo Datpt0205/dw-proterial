@@ -48,12 +48,12 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
-from dw_sales.adapters.assembly import demo_order_rules
+from dw_sales.adapters.assembly import demo_order_rules, model_requests
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies
 from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.case_store import (
@@ -68,6 +68,7 @@ from dw_sales.application.case_store import (
     Stored,
     WorkerState,
 )
+from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -655,15 +656,26 @@ def open_world(
         ledger=catalog,
         rules=policies.quote_rules,
         pricing=policies.pricing,
+        requests=(
+            None
+            if model is None
+            else model_requests(
+                model,
+                catalog,
+                demo_order_rules(policies.order_rules, bound_to, sample.data_dir / "policies"),
+            )
+        ),
     )
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
         reader=mock_po_readers(),
+        quote_forms=ExcelQuoteForms(),
         rules=demo_order_rules(policies.order_rules, bound_to, sample.data_dir / "policies"),
         cases=store,
         new_case_id=ids.new_uuid,
         descriptions=None if model is None else DescriptionReader(model),
+        intents=None if model is None else IntentReader(model, catalog, store),
     )
     directory = Directory(tuple(callers))
     notifications = Notifications()

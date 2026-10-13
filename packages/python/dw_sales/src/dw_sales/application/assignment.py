@@ -181,7 +181,7 @@ class AssignmentService:
             what, link = f"đơn hàng PO {case.header.po_no}", f"/sales/orders/{case.case_id}"
         else:
             what, link = (
-                f"báo giá RFQ {case.request.document.rfq_no.value}",
+                f"báo giá RFQ {case.request.reference}",
                 f"/sales/quotes/{case.case_id}",
             )
         await self.notifications.deliver(

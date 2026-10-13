@@ -23,6 +23,7 @@ from dw_sales.adapters.mock.generate_attachments import (
     PurchaseOrderDocument,
     StatedAttributes,
     load_design_replies,
+    load_free_requests,
     load_purchase_orders,
     load_quote_requests,
     render_attachments,
@@ -185,6 +186,7 @@ def _workbook(rendered: dict[str, bytes], message_id: str) -> Workbook:
         {d.message_id: d.name for d in load_purchase_orders()}
         | {d.message_id: d.name for d in load_quote_requests()}
         | {d.message_id: d.name for d in load_design_replies()}
+        | {d.message_id: d.name for d in load_free_requests() if d.name is not None}
     )
     return load_workbook(io.BytesIO(rendered[attachment_file_name(message_id, names[message_id])]))
 

@@ -840,12 +840,16 @@ export interface components {
             case_version: number;
             /** Customer Code */
             customer_code?: string | null;
+            /** Field */
+            field?: string | null;
             /** Needed By */
             needed_by?: string | null;
             /** Note */
             note?: string | null;
             /** Quantity */
             quantity?: number | string | null;
+            /** Value */
+            value?: string | null;
         };
         /** ArtifactListView */
         ArtifactListView: {
@@ -1141,6 +1145,35 @@ export interface components {
             suggested_delivery_date: string | null;
         };
         /**
+         * DescriptionReading
+         * @description What a model reading did for one line, stamped on its check basis.
+         *
+         *     ``read``: every check passed, and ``spans`` are what the candidates were
+         *     computed from. ``not_understood``: a check refused it (``reason``).
+         *     ``unavailable``: no usable answer (the model down, timed out, or its
+         *     output invalid); the line is unmapped exactly as without the model.
+         */
+        DescriptionReading: {
+            /** Model Profile */
+            model_profile: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "read" | "not_understood" | "unavailable";
+            /** Prompt */
+            prompt: string;
+            /** Reason */
+            reason?: ("line_missing" | "no_attribute" | "span_not_found" | "span_repeated" | "spans_overlap" | "value_unparsed" | "text_uncovered" | "digit_in_label" | "value_refused") | null;
+            /** Route */
+            route: string;
+            /**
+             * Spans
+             * @default []
+             */
+            spans: components["schemas"]["SpanRead"][];
+        };
+        /**
          * DescriptionReadingView
          * @description What a model reading of the description did (dw_sales ADR 0005).
          *     ``outcome``: ``read``, ``not_understood`` (``reason`` says which check
@@ -1341,6 +1374,37 @@ export interface components {
             sender_verified: boolean;
             /** Subject */
             subject: string;
+        };
+        /**
+         * IntentReading
+         * @description What the model reading of a message's intent did, stamped on its
+         *     disposition: the prompt, profile and route of the call, the rules whose
+         *     switch asked for it, and the outcome. ``unavailable``: no usable answer
+         *     within the retry window, so the message went to Sales as `other`.
+         */
+        IntentReading: {
+            /** Kind */
+            kind?: ("po" | "quote_request" | "design_reply" | "reply_to_case" | "delivery_change" | "complaint" | "sample_request" | "other") | null;
+            /** Language */
+            language?: ("vi" | "en" | "ja" | "other") | null;
+            /** Model Profile */
+            model_profile: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "read" | "unavailable";
+            /** Prompt */
+            prompt: string;
+            /**
+             * References
+             * @default []
+             */
+            references: components["schemas"]["ResolvedReference"][];
+            /** Route */
+            route: string;
+            /** Rules */
+            rules: string;
         };
         /** ItemBasisView */
         ItemBasisView: {
@@ -1560,6 +1624,7 @@ export interface components {
             owner?: string | null;
             /** Processed At */
             processed_at?: string | null;
+            reading?: components["schemas"]["IntentReading"] | null;
             /** Reason */
             reason?: string | null;
         };
@@ -2041,13 +2106,20 @@ export interface components {
         };
         /** QuoteCaseView */
         QuoteCaseView: {
+            /**
+             * Anchors
+             * @default {}
+             */
+            anchors: {
+                [key: string]: components["schemas"]["SourceAnchor"];
+            };
             approval: components["schemas"]["QuoteApprovalView"] | null;
             /** Assigned To */
             assigned_to: string | null;
             /** Attachment Id */
-            attachment_id: string;
+            attachment_id: string | null;
             /** Attachment Sha256 */
-            attachment_sha256: string;
+            attachment_sha256: string | null;
             /**
              * Case Id
              * Format: uuid
@@ -2085,6 +2157,12 @@ export interface components {
             master_list: components["schemas"]["StampView"] | null;
             /** Message Id */
             message_id: string;
+            message_text?: components["schemas"]["Words"] | null;
+            /**
+             * Model Read
+             * @default []
+             */
+            model_read: string[];
             /** Overdue */
             overdue: boolean;
             /** Parser Version */
@@ -2092,6 +2170,7 @@ export interface components {
             pricing: components["schemas"]["PricingView"] | null;
             /** Quote Due */
             quote_due: string | null;
+            reading?: components["schemas"]["RequestReading"] | null;
             /**
              * Received At
              * Format: date-time
@@ -2101,13 +2180,10 @@ export interface components {
             release_manifest_ref: string | null;
             /** Returns */
             returns: components["schemas"]["ReturnView"][];
-            /**
-             * Rfq Date
-             * Format: date
-             */
-            rfq_date: string;
+            /** Rfq Date */
+            rfq_date: string | null;
             /** Rfq No */
-            rfq_no: string;
+            rfq_no: string | null;
             /** Rules Version */
             rules_version: string;
             /** Sender */
@@ -2149,8 +2225,18 @@ export interface components {
             blocking: boolean;
             /** Code */
             code: string;
+            /**
+             * Confirmed
+             * @default []
+             */
+            confirmed: components["schemas"]["ValueConfirmationView"][];
             disposition: components["schemas"]["QuoteDispositionView"];
             expected: components["schemas"]["Words"] | null;
+            /**
+             * Flagged
+             * @default []
+             */
+            flagged: string[];
             /** Key */
             key: string;
             /** Line No */
@@ -2166,16 +2252,28 @@ export interface components {
             anchors: {
                 [key: string]: components["schemas"]["SourceAnchor"];
             };
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: string[];
             /** Customer Item Code */
             customer_item_code: string | null;
             /** Description */
             description: string;
+            description_reading?: components["schemas"]["DescriptionReading"] | null;
             /** Line No */
             line_no: number;
+            /**
+             * Model Read
+             * @default []
+             */
+            model_read: string[];
             /** Needed By */
             needed_by: string | null;
             /** Quantity */
             quantity: string | null;
+            stated_target_price?: components["schemas"]["Amount"] | null;
             target_price: components["schemas"]["Amount"] | null;
             /** Uom */
             uom: string;
@@ -2205,7 +2303,7 @@ export interface components {
              */
             received_at: string;
             /** Rfq No */
-            rfq_no: string;
+            rfq_no: string | null;
             /** Status */
             status: string;
             /** Ycbg No */
@@ -2219,7 +2317,7 @@ export interface components {
          *     would see something else than the reader read.
          * @enum {string}
          */
-        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value";
+        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read";
         /**
          * RenderBody
          * @description An artifact kind to render from the case at the version the caller saw;
@@ -2238,6 +2336,43 @@ export interface components {
         RenderedView: {
             /** Artifacts */
             artifacts: components["schemas"]["ArtifactView"][];
+        };
+        /**
+         * RequestReading
+         * @description How a model read the request (ticket 29): the prompt, profile and route
+         *     of the calls, the rules whose switch asked, and how many calls it took.
+         */
+        RequestReading: {
+            /** Calls */
+            calls: number;
+            /** Model Profile */
+            model_profile: string;
+            /** Prompt */
+            prompt: string;
+            /** Refused */
+            refused?: {
+                [key: string]: number;
+            };
+            /** Route */
+            route: string;
+            /** Rules */
+            rules: string;
+        };
+        /**
+         * ResolvedReference
+         * @description A number the message names that code found in it and resolved to
+         *     exactly one record of the sender's customer.
+         */
+        ResolvedReference: {
+            /** Number */
+            number: string;
+            /** Order Case Id */
+            order_case_id?: string | null;
+            /**
+             * Record
+             * @enum {string}
+             */
+            record: "purchase_order" | "quote_request";
         };
         /** ResumeBody */
         ResumeBody: {
@@ -2329,15 +2464,18 @@ export interface components {
         };
         /**
          * SourceAnchor
-         * @description The place in one attachment a value was read from.
+         * @description The place in one attachment, or in the message's own text, a value was
+         *     read from.
          *
-         *     At least one of: ``cell_ref`` (``Sheet!B10``), ``page`` with its
-         *     ``boxes``, or ``quote``, the words as the file prints them. More than one
-         *     may be given when the reader knows more than one.
+         *     At least one of: ``cell_ref`` (``Sheet!B10``), ``page`` (with its
+         *     ``boxes`` where the reader knows them), ``quote``, the words as the file
+         *     prints them, or ``chars``, where they are in the text DW1 read. More than
+         *     one may be given when the reader knows more than one. ``attachment_id``
+         *     None points into the message's newest part, by ``chars`` alone.
          */
         SourceAnchor: {
             /** Attachment Id */
-            attachment_id: string;
+            attachment_id: string | null;
             /** Attachment Sha256 */
             attachment_sha256: string;
             /**
@@ -2347,6 +2485,7 @@ export interface components {
             boxes: components["schemas"]["PageBox"][];
             /** Cell Ref */
             cell_ref?: string | null;
+            chars?: components["schemas"]["TextRange"] | null;
             /** Page */
             page?: number | null;
             /** Quote */
@@ -2389,6 +2528,31 @@ export interface components {
             sheet?: string | null;
             /** Sheets */
             sheets?: string[];
+        };
+        /**
+         * SpanRead
+         * @description One attribute as code accepted it: the text, where it sits in the
+         *     NFKC-normalised description, the value, and who read the value.
+         */
+        SpanRead: {
+            /**
+             * Attribute
+             * @enum {string}
+             */
+            attribute: "family" | "stranding" | "conductor" | "shield" | "colour" | "packaging" | "cores" | "gauge" | "pack_length_m" | "spec_no";
+            /** End */
+            end: number;
+            /**
+             * Read By
+             * @enum {string}
+             */
+            read_by: "code" | "model";
+            /** Span */
+            span: string;
+            /** Start */
+            start: number;
+            /** Value */
+            value: string;
         };
         /**
          * SpanReadView
@@ -2515,6 +2679,16 @@ export interface components {
             /** Target Seconds */
             target_seconds: number;
         };
+        /**
+         * TextRange
+         * @description Characters ``start`` (inclusive) to ``end`` (exclusive) of a text.
+         */
+        TextRange: {
+            /** End */
+            end: number;
+            /** Start */
+            start: number;
+        };
         /** TimeStat */
         TimeStat: {
             /** Cases */
@@ -2577,6 +2751,28 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * ValueConfirmationView
+         * @description One value a model read, as Sales confirmed it (ticket 29).
+         */
+        ValueConfirmationView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** Field */
+            field: string;
+            /** Read */
+            read: string;
+            /** Value */
+            value: string;
         };
         /**
          * ValueCorrectionView

@@ -173,6 +173,10 @@ class InboundMessage(BaseModel):
     # and a mailbox in Hanoi.
     received_at: AwareDatetime
     body_text: str
+    # The text/html alternative, when the message has one. Its structure
+    # (blockquote, a client's reply container) is what tells the newest part
+    # from quoted history (`mail_parts.newest_part`); nothing renders it.
+    body_html: str | None = None
     attachments: tuple[Attachment, ...] = ()
     authentication: MailAuthentication = MailAuthentication()
 

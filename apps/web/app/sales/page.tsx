@@ -23,6 +23,7 @@ import { useNow } from "../../lib/use-now";
 import { salesApi } from "./_lib/api";
 import { useCustomerName } from "./_lib/customers";
 import { ACTION, label, ROUTING_REASON } from "./_lib/labels";
+import { quoteTitle } from "./_lib/quote-actions";
 import { usePeople } from "./_lib/people";
 import { useResource } from "./_lib/use-resource";
 import { useListView } from "./_lib/use-status-filter";
@@ -128,7 +129,7 @@ function MyWork() {
     }
     if (item.kind === "quote") {
       const q = quoteById.get(item.id);
-      return q ? `RFQ ${q.rfq_no}` : null;
+      return q ? quoteTitle(q) : null;
     }
     return item.id;
   };

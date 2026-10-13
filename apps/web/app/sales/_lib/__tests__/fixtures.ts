@@ -209,6 +209,8 @@ export function pendingQuote(): Quote {
     currency: "USD",
     attachment_id: "M10-A1",
     attachment_sha256: SHA,
+    anchors: {},
+    model_read: [],
     rules_version: "sales_quote_rules@1.1.0",
     parser_version: "excel_rfq_reader@1.0.0",
     catalog_as_of: "2026-10-02T18:00:00+07:00",

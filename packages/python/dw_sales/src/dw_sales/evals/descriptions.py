@@ -32,8 +32,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import statistics
-import time
 import uuid
 from collections.abc import Callable, Coroutine, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -68,6 +66,7 @@ from dw_sales.domain.description_reading import (
 )
 from dw_sales.domain.order_checks import MappedLine
 from dw_sales.domain.orders import MappingStatus, PoLine, PoLineAnchors
+from dw_sales.evals.recorded import latency
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
 
 # The proposed bar (ticket 28, Đạt sets the final one): the gold code among
@@ -116,6 +115,8 @@ class Replayed:
     raw: Mapping[str, Any] | None = None
     model_profile: str = "onprem"
     route: str = "structured_extraction"
+    # What `configs/models/onprem.yaml` declares for the route.
+    max_input_tokens: int = 6000
     calls: list[tuple[PromptRef, RunContext, dict[str, str]]] = field(default_factory=list)
 
     async def interpret[OutputT: BaseModel](
@@ -146,52 +147,6 @@ class Replayed:
             if answer is not None:
                 lines.append({"line_no": sent["line_no"], **_nulls(), **answer})
         return schema.model_validate({"lines": lines})
-
-
-@dataclass
-class Observed:
-    """Wraps the model under test in a live lane: times every call and keeps
-    each line's answer, so the lane can report latency and record the answers
-    the smoke replays (`--record`)."""
-
-    inner: Any
-    seconds: list[float] = field(default_factory=list)
-    answers: dict[str, dict[str, Any] | None] = field(default_factory=dict)
-
-    @property
-    def model_profile(self) -> str:
-        return str(self.inner.model_profile)
-
-    @property
-    def route(self) -> str:
-        return str(self.inner.route)
-
-    async def interpret[OutputT: BaseModel](
-        self,
-        prompt: PromptRef,
-        inputs: Mapping[str, str],
-        schema: type[OutputT],
-        *,
-        run: RunContext,
-        max_output_tokens: int,
-    ) -> OutputT:
-        started = time.perf_counter()
-        sent = json.loads(inputs["lines"])
-        try:
-            answer: OutputT = await self.inner.interpret(
-                prompt, inputs, schema, run=run, max_output_tokens=max_output_tokens
-            )
-        finally:
-            self.seconds.append(time.perf_counter() - started)
-        by_no = {line["line_no"]: line for line in answer.model_dump(mode="json").get("lines", [])}
-        for line in sent:
-            got = by_no.get(line["line_no"])
-            self.answers[line["description"]] = (
-                None
-                if got is None
-                else {k: v for k, v in got.items() if k != "line_no" and v is not None}
-            )
-        return answer
 
 
 def _nulls() -> dict[str, None]:
@@ -318,21 +273,6 @@ def scores(reads: Sequence[Read]) -> dict[str, Any]:
     }
 
 
-def latency(model: Any) -> dict[str, float] | None:
-    """p50/p95 seconds per call (one PO's unread lines) in a live lane."""
-    seconds = getattr(model, "seconds", None)
-    if not seconds:
-        return None
-    ordered = sorted(seconds)
-    p95 = ordered[min(len(ordered) - 1, round(0.95 * (len(ordered) - 1)))]
-    return {
-        "calls": len(ordered),
-        "p50_s": round(statistics.median(ordered), 2),
-        "p95_s": round(p95, 2),
-        "max_s": round(ordered[-1], 2),
-    }
-
-
 # -------------------------------------------------------------- graders --
 
 
@@ -365,7 +305,7 @@ def grade_golden(
         "by_language": by_lang,
         "proposed_bar_vi_en": PROPOSED_BAR,
         "meets_proposed_bar_vi_en": vi_en["gold_in_candidates"] >= PROPOSED_BAR,
-        "latency": latency(model),
+        "latency": latency(model, DESCRIPTION_ATTRIBUTES.prompt_id),
         "missed": sorted(r.line_id for r in reads if r.gold not in r.candidates),
     }
     if broken:

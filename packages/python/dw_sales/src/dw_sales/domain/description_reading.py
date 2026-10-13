@@ -49,6 +49,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from dw_sales.domain.catalog import Colour, Conductor, ItemFamily, Packaging, Shield, Stranding
 from dw_sales.domain.descriptions import StatedAttributes
+from dw_sales.domain.spans import FoldedText
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -222,7 +223,7 @@ def verify_reading(description: str, line: ModelDescriptionLine | None) -> Verif
     that does not hold is a line Sales maps, not a PO that cannot be read."""
     if line is None:
         return "line_missing"
-    text = _Folded(unicodedata.normalize("NFKC", description))
+    text = FoldedText(unicodedata.normalize("NFKC", description))
     claims: list[tuple[AttributeName, str, str | None]] = []
     for name in CATEGORICAL:
         value, span = getattr(line, name), getattr(line, f"{name}_span")
@@ -275,35 +276,6 @@ def verify_reading(description: str, line: ModelDescriptionLine | None) -> Verif
     except ValidationError:
         return "value_refused"
     return Verified(stated=stated, spans=tuple(ordered))
-
-
-class _Folded:
-    """The normalised description, case folded for finding spans, with each
-    folded character's position in the unfolded text (folding can lengthen
-    a character: ``ß`` is ``ss``)."""
-
-    def __init__(self, original: str) -> None:
-        self.original = original
-        folded: list[str] = []
-        self._origin: list[int] = []
-        for index, char in enumerate(original):
-            for piece in char.casefold():
-                folded.append(piece)
-                self._origin.append(index)
-        self.folded = "".join(folded)
-
-    def locate(self, span: str) -> tuple[int, int] | NotUnderstood:
-        wanted = span.casefold().strip()
-        if not wanted:
-            return "span_not_found"
-        first = self.folded.find(wanted)
-        if first < 0:
-            return "span_not_found"
-        # Overlapping occurrences count: `22` is twice in `222`.
-        if self.folded.find(wanted, first + 1) >= 0:
-            return "span_repeated"
-        last = first + len(wanted) - 1
-        return self._origin[first], self._origin[last] + 1
 
 
 def _covered(text: str, spans: list[SpanRead]) -> bool:

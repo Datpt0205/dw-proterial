@@ -101,7 +101,7 @@ async def test_m36_lines_the_model_read_are_candidates_sales_confirms(
     an = model_api.as_(AN)
     case = await order_of(an, "M36")
     # The demo tenant's own rules, where the step is on.
-    assert case["rules_version"] == "sales_order_rules@1.2.1"
+    assert case["rules_version"] == "sales_order_rules@1.3.1"
     lines = {line["line_no"]: line for line in case["lines"]}
 
     # The recorded model left line 1's colour out and line 2's "BRD"

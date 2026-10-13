@@ -45,6 +45,21 @@ class PoDocumentReaderPort(Protocol):
         ...
 
 
+# The seller's two quotation forms a file can be: a customer's request in the
+# fixed-label layout, or Design's reply to a YCBG.
+QuoteForm = Literal["quote_request", "design_reply"]
+
+
+class QuoteFormPort(Protocol):
+    """Which quotation form a file is, recognised by its marker, or None.
+
+    What lets a readable document decide its message's kind before any
+    word of the subject is read (ticket 31): recognition only, no value.
+    """
+
+    def form(self, content: AttachmentContent) -> QuoteForm | None: ...
+
+
 class OrderRulesPort(Protocol):
     """The order rules that apply to ``scope``'s tenant.
 

@@ -128,6 +128,16 @@ class ModelAssist(BaseModel):
     # for a line the convert list does not map (ticket 28). Its labels are
     # flagged; Sales confirms the PRV code.
     description_attributes: bool
+    # A local model gives the kind of a message no reader accepted, in place
+    # of the keyword tables; code maps the kind to the route (ticket 31).
+    message_intent: bool
+    # A local model reads a request for quotation the fixed-label reader does
+    # not, from the body, a PDF's text or a customer's Excel; every value it
+    # read is flagged for Sales to confirm (ticket 29).
+    rfq_extraction: bool
+    # How long a message whose intent the model could not give stays not yet
+    # processed, to be tried again, before it is routed `other` (ticket 31).
+    unread_retry_hours: int = Field(ge=0, le=168)
 
 
 class OrderRules(BaseModel):
@@ -165,7 +175,7 @@ class OrderRules(BaseModel):
 
     @property
     def version(self) -> str:
-        """What a finding is stamped with: ``sales_order_rules@1.2.0``."""
+        """What a finding is stamped with: ``sales_order_rules@1.3.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
     def finding(

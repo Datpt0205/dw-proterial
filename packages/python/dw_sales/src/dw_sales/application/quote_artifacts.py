@@ -161,7 +161,7 @@ async def spec_discussion_draft(
     )
     values = {
         "customer_name": d.customer.name,
-        "rfq_no": case.request.document.rfq_no.value,
+        "rfq_no": case.request.reference,
         "lines": lines,
     }
     return (d.eml(bound.ref, filled(bound, draft, values)),)
@@ -180,7 +180,7 @@ async def decline_draft(d: QuoteDrafting, design: DesignRequestSource) -> tuple[
     bound, draft = d.customer_email("decline_draft")
     values = {
         "customer_name": d.customer.name,
-        "rfq_no": case.request.document.rfq_no.value,
+        "rfq_no": case.request.reference,
         "reason": bound.word(f"reason.{decline.reason.value}"),
     }
     return (d.eml(bound.ref, filled(bound, draft, values)),)
