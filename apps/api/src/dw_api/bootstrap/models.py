@@ -47,6 +47,8 @@ def model_provider_config(settings: ApiSettings) -> ModelProviderConfig:
         openai_structured_mode=settings.openai_structured_mode,
         openai_strict_schema=settings.openai_strict_schema,
         outbound_allowed_hosts=tuple(settings.outbound_allowed_hosts),
+        onprem_base_url=settings.onprem_model_base_url,
+        onprem_api_key=settings.onprem_model_api_key,
     )
 
 

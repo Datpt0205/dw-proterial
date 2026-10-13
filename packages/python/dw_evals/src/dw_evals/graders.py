@@ -42,6 +42,12 @@ class GraderContext:
     """Shared, lazily-initialized resources for graders."""
 
     repo_root: Path
+    # The model under test when the eval composition root runs a live lane
+    # (`scripts/run_evals.py --live <profile>`), outside CI. A grader that
+    # reads documents through a model uses it in place of its recorded
+    # answers; None, the smoke, replays those answers and calls no model.
+    # Typed `Any` because each context declares the port it calls.
+    live_model: Any = None
     _prompt_registry: Any = field(default=None, init=False)
 
     @property

@@ -96,6 +96,7 @@ export function order(overrides: Partial<Order> = {}): Order {
       lead_time_days: 21,
       lead_time_source: "item_standard",
       checks_run: ["read"],
+      description_reading: null,
     },
     suggested_delivery_date: "2026-10-14",
     confirmed_delivery_date: null,

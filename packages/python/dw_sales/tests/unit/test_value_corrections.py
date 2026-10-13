@@ -62,7 +62,7 @@ from dw_sales.domain.orders import (
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.1.0"
+RULES = "sales_order_rules@1.2.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -455,7 +455,7 @@ def _intake() -> OrderIntake:
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=MockInbox.load(SCOPE),
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.1.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.2.0.yaml")),
         cases=_NoCases(),
         new_case_id=uuid.uuid4,
     )

@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded readings (onprem, 2026-10-13) scored 0.711 of VI/EN golden lines with the gold code among the candidates. The replay is deterministic, so a lower score means the verification changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "min_gold_in_candidates_vi_en": 0.71
+}

@@ -60,7 +60,7 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(ROOT / "configs" / "policies" / "sales_order_rules@1.1.0.yaml")
+RULES = load_order_rules(ROOT / "configs" / "policies" / "sales_order_rules@1.2.0.yaml")
 CAPS = RULES.intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)
@@ -346,7 +346,7 @@ def test_the_document_check_raises_a_blocking_po_level_legacy_encoding() -> None
 
     assert (finding.line_no, finding.severity, finding.blocking) == (None, Severity.ERROR, True)
     assert (finding.expected, finding.actual) == ("Unicode", "TCVN3")
-    assert finding.rule_version == "sales_order_rules@1.1.0"
+    assert finding.rule_version == "sales_order_rules@1.2.0"
     assert not [
         f
         for f in check_document(_excel(_fixture(M01)), RULES)

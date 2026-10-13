@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from dw_agent_runtime.adapters.run_store import RunStatus
 from dw_agent_runtime.registry import parse_worker_file
@@ -28,10 +29,16 @@ from dw_kernel.errors import (
 from dw_kernel.pagination import PageQuery, page_request
 from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalStatus
+from dw_sales.application.model_reading import InterpretationPort
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.runs import DECIDE_SCOPES, DecisionType, subject_of
 from dw_sales.application.support import DW1_WORKER_ID, DW1_WORKER_VERSION
 from dw_sales.domain.catalog import LmeBand
+from dw_sales.domain.description_reading import (
+    ModelDescriptionLine,
+    ModelDescriptionReading,
+    SpanRead,
+)
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, KHOA, READER
 from dw_sales.evals.world import Caller, SampleSet, World, open_world
@@ -293,12 +300,39 @@ def test_dw1_offers_a_model_no_outbound_tool() -> None:
         assert level not in {"external", "critical"}, pin["name"]
 
 
-def test_dw1s_graph_takes_no_model() -> None:
-    """The graph is built from its steps alone: no gateway, no chat model,
-    so no model turn exists in a DW1 run to read a document."""
+def test_a_dw1_turn_that_reads_a_document_gets_no_tool_and_a_typed_flagged_answer() -> None:
+    """The invariant that replaced "DW1 calls no model" (dw_sales ADR 0005).
+
+    - No tool: the worker declares no toolset, and the one door to a model
+      (`InterpretationPort`) offers none: a turn that reads customer text
+      cannot reach anything (ADR 0007).
+    - The graph holds no model: a node gets its steps by injection, and the
+      step that reads a description gets the run's context handed down, so
+      the call is attributed to this run.
+    - Typed output: the answer is validated into a frozen schema that refuses
+      a key it does not declare, so the model cannot add a code or a number.
+    - Flagged: a value the model chose is marked as the model's, and a number
+      is never one (`SpanRead`).
+    """
+    definition, _ = parse_worker_file(WORKER_FILE)
+    assert definition.toolset_version is None
+    assert "tools" not in inspect.signature(InterpretationPort.interpret).parameters
+
     assert list(inspect.signature(graph.build_graph).parameters) == ["steps"]
     source = inspect.getsource(graph)
-    assert not [w for w in ("ModelGateway", "ChatModel", "chat_models", "gateway") if w in source]
+    assert not [w for w in ("ModelGateway", "ChatModel", "chat_models", "generate") if w in source]
+    assert "run" in inspect.signature(graph.Dw1Steps.process).parameters
+
+    for schema in (ModelDescriptionReading, ModelDescriptionLine):
+        assert schema.model_config.get("extra") == "forbid"
+        assert schema.model_config.get("frozen") is True
+    with pytest.raises(ValidationError):
+        ModelDescriptionLine.model_validate({"line_no": 1, "prv_code": "HW-1001"})
+
+    with pytest.raises(ValidationError, match="read by code"):
+        SpanRead(attribute="cores", span="2C", start=0, end=2, value="2", read_by="model")
+    with pytest.raises(ValidationError, match="read by code"):
+        SpanRead(attribute="colour", span="BLK", start=0, end=3, value="black", read_by="code")
 
 
 # ------------------------------------------------ withdrawal and staleness --

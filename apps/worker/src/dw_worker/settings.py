@@ -154,6 +154,25 @@ class WorkerSettings(BaseSettings):
     openai_api_key: str = Field(
         default="", validation_alias=AliasChoices("DW_WORKER_OPENAI_API_KEY", "OPENAI_API_KEY")
     )
+    # The model server the deployment runs itself (provider ``onprem``), read
+    # under the same names the API reads it, so DW1's mailbox lane and "DW xử
+    # lý" read a description on the same model.
+    onprem_model_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "DW_WORKER_ONPREM_MODEL_BASE_URL",
+            "DW_API_ONPREM_MODEL_BASE_URL",
+            "DW_ONPREM_MODEL_BASE_URL",
+        ),
+    )
+    onprem_model_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "DW_WORKER_ONPREM_MODEL_API_KEY",
+            "DW_API_ONPREM_MODEL_API_KEY",
+            "DW_ONPREM_MODEL_API_KEY",
+        ),
+    )
     # The structured-output model a chat command reads a message with. Same
     # names and defaults the API reads, mapped onto the one builder both
     # processes use (`dw_agent_runtime.adapters.model_stack`, through

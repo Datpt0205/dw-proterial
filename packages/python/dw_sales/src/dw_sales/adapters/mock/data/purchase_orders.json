@@ -1363,5 +1363,42 @@
         ]
       }
     ]
+  },
+  {
+    "message_id": "M36",
+    "name": "VLX-PO-2610-0009.xlsx",
+    "layout": "xlsx",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2610-0009",
+    "revision": 0,
+    "po_date": "2026-10-02",
+    "currency": "USD",
+    "remarks": "Mã hàng mới, mô tả theo cách kho ghi / New item numbers, described the way our store writes them",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "VX-N-0101",
+        "description": "Dây điện AWG24 lõi xoắn, đồng mạ thiếc, không chống nhiễu, màu đỏ, reel 610m",
+        "quantity": "6100",
+        "unit_price": "0.0420",
+        "requested_date": "2026-12-04"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "VX-N-0102",
+        "description": "4C AWG22 TC BRD GRY 300M RL",
+        "quantity": "3000",
+        "unit_price": "0.7120",
+        "requested_date": "2026-12-04"
+      },
+      {
+        "no": 3,
+        "customer_item_code": "VX-N-0103",
+        "description": "Cáp 2 lõi 0,5mm2 đồng mạ thiếc chống nhiễu lá nhôm màu đen, cuộn reel 300m",
+        "quantity": "3000",
+        "unit_price": "0.4850",
+        "requested_date": "2026-12-04"
+      }
+    ]
   }
 ]

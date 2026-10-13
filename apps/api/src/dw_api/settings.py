@@ -204,6 +204,17 @@ class ApiSettings(BaseSettings):
         default="json_schema",
         validation_alias=AliasChoices("DW_API_OPENAI_STRUCTURED_MODE"),
     )
+    # A model server this deployment runs itself (provider ``onprem``): the
+    # `onprem` profile's routes, which DW1's document readings run on. Unset
+    # means no such server; a step that needs it degrades to a person.
+    onprem_model_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DW_API_ONPREM_MODEL_BASE_URL", "DW_ONPREM_MODEL_BASE_URL"),
+    )
+    onprem_model_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DW_API_ONPREM_MODEL_API_KEY", "DW_ONPREM_MODEL_API_KEY"),
+    )
     # Responses-API strict structured output. On by default because /responses
     # validates the schema either way: a Pydantic model with a defaulted field
     # omits it from `required`, and the endpoint answers 400. `strict` is what

@@ -40,6 +40,7 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
+from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError, DomainError, DWError, PermissionDeniedError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
@@ -103,14 +104,15 @@ class CaseDecisions:
     # ------------------------------------------------------- DW xử lý --
 
     async def process(
-        self, context: AccessContext, message_id: str | None
+        self, context: AccessContext, message_id: str | None, *, run: RunContext
     ) -> list[dict[str, str | None]]:
         """One message, or every one still without a disposition. What the
-        run keeps of it: the disposition and the case, by id."""
+        run keeps of it: the disposition and the case, by id. A model call
+        the processing makes is attributed to ``run`` (dw_sales ADR 0005)."""
         views = (
-            [await self.inbox.process(context, message_id)]
+            [await self.inbox.process(context, message_id, run=run)]
             if message_id is not None
-            else await self.inbox.process_all(context)
+            else await self.inbox.process_all(context, run=run)
         )
         return [
             {

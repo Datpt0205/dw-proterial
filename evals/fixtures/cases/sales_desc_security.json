@@ -1,0 +1,6 @@
+{
+  "golden_ref": "evals/fixtures/cases/sales_descriptions_golden.json",
+  "security_ref": "evals/fixtures/cases/sales_descriptions_security.json",
+  "recorded_ref": "evals/fixtures/cases/sales_descriptions_recorded.json",
+  "neighbour": "vi13"
+}

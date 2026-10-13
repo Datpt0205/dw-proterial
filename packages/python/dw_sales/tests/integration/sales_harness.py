@@ -143,7 +143,7 @@ async def run_mailbox(
         catalog=MockSalesCatalog.load(scope),
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.1.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.2.0.yaml")),
         # Duplicates and revisions are recognised against the cases as stored.
         cases=SqlOrderCaseLookup(sessions),
         new_case_id=uuid.uuid4,

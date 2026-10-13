@@ -274,6 +274,9 @@ async def test_a_line_without_its_check_basis_or_with_a_stranger_key_is_refused(
         "check_basis - 'checks_run'",
         "jsonb_set(check_basis, '{checks_run}', '[]')",
         'check_basis || \'{"current_price": "0.70"}\'',
+        # Ticket 28: a model reading is stamped as an object (or null), never
+        # as a bare word a later reader would have to interpret.
+        'check_basis || \'{"description_reading": "read"}\'',
     ):
         refused = await _refused(
             app_sessions, small_run.scope, target.format(basis=basis), id=case.case_id

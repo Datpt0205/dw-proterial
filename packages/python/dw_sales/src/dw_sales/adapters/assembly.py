@@ -9,7 +9,14 @@ process already built (sessions, the platform's ports, the runtime) and calls
 `build_dw1`.
 
 DW1's master data and mailbox are fictional mocks bound to one (tenant,
-workspace), ``scope``; every other scope reads them empty.
+workspace), ``scope``; every other scope reads them empty. So is that
+tenant's own version of the order rules, where the sample set holds one
+(`adapters/mock/data/policies`): every other tenant reads the platform's.
+
+Given ``model``, the gateway of a process with a model server for DW1's
+profile, DW1 reads the descriptions its own vocabulary does not through it,
+for a tenant whose rules turn that on (dw_sales ADR 0005). Without one, no
+model is called at all.
 """
 
 from __future__ import annotations
@@ -21,12 +28,14 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
-from dw_agent_runtime.ports import WorkflowRunnerPort
+from dw_agent_runtime.ports import ModelGateway, WorkflowRunnerPort
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry, parse_worker_file
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
-from dw_sales.adapters.order_rules import PlatformOrderRules
+from dw_sales.adapters.mock.fixtures import DATA_DIR
+from dw_sales.adapters.model_interpretation import GatewayInterpretation
+from dw_sales.adapters.order_rules import TenantOrderRules, load_tenant_order_rules
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.uow import AuditFactory, SqlSalesUnitOfWorkFactory
@@ -37,6 +46,7 @@ from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.access import SalesAuthorizationPort
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
+from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import (
     ArtifactBytesPort,
@@ -48,6 +58,7 @@ from dw_sales.application.ports import (
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.telemetry import SpanPort
+from dw_sales.domain.order_checks import OrderRules
 from dw_sales.workflows.graph import register
 
 
@@ -93,6 +104,7 @@ def build_dw1(
     runtime: Dw1Runtime,
     telemetry: SpanPort,
     lane_access: ServiceAccessPort | None = None,
+    model: ModelGateway | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
@@ -113,16 +125,21 @@ def build_dw1(
         rules=policies.quote_rules,
         pricing=policies.pricing,
     )
+    worker_file = configs / "workers" / "sales.yaml"
+    worker, _ = parse_worker_file(worker_file)
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(policies.order_rules),
+        rules=demo_order_rules(policies.order_rules, scope, DATA_DIR / "policies"),
         cases=SqlOrderCaseLookup(session_factory),
         new_case_id=ids.new_uuid,
+        descriptions=(
+            None
+            if model is None
+            else DescriptionReader(GatewayInterpretation(model, worker.default_model_profile))
+        ),
     )
-    worker_file = configs / "workers" / "sales.yaml"
-    worker, _ = parse_worker_file(worker_file)
     runs = RuntimeDw1Runs(
         runtime.runner,
         runtime.approval_flow,
@@ -167,3 +184,10 @@ def build_dw1(
         else InboxLane(uow, inbox, assembly.services.dw1, lane_access, clock, ids)
     )
     return Dw1Mount(services=assembly.services, lane=lane)
+
+
+def demo_order_rules(platform: OrderRules, scope: SalesScope, tenant_dir: Path) -> TenantOrderRules:
+    """The platform's order rules, with the demo tenant's own version where
+    the sample set holds one (`TenantOrderRules`)."""
+    own = load_tenant_order_rules(tenant_dir)
+    return TenantOrderRules(platform, {} if own is None else {scope.tenant_id.value: own})

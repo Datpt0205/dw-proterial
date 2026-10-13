@@ -10,28 +10,36 @@ import pytest
 from pydantic import ValidationError
 
 from dw_kernel.ids import TenantId, WorkspaceId
-from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
+from dw_sales.adapters.mock.fixtures import DATA_DIR
+from dw_sales.adapters.order_rules import (
+    PlatformOrderRules,
+    TenantOrderRules,
+    load_order_rules,
+    load_tenant_order_rules,
+)
 from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import SalesScope
 
 pytestmark = pytest.mark.unit
 
 SHIPPED = (
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / ("sales_order_rules@1.1.0.yaml")
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / ("sales_order_rules@1.2.0.yaml")
 )
+
+MOCK_POLICIES = DATA_DIR / "policies"
 
 
 def test_the_shipped_policy_loads() -> None:
     rules = load_order_rules(SHIPPED)
 
-    assert rules.version == "sales_order_rules@1.1.0"
+    assert rules.version == "sales_order_rules@1.2.0"
 
 
 def test_a_file_named_for_another_version_is_refused(tmp_path: Path) -> None:
-    renamed = tmp_path / "sales_order_rules@1.1.1.yaml"
+    renamed = tmp_path / "sales_order_rules@1.2.1.yaml"
     shutil.copy(SHIPPED, renamed)
 
-    with pytest.raises(ValueError, match=r"holds sales_order_rules@1\.1\.0"):
+    with pytest.raises(ValueError, match=r"holds sales_order_rules@1\.2\.0"):
         load_order_rules(renamed)
 
 
@@ -51,3 +59,41 @@ async def test_every_tenant_gets_the_platform_rules_until_it_has_its_own() -> No
     for tenant in (1, 2):
         scope = SalesScope(TenantId(uuid.UUID(int=tenant)), WorkspaceId(uuid.UUID(int=9)))
         assert await port.rules(scope) is rules
+
+
+async def test_a_tenants_own_rules_never_reach_another_tenant() -> None:
+    """The demo tenant's version (model assist on) is its own: another tenant
+    reads the platform's, with the step off, never the demo tenant's."""
+    platform = load_order_rules(SHIPPED)
+    own = load_tenant_order_rules(MOCK_POLICIES)
+    assert own is not None
+    alpha = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=9)))
+    beta = SalesScope(TenantId(uuid.UUID(int=2)), WorkspaceId(uuid.UUID(int=9)))
+    port: OrderRulesPort = TenantOrderRules(platform, {alpha.tenant_id.value: own})
+
+    assert (await port.rules(alpha)).model_assist.description_attributes
+    beta_rules = await port.rules(beta)
+    assert beta_rules is platform
+    assert not beta_rules.model_assist.description_attributes
+
+
+def test_a_tenant_version_under_the_platforms_number_is_refused() -> None:
+    platform = load_order_rules(SHIPPED)
+    same_number = platform.model_copy(
+        update={
+            "model_assist": platform.model_assist.model_copy(
+                update={"description_attributes": True}
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="number of its own"):
+        TenantOrderRules(platform, {uuid.UUID(int=1): same_number})
+
+
+def test_a_policy_without_the_model_assist_switch_is_refused(tmp_path: Path) -> None:
+    broken = tmp_path / SHIPPED.name
+    text = SHIPPED.read_text(encoding="utf-8")
+    broken.write_text(text.replace("  description_attributes: false\n", ""), encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="model_assist"):
+        load_order_rules(broken)

@@ -45,6 +45,7 @@ from dw_sales.domain.catalog import (
     fiscal_year,
     month_key,
 )
+from dw_sales.domain.descriptions import read_description
 from dw_sales.domain.messages import InboundMessage
 
 pytestmark = pytest.mark.unit
@@ -53,7 +54,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.1.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.2.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -221,10 +222,13 @@ async def _resolve(
     stated: StatedAttributes | None,
     *,
     typed_legacy: bool = False,
+    verbatim: str | None = None,
 ) -> Item | str:
     """The item a line names, or the finding code that says why it names none.
 
     A description typed in a legacy font is matched on nothing (ticket 20).
+    A verbatim description in words DW1's vocabulary does not read matches
+    nothing either: what a model makes of it is ticket 28's, not this table's.
     """
     entry = (await catalog.convert_entry(SCOPE, customer.code, code)).data
     if entry is not None:
@@ -233,6 +237,9 @@ async def _resolve(
         assert stated is None or _states(stated, item), f"{code} describes another item"
         return item
     if typed_legacy:
+        return "code_unmapped"
+    if stated is None and verbatim is not None:
+        assert read_description(verbatim) is None, f"{code}: DW1's vocabulary reads it"
         return "code_unmapped"
     assert stated is not None, f"{code} has no convert entry and states nothing"
     candidates = [item for item in (await catalog.items(SCOPE)).data if _states(stated, item)]
@@ -447,6 +454,7 @@ async def _order_outcome(
             line.customer_item_code,
             line.attributes,
             typed_legacy=line.no in po.legacy_font_lines,
+            verbatim=line.description,
         )
         if isinstance(item, str):
             findings.add((item, line.no))

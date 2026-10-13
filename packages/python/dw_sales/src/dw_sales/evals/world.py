@@ -48,9 +48,9 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
+from dw_sales.adapters.assembly import demo_order_rules
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
-from dw_sales.adapters.order_rules import PlatformOrderRules
 from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies
 from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
@@ -68,6 +68,7 @@ from dw_sales.application.case_store import (
     Stored,
     WorkerState,
 )
+from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService
@@ -624,11 +625,18 @@ def open_world(
     bound_to: SalesScope = ALPHA,
     allowance: RunAllowancePort | None = None,
     telemetry: TelemetryPort | None = None,
+    model: InterpretationPort | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
     names a plan's limits, and spans go nowhere unless ``telemetry`` takes
-    them (the runtime's and Sales' alike)."""
+    them (the runtime's and Sales' alike). The bound tenant checks its orders
+    under its own rules where the sample set holds them (``policies/``).
+
+    ``model`` is what reads a description DW1's vocabulary does not (dw_sales
+    ADR 0005): a recorded or scripted one in the smoke, the local model in the
+    live lane. None, as in a process with no model server: no model is called
+    at all."""
     telemetry = telemetry or NullTelemetry()
     policies = load_sales_policies(
         repo_root / "configs" / "policies", repo_root / "configs" / "copy"
@@ -652,9 +660,10 @@ def open_world(
         catalog=catalog,
         inbox=inbox,
         reader=mock_po_readers(),
-        rules=PlatformOrderRules(policies.order_rules),
+        rules=demo_order_rules(policies.order_rules, bound_to, sample.data_dir / "policies"),
         cases=store,
         new_case_id=ids.new_uuid,
+        descriptions=None if model is None else DescriptionReader(model),
     )
     directory = Directory(tuple(callers))
     notifications = Notifications()

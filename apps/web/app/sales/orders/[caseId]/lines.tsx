@@ -23,7 +23,7 @@ import { basisStatement } from "../../_lib/statements";
 import { useAction } from "../../_lib/use-action";
 import { GuardedButton } from "../../_components/guarded-button";
 import { Money, Quantity } from "../../_components/money";
-import { MappingTag, ValueStateTag } from "../../_components/tags";
+import { MappingTag, ReadByTag, ValueStateTag } from "../../_components/tags";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Line = SalesSchemas["OrderLineView"];
@@ -192,6 +192,9 @@ export function LinesTable({
                   </Typography.Text>
                 ) : null}
                 <MappingTag status={line.mapping.status} />
+                {line.basis.description_reading?.outcome === "read" ? (
+                  <ReadByTag by="model" />
+                ) : null}
                 {line.mapping.confirmed_by ? (
                   <Typography.Text>
                     {name(line.mapping.confirmed_by)}

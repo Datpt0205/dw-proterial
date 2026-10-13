@@ -3,10 +3,27 @@
 Status: proposal, 2026-10-12. Đạt decides (tickets 28-33 are
 `needs-triage`).
 
-Today DW1 calls no model. Reading, mapping, checks, files and emails are
-deterministic code, and anything unusual is routed to a person. This file
-lists the steps where a local model should take over part of that work, in
-the order to build them, and what stays with people.
+Until 2026-10-13 DW1 called no model. Reading, mapping, checks, files and
+emails are deterministic code, and anything unusual is routed to a person.
+This file lists the steps where a local model should take over part of that
+work, in the order to build them, and what stays with people.
+
+**Built (2026-10-13, Đạt away, on his pre-authorisation):** the shared
+prerequisites below ("Before any model step") and ticket 28 (O2 only). The
+rules are now dw_sales ADR 0005 (Proposed). Measured on the local
+Qwen3.5-9B (thinking off, GTX 1080 Max-Q):
+
+- Golden set (67 lines): the gold code is among the candidates for 71.1% of
+  VI/EN lines (VI 65.2%, EN 77.3%) and 50.0% of JA, against a proposed bar of
+  80%. 28.9% of VI/EN lines go to a person.
+- 0 wrong single candidates, 0 numbers from the model, 0 injection effects,
+  3 of 3 missing-evidence lines unmapped.
+- About 77 s per 10-line call (p95 94 s), about 7.7 s per line.
+- Live portal flow: the whole mailbox processed in 57.5 s, M36 lines 1 and 3
+  suggested correctly and confirmed through the API.
+
+Detail, the run-by-run table and the decisions taken: ticket 28's "As built"
+and Comments. Next: ticket 29.
 
 ## The rule every candidate follows
 
@@ -96,8 +113,18 @@ removing them; shadow measurement only).
     - `configs/prompts/sales/` and a regenerated manifest;
     - a live eval lane outside CI on the local model, recording accuracy
       and latency per document on GPU and on CPU.
-5. Tickets **28**, then **29** (it uses 28 for item lines), then **30**,
-   **31**, **32**, **33**.
+
+    **Done 2026-10-13** (with ticket 28), with these differences:
+    - The `openai_compatible` adapter now switches thinking off per route
+      (`reasoning_effort: none`), so no server default is needed.
+    - The local server is its own provider (`onprem`), apart from the gateway.
+    - `max_input_tokens` is not declared, because nothing reads it; code
+      bounds each call instead (10 lines). The context-overflow item stays
+      open for that reason.
+    - Latency was measured on GPU only, not on CPU.
+
+5. Tickets **28** (done 2026-10-13), then **29** (it uses 28 for item
+   lines), then **30**, **31**, **32**, **33**.
 
 Each ticket ships with its switch off for every tenant. A tenant turns one
 on through an approved version of its own rules (ticket 19) once that

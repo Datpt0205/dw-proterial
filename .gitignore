@@ -50,6 +50,7 @@ Thumbs.db
 # Runtime artifacts
 *.log
 evals/reports/*.json
+evals/reports/live-*/
 !evals/reports/.gitkeep
 release-manifest.local.json
 

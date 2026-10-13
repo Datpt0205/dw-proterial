@@ -26,6 +26,7 @@ import { ActionError } from "../../_lib/errors";
 import { label, MAPPING_STATUS } from "../../_lib/labels";
 import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
+import { DescriptionReadingPanel } from "./description-reading";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Line = SalesSchemas["OrderLineView"];
@@ -58,10 +59,12 @@ function fit(fits: boolean | null) {
  * The candidate picker (G13): the PO line beside each candidate item, one
  * attribute per row, PO value | item value | khớp/lệch. Only the attributes the
  * PO states as its own fields are compared here (unit, quantity against MOQ
- * and pack); the cable attributes stay in the PO's description, shown above,
- * because the API does not send what DW1 read from it, and a second reader in
- * the browser would be a second answer. DW1 checks the line again against the
- * code Sales confirms, and any finding it raises lands on the case.
+ * and pack); the cable attributes stay in the PO's description, shown above:
+ * a second reader in the browser would be a second answer. Where a local
+ * model read the description (ticket 28), what it read is shown with the text
+ * each attribute came from and who read it (`DescriptionReadingPanel`). DW1
+ * checks the line again against the code Sales confirms, and any finding it
+ * raises lands on the case.
  */
 export function CandidatePicker({
   order,
@@ -150,6 +153,7 @@ export function CandidatePicker({
         <Typography.Text>
           Trạng thái mã: {label(MAPPING_STATUS, line.mapping.status)}
         </Typography.Text>
+        <DescriptionReadingPanel reading={line.basis.description_reading} />
         {typing ? (
           <Form layout="vertical">
             <Form.Item

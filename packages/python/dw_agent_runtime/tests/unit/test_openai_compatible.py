@@ -75,3 +75,21 @@ def test_json_object_is_extracted_from_fenced_text() -> None:
 def test_non_object_json_is_rejected() -> None:
     with pytest.raises(ValueError, match="non-object"):
         _extract_json_object("[1, 2]")
+
+
+def test_thinking_is_switched_off_only_when_the_route_says_so() -> None:
+    """A local thinking model answers a one-line extraction in minutes with
+    thinking on; the route's ``reasoning_effort: none`` is what turns it off,
+    and a route that says nothing sends nothing (the server's default)."""
+    off = _build_request_body(
+        _prompt(),
+        SCHEMA,
+        _route(provider="onprem", model="qwen3.5-9b-dw", reasoning_effort="none"),
+        structured_mode="json_schema",
+        max_output_tokens=None,
+    )
+    assert off["reasoning_effort"] == "none"
+    unset = _build_request_body(
+        _prompt(), SCHEMA, _route(), structured_mode="json_schema", max_output_tokens=None
+    )
+    assert "reasoning_effort" not in unset

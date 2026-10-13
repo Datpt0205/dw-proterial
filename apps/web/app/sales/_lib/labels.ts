@@ -179,6 +179,39 @@ export const GLOSSARY_LISTS = {
 
 // ------------------------------------------------- the screen's own words --
 
+/** Who read a value of a model reading of a description (ticket 28). */
+export const READ_BY = {
+  code: "DW1 tính từ chữ",
+  model: "Mô hình đọc, cần kiểm",
+} as const;
+
+/** The attributes a description reading names (`description_reading.py`). */
+export const READ_ATTRIBUTE = {
+  family: "Họ cáp",
+  stranding: "Kiểu lõi",
+  conductor: "Ruột dẫn",
+  shield: "Chống nhiễu",
+  colour: "Màu",
+  packaging: "Đóng gói",
+  cores: "Số lõi",
+  gauge: "Tiết diện",
+  pack_length_m: "Chiều dài mỗi cuộn (m)",
+  spec_no: "Số spec",
+} as const;
+
+/** Why DW1 did not take a model's reading (`NotUnderstood`). */
+export const READING_REASON = {
+  line_missing: "mô hình bỏ qua dòng này",
+  no_attribute: "mô tả không nêu thuộc tính nào",
+  span_not_found: "chữ mô hình chỉ ra không có trong mô tả",
+  span_repeated: "chữ mô hình chỉ ra xuất hiện hơn một lần",
+  spans_overlap: "hai thuộc tính được đọc từ cùng một chữ",
+  value_unparsed: "DW1 không đọc được giá trị từ chữ đó",
+  text_uncovered: "còn chữ không thuộc thuộc tính nào",
+  digit_in_label: "nhãn chứa con số",
+  value_refused: "giá trị không có mặt hàng nào mang",
+} as const;
+
 /** The next step a work item names (`WorkItem.action`, `_ORDER_NEXT`). */
 export const ACTION = {
   self_check: "Tự kiểm và quyết định từng cờ",

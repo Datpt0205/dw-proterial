@@ -137,6 +137,11 @@ def _build_request_body(
         body["response_format"] = response_format
     if route.temperature is not None:
         body["temperature"] = route.temperature
+    if route.reasoning_effort is not None:
+        # Chat-completions' own key. "none" is how a local server (Ollama,
+        # vLLM with a Qwen3 template) is told not to think; left unset, the
+        # server's default applies, which for a thinking model is to think.
+        body["reasoning_effort"] = route.reasoning_effort
     if max_output_tokens:
         reasoning_family = route.model.startswith(("gpt-5", "o1", "o3", "o4"))
         body["max_completion_tokens" if reasoning_family else "max_tokens"] = max_output_tokens

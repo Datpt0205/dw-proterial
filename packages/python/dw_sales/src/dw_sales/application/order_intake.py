@@ -7,9 +7,8 @@ quote request or a Design reply is handed to the quotation flow, which gives
 it its disposition (ticket 03); `IntakeOutcome.disposition` is then None and
 the outcome says so.
 
-**Code rules, not a model.** The spec keeps every model away from real
-customer documents in this slice, so routing is keywords over the subject and
-the attachment names, then the body. Keywords miss any phrasing nobody listed;
+**Code rules, not a model, for routing.** Routing is keywords over the
+subject and the attachment names, then the body. Keywords miss any phrasing nobody listed;
 what keeps that safe is where a miss lands: routed to Sales as ``other``. No
 keyword sets a value.
 
@@ -33,7 +32,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 
+from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
+from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (
     OrderCaseLookupPort,
     OrderRulesPort,
@@ -41,7 +42,7 @@ from dw_sales.application.order_ports import (
 )
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.support import decided
-from dw_sales.domain.catalog import Customer, LmeMonth, customers_named
+from dw_sales.domain.catalog import Customer, Item, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
     CaseKind,
@@ -62,6 +63,7 @@ from dw_sales.domain.order_checks import (
     check_line,
     current_quotation,
     map_line,
+    wants_reading,
 )
 from dw_sales.domain.orders import (
     Actor,
@@ -142,15 +144,22 @@ class OrderIntake:
     rules: OrderRulesPort
     cases: OrderCaseLookupPort
     new_case_id: Callable[[], uuid.UUID]
+    # A model reading of the descriptions DW1's vocabulary does not read
+    # (dw_sales ADR 0005), for a tenant whose rules turn it on. None: no model
+    # is wired in this process, and those lines stay unmapped as before.
+    descriptions: DescriptionReader | None = None
 
     async def classify(self, scope: SalesScope, message: InboundMessage) -> MessageKind:
         return self._kind(message, await self._attachments(scope, message))
 
-    async def process(self, scope: SalesScope, message: InboundMessage) -> IntakeOutcome:
+    async def process(
+        self, scope: SalesScope, message: InboundMessage, *, run: RunContext | None = None
+    ) -> IntakeOutcome:
         """The message's disposition, and the order case it created or revised.
 
         Refused with a conflict when this message already has a case: that is
-        processing twice, not a duplicate PO.
+        processing twice, not a duplicate PO. ``run`` is the DW1 run doing the
+        processing: a model call is made only inside one, attributed to it.
         """
         attached = await self._attachments(scope, message)
         kind = self._kind(message, attached)
@@ -159,7 +168,7 @@ class OrderIntake:
         sender = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
         if kind is MessageKind.OTHER:
             return self._routed(message, kind, _other_reason(message), sender)
-        return await self._order(scope, message, kind, sender, attached)
+        return await self._order(scope, message, kind, sender, attached, run)
 
     # ------------------------------------------------------------ orders --
 
@@ -170,6 +179,7 @@ class OrderIntake:
         kind: MessageKind,
         sender: Customer | None,
         attached: Sequence[_Attached],
+        run: RunContext | None,
     ) -> IntakeOutcome:
         rules = await self.rules.rules(scope)
         caps = rules.intake
@@ -226,7 +236,9 @@ class OrderIntake:
                 customer,
                 f"more than one attachment reads as a PO: {ids}",
             )
-        return await self._case(scope, message, kind, customer, attributed, documents[0], rules)
+        return await self._case(
+            scope, message, kind, customer, attributed, documents[0], rules, run
+        )
 
     async def _case(
         self,
@@ -237,6 +249,7 @@ class OrderIntake:
         attributed: bool,
         document: PoDocument,
         rules: OrderRules,
+        run: RunContext | None,
     ) -> IntakeOutcome:
         header = document.header
         earlier = await self.cases.cases_for_po(scope, customer.code, header.po_no)
@@ -254,13 +267,20 @@ class OrderIntake:
         items = await self.catalog.items(scope)
         lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
         as_of: list[datetime] = [items.as_of, lme.as_of]
-        checks: list[LineCheck] = []
+        mapped_lines: list[tuple[PoLine, MappedLine]] = []
+        unread: list[PoLine] = []
         for po_line in document.lines:
             entry = await self.catalog.convert_entry(
                 scope, customer.code, po_line.customer_item_code
             )
             as_of.append(entry.as_of)
-            mapped = map_line(po_line, entry=entry.data, items=items.data)
+            mapped_lines.append((po_line, map_line(po_line, entry=entry.data, items=items.data)))
+            if wants_reading(po_line, entry=entry.data):
+                unread.append(po_line)
+        read = await self._read(unread, items.data, rules, run)
+        checks: list[LineCheck] = []
+        for po_line, by_code in mapped_lines:
+            mapped = read.get(po_line.line_no, by_code)
             check, quoted_as_of = await self._check_line(
                 scope, customer.code, header, message.received_at, po_line, mapped, lme.data, rules
             )
@@ -364,7 +384,10 @@ class OrderIntake:
             )
         header = case.effective_header
         lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
-        mapped = MappedLine(line.mapping, item, line.basis.convert_prv_code)
+        # The reading the candidates came from stays the line's evidence.
+        mapped = MappedLine(
+            line.mapping, item, line.basis.convert_prv_code, line.basis.description_reading
+        )
         recheck, _ = await self._check_line(
             scope,
             case.customer_code,
@@ -432,6 +455,23 @@ class OrderIntake:
         recheck = Recheck(tuple(checks), tuple(po_findings), po_codes)
         return decided(lambda: case.correct_value(finding_key, correction, actor, recheck))
 
+    async def _read(
+        self,
+        lines: Sequence[PoLine],
+        items: Sequence[Item],
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> dict[int, MappedLine]:
+        """The lines a model read (dw_sales ADR 0005), by line number: only
+        where the tenant's rules turn it on, a model is wired, and a DW1 run
+        is doing the processing. Otherwise none, and every line keeps the
+        mapping code gave it."""
+        if not lines or not rules.model_assist.description_attributes:
+            return {}
+        if self.descriptions is None or run is None:
+            return {}
+        return await self.descriptions.read(lines, items, run=run)
+
     async def _case_rules(
         self, scope: SalesScope, case: OrderCase, details: dict[str, object]
     ) -> OrderRules:
@@ -464,7 +504,9 @@ class OrderIntake:
                 "the item the line was checked against is no longer in the item master",
                 details={"line": line.line_no},
             )
-        return MappedLine(line.mapping, item, line.basis.convert_prv_code)
+        return MappedLine(
+            line.mapping, item, line.basis.convert_prv_code, line.basis.description_reading
+        )
 
     async def _customer_findings(
         self, scope: SalesScope, case: OrderCase, po_date: date, rules: OrderRules
