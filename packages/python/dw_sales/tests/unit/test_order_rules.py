@@ -10,20 +10,21 @@ import pytest
 from pydantic import ValidationError
 
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.order_rules import (
     PlatformOrderRules,
-    TenantOrderRules,
     load_order_rules,
     load_tenant_order_rules,
 )
 from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.rules import RuleBookOrderRules
 
 pytestmark = pytest.mark.unit
 
 SHIPPED = (
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / ("sales_order_rules@1.4.0.yaml")
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / ("sales_order_rules@1.5.0.yaml")
 )
 
 MOCK_POLICIES = DATA_DIR / "policies"
@@ -32,14 +33,14 @@ MOCK_POLICIES = DATA_DIR / "policies"
 def test_the_shipped_policy_loads() -> None:
     rules = load_order_rules(SHIPPED)
 
-    assert rules.version == "sales_order_rules@1.4.0"
+    assert rules.version == "sales_order_rules@1.5.0"
 
 
 def test_a_file_named_for_another_version_is_refused(tmp_path: Path) -> None:
     renamed = tmp_path / "sales_order_rules@1.2.1.yaml"
     shutil.copy(SHIPPED, renamed)
 
-    with pytest.raises(ValueError, match=r"holds sales_order_rules@1\.4\.0"):
+    with pytest.raises(ValueError, match=r"holds sales_order_rules@1\.5\.0"):
         load_order_rules(renamed)
 
 
@@ -69,25 +70,12 @@ async def test_a_tenants_own_rules_never_reach_another_tenant() -> None:
     assert own is not None
     alpha = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=9)))
     beta = SalesScope(TenantId(uuid.UUID(int=2)), WorkspaceId(uuid.UUID(int=9)))
-    port: OrderRulesPort = TenantOrderRules(platform, {alpha.tenant_id.value: own})
+    port: OrderRulesPort = RuleBookOrderRules(static_rule_book(platform, alpha, own))
 
     assert (await port.rules(alpha)).model_assist.description_attributes
     beta_rules = await port.rules(beta)
     assert beta_rules is platform
     assert not beta_rules.model_assist.description_attributes
-
-
-def test_a_tenant_version_under_the_platforms_number_is_refused() -> None:
-    platform = load_order_rules(SHIPPED)
-    same_number = platform.model_copy(
-        update={
-            "model_assist": platform.model_assist.model_copy(
-                update={"description_attributes": True}
-            )
-        }
-    )
-    with pytest.raises(ValueError, match="number of its own"):
-        TenantOrderRules(platform, {uuid.UUID(int=1): same_number})
 
 
 def test_a_policy_without_the_model_assist_switch_is_refused(tmp_path: Path) -> None:

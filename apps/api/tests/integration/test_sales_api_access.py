@@ -26,6 +26,9 @@ _PARAMS = {
     "finding_key": "price_mismatch:2",
     "line_no": "1",
     "message_id": "M01",
+    # A tenant's own rule versions (ticket 19).
+    "key": "sales_order_rules",
+    "version_id": str(uuid.uuid4()),
 }
 
 

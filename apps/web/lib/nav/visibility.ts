@@ -9,6 +9,7 @@ import {
 /** What the menu knows about the person looking at it. */
 export interface NavViewer {
   isPlatformOperator: boolean;
+  isSupportStaff: boolean;
   hasScope: (scope: string) => boolean;
   roles: readonly string[];
 }
@@ -22,6 +23,7 @@ export interface NavViewer {
  */
 export function isNavItemVisible(item: NavItem, viewer: NavViewer): boolean {
   if (item.operatorOnly && !viewer.isPlatformOperator) return false;
+  if (item.supportStaffOnly && !viewer.isSupportStaff) return false;
   if (item.scope && !viewer.hasScope(item.scope)) return false;
   if (item.anyScope !== undefined) {
     // An empty list asks for nothing and would show to everyone: refuse it.

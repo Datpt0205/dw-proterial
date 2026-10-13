@@ -65,6 +65,7 @@ from dw_sales.domain.orders import (
     OrderCase,
     OrderLine,
     PoLineAnchors,
+    PrintCopy,
     ValueCorrection,
 )
 from dw_sales.domain.quotes import (
@@ -433,9 +434,11 @@ class OrderLineView(BaseModel):
     uom: str
     unit_price: Amount
     amount: Amount
-    requested_date: date
+    # None: printed blank, "date to follow" (`requested_date_missing`).
+    requested_date: date | None
     # Earliest first; a line with one quantity and one date is a list of one,
-    # and `printed_schedules` says whether the PO prints them apart.
+    # a line printed with no date has none, and `printed_schedules` says
+    # whether the PO prints them apart.
     schedules: list[DeliveryScheduleView]
     printed_schedules: bool
     anchors: dict[str, SourceAnchor]
@@ -544,7 +547,7 @@ def order_line(case: OrderCase, line: OrderLine, prices: PriceView) -> OrderLine
             for s in line.effective.schedules
         ],
         printed_schedules=po.prints_schedules,
-        anchors=dict(po.anchors),
+        anchors=_seen_anchors(po.anchors, prices),
         flags=list(po.flags),
         corrections=_corrections(line.corrections, prices),
         value_states=_line_states(case, line),
@@ -650,6 +653,8 @@ class OrderCaseView(BaseModel):
     # The first value read from text typed in a TCVN3 or VNI font, which
     # `legacy_encoding` opens the source at; None when there is none.
     legacy_text_anchor: SourceAnchor | None
+    # The PDF print attached beside the workbook (ticket 34); None: none was.
+    print_copy: PrintCopyView | None
     coverage: CoverageView
     lines: list[OrderLineView]
     findings: list[OrderFindingView]
@@ -769,6 +774,45 @@ def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummar
     )
 
 
+class PrintDifferenceView(BaseModel):
+    """A value the PDF print shows differently, and where it shows it."""
+
+    model_config = _VIEW
+
+    line_no: int | None
+    field: str
+    anchor: SourceAnchor
+
+
+class PrintCopyView(BaseModel):
+    model_config = _VIEW
+
+    attachment_id: str
+    differences: list[PrintDifferenceView]
+
+
+def _seen_anchors(
+    anchors: Iterable[tuple[str, SourceAnchor]], prices: PriceView
+) -> dict[str, SourceAnchor]:
+    """Where each value was read. A PDF anchor quotes the printed words, so a
+    price's anchor shows the price: a viewer who may not see amounts gets
+    none for one (spec decision 8), and could not open the source anyway."""
+    return {field: a for field, a in anchors if prices.amounts or field not in AMOUNT_FIELDS}
+
+
+def _print_copy(copy: PrintCopy | None, prices: PriceView) -> PrintCopyView | None:
+    if copy is None:
+        return None
+    return PrintCopyView(
+        attachment_id=copy.attachment_id,
+        differences=[
+            PrintDifferenceView(line_no=d.line_no, field=d.field, anchor=d.anchor)
+            for d in copy.differences
+            if prices.amounts or d.field not in AMOUNT_FIELDS
+        ],
+    )
+
+
 def order_case(
     case: OrderCase,
     *,
@@ -803,8 +847,9 @@ def order_case(
         buyer=document.buyer,
         buyer_anchor=document.buyer_anchor,
         total=_amount(total.amount, prices.amounts) if total else None,
-        total_anchor=total.anchor if total else None,
+        total_anchor=total.anchor if total and prices.amounts else None,
         legacy_text_anchor=legacy[0] if (legacy := document.first_legacy_text()) else None,
+        print_copy=_print_copy(document.print_copy, prices),
         coverage=CoverageView(
             lines_printed=coverage.lines_printed,
             lines_read=coverage.lines_read,

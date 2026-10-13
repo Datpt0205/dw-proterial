@@ -1,6 +1,6 @@
 # 23 — No price, name or mail text reaches a span, log or error (G32)
 
-Status: built (2026-10-12), review interrupted: its adversarial review still owed
+Status: done (built 2026-10-12, reviewed and closed 2026-10-13)
 Blocked by: —
 Category: enhancement
 
@@ -126,3 +126,71 @@ and there is no attribute allowlist for Sales components.
    non-`DWError` exception whose text holds document content (a parser's,
    say) would reach both. Narrowing what a span records of an exception is a
    platform decision.
+
+### Review (2026-10-13)
+
+The adversarial review cut off on 2026-10-12, done against the tree after
+tickets 28–33, which made DW1 call a model (dw_sales ADR 0005) and so
+outdated the comment above that "DW1 calls no model".
+
+Findings, each fixed:
+
+1. **Acceptance 2 was tested at the recorder, not through a Sales model
+   step.** The third test fed `TelemetryUsageRecorder` a request by hand, and
+   the end-to-end test asserted `dw.model.call` was absent. New:
+   `test_a_model_reading_for_sales_exports_no_prompt_or_answer`, twice
+   (answered; an answer outside the schema). M36 is processed through the
+   route with ticket 28's description reading on the real
+   `RoutingModelGateway` (`onprem` profile, the real prompt registry), behind
+   `GatewayInterpretation` as the API wires it, its usage recorded to the
+   exported telemetry. The descriptions are shown to be in the rendered
+   prompt, `dw.model.call` is shown to be exported, and then no description,
+   no 12-character window of one, and no span text the model answered with
+   is in any span or log record.
+2. **Every span exported the text of any exception that crossed it.**
+   `OtelTelemetry._span` set the status to `str(exc)` and called
+   `record_exception`; and, measured on the pinned SDK, `start_as_current_span`
+   records the exception a second time on its own (message and stack trace,
+   which quotes every chained cause). A parser's or a validator's message, or
+   a `KeyError` on a description, would have reached the collector and
+   Langfuse from `dw.run.start`. Now a span records the exception's type and,
+   for a `DWError`, its message (safe to log by contract), nothing else; the
+   SDK's own recording is off. Stack traces stay in the process's log.
+   `dw_observability` test
+   `test_an_exception_on_a_span_exports_its_type_never_its_text`.
+
+Checked and found sound: no Sales code calls the telemetry port but
+`SalesSpans.emit`; no HTTP auto-instrumentation exports URLs; every
+`DWError` Sales raises carries ids, codes and field names (a layout's refusal
+names `problem:field`, never a cell); every Sales model hides its input in
+errors; the model adapter logs the error's type only; FastAPI's 422 drops
+`input`.
+
+Mutation checks (each against the passing tree, then restored):
+
+- `dw.model.call` given the prompt variables → both model tests red.
+- the gateway logs the model's raw answer at DEBUG → both red.
+- the Sales model adapter logs with `exc_info` AND `ModelDescriptionReading`
+  stops hiding its input → `outside_schema` red (`Dây điện AWG24 lõi …` in
+  the log). Either alone stays green, correctly: the other still holds.
+- the SDK's exception recording back on → red; the event's message back to
+  `str(exc)` → red.
+
+- Decided by the agent (Đạt away), 2026-10-13: **a span records an
+  exception's type, and a `DWError`'s message, and nothing else, for every
+  process.** The ticket's earlier note called this a platform decision; it
+  is taken on the fail-closed default (failure-modes #7): a trace can go to a
+  hosted Langfuse, and losing a stack trace from a trace costs a log lookup,
+  while a customer's price in a third party's store cannot be taken back.
+  Logs keep their stack traces: they stay in the deployment's own pipeline.
+  The worker's mailbox lane still `logger.exception`s a failed message; that
+  is a log, and stays.
+
+### As built — review (2026-10-13)
+
+- `packages/python/dw_observability/src/dw_observability/otel.py`:
+  `_exception_event`; the SDK's `record_exception`/`set_status_on_exception`
+  off.
+- `packages/python/dw_observability/tests/unit/test_telemetry.py`: one test.
+- `apps/api/tests/unit/test_sales_telemetry.py`: the model-step test (two
+  cases) and its `_OnPremServer`.

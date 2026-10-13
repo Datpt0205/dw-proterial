@@ -160,6 +160,24 @@ def _order_anchors(document: PoDocument) -> list[LabelledAnchor]:
     return anchors
 
 
+def _order_sources(message_id: str, document: PoDocument) -> list[_Source]:
+    """The files one revision was read from: the PO, and its PDF print when
+    the mail carried one (ticket 34), labelled where it shows a value
+    differently."""
+    sources = [
+        _Source(
+            message_id, document.attachment_id, document.attachment_sha256, _order_anchors(document)
+        )
+    ]
+    if (copy := document.print_copy) is not None:
+        anchors = [
+            LabelledAnchor(field=d.field, line_no=d.line_no, anchor=d.anchor)
+            for d in copy.differences
+        ]
+        sources.append(_Source(message_id, copy.attachment_id, copy.attachment_sha256, anchors))
+    return sources
+
+
 def _quote_anchors(case: QuoteCase, attachment_id: str) -> list[LabelledAnchor]:
     document = case.request.document
     found: list[LabelledAnchor] = []
@@ -311,9 +329,10 @@ class SourceService:
         ]
         found = next(
             (
-                _Source(message_id, d.attachment_id, d.attachment_sha256, _order_anchors(d))
+                source
                 for message_id, d in revisions
-                if d.attachment_id == attachment_id
+                for source in _order_sources(message_id, d)
+                if source.attachment_id == attachment_id
             ),
             None,
         )

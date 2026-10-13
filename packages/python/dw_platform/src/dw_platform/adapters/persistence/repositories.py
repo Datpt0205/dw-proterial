@@ -257,8 +257,41 @@ class SqlAuditRepository:
         workspace_id: uuid.UUID,
         support_grant_id: uuid.UUID | None = None,
     ) -> Page[AuditEntry]:
+        query = self.page_query(
+            request, workspace_id=workspace_id, support_grant_id=support_grant_id
+        )
+        rows = (await self.session.execute(query)).all()
+        entries = [
+            AuditEntry(
+                event=self._event_from_row(row),
+                actor_display_name=row.actor_display_name,
+                actor_kind=AuditActorKind.SUPPORT if row.by_support else AuditActorKind.USER,
+            )
+            for row in rows
+        ]
+        return build_page(
+            entries,
+            request=request,
+            position_of=lambda entry: CursorPosition(
+                sort_value=entry.event.occurred_at, tiebreaker=entry.event.id
+            ),
+        )
+
+    @staticmethod
+    def page_query(
+        request: PageRequest, *, workspace_id: uuid.UUID, support_grant_id: uuid.UUID | None
+    ) -> sa.Select[Any]:
+        """`list_page`'s statement, apart so a test can ask Postgres for its plan."""
         events, users, grants = tables.audit_events, tables.users, tables.support_grants
-        grant_ref = events.c.details[SUPPORT_GRANT_DETAIL].astext
+        # The key is written into the statement, not bound: the partial index
+        # `ix_audit_events_support_grant` is on `details ->> 'support_grant_id'`,
+        # and a bound key (`details ->> $1`) matches it only in a custom plan.
+        # asyncpg prepares the statement, and Postgres may move it to a generic
+        # plan after five runs, which then walks the workspace's whole trail
+        # (measured with `plan_cache_mode = force_generic_plan`).
+        grant_ref = events.c.details.op("->>", return_type=sa.Text)(
+            sa.literal_column(f"'{SUPPORT_GRANT_DETAIL}'")
+        )
         # Compared as text, so a malformed id in one row's details matches
         # nothing instead of failing the whole page on a cast. RLS bounds the
         # grants to the caller's tenant, as it bounds the events.
@@ -282,22 +315,7 @@ class SqlAuditRepository:
         )
         if support_grant_id is not None:
             query = query.where(grant_ref == str(support_grant_id))
-        rows = (await self.session.execute(query)).all()
-        entries = [
-            AuditEntry(
-                event=self._event_from_row(row),
-                actor_display_name=row.actor_display_name,
-                actor_kind=AuditActorKind.SUPPORT if row.by_support else AuditActorKind.USER,
-            )
-            for row in rows
-        ]
-        return build_page(
-            entries,
-            request=request,
-            position_of=lambda entry: CursorPosition(
-                sort_value=entry.event.occurred_at, tiebreaker=entry.event.id
-            ),
-        )
+        return query
 
     @staticmethod
     def _map_rows(result: sa.engine.Result[tuple]) -> list[AuditEvent]:  # type: ignore[type-arg]

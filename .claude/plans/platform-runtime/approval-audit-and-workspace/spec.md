@@ -79,7 +79,7 @@ chỉ mang mã định danh; ticket 02 cần trước khi một tenant có nhi�
 
 ## Danh sách ticket
 
-| #   | Ticket                                                                                                                     | Status          | Blocked by |
-| --- | -------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------- |
-| 01  | [Quyết định approval ghi `audit_events` cùng giao dịch](issues/01-approval-decision-writes-audit.md)                       | ready-for-agent | —          |
-| 02  | [Approval, run và audit đọc theo workspace; route nào cũng kiểm scope](issues/02-approval-run-audit-reads-by-workspace.md) | resolved        | —          |
+| #   | Ticket                                                                                                                     | Status   | Blocked by |
+| --- | -------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
+| 01  | [Quyết định approval ghi `audit_events` cùng giao dịch](issues/01-approval-decision-writes-audit.md)                       | resolved | —          |
+| 02  | [Approval, run và audit đọc theo workspace; route nào cũng kiểm scope](issues/02-approval-run-audit-reads-by-workspace.md) | resolved | —          |

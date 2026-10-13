@@ -36,6 +36,7 @@ order_cases = sa.Table(
     sa.Column("po_no", sa.Text, nullable=False),
     sa.Column("case_version", sa.Integer, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
+    sa.Column("received_at", _TS, nullable=False),
     sa.Column("rules_version", sa.Text),
     sa.Column("catalog_as_of", _TS),
     sa.Column("cross_check_required", sa.Boolean),
@@ -142,6 +143,13 @@ quote_cases = sa.Table(
     sa.Column("status", sa.Text, nullable=False),
     sa.Column("body", JSONB, nullable=False),
     sa.Column("ycbg_no", sa.Text, sa.Computed("body #>> '{ycbg,ycbg_no}'")),
+    sa.Column("received_at", _TS, nullable=False),
+    # The quotation's due date, ISO text (sorts as the dates do), for the work
+    # list's order (ticket 24).
+    sa.Column("quote_due", sa.Text, sa.Computed("body #>> '{request,document,quote_due,value}'")),
+    sa.Column(
+        "priced_by", UUID(as_uuid=True), sa.Computed("(body #>> '{pricing,decided_by}')::uuid")
+    ),
     sa.Column("assigned_to", UUID(as_uuid=True)),
     sa.Column("release_manifest_ref", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
@@ -257,6 +265,25 @@ po_layouts = sa.Table(
     # same tenant and workspace (`fk_po_layouts_approval_requests`).
     sa.Column("approval_id", UUID(as_uuid=True), nullable=False),
     sa.Column("body", JSONB, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# A tenant's own versions of a Sales rule, proposed and decided (ticket 19).
+rule_versions = sa.Table(
+    "rule_versions",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("key", sa.Text, nullable=False),
+    sa.Column("version", sa.Text, nullable=False),
+    sa.Column("document", JSONB, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("proposed_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("proposed_at", _TS, nullable=False),
+    sa.Column("decided_by", UUID(as_uuid=True)),
+    sa.Column("decided_at", _TS),
+    sa.Column("comment", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

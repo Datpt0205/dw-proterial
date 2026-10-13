@@ -71,6 +71,8 @@ _SALES_TABLES = (
     "sales.case_events",
     # Migration 63242ec52c4b (ticket 30): the PO layouts people map and decide.
     "sales.po_layouts",
+    # Migration 57a241ea182b (ticket 19): a tenant's own rule versions.
+    "sales.rule_versions",
 )
 
 
@@ -103,7 +105,7 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     every = {"SELECT", "INSERT", "UPDATE", "DELETE"}
     for table in ("order_cases", "order_revisions", "order_lines", "order_findings"):
         assert {verb for tbl, verb in held if tbl == table} == every, table
-    for table in ("quote_cases", "messages", "worker_state", "po_layouts"):
+    for table in ("quote_cases", "messages", "worker_state", "po_layouts", "rule_versions"):
         assert {verb for tbl, verb in held if tbl == table} == every, table
     for table in ("artifacts", "source_served"):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table

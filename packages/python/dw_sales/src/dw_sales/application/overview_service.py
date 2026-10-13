@@ -25,46 +25,48 @@ other step to the case's assignee, and an unassigned case to everyone who
 may take the step. Messages routed to Sales go to their owner, or to every
 PIC when the owner is the pool.
 
-The overview loads every case of the workspace: right for the demo's mock
-set, and owed to SQL aggregates before real volume (ticket 12).
+Neither reads the whole history: the store computes the figures and pages
+the work list (`OverviewReadPort`, ticket 24), against the facts this module
+owns (whose time each status is, the next step on each status and the scope
+that takes it), which it hands down rather than the store restating them.
 """
 
 from __future__ import annotations
 
-import statistics
 import uuid
-from collections import Counter, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
-from itertools import pairwise
-from typing import Final, Literal
-from zoneinfo import ZoneInfo
+from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
+from dw_kernel.pagination import Page, PageQuery, page_request
 from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.case_store import (
-    LoggedEvent,
-    LoggedMessage,
-    SalesUnitOfWorkFactory,
-    Stored,
+from dw_sales.application.case_store import LoggedMessage, SalesUnitOfWorkFactory, Stored
+from dw_sales.application.overview_ports import (
+    Bucket,
+    FigureBasis,
+    OpenOrder,
+    OverviewFigures,
+    Spread,
+    SurveyStep,
+    WorkFilter,
 )
-from dw_sales.application.ports import InboxPort, MemberDirectoryPort
+from dw_sales.application.ports import InboxPort, MemberDirectoryPort, SalesScope
 from dw_sales.application.runs import PendingDecisionsPort, awaited
 from dw_sales.application.views import WorkerStateView, worker_state
 from dw_sales.domain.dispositions import SALES_PIC_POOL, CaseKind, DispositionKind
 from dw_sales.domain.kpi import SalesKpi
-from dw_sales.domain.orders import CorrectedBySales, MappingStatus, OrderCase, OrderStatus
+from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.process import WIV_STEPS, Procedure
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus
 
 _VIEW = ConfigDict(frozen=True)
-_LOCAL = ZoneInfo("Asia/Ho_Chi_Minh")
-
-Bucket = Literal["dw", "sales", "design", "approver", "customer"]
+# The zone a month is counted in (giờ Việt Nam).
+_LOCAL_ZONE: Final = "Asia/Ho_Chi_Minh"
 
 # Whose time a case's interval in each status is: the status it was in.
 _ORDER_BUCKETS: Final[Mapping[str, Bucket]] = {
@@ -228,54 +230,43 @@ _QUOTE_NEXT: Final[Mapping[QuoteStatus, tuple[str, SalesScopes]]] = {
 }
 
 
-def _stat(seconds: Sequence[float]) -> TimeStat:
+def _stat(spread: Spread) -> TimeStat:
     return TimeStat(
-        cases=len(seconds),
-        median_seconds=statistics.median(seconds) if seconds else None,
-        max_seconds=max(seconds) if seconds else None,
+        cases=spread.cases, median_seconds=spread.median_seconds, max_seconds=spread.max_seconds
     )
 
 
-def _month(at: datetime) -> str:
-    local = at.astimezone(_LOCAL)
-    return f"{local.year:04d}-{local.month:02d}"
+_BASIS_BUCKETS: Final[Mapping[CaseKind, Mapping[str, Bucket]]] = {
+    CaseKind.ORDER: {str(status): bucket for status, bucket in _ORDER_BUCKETS.items()},
+    CaseKind.QUOTE: {str(status): bucket for status, bucket in _QUOTE_BUCKETS.items()},
+}
+_SURVEY: Final = tuple(
+    SurveyStep(step.step_id, _PROCEDURE_KIND[step.procedure], frozenset(step.states))
+    for step in WIV_STEPS
+)
 
 
-@dataclass(frozen=True, slots=True)
-class _Durations:
-    per_bucket: dict[Bucket, list[float]]
+def figure_basis(inbox_ids: frozenset[str]) -> FigureBasis:
+    """What the store computes the figures against, from this module's facts."""
+    return FigureBasis(
+        buckets=_BASIS_BUCKETS,
+        draft_ready={kind: str(status) for kind, status in _DRAFT_READY.items()},
+        steps=_SURVEY,
+        zone=_LOCAL_ZONE,
+        inbox_ids=inbox_ids,
+    )
 
 
-def _durations(events: Iterable[LoggedEvent], ingest: Mapping[uuid.UUID, datetime]) -> _Durations:
-    """Each case's time per bucket, from its consecutive events; DW1's time
-    also counts from the message's ingest to the case's first event."""
-    by_case: dict[uuid.UUID, list[LoggedEvent]] = defaultdict(list)
-    for event in events:
-        by_case[event.case_id].append(event)
-    totals: dict[Bucket, list[float]] = {
-        "dw": [],
-        "sales": [],
-        "design": [],
-        "approver": [],
-        "customer": [],
-    }
-    for case_id, timeline in by_case.items():
-        timeline.sort(key=lambda e: (e.occurred_at, e.case_version))
-        buckets = _ORDER_BUCKETS if timeline[0].case_kind is CaseKind.ORDER else _QUOTE_BUCKETS
-        spent: dict[Bucket, float] = defaultdict(float)
-        started = ingest.get(case_id)
-        if started is not None:
-            ready = next(
-                (e for e in timeline if e.to_status == _DRAFT_READY[e.case_kind]), timeline[0]
-            )
-            spent["dw"] += max((ready.occurred_at - started).total_seconds(), 0.0)
-        for before, after in pairwise(timeline):
-            bucket = buckets.get(before.to_status)
-            if bucket is not None and bucket != "dw":
-                spent[bucket] += (after.occurred_at - before.occurred_at).total_seconds()
-        for bucket, seconds in spent.items():
-            totals[bucket].append(seconds)
-    return _Durations(totals)
+# Steps decided on the whole case rather than on its assignee.
+_DECIDED_ON_THE_CASE: Final = frozenset({"cross_check", "approve"})
+# The page a work list is cut into when the caller names none.
+WORK_PAGE: Final = 50
+
+
+class KpiPort(Protocol):
+    """The KPI policy that applies to ``scope``'s tenant."""
+
+    async def kpi(self, scope: SalesScope) -> SalesKpi: ...
 
 
 @dataclass(frozen=True)
@@ -284,7 +275,9 @@ class OverviewService:
     gate: Gate
     clock: UtcClock
     inbox: InboxPort
-    kpi: SalesKpi
+    # The KPI policy in force for the caller's tenant (its own approved
+    # version, or the platform's: ticket 19).
+    kpi: KpiPort
     directory: MemberDirectoryPort
     decisions: PendingDecisionsPort
 
@@ -292,97 +285,131 @@ class OverviewService:
         await self.gate.require(context, SalesScopes.OVERVIEW_READ, resource_type="sales_overview")
         scope = sales_scope(context)
         now = self.clock.now()
+        inbox = {m.message_id: m.received_at for m in await self.inbox.list_messages(scope)}
+        kpi = await self.kpi.kpi(scope)
         async with self.uow(scope) as work:
-            orders = [s.case for s in await work.orders.list_all()]
-            quotes = [s.case for s in await work.quotes.list_all()]
-            messages = list(await work.messages.list_all())
-            events = list(await work.events.list_all())
+            figures = await work.overview.figures(figure_basis(frozenset(inbox)))
             worker = await work.worker.state()
-        inbox = list(await self.inbox.list_messages(scope))
         return OverviewView(
             as_of=now,
-            kpi_policy=self.kpi.version,
+            kpi_policy=kpi.version,
             worker=worker_state(worker),
-            steps=_steps(orders, quotes),
-            messages=_messages(
-                inbox_ids={m.message_id: m.received_at for m in inbox}, logged=messages, now=now
+            steps=_steps(figures),
+            messages=_messages(inbox, figures, now=now),
+            times=TimesView(
+                dw=_stat(figures.times["dw"]),
+                sales=_stat(figures.times["sales"]),
+                design=_stat(figures.times["design"]),
+                approver=_stat(figures.times["approver"]),
+                customer=_stat(figures.times["customer"]),
             ),
-            times=_times(events, messages),
             order_confirmation=TargetView(
-                target_seconds=self.kpi.order_confirmation_target_hours * 3600.0,
-                measured=_stat(
-                    [
-                        (o.confirmed_at - o.received_at).total_seconds()
-                        for o in orders
-                        if o.confirmed_at is not None
-                    ]
-                ),
+                target_seconds=kpi.order_confirmation_target_hours * 3600.0,
+                measured=_stat(figures.order_confirmation),
             ),
             quotation_time=TargetView(
-                target_seconds=self.kpi.quotation_target_days * 86400.0,
-                measured=_stat(
-                    [
-                        (q.sent.at - q.request.received_at).total_seconds()
-                        for q in quotes
-                        if q.sent is not None
-                    ]
-                ),
+                target_seconds=kpi.quotation_target_days * 86400.0,
+                measured=_stat(figures.quotation_time),
             ),
-            lines_printed=sum(o.document.rows_printed for o in orders),
-            lines_read=sum(len(o.lines) for o in orders),
-            mapping=_mapping(orders),
-            findings_by_code=dict(
-                sorted(
-                    Counter(
-                        [f.code.value for o in orders for f in o.findings]
-                        + [f.code.value for q in quotes for f in q.findings]
-                    ).items()
+            lines_printed=figures.lines_printed,
+            lines_read=figures.lines_read,
+            mapping=MappingCounts(
+                convert_list=figures.lines_exact,
+                confirmed_candidate=figures.lines_candidate_confirmed,
+                unresolved=figures.lines_read
+                - figures.lines_exact
+                - figures.lines_candidate_confirmed,
+            ),
+            findings_by_code=dict(sorted(figures.findings_by_code.items())),
+            orders_prepared_without_correction=figures.orders_prepared_without_correction,
+            quotes_sent_as_first_drafted=figures.quotes_sent_as_first_drafted,
+            a3_shadow=figures.a3_shadow,
+            export=[
+                ExportRow(
+                    step_id=step.step_id,
+                    month=month,
+                    times=figures.export.get((step.step_id, month), 0),
+                    manual_baseline_minutes=kpi.manual_baseline_minutes[step.step_id],
                 )
-            ),
-            orders_prepared_without_correction=sum(
-                1 for o in orders if o.prepared_by is not None and not _corrected(o)
-            ),
-            quotes_sent_as_first_drafted=sum(
-                1 for q in quotes if q.sent is not None and not q.returns and not q.earlier_pricing
-            ),
-            a3_shadow=sum(1 for o in orders if _a3_shadow(o)),
-            export=_export(events, self.kpi),
+                for month in figures.months
+                for step in WIV_STEPS
+            ],
         )
 
-    async def my_work(self, context: AccessContext) -> list[WorkItem]:
+    async def my_work(
+        self, context: AccessContext, *, limit: int = WORK_PAGE, cursor: str | None = None
+    ) -> Page[WorkItem]:
+        """One page of the caller's work, by due date then by when it came in.
+
+        The store narrows to the rows these rules could admit and pages them;
+        each row is then decided here, so a page can hold fewer items than
+        ``limit`` (a cross-check a run is still on its way to raising), and
+        ``next_cursor`` alone says whether more follow."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type="sales_work")
         scope = sales_scope(context)
-        me = context.principal_id
+        request = page_request(
+            limit=limit,
+            cursor=cursor,
+            query=PageQuery(
+                key="sales.my_work",
+                filters={
+                    "tenant": context.tenant_id,
+                    "workspace": context.workspace_id,
+                    "principal": context.principal_id,
+                },
+            ),
+        )
+        wanted = await self._wanted(context)
         async with self.uow(scope) as work:
-            orders = list(await work.orders.list_all())
-            quotes = list(await work.quotes.list_all())
-            messages = list(await work.messages.list_all())
-        items = [item for s in orders if (item := await self._order_item(context, s)) is not None]
-        items += [item for s in quotes if (item := self._quote_item(context, s)) is not None]
+            page = await work.overview.work_page(wanted, request)
+            # A cross-check is decided on the case itself (who made it, what
+            # the run is waiting on): only those are read whole.
+            checks: dict[uuid.UUID, Stored[OrderCase] | None] = {}
+            for entry in page.items:
+                row = entry.row
+                if isinstance(row, OpenOrder) and row.status is OrderStatus.UPLOADED_TO_BRAVO:
+                    checks[row.case_id] = await work.orders.get(row.case_id)
+        items: list[WorkItem] = []
+        for entry in page.items:
+            row = entry.row
+            if isinstance(row, OpenOrder):
+                item = await self._order_item(context, row, checks.get(row.case_id))
+            elif isinstance(row, LoggedMessage):
+                item = _message_item(row, wanted)
+            else:
+                item = self._quote_item(context, row)
+            if item is not None:
+                items.append(item)
+        return Page(items=tuple(items), next_cursor=page.next_cursor)
+
+    async def _wanted(self, context: AccessContext) -> WorkFilter:
+        """The narrowing the store applies, read from the same tables the
+        rows are decided by below."""
+        owners: frozenset[str] = frozenset()
         if self.gate.allows(context, SalesScopes.INBOX_PROCESS):
             mine = {
                 m.email.lower()
                 for m in await self.directory.list_members(context)
-                if m.user_id == me and m.email
+                if m.user_id == context.principal_id and m.email
             }
-            for logged in messages:
-                d = logged.disposition
-                if d.kind is DispositionKind.ROUTED_TO_SALES and (
-                    d.owner == SALES_PIC_POOL or (d.owner or "").lower() in mine
-                ):
-                    items.append(
-                        WorkItem(
-                            kind="message",
-                            id=d.message_id,
-                            status=d.kind.value,
-                            action=f"handle_{d.reason.value if d.reason else 'message'}",
-                            customer_code=d.customer_code,
-                            received_at=logged.processed_at,
-                            due=None,
-                            assigned_to=None,
-                        )
-                    )
-        return sorted(items, key=lambda i: (i.due or date.max, i.received_at))
+            owners = frozenset({SALES_PIC_POOL, *mine})
+        return WorkFilter(
+            principal_id=context.principal_id,
+            order_statuses=frozenset(
+                status
+                for status, (action, scope) in _ORDER_NEXT.items()
+                if action not in _DECIDED_ON_THE_CASE and self.gate.allows(context, scope)
+            ),
+            quote_statuses=frozenset(
+                status.value
+                for status, (action, scope) in _QUOTE_NEXT.items()
+                if action not in _DECIDED_ON_THE_CASE and self.gate.allows(context, scope)
+            ),
+            cross_checks=self.gate.allows(context, SalesScopes.ORDER_CROSS_CHECK)
+            or self.gate.allows(context, SalesScopes.ORDER_PREPARE),
+            approvals=self.gate.allows(context, SalesScopes.QUOTE_APPROVE),
+            message_owners=owners,
+        )
 
     def _eligible(
         self, context: AccessContext, scope: SalesScopes, assigned_to: uuid.UUID | None
@@ -392,40 +419,42 @@ class OverviewService:
         return assigned_to is None or assigned_to == context.principal_id
 
     async def _order_item(
-        self, context: AccessContext, stored: Stored[OrderCase]
+        self, context: AccessContext, row: OpenOrder, stored: Stored[OrderCase] | None
     ) -> WorkItem | None:
-        case, assigned = stored.case, stored.origin.assigned_to
-        step = _ORDER_NEXT.get(case.status)
+        step = _ORDER_NEXT.get(row.status)
         if step is None:
             return None
         action, scope = step
-        wait = await awaited(self.decisions, context, case) if action == "cross_check" else None
-        if wait is not None and wait.stalled:
-            # Nothing is on the way to the cross-check: its Bravo recorder
-            # raises it again (the head may too, from the order's page).
-            if context.principal_id != case.bravo_recorded_by or not self.gate.allows(
-                context, SalesScopes.ORDER_PREPARE
-            ):
+        if action == "cross_check":
+            if stored is None:  # gone since the page was read
                 return None
-            action = "resend_cross_check"
-        elif wait is not None and wait.approval_id is None:
-            # A run is on its way to raising it: nothing to decide yet.
-            return None
-        elif action == "cross_check":
+            case = stored.case
+            wait = await awaited(self.decisions, context, case)
+            if wait is not None and wait.stalled:
+                # Nothing is on the way to the cross-check: its Bravo recorder
+                # raises it again (the head may too, from the order's page).
+                if context.principal_id != case.bravo_recorded_by or not self.gate.allows(
+                    context, SalesScopes.ORDER_PREPARE
+                ):
+                    return None
+                action = "resend_cross_check"
+            elif wait is not None and wait.approval_id is None:
+                # A run is on its way to raising it: nothing to decide yet.
+                return None
             # Anyone who may cross-check and made none of the case.
-            if not self.gate.allows(context, scope) or context.principal_id in case.makers:
+            elif not self.gate.allows(context, scope) or context.principal_id in case.makers:
                 return None
-        elif not self._eligible(context, scope, assigned):
+        elif not self._eligible(context, scope, row.assigned_to):
             return None
         return WorkItem(
             kind="order",
-            id=str(case.case_id),
-            status=case.status.value,
+            id=str(row.case_id),
+            status=row.status.value,
             action=action,
-            customer_code=case.customer_code,
-            received_at=case.received_at,
+            customer_code=row.customer_code,
+            received_at=row.received_at,
             due=None,
-            assigned_to=assigned,
+            assigned_to=row.assigned_to,
         )
 
     def _quote_item(self, context: AccessContext, stored: Stored[QuoteCase]) -> WorkItem | None:
@@ -453,100 +482,54 @@ class OverviewService:
         )
 
 
-def _steps(orders: Sequence[OrderCase], quotes: Sequence[QuoteCase]) -> list[StepCount]:
-    statuses = {
-        CaseKind.ORDER: Counter(o.status.value for o in orders),
-        CaseKind.QUOTE: Counter(q.status.value for q in quotes),
-    }
+def _message_item(logged: LoggedMessage, wanted: WorkFilter) -> WorkItem | None:
+    """A message routed to Sales: its owner's, or every PIC's when the owner
+    is the pool."""
+    d = logged.disposition
+    if d.kind is not DispositionKind.ROUTED_TO_SALES or (
+        (d.owner or "").lower() not in wanted.message_owners
+    ):
+        return None
+    return WorkItem(
+        kind="message",
+        id=d.message_id,
+        status=d.kind.value,
+        action=f"handle_{d.reason.value if d.reason else 'message'}",
+        customer_code=d.customer_code,
+        received_at=logged.processed_at,
+        due=None,
+        assigned_to=None,
+    )
+
+
+def _steps(figures: OverviewFigures) -> list[StepCount]:
     return [
         StepCount(
             step_id=step.step_id,
             procedure=step.procedure.value,
             coverage=step.coverage.value,
             states=list(step.states),
-            cases=sum(statuses[_PROCEDURE_KIND[step.procedure]][s] for s in step.states),
+            cases=sum(
+                figures.statuses.get(_PROCEDURE_KIND[step.procedure], {}).get(s, 0)
+                for s in step.states
+            ),
         )
         for step in WIV_STEPS
     ]
 
 
 def _messages(
-    *, inbox_ids: Mapping[str, datetime], logged: Sequence[LoggedMessage], now: datetime
+    inbox: Mapping[str, datetime], figures: OverviewFigures, *, now: datetime
 ) -> MessagesView:
-    decided = {m.disposition.message_id for m in logged}
-    waiting = [received for message_id, received in inbox_ids.items() if message_id not in decided]
-    routed = [m for m in logged if m.disposition.kind is DispositionKind.ROUTED_TO_SALES]
+    waiting = [
+        received
+        for message_id, received in inbox.items()
+        if message_id not in figures.decided_inbox_ids
+    ]
     return MessagesView(
-        total=len(inbox_ids),
+        total=len(inbox),
         without_disposition=len(waiting),
         oldest_waiting_seconds=(now - min(waiting)).total_seconds() if waiting else None,
-        routed_to_sales=len(routed),
-        routed_without_owner=sum(1 for m in routed if not m.disposition.owner),
+        routed_to_sales=figures.routed_to_sales,
+        routed_without_owner=figures.routed_without_owner,
     )
-
-
-def _times(events: Sequence[LoggedEvent], messages: Sequence[LoggedMessage]) -> TimesView:
-    ingest = {
-        m.disposition.case_id: m.processed_at
-        for m in messages
-        if m.disposition.case_id is not None and m.disposition.kind is DispositionKind.CASE_CREATED
-    }
-    spent = _durations(events, ingest).per_bucket
-    return TimesView(
-        dw=_stat(spent["dw"]),
-        sales=_stat(spent["sales"]),
-        design=_stat(spent["design"]),
-        approver=_stat(spent["approver"]),
-        customer=_stat(spent["customer"]),
-    )
-
-
-def _mapping(orders: Sequence[OrderCase]) -> MappingCounts:
-    statuses = Counter(line.mapping.status for o in orders for line in o.lines)
-    exact = statuses[MappingStatus.EXACT]
-    confirmed = statuses[MappingStatus.CANDIDATE_CONFIRMED]
-    return MappingCounts(
-        convert_list=exact,
-        confirmed_candidate=confirmed,
-        unresolved=sum(statuses.values()) - exact - confirmed,
-    )
-
-
-def _corrected(case: OrderCase) -> bool:
-    return any(isinstance(f.disposition, CorrectedBySales) for f in case.findings) or any(
-        line.mapping.hand_entered for line in case.lines
-    )
-
-
-def _a3_shadow(case: OrderCase) -> bool:
-    return (
-        not case.findings
-        and not case.superseded
-        and all(line.mapping.status is MappingStatus.EXACT for line in case.lines)
-    )
-
-
-def _export(events: Sequence[LoggedEvent], kpi: SalesKpi) -> list[ExportRow]:
-    """Every surveyed step for every month with activity: the cases DW1 took
-    through the step that month (each case once), beside the manual baseline.
-    A step DW1 does not do exports with 0, not without a row."""
-    cases: dict[tuple[str, str], set[uuid.UUID]] = defaultdict(set)
-    for step in WIV_STEPS:
-        kind = _PROCEDURE_KIND[step.procedure]
-        for event in events:
-            # A case is opened already checked: its first event passed
-            # through `received` (O1) on the way.
-            passed = {event.to_status} | ({"received"} if event.from_status is None else set())
-            if event.case_kind is kind and passed & set(step.states):
-                cases[(step.step_id, _month(event.occurred_at))].add(event.case_id)
-    months = sorted({_month(event.occurred_at) for event in events})
-    return [
-        ExportRow(
-            step_id=step.step_id,
-            month=month,
-            times=len(cases.get((step.step_id, month), ())),
-            manual_baseline_minutes=kpi.manual_baseline_minutes[step.step_id],
-        )
-        for month in months
-        for step in WIV_STEPS
-    ]

@@ -453,6 +453,10 @@ class InboxProcessing:
         }
         if disposition.reason is not None:
             details["reason"] = disposition.reason.value
+        if disposition.reason is RoutingReason.MALWARE_DETECTED:
+            # Which attachment and which signature (ticket 25); the detail is
+            # built by the intake from ids and signature names, never bytes.
+            details["malware"] = disposition.detail
         if disposition.case_id is not None and disposition.case_kind is not None:
             details |= {
                 "case_kind": disposition.case_kind.value,

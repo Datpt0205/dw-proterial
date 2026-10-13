@@ -217,6 +217,9 @@ class MySupportGrantModel(BaseModel):
     resource_label: str
     scope_set_key: str
     scope_set_label: str
+    # The scopes stamped on the grant: exactly what a context opened under it
+    # holds (ADR 0024), so the web shows what the server will allow.
+    scopes: list[str]
     # `active`, `expired`, `ineffective` or `revoked`, by the same rule the
     # support context applies on every request.
     state: str
@@ -255,6 +258,7 @@ async def my_grants(
             resource_label=row.grant.resource_label,
             scope_set_key=row.grant.scope_set_key,
             scope_set_label=row.grant.scope_set_label,
+            scopes=sorted(row.grant.scopes),
             state=await container.support_access.state_of(row.grant),
             activated_at=row.grant.activated_at,
             expires_at=row.grant.expires_at,

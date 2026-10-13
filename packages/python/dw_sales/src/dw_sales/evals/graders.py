@@ -73,6 +73,7 @@ _PIC = frozenset(
         _S.ORDER_CROSS_CHECK,
         _S.QUOTE_PREPARE,
         _S.WORKER_PAUSE,
+        _S.RULES_PROPOSE,
     }
 )
 # The demo personas' Sales scopes, by what each step needs (spec "Actors").
@@ -98,6 +99,7 @@ GIANG = Caller(
         _S.ORDER_RESEND_CROSS_CHECK,
         _S.CASE_ASSIGN,
         _S.LAYOUT_APPROVE,
+        _S.RULES_APPROVE,
     },
 )
 KHOA = Caller(
@@ -145,11 +147,11 @@ _FIELDS = ("prv_code", "quantity", "unit_price", "requested_date", "schedules")
 
 
 def _printed_schedules(line: PrintedLine) -> list[tuple[Decimal, date]]:
-    """When and how much a sample line is to be delivered: its schedules,
-    or its one quantity on its one date."""
-    return [(s.quantity, s.requested_date) for s in line.schedules] or [
-        (line.quantity, line.requested_date)
-    ]
+    """When and how much a sample line is to be delivered: its schedules, its
+    one quantity on its one date, or nothing yet when it prints no date."""
+    if line.schedules:
+        return [(s.quantity, s.requested_date) for s in line.schedules]
+    return [] if line.requested_date is None else [(line.quantity, line.requested_date)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,7 +227,8 @@ async def grade_extraction_accuracy(
     misses: list[_Miss] = []
     wrong_routes: list[str] = []
     for po in truth:
-        if po.message_id not in wanted:
+        # A PDF print read beside its workbook is no PO of its own (ticket 34).
+        if po.message_id not in wanted or po.print_of is not None:
             continue
         disposition, case = seen[po.message_id]
         if po.message_id in routed:
@@ -795,7 +798,7 @@ async def grade_price_confidentiality(
         s = world.services
         bodies: list[Any] = [
             await s.overview.overview(context),
-            await s.overview.my_work(context),
+            list((await s.overview.my_work(context)).items),
             await s.inbox.messages(context),
             await s.orders.summaries(context),
             await s.orders.get(context, order_id),

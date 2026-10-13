@@ -48,6 +48,10 @@ class SalesScopes(StrEnum):
     # Approve or reject a customer's PO layout a PIC mapped (ticket 30): the
     # checker of a maker/checker pair, never its proposer (the head's).
     LAYOUT_APPROVE = "sales.layout.approve"
+    # Propose a tenant version of a Sales rule (PIC and head), and approve or
+    # reject one (the head's): a maker/checker pair (ticket 19).
+    RULES_PROPOSE = "sales.rules.propose"
+    RULES_APPROVE = "sales.rules.approve"
 
 
 # What a customer may grant FPT support in Sales (dw_sales ADR 0003 §5, ADR

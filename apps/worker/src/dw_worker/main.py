@@ -90,6 +90,7 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.retention_policy import load_retention_policy
 from dw_sales.adapters.assembly import build_dw1, build_layout_settlement
+from dw_sales.adapters.clamd import malware_scanner
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE, InboxLane
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.ports import SalesScope
@@ -307,6 +308,14 @@ def build_sales_inbox_lane(
         runtime=runtime,
         telemetry=telemetry,
         lane_access=SqlMembershipLookup(sessions),
+        # Every attachment scanned before it is read (ticket 25), by the one
+        # rule the API reads too.
+        scanner=malware_scanner(
+            settings.sales_malware_scan,
+            host=settings.sales_clamd_host,
+            port=settings.sales_clamd_port,
+            deployed=settings.is_deployed,
+        ),
         # As the API passes it: only a process that reaches a model server of
         # its own reads a description through one (dw_sales ADR 0005).
         model=runtime.gateway if Provider.ONPREM in runtime.gateway.adapters else None,

@@ -19,7 +19,6 @@ from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import refusals_named, scope_values
 from dw_sales.application.case_store import (
     ArtifactRecord,
-    LoggedEvent,
     LoggedMessage,
     ServedSource,
     SourceRegion,
@@ -116,7 +115,7 @@ class SqlMessageLog:
             .mappings()
             .first()
         )
-        return None if row is None else _disposition(row)
+        return None if row is None else disposition_of(row)
 
     async def list_all(self) -> Sequence[LoggedMessage]:
         rows = (
@@ -124,10 +123,10 @@ class SqlMessageLog:
                 sa.select(_M).order_by(_M.c.processed_at.desc(), _M.c.id.desc())
             )
         ).mappings()
-        return [LoggedMessage(_disposition(row), row["processed_at"]) for row in rows]
+        return [LoggedMessage(disposition_of(row), row["processed_at"]) for row in rows]
 
 
-def _disposition(row: RowMapping) -> MessageDisposition:
+def disposition_of(row: RowMapping) -> MessageDisposition:
     case = _case_of(row)
     return MessageDisposition.model_validate(
         {
@@ -146,43 +145,6 @@ def _disposition(row: RowMapping) -> MessageDisposition:
             "layout_prefill": row["layout_prefill"],
         }
     )
-
-
-@dataclass(frozen=True)
-class SqlCaseEventLog:
-    """Implements `CaseEventLogPort`: the workspace's case events, read only.
-
-    Written beside each case by the case repositories (`record_event`)."""
-
-    session: AsyncSession
-    scope: SalesScope
-
-    async def list_all(self) -> Sequence[LoggedEvent]:
-        rows = await self.session.execute(
-            sa.select(
-                _E.c.case_kind,
-                _E.c.case_id,
-                _E.c.case_version,
-                _E.c.action,
-                _E.c.from_status,
-                _E.c.to_status,
-                _E.c.actor_kind,
-                _E.c.occurred_at,
-            ).order_by(_E.c.occurred_at, _E.c.case_version, _E.c.id)
-        )
-        return [
-            LoggedEvent(
-                case_kind=CaseKind(r.case_kind),
-                case_id=r.case_id,
-                case_version=r.case_version,
-                action=r.action,
-                from_status=r.from_status,
-                to_status=r.to_status,
-                actor_kind=r.actor_kind,
-                occurred_at=r.occurred_at,
-            )
-            for r in rows
-        ]
 
 
 @dataclass(frozen=True)

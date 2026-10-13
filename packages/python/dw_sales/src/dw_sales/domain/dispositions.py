@@ -49,6 +49,9 @@ class RoutingReason(StrEnum):
     SAMPLE_REQUEST = "sample_request"
     CUSTOMER_UNKNOWN = "customer_unknown"
     ATTACHMENT_UNREADABLE = "attachment_unreadable"
+    # The scanner found malware in an attachment (ticket 25): nothing in the
+    # message is read, and its bytes are never served.
+    MALWARE_DETECTED = "malware_detected"
     OTHER = "other"
 
 

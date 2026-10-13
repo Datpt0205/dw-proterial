@@ -125,6 +125,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     total: "94115000",
     total_anchor: anchor(4),
     legacy_text_anchor: null,
+    print_copy: null,
     coverage: {
       lines_printed: 1,
       lines_read: 1,

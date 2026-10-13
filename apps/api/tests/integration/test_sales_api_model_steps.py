@@ -117,7 +117,7 @@ async def test_a_postponement_no_keyword_lists_is_read_and_names_m35s_order(
         "read",
         "sales.message_intent@1.0.0",
     )
-    assert reading["rules"] == "sales_order_rules@1.4.1"
+    assert reading["rules"] == "sales_order_rules@1.5.1"
     ((reference),) = reading["references"]
     assert (reference["number"], reference["order_case_id"]) == (
         "BRN-PO-2609-052",

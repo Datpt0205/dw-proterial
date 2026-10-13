@@ -25,6 +25,7 @@ from dw_kernel.errors import NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.pagination import PageQuery, PageRequest
 from dw_kernel.ports import FixedClock, Uuid4Generator
+from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.support_grants import SqlStaffGrants
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
@@ -333,3 +334,50 @@ async def test_sa10_the_customer_reads_a_grants_trail_and_who_acted_under_it(
         ]
     )
     assert len(whole.items) == len(of_grant.items) + 3
+
+
+async def test_a_grants_trail_uses_its_index_in_a_generic_plan(
+    world: SupportWorld, migrator: AsyncEngine
+) -> None:
+    """`list_page` filtered by grant reaches `ix_audit_events_support_grant`
+    even in the generic plan Postgres may move a prepared statement to after
+    five runs (asyncpg prepares every statement): with the `details` key bound
+    as a parameter it did not, and a page walked the workspace's whole trail.
+
+    A trail of 5,000 events (50 naming a grant) is written and analysed inside
+    a transaction that is rolled back, so no other test sees it."""
+    query = SqlAuditRepository.page_query(
+        PageRequest(limit=50, after=None, query=PageQuery(key="test.support_trail")),
+        workspace_id=world.ws1,
+        support_grant_id=uuid.uuid4(),
+    )
+    async with migrator.connect() as conn:
+        transaction = await conn.begin()
+        await conn.execute(
+            sa.text(
+                "INSERT INTO platform.audit_events (id, tenant_id, workspace_id, actor_id,"
+                " action, resource_type, resource_id, details, occurred_at)"
+                " SELECT gen_random_uuid(), :t, :w, :a, 'probe.touched', 'probe', 'p',"
+                " CASE WHEN n % 100 = 0"
+                "  THEN jsonb_build_object('support_grant_id', gen_random_uuid()::text)"
+                "  ELSE '{}'::jsonb END,"
+                " CAST(:now AS timestamptz) - make_interval(secs => n)"
+                " FROM generate_series(1, 5000) AS n"
+            ),
+            {"t": world.tenant_a, "w": world.ws1, "a": world.users["granter"], "now": NOW},
+        )
+        await conn.exec_driver_sql("ANALYZE platform.audit_events")
+        await conn.exec_driver_sql("SET LOCAL plan_cache_mode = force_generic_plan")
+        # PREPARE/EXECUTE, not EXPLAIN with parameters: EXPLAIN plans its
+        # statement with the values in it, which is a custom plan.
+        compiled = query.compile(dialect=conn.dialect)
+        values = ", ".join(f"'{compiled.params[name]}'" for name in compiled.positiontup or ())
+        await conn.exec_driver_sql(f"PREPARE trail AS {compiled}")
+        plan = "\n".join(
+            row[0] for row in await conn.exec_driver_sql(f"EXPLAIN EXECUTE trail({values})")
+        )
+        await transaction.rollback()
+    assert "$" in plan, f"not a generic plan:\n{plan}"
+    # A partition's copy of the index is named by Postgres from its columns,
+    # `..._tenant_id_workspace_id_expr_...`; the page index has no `expr`.
+    assert "workspace_id_expr" in plan, plan

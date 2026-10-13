@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 
 import pytest
 from opentelemetry.sdk.metrics import MeterProvider
@@ -11,6 +12,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from dw_kernel.errors import ConflictError
 from dw_observability.langfuse import langfuse_otlp_config
 from dw_observability.otel import OtelTelemetry, build_telemetry, configure_tracing
 from dw_observability.telemetry import NullTelemetry, RecordingTelemetry, safe_attributes
@@ -113,6 +115,45 @@ def test_otel_span_records_exception_status() -> None:
             raise ValueError("boom")
     span = span_exporter.get_finished_spans()[0]
     assert not span.status.is_ok
+
+
+def test_an_exception_on_a_span_exports_its_type_never_its_text() -> None:
+    """Sales ticket 23: an exception's text can be the document it failed on
+    (a parser's cell, a validator's input), and a span leaves the process. A
+    `DWError`'s message is safe to log by contract and is kept."""
+    span_exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(span_exporter))
+    meter = MeterProvider(metric_readers=[InMemoryMetricReader()]).get_meter("test")
+    telemetry = OtelTelemetry(tracer=provider.get_tracer("test"), meter=meter)
+    secret = "0.4850 USD Velatrix Electronics"
+
+    with pytest.raises(ValueError):
+        with telemetry.span("dw.run.start", {}):
+            try:
+                raise KeyError(secret)
+            except KeyError as cause:
+                raise ValueError(f"cell B7 holds {secret}") from cause
+    with pytest.raises(ConflictError):
+        with telemetry.span("dw.run.resume", {}):
+            raise ConflictError("the case changed", details={"note": secret})
+
+    refused, conflict = span_exporter.get_finished_spans()
+    exported = [
+        json.dumps(
+            [span.status.description, [(e.name, dict(e.attributes or {})) for e in span.events]]
+        )
+        for span in (refused, conflict)
+    ]
+    assert all("Velatrix" not in text and "0.4850" not in text for text in exported)
+    assert refused.status.description == "ValueError"
+    (event,) = refused.events
+    assert dict(event.attributes or {}) == {
+        "exception.type": "builtins.ValueError",
+        "exception.message": "ValueError",
+    }
+    assert conflict.status.description == "the case changed"
+    assert dict(conflict.events[0].attributes or {})["exception.message"] == "the case changed"
 
 
 def test_langfuse_config_builds_basic_auth_otlp_endpoint() -> None:

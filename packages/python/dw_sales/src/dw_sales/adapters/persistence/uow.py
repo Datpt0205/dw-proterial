@@ -24,14 +24,15 @@ from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_te
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_sales.adapters.persistence.layouts import SqlLayoutStore
 from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
+from dw_sales.adapters.persistence.overview import SqlOverviewReader
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseRepository
 from dw_sales.adapters.persistence.records import (
     SqlArtifactLog,
-    SqlCaseEventLog,
     SqlMessageLog,
     SqlSourceServed,
     SqlWorkerSwitch,
 )
+from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionStore
 from dw_sales.application.case_store import LayoutApprovalsPort
 from dw_sales.application.ports import SalesScope
 
@@ -45,7 +46,8 @@ class SqlSalesUnitOfWork:
     orders: SqlOrderCaseRepository
     quotes: SqlQuoteCaseRepository
     messages: SqlMessageLog
-    events: SqlCaseEventLog
+    overview: SqlOverviewReader
+    rule_versions: SqlRuleVersionStore
     served: SqlSourceServed
     artifacts: SqlArtifactLog
     worker: SqlWorkerSwitch
@@ -85,7 +87,8 @@ class SqlSalesUnitOfWork:
         self.orders = SqlOrderCaseRepository(session, scope)
         self.quotes = SqlQuoteCaseRepository(session, scope)
         self.messages = SqlMessageLog(session, scope)
-        self.events = SqlCaseEventLog(session, scope)
+        self.overview = SqlOverviewReader(session, scope)
+        self.rule_versions = SqlRuleVersionStore(session, scope)
         self.served = SqlSourceServed(session, scope)
         self.artifacts = SqlArtifactLog(session, scope)
         self.worker = SqlWorkerSwitch(session, scope)

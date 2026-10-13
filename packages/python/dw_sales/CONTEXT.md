@@ -42,6 +42,22 @@ API and the plan use the English terms. The spec is
   (`line_total_mismatch` otherwise). The lead time is checked per schedule,
   the MOQ, pack and price per line; the upload file has a row per schedule
   (ticket 21). A split line's dates are asked of the customer, never typed.
+- **Malware scan** (Quét mã độc): every attachment is scanned by ClamAV
+  before anything reads it, then held to its name (ticket 25). An infected
+  one routes its message to Sales (`malware_detected`) with nothing in it
+  read or served; a scanner that cannot answer leaves the message not yet
+  processed ("chưa quét được, thử lại"); a file that is not what its name
+  says, or an encrypted Office file, is refused unread.
+- **Date to follow** (Ngày giao báo sau): a PO line printed with its
+  requested date blank. It reads with no date and no schedule, and raises
+  `requested_date_missing`: Sales asks the customer for the date, or goes
+  ahead with it to follow, DW1 suggesting the first day the lead time allows
+  (ticket 34).
+- **PDF print** (Bản in PDF): a PDF print of a PO attached beside its
+  workbook in the same mail. The two are one PO, read from the workbook; the
+  print is kept as a second source, and a value it prints differently is
+  flagged `print_differs` on the workbook's value (`value_uncertain`), never a
+  second case (ticket 34).
 - **Legacy encoding** (Font tiếng Việt cũ): Vietnamese typed in a TCVN3
   (`.VnTime`, `.VnArial`, …) or VNI (`VNI-Times`, …) font, whose letters are
   stored as other characters ("Cña hµng" for "Cửa hàng"). DW1 detects it by
@@ -237,7 +253,8 @@ Routing reasons: `delivery_change` (Đổi lịch giao — PC, DW2), `complaint`
 (Khiếu nại — QA), `design_reply_unmatched` (Phản hồi Design không khớp
 YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác định
 được khách hàng), `attachment_unreadable` (Không đọc được file),
-`reply_to_case` (Trả lời về hồ sơ đang xử lý), `other` (Khác).
+`malware_detected` (Tệp đính kèm có mã độc), `reply_to_case` (Trả lời về hồ
+sơ đang xử lý), `other` (Khác).
 
 ## Finding dispositions
 
@@ -272,6 +289,7 @@ YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác
 | `customer_temporary`       | Khách hàng mã tạm thời               |
 | `sender_unverified`        | Chưa xác thực người gửi              |
 | `legacy_encoding`          | Font tiếng Việt cũ (TCVN3/VNI)       |
+| `requested_date_missing`   | Dòng chưa có ngày yêu cầu            |
 | `rfq_incomplete`           | Yêu cầu báo giá thiếu thông tin      |
 | `price_below_policy_floor` | Giá dưới mức sàn                     |
 | `price_floor_unknown`      | Không tính được giá sàn              |

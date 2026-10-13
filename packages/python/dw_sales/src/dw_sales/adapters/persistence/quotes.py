@@ -50,7 +50,7 @@ def _case(row: RowMapping) -> QuoteCase:
     )
 
 
-def _stored(row: RowMapping) -> Stored[QuoteCase]:
+def stored_quote(row: RowMapping) -> Stored[QuoteCase]:
     origin = CaseOrigin(
         assigned_to=row["assigned_to"], release_manifest_ref=row["release_manifest_ref"]
     )
@@ -67,7 +67,7 @@ class SqlQuoteCaseRepository:
     async def get(self, case_id: uuid.UUID) -> Stored[QuoteCase] | None:
         result = await self.session.execute(sa.select(_Q).where(_Q.c.id == case_id))
         row = result.mappings().first()
-        return None if row is None else _stored(row)
+        return None if row is None else stored_quote(row)
 
     async def list_all(self) -> Sequence[Stored[QuoteCase]]:
         rows = (
@@ -75,7 +75,7 @@ class SqlQuoteCaseRepository:
                 sa.select(_Q).order_by(_Q.c.created_at.desc(), _Q.c.id.desc())
             )
         ).mappings()
-        return [_stored(row) for row in rows]
+        return [stored_quote(row) for row in rows]
 
     async def cases_for_ycbg(self, ycbg_no: str) -> Sequence[QuoteCase]:
         rows = (
@@ -94,6 +94,7 @@ class SqlQuoteCaseRepository:
                     case_version=case.case_version,
                     status=case.status.value,
                     body=_body(case),
+                    received_at=case.request.received_at,
                     assigned_to=origin.assigned_to,
                     release_manifest_ref=origin.release_manifest_ref,
                 )
@@ -112,7 +113,12 @@ class SqlQuoteCaseRepository:
             await self.session.execute(
                 sa.update(_Q)
                 .where(_Q.c.id == case.case_id)
-                .values(case_version=case.case_version, status=case.status.value, body=_body(case))
+                .values(
+                    case_version=case.case_version,
+                    status=case.status.value,
+                    body=_body(case),
+                    received_at=case.request.received_at,
+                )
             )
             await self._event(case, was, event)
 

@@ -262,8 +262,24 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   `amr`, deny-by-default routes, `support.access` audit) and, step 10,
   `GET /audit/events?support_grant_id=` with `actor_display_name` and
   `actor_kind` (`support` only for the grant's own staff member; index
-  `f1980035d8de`). Open: the web `/audit` page does not show the two fields
-  yet; the realm change is applied by hand to a running Keycloak.
+  `f1980035d8de`). Reviewed 2026-10-13: the grant filter bound its
+  `details` key as a parameter, which a generic plan cannot match to the
+  index; the key is written into the statement now, held by a
+  `force_generic_plan` test. Open: the web `/audit` page does not show the
+  two fields yet; the realm change is applied by hand to a running Keycloak.
+
+- **`support-access/03`** (built 2026-10-13, uncommitted): the web support
+  session (`lib/support/`: the grant in `sessionStorage`, the header and the
+  grant's tenant on every request, closed on `support_grant_ended`), the
+  shell's banner slot, the landing registry (Sales lands on its orders), the
+  `/support` page, `supportStaffOnly`; `/support/my-grants` returns the
+  grant's stamped scopes and the web holds exactly those under a grant.
+  Owed: the Playwright run (spec written; Docker was down).
+
+- **Spans record no exception text** (2026-10-13, from Sales ticket 23's
+  review): `OtelTelemetry` records an exception's type and a `DWError`'s
+  message only, with the SDK's own `record_exception` off (it added the text
+  and the stack trace a second time). Stack traces stay in the logs.
 
 - **`tenant-members-and-invitations/01`:** `GET /admin/members` (tenant-wide,
   `vi-VN-x-icu` order, measured present), `PUT /admin/members/{id}/memberships`

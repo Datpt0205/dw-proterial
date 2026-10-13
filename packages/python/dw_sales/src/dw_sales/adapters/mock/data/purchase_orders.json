@@ -1457,5 +1457,88 @@
         "requested_date": "2026-12-04"
       }
     ]
+  },
+  {
+    "message_id": "M44",
+    "name": "VLX-PO-2610-0011.xlsx",
+    "layout": "xlsx",
+    "customer_code": "VLX",
+    "po_no": "VLX-PO-2610-0011",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "USD",
+    "remarks": "Ngày giao dòng 2 sẽ báo sau / Line 2 delivery date to follow",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "VX-C2F05",
+        "quantity": "6000",
+        "unit_price": "0.4850",
+        "requested_date": "2026-11-27"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "VX-C4B22",
+        "quantity": "3000",
+        "unit_price": "0.7120",
+        "requested_date": null
+      }
+    ]
+  },
+  {
+    "message_id": "M45",
+    "name": "BRN-PO-2610-018.xlsx",
+    "layout": "xlsx",
+    "customer_code": "BRN",
+    "po_no": "BRN-PO-2610-018",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "VND",
+    "remarks": "Bản PDF đính kèm để đối chiếu.",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "BRN-W-0007",
+        "quantity": "6100",
+        "unit_price": "1150",
+        "requested_date": "2026-11-16"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "BRN-C-0118",
+        "quantity": "2000",
+        "unit_price": "21800",
+        "requested_date": "2026-11-30"
+      }
+    ]
+  },
+  {
+    "message_id": "M45",
+    "name": "BRN-PO-2610-018.pdf",
+    "layout": "pdf",
+    "customer_code": "BRN",
+    "po_no": "BRN-PO-2610-018",
+    "revision": 0,
+    "po_date": "2026-09-30",
+    "currency": "VND",
+    "remarks": "Bản PDF đính kèm để đối chiếu.",
+    "buyer_address": "Lô C-12, Khu công nghiệp Thử Nghiệm, phường Mẫu Thử, tỉnh Giả Lập (địa chỉ giả lập)",
+    "print_of": "BRN-PO-2610-018.xlsx",
+    "lines": [
+      {
+        "no": 1,
+        "customer_item_code": "BRN-W-0007",
+        "quantity": "6100",
+        "unit_price": "1150",
+        "requested_date": "2026-11-23"
+      },
+      {
+        "no": 2,
+        "customer_item_code": "BRN-C-0118",
+        "quantity": "2000",
+        "unit_price": "21800",
+        "requested_date": "2026-11-30"
+      }
+    ]
   }
 ]

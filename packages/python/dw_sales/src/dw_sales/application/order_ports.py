@@ -89,6 +89,13 @@ class OrderRulesPort(Protocol):
 
     async def rules(self, scope: SalesScope) -> OrderRules: ...
 
+    async def rules_at(self, scope: SalesScope, ref: str) -> OrderRules | None:
+        """The version a case's stamp names (``sales_order_rules@x.y.z``):
+        the platform's or one of the tenant's own. None when this process no
+        longer holds it, and a recheck under it is refused (ticket 19: a later
+        read uses the stamp, not what is in force)."""
+        ...
+
 
 class OrderCaseLookupPort(Protocol):
     """The cases already opened for one customer PO number.

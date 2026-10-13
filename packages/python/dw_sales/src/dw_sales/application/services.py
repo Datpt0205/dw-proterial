@@ -41,11 +41,11 @@ from dw_sales.application.ports import (
 )
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
+from dw_sales.application.rules import SalesRulesService, TenantRuleBook
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
 from dw_sales.application.source import SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.worker_service import WorkerService
-from dw_sales.domain.kpi import SalesKpi
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,8 @@ class SalesServices:
     worker: WorkerService
     assignment: AssignmentService
     layouts: LayoutService
+    # A tenant's own rule versions, proposed and approved (ticket 19).
+    rules: SalesRulesService
     gate: Gate
 
 
@@ -85,7 +87,7 @@ def assemble(
     intake: OrderIntake,
     quotation: QuotationService,
     files: SourceViewPort,
-    kpi: SalesKpi,
+    book: TenantRuleBook,
     directory: MemberDirectoryPort,
     holders: ScopeHoldersPort,
     notifications: NotificationSenderPort,
@@ -115,7 +117,7 @@ def assemble(
         SalesSpans(telemetry),
     )
     services = SalesServices(
-        overview=OverviewService(uow, gate, clock, inbox, kpi, directory, pending),
+        overview=OverviewService(uow, gate, clock, inbox, book, directory, pending),
         inbox=InboxQueries(uow, gate, inbox, handoff_copy),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=OrderQueries(uow, gate, pending),
@@ -139,6 +141,7 @@ def assemble(
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
+        rules=SalesRulesService(uow, gate, book, clock, ids),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing)

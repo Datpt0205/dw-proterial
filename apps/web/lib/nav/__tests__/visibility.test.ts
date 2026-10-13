@@ -11,6 +11,7 @@ function item(overrides: Partial<NavItem>): NavItem {
 function viewer(scopes: string[], extra: Partial<NavViewer> = {}): NavViewer {
   return {
     isPlatformOperator: false,
+    isSupportStaff: false,
     hasScope: (scope) => scopes.includes(scope),
     roles: [],
     ...extra,
@@ -34,6 +35,17 @@ describe("isNavItemVisible", () => {
 
   it("hides an empty anyScope: a configuration error fails closed", () => {
     expect(isNavItemVisible(item({ anyScope: [] }), viewer(["a"]))).toBe(false);
+  });
+
+  it("shows a supportStaffOnly item to a support staff member only", () => {
+    const page = item({ supportStaffOnly: true });
+    expect(isNavItemVisible(page, viewer(["s"]))).toBe(false);
+    expect(
+      isNavItemVisible(page, viewer([], { isPlatformOperator: true })),
+    ).toBe(false);
+    expect(isNavItemVisible(page, viewer([], { isSupportStaff: true }))).toBe(
+      true,
+    );
   });
 
   it("keeps scope, operatorOnly and roles as they were", () => {

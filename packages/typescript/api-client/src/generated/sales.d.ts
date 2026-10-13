@@ -864,6 +864,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rules In Force */
+        get: operations["rules_in_force_api_v1_sales_rules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/rules/versions/{version_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Rules */
+        post: operations["decide_rules_api_v1_sales_rules_versions__version_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/rules/{key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Rules */
+        post: operations["propose_rules_api_v1_sales_rules__key__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/worker/pause": {
         parameters: {
             query?: never;
@@ -1425,7 +1476,7 @@ export interface components {
          * @description The order checks of the spec's findings table, one code each.
          * @enum {string}
          */
-        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding";
+        FindingCode: "code_unmapped" | "code_ambiguous" | "price_mismatch" | "currency_mismatch" | "uom_mismatch" | "quotation_missing" | "lme_band_mismatch" | "moq_violation" | "pack_multiple" | "line_total_mismatch" | "value_uncertain" | "customer_unknown" | "duplicate_po" | "requested_date_short_lt" | "missing_noc_esf" | "revised_po" | "revision_without_base" | "customer_temporary" | "sender_unverified" | "legacy_encoding" | "requested_date_missing";
         /**
          * FixedCopper
          * @description The price does not move with copper.
@@ -2186,6 +2237,7 @@ export interface components {
             prepared_at: string | null;
             /** Prepared By */
             prepared_by: string | null;
+            print_copy: components["schemas"]["PrintCopyView"] | null;
             /**
              * Received At
              * Format: date-time
@@ -2268,11 +2320,8 @@ export interface components {
             printed_schedules: boolean;
             /** Quantity */
             quantity: string;
-            /**
-             * Requested Date
-             * Format: date
-             */
-            requested_date: string;
+            /** Requested Date */
+            requested_date: string | null;
             /** Schedules */
             schedules: components["schemas"]["DeliveryScheduleView"][];
             /** Suggested Delivery Date */
@@ -2388,6 +2437,20 @@ export interface components {
             /** Y */
             y: number;
         };
+        /**
+         * Page
+         * @description A page of results and the cursor that continues it.
+         *
+         *     ``next_cursor`` is ``None`` on the last page, and that — not an empty
+         *     ``items`` — is the client's stop condition: a filtered listing can return an
+         *     empty page in the middle of a run and still have more rows behind it.
+         */
+        Page_WorkItem_: {
+            /** Items */
+            items: components["schemas"]["WorkItem"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** PauseBody */
         PauseBody: {
             /** Reason */
@@ -2407,6 +2470,12 @@ export interface components {
             approval_id: string;
             /** Approval Type */
             approval_type: string;
+        };
+        /** PlatformRuleView */
+        PlatformRuleView: {
+            key: components["schemas"]["RuleKey"];
+            /** Ref */
+            ref: string;
         };
         /** PreviewLineView */
         PreviewLineView: {
@@ -2478,6 +2547,24 @@ export interface components {
             lines: components["schemas"]["PricedLineView"][];
             lme: components["schemas"]["LmeView"] | null;
             management_guidance: components["schemas"]["Words"] | null;
+        };
+        /** PrintCopyView */
+        PrintCopyView: {
+            /** Attachment Id */
+            attachment_id: string;
+            /** Differences */
+            differences: components["schemas"]["PrintDifferenceView"][];
+        };
+        /**
+         * PrintDifferenceView
+         * @description A value the PDF print shows differently, and where it shows it.
+         */
+        PrintDifferenceView: {
+            anchor: components["schemas"]["SourceAnchor"];
+            /** Field */
+            field: string;
+            /** Line No */
+            line_no: number | null;
         };
         /** ProcessAllView */
         ProcessAllView: {
@@ -2782,7 +2869,7 @@ export interface components {
          *     would see something else than the reader read.
          * @enum {string}
          */
-        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout";
+        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs";
         /**
          * RenderBody
          * @description An artifact kind to render from the case at the version the caller saw;
@@ -2903,6 +2990,94 @@ export interface components {
              * Format: uuid
              */
             returned_by: string;
+        };
+        /** RuleDecision */
+        RuleDecision: {
+            /** Approve */
+            approve: boolean;
+            /** Comment */
+            comment?: string | null;
+        };
+        /**
+         * RuleKey
+         * @description The Sales policies a tenant may hold its own version of.
+         * @enum {string}
+         */
+        RuleKey: "sales_order_rules" | "sales_kpi";
+        /**
+         * RuleProposalBody
+         * @description A whole policy document for one key, validated by that key's schema.
+         */
+        RuleProposalBody: {
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * RuleVersionView
+         * @description A version as the rules list shows it: who proposed and decided it, and
+         *     the document only to whoever may propose (it can hold price rules).
+         */
+        RuleVersionView: {
+            /** Comment */
+            comment: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            };
+            key: components["schemas"]["RuleKey"];
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "platform" | "tenant";
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /**
+             * Proposed By
+             * Format: uuid
+             */
+            proposed_by: string;
+            /** Ref */
+            ref: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "rejected" | "superseded";
+            /** Version */
+            version: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /**
+         * RulesInForceView
+         * @description What applies to the tenant now, per key, and every version it holds.
+         */
+        RulesInForceView: {
+            /** In Force */
+            in_force: {
+                [key: string]: string;
+            };
+            /** Layers */
+            layers: {
+                [key: string]: "platform" | "tenant";
+            };
+            /** Platform */
+            platform: components["schemas"]["PlatformRuleView"][];
+            /** Versions */
+            versions: components["schemas"]["RuleVersionView"][];
         };
         /**
          * ScreeningRow
@@ -3721,7 +3896,11 @@ export interface operations {
     };
     my_work_api_v1_sales_my_work_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                /** @description Opaque cursor from a previous page. */
+                cursor?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3734,7 +3913,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkItem"][];
+                    "application/json": components["schemas"]["Page_WorkItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5053,6 +5241,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rules_in_force_api_v1_sales_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesInForceView"];
+                };
+            };
+        };
+    };
+    decide_rules_api_v1_sales_rules_versions__version_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleVersionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_rules_api_v1_sales_rules__key__versions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                key: components["schemas"]["RuleKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleProposalBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleVersionView"];
                 };
             };
             /** @description Validation Error */

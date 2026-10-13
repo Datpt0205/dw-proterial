@@ -345,7 +345,7 @@ async def test_the_model_pre_fills_a_mapping_that_passes_every_check() -> None:
     assert prefill is not None and prefill.outcome == "proposed"
     assert prefill.mapping is not None and prefill.mapping.unit_price == "Price"
     assert prefill.mapping.pdf_columns is not None  # found by code on the form
-    assert (prefill.prompt, prefill.rules) == (str(LAYOUT_PROPOSAL), "sales_order_rules@1.4.1")
+    assert (prefill.prompt, prefill.rules) == (str(LAYOUT_PROPOSAL), "sales_order_rules@1.5.1")
     source = await world.services.layouts.source(AN.context(), "M43", "M43-A1")
     assert source.prefill == prefill
     proposed = await world.services.layouts.propose(AN.context(), "M43", "M43-A1", prefill.mapping)
@@ -560,7 +560,7 @@ def _document(*, requested: date, po_date: date) -> PoDocument:
         {
             "attachment_id": "X-A1",
             "attachment_sha256": "0" * 64,
-            "parser_version": "excel_po_reader@1.4.0",
+            "parser_version": "excel_po_reader@1.5.0",
             "header": {
                 "po_no": "X-1",
                 "revision": 0,

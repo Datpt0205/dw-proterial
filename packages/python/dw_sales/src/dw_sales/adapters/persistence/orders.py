@@ -68,6 +68,9 @@ def _case_columns(case: OrderCase) -> dict[str, Any]:
         "po_no": case.header.po_no,
         "case_version": case.case_version,
         "status": case.status.value,
+        # The current revision's, kept on the case for the work list's order
+        # (ticket 24); `order_revisions` stays its record.
+        "received_at": case.received_at,
         "rules_version": case.rules_version,
         "catalog_as_of": case.catalog_as_of,
         "cross_check_required": case.cross_check_required,

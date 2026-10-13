@@ -41,6 +41,8 @@ PIC = frozenset(
         "sales.order.cross_check",
         "sales.quote.prepare",
         "sales.worker.pause",
+        # Proposes a tenant's own rule version (57a241ea182b, ticket 19).
+        "sales.rules.propose",
     }
 )
 HEAD = PIC | {
@@ -51,6 +53,8 @@ HEAD = PIC | {
     "sales.case.assign",
     # Decides a PO layout a PIC mapped (63242ec52c4b, ticket 30).
     "sales.layout.approve",
+    # Decides a rule version a PIC proposed (57a241ea182b, ticket 19).
+    "sales.rules.approve",
 }
 # (subject, tenant) -> the `sales.*` scopes the spec's actor table gives them.
 SPEC: dict[tuple[str, str], frozenset[str]] = {

@@ -1,6 +1,6 @@
 # 02 — Ngữ cảnh hỗ trợ: MFA, route mặc định từ chối, audit
 
-Status: resolved (bước 10 xong 12/10/2026; ngoài code còn áp realm cho môi trường đã chạy và bản token che chữ ký, xem Comments)
+Status: resolved (bước 10 xong 12/10/2026, review đối kháng 13/10/2026; ngoài code còn áp realm cho môi trường đã chạy và bản token che chữ ký, xem Comments)
 Blocked by: 01
 Area: platform-runtime
 
@@ -201,3 +201,37 @@ FROM PUBLIC`, `dw_app` EXECUTE. `GET /support/my-grants` (chỉ nhân viên hỗ
   `staff_user_id`, gỡ so mã quyền, gỡ lọc, gỡ lọc workspace → mỗi lần đỏ. Unit
   `test_run_and_audit_reads.py`: tên và loại actor, lọc, mã sai dạng 422, cursor
   gắn với lọc (bốn ca); route bỏ lọc → đỏ, cursor bỏ lọc → đỏ hai ca.
+- 13/10/2026, **review đối kháng bước 10** (agent, Đạt vắng). Một lỗi, đã sửa:
+  **lọc theo quyền không dùng index của nó trong generic plan.** SQLAlchemy
+  viết `details[SUPPORT_GRANT_DETAIL].astext` thành `details ->> $1`: khóa là
+  tham số. asyncpg prepare mọi câu, và sau năm lần chạy Postgres có thể chuyển
+  sang generic plan; `details ->> $1` không khớp biểu thức của
+  `ix_audit_events_support_grant` (`details ->> 'support_grant_id'`), nên trang
+  có lọc quét cả nhật ký của workspace qua `ix_audit_events_page` rồi lọc.
+  **Đo** trên DB dev với `plan_cache_mode = force_generic_plan`: khóa là tham
+  số → Index Scan của index trang + `Filter: (details ->> $1) = $2`; khóa viết
+  thẳng → Index Cond trên index của quyền. Ước tính chi phí hai plan gần như
+  bằng nhau khi bảng nhỏ, nên chế độ `auto` có thể chọn generic. Nay khóa viết
+  thẳng vào câu (`literal_column`), câu tách ra
+  `SqlAuditRepository.page_query`. Test integration
+  `test_a_grants_trail_uses_its_index_in_a_generic_plan`: 5.000 sự kiện (50
+  có mã quyền) ghi và `ANALYZE` trong một transaction rồi rollback,
+  `PREPARE`/`EXPLAIN EXECUTE` dưới `force_generic_plan` (EXPLAIN có tham số tự
+  nó là custom plan, đã thử), khẳng định plan là generic và dùng index của
+  quyền. **Mutation:** trả lại khóa dạng tham số → test đỏ (plan in ra
+  `Filter: ((details ->> $1) = ($3)::text)`).
+- Đã kiểm, không đổi: `EXISTS` tìm `actor_kind` dùng
+  `ix_support_grants_staff_user_id_status` (plan: Index Cond
+  `staff_user_id = audit_events.actor_id`), nên so `id::text` không làm quét
+  bảng quyền; RLS của `support_grants` giới hạn theo tenant; route chỉ nhận
+  `support_grant_id` dạng UUID (422); dấu vân tay cursor có lọc; ngữ cảnh hỗ
+  trợ gọi `/audit/events` → 403 (SA7); tenant B và ws2 đọc 0 dòng (test SA10).
+  `reviewing-deployment-security`: không thêm route, header, CORS hay image;
+  một tham số query trên route có sẵn, kiểm scope của route không đổi (ticket
+  02 của `approval-audit-and-workspace`).
+- **As built (review):**
+  `packages/python/dw_platform/src/dw_platform/adapters/persistence/repositories.py`
+  (`page_query`, khóa viết thẳng),
+  `packages/python/dw_platform/tests/integration/test_support_staff_access.py`
+  (một test). `test_support_staff_access.py`, `test_rls_coverage.py`,
+  `test_privileges.py`: 31 passed.

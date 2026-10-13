@@ -106,6 +106,7 @@ export const ROUTING_REASON = {
   sample_request: "Yêu cầu hàng mẫu",
   customer_unknown: "Chưa xác định được khách hàng",
   attachment_unreadable: "Không đọc được file",
+  malware_detected: "Tệp đính kèm có mã độc",
   reply_to_case: "Trả lời về hồ sơ đang xử lý",
   other: "Khác",
 } as const;
@@ -140,6 +141,7 @@ export const FINDING_CODE = {
   customer_temporary: "Khách hàng mã tạm thời",
   sender_unverified: "Chưa xác thực người gửi",
   legacy_encoding: "Font tiếng Việt cũ (TCVN3/VNI)",
+  requested_date_missing: "Dòng chưa có ngày yêu cầu",
   rfq_incomplete: "Yêu cầu báo giá thiếu thông tin",
   price_below_policy_floor: "Giá dưới mức sàn",
   price_floor_unknown: "Không tính được giá sàn",
@@ -285,6 +287,8 @@ export const REGION_FLAG = {
   font_matches_fill: "Chữ trùng màu nền",
   formula_without_cached_value: "Công thức chưa có giá trị",
   model_read: "Mô hình đọc, cần xác nhận",
+  new_layout: "Mẫu PO mới duyệt, cần xác nhận",
+  print_differs: "Bản in PDF ghi khác",
 } as const;
 
 /** The fields a source anchor names, as a person reads them. */

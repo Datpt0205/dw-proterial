@@ -8,6 +8,74 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-13, ticket 25 needs-info, 27 needs-info (agent, Đạt away; "As
+  built" and Comments in each ticket):
+    - **25, built.** Every attachment is scanned by ClamAV before anything
+      reads it (`ScannedInbox` in `build_dw1`), then held to its name: an
+      infected one routes its message `malware_detected` unread and audited
+      (ids and signature), a scanner that cannot answer leaves it not yet
+      processed (503 "chưa quét được, thử lại"), a renamed program or an
+      encrypted Office file is refused unread; every reader call has a wall
+      clock. Compose `clamav` (`clamav/clamav:1.5.4` by digest, own internal
+      network `dw-scan`, read-only, no capabilities, 947 MiB resident, trivy
+      0 HIGH/CRITICAL); EICAR caught by the real clamd; CI starts it.
+      Migration `13c687788955`. `DW_SALES_MALWARE_SCAN=skip` for a host-run
+      local API only (refused where a deployed process reads a mailbox).
+    - **25, owed.** Acceptance 5, parsing in a sandbox: which one (docgen, or
+      a reader container of its own) and whether "DW xử lý" may become
+      asynchronous. The integration suites it touches were running when
+      Docker's WSL VM died, and are owed.
+    - **27.** Not started: it runs in 25's sandbox, and the measurements need
+      Docker. `WslService` is stuck in StopPending; restarting it needs an
+      administrator. Ollama was not touched.
+- 2026-10-13, tickets 23 (review), 24 and 19 done (agent, Đạt away;
+  uncommitted; Comments and "As built" in each ticket):
+    - **23.** The review found the end-to-end test asserting that no model
+      was called, since 28-33 made DW1 call one; a new test runs M36's
+      description reading on the real gateway and finds no prompt, answer or
+      12-character window of a description in any span or log. And every
+      span exported the text and stack trace of any exception crossing it,
+      the SDK recording it a second time on its own: a span now records the
+      type and a `DWError`'s message only (`dw_observability.otel`).
+    - **24.** The overview's figures are SQL aggregates and the work list is
+      a keyset page (`GET /my-work?limit&cursor`), behind `OverviewReadPort`;
+      the old Python computation is the in-memory store's and the test's
+      reference, held equal over the walked demo. Partial indexes on open
+      work (migration `6d0252a87a6c`); measured on 50,000 cases: 51 rows
+      read, 0.5 ms generic plan. The kernel cursor gained an optional leading
+      `group` (the due date).
+    - **19.** A tenant's own `sales_order_rules` and `sales_kpi` versions are
+      proposed (PIC or head), approved (head, never the proposer) and
+      resolved through `TenantOverlay`; a recheck reads the version its case
+      stamped. `sales.rule_versions` (migration `57a241ea182b`, narrowed by
+      tenant only), `/api/v1/sales/rules`. The demo tenant's `1.5.1` is
+      proposed by An and approved by Giang through the service at
+      `make demo-reset`; the API no longer reads the sample set's policies.
+      The quote rules, pricing, copy and upload template: ticket 36.
+    - **Owed.** Docker Desktop (WSL) stopped answering at 22:00 mid-run: the
+      full Sales integration suite was not re-run after 19's last changes
+      (ticket 19, "Owed").
+- 2026-10-13, ticket 34 done (agent, Đạt away; "As built" and Comments in
+  the ticket): a PO line printed with no requested date (blank, or a dash)
+  reads with none and raises `requested_date_missing` (ask the customer, or
+  accept with the date to follow), in both readers and through an approved
+  layout; an `.xlsx` and its PDF print in one mail are one PO read from the
+  workbook, the print kept as a source and each value it shows differently
+  `value_uncertain` (`print_differs`). Rules `sales_order_rules@1.5.0`, the
+  demo tenant's `1.5.1` (replaces `1.4.1`), readers `@1.5.0`, migration
+  `a459e2244a9c`, mock M44 and M45 (the mailbox is 45 messages). Found on the
+  way: a PDF anchor's quote showed prices to a viewer without amounts (support
+  and leadership); the order view now leaves a price's anchor out.
+- 2026-10-13, ticket 21 done (agent, Đạt away; built in `dd5ef1d`, verified,
+  finished and reviewed; "As built" and Comments in the ticket): a PO line
+  keeps every delivery schedule from the reader to the upload file (a row per
+  schedule, `sales_bravo_upload@1.1.0`), the cross-check sheet and the order
+  page. Review added a PostgreSQL round trip (M34) and found a cubic
+  backtracking pattern on customer text in the schedule list (75 s on one
+  4,000-character entry) and a quadratic one in the PDF total; both are linear
+  now, each with a test that goes red with the pattern back. Ticket 35
+  (needs-triage): confirmation is one date per line, so a split line is
+  confirmed as one delivery.
 - 2026-10-13, tickets 32, 33 and 30 built (uncommitted; Đạt away, on his
   pre-authorisation; "As built" and Comments in each ticket):
     - **What.** A customer's reply is attached to its case by its thread
@@ -362,7 +430,21 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 | 06     | `2f737ca` | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
 | 08     | `88fb7b6` | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown       |
 | 09     | `2284d3c` | Evals `sales@1.0.0` + graders injected; security reviews; demo runbook, `demo-reset`, Playwright walk    |
-| 10     | (pending) | DW1 on the runtime: checker decisions are platform approvals, decide scope stamped, makers refused       |
+| 10     | `8d098b3` | DW1 on the runtime: checker decisions are platform approvals, decide scope stamped, makers refused       |
+| 12     | `e60592c` | Triaged into 13-27; what waits on the requirements doc stays (needs-info)                                |
+| 13     | `a995031` | The quote approval panel sees a newly rendered preview                                                   |
+| 14     | `4027c0d` | An order whose cross-check failed to apply is cross-checked again                                        |
+| 17     | `4db04fc` | The head reassigns a case                                                                                |
+| 15, 16 | `8ac3d33` | Per-field value corrections; the DW1 mailbox lane                                                        |
+| 18     | `395dbf3` | Web vitest on every push, the DW1 browser walk on main and nightly                                       |
+| 20, 22 | `dd5ef1d` | Legacy Vietnamese encodings refused; FPT support reads cases without prices                              |
+| 26     | `dd5ef1d` | Public-repo guard over `git ls-files`, deny-list outside git                                             |
+| 21, 23 | `dd5ef1d` | Built there; 21 finished and 23 reviewed 2026-10-13 (uncommitted)                                        |
+| 28     | `61a5ae5` | A local model reads free-text item descriptions; code verifies (ADR 0005)                                |
+| 29, 31 | `1009491` | A local model reads RFQs in any shape and classifies unread mail                                         |
+| 30-33  | `e97042b` | Model steps for case replies, hand-offs and new PO layouts                                               |
+| 34     | (pending) | Blank requested dates, an `.xlsx` and its PDF print as one PO                                            |
+| 24, 19 | (pending) | Overview figures and a paged work list in SQL; a tenant's own rules proposed and approved (2026-10-13)   |
 
 ## Open
 
@@ -437,8 +519,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   decide); the web client types need `pnpm run generate:api-types`.
 
 - From ticket 05 (2026-10-05):
-    - The overview loads every case of the workspace; SQL aggregates before
-      real volume (ticket 12).
+    - The overview loaded every case of the workspace: SQL aggregates and a
+      paged work list since ticket 24 (2026-10-13).
     - The A3 shadow count uses interim conditions (no finding, every line
       exact, an original) until Proterial defines A3.
     - Ticket 08 must render a served PDF page with pdf.js scripting off and

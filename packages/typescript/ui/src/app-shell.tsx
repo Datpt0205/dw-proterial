@@ -20,6 +20,11 @@ export interface AppShellProps {
   selectedKey?: string;
   /** What sits at the end of the bar: notifications, account. */
   actions?: ReactNode;
+  /**
+   * A strip under the bar on every page while a state of the session holds:
+   * the support-grant banner (support-access ticket 03). Nothing when absent.
+   */
+  banner?: ReactNode;
   children: ReactNode;
 }
 
@@ -64,6 +69,7 @@ export function AppShell({
   navItems,
   selectedKey,
   actions,
+  banner,
   children,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -124,6 +130,7 @@ export function AppShell({
           />
         </nav>
       </Drawer>
+      {banner}
       <Layout.Content className="px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
         <div className="mx-auto w-full max-w-[100rem]">{children}</div>
       </Layout.Content>

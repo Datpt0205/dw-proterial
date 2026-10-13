@@ -57,7 +57,7 @@ from dw_sales.domain.orders import (
 pytestmark = pytest.mark.unit
 
 POLICY = Path(__file__).resolve().parents[5] / "configs" / "policies"
-SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.4.0.yaml")
+SHIPPED = load_order_rules(POLICY / "sales_order_rules@1.5.0.yaml")
 PO_DATE = date(2026, 9, 24)
 # 2026-09-24 20:00 UTC is already 25 September in Hanoi.
 RECEIVED = datetime(2026, 9, 24, 20, 0, tzinfo=UTC)
@@ -202,7 +202,7 @@ def _codes(check: Any) -> list[tuple[str, str | None, str | None]]:
 def test_the_shipped_rules_stamp_their_version_and_severity_on_a_finding() -> None:
     finding = SHIPPED.finding(FindingCode.REVISED_PO)
 
-    assert (finding.rule_version, finding.severity) == ("sales_order_rules@1.4.0", Severity.WARNING)
+    assert (finding.rule_version, finding.severity) == ("sales_order_rules@1.5.0", Severity.WARNING)
     assert SHIPPED.cross_check_required is True
     assert SHIPPED.export_control_mode == "warn"
 
@@ -910,3 +910,49 @@ def test_a_split_po_is_never_a_duplicate_of_an_erp_order_holding_the_line_once()
     assert history.finding is not None
     assert (history.finding.code, history.duplicate_of_so) == (FindingCode.REVISED_PO, None)
     assert _history(_document(), orders=(_bravo(),)).finding.code is FindingCode.DUPLICATE_PO
+
+
+# ---------------------------------------------- a blank date (ticket 34) --
+
+
+def test_a_line_with_no_date_is_requested_date_missing_and_suggested_the_lead_time() -> None:
+    """Received 25 September (Hanoi) + 35 days = 30 October: with no date to
+    hold it to, DW1 suggests the first day the lead time allows."""
+    check = _run(_po_line(requested_date=None), quotation=_quotation())
+
+    (finding,) = check.findings
+    assert (finding.code, finding.severity, finding.line_no) == (
+        FindingCode.REQUESTED_DATE_MISSING,
+        Severity.ERROR,
+        1,
+    )
+    assert check.line.suggested_delivery_date == date(2026, 10, 30)
+    assert "lead_time" in check.line.basis.checks_run
+
+
+def test_a_line_with_no_date_is_still_missing_one_when_its_code_is_not_known() -> None:
+    unmapped = MappedLine(LineMapping(status=MappingStatus.UNMAPPED), None, None)
+
+    check = _run(_po_line(requested_date=None), mapped=unmapped)
+
+    assert {f.code for f in check.findings} == {
+        FindingCode.CODE_UNMAPPED,
+        FindingCode.REQUESTED_DATE_MISSING,
+    }
+
+
+def test_a_line_with_no_date_adds_up_without_schedules() -> None:
+    document = _document(_po_line(requested_date=None))
+
+    assert check_document(document, SHIPPED) == ()
+
+
+def test_a_line_with_no_date_is_one_a_bravo_order_without_it_does_not_hold() -> None:
+    """The Bravo order holds line 1 and nothing else: the PO's dateless line 2
+    is still a line it lacks, so the PO is no duplicate of it."""
+    document = _document(_po_line(1), _po_line(2, requested_date=None))
+
+    history = _history(document, orders=(_bravo(),))
+
+    assert history.finding is not None
+    assert history.finding.code is FindingCode.REVISED_PO

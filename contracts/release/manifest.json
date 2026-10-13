@@ -95,7 +95,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "100949111c1a36e531a96e60ce707e7b4f3f6392",
+  "git_sha": "e97042b5f8ba2444930478cb5851e0ca0083dc5c",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",
@@ -144,6 +144,11 @@
       "checksum": "6e84ce584ebd76202516a8bb7a5ef4766c5e8744958869fabb4b3095f12c8d5a",
       "policy_id": "sales_order_rules",
       "version": "1.4.0"
+    },
+    {
+      "checksum": "4b9ab643aae271bf1f74e9d8b87eaaf0ca5ffee5dfd4e6f56ca4befdddb9cf9c",
+      "policy_id": "sales_order_rules",
+      "version": "1.5.0"
     },
     {
       "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",

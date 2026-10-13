@@ -55,7 +55,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.4.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.5.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -331,8 +331,12 @@ async def _line_findings(
     if line.quantity % item.pack_multiple:
         found.add("pack_multiple")
     lead_times = [item.standard_lead_time_days] + ([quotation.lead_time_days] if quotation else [])
-    # Each schedule's date on its own (ticket 21); a line with one date has one.
-    for requested in [s.requested_date for s in line.schedules] or [line.requested_date]:
+    # Each schedule's date on its own (ticket 21); a line with one date has
+    # one, and a line printed with none has nothing to hold (ticket 34).
+    if line.requested_date is None:
+        found.add("requested_date_missing")
+    printed: list[date | None] = [s.requested_date for s in line.schedules]
+    for requested in [day for day in printed or [line.requested_date] if day is not None]:
         if requested < po.po_date + timedelta(days=min(lead_times)):
             found.add("requested_date_short_lt")
         else:
@@ -375,6 +379,25 @@ def _uncertain_lines(po: PurchaseOrderDocument) -> set[Finding]:
         for line in page
     }
     return {("value_uncertain", no) for no in set(po.hidden_lines) | on_hidden_pages}
+
+
+def _printed_otherwise(
+    po: PurchaseOrderDocument, printed: PurchaseOrderDocument | None
+) -> set[Finding]:
+    """A value the PDF print beside the workbook shows differently is
+    uncertain where the workbook prints it: on its line, or on the PO."""
+    if printed is None:
+        return set()
+    assert printed.print_of == po.name, f"{po.message_id}: a print of another workbook"
+    assert [line.no for line in printed.lines] == [line.no for line in po.lines], po.message_id
+    found: set[Finding] = {
+        ("value_uncertain", ours.no)
+        for ours, theirs in zip(po.lines, printed.lines, strict=True)
+        if ours != theirs
+    }
+    if (po.po_date, po.currency) != (printed.po_date, printed.currency):
+        found.add(("value_uncertain", None))
+    return found
 
 
 async def _history(
@@ -444,6 +467,7 @@ async def _order_outcome(
     message: InboundMessage,
     po: PurchaseOrderDocument,
     revisions: dict[tuple[str, str], list[int]],
+    printed: PurchaseOrderDocument | None = None,
 ) -> Outcome:
     received = message.received_at.date()
     findings: set[Finding] = set()
@@ -468,6 +492,7 @@ async def _order_outcome(
     findings |= _compliance_findings(customer, po.po_date, received)
     findings |= _po_total_findings(po)
     findings |= _uncertain_lines(po)
+    findings |= _printed_otherwise(po, printed)
     if po.legacy_font_lines:
         findings.add(("legacy_encoding", None))
     if forwarded:
@@ -490,7 +515,9 @@ def _buyer_name(catalog_customers: dict[str, Customer], po: PurchaseOrderDocumen
 
 
 async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Outcome]:
-    orders = {po.message_id: po for po in load_purchase_orders()}
+    # A PDF print beside its workbook is no PO of its own (ticket 34).
+    orders = {po.message_id: po for po in load_purchase_orders() if po.print_of is None}
+    prints = {po.message_id: po for po in load_purchase_orders() if po.print_of is not None}
     requests = {rfq.message_id: rfq for rfq in load_quote_requests()}
     # Requests in the customer's own form: no reader reads one, so without a
     # model each is routed (ticket 29; what a model makes of them is the
@@ -525,7 +552,9 @@ async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Ou
             elif customer is None:
                 outcome = Outcome(None, "po", ("routed_to_sales", "customer_unknown"), frozenset())
             else:
-                outcome = await _order_outcome(catalog, customer, forwarded, message, po, revisions)
+                outcome = await _order_outcome(
+                    catalog, customer, forwarded, message, po, revisions, prints.get(mid)
+                )
         elif (rfq := requests.get(mid)) is not None:
             customer, forwarded = await _attribute(
                 catalog, message, customers[rfq.customer_code].name
@@ -780,9 +809,12 @@ def test_every_routing_reason_but_other_and_every_disposition_is_given() -> None
     assert reasons >= {"customer_unknown", "complaint", "other"}, "the glossary was misread"
     assert {kind for kind, _ in claimed} <= dispositions
     # `reply_to_case` is given by a model's reading alone (ticket 31), which
-    # this table, what DW1 does without a model, never runs.
+    # this table, what DW1 does without a model, never runs. `malware_detected`
+    # is a scanner's verdict (ticket 25): no mock file carries malware, since
+    # an EICAR file in git is quarantined by the antivirus of whoever checks
+    # it out; `test_malware_scan.py` and clamd's own test give it.
     given = {reason for _, reason in claimed if reason}
-    assert given - {"other"} == reasons - {"other", "reply_to_case"}
+    assert given - {"other"} == reasons - {"other", "reply_to_case", "malware_detected"}
     # Not one message is left without a decision.
     assert "not_yet_processed" not in {kind for kind, _ in claimed}
 

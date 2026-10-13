@@ -45,6 +45,15 @@ def test_a_cursor_round_trips_to_the_position_it_was_minted_from() -> None:
     assert decode_cursor(encode_cursor(position, _QUERY), _QUERY) == position
 
 
+def test_a_cursor_keeps_a_leading_group_and_omits_an_empty_one() -> None:
+    grouped = CursorPosition(sort_value=_EPOCH, tiebreaker=uuid.uuid4(), group="2026-10-20")
+    assert decode_cursor(encode_cursor(grouped, _QUERY), _QUERY) == grouped
+    # A listing without a group mints the cursor it minted before the field.
+    plain = _position()
+    payload = json.loads(base64.urlsafe_b64decode(encode_cursor(plain, _QUERY) + "=="))
+    assert "g" not in payload
+
+
 def test_a_cursor_survives_a_url_without_escaping() -> None:
     # The whole point of stripping base64 padding and using the urlsafe
     # alphabet: a client appends the cursor to a query string verbatim.

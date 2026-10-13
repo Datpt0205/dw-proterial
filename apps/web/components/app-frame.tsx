@@ -32,6 +32,8 @@ import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { FeedbackLauncher } from "./feedback/launcher";
+import { SupportBannerSlot } from "./support-banner";
+import { useSupportGrant } from "../lib/support/session";
 
 function CenteredCard({ children }: { children: ReactNode }) {
   return (
@@ -121,10 +123,13 @@ function menuItems(
  * active; every other state gets a dedicated full-screen view. */
 export function AppFrame({ children }: { children: ReactNode }) {
   const auth = useAuth();
-  const { status, error, logout, active, isPlatformOperator } = auth;
+  const { status, error, logout, active, isPlatformOperator, isSupportStaff } =
+    auth;
   const pathname = usePathname();
   const router = useRouter();
   const badges = useNavBadges();
+  // A grant open in this tab: its pages are reached through it.
+  const grant = useSupportGrant();
   const { token } = theme.useToken();
 
   // The nav the user can actually reach, and the bar drawn from it: a
@@ -144,8 +149,19 @@ export function AppFrame({ children }: { children: ReactNode }) {
     if (!active && isPlatformOperator && !pathname.startsWith("/platform")) {
       return "/platform";
     }
+    // A support staff member with no membership of their own (ADR 0024)
+    // works only through the grants listed on /support.
+    if (
+      !active &&
+      !isPlatformOperator &&
+      isSupportStaff &&
+      !grant &&
+      !pathname.startsWith("/support")
+    ) {
+      return "/support";
+    }
     return null;
-  }, [status, active, isPlatformOperator, pathname]);
+  }, [status, active, isPlatformOperator, isSupportStaff, grant, pathname]);
 
   useEffect(() => {
     if (redirectTo) router.replace(redirectTo);
@@ -238,6 +254,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
         workspace={<WorkspaceSwitcher />}
         navItems={menuItems(nav, current, badges, token)}
         selectedKey={current}
+        banner={<SupportBannerSlot />}
         actions={
           <>
             <NotificationBell />

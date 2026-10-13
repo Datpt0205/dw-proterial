@@ -61,6 +61,7 @@ import { OrderActions } from "./actions";
 import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
 import { LinesTable } from "./lines";
+import { PrintCopyNotice } from "./print-copy";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Anchor = SalesSchemas["SourceAnchor"];
@@ -79,6 +80,10 @@ function anchorOf(
   field: string,
   lineNo: number | null,
 ): Anchor | null {
+  // `print:<n>`: where the PDF print shows a value differently (ticket 34).
+  const printed = /^print:(\d+)$/.exec(field);
+  if (printed)
+    return order.print_copy?.differences[Number(printed[1])]?.anchor ?? null;
   if (lineNo === null)
     return (
       order.header_anchors[field] ??
@@ -390,6 +395,8 @@ function OrderDetail() {
             : undefined
         }
       />
+
+      <PrintCopyNotice order={data} onOpenSource={openSource} />
 
       <FindingsPanel
         order={data}

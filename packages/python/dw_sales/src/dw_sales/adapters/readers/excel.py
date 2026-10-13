@@ -17,6 +17,10 @@ checks raise `legacy_encoding` and nothing is matched on it (ticket 20). The
 cell's font is the one openpyxl reports; a font set on part of a cell's text
 (rich text) is not read.
 
+**A line with a blank date cell**, or one holding only a dash, reads with no
+requested date ("date to follow"), anchored at that cell; the checks raise
+`requested_date_missing` (ticket 34).
+
 **A line split over several delivery dates** (ticket 21) prints its schedules
 as rows under it, each with a quantity and a date and nothing else, its own
 date cell left blank; or as a "date: quantity" list in its date cell. Either
@@ -49,7 +53,7 @@ from openpyxl.worksheet.cell_range import CellRange
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import ValidationError
 
-from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules
+from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules, no_date
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LabelCell
 from dw_sales.domain.legacy_fonts import legacy_encoding
@@ -73,7 +77,7 @@ from dw_sales.domain.orders import (
 )
 from dw_sales.domain.rfq_reading import parse_currency
 
-PARSER_VERSION = "excel_po_reader@1.4.0"
+PARSER_VERSION = "excel_po_reader@1.5.0"
 # A form need not print its revision: its POs then read as revision 0, the
 # value anchored where the PO number is (ticket 30).
 REQUIRED_HEADER = frozenset({"po_no", "po_date", "currency"})
@@ -768,7 +772,10 @@ _LINE_VALUES: Mapping[PoLineField, Callable[[object], object]] = {
     "uom": _text,
     "unit_price": _number,
     "amount": _number,
-    "requested_date": _day,
+    # Blank is "date to follow" (ticket 34): the line reads, the checks ask.
+    "requested_date": lambda value: (
+        None if _blank(value) or (isinstance(value, str) and no_date(value)) else _day(value)
+    ),
 }
 
 

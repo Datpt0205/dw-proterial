@@ -104,6 +104,9 @@ def _lane(
         model_provider="mock",
         sales_demo_tenant_id=str(tenancy.tenant),
         sales_demo_workspace_id=str(tenancy.workspace),
+        # No clamd beside this suite: the lane reads unscanned files, which
+        # only a profile that is not deployed may (ticket 25).
+        sales_malware_scan="skip",
     )
     built = build_sales_inbox_lane(
         settings, sessions, clock=SystemClock(), ids=Uuid4Generator(), telemetry=NullTelemetry()

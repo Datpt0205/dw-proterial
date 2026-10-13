@@ -34,6 +34,11 @@ export interface NavItem {
   badgeKey?: string;
   /** Shown only to a Platform Operator (ADR-002), regardless of scope/role. */
   operatorOnly?: boolean;
+  /**
+   * Shown only to a member of the support team (`is_support_staff` of the
+   * bootstrap, ADR 0024), regardless of scope/role.
+   */
+  supportStaffOnly?: boolean;
   /** Administers the tenant or the platform (see `barNav`). */
   administration?: boolean;
 }

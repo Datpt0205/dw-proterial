@@ -24,6 +24,15 @@ schedules as rows under the line is a layout no customer has sent yet: such a
 row is no table row, so it ends the table, and the printed total does not add
 up to what was read.
 
+**A row printed with no date** ("date to follow", ticket 34) prints a dash
+where the date goes, read as no date at the dash, or is a row one cell short.
+A short row is read with the gap at the date's column only when every number
+in it then reads as one and the cell after the gap is no date, so a short row
+is never read shifted and a printed date is never taken for a blank one: the
+line has no requested date, anchored at the row's line number, and the checks
+raise `requested_date_missing`. Any other short row is not a table row, as
+before.
+
 Scans are not read: a PDF with no text layer comes back `Unreadable`, and the
 message is routed to Sales. A numbered row-shaped line outside the table (a
 wrapped description, a page without the table header) is counted as printed
@@ -45,7 +54,7 @@ from typing import get_args
 from pydantic import ValidationError
 from pypdf import PdfReader
 
-from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules
+from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules, no_date
 from dw_sales.domain.anchors import PageBox, SourceAnchor
 from dw_sales.domain.layouts import LabelCell
 from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
@@ -66,11 +75,11 @@ from dw_sales.domain.orders import (
 )
 from dw_sales.domain.rfq_reading import parse_currency
 
-PARSER_VERSION = "pdf_po_reader@1.4.0"
+PARSER_VERSION = "pdf_po_reader@1.5.0"
 # A form need not print its revision: its POs then read as revision 0 (ticket 30).
 REQUIRED_HEADER = frozenset({"po_no", "po_date", "currency"})
 _CELL_GAP = re.compile(r"\s{2,}")
-_TRAILING_WORDS = re.compile(r"(?:\s+[^\d\s]+)+$")
+_WORD = re.compile(r"\S+")
 # The tag a PDF puts before an embedded subset's font name: ``ABCDEF+``.
 _SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 # Average glyph advance as a share of the font size: the width estimate.
@@ -434,7 +443,7 @@ class _Pdf:
         anchor, value, run, page = found[-1]
         # The amount, then the currency it is printed in: the words after the
         # number go, a space that groups thousands stays (`1 443.80 USD`).
-        amount = _TRAILING_WORDS.sub("", value).strip()
+        amount = _without_trailing_words(value)
         try:
             return PrintedTotal(
                 amount=self._decimal(amount),
@@ -456,18 +465,28 @@ class _Pdf:
         return lines
 
     def _row(self, page: _Page, text: str) -> PoLine:
-        cells = _cells(text)
-        drawn = page.find_row(cells)
+        printed = _cells(text)
+        drawn = page.find_row(printed)
+        runs: list[_Run | None] = list(drawn) if drawn else [None] * len(printed)
+        if len(printed) < len(self._layout.columns):
+            # A row with its date left blank (`_is_row`): the gap is the date's.
+            gap = self._date_column
+            printed = [*printed[:gap], "", *printed[gap:]]
+            runs = [*runs[:gap], None, *runs[gap:]]
         values: dict[str, object] = {}
         anchors: dict[str, SourceAnchor] = {}
         legacy: list[LegacyText] = []
         schedules: tuple[DeliverySchedule, ...] = ()
-        for index, ((_, name), cell) in enumerate(zip(self._layout.columns, cells, strict=True)):
-            run = drawn[index] if drawn else None
-            anchor = self._anchor(page, run, cell)
+        columns = zip(self._layout.columns, printed, runs, strict=True)
+        for (_, name), cell, run in columns:
+            anchor = self._anchor(page, run, cell) if cell else anchors["line_no"]
             if name is None:
                 continue
             try:
+                if name == "requested_date" and no_date(cell):
+                    values[name] = None
+                    anchors[name] = anchor
+                    continue
                 if name == "requested_date":
                     listed = listed_schedules(cell, anchor, self._day, self._decimal)
                     schedules = in_date_order(listed) if listed is not None else ()
@@ -493,7 +512,38 @@ class _Pdf:
 
     def _is_row(self, text: str) -> bool:
         cells = _cells(text)
-        return len(cells) == len(self._layout.columns) and cells[0].isdigit()
+        if not cells or not cells[0].isdigit():
+            return False
+        columns = self._layout.columns
+        if len(cells) == len(columns):
+            return True
+        if len(cells) != len(columns) - 1:
+            return False
+        # Its date left blank: with the gap at the date's column, every number
+        # reads as one, and what follows the gap is no date the gap would hide.
+        gap = self._date_column
+        placed = [*cells[:gap], "", *cells[gap:]]
+        numbers = all(
+            self._number.fullmatch(cell) is not None
+            for (_, name), cell in zip(columns, placed, strict=True)
+            if name in ("quantity", "unit_price", "amount")
+        )
+        return numbers and (gap == len(cells) or not self._reads_as_dates(cells[gap]))
+
+    @property
+    def _date_column(self) -> int:
+        return next(
+            i for i, (_, name) in enumerate(self._layout.columns) if name == "requested_date"
+        )
+
+    def _reads_as_dates(self, text: str) -> bool:
+        """A date in the layout's format, or a ``date: quantity`` list that
+        starts with one: what a date cell prints."""
+        try:
+            self._day(text.partition(":")[0].strip())
+        except ValueError:
+            return False
+        return True
 
     def _anchor(self, page: _Page, run: _Run | None, quote: str) -> SourceAnchor:
         """The page and box of the run that printed ``quote``; the quote alone
@@ -517,6 +567,17 @@ class _Pdf:
             return datetime.strptime(text, self._layout.date_format).date()
         except ValueError as exc:
             raise ValueError("is not a date in the layout's format") from exc
+
+
+def _without_trailing_words(text: str) -> str:
+    """``1 443.80 USD`` as ``1 443.80``: the words with no digit after the
+    last one that has one go. Walked word by word, in time linear in the
+    text: the pattern it replaces backtracked quadratically on a long run of
+    words (3 s on 16,000 characters of the customer's total line)."""
+    words = list(_WORD.finditer(text))
+    while len(words) > 1 and not any(c.isdigit() for c in words[-1].group()):
+        words.pop()
+    return text[: words[-1].end()].strip() if words else ""
 
 
 def _cells(text: str) -> Sequence[str]:

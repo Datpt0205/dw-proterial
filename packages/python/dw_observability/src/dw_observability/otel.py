@@ -34,6 +34,7 @@ from opentelemetry.metrics import Counter, Meter
 from opentelemetry.metrics import _Gauge as Gauge
 from opentelemetry.trace import Status, StatusCode, Tracer
 
+from dw_kernel.errors import DWError
 from dw_observability.telemetry import TelemetryPort, safe_attributes
 
 _meter_provider_lock = threading.Lock()
@@ -129,6 +130,20 @@ def _ensure_meter_provider(service_name: str) -> None:
         _meter_provider_installed = True
 
 
+def _exception_event(exc: Exception) -> dict[str, str]:
+    """What a span says of an exception that crossed it: its type and, for a
+    `DWError`, the message that is safe to log by contract. Never ``str(exc)``
+    of any other exception, nor a stack trace (which quotes every chained
+    cause's text): a parser's or a validator's message can hold the document
+    it failed on, and a span leaves the process for a collector or Langfuse
+    (Sales ticket 23). The stack trace stays in the process's own log."""
+    kind = type(exc)
+    return {
+        "exception.type": f"{kind.__module__}.{kind.__qualname__}",
+        "exception.message": exc.message if isinstance(exc, DWError) else kind.__name__,
+    }
+
+
 @dataclass
 class OtelTelemetry:
     """``TelemetryPort`` on an OpenTelemetry tracer + meter."""
@@ -140,14 +155,20 @@ class OtelTelemetry:
 
     @contextmanager
     def _span(self, name: str, attributes: Mapping[str, object]) -> Iterator[None]:
-        with self.tracer.start_as_current_span(name) as span:
+        # The SDK's own recording is off: left on, it adds ``str(exc)`` and the
+        # stack trace to the span as the exception leaves the block, whatever
+        # this method records (measured on the pinned SDK, Sales ticket 23).
+        with self.tracer.start_as_current_span(
+            name, record_exception=False, set_status_on_exception=False
+        ) as span:
             for key, value in safe_attributes(attributes).items():
                 span.set_attribute(key, value)
             try:
                 yield
             except Exception as exc:
-                span.set_status(Status(StatusCode.ERROR, str(exc)))
-                span.record_exception(exc)
+                event = _exception_event(exc)
+                span.set_status(Status(StatusCode.ERROR, str(event["exception.message"])))
+                span.add_event("exception", event)
                 raise
 
     def span(self, name: str, attributes: Mapping[str, object]) -> AbstractContextManager[None]:

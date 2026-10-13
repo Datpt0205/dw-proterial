@@ -268,7 +268,11 @@ export function LinesTable({
                 <Entered
                   line={line}
                   field="requested_date"
-                  show={(v) => formatDate(typeof v === "string" ? v : null)}
+                  // No date printed is "date to follow" (ticket 34), which
+                  // `requested_date_missing` asks about: not an unknown.
+                  show={(v) =>
+                    typeof v === "string" ? formatDate(v) : "Báo sau"
+                  }
                 />
               ),
           },

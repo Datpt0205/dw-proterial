@@ -57,6 +57,7 @@ from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller
+from dw_sales.application.malware import AttachmentInfectedError, AttachmentRefusedError
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (
@@ -114,6 +115,7 @@ from dw_sales.domain.orders import (
     Unreadable,
     ValueCorrection,
 )
+from dw_sales.domain.print_pairs import one_po
 from dw_sales.domain.reply_intent import CaseReply
 
 
@@ -217,6 +219,11 @@ class IntakeOutcome:
 class _Attached:
     attachment_id: str
     content: AttachmentContent | None
+    # What the scanner found in it (ticket 25): then there are no bytes.
+    infected: str | None = None
+    # Why it was refused unread (ticket 25): not what its name says, or
+    # encrypted. Then there are no bytes either.
+    refused: str | None = None
 
 
 @dataclass(frozen=True)
@@ -316,6 +323,14 @@ class OrderIntake:
         run: RunContext | None,
         now: datetime | None,
     ) -> Classification:
+        if infected := [a for a in attached if a.infected is not None]:
+            # Malware in any attachment: the mail is Sales', and nothing in it
+            # is read, no model asked (ticket 25). Ids and signatures only.
+            return Classification(
+                MessageKind.OTHER,
+                RoutingReason.MALWARE_DETECTED,
+                "; ".join(f"{a.attachment_id}: {a.infected}" for a in infected),
+            )
         sender = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
         rules = await self.rules.rules(scope)
         by_content = await self._by_content(scope, attached, sender, rules.intake)
@@ -488,7 +503,7 @@ class OrderIntake:
         for item in attached:
             content = item.content
             if content is None:
-                reasons.append(f"{item.attachment_id}: not in the mailbox")
+                reasons.append(f"{item.attachment_id}: {item.refused or 'not in the mailbox'}")
                 continue
             file_type = self.reader.sniff(content.data)
             if file_type is None:
@@ -517,17 +532,25 @@ class OrderIntake:
             attributed = True
 
         documents: list[PoDocument] = []
+        kinds: list[str] = []
         for content in readable:
             result = await self._read_po(scope, content, customer.code, caps, flag=rules)
             if isinstance(result, Unreadable):
                 reasons.append(f"{content.attachment.attachment_id}: {result.reason}")
             else:
                 documents.append(result)
+                kinds.append(self.reader.sniff(content.data) or "")
         if not documents:
             routed = self._routed(message, kind, unreadable, customer, "; ".join(reasons))
             return await self._with_prefill(scope, routed, readable, customer, rules, run)
+        if sorted(kinds) == ["pdf", "xlsx"]:
+            # A workbook and its PDF print are one PO, read from the workbook
+            # (ticket 34); `one_po` says None when they are two.
+            workbook, printed = documents if kinds[0] == "xlsx" else documents[::-1]
+            if (paired := one_po(workbook, printed)) is not None:
+                documents = [paired]
         if len(documents) > 1:
-            # Two orders, or one order twice (an Excel file and its PDF print):
+            # Two orders, or a workbook and a print that are not the same PO:
             # either way Sales decides which is entered.
             ids = ", ".join(d.attachment_id for d in documents)
             return self._routed(
@@ -843,10 +866,13 @@ class OrderIntake:
     async def _case_rules(
         self, scope: SalesScope, case: OrderCase, details: dict[str, object]
     ) -> OrderRules:
-        """The tenant's rules, while they are the ones stamped on the case: a
-        recheck under other rules would put two versions on one case."""
-        rules = await self.rules.rules(scope)
-        if rules.version != case.rules_version:
+        """The rules stamped on the case, read by the stamp (ticket 19): a
+        recheck under other rules would put two versions on one case, and a
+        version the tenant approved since does not reach a case checked
+        before it. Refused when this process no longer holds that version."""
+        stamped = case.rules_version
+        rules = None if stamped is None else await self.rules.rules_at(scope, stamped)
+        if rules is None:
             raise ConflictError(
                 "the case was checked under rules that no longer apply", details=details
             )
@@ -961,17 +987,31 @@ class OrderIntake:
     # ------------------------------------------------------------ helpers --
 
     async def _attachments(self, scope: SalesScope, message: InboundMessage) -> list[_Attached]:
-        return [
-            _Attached(
-                a.attachment_id,
-                await self.inbox.read_attachment(scope, message.message_id, a.attachment_id),
-            )
-            for a in message.attachments
-        ]
+        """Each attachment as the scanned mailbox hands it over (ticket 25):
+        an infected one has no bytes; one the scanner could not answer for
+        stops the processing (`ScanUnavailableError`), to be tried again."""
+        attached: list[_Attached] = []
+        for a in message.attachments:
+            try:
+                content = await self.inbox.read_attachment(
+                    scope, message.message_id, a.attachment_id
+                )
+            except AttachmentInfectedError as infected:
+                attached.append(_Attached(a.attachment_id, None, infected.signature))
+                continue
+            except AttachmentRefusedError as refused:
+                attached.append(_Attached(a.attachment_id, None, refused=refused.reason))
+                continue
+            attached.append(_Attached(a.attachment_id, content))
+        return attached
 
     def _carries_document(self, attached: Sequence[_Attached]) -> bool:
+        """Whether a file in it is a document: by its bytes, or by the name of
+        one refused unread for not being what it says (ticket 25), whose
+        message is then routed with that reason rather than read as mail."""
         return any(
-            item.content is not None and self.reader.sniff(item.content.data) is not None
+            item.refused is not None
+            or (item.content is not None and self.reader.sniff(item.content.data) is not None)
             for item in attached
         )
 

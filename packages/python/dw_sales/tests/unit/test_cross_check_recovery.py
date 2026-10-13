@@ -259,7 +259,7 @@ async def test_the_new_approval_names_the_same_makers() -> None:
 
 
 async def _actions(world: World, caller: Caller, case_id: uuid.UUID) -> set[str]:
-    items = await world.services.overview.my_work(caller.context())
+    items = (await world.services.overview.my_work(caller.context())).items
     return {i.action for i in items if i.id == str(case_id)}
 
 

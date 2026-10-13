@@ -2399,7 +2399,8 @@
           "revision_without_base",
           "customer_temporary",
           "sender_unverified",
-          "legacy_encoding"
+          "legacy_encoding",
+          "requested_date_missing"
         ],
         "title": "FindingCode",
         "type": "string"
@@ -5094,6 +5095,13 @@
             "title": "Scope Set Label",
             "type": "string"
           },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
           "state": {
             "title": "State",
             "type": "string"
@@ -5129,6 +5137,7 @@
           "resource_label",
           "scope_set_key",
           "scope_set_label",
+          "scopes",
           "state",
           "activated_at",
           "expires_at",
@@ -5740,6 +5749,16 @@
             ],
             "title": "Prepared By"
           },
+          "print_copy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrintCopyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "received_at": {
             "format": "date-time",
             "title": "Received At",
@@ -5890,6 +5909,7 @@
           "total",
           "total_anchor",
           "legacy_text_anchor",
+          "print_copy",
           "coverage",
           "lines",
           "findings",
@@ -6104,9 +6124,16 @@
             "type": "string"
           },
           "requested_date": {
-            "format": "date",
-            "title": "Requested Date",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Date"
           },
           "schedules": {
             "items": {
@@ -6555,6 +6582,35 @@
         "title": "Page",
         "type": "object"
       },
+      "Page_WorkItem_": {
+        "description": "A page of results and the cursor that continues it.\n\n``next_cursor`` is ``None`` on the last page, and that — not an empty\n``items`` — is the client's stop condition: a filtered listing can return an\nempty page in the middle of a run and still have more rows behind it.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "Page",
+        "type": "object"
+      },
       "PauseBody": {
         "additionalProperties": false,
         "properties": {
@@ -6620,6 +6676,23 @@
           "scopes"
         ],
         "title": "PermissionSetView",
+        "type": "object"
+      },
+      "PlatformRuleView": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/RuleKey"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ref"
+        ],
+        "title": "PlatformRuleView",
         "type": "object"
       },
       "PreviewLineView": {
@@ -6882,6 +6955,57 @@
           "management_guidance"
         ],
         "title": "PricingView",
+        "type": "object"
+      },
+      "PrintCopyView": {
+        "properties": {
+          "attachment_id": {
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/PrintDifferenceView"
+            },
+            "title": "Differences",
+            "type": "array"
+          }
+        },
+        "required": [
+          "attachment_id",
+          "differences"
+        ],
+        "title": "PrintCopyView",
+        "type": "object"
+      },
+      "PrintDifferenceView": {
+        "description": "A value the PDF print shows differently, and where it shows it.",
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/SourceAnchor"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          }
+        },
+        "required": [
+          "line_no",
+          "field",
+          "anchor"
+        ],
+        "title": "PrintDifferenceView",
         "type": "object"
       },
       "ProcessAllView": {
@@ -7890,7 +8014,8 @@
           "font_matches_fill",
           "formula_without_cached_value",
           "model_read",
-          "new_layout"
+          "new_layout",
+          "print_differs"
         ],
         "title": "RegionFlag",
         "type": "string"
@@ -8288,6 +8413,214 @@
           "scopes"
         ],
         "title": "RoleView",
+        "type": "object"
+      },
+      "RuleDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "approve": {
+            "title": "Approve",
+            "type": "boolean"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "required": [
+          "approve"
+        ],
+        "title": "RuleDecision",
+        "type": "object"
+      },
+      "RuleKey": {
+        "description": "The Sales policies a tenant may hold its own version of.",
+        "enum": [
+          "sales_order_rules",
+          "sales_kpi"
+        ],
+        "title": "RuleKey",
+        "type": "string"
+      },
+      "RuleProposalBody": {
+        "additionalProperties": false,
+        "description": "A whole policy document for one key, validated by that key's schema.",
+        "properties": {
+          "document": {
+            "additionalProperties": true,
+            "title": "Document",
+            "type": "object"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "title": "RuleProposalBody",
+        "type": "object"
+      },
+      "RuleVersionView": {
+        "description": "A version as the rules list shows it: who proposed and decided it, and\nthe document only to whoever may propose (it can hold price rules).",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "document": {
+            "additionalProperties": true,
+            "title": "Document",
+            "type": "object"
+          },
+          "key": {
+            "$ref": "#/components/schemas/RuleKey"
+          },
+          "layer": {
+            "enum": [
+              "platform",
+              "tenant"
+            ],
+            "title": "Layer",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "format": "uuid",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "key",
+          "version",
+          "ref",
+          "layer",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "comment",
+          "document"
+        ],
+        "title": "RuleVersionView",
+        "type": "object"
+      },
+      "RulesInForceView": {
+        "description": "What applies to the tenant now, per key, and every version it holds.",
+        "properties": {
+          "in_force": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/RuleKey"
+            },
+            "title": "In Force",
+            "type": "object"
+          },
+          "layers": {
+            "additionalProperties": {
+              "enum": [
+                "platform",
+                "tenant"
+              ],
+              "type": "string"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/RuleKey"
+            },
+            "title": "Layers",
+            "type": "object"
+          },
+          "platform": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformRuleView"
+            },
+            "title": "Platform",
+            "type": "array"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/RuleVersionView"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "in_force",
+          "layers",
+          "platform",
+          "versions"
+        ],
+        "title": "RulesInForceView",
         "type": "object"
       },
       "RunView": {
@@ -13828,20 +14161,58 @@
     "/api/v1/sales/my-work": {
       "get": {
         "operationId": "my_work_api_v1_sales_my_work_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque cursor from a previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/WorkItem"
-                  },
-                  "title": "Response My Work Api V1 Sales My Work Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_WorkItem_"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "My Work",
@@ -16301,6 +16672,167 @@
           }
         },
         "summary": "Ycbg",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules": {
+      "get": {
+        "operationId": "rules_in_force_api_v1_sales_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesInForceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Rules In Force",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/versions/{version_id}/decision": {
+      "post": {
+        "operationId": "decide_rules_api_v1_sales_rules_versions__version_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleVersionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Rules",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/{key}/versions": {
+      "post": {
+        "operationId": "propose_rules_api_v1_sales_rules__key__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RuleKey"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleProposalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleVersionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Rules",
         "tags": [
           "sales"
         ]

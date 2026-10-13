@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
-from typing import Literal, Protocol, Self
+from typing import TYPE_CHECKING, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
@@ -38,6 +38,10 @@ from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
+
+if TYPE_CHECKING:
+    from dw_sales.application.overview_ports import OverviewReadPort
+    from dw_sales.application.rules import RuleVersionStorePort
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -316,12 +320,6 @@ class MessageLogPort(Protocol):
         ...
 
 
-class CaseEventLogPort(Protocol):
-    async def list_all(self) -> Sequence[LoggedEvent]:
-        """Every event of the workspace's cases, oldest first."""
-        ...
-
-
 class SourceServedPort(Protocol):
     async def record(self, served: ServedSource) -> None:
         """Idempotent: the same region served again keeps its first record."""
@@ -365,7 +363,10 @@ class SalesUnitOfWork(Protocol):
     def messages(self) -> MessageLogPort: ...
 
     @property
-    def events(self) -> CaseEventLogPort: ...
+    def overview(self) -> OverviewReadPort: ...
+
+    @property
+    def rule_versions(self) -> RuleVersionStorePort: ...
 
     @property
     def served(self) -> SourceServedPort: ...
