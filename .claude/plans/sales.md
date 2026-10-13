@@ -8,6 +8,14 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-13, CI on 399920d: 6 of 7 jobs green (unit, evals, frontend with
+  vitest, integration, container build, scaffold-smoke). The public-repo
+  guard fails by design until Đạt creates the PUBLIC_REPO_DENYLIST secret.
+  The DW1 browser walk on CI passed on e97042b and failed on 399920d at step
+  2: it pinned "DW xử lý tất cả (42)" while 44 were left after M44/M45;
+  the click is now count-agnostic. Local integration and the support-access
+  03 walk wait on a reboot (WSL hung at 22:01, needs admin).
+
 - 2026-10-13, ticket 25 needs-info, 27 needs-info (agent, Đạt away; "As
   built" and Comments in each ticket):
     - **25, built.** Every attachment is scanned by ClamAV before anything
