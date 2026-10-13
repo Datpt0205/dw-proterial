@@ -90,6 +90,13 @@
       ],
       "kind": "design_reply"
     },
+    "296909706d7149f9158bd3ba": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2608-0102"
+      ],
+      "kind": "complaint"
+    },
     "29a225453bd387b85bdba912": {
       "language": "vi",
       "referenced_number_spans": [
@@ -431,6 +438,11 @@
       "referenced_number_spans": [],
       "kind": "other"
     },
+    "c22d3ba7c30dbbc5af3cc7d3": {
+      "language": "vi",
+      "referenced_number_spans": [],
+      "kind": "sample_request"
+    },
     "c5ffb9514a5457afea3dcf45": {
       "language": "vi",
       "referenced_number_spans": [
@@ -561,6 +573,13 @@
       "language": "vi",
       "referenced_number_spans": [],
       "kind": "other"
+    },
+    "f5a356e963379a59240bbe5b": {
+      "language": "vi",
+      "referenced_number_spans": [
+        "VLX-PO-2609-0118"
+      ],
+      "kind": "delivery_change"
     },
     "f708dc7142927a006afa8e6e": {
       "language": "en",

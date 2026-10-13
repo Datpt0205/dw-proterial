@@ -117,6 +117,10 @@ class RegionFlag(StrEnum):
     # residual risk is field confusion (`24` of `AWG24`, a reel length read as
     # the quantity, the send date as the required date). Sales confirms each.
     MODEL_READ = "model_read"
+    # Read through a PO layout people approved recently (ticket 30): the first
+    # POs a new or changed layout reads are confirmed value by value, so a
+    # wrong mapping cannot repeat silently (`layout_onboarding`).
+    NEW_LAYOUT = "new_layout"
 
 
 class FlaggedValue(BaseModel):
@@ -375,6 +379,9 @@ class PoDocument(BaseModel):
     buyer: PrintedText | None = None
     buyer_anchor: SourceAnchor | None = None
     total: PrintedTotal | None = None
+    # The tenant's own approved layout the reader read it with (ticket 30):
+    # `po_layout:<id>@<version>`. None: the platform's layout for the customer.
+    layout_ref: str | None = Field(default=None, pattern=r"^po_layout:[0-9a-f-]{36}@\d+$")
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
@@ -1160,7 +1167,9 @@ _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
         _S.IN_REVIEW: frozenset(
             {_S.IN_REVIEW, _S.PREPARED, _S.CORRECTION_REQUESTED, _S.CHECKED, _S.CLOSED}
         ),
-        _S.CORRECTION_REQUESTED: frozenset({_S.CHECKED, _S.CLOSED}),
+        # -> in_review: the customer answered without a corrected PO (they
+        # keep it as it is), and Sales decides each finding again.
+        _S.CORRECTION_REQUESTED: frozenset({_S.CHECKED, _S.IN_REVIEW, _S.CLOSED}),
         _S.PREPARED: frozenset(
             {_S.PREPARED, _S.UPLOADED_TO_BRAVO, _S.IN_REVIEW, _S.CHECKED, _S.CLOSED}
         ),
@@ -1826,6 +1835,22 @@ class OrderCase(BaseModel):
                 details={"case_id": str(self.case_id)},
             )
         return self._next(transition(self.status, _S.CORRECTION_REQUESTED))
+
+    def resume_review(self) -> OrderCase:
+        """correction_requested -> in_review: the customer answered without a
+        corrected PO (ticket 32), and Sales takes the case up again.
+
+        It disposes no finding (spec decision 9): each one sent back to the
+        customer stays `ask_customer`, which `prepare` refuses, until Sales
+        decides it again, one by one. A corrected PO needs none of this: it
+        arrives as a revision and is read afresh.
+        """
+        if self.status is not _S.CORRECTION_REQUESTED:
+            raise ConflictError(
+                "only an order awaiting the customer's correction resumes its review",
+                details={"case_id": str(self.case_id), "status": self.status.value},
+            )
+        return self._next(transition(self.status, _S.IN_REVIEW))
 
     def prepare(self, actor: Actor, at: datetime) -> OrderCase:
         """in_review -> prepared: the PIC's self-check is done (step 7).

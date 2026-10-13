@@ -12,6 +12,7 @@ import {
   Typography,
 } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
+import { StatusTag } from "@dw/ui";
 import { formatDateTime, fromPickerDay } from "../../../../lib/dates";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
@@ -26,6 +27,7 @@ import {
 } from "../../_lib/quote-actions";
 import { useAction } from "../../_lib/use-action";
 import { AmountInput } from "../../_components/amount-input";
+import { suggestedStep } from "../../_components/case-replies";
 import { GuardedButton } from "../../_components/guarded-button";
 import { ModelReadFinding, type OpenSource } from "./model-read";
 
@@ -53,6 +55,14 @@ const BUTTON: Partial<Record<QuoteAction, string>> = {
 
 type Dialog = "recordYcbg" | "submit" | "decline" | null;
 
+/** The case's own step a reply's proposal pre-selects (ticket 32). */
+const SUGGESTED: Partial<
+  Record<NonNullable<SalesSchemas["CaseReplyView"]["proposal"]>, QuoteAction>
+> = {
+  settle_spec: "specSettle",
+  decline_customer_rejected_spec: "decline",
+};
+
 export function QuoteActions({
   quote,
   viewer,
@@ -73,6 +83,9 @@ export function QuoteActions({
     ([action]) => BUTTON[action],
   );
   const v = quote.case_version;
+  // Marked, never pressed for Sales: the newest reply's proposal.
+  const proposal = suggestedStep(quote.replies);
+  const suggested = proposal ? (SUGGESTED[proposal] ?? null) : null;
 
   const finish = (result: { ok: boolean; error?: unknown }) => {
     if (result.ok) {
@@ -174,18 +187,24 @@ export function QuoteActions({
       {shown.length ? (
         <Space wrap align="start" size="middle">
           {shown.map(([action, offer]) => (
-            <GuardedButton
-              key={action}
-              type={action === "decline" ? "default" : "primary"}
-              danger={action === "decline"}
-              reason={offer.reason}
-              loading={pending === action}
-              onClick={() =>
-                direct[action] ? direct[action]!() : setDialog(action as Dialog)
-              }
-            >
-              {BUTTON[action]}
-            </GuardedButton>
+            <Space key={action} size="small" align="center">
+              <GuardedButton
+                type={action === "decline" ? "default" : "primary"}
+                danger={action === "decline"}
+                reason={offer.reason}
+                loading={pending === action}
+                onClick={() =>
+                  direct[action]
+                    ? direct[action]!()
+                    : setDialog(action as Dialog)
+                }
+              >
+                {BUTTON[action]}
+              </GuardedButton>
+              {suggested === action ? (
+                <StatusTag tone="warn">Đề xuất từ thư khách</StatusTag>
+              ) : null}
+            </Space>
           ))}
         </Space>
       ) : null}
@@ -241,6 +260,7 @@ export function QuoteActions({
       <DeclineDialog
         open={dialog === "decline"}
         quote={quote}
+        reason={suggested === "decline" ? "customer_rejected_spec" : undefined}
         loading={pending === "decline"}
         onCancel={() => setDialog(null)}
         onSubmit={async (reason, note) => {
@@ -323,12 +343,15 @@ function NumberDialog({
 function DeclineDialog({
   open,
   quote,
+  reason,
   loading,
   onCancel,
   onSubmit,
 }: {
   open: boolean;
   quote: Quote;
+  /** Pre-selected by a reply's proposal; Sales may pick another. */
+  reason?: keyof typeof DECLINE_REASON;
   loading: boolean;
   onCancel: () => void;
   onSubmit: (reason: keyof typeof DECLINE_REASON, note: string | null) => void;
@@ -356,6 +379,7 @@ function DeclineDialog({
         form={form}
         layout="vertical"
         validateTrigger="onBlur"
+        initialValues={reason ? { reason } : undefined}
         onFinish={({ reason, note }) => onSubmit(reason, note?.trim() || null)}
       >
         <Form.Item

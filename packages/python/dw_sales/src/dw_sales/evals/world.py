@@ -27,8 +27,11 @@ another directory, so the graders run on it unchanged.
 
 from __future__ import annotations
 
+import json
+import shutil
+import tempfile
 import uuid
-from collections.abc import Awaitable, Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -37,7 +40,7 @@ from typing import Any, Self
 
 from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import parse_worker_file
-from dw_agent_runtime.testing.memory_runtime import MemoryRuntime
+from dw_agent_runtime.testing.memory_runtime import MemoryApprovals, MemoryRuntime
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.pagination import Page, PageRequest
@@ -68,16 +71,26 @@ from dw_sales.application.case_store import (
     Stored,
     WorkerState,
 )
+from dw_sales.application.handoffs import HandoffReader
+from dw_sales.application.layouts import (
+    LAYOUT_DECIDED,
+    LayoutChecks,
+    LayoutPrefiller,
+    LayoutSettlement,
+)
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService
+from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.runs import subject_of
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.source import required_regions
+from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
+from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.workflows.graph import register
@@ -113,6 +126,46 @@ class SampleSet:
 def _path(repo_root: Path, value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else repo_root / path
+
+
+class SampleWith:
+    """The fictional sample set with ``messages`` added to its mailbox, in a
+    temporary copy (a context manager). A message names its ``message_id``,
+    ``sender``, ``subject``, ``received_at``, ``body`` and ``authentication``,
+    and may name ``internet_message_id`` and ``references`` (a reply in a
+    thread, ticket 32)."""
+
+    def __init__(self, messages: Sequence[Mapping[str, Any]]) -> None:
+        self._messages = messages
+        self._dir: tempfile.TemporaryDirectory[str] | None = None
+
+    def __enter__(self) -> SampleSet:
+        self._dir = tempfile.TemporaryDirectory()
+        root = Path(self._dir.name)
+        shutil.copytree(DATA_DIR, root / "data")
+        shutil.copytree(ATTACHMENTS_DIR, root / "attachments")
+        inbox = root / "data" / "inbox.json"
+        listed = json.loads(inbox.read_text(encoding="utf-8"))
+        for spec in self._messages:
+            listed.append(
+                {
+                    "message_id": spec["message_id"],
+                    "sender": {"address": spec["sender"], "display_name": ""},
+                    "subject": spec["subject"],
+                    "received_at": spec["received_at"],
+                    "body_text": spec["body"],
+                    "attachments": [],
+                    "authentication": spec["authentication"],
+                    "internet_message_id": spec.get("internet_message_id"),
+                    "references": list(spec.get("references", ())),
+                }
+            )
+        inbox.write_text(json.dumps(listed, ensure_ascii=False), encoding="utf-8")
+        return SampleSet(root / "data", root / "attachments")
+
+    def __exit__(self, *exc: object) -> None:
+        assert self._dir is not None
+        self._dir.cleanup()
 
 
 # --------------------------------------------------------------- callers --
@@ -161,6 +214,7 @@ class _ScopeState:
     artifacts: dict[uuid.UUID, ArtifactRecord] = field(default_factory=dict)
     worker: WorkerState = field(default_factory=lambda: WorkerState(paused=False))
     audit: list[AuditEvent] = field(default_factory=list)
+    layouts: dict[uuid.UUID, PoLayout] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -173,6 +227,7 @@ class _ScopeState:
             artifacts=dict(self.artifacts),
             worker=self.worker,
             audit=list(self.audit),
+            layouts=dict(self.layouts),
         )
 
 
@@ -333,6 +388,32 @@ class _Worker:
         self._state.worker = state
 
 
+class _Layouts:
+    """`LayoutStorePort` over one transaction's state; refuses what the SQL
+    store refuses: a second layout under one id, and a decision on a layout
+    decided meanwhile."""
+
+    def __init__(self, held: dict[uuid.UUID, PoLayout]) -> None:
+        self._held = held
+
+    async def get(self, layout_id: uuid.UUID) -> PoLayout | None:
+        return self._held.get(layout_id)
+
+    async def list_all(self) -> Sequence[PoLayout]:
+        return list(reversed(self._held.values()))
+
+    async def add(self, layout: PoLayout) -> None:
+        if layout.layout_id in self._held:
+            raise ConflictError("the layout is already stored")
+        self._held[layout.layout_id] = layout
+
+    async def save(self, layout: PoLayout, *, expected: LayoutStatus) -> None:
+        stored = self._held.get(layout.layout_id)
+        if stored is None or stored.status != expected:
+            raise ConflictError("the layout was decided meanwhile")
+        self._held[layout.layout_id] = layout
+
+
 class _Audit:
     """The platform's audit port as a Sales transaction writes it."""
 
@@ -372,6 +453,10 @@ class _Work:
         self.artifacts = _Artifacts(state.artifacts)
         self.worker = _Worker(state)
         self.audit = _Audit(state.audit)
+        self.layouts = _Layouts(state.layouts)
+        # The runtime's approvals, written at once (no rollback in memory): a
+        # layout's proposal opens one here (ticket 30).
+        self.approvals = store.approvals.scoped(scope.tenant_id.value)
 
     async def commit(self) -> None:
         self._store.states[self._scope] = self._state
@@ -390,12 +475,13 @@ class _Work:
 
 
 class MemoryStore:
-    """Implements `SalesUnitOfWorkFactory`, `OrderCaseLookupPort` and
-    `QuoteCaseLookupPort` in memory, per scope: what one scope committed no
-    other scope reads."""
+    """Implements `SalesUnitOfWorkFactory`, `OrderCaseLookupPort`,
+    `QuoteCaseLookupPort` and `LayoutLookupPort` in memory, per scope: what one
+    scope committed no other scope reads."""
 
-    def __init__(self) -> None:
+    def __init__(self, approvals: MemoryApprovals | None = None) -> None:
         self.states: dict[SalesScope, _ScopeState] = {}
+        self.approvals = approvals or MemoryApprovals(FixedClock(NOW))
 
     def state(self, scope: SalesScope) -> _ScopeState:
         return self.states.setdefault(scope, _ScopeState())
@@ -411,6 +497,22 @@ class MemoryStore:
             for s in self.state(scope).orders.values()
             if s.case.customer_code == customer_code and s.case.header.po_no == po_no
         ]
+
+    async def approved(self, scope: SalesScope, customer_code: str) -> Sequence[PoLayout]:
+        return [
+            layout
+            for layout in self.state(scope).layouts.values()
+            if layout.customer_code == customer_code and layout.status == "approved"
+        ]
+
+    async def read_count(self, scope: SalesScope, layout_ref: str) -> int:
+        return sum(
+            1
+            for stored in self.state(scope).orders.values()
+            if layout_ref
+            in {stored.case.document.layout_ref}
+            | {old.document.layout_ref for old in stored.case.superseded}
+        )
 
     async def cases_for_ycbg(self, scope: SalesScope, ycbg_no: str) -> Sequence[QuoteCase]:
         return [
@@ -501,6 +603,49 @@ class World:
     sample: SampleSet
     runtime: MemoryRuntime
     runs: RuntimeDw1Runs
+    layout_settlement: LayoutSettlement
+
+    async def decide_layout(
+        self,
+        caller: Caller,
+        layout_id: uuid.UUID,
+        *,
+        approve: bool,
+        comment: str,
+        scope: SalesScope = ALPHA,
+    ) -> None:
+        """A decision on the approval a layout's proposal opened, as the API's
+        `POST /approvals/{id}/decisions` makes it, on the version shown; then
+        carried out as the worker carries it out (`settle_layouts`)."""
+        layout = self.store.state(scope).layouts[layout_id]
+        await self.runtime.approval_flow.decide(
+            approval_id=layout.approval_id,
+            approve=approve,
+            comment=comment,
+            context=caller.context(scope),
+            authorization=ScopeAuthorizationService(),
+            subject_version=layout.version,
+        )
+        await self.settle_layouts()
+
+    async def settle_layouts(self) -> None:
+        """Each `sales.layout.decided` the decisions announced, handed to the
+        settlement with the envelope's tenancy and the decider, as the
+        worker's handler hands it (`dw_worker.consumers.sales_layouts`)."""
+        events = self.runtime.outbox.events
+        for event in [e for e in events if e.event_type == LAYOUT_DECIDED]:
+            events.remove(event)
+            decider = AccessContext(
+                tenant_id=event.tenant_id.value,
+                workspace_id=event.workspace_id.value,
+                principal_id=uuid.UUID(str(event.payload["decided_by"])),
+                roles=frozenset(),
+                scopes=frozenset(),
+                plan_id="background",
+            )
+            await self.layout_settlement.settle(
+                uuid.UUID(str(event.payload["approval_id"])), decider
+            )
 
     async def process_each(
         self,
@@ -642,11 +787,14 @@ def open_world(
     policies = load_sales_policies(
         repo_root / "configs" / "policies", repo_root / "configs" / "copy"
     )
-    store = MemoryStore()
-    catalog = MockSalesCatalog.load(bound_to, sample.data_dir)
-    inbox = MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir)
     clock = FixedClock(NOW)
     ids = Uuid4Generator()
+    runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance, telemetry=telemetry)
+    store = MemoryStore(runtime.approvals)
+    catalog = MockSalesCatalog.load(bound_to, sample.data_dir)
+    inbox = MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir)
+    readers = mock_po_readers()
+    layout_checks = LayoutChecks(readers, catalog)
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
@@ -669,18 +817,22 @@ def open_world(
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
-        reader=mock_po_readers(),
+        reader=readers,
         quote_forms=ExcelQuoteForms(),
         rules=demo_order_rules(policies.order_rules, bound_to, sample.data_dir / "policies"),
         cases=store,
         new_case_id=ids.new_uuid,
         descriptions=None if model is None else DescriptionReader(model),
         intents=None if model is None else IntentReader(model, catalog, store),
+        threads=ThreadLinks(store, inbox),
+        replies=None if model is None else ReplyReader(model),
+        handoffs=None if model is None else HandoffReader(model, catalog, store),
+        layouts=store,
+        layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
     )
     directory = Directory(tuple(callers))
     notifications = Notifications()
     objects = Objects()
-    runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance, telemetry=telemetry)
     worker_file = repo_root / "configs" / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     runs = RuntimeDw1Runs(
@@ -708,6 +860,8 @@ def open_world(
         artifact_bytes=objects,
         artifact_writer=ArtifactFiles(),
         artifact_copy=policies.artifact_copy,
+        handoff_copy=policies.handoff_copy,
+        layout_checks=layout_checks,
         release_manifest_ref="sha256:eval",
         runs=runs,
         pending=runs,
@@ -718,6 +872,7 @@ def open_world(
         workers=runtime.workers,
         approvals=runtime.approval_flow,
         steps=assembly.decisions,
+        layouts=assembly.layout_decisions,
         worker_file=worker_file,
     )
     return World(
@@ -731,6 +886,7 @@ def open_world(
         sample,
         runtime,
         runs,
+        LayoutSettlement(store, clock, ids),
     )
 
 
@@ -740,6 +896,7 @@ __all__ = [
     "Caller",
     "MemoryStore",
     "SampleSet",
+    "SampleWith",
     "World",
     "open_world",
 ]

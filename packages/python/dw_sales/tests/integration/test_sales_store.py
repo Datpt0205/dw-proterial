@@ -201,7 +201,7 @@ async def test_a_corrected_value_reads_back_beside_the_value_as_read(
         inbox=MockInbox.load(scope),
         reader=mock_po_readers(),
         quote_forms=ExcelQuoteForms(),
-        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.3.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.4.0.yaml")),
         cases=SqlOrderCaseLookup(app_sessions),
         new_case_id=uuid.uuid4,
     )

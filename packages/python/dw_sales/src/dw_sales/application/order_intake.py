@@ -10,6 +10,21 @@ the outcome says so.
 **A readable document decides first.** An attachment the seller's request
 form or Design's reply form recognises, or one that reads as a PO, decides the
 message's kind whatever its subject says, and no model is asked (ticket 31).
+**Then the thread.** A message whose `In-Reply-To`/`References` name a message
+already on one case of the sender's own customer is a reply on that case, and
+is attached to it (ticket 32, `ThreadLinkPort`): a "Re:" to a spec discussion
+is no new request, whatever its subject repeats. Where the tenant's rules turn
+it on, a local model reads the reply into a typed intent (`ReplyReader`); the
+case and the step are code's.
+**A tenant's own PO layouts read first.** A customer's form a person mapped and
+another approved (ticket 30) is read with that layout, the tenant's data;
+otherwise with the platform's. The first POs a new layout reads keep every
+value `value_uncertain` (`layout_onboarding`). A PO no layout reads is routed
+`attachment_unreadable`, and where the tenant turns it on a local model
+pre-fills the onboarding screen's mapping (`LayoutPrefiller`).
+A message routed as a delivery change, a complaint or a sample request carries,
+where the tenant turns it on, a hand-off to PC or QA a local model pre-filled
+with the customer's own words and code verified (ticket 33, `HandoffReader`).
 Only a message no reader accepted is classified by its words: by a local
 model's typed intent where the tenant's rules turn it on (`message_intent`,
 dw_sales ADR 0005), which code maps to the route (`INTENT_ROUTES`), else by
@@ -40,16 +55,22 @@ from typing import Final
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
+from dw_sales.application.handoffs import HandoffReader
+from dw_sales.application.layouts import LayoutPrefiller
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (
+    LayoutLookupPort,
     OrderCaseLookupPort,
     OrderRulesPort,
     PoDocumentReaderPort,
     QuoteFormPort,
+    ThreadLinkPort,
 )
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
+from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.support import decided
+from dw_sales.application.threads import ThreadedCase
 from dw_sales.domain.catalog import Customer, Item, LmeMonth, customers_named
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
@@ -58,6 +79,8 @@ from dw_sales.domain.dispositions import (
     MessageDisposition,
     RoutingReason,
 )
+from dw_sales.domain.handoffs import HandoffKind
+from dw_sales.domain.layouts import PoLayout, flagged_as_new
 from dw_sales.domain.mail_parts import newest_part
 from dw_sales.domain.message_intent import IntentKind, IntentReading
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
@@ -73,6 +96,7 @@ from dw_sales.domain.order_checks import (
     check_line,
     current_quotation,
     map_line,
+    received_date,
     wants_reading,
 )
 from dw_sales.domain.orders import (
@@ -90,6 +114,7 @@ from dw_sales.domain.orders import (
     Unreadable,
     ValueCorrection,
 )
+from dw_sales.domain.reply_intent import CaseReply
 
 
 class MessageKind(StrEnum):
@@ -97,6 +122,8 @@ class MessageKind(StrEnum):
     REVISED_PO = "revised_po"
     QUOTE_REQUEST = "quote_request"
     DESIGN_REPLY = "design_reply"
+    # A reply on a case its thread headers name (ticket 32).
+    CASE_REPLY = "case_reply"
     OTHER = "other"
 
 
@@ -117,6 +144,13 @@ INTENT_ROUTES: Final[Mapping[IntentKind, MessageKind | RoutingReason]] = {
     "complaint": RoutingReason.COMPLAINT,
     "sample_request": RoutingReason.SAMPLE_REQUEST,
     "other": RoutingReason.OTHER,
+}
+# The routing reasons a hand-off to PC or QA is pre-filled for (ticket 33):
+# the hand-off's kind is the reason, never a model's choice.
+HANDOFF_KINDS: Final[Mapping[RoutingReason, HandoffKind]] = {
+    RoutingReason.DELIVERY_CHANGE: "delivery_change",
+    RoutingReason.COMPLAINT: "complaint",
+    RoutingReason.SAMPLE_REQUEST: "sample_request",
 }
 # Why a message no model could read goes to Sales once its retries are over.
 NOT_UNDERSTOOD: Final = "DW1 did not understand the message: no usable model answer"
@@ -152,7 +186,8 @@ class Classification:
     otherwise the keyword reasons apply. ``reading`` is the model reading's
     stamp, for the disposition. ``retry``: the model gave no usable answer
     and the message is young enough to try again, so it stays not yet
-    processed (`ModelAssist.unread_retry_hours`).
+    processed (`ModelAssist.unread_retry_hours`). ``thread``: the case a
+    `case_reply`'s thread headers name.
     """
 
     kind: MessageKind
@@ -160,6 +195,7 @@ class Classification:
     detail: str | None = None
     reading: IntentReading | None = None
     retry: bool = False
+    thread: ThreadedCase | None = None
 
 
 @dataclass(frozen=True)
@@ -202,6 +238,22 @@ class OrderIntake:
     # 31), for a tenant whose rules turn it on. None: no model is wired, and
     # the keyword tables classify those messages as before.
     intents: IntentReader | None = None
+    # The case a reply's thread headers name (ticket 32). None: no case log is
+    # wired (a reader-only test), and no reply is linked.
+    threads: ThreadLinkPort | None = None
+    # A model reading of such a reply, for a tenant whose rules turn it on.
+    # None: no model is wired, and the reply is attached unread.
+    replies: ReplyReader | None = None
+    # A model pre-filling a routed message's hand-off to PC or QA (ticket 33),
+    # for a tenant whose rules turn it on. None: no model is wired, and the
+    # message is routed with no hand-off, as before.
+    handoffs: HandoffReader | None = None
+    # The PO layouts the tenant approved (ticket 30). None: none are stored in
+    # this process (a reader-only test), and the platform's layouts read.
+    layouts: LayoutLookupPort | None = None
+    # A model pre-filling the mapping of a form no layout reads (ticket 30),
+    # for a tenant whose rules turn it on. None: no model is wired.
+    layout_prefiller: LayoutPrefiller | None = None
 
     async def classify(
         self,
@@ -243,10 +295,13 @@ class OrderIntake:
         kind = classification.kind
         if kind in QUOTATION_KINDS:
             return IntakeOutcome(message.message_id, kind, None)
+        if classification.thread is not None:
+            return await self._reply(scope, message, classification.thread, run)
         sender = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
         if kind is MessageKind.OTHER:
             reason = classification.reason or _other_reason(message)
             outcome = self._routed(message, kind, reason, sender, classification.detail)
+            outcome = await self._with_handoff(scope, message, outcome, sender, run)
         else:
             outcome = await self._order(scope, message, kind, sender, attached, run)
         return _stamped(outcome, classification.reading)
@@ -273,6 +328,10 @@ class OrderIntake:
         if by_content:
             (kind,) = by_content
             return Classification(kind)
+        if self.threads is not None and message.references:
+            thread = await self.threads.linked_case(scope, message, sender)
+            if thread is not None:
+                return Classification(MessageKind.CASE_REPLY, thread=thread)
         if self.intents is not None and run is not None and rules.model_assist.message_intent:
             return await self._intent(scope, message, attached, sender, rules, run, now)
         return Classification(self._kind(message, attached))
@@ -306,7 +365,7 @@ class OrderIntake:
             return kinds
         revised: list[bool] = []
         for content in readable:
-            document = await self.reader.read(content, customer.code, caps)
+            document = await self._read_po(scope, content, customer.code, caps, flag=None)
             if not isinstance(document, Unreadable):
                 revised.append(document.header.revision > 0)
         if revised:
@@ -350,6 +409,66 @@ class OrderIntake:
                 read.reading,
             )
         return Classification(route, reading=read.reading)
+
+    async def _reply(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        thread: ThreadedCase,
+        run: RunContext | None,
+    ) -> IntakeOutcome:
+        """A reply attached to the case its thread names, with a model's
+        reading of it where the tenant's rules, a wired model and a DW1 run
+        allow. Nothing on the case changes: Sales confirms any step."""
+        rules = await self.rules.rules(scope)
+        reading = None
+        if self.replies is not None and run is not None and rules.model_assist.reply_intent:
+            reading = await self.replies.read(
+                newest_part(message), thread, rules_version=rules.version, run=run
+            )
+        disposition = MessageDisposition(
+            message_id=message.message_id,
+            kind=DispositionKind.ATTACHED_TO_CASE,
+            case_kind=thread.case_kind,
+            case_id=thread.case_id,
+            customer_code=thread.customer_code,
+            reply=CaseReply(linked_to=thread.linked_to, reading=reading),
+        )
+        return IntakeOutcome(message.message_id, MessageKind.CASE_REPLY, disposition)
+
+    async def _with_handoff(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        outcome: IntakeOutcome,
+        sender: Customer | None,
+        run: RunContext | None,
+    ) -> IntakeOutcome:
+        """The routed outcome with the hand-off a model pre-filled, where the
+        reason takes one, the sender is a customer, the tenant's rules turn
+        the step on, a model is wired and a DW1 run is processing."""
+        disposition = outcome.disposition
+        if disposition is None or disposition.reason is None:
+            return outcome
+        kind = HANDOFF_KINDS.get(disposition.reason)
+        if kind is None or sender is None or self.handoffs is None or run is None:
+            return outcome
+        rules = await self.rules.rules(scope)
+        if not rules.model_assist.request_handoff:
+            return outcome
+        handoff = await self.handoffs.read(
+            scope,
+            newest_part(message),
+            sender,
+            kind,
+            received_on=received_date(message.received_at),
+            rules_version=rules.version,
+            run=run,
+        )
+        stamped = MessageDisposition.model_validate(
+            {**disposition.model_dump(), "handoff": handoff}
+        )
+        return IntakeOutcome(outcome.message_id, outcome.kind, stamped, outcome.case)
 
     # ------------------------------------------------------------ orders --
 
@@ -399,13 +518,14 @@ class OrderIntake:
 
         documents: list[PoDocument] = []
         for content in readable:
-            result = await self.reader.read(content, customer.code, caps)
+            result = await self._read_po(scope, content, customer.code, caps, flag=rules)
             if isinstance(result, Unreadable):
                 reasons.append(f"{content.attachment.attachment_id}: {result.reason}")
             else:
                 documents.append(result)
         if not documents:
-            return self._routed(message, kind, unreadable, customer, "; ".join(reasons))
+            routed = self._routed(message, kind, unreadable, customer, "; ".join(reasons))
+            return await self._with_prefill(scope, routed, readable, customer, rules, run)
         if len(documents) > 1:
             # Two orders, or one order twice (an Excel file and its PDF print):
             # either way Sales decides which is entered.
@@ -420,6 +540,73 @@ class OrderIntake:
         return await self._case(
             scope, message, kind, customer, attributed, documents[0], rules, run
         )
+
+    async def _read_po(
+        self,
+        scope: SalesScope,
+        content: AttachmentContent,
+        customer_code: str,
+        caps: IntakeCaps,
+        *,
+        flag: OrderRules | None,
+    ) -> PoDocument | Unreadable:
+        """The PO, read with the tenant's own approved layout of the customer's
+        form where it has one, the platform's otherwise. With ``flag``, the
+        rules under which a PO among the first a new layout reads has every
+        value flagged `new_layout`."""
+        stored = await self._stored_layout(scope, customer_code, content)
+        if stored is None:
+            return await self.reader.read(content, customer_code, caps)
+        read = await self.reader.read_with(content, stored.mapping, caps, layout_ref=stored.ref)
+        if isinstance(read, Unreadable) or flag is None or self.layouts is None:
+            return read
+        seen = await self.layouts.read_count(scope, stored.ref)
+        if seen < flag.layout_onboarding.uncertain_first_pos:
+            return flagged_as_new(read)
+        return read
+
+    async def _stored_layout(
+        self, scope: SalesScope, customer_code: str, content: AttachmentContent
+    ) -> PoLayout | None:
+        if self.layouts is None:
+            return None
+        kind = {"xlsx": "excel", "pdf": "pdf"}.get(self.reader.sniff(content.data) or "")
+        approved = await self.layouts.approved(scope, customer_code)
+        return next((layout for layout in approved if layout.kind == kind), None)
+
+    async def _with_prefill(
+        self,
+        scope: SalesScope,
+        outcome: IntakeOutcome,
+        readable: Sequence[AttachmentContent],
+        customer: Customer,
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> IntakeOutcome:
+        """The routed outcome with a model's pre-filled mapping of the first
+        form no layout of the customer's reads, where the tenant's rules turn
+        the step on, a model is wired and a DW1 run is processing."""
+        prefiller, disposition = self.layout_prefiller, outcome.disposition
+        if prefiller is None or run is None or disposition is None:
+            return outcome
+        if not rules.model_assist.layout_proposal:
+            return outcome
+        for content in readable:
+            file_type = self.reader.sniff(content.data)
+            if file_type is None or file_type == "unsupported":
+                continue
+            if self.reader.has_layout(customer.code, file_type):
+                continue
+            if await self._stored_layout(scope, customer.code, content) is not None:
+                continue
+            prefill = await prefiller.prefill(scope, content, customer, rules, run=run)
+            if prefill is None:
+                continue
+            stamped = MessageDisposition.model_validate(
+                {**disposition.model_dump(), "layout_prefill": prefill}
+            )
+            return IntakeOutcome(outcome.message_id, outcome.kind, stamped, outcome.case)
+        return outcome
 
     async def _case(
         self,

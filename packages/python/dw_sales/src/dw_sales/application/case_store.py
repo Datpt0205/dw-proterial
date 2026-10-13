@@ -30,9 +30,12 @@ from typing import Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.ports import AuditRepositoryPort
+from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
+from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 
@@ -263,6 +266,35 @@ class QuoteCaseStorePort(Protocol):
     async def assign(self, case_id: uuid.UUID, assigned_to: uuid.UUID | None) -> None: ...
 
 
+class LayoutStorePort(Protocol):
+    """The PO layouts people mapped and decided in the workspace (ticket 30)."""
+
+    async def get(self, layout_id: uuid.UUID) -> PoLayout | None: ...
+
+    async def list_all(self) -> Sequence[PoLayout]:
+        """Every layout of the workspace, newest proposed first."""
+        ...
+
+    async def add(self, layout: PoLayout) -> None: ...
+
+    async def save(self, layout: PoLayout, *, expected: LayoutStatus) -> None:
+        """The layout's next state, decided on the status it had: a decision
+        made on a layout someone else decided meanwhile is refused (409)."""
+        ...
+
+
+class LayoutApprovalsPort(Protocol):
+    """The platform's approvals, as a PO layout's decision uses them
+    (ticket 30): opened in the proposal's transaction, and read back when
+    the decision is carried out. The narrow side of `ApprovalRepositoryPort`."""
+
+    async def add(self, request: ApprovalRequest) -> None: ...
+
+    async def get(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalRequest | None: ...
+
+
 class MessageLogPort(Protocol):
     """What became of each inbound message (spec decision 10)."""
 
@@ -343,6 +375,12 @@ class SalesUnitOfWork(Protocol):
 
     @property
     def worker(self) -> WorkerSwitchPort: ...
+
+    @property
+    def layouts(self) -> LayoutStorePort: ...
+
+    @property
+    def approvals(self) -> LayoutApprovalsPort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

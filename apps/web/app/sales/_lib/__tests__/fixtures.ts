@@ -165,6 +165,7 @@ export function order(overrides: Partial<Order> = {}): Order {
     makers: [],
     cross_check_stalled: false,
     unapplied_decision: null,
+    replies: [],
     lines: [line],
     ...overrides,
   };
@@ -259,5 +260,6 @@ export function pendingQuote(): Quote {
       approval_id: "01a10aa0-fe9a-7000-a7de-ed21190d4a99",
       approval_type: "sales.quote",
     },
+    replies: [],
   };
 }

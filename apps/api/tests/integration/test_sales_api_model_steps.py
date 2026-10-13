@@ -35,6 +35,7 @@ CASES = REPO / "evals/fixtures/cases"
 BY_KEY = {
     **load_answers(CASES / "sales_intent_recorded.json"),
     **load_answers(CASES / "sales_rfq_recorded.json"),
+    **load_answers(CASES / "sales_handoff_recorded.json"),
 }
 DESCRIPTIONS = json.loads((CASES / "sales_descriptions_recorded.json").read_text(encoding="utf-8"))[
     "answers"
@@ -116,16 +117,25 @@ async def test_a_postponement_no_keyword_lists_is_read_and_names_m35s_order(
         "read",
         "sales.message_intent@1.0.0",
     )
-    assert reading["rules"] == "sales_order_rules@1.3.1"
+    assert reading["rules"] == "sales_order_rules@1.4.1"
     ((reference),) = reading["references"]
     assert (reference["number"], reference["order_case_id"]) == (
         "BRN-PO-2609-052",
         m35["case_id"],
     )
-    # M35's PO decided its own kind: one call, for M40, in its DW1 run.
-    ((request, run),) = gateway.calls
-    assert (request.prompt_id, run.worker_id) == ("sales.message_intent", "sales-dw1")
-    assert run.tenant_id == sid("tenant", "tenant-alpha")
+    # M35's PO decided its own kind: M40's intent, then its hand-off
+    # (ticket 33), both in M40's DW1 run.
+    assert [request.prompt_id for request, _ in gateway.calls] == [
+        "sales.message_intent",
+        "sales.request_handoff",
+    ]
+    assert {(run.worker_id, run.tenant_id) for _, run in gateway.calls} == {
+        ("sales-dw1", sid("tenant", "tenant-alpha"))
+    }
+    assert (m40["handoff"]["outcome"], m40["handoff"]["po_no"]) == (
+        "read",
+        "BRN-PO-2609-052",
+    )
     async with migrator.connect() as conn:
         kept = await conn.scalar(
             sa.text("SELECT model_reading ->> 'kind' FROM sales.messages WHERE message_id = 'M40'")

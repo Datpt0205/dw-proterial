@@ -28,7 +28,7 @@ from dw_sales.application.model_reading import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
-    estimated_tokens,
+    cut_to_tokens,
 )
 from dw_sales.application.order_ports import OrderCaseLookupPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
@@ -153,10 +153,4 @@ class IntentReader:
     def _bounded(self, body: str) -> str:
         """The body cut to what fits the route with the prompt beside it: the
         kind of a message is in its first lines, and the rest is not sent."""
-        room = self.model.max_input_tokens - PROMPT_TOKENS
-        if estimated_tokens(body) <= room:
-            return body
-        cut = body
-        while cut and estimated_tokens(cut) > room:
-            cut = cut[: len(cut) * 3 // 4]
-        return cut
+        return cut_to_tokens(body, self.model.max_input_tokens - PROMPT_TOKENS)

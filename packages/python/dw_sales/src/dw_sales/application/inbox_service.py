@@ -34,7 +34,13 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.case_store import CaseOrigin, SalesUnitOfWork, SalesUnitOfWorkFactory
+from dw_sales.application.case_store import (
+    CaseOrigin,
+    LoggedMessage,
+    SalesUnitOfWork,
+    SalesUnitOfWorkFactory,
+)
+from dw_sales.application.handoffs import HandoffCopy, render
 from dw_sales.application.order_intake import (
     QUOTATION_KINDS,
     Classification,
@@ -60,6 +66,7 @@ from dw_sales.application.support import (
 )
 from dw_sales.application.telemetry import SalesSpan, SalesSpans, case_attributes
 from dw_sales.application.views import (
+    HandoffDraftView,
     InboxMessageView,
     MessageDispositionView,
     inbox_message,
@@ -90,6 +97,8 @@ class InboxQueries:
     uow: SalesUnitOfWorkFactory
     gate: Gate
     inbox: InboxPort
+    # The words a routed message's hand-off is written with (ticket 33).
+    handoffs: HandoffCopy
 
     async def messages(self, context: AccessContext) -> list[InboxMessageView]:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type="sales_message")
@@ -104,8 +113,28 @@ class InboxQueries:
                 if seen is not None
                 else message_disposition(MessageDisposition.pending(message.message_id), None)
             )
-            views.append(inbox_message(message, disposition))
+            views.append(inbox_message(message, disposition, self._draft(seen)))
         return views
+
+    def _draft(self, seen: LoggedMessage | None) -> HandoffDraftView | None:
+        """A routed message's hand-off, written from the template: the
+        values code kept, empty where it kept none, for Sales to fill."""
+        if seen is None or seen.disposition.handoff is None:
+            return None
+        disposition = seen.disposition
+        assert disposition.handoff is not None  # narrowed above
+        written = render(
+            disposition.handoff,
+            self.handoffs,
+            customer_code=disposition.customer_code or "",
+            message_id=disposition.message_id,
+        )
+        return HandoffDraftView(
+            to=written.to,
+            subject=written.subject,
+            body=written.body,
+            template_ref=written.template_ref,
+        )
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,1005 @@
+{
+  "_comment": "Ticket 30's golden PO forms: twelve customers' own forms (Vietnamese and English labels in Excel and text-layer PDF, Japanese labels in Excel: the generator's PDF font has no CJK glyphs), printed by the mock generator (`generate_attachments.render_po`) from these fields on every run, so the label cells the model is shown are the same each time. The gold mapping is each form's own labels. Every company, number and item is fictional.",
+  "forms": [
+    {
+      "id": "LF01",
+      "lang": "vi",
+      "kind": "xlsx",
+      "customer": "VLX",
+      "po_no": "VLX-PO-2610-0201",
+      "currency": "USD",
+      "form": {
+        "title": "ĐƠN ĐẶT HÀNG",
+        "sheet": "DonHang",
+        "header": [
+          [
+            "Số PO",
+            "po_no"
+          ],
+          [
+            "Lần sửa",
+            "revision"
+          ],
+          [
+            "Ngày PO",
+            "po_date"
+          ],
+          [
+            "Tiền tệ",
+            "currency"
+          ],
+          [
+            "Nhà cung cấp",
+            "supplier"
+          ]
+        ],
+        "columns": [
+          [
+            "STT",
+            "line_no"
+          ],
+          [
+            "Mã hàng",
+            "customer_item_code"
+          ],
+          [
+            "Tên hàng",
+            "description"
+          ],
+          [
+            "SL",
+            "quantity"
+          ],
+          [
+            "ĐVT",
+            "uom"
+          ],
+          [
+            "Đơn giá",
+            "unit_price"
+          ],
+          [
+            "Thành tiền",
+            "amount"
+          ],
+          [
+            "Ngày giao",
+            "requested_date"
+          ]
+        ],
+        "total": "Cộng"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "VX-W24-BK",
+          "quantity": "12200",
+          "unit_price": "0.0420",
+          "requested_date": "2026-11-20"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "VX-C2F05",
+          "quantity": "6000",
+          "unit_price": "0.4850",
+          "requested_date": "2026-12-04"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF02",
+      "lang": "en",
+      "kind": "xlsx",
+      "customer": "NRV",
+      "po_no": "NRV-PO-26-0611",
+      "currency": "USD",
+      "form": {
+        "title": "PURCHASE ORDER",
+        "sheet": "Order",
+        "header": [
+          [
+            "Purchase Order No.",
+            "po_no"
+          ],
+          [
+            "Date",
+            "po_date"
+          ],
+          [
+            "Vendor",
+            "supplier"
+          ],
+          [
+            "Currency",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "Line",
+            "line_no"
+          ],
+          [
+            "Item Code",
+            "customer_item_code"
+          ],
+          [
+            "Item Description",
+            "description"
+          ],
+          [
+            "Quantity",
+            "quantity"
+          ],
+          [
+            "UOM",
+            "uom"
+          ],
+          [
+            "Unit Cost",
+            "unit_price"
+          ],
+          [
+            "Line Amount",
+            "amount"
+          ],
+          [
+            "Delivery Date",
+            "requested_date"
+          ],
+          [
+            "Remarks",
+            "note"
+          ]
+        ],
+        "total": "Grand Total"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "NV-HW22-BK",
+          "quantity": "6100",
+          "unit_price": "0.0510",
+          "requested_date": "2026-11-13"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "NV-CB4-22-GY",
+          "quantity": "3000",
+          "unit_price": "0.6980",
+          "requested_date": "2026-12-11"
+        },
+        {
+          "no": 3,
+          "customer_item_code": "NV-CB4-075-BK",
+          "quantity": "3000",
+          "unit_price": "0.8240",
+          "requested_date": "2026-12-11"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF03",
+      "lang": "ja",
+      "kind": "xlsx",
+      "customer": "KMH",
+      "po_no": "KMH-2026-1005-D",
+      "currency": "USD",
+      "form": {
+        "title": "注文書",
+        "sheet": "注文書",
+        "header": [
+          [
+            "注文番号",
+            "po_no"
+          ],
+          [
+            "改訂",
+            "revision"
+          ],
+          [
+            "発注日",
+            "po_date"
+          ],
+          [
+            "通貨",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "行",
+            "line_no"
+          ],
+          [
+            "品番",
+            "customer_item_code"
+          ],
+          [
+            "品名",
+            "description"
+          ],
+          [
+            "数量",
+            "quantity"
+          ],
+          [
+            "単位",
+            "uom"
+          ],
+          [
+            "単価",
+            "unit_price"
+          ],
+          [
+            "金額",
+            "amount"
+          ],
+          [
+            "納期",
+            "requested_date"
+          ]
+        ],
+        "total": "合計"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "KMH-21-0077",
+          "quantity": "9150",
+          "unit_price": "0.0330",
+          "requested_date": "2026-11-27"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "KMH-20-0310",
+          "quantity": "3000",
+          "unit_price": "0.6150",
+          "requested_date": "2026-12-18"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF04",
+      "lang": "en",
+      "kind": "xlsx",
+      "customer": "QRL",
+      "po_no": "QRL-PO-1005-21",
+      "currency": "USD",
+      "form": {
+        "title": "PURCHASE ORDER",
+        "sheet": "PO",
+        "header": [
+          [
+            "PO #",
+            "po_no"
+          ],
+          [
+            "Issue Date",
+            "po_date"
+          ],
+          [
+            "Curr.",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "#",
+            "line_no"
+          ],
+          [
+            "Part",
+            "customer_item_code"
+          ],
+          [
+            "Desc.",
+            "description"
+          ],
+          [
+            "Qty Ordered",
+            "quantity"
+          ],
+          [
+            "U/M",
+            "uom"
+          ],
+          [
+            "Price Each",
+            "unit_price"
+          ],
+          [
+            "Ext. Price",
+            "amount"
+          ],
+          [
+            "Required",
+            "requested_date"
+          ]
+        ],
+        "total": "TOTAL USD"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "QR-HW20-BK",
+          "quantity": "6100",
+          "unit_price": "0.0640",
+          "requested_date": "2026-11-20"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "QR-CB2-AWG22",
+          "quantity": "3050",
+          "unit_price": "0.3150",
+          "requested_date": "2026-11-27"
+        },
+        {
+          "no": 3,
+          "customer_item_code": "QR-HW18-BK",
+          "quantity": "6100",
+          "unit_price": "0.0910",
+          "requested_date": "2026-11-27"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF05",
+      "lang": "vi",
+      "kind": "pdf",
+      "customer": "BRN",
+      "po_no": "BRN-PO-2610-007",
+      "currency": "VND",
+      "form": {
+        "title": "ĐƠN ĐẶT HÀNG",
+        "header": [
+          [
+            "Số đơn",
+            "po_no"
+          ],
+          [
+            "Ngày lập",
+            "po_date"
+          ],
+          [
+            "Loại tiền",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "TT",
+            "line_no"
+          ],
+          [
+            "Mã KH",
+            "customer_item_code"
+          ],
+          [
+            "Diễn giải",
+            "description"
+          ],
+          [
+            "Số lượng đặt",
+            "quantity"
+          ],
+          [
+            "Đơn vị",
+            "uom"
+          ],
+          [
+            "Giá",
+            "unit_price"
+          ],
+          [
+            "Thành tiền (VND)",
+            "amount"
+          ],
+          [
+            "Ngày cần hàng",
+            "requested_date"
+          ]
+        ],
+        "total": "Tổng tiền",
+        "thousands": ".",
+        "decimal": ",",
+        "date_format": "%d/%m/%Y"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "BRN-W-0007",
+          "quantity": "12200",
+          "unit_price": "1150",
+          "requested_date": "2026-11-20"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "BRN-C-0118",
+          "quantity": "3000",
+          "unit_price": "21800",
+          "requested_date": "2026-12-04"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF06",
+      "lang": "en",
+      "kind": "pdf",
+      "customer": "CVG",
+      "po_no": "CVG-261005-04",
+      "currency": "USD",
+      "form": {
+        "title": "INTRA-GROUP PURCHASE ORDER",
+        "header": [
+          [
+            "PO Number",
+            "po_no"
+          ],
+          [
+            "Revision No",
+            "revision"
+          ],
+          [
+            "PO Issue Date",
+            "po_date"
+          ],
+          [
+            "Currency Code",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "Ln",
+            "line_no"
+          ],
+          [
+            "Customer P/N",
+            "customer_item_code"
+          ],
+          [
+            "Material Description",
+            "description"
+          ],
+          [
+            "Qty",
+            "quantity"
+          ],
+          [
+            "UoM",
+            "uom"
+          ],
+          [
+            "Unit Price",
+            "unit_price"
+          ],
+          [
+            "Net Value",
+            "amount"
+          ],
+          [
+            "Delivery",
+            "requested_date"
+          ],
+          [
+            "Comment",
+            "note"
+          ]
+        ],
+        "total": "Total Net Value",
+        "thousands": ",",
+        "decimal": ".",
+        "date_format": "%d-%m-%Y"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "CVG-0001",
+          "quantity": "12200",
+          "unit_price": "0.0385",
+          "requested_date": "2026-11-16"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "CVG-0004",
+          "quantity": "3000",
+          "unit_price": "0.9050",
+          "requested_date": "2026-12-07"
+        },
+        {
+          "no": 3,
+          "customer_item_code": "CVG-0006",
+          "quantity": "1500",
+          "unit_price": "0.8900",
+          "requested_date": "2026-12-07"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF07",
+      "lang": "en",
+      "kind": "pdf",
+      "customer": "KMH",
+      "po_no": "KMH-2026-1006-E",
+      "currency": "USD",
+      "form": {
+        "title": "PURCHASE ORDER (EXPORT)",
+        "header": [
+          [
+            "Order No",
+            "po_no"
+          ],
+          [
+            "Order Issued",
+            "po_date"
+          ],
+          [
+            "Settlement Currency",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "No",
+            "line_no"
+          ],
+          [
+            "Customer Item",
+            "customer_item_code"
+          ],
+          [
+            "Item Name",
+            "description"
+          ],
+          [
+            "Order Qty",
+            "quantity"
+          ],
+          [
+            "Unit",
+            "uom"
+          ],
+          [
+            "Unit Price",
+            "unit_price"
+          ],
+          [
+            "Order Amount",
+            "amount"
+          ],
+          [
+            "Desired Delivery",
+            "requested_date"
+          ]
+        ],
+        "total": "Grand Total",
+        "thousands": ",",
+        "decimal": ".",
+        "date_format": "%Y/%m/%d"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "KMH-21-0077",
+          "quantity": "6100",
+          "unit_price": "0.0330",
+          "requested_date": "2026-11-25"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "KMH-20-0310",
+          "quantity": "1500",
+          "unit_price": "0.6150",
+          "requested_date": "2026-12-15"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF08",
+      "lang": "vi",
+      "kind": "xlsx",
+      "customer": "TZ2609",
+      "po_no": "LMR-PO-2610-004",
+      "currency": "USD",
+      "form": {
+        "title": "PHIẾU ĐẶT HÀNG",
+        "sheet": "Phieu",
+        "header": [
+          [
+            "Mã đơn",
+            "po_no"
+          ],
+          [
+            "Ngày đặt",
+            "po_date"
+          ],
+          [
+            "Đồng tiền",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "Số TT",
+            "line_no"
+          ],
+          [
+            "Mã vật tư",
+            "customer_item_code"
+          ],
+          [
+            "Quy cách",
+            "description"
+          ],
+          [
+            "Khối lượng",
+            "quantity"
+          ],
+          [
+            "Đơn vị tính",
+            "uom"
+          ],
+          [
+            "Đơn giá (USD)",
+            "unit_price"
+          ],
+          [
+            "Tổng cộng dòng",
+            "amount"
+          ],
+          [
+            "Hạn giao",
+            "requested_date"
+          ],
+          [
+            "Ghi chú",
+            "note"
+          ]
+        ],
+        "total": "Tổng giá trị đơn hàng"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "LM-W22-RD",
+          "quantity": "6100",
+          "unit_price": "0.0560",
+          "requested_date": "2026-11-30"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF09",
+      "lang": "en",
+      "kind": "xlsx",
+      "customer": "VLX",
+      "po_no": "VLX-PO-2610-0215",
+      "currency": "USD",
+      "form": {
+        "title": "ORDER",
+        "sheet": "Order",
+        "header": [
+          [
+            "Order Ref",
+            "po_no"
+          ],
+          [
+            "Amendment",
+            "revision"
+          ],
+          [
+            "Order Date",
+            "po_date"
+          ],
+          [
+            "Currency",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "Seq",
+            "line_no"
+          ],
+          [
+            "SKU",
+            "customer_item_code"
+          ],
+          [
+            "Product",
+            "description"
+          ],
+          [
+            "Order Quantity",
+            "quantity"
+          ],
+          [
+            "Unit of Measure",
+            "uom"
+          ],
+          [
+            "Unit Price (USD)",
+            "unit_price"
+          ],
+          [
+            "Total Price",
+            "amount"
+          ],
+          [
+            "Ship Date",
+            "requested_date"
+          ]
+        ],
+        "total": "Order Total"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "VX-W24-RD",
+          "quantity": "6100",
+          "unit_price": "0.0420",
+          "requested_date": "2026-11-13"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "VX-C4B22",
+          "quantity": "3000",
+          "unit_price": "0.7120",
+          "requested_date": "2026-12-04"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF10",
+      "lang": "vi",
+      "kind": "pdf",
+      "customer": "VLX",
+      "po_no": "VLX-PO-2610-0222",
+      "currency": "USD",
+      "form": {
+        "title": "ĐƠN HÀNG",
+        "header": [
+          [
+            "Đơn hàng số",
+            "po_no"
+          ],
+          [
+            "Ngày",
+            "po_date"
+          ],
+          [
+            "Tiền tệ",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "#",
+            "line_no"
+          ],
+          [
+            "Mã SP",
+            "customer_item_code"
+          ],
+          [
+            "Mô tả SP",
+            "description"
+          ],
+          [
+            "Số lượng",
+            "quantity"
+          ],
+          [
+            "ĐVT",
+            "uom"
+          ],
+          [
+            "Đơn giá",
+            "unit_price"
+          ],
+          [
+            "Giá trị",
+            "amount"
+          ],
+          [
+            "Ngày giao hàng",
+            "requested_date"
+          ]
+        ],
+        "total": "Tổng",
+        "thousands": ",",
+        "decimal": ".",
+        "date_format": "%d.%m.%Y"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "VX-W24-BK",
+          "quantity": "6100",
+          "unit_price": "0.0420",
+          "requested_date": "2026-11-18"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "VX-C2F05",
+          "quantity": "3000",
+          "unit_price": "0.4850",
+          "requested_date": "2026-12-02"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF11",
+      "lang": "en",
+      "kind": "pdf",
+      "customer": "QRL",
+      "po_no": "QRL-PO-1007-02",
+      "currency": "USD",
+      "form": {
+        "title": "PURCHASE ORDER",
+        "header": [
+          [
+            "Purchase Order",
+            "po_no"
+          ],
+          [
+            "Order Date",
+            "po_date"
+          ],
+          [
+            "Currency",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "Line No",
+            "line_no"
+          ],
+          [
+            "Supplier Part",
+            "customer_item_code"
+          ],
+          [
+            "Item Name",
+            "description"
+          ],
+          [
+            "Order Qty",
+            "quantity"
+          ],
+          [
+            "Units",
+            "uom"
+          ],
+          [
+            "Rate",
+            "unit_price"
+          ],
+          [
+            "Amount",
+            "amount"
+          ],
+          [
+            "Due Date",
+            "requested_date"
+          ],
+          [
+            "Buyer Note",
+            "note"
+          ]
+        ],
+        "total": "Total Amount",
+        "thousands": " ",
+        "decimal": ".",
+        "date_format": "%m/%d/%Y"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "QR-HW20-BK",
+          "quantity": "12200",
+          "unit_price": "0.0640",
+          "requested_date": "2026-11-23"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "QR-CB4-03-WH",
+          "quantity": "1500",
+          "unit_price": "0.4420",
+          "requested_date": "2026-12-14"
+        }
+      ],
+      "po_date": "2026-10-05"
+    },
+    {
+      "id": "LF12",
+      "lang": "ja",
+      "kind": "xlsx",
+      "customer": "KMH",
+      "po_no": "KMH-2026-1008-F",
+      "currency": "USD",
+      "form": {
+        "title": "注文書 / PURCHASE ORDER",
+        "sheet": "注文",
+        "header": [
+          [
+            "注文書番号",
+            "po_no"
+          ],
+          [
+            "注文日",
+            "po_date"
+          ],
+          [
+            "通貨単位",
+            "currency"
+          ]
+        ],
+        "columns": [
+          [
+            "項番",
+            "line_no"
+          ],
+          [
+            "お客様品番",
+            "customer_item_code"
+          ],
+          [
+            "品名・仕様",
+            "description"
+          ],
+          [
+            "注文数量",
+            "quantity"
+          ],
+          [
+            "単位",
+            "uom"
+          ],
+          [
+            "単価(USD)",
+            "unit_price"
+          ],
+          [
+            "金額(USD)",
+            "amount"
+          ],
+          [
+            "指定納期",
+            "requested_date"
+          ]
+        ],
+        "total": "合計金額"
+      },
+      "lines": [
+        {
+          "no": 1,
+          "customer_item_code": "KMH-21-0077",
+          "quantity": "12200",
+          "unit_price": "0.0330",
+          "requested_date": "2026-11-26"
+        },
+        {
+          "no": 2,
+          "customer_item_code": "KMH-20-0310",
+          "quantity": "3000",
+          "unit_price": "0.6150",
+          "requested_date": "2026-12-16"
+        }
+      ],
+      "po_date": "2026-10-05"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+schema_version: "1.0"
+copy_id: sales_handoffs
+version: "1.0.0"
+
+# The words of a hand-off Sales sends to PC or QA from a customer's mail
+# (ticket 33, dw_sales ADR 0005). Code fills every placeholder from what it
+# located, parsed and resolved in the mail; the customer's own sentences go in
+# quotation marks, as theirs. The model writes no word of it. Sales reviews,
+# edits and sends it from their own mailbox: DW1 sends nothing and changes no
+# date or quantity in the ERP.
+#
+# Platform layer, fictional wording. A tenant's own wording arrives as its own
+# version of this file (ticket 19), never as an edit to this one.
+#
+# {customer} the customer code; {po} the PO the mail names, when it resolved to
+# one of the customer's orders; {message_id} the mail in the Sales mailbox;
+# {lines} one `line` per line asked to change; {lot} the lot as the customer
+# wrote it; {quotes} one `quote` per sentence or item; {quantity} the sample
+# quantity. A value code did not keep is written as `unknown`.
+
+unknown: "(chưa rõ, Sales điền)"
+line: "- Dòng {line_no} ({item}): số lượng mới {quantity}; ngày giao mới {date}"
+quote: "  «{text}»"
+
+templates:
+  delivery_change:
+    to: pc
+    subject: "[Chuyển PC] Khách {customer} đề nghị đổi giao hàng – PO {po}"
+    body: |
+      Chào anh/chị PC,
+
+      Khách {customer} đề nghị thay đổi giao hàng cho PO {po}:
+      {lines}
+
+      Nhờ PC xem khả năng và báo lại ngày có thể giao; Sales xác nhận với
+      khách sau. Chưa có thay đổi nào trên Bravo.
+
+      Thư gốc của khách: {message_id} trong hộp thư Sales.
+
+      Sales
+  complaint:
+    to: qa
+    subject: "[Chuyển QA] Khách {customer} phản ánh chất lượng – PO {po}, lô {lot}"
+    body: |
+      Chào anh/chị QA,
+
+      Khách {customer} phản ánh về hàng đã giao theo PO {po}, lô {lot}.
+      Khách viết:
+      {quotes}
+
+      Nhờ QA kiểm tra và hướng dẫn Sales trả lời khách.
+
+      Thư gốc của khách: {message_id} trong hộp thư Sales.
+
+      Sales
+  sample_request:
+    to: pc
+    subject: "[Chuyển PC] Khách {customer} xin hàng mẫu"
+    body: |
+      Chào anh/chị PC,
+
+      Khách {customer} xin hàng mẫu:
+      {quotes}
+      Số lượng khách nêu: {quantity}.
+
+      Nhờ PC xem khả năng chuẩn bị mẫu và báo lại cho Sales.
+
+      Thư gốc của khách: {message_id} trong hộp thư Sales.
+
+      Sales

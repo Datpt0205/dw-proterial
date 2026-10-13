@@ -1,0 +1,710 @@
+{
+  "_comment": "Ticket 33 golden set: fictional delivery-change, complaint and sample-request mails, VI/EN/JA, received 2026-10-10, with the spans a person copies into a hand-off for PC or QA. Every company, person, PO, lot and quantity is invented; po_no is set only when the PO is one of the sender's own orders in the mock ERP.",
+  "mails": [
+    {
+      "id": "HO01",
+      "lang": "vi",
+      "kind": "delivery_change",
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Điều chỉnh đơn VLX-PO-2608-0102",
+      "body": "Chào chị Vy,\n\nPhần còn lại của đơn hàng, bên em xin điều chỉnh như sau:\n- Dòng 1 (mã VX-C4B22): giảm số lượng còn 2.000 m, ngày giao giữ nguyên.\n- Dòng 2: lùi ngày giao sang 05/12/2026, số lượng giữ nguyên.\n\nNhờ chị kiểm tra với bộ phận kế hoạch và xác nhận lại giúp em.\n\nCảm ơn chị,\nTrịnh Mỹ An",
+      "gold": {
+        "po_no": "VLX-PO-2608-0102",
+        "lines": [
+          {
+            "line": 1,
+            "new_quantity": "2000",
+            "new_date": null
+          },
+          {
+            "line": 2,
+            "new_quantity": null,
+            "new_date": "2026-12-05"
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "two_lines"
+      ]
+    },
+    {
+      "id": "HO02",
+      "lang": "vi",
+      "kind": "delivery_change",
+      "sender": "thu.vo@brennic.example",
+      "subject": "Đề nghị đổi ngày giao hàng",
+      "body": "Kính gửi Phòng Kinh doanh,\n\nTheo đơn BRN-PO-2608-022, mã BRN-C-0118 bên em đề nghị đổi ngày giao sang ngày 20 tháng 11 do dây chuyền lắp ráp đang chậm tiến độ. Số lượng không thay đổi.\n\nMong anh chị xem xét và phản hồi giúp.\n\nTrân trọng,\nVõ Minh Thư",
+      "gold": {
+        "po_no": "BRN-PO-2608-022",
+        "lines": [
+          {
+            "line": 2,
+            "new_quantity": null,
+            "new_date": "2026-11-20"
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO03",
+      "lang": "vi",
+      "kind": "delivery_change",
+      "sender": "minh.dao@lumora.example",
+      "subject": "Đơn LMR-PO-2608-001 – đề nghị lùi lịch giao",
+      "body": "Chào anh/chị,\n\nVới đơn trên, mã LM-W22-RD bên em xin giảm còn 4.500 m và lùi lịch giao sang tuần sau, vì dự án của khách hàng bên em bị dời.\n\nNhờ anh/chị xác nhận giúp.\n\nTrân trọng,\nĐào Quang Minh",
+      "gold": {
+        "po_no": "LMR-PO-2608-001",
+        "lines": [
+          {
+            "line": 1,
+            "new_quantity": "4500",
+            "new_date": null
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "unparseable_date"
+      ]
+    },
+    {
+      "id": "HO04",
+      "lang": "vi",
+      "kind": "delivery_change",
+      "sender": "purchasing@velatrix.example",
+      "subject": "Lùi ngày giao cáp VX-C2F05",
+      "body": "Kính gửi Phòng Kinh doanh,\n\nBên em muốn lùi ngày giao cáp VX-C2F05 sang 18/11/2026 do kho đang kiểm kê. Hiện em chưa tra lại được số đơn, anh chị kiểm tra giúp đơn đang mở của Velatrix có mã này.\n\nTrân trọng,\nVelatrix Purchasing",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "no_po"
+      ]
+    },
+    {
+      "id": "HO05",
+      "lang": "en",
+      "kind": "delivery_change",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Re: Shipment status",
+      "body": "Hi Vy,\n\nThanks for the update below. One change on our side: for NRV-PO-26-0388, please reduce item NV-CB4-22-GY to 2,400 m and ship it on 14 Nov 2026 instead.\n\nBest regards,\nHana Westbrook\n\nOn Tue, 6 Oct 2026 at 10:00, Vy <vy@seller.example> wrote:\n> Dear Hana,\n>\n> NRV-PO-26-0190 was shipped in full, 12,200 m in one lot.\n> The next order is being planned now.\n>\n> Regards,\n> Vy",
+      "gold": {
+        "po_no": "NRV-PO-26-0388",
+        "lines": [
+          {
+            "line": 1,
+            "new_quantity": "2400",
+            "new_date": "2026-11-14"
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "HO06",
+      "lang": "en",
+      "kind": "delivery_change",
+      "sender": "ivy.tran@quorilo.example",
+      "subject": "Two changes to our open order",
+      "body": "Hi Vy,\n\nTwo changes on QRL-PO-0918-07, please:\n- Line 1 (QR-HW20-BK): new delivery date 2026-12-04.\n- Line 2: reduce the quantity to 4,000 m, date unchanged.\n\nThe earlier question below is still open as well.\n\nBest regards,\nIvy Tran\nQuorilo Medical Devices\n\nFrom: Ivy Tran <ivy.tran@quorilo.example>\nSent: Friday, October 2, 2026 9:14 AM\nTo: Vy <vy@seller.example>\nSubject: Remaining balance on our July order\n\nHi Vy,\n\nPlease confirm when the remaining 1,050 m on QRL-PO-0703-02 can ship.\n\nThanks,\nIvy",
+      "gold": {
+        "po_no": "QRL-PO-0918-07",
+        "lines": [
+          {
+            "line": 1,
+            "new_quantity": null,
+            "new_date": "2026-12-04"
+          },
+          {
+            "line": 2,
+            "new_quantity": "4000",
+            "new_date": null
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "quoted_history",
+        "two_lines"
+      ]
+    },
+    {
+      "id": "HO07",
+      "lang": "en",
+      "kind": "delivery_change",
+      "sender": "po-desk@norvanta.example",
+      "subject": "Reschedule request",
+      "body": "Dear Sales team,\n\nPlease reschedule PO NRV-PO-26-0455, line 1, to 27 Nov 2026. Our line changeover has moved by three weeks.\n\nRegards,\nNorvanta PO Desk",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "unknown_po"
+      ]
+    },
+    {
+      "id": "HO08",
+      "lang": "en",
+      "kind": "delivery_change",
+      "sender": "scm@corvane-group.example",
+      "subject": "Changes to CVG-260415-03",
+      "body": "Dear Sales,\n\nPlease note the following changes to the order above:\n- CVG-0002: new quantity 5,000 m.\n- CVG-0003: please deliver on Nov 30 instead.\nEverything else stays as ordered.\n\nRegards,\nCorvane Supply Chain Desk",
+      "gold": {
+        "po_no": "CVG-260415-03",
+        "lines": [
+          {
+            "line": 2,
+            "new_quantity": "5000",
+            "new_date": null
+          },
+          {
+            "line": 3,
+            "new_quantity": null,
+            "new_date": "2026-11-30"
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "two_lines"
+      ]
+    },
+    {
+      "id": "HO09",
+      "lang": "en",
+      "kind": "delivery_change",
+      "sender": "procurement@quorilo.example",
+      "subject": "Delivery date change",
+      "body": "Hello,\n\nCould you push PO NRV-PO-26-0190 out to 18 Dec 2026? Our cleanroom expansion is running late and we have no space to receive it earlier.\n\nThank you,\nQuorilo Procurement",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "other_customer_po"
+      ]
+    },
+    {
+      "id": "HO10",
+      "lang": "ja",
+      "kind": "delivery_change",
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "納期変更のお願い（KMH-2026-0728-A）",
+      "body": "Demo Wire & Cable\n営業部 ご担当者様\n\nいつも大変お世話になっております。\nクモハナデバイスベトナムの新井でございます。\n\n標記注文書につきまして、2行目（KMH-21-0077）の納期を2026年11月27日へご変更いただき、あわせて数量を4,000mに減らしていただけますでしょうか。\n\nお手数をおかけいたしますが、ご確認のほどよろしくお願い申し上げます。\n\n新井 匠",
+      "gold": {
+        "po_no": "KMH-2026-0728-A",
+        "lines": [
+          {
+            "line": 2,
+            "new_quantity": "4000",
+            "new_date": "2026-11-27"
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO11",
+      "lang": "ja",
+      "kind": "delivery_change",
+      "sender": "purchasing@kumohana.example",
+      "subject": "注文内容変更のご相談",
+      "body": "Demo Wire & Cable 営業ご担当者様\n\nいつもお世話になっております。クモハナ購買部でございます。\n\n注文書KMH-2025-1118-Bの1行目（CB-2007）につきまして、数量を2,500mに変更のうえ、納期を来週に前倒ししていただくことは可能でしょうか。\n\nご検討のほど、よろしくお願い申し上げます。\n\nクモハナ購買部",
+      "gold": {
+        "po_no": "KMH-2025-1118-B",
+        "lines": [
+          {
+            "line": 1,
+            "new_quantity": "2500",
+            "new_date": null
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "unparseable_date"
+      ]
+    },
+    {
+      "id": "HO12",
+      "lang": "ja",
+      "kind": "delivery_change",
+      "sender": "scm@corvane-group.example",
+      "subject": "納期変更のお願い",
+      "body": "Demo Wire & Cable 営業ご担当者様\n\nお世話になっております。Corvane Group Japan 調達部でございます。\n\n注文番号CVG-260610-05のうち、品番CVG-0005の納期を12月11日に変更していただけますでしょうか。\n\n何卒よろしくお願いいたします。\n\n-----Original Message-----\nFrom: Corvane Supply Chain Desk <scm@corvane-group.example>\nSent: Monday, October 5, 2026 4:20 PM\nTo: Vy <vy@seller.example>\nSubject: 出荷状況の確認\n\nCVG-260415-03 の残数 6,100m の出荷予定をご教示ください。",
+      "gold": {
+        "po_no": "CVG-260610-05",
+        "lines": [
+          {
+            "line": 2,
+            "new_quantity": null,
+            "new_date": "2026-12-11"
+          }
+        ],
+        "lot_no": null,
+        "problem": [],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "HO13",
+      "lang": "vi",
+      "kind": "complaint",
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Phản ánh chất lượng cáp – PO VLX-PO-2602-0077",
+      "body": "Chào chị Vy,\n\nLô cáp giao theo đơn trên (số lô LOT 2603-041 trên nhãn cuộn), khi lắp ráp bên em phát hiện vỏ cách điện bị nứt ở nhiều đoạn sau khi uốn cong. Bên em đã tạm ngưng sử dụng lô này.\n\nNhờ chị chuyển bộ phận chất lượng kiểm tra và phản hồi giúp em.\n\nTrân trọng,\nTrịnh Mỹ An",
+      "gold": {
+        "po_no": "VLX-PO-2602-0077",
+        "lines": [],
+        "lot_no": "LOT 2603-041",
+        "problem": [
+          "vỏ cách điện bị nứt"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO14",
+      "lang": "vi",
+      "kind": "complaint",
+      "sender": "thu.vo@brennic.example",
+      "subject": "Re: Tình trạng giao hàng",
+      "body": "Kính gửi chị Vy,\n\nCảm ơn chị đã phản hồi. Riêng đơn BRN-PO-2601-004, bên em mới mở cuộn dự trữ thì thấy cuộn số 3 trong lô LOT-2602-233 bị thiếu 150 m so với chiều dài ghi trên nhãn. Bên em đã đo lại hai lần.\n\nNhờ chị chuyển bộ phận chất lượng xử lý giúp.\n\nTrân trọng,\nVõ Minh Thư\n\nOn Tue, 6 Oct 2026 at 10:00, Vy <vy@seller.example> wrote:\n> Chào chị Thư,\n>\n> Đơn BRN-PO-2608-022 đã giao đủ 2.000 m cáp ngày 18/09.\n> Chị cần em hỗ trợ gì thêm ạ?\n>\n> Vy",
+      "gold": {
+        "po_no": "BRN-PO-2601-004",
+        "lines": [],
+        "lot_no": "LOT-2602-233",
+        "problem": [
+          "bị thiếu 150 m"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "quoted_history"
+      ]
+    },
+    {
+      "id": "HO15",
+      "lang": "vi",
+      "kind": "complaint",
+      "sender": "minh.dao@lumora.example",
+      "subject": "Khiếu nại màu vỏ dây",
+      "body": "Chào anh/chị,\n\nDây LM-W22-RD giao theo PO LMR-PO-2608-001, số lô L26-0918-05, có vỏ bị bạc màu từ đỏ sang hồng nhạt ở các vòng ngoài của cuộn. Màu này không đạt yêu cầu nhận dạng dây của bên em.\n\nMong anh/chị kiểm tra và phản hồi sớm.\n\nTrân trọng,\nĐào Quang Minh",
+      "gold": {
+        "po_no": "LMR-PO-2608-001",
+        "lines": [],
+        "lot_no": "L26-0918-05",
+        "problem": [
+          "vỏ bị bạc màu"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO16",
+      "lang": "vi",
+      "kind": "complaint",
+      "sender": "purchasing@velatrix.example",
+      "subject": "Hàng giao sai nhãn",
+      "body": "Kính gửi Phòng Kinh doanh,\n\nLô hàng bên em nhận ngày 08/10 có 2 thùng dán nhãn PO BRN-PO-2608-022, không phải đơn của Velatrix, và số lượng trong thùng không khớp phiếu giao hàng.\n\nNhờ anh chị kiểm tra và hướng dẫn bên em xử lý số hàng này.\n\nTrân trọng,\nVelatrix Purchasing",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [
+          "không khớp phiếu giao hàng"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "other_customer_po"
+      ]
+    },
+    {
+      "id": "HO17",
+      "lang": "en",
+      "kind": "complaint",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Quality claim – LOT 2605-077",
+      "body": "Hi Vy,\n\nOn PO NRV-PO-26-0190 we re-measured the reels before kitting. Reel 4 came out short by 200 m against the label, and reel 6 looks short as well.\n\nCould QA look into this and let us know how you would like to handle it?\n\nBest regards,\nHana Westbrook",
+      "gold": {
+        "po_no": "NRV-PO-26-0190",
+        "lines": [],
+        "lot_no": "LOT 2605-077",
+        "problem": [
+          "short by 200 m"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO18",
+      "lang": "en",
+      "kind": "complaint",
+      "sender": "ivy.tran@quorilo.example",
+      "subject": "Incoming inspection finding",
+      "body": "Hi Vy,\n\nDuring incoming inspection of the wire delivered last week, lot QL-2609-311, we found scratches along the insulation on about a third of the coil. We have put the lot on hold.\n\nPlease forward this to your QA team.\n\nKind regards,\nIvy Tran",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": "QL-2609-311",
+        "problem": [
+          "scratches along the insulation"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "no_po"
+      ]
+    },
+    {
+      "id": "HO19",
+      "lang": "en",
+      "kind": "complaint",
+      "sender": "scm@corvane-group.example",
+      "subject": "Damaged drums",
+      "body": "Dear Sales,\n\nRegarding CVG-260610-05, two drums from lot 2607-CV-118 arrived damaged: the outer jacket is torn in several places, and on one drum the conductor is exposed.\n\nPlease ask QA to review; we can send photos on request.\n\nRegards,\nCorvane Supply Chain Desk",
+      "gold": {
+        "po_no": "CVG-260610-05",
+        "lines": [],
+        "lot_no": "2607-CV-118",
+        "problem": [
+          "the outer jacket is torn",
+          "the conductor is exposed"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO20",
+      "lang": "en",
+      "kind": "complaint",
+      "sender": "po-desk@norvanta.example",
+      "subject": "Wrong colour received",
+      "body": "Dear Sales team,\n\nThe reels for NRV-PO-26-0388 arrived labelled grey, but the cable inside is black. None of the reels carries a lot label, so we cannot trace them.\n\nPlease advise how QA would like to proceed.\n\nRegards,\nNorvanta PO Desk",
+      "gold": {
+        "po_no": "NRV-PO-26-0388",
+        "lines": [],
+        "lot_no": null,
+        "problem": [
+          "the cable inside is black"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO21",
+      "lang": "ja",
+      "kind": "complaint",
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "受入検査不具合のご連絡",
+      "body": "Demo Wire & Cable\n品質保証ご担当者様\n\nいつもお世話になっております。クモハナデバイスベトナムの新井でございます。\n\n注文書KMH-2026-0728-Aにて納品いただいた電線（ロット番号：LOT 2608-152）の受入検査におきまして、被覆に傷が多数見つかりました。\n該当ロットは現在使用を保留しております。\n\n原因のご調査と今後のご対応につきまして、ご連絡いただけますと幸いです。\n\n新井 匠",
+      "gold": {
+        "po_no": "KMH-2026-0728-A",
+        "lines": [],
+        "lot_no": "LOT 2608-152",
+        "problem": [
+          "被覆に傷"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO22",
+      "lang": "ja",
+      "kind": "complaint",
+      "sender": "purchasing@kumohana.example",
+      "subject": "ケーブル断線の件",
+      "body": "Demo Wire & Cable 品質保証ご担当者様\n\nいつもお世話になっております。クモハナ購買部でございます。\n\nロットK-2609-044のケーブルにおいて、端末加工時に導体が断線している箇所が3か所ございました。\n現品は弊社にて保管しております。\n\nお手数ですが、ご確認のほどよろしくお願いいたします。\n\nクモハナ購買部",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": "K-2609-044",
+        "problem": [
+          "導体が断線している"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": [
+        "no_po"
+      ]
+    },
+    {
+      "id": "HO23",
+      "lang": "ja",
+      "kind": "complaint",
+      "sender": "scm@corvane-group.example",
+      "subject": "納入品の長さ不足について",
+      "body": "Demo Wire & Cable 品質保証ご担当者様\n\nお世話になっております。Corvane Group Japan 調達部でございます。\n\n注文番号CVG-260415-03で納品いただいたドラムのうち、ロットCV-2605-2201の1本が、実測で表示より約150m短くなっておりました。\n\nご調査のうえ、ご対応をご相談させていただけますと幸いです。\n\nCorvane Group Japan 調達部",
+      "gold": {
+        "po_no": "CVG-260415-03",
+        "lines": [],
+        "lot_no": "CV-2605-2201",
+        "problem": [
+          "表示より約150m短く"
+        ],
+        "items": [],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO24",
+      "lang": "vi",
+      "kind": "sample_request",
+      "sender": "thu.vo@brennic.example",
+      "subject": "Xin hàng mẫu cho dự án tủ điện",
+      "body": "Kính gửi Phòng Kinh doanh,\n\nBrennic đang thử nghiệm cho dự án tủ điện mới, nhờ anh chị gửi giúp 100 m hàng mẫu cáp 3 lõi bọc giáp 1.5mm2 trong tháng 10.\n\nTrân trọng,\nVõ Minh Thư",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "cáp 3 lõi bọc giáp 1.5mm2"
+        ],
+        "quantity": "100"
+      },
+      "tags": []
+    },
+    {
+      "id": "HO25",
+      "lang": "vi",
+      "kind": "sample_request",
+      "sender": "an.trinh@velatrix.example",
+      "subject": "Xin mẫu đánh giá",
+      "body": "Chào chị Vy,\n\nBên em cần mẫu hai loại để đánh giá:\n1. Dây đơn AWG26 màu xanh lá\n2. Cáp 4 lõi 0.5mm2 có lưới chống nhiễu\nMỗi loại 30 m là đủ ạ.\n\nCảm ơn chị,\nTrịnh Mỹ An",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "Dây đơn AWG26 màu xanh lá",
+          "Cáp 4 lõi 0.5mm2 có lưới chống nhiễu"
+        ],
+        "quantity": "30"
+      },
+      "tags": []
+    },
+    {
+      "id": "HO26",
+      "lang": "vi",
+      "kind": "sample_request",
+      "sender": "minh.dao@lumora.example",
+      "subject": "Đề nghị gửi mẫu dây",
+      "body": "Chào anh/chị,\n\nLumora muốn nhận một ít mẫu dây chịu nhiệt 105°C tiết diện 0.3mm2 để thử trong lò sấy. Số lượng anh/chị cho bên em xin theo mức mẫu thông thường.\n\nTrân trọng,\nĐào Quang Minh",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "dây chịu nhiệt 105°C tiết diện 0.3mm2"
+        ],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO27",
+      "lang": "vi",
+      "kind": "sample_request",
+      "sender": "purchasing@velatrix.example",
+      "subject": "Yêu cầu hàng mẫu",
+      "body": "Kính gửi Phòng Kinh doanh,\n\nVelatrix cần 20 m mẫu cáp dẹt 10 lõi bước 1.27 mm cho dự án bo mạch mới. Nhờ anh chị báo giúp thời gian gửi mẫu.\n\nTrân trọng,\nVelatrix Purchasing",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "cáp dẹt 10 lõi bước 1.27 mm"
+        ],
+        "quantity": "20"
+      },
+      "tags": []
+    },
+    {
+      "id": "HO28",
+      "lang": "en",
+      "kind": "sample_request",
+      "sender": "ivy.tran@quorilo.example",
+      "subject": "Sample request – monitor project",
+      "body": "Hi Vy,\n\nFor a new monitor project we would like samples of:\n- 2C AWG24 shielded cable, grey jacket\n- AWG22 hook-up wire, white\n200 m of each, if possible.\n\nBest regards,\nIvy Tran",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "2C AWG24 shielded cable",
+          "AWG22 hook-up wire"
+        ],
+        "quantity": "200"
+      },
+      "tags": []
+    },
+    {
+      "id": "HO29",
+      "lang": "en",
+      "kind": "sample_request",
+      "sender": "hana.westbrook@norvanta.example",
+      "subject": "Sample for harness trial",
+      "body": "Hi Vy,\n\nCould you send us 50 m of 4-core 0.75 mm² sheathed cable as a sample for our harness trial? We would need it by the end of October.\n\nThanks,\nHana Westbrook",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "4-core 0.75 mm² sheathed cable"
+        ],
+        "quantity": "50"
+      },
+      "tags": []
+    },
+    {
+      "id": "HO30",
+      "lang": "en",
+      "kind": "sample_request",
+      "sender": "scm@corvane-group.example",
+      "subject": "Sample request",
+      "body": "Dear Sales,\n\nOur design team would like a sample of halogen-free single wire, AWG20, in black and red. The length is up to you; a short coil per colour is enough.\n\nRegards,\nCorvane Supply Chain Desk",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "halogen-free single wire, AWG20"
+        ],
+        "quantity": null
+      },
+      "tags": []
+    },
+    {
+      "id": "HO31",
+      "lang": "ja",
+      "kind": "sample_request",
+      "sender": "takumi.arai@vn.kumohana.example",
+      "subject": "サンプルご提供のお願い",
+      "body": "Demo Wire & Cable\n営業部 ご担当者様\n\nいつもお世話になっております。クモハナデバイスベトナムの新井でございます。\n\n新規案件の評価用として、2芯シールドケーブル AWG26 のサンプルを100mご提供いただけますでしょうか。\n\nご検討のほど、よろしくお願い申し上げます。\n\n新井 匠",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "2芯シールドケーブル AWG26"
+        ],
+        "quantity": "100"
+      },
+      "tags": []
+    },
+    {
+      "id": "HO32",
+      "lang": "ja",
+      "kind": "sample_request",
+      "sender": "purchasing@kumohana.example",
+      "subject": "サンプル依頼（2品目）",
+      "body": "Demo Wire & Cable 営業ご担当者様\n\nいつもお世話になっております。クモハナ購買部でございます。\n\n下記2品目のサンプルを各50mお願いしたく存じます。\n・耐熱ビニル電線 0.3sq 黒\n・4芯キャブタイヤケーブル 0.5sq\n\n何卒よろしくお願い申し上げます。\n\nクモハナ購買部",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "耐熱ビニル電線 0.3sq 黒",
+          "4芯キャブタイヤケーブル 0.5sq"
+        ],
+        "quantity": "50"
+      },
+      "tags": []
+    },
+    {
+      "id": "HO33",
+      "lang": "ja",
+      "kind": "sample_request",
+      "sender": "scm@corvane-group.example",
+      "subject": "試作用サンプルのお願い",
+      "body": "Demo Wire & Cable 営業ご担当者様\n\nお世話になっております。Corvane Group Japan 調達部でございます。\n\n試作用として、フラットケーブル 20芯（ピッチ1.27mm）のサンプルを10mお送りいただけますでしょうか。\n\nよろしくお願いいたします。\n\nCorvane Group Japan 調達部",
+      "gold": {
+        "po_no": null,
+        "lines": [],
+        "lot_no": null,
+        "problem": [],
+        "items": [
+          "フラットケーブル 20芯"
+        ],
+        "quantity": "10"
+      },
+      "tags": []
+    }
+  ]
+}

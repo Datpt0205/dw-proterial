@@ -1,0 +1,9 @@
+{
+  "_comment": "What the recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) make of the sample mailbox's routed messages: M11 and M40 name their PO, which resolves to the case DW1 holds for it (M01's, M35's), and state no date code can parse ('tuần 46', 'tuần sau'), so no line is handed off; M31's PO is an ERP order of the sender's; M17 is a sample request with its item quoted.",
+  "messages": {
+    "M11": { "reason": "delivery_change", "outcome": "read", "po_no": "VLX-PO-2609-0118", "lines": [], "to": "pc" },
+    "M17": { "reason": "sample_request", "outcome": "read", "po_no": null, "quotes": 1, "to": "pc" },
+    "M31": { "reason": "complaint", "outcome": "read", "po_no": "VLX-PO-2608-0102", "quotes": 1, "to": "qa" },
+    "M40": { "reason": "delivery_change", "outcome": "read", "po_no": "BRN-PO-2609-052", "lines": [], "to": "pc" }
+  }
+}

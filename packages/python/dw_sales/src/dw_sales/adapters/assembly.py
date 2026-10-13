@@ -15,9 +15,11 @@ tenant's own version of the order rules, where the sample set holds one
 
 Given ``model``, the gateway of a process with a model server for DW1's
 profile, DW1 reads through it what its own code does not (dw_sales ADR 0005):
-item descriptions outside its vocabulary (ticket 28) and the intent of a
-message no reader accepted (ticket 31), each for a tenant whose rules turn it
-on. Without one, no model is called at all.
+item descriptions outside its vocabulary (ticket 28), the intent of a
+message no reader accepted (ticket 31) and of a customer's reply in a case's
+thread (ticket 32), each for a tenant whose rules turn it on. Without one, no
+model is called at all; a reply is still attached to its case by its thread
+headers.
 """
 
 from __future__ import annotations
@@ -43,9 +45,14 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.adapters.order_rules import TenantOrderRules, load_tenant_order_rules
+from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
-from dw_sales.adapters.persistence.uow import AuditFactory, SqlSalesUnitOfWorkFactory
+from dw_sales.adapters.persistence.uow import (
+    ApprovalsFactory,
+    AuditFactory,
+    SqlSalesUnitOfWorkFactory,
+)
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.adapters.readers.text_parts import AttachmentTexts
@@ -53,7 +60,9 @@ from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms,
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.access import SalesAuthorizationPort
+from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
+from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
@@ -67,9 +76,11 @@ from dw_sales.application.ports import (
     ScopeHoldersPort,
 )
 from dw_sales.application.quotation import QuotationService
+from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import ModelRequests, RfqModelReader
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.telemetry import SpanPort
+from dw_sales.application.threads import ThreadLinks
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.workflows.graph import register
 
@@ -105,6 +116,7 @@ def build_dw1(
     configs: Path,
     session_factory: async_sessionmaker[AsyncSession],
     audit: AuditFactory,
+    approvals: ApprovalsFactory,
     clock: UtcClock,
     ids: IdGenerator,
     authorization: SalesAuthorizationPort,
@@ -134,6 +146,9 @@ def build_dw1(
     interpretation = (
         None if model is None else interpretation_for(model, configs, worker.default_model_profile)
     )
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    readers = mock_po_readers()
+    layout_checks = LayoutChecks(readers, catalog)
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
@@ -152,7 +167,7 @@ def build_dw1(
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
-        reader=mock_po_readers(),
+        reader=readers,
         rules=tenant_rules,
         cases=order_cases,
         new_case_id=ids.new_uuid,
@@ -160,6 +175,15 @@ def build_dw1(
         descriptions=None if interpretation is None else DescriptionReader(interpretation),
         intents=(
             None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
+        ),
+        threads=ThreadLinks(uow, inbox),
+        replies=None if interpretation is None else ReplyReader(interpretation),
+        handoffs=(
+            None if interpretation is None else HandoffReader(interpretation, catalog, order_cases)
+        ),
+        layouts=SqlLayoutLookup(session_factory),
+        layout_prefiller=(
+            None if interpretation is None else LayoutPrefiller(interpretation, layout_checks)
         ),
     )
     runs = RuntimeDw1Runs(
@@ -170,7 +194,6 @@ def build_dw1(
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
     )
-    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit)
     assembly = assemble(
         uow=uow,
         authorization=authorization,
@@ -188,6 +211,8 @@ def build_dw1(
         artifact_bytes=artifact_bytes,
         artifact_writer=ArtifactFiles(),
         artifact_copy=policies.artifact_copy,
+        handoff_copy=policies.handoff_copy,
+        layout_checks=layout_checks,
         release_manifest_ref=release_manifest_ref,
         runs=runs,
         pending=runs,
@@ -198,6 +223,7 @@ def build_dw1(
         workers=runtime.workers,
         approvals=runtime.approval_flow,
         steps=assembly.decisions,
+        layouts=assembly.layout_decisions,
         worker_file=worker_file,
     )
     lane = (
@@ -206,6 +232,22 @@ def build_dw1(
         else InboxLane(uow, inbox, assembly.services.dw1, lane_access, clock, ids)
     )
     return Dw1Mount(services=assembly.services, lane=lane)
+
+
+def build_layout_settlement(
+    *,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> LayoutSettlement:
+    """What carries out a decided PO layout approval (`sales.layout.decided`,
+    ticket 30), for the worker's outbox handler. It needs no mailbox and no
+    mock data: the layout and the approval are both rows, read under the
+    decided approval's own tenant and workspace."""
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    return LayoutSettlement(uow, clock, ids)
 
 
 def model_requests(

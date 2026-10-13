@@ -1,0 +1,5 @@
+{
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) read 0.957 of the 46 golden replies as their kind (0.943 of the 35 outside the conditional and non-answer ones, the proposed bar's set) and read none of the 11 conditional acceptances and polite non-answers as accepts_spec. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "min_kind_accuracy": 0.95,
+  "max_false_accepts": 0
+}

@@ -23,6 +23,7 @@ export interface Viewer {
 export type OrderAction =
   | "prepare"
   | "correction"
+  | "resumeReview"
   | "bravo"
   | "applyChange"
   | "crossCheck"
@@ -162,6 +163,11 @@ export function orderOffers(
             : null,
       };
   }
+
+  // The customer answered without a corrected PO (ticket 32): the review
+  // resumes, every finding sent back still to be decided again.
+  if (status === "correction_requested")
+    offers.resumeReview = { reason: canPrepare ? null : noPrepare };
 
   if (status === "prepared")
     offers.bravo = { reason: canPrepare ? null : noPrepare };

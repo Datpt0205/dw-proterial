@@ -84,6 +84,7 @@ PROPOSED_BAR = 0.85
 RECORDED = "evals/fixtures/cases/sales_rfq_recorded.json"
 INTENTS = "evals/fixtures/cases/sales_intent_recorded.json"
 DESCRIPTIONS = "evals/fixtures/cases/sales_descriptions_recorded.json"
+HANDOFFS = "evals/fixtures/cases/sales_handoff_recorded.json"
 _RECEIVED = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 _FONT = "DejaVuSans-LatinVi"
 _RUN = RunContext(
@@ -784,6 +785,10 @@ def flow_model(ctx: GraderContext) -> Any:
             ),
             "sales.description_attributes": Replayed(
                 answers=descriptions, prompts=ctx.prompt_registry
+            ),
+            # M40 is routed as a delivery change, with its hand-off (ticket 33).
+            "sales.request_handoff": Recorded(
+                answers=load_answers(root / HANDOFFS), prompts=ctx.prompt_registry
             ),
         }
     )

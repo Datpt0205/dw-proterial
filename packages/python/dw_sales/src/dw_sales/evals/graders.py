@@ -97,6 +97,7 @@ GIANG = Caller(
         _S.WORKER_RESUME,
         _S.ORDER_RESEND_CROSS_CHECK,
         _S.CASE_ASSIGN,
+        _S.LAYOUT_APPROVE,
     },
 )
 KHOA = Caller(
@@ -295,10 +296,15 @@ def readme_claims(readme: str) -> dict[str, _Claim]:
     return claims
 
 
-def _findings_of(disposition_kind: str, case: OrderCase | QuoteCase | None) -> frozenset[_Finding]:
+def _findings_of(
+    disposition: MessageDispositionView, case: OrderCase | QuoteCase | None
+) -> frozenset[_Finding]:
     """What a message raised: an order case's findings as it stood after the
-    message, a quote request's own; a Design reply or a routed message none."""
-    if case is None or (isinstance(case, QuoteCase) and disposition_kind != "case_created"):
+    message, a quote request's own; a Design reply, a customer's reply in a
+    case's thread (ticket 32) or a routed message none."""
+    if case is None or disposition.reply is not None:
+        return frozenset()
+    if isinstance(case, QuoteCase) and disposition.kind != "case_created":
         return frozenset()
     return frozenset((f.code.value, f.line_no) for f in case.findings)
 
@@ -365,7 +371,7 @@ async def grade_findings_recall(
         claim, (disposition, case) = claims[message_id], seen[message_id]
         if (disposition.kind, disposition.reason) != (claim.disposition, claim.reason):
             wrong.append(message_id)
-        got = _findings_of(disposition.kind, case)
+        got = _findings_of(disposition, case)
         wanted, found, hit = (
             wanted + len(claim.findings),
             found + len(got),

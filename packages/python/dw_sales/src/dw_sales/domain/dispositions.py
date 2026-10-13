@@ -19,7 +19,10 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dw_sales.domain.catalog import Compliance, CustomerCode
+from dw_sales.domain.handoffs import Handoff
+from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
+from dw_sales.domain.reply_intent import CaseReply
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -75,6 +78,15 @@ class MessageDisposition(BaseModel):
     # What a model reading of the message's intent did, where the tenant's
     # rules asked for one (ticket 31): ids, codes and numbers, never words.
     reading: IntentReading | None = None
+    # A reply attached to its case by the mail's thread headers (ticket 32),
+    # with what a model read of it where the tenant's rules asked.
+    reply: CaseReply | None = None
+    # The hand-off to PC or QA a model pre-filled from a delivery change, a
+    # complaint or a sample request (ticket 33), for Sales to review and send.
+    handoff: Handoff | None = None
+    # The layout a model pre-filled for a PO no layout of the customer reads
+    # (ticket 30), for the onboarding screen to open with.
+    layout_prefill: LayoutPrefill | None = None
 
     @model_validator(mode="after")
     def _kind_says_what_is_there(self) -> Self:
@@ -87,6 +99,17 @@ class MessageDisposition(BaseModel):
             raise ValueError("a routed message has a reason and an owner, and only it does")
         if self.compliance is not None and self.reason is not RoutingReason.SAMPLE_REQUEST:
             raise ValueError("only a sample request carries the export-control status")
+        if self.reply is not None and kind is not DispositionKind.ATTACHED_TO_CASE:
+            raise ValueError("only a message attached to a case is a reply on it")
+        if self.handoff is not None and (
+            self.reason is None or self.reason.value != self.handoff.kind
+        ):
+            raise ValueError("a hand-off is of the kind the message was routed as")
+        if (
+            self.layout_prefill is not None
+            and self.reason is not RoutingReason.ATTACHMENT_UNREADABLE
+        ):
+            raise ValueError("a layout is pre-filled only for a PO nothing could read")
         return self
 
     @classmethod

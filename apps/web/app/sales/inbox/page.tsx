@@ -32,7 +32,7 @@ import { compareVi, matches } from "../../../lib/search";
 import { useNow } from "../../../lib/use-now";
 import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
-import { INTENT_KIND, label, ROUTING_REASON } from "../_lib/labels";
+import { INTENT_KIND, label, REPLY_KIND, ROUTING_REASON } from "../_lib/labels";
 import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
@@ -50,6 +50,7 @@ import {
 import { SCOPE, useSalesFrame } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 import { MessageDispositionTag } from "../_components/tags";
+import { HandoffDraft } from "./handoff-draft";
 
 type Message = SalesSchemas["InboxMessageView"];
 
@@ -146,6 +147,14 @@ function Inbox() {
       overview.reload();
     } else setError(result.error);
   };
+
+  // A PO no layout read, from a customer: the form is mapped once, by a PIC
+  // who sees prices (the form prints them); the server checks both scopes.
+  const mapsForm = (m: Message) =>
+    m.disposition.reason === "attachment_unreadable" &&
+    Boolean(m.disposition.customer_code) &&
+    hasScope(SCOPE.prepare) &&
+    hasScope(SCOPE.price);
 
   const processAll = async () =>
     after(
@@ -285,9 +294,26 @@ function Inbox() {
                       {m.attachments.map((a) => (
                         <Typography.Text key={a.attachment_id}>
                           <PaperClipOutlined aria-hidden /> {a.name}
+                          {mapsForm(m) ? (
+                            <>
+                              {" · "}
+                              <Link
+                                href={`/sales/layouts/new?message=${encodeURIComponent(m.message_id)}&attachment=${encodeURIComponent(a.attachment_id)}`}
+                              >
+                                Thiết lập mẫu PO
+                              </Link>
+                            </>
+                          ) : null}
                         </Typography.Text>
                       ))}
                     </Space>
+                  ) : null}
+                  {m.disposition.layout_prefill ? (
+                    <Typography.Paragraph className="!mb-0">
+                      {m.disposition.layout_prefill.outcome === "proposed"
+                        ? "Mô hình đã gợi ý cách gán mẫu PO này: mở “Thiết lập mẫu PO” để kiểm và gửi duyệt."
+                        : "Mô hình không gợi ý được cách gán mẫu PO này: lập tay ở “Thiết lập mẫu PO”."}
+                    </Typography.Paragraph>
                   ) : null}
                   {m.disposition.detail ? (
                     <Typography.Paragraph className="!mb-0">
@@ -300,6 +326,12 @@ function Inbox() {
                   <Typography.Paragraph className="!mb-0 whitespace-pre-wrap">
                     {m.body_text}
                   </Typography.Paragraph>
+                  {m.handoff_draft && m.disposition.handoff ? (
+                    <HandoffDraft
+                      draft={m.handoff_draft}
+                      handoff={m.disposition.handoff}
+                    />
+                  ) : null}
                 </div>
               ),
               expandRowByClick: false,
@@ -382,6 +414,16 @@ function Inbox() {
                     ) : null}
                     {m.disposition.reading ? (
                       <IntentTag reading={m.disposition.reading} />
+                    ) : null}
+                    {m.disposition.reply ? (
+                      <ReplyTag reply={m.disposition.reply} />
+                    ) : null}
+                    {m.handoff_draft ? (
+                      <Typography.Text>
+                        Có bản chuyển{" "}
+                        {m.handoff_draft.to === "qa" ? "QA" : "PC"} soạn sẵn: mở
+                        thư để xem
+                      </Typography.Text>
                     ) : null}
                     {m.disposition.case_id ? (
                       <Link
@@ -509,6 +551,37 @@ function IntentTag({
             )
             .join(", ")}
         </Typography.Text>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * A reply its thread headers attached to a case (ticket 32): which message it
+ * answers, and what a model read it as where the step is on. The case shows
+ * the sentences and the step it proposes; Sales decides there.
+ */
+function ReplyTag({
+  reply,
+}: {
+  reply: NonNullable<SalesSchemas["MessageDispositionView"]["reply"]>;
+}) {
+  const reading = reply.reading;
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <Typography.Text>
+        Trả lời thư {reply.linked_to} trong luồng
+      </Typography.Text>
+      {reading ? (
+        reading.outcome === "read" && reading.kind ? (
+          <StatusTag tone="warn">
+            Mô hình đọc: {label(REPLY_KIND, reading.kind)}
+          </StatusTag>
+        ) : (
+          <StatusTag tone="unk">
+            Mô hình không đọc được: Sales đọc thư
+          </StatusTag>
+        )
       ) : null}
     </span>
   );

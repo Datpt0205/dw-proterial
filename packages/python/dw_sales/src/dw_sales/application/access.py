@@ -45,6 +45,9 @@ class SalesScopes(StrEnum):
     WORKER_RESUME = "sales.worker.resume"
     # Reassign a case to another member who works it (ticket 17, the head's).
     CASE_ASSIGN = "sales.case.assign"
+    # Approve or reject a customer's PO layout a PIC mapped (ticket 30): the
+    # checker of a maker/checker pair, never its proposer (the head's).
+    LAYOUT_APPROVE = "sales.layout.approve"
 
 
 # What a customer may grant FPT support in Sales (dw_sales ADR 0003 §5, ADR

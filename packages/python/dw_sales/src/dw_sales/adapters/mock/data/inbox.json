@@ -85,6 +85,7 @@
     ],
     "subject": "PO NRV-PO-26-0457",
     "received_at": "2026-09-24T14:40:00+07:00",
+    "internet_message_id": "<nrv-po-26-0457.20260924@mail.norvanta.example>",
     "body_text": "Hello,\n\nAttached is our PO NRV-PO-26-0457. Line 3 is a new cable for our EV charger project.\n\nRegards,\nHana Westbrook\nPurchasing – Norvanta Automotive Components",
     "attachments": [
       {
@@ -205,6 +206,7 @@
     ],
     "subject": "RFQ QRL-RFQ-2609-03 – 3-core shielded cable",
     "received_at": "2026-09-29T10:00:00+07:00",
+    "internet_message_id": "<qrl-rfq-2609-03.20260929@mail.quorilo.example>",
     "body_text": "Hi team,\n\nWe are starting a new infusion pump line and need a quotation for the cable in the attached RFQ QRL-RFQ-2609-03 (3-core AWG26, braided shield, white, 6,000 m). Please include MOQ and lead time. Quote needed by 9 October 2026.\n\nThanks,\nIvy Tran",
     "attachments": [
       {
@@ -923,6 +925,68 @@
     "subject": "Đề nghị lùi ngày nhận hàng",
     "received_at": "2026-10-02T17:30:00+07:00",
     "body_text": "Kính gửi Phòng Kinh doanh,\n\nDo kho Brennic đang sửa chữa, bên em đề nghị lùi ngày nhận hàng của đơn BRN-PO-2609-052 sang tuần sau.\n\nTrân trọng,\nVõ Thị Thu",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M41",
+    "sender": {
+      "address": "ivy.tran@quorilo.example",
+      "display_name": "Ivy Tran"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "Re: RFQ QRL-RFQ-2609-03 – 3-core shielded cable",
+    "received_at": "2026-10-02T17:40:00+07:00",
+    "internet_message_id": "<qrl-rfq-2609-03.re.20261002@mail.quorilo.example>",
+    "references": ["<qrl-rfq-2609-03.20260929@mail.quorilo.example>"],
+    "body_text": "Hi team,\n\nWe have reviewed the specification your Design team proposed for the 3-core shielded cable. We accept the proposed specification without changes. Please go ahead with the quotation.\n\nThanks,\nIvy Tran\n\nOn Tue, 29 Sep 2026 at 10:00, Ivy Tran <ivy.tran@quorilo.example> wrote:\n> We are starting a new infusion pump line and need a quotation for the cable in the attached RFQ QRL-RFQ-2609-03 (3-core AWG26, braided shield, white, 6,000 m).\n> Please include MOQ and lead time. Quote needed by 9 October 2026.",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M42",
+    "sender": {
+      "address": "hana.westbrook@norvanta.example",
+      "display_name": "Hana Westbrook"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "RE: PO NRV-PO-26-0457",
+    "received_at": "2026-10-02T17:50:00+07:00",
+    "internet_message_id": "<nrv-po-26-0457.re.20261002@mail.norvanta.example>",
+    "references": ["<nrv-po-26-0457.20260924@mail.norvanta.example>"],
+    "body_text": "Hello,\n\nThank you for checking our order. Please keep the PO as it is. The unit price on line 2 is the price we agreed with your sales manager last week.\n\nRegards,\nHana Westbrook\nPurchasing – Norvanta Automotive Components\n\nFrom: Hana Westbrook <hana.westbrook@norvanta.example>\nSent: Thursday, September 24, 2026 2:40 PM\nTo: Sales – Demo Wire & Cable <sales@seller.example>\nSubject: PO NRV-PO-26-0457\n\nAttached is our PO NRV-PO-26-0457. Line 3 is a new cable for our EV charger project.",
+    "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
+  },
+  {
+    "message_id": "M43",
+    "sender": {
+      "address": "po-desk@norvanta.example",
+      "display_name": "Norvanta PO Desk"
+    },
+    "recipients": [
+      {
+        "address": "sales@seller.example",
+        "display_name": "Sales – Demo Wire & Cable"
+      }
+    ],
+    "subject": "PO NRV-PO-26-0502 (new procurement system)",
+    "received_at": "2026-10-02T17:55:00+07:00",
+    "body_text": "Hello,\n\nNorvanta has moved to a new procurement system. Attached is our PO NRV-PO-26-0502 in the new format; later orders will come in the same one.\n\nRegards,\nNorvanta PO Desk",
+    "attachments": [
+      {
+        "attachment_id": "M43-A1",
+        "name": "NRV-PO-26-0502.pdf",
+        "media_type": "application/pdf"
+      }
+    ],
     "authentication": { "spf": "pass", "dkim": "pass", "dmarc": "pass" }
   }
 ]

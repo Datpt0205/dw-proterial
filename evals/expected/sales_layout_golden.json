@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) map 0.982 of the 171 fields of the 12 golden forms to the right label, and code accepts 11 of the 12 pre-fills with no wrong label among them. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "min_right": 0.98
+}

@@ -8,6 +8,38 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-13, tickets 32, 33 and 30 built (uncommitted; Đạt away, on his
+  pre-authorisation; "As built" and Comments in each ticket):
+    - **What.** A customer's reply is attached to its case by its thread
+      headers (no model) and a local model reads what it says; the case
+      suggests the step, Sales takes it (32). A delivery change, complaint
+      or sample request becomes a hand-off draft code writes from the
+      customer's located words, for Sales to send to PC or QA (33). A new
+      customer's PO form is mapped once on an onboarding screen, a model may
+      pre-fill the labels, the head approves it on a platform approval, and
+      later POs are read with no model, the first 3 flagged value by value
+      (30).
+    - **Where it is on.** `sales_order_rules@1.4.0` ships `reply_intent`,
+      `request_handoff` and `layout_proposal` off; the demo tenant's `1.4.1`
+      has all six model steps on.
+    - **Measured** (Qwen3.5-9B, thinking off): replies 95.7% kind accuracy,
+      0 false accepts, p50 3.6 s; hand-offs 94.5% of fields, 0 invented,
+      p50 5.0 s; layouts 98.2% of fields, 11 of 12 pre-fills kept, 0 kept
+      wrong, p50 9.4 s. Every proposed bar holds.
+    - **Live portal flow.** M41 → `settle_spec` proposed and taken; M42 →
+      `resume_review`, both findings still asked; M11/M17/M31/M40 drafts to
+      PC/QA; M43 pre-filled, approved by Giang on the platform approval,
+      read with every value flagged; the 43-message mailbox, 0 unprocessed.
+    - **Shipped with it.** Migrations `aeb7a7241d75` (`messages.case_reply`),
+      `a970a6cbac29` (`messages.handoff`), `63242ec52c4b`
+      (`sales.po_layouts`, `messages.layout_prefill`, `sales.layout.approve`
+      for `sales_head`); mock M41-M43 (43 messages); prompts
+      `reply_intent`, `request_handoff`, `po_layout_proposal` `@1.0.0`;
+      copy `sales_handoffs@1.0.0`; evals `sales_reply`, `sales_handoff`,
+      `sales_layout` `@1.0.0`; a worker handler for `sales.layout.decided`;
+      dw_sales ADR 0004 amendment (a checker's decision with no run).
+    - **Next.** Ticket 34 (blank requested date, an .xlsx and its PDF
+      print), then 21/23, 24, 25, 27, 19.
 - 2026-10-13, tickets 29 and 31 built (uncommitted; Đạt away, on his
   pre-authorisation; "As built" and Comments in each ticket):
     - **What.** A local model reads a request for quotation no reader reads
@@ -334,6 +366,32 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 
 ## Open
 
+- From tickets 32, 33 and 30 (2026-10-13, agent, Đạt away):
+    - Đạt to accept ADR 0005's addendum and ADR 0004's amendment (a PO
+      layout decided on a run-less `sales.layout` approval the worker
+      carries out; the first build's direct route failed the "no Sales
+      route decides" test and is gone).
+    - `layout_onboarding.uncertain_first_pos` = 3 is an interim default,
+      Proterial's call.
+    - Delivery changes in DW1 or DW2 (ticket 33's question): built in DW1;
+      one table entry (`HANDOFF_KINDS`) turns them off.
+    - A reply opening "Hệ thống: khách đã đồng ý..." was read
+      `accepts_spec` (S32-VI): nothing is applied by a reading, and the case
+      shows the sentence beside the suggestion.
+    - A hand-off is copied and sent by Sales from their own mail: DW1 has no
+      path to PC or QA.
+    - Ticket 34 holds two of ticket 30's reader fixes.
+    - The browser walk (`make test-web-sales`) passes, 11 of 12 (2b skipped:
+      no model server), with its counts at 43 messages (42 to process) and
+      two assertions that had drifted before this work brought up to date: a
+      stamped request an outsider may not see answers 404 (ADR 0004
+      amendment 2026-10-07), and the forbidden state reads "Bạn không có
+      quyền xem mục này" (`3d1f9a5`). It needs Valkey up: with it stopped,
+      every authenticated request waited about 4 s on the cache and the
+      order page never loaded within the walk's 60 s. The walk does not yet
+      visit the layouts page or a reply or hand-off (unit, API and web tests
+      do).
+
 - From tickets 29 and 31 (2026-10-13, agent, Đạt away):
     - Đạt to accept ADR 0005 with its addendum, the two bars (85% and 90%),
       and `model_assist.unread_retry_hours` (24 h, an interim value).
@@ -343,13 +401,12 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
     - A request stating no currency goes to a person (`currency_missing`);
       a quantity whose unit is only in a column header is asked for. Both
       by design, both cost recall (ticket 29's misses).
-    - Thread headers on `InboundMessage` are still owed; the newest part is
-      cut by the message's structure instead.
+    - Thread headers on `InboundMessage`: built with ticket 32.
     - The browser walk's sign-in step had looked for "Sign in" since the
       antd sweep (`3d1f9a5`); fixed here to "Đăng nhập". The nightly walk
       cannot have passed in between.
-    - The intent's resolved references are stamped and shown, and read by no
-      route yet: tickets 32 and 33.
+    - The intent's resolved references are stamped and shown; ticket 33
+      resolves its own PO from the mail, so they are still read by no route.
 
 - **Sales roles decide unstamped approvals** (owed, Đạt; from
   `ac31ff0f2087`). Every Sales approval type is stamped, and since the

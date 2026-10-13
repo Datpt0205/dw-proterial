@@ -138,6 +138,26 @@ class ModelAssist(BaseModel):
     # How long a message whose intent the model could not give stays not yet
     # processed, to be tried again, before it is routed `other` (ticket 31).
     unread_retry_hours: int = Field(ge=0, le=168)
+    # A local model reads what a customer's reply in a case's thread says and
+    # quotes where; code proposes the next step, Sales confirms (ticket 32).
+    reply_intent: bool
+    # A local model copies the spans of a delivery-change, complaint or
+    # sample-request mail into a hand-off code writes (ticket 33).
+    request_handoff: bool
+    # A local model proposes which label on a new PO form names which field,
+    # for the layout-onboarding screen a person completes (ticket 30).
+    layout_proposal: bool
+
+
+class LayoutOnboarding(BaseModel):
+    """How a newly approved PO layout earns trust (ticket 30)."""
+
+    model_config = _FROZEN
+
+    # The first this-many POs read through a new or changed layout keep every
+    # value `value_uncertain`: an approved but wrong mapping must not repeat
+    # silently on every later PO.
+    uncertain_first_pos: int = Field(ge=0, le=100)
 
 
 class OrderRules(BaseModel):
@@ -165,6 +185,7 @@ class OrderRules(BaseModel):
     # The month the fiscal year starts in; the ESF is renewed per fiscal year.
     fiscal_year_start_month: int = Field(ge=1, le=12)
     model_assist: ModelAssist
+    layout_onboarding: LayoutOnboarding
     findings: Mapping[FindingCode, Severity]
 
     @model_validator(mode="after")
@@ -175,7 +196,7 @@ class OrderRules(BaseModel):
 
     @property
     def version(self) -> str:
-        """What a finding is stamped with: ``sales_order_rules@1.3.0``."""
+        """What a finding is stamped with: ``sales_order_rules@1.4.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
     def finding(

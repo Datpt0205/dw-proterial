@@ -1,0 +1,351 @@
+{
+  "_comment": "The local model's answers (onprem profile) to sales.request_handoff, by answer key (the prompt and its exact inputs, hashed), recorded by `run_evals.py --live onprem --record`; the smoke replays them, so CI scores the same readings through the same code without a model. null: the call gave no usable answer. Fictional text.",
+  "answers": {
+    "025662fe6478f702c22c55ec": {
+      "item_spans": [
+        "halogen-free single wire, AWG20, in black and red"
+      ],
+      "quantity_span": null
+    },
+    "07221f863fb07564035a5f93": {
+      "item_spans": [
+        "dây chịu nhiệt 105°C tiết diện 0.3mm2"
+      ],
+      "quantity_span": null
+    },
+    "0ef9d47db966248b060652ef": {
+      "po_no_span": null,
+      "lot_no_span": "QL-2609-311",
+      "problem_quote_spans": [
+        "During incoming inspection of the wire delivered last week, lot QL-2609-311, we found scratches along the insulation on about a third of the coil."
+      ]
+    },
+    "15a372703aaef37ef6876679": {
+      "po_no_span": "NRV-PO-26-0455",
+      "lines": [
+        {
+          "line_or_item_span": "line 1",
+          "new_quantity_span": null,
+          "new_date_span": "27 Nov 2026"
+        }
+      ]
+    },
+    "198253fbd86c1babc9dc2002": {
+      "po_no_span": "QRL-PO-0918-07",
+      "lines": [
+        {
+          "line_or_item_span": "Line 1 (QR-HW20-BK)",
+          "new_quantity_span": null,
+          "new_date_span": "2026-12-04"
+        },
+        {
+          "line_or_item_span": "Line 2",
+          "new_quantity_span": "4,000 m",
+          "new_date_span": null
+        }
+      ]
+    },
+    "1b87594b3d4efbcec7d0e5d4": {
+      "item_spans": [
+        "耐熱ビニル電線 0.3sq 黒",
+        "4芯キャブタイヤケーブル 0.5sq"
+      ],
+      "quantity_span": "各50m"
+    },
+    "1f84480870114f792cb90f2a": {
+      "po_no_span": "BRN-PO-2608-022",
+      "lines": [
+        {
+          "line_or_item_span": "BRN-C-0118",
+          "new_quantity_span": null,
+          "new_date_span": "20 tháng 11"
+        }
+      ]
+    },
+    "21cc171a6f56e84a1122b55c": {
+      "item_spans": [
+        "4-core 0.75 mm² sheathed cable"
+      ],
+      "quantity_span": "50 m"
+    },
+    "2265e8ee936fa014d8f748a2": {
+      "po_no_span": "BRN-PO-2601-004",
+      "lot_no_span": "LOT-2602-233",
+      "problem_quote_spans": [
+        "cuộn số 3 trong lô LOT-2602-233 bị thiếu 150 m so với chiều dài ghi trên nhãn. Bên em đã đo lại hai lần."
+      ]
+    },
+    "2618105cefdbf89af5e62dae": {
+      "item_spans": [
+        "cáp dẹt 10 lõi bước 1.27 mm"
+      ],
+      "quantity_span": "20 m"
+    },
+    "29c723ff243e4b2ceefe95fd": {
+      "po_no_span": "NRV-PO-26-0388",
+      "lines": [
+        {
+          "line_or_item_span": "NV-CB4-22-GY",
+          "new_quantity_span": "2,400 m",
+          "new_date_span": "14 Nov 2026"
+        }
+      ]
+    },
+    "2ae1efc001b4bf29655382c5": {
+      "item_spans": [
+        "cáp 3 lõi 0.75mm2"
+      ],
+      "quantity_span": "20 m"
+    },
+    "358e16eafa7570004fd2d876": {
+      "po_no_span": "VLX-PO-2602-0077",
+      "lot_no_span": "LOT 2603-041",
+      "problem_quote_spans": [
+        "Lô cáp giao theo đơn trên (số lô LOT 2603-041 trên nhãn cuộn), khi lắp ráp bên em phát hiện vỏ cách điện bị nứt ở nhiều đoạn sau khi uốn cong.",
+        "Bên em đã tạm ngưng sử dụng lô này."
+      ]
+    },
+    "3f0fbb5725a6969c1d72ee36": {
+      "po_no_span": "NRV-PO-26-0388",
+      "lines": [
+        {
+          "line_or_item_span": "1",
+          "new_quantity_span": null,
+          "new_date_span": "20/11/2026"
+        }
+      ]
+    },
+    "4c1d42a9f4a746badff38401": {
+      "po_no_span": "VLX-PO-2608-0102",
+      "lot_no_span": "LOT-2609-120",
+      "problem_quote_spans": [
+        "Lô LOT-2609-120 giao theo đơn trên có một cuộn bị đứt lõi ở đoạn giữa."
+      ]
+    },
+    "573e3dd34c65619779bd21ed": {
+      "po_no_span": "VLX-PO-2609-0118",
+      "lines": [
+        {
+          "line_or_item_span": "3",
+          "new_quantity_span": null,
+          "new_date_span": null
+        },
+        {
+          "line_or_item_span": "4",
+          "new_quantity_span": null,
+          "new_date_span": null
+        }
+      ]
+    },
+    "618b993793f3ccf397c2bbbc": {
+      "po_no_span": "LMR-PO-2608-001",
+      "lines": [
+        {
+          "line_or_item_span": "LM-W22-RD",
+          "new_quantity_span": "4.500 m",
+          "new_date_span": null
+        }
+      ]
+    },
+    "69bebb950e61c60ecec652da": {
+      "item_spans": [
+        "cáp 3 lõi bọc giáp 1.5mm2"
+      ],
+      "quantity_span": "100 m"
+    },
+    "6ab2a04734772ec5372ade2a": {
+      "po_no_span": "CVG-260610-05",
+      "lines": [
+        {
+          "line_or_item_span": "CVG-0005",
+          "new_quantity_span": null,
+          "new_date_span": "12月11日"
+        }
+      ]
+    },
+    "78c59cbadfa874b2859ed22c": {
+      "po_no_span": "BRN-PO-2608-022",
+      "lot_no_span": null,
+      "problem_quote_spans": [
+        "納品された電線の被覆に傷がありました。"
+      ]
+    },
+    "7f4a5e64706290d1fcb52ec7": {
+      "po_no_span": "CVG-260610-05",
+      "lot_no_span": "2607-CV-118",
+      "problem_quote_spans": [
+        "two drums from lot 2607-CV-118 arrived damaged: the outer jacket is torn in several places, and on one drum the conductor is exposed."
+      ]
+    },
+    "8be5d52909ac1e5ca93830dc": {
+      "item_spans": [
+        "Dây đơn AWG26 màu xanh lá",
+        "Cáp 4 lõi 0.5mm2 có lưới chống nhiễu"
+      ],
+      "quantity_span": "30 m"
+    },
+    "a42b295505d4f0d2cf8392f9": {
+      "po_no_span": null,
+      "lot_no_span": "K-2609-044",
+      "problem_quote_spans": [
+        "ロットK-2609-044のケーブルにおいて、端末加工時に導体が断線している箇所が3か所ございました。"
+      ]
+    },
+    "a59ca05de60c34f4fc8deb4c": {
+      "item_spans": [
+        "cáp 2 lõi 1.25mm2 (mã BRN-C-0118)"
+      ],
+      "quantity_span": "50 m"
+    },
+    "a7a4f2f3efc3b050fea6ffa4": {
+      "po_no_span": "VLX-PO-2608-0102",
+      "lot_no_span": "LOT-2609-118",
+      "problem_quote_spans": [
+        "Lô cáp CB-2007 giao ngày 25/09 theo PO VLX-PO-2608-0102 có 2 cuộn bị móp lõi cuộn, dây bên trong bị trầy vỏ."
+      ]
+    },
+    "b4a25681bda2680bc8c731fb": {
+      "po_no_span": "LMR-PO-2608-001",
+      "lot_no_span": "L26-0918-05",
+      "problem_quote_spans": [
+        "Dây LM-W22-RD giao theo PO LMR-PO-2608-001, số lô L26-0918-05, có vỏ bị bạc màu từ đỏ sang hồng nhạt ở các vòng ngoài của cuộn.",
+        "Màu này không đạt yêu cầu nhận dạng dây của bên em."
+      ]
+    },
+    "c1b01bbcb8c61a08da49244b": {
+      "po_no_span": "CVG-260415-03",
+      "lines": [
+        {
+          "line_or_item_span": "CVG-0002",
+          "new_quantity_span": "5,000 m",
+          "new_date_span": null
+        },
+        {
+          "line_or_item_span": "CVG-0003",
+          "new_quantity_span": null,
+          "new_date_span": "Nov 30"
+        }
+      ]
+    },
+    "c4cb73fbc92ee69a6830000f": {
+      "item_spans": [
+        "フラットケーブル 20芯（ピッチ1.27mm）"
+      ],
+      "quantity_span": "10m"
+    },
+    "cb1bf4e51d4461f06f2475d0": {
+      "po_no_span": "PO BRN-PO-2608-022",
+      "lot_no_span": null,
+      "problem_quote_spans": [
+        "Lô hàng bên em nhận ngày 08/10 có 2 thùng dán nhãn PO BRN-PO-2608-022, không phải đơn của Velatrix, và số lượng trong thùng không khớp phiếu giao hàng."
+      ]
+    },
+    "d6b2464d33c312827ff5e0a6": {
+      "item_spans": [
+        "2芯シールドケーブル AWG26"
+      ],
+      "quantity_span": "100m"
+    },
+    "d9a01d43b36cc1dee1d0559e": {
+      "po_no_span": "NRV-PO-26-0190",
+      "lines": [
+        {
+          "line_or_item_span": "NRV-PO-26-0190",
+          "new_quantity_span": null,
+          "new_date_span": "18 Dec 2026"
+        }
+      ]
+    },
+    "dd6fd5f55de1d8717e36fbde": {
+      "po_no_span": "VLX-PO-2608-0102",
+      "lines": [
+        {
+          "line_or_item_span": "Dòng 1 (mã VX-C4B22)",
+          "new_quantity_span": "2.000 m",
+          "new_date_span": null
+        },
+        {
+          "line_or_item_span": "Dòng 2",
+          "new_quantity_span": null,
+          "new_date_span": "05/12/2026"
+        }
+      ]
+    },
+    "e70e722b6cdb08bdefe16d7f": {
+      "po_no_span": "KMH-2025-1118-B",
+      "lines": [
+        {
+          "line_or_item_span": "CB-2007",
+          "new_quantity_span": "2,500m",
+          "new_date_span": null
+        }
+      ]
+    },
+    "ea00cfd0d8c490c7f241875c": {
+      "po_no_span": "CVG-260415-03",
+      "lot_no_span": "CV-2605-2201",
+      "problem_quote_spans": [
+        "ロットCV-2605-2201の1本が、実測で表示より約150m短くなっておりました。"
+      ]
+    },
+    "eb5dbdf5495ac587a316e82f": {
+      "po_no_span": "BRN-PO-2609-052",
+      "lines": [
+        {
+          "line_or_item_span": "null",
+          "new_quantity_span": null,
+          "new_date_span": null
+        }
+      ]
+    },
+    "eb96db1c94be91b9ada4f7db": {
+      "item_spans": [
+        "2C AWG24 shielded cable, grey jacket",
+        "AWG22 hook-up wire, white"
+      ],
+      "quantity_span": "200 m of each"
+    },
+    "ecca49cb20af315c4a453fed": {
+      "po_no_span": "KMH-21-0077",
+      "lines": [
+        {
+          "line_or_item_span": "2行目（KMH-21-0077）",
+          "new_quantity_span": "4,000m",
+          "new_date_span": "2026年11月27日"
+        }
+      ]
+    },
+    "ee90e275d7e4ded2423f91c5": {
+      "po_no_span": "NRV-PO-26-0190",
+      "lot_no_span": "LOT 2605-077",
+      "problem_quote_spans": [
+        "Reel 4 came out short by 200 m against the label, and reel 6 looks short as well."
+      ]
+    },
+    "ef1403147580f949e07e6416": {
+      "po_no_span": "KMH-2026-0728-A",
+      "lot_no_span": "LOT 2608-152",
+      "problem_quote_spans": [
+        "受入検査におきまして、被覆に傷が多数見つかりました。"
+      ]
+    },
+    "f4b2196a3671454da425e039": {
+      "po_no_span": null,
+      "lines": [
+        {
+          "line_or_item_span": "VX-C2F05",
+          "new_quantity_span": null,
+          "new_date_span": "18/11/2026"
+        }
+      ]
+    },
+    "fd08db63a85076d61174851a": {
+      "po_no_span": "NRV-PO-26-0388",
+      "lot_no_span": null,
+      "problem_quote_spans": [
+        "The reels for NRV-PO-26-0388 arrived labelled grey, but the cable inside is black.",
+        "None of the reels carries a lot label, so we cannot trace them."
+      ]
+    }
+  }
+}

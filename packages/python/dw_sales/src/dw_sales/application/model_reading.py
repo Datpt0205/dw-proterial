@@ -71,6 +71,16 @@ def estimated_tokens(text: str) -> int:
     return wide + (len(text) - wide + 2) // 3
 
 
+def cut_to_tokens(text: str, room: int) -> str:
+    """``text`` cut from its end until `estimated_tokens` says it fits in
+    ``room``: what a step reads is in a message's first lines, and the rest is
+    not sent rather than refused by the server."""
+    cut = text
+    while cut and estimated_tokens(cut) > room:
+        cut = cut[: len(cut) * 3 // 4]
+    return cut
+
+
 class ModelUnavailableError(Exception):
     """No usable answer: the model is down or timed out, its output did not
     validate against the schema, or no model is configured for the profile.

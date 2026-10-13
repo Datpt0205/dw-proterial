@@ -55,7 +55,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 PACKAGE = Path(__file__).resolve().parents[2]
 GLOSSARY = (PACKAGE / "CONTEXT.md").read_text(encoding="utf-8")
-ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.3.0.yaml"
+ORDER_RULES = PACKAGE.parents[2] / "configs" / "policies" / "sales_order_rules@1.4.0.yaml"
 # The owner of the fiscal year's first month; read, never restated here.
 FISCAL_YEAR_START = int(
     yaml.safe_load(ORDER_RULES.read_text(encoding="utf-8"))["fiscal_year_start_month"]
@@ -506,7 +506,16 @@ async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Ou
         mid = message.message_id
         if (po := orders.get(mid)) is not None:
             customer, forwarded = await _attribute(catalog, message, _buyer_name(customers, po))
-            if po.layout == "pdf_image":
+            if po.form is not None:
+                # The customer's own form: no layout reads it until a person
+                # maps it (ticket 30), so nothing is read.
+                outcome = Outcome(
+                    customer.code if customer else None,
+                    "po",
+                    ("routed_to_sales", "attachment_unreadable"),
+                    frozenset(),
+                )
+            elif po.layout == "pdf_image":
                 outcome = Outcome(
                     customer.code if customer else None,
                     "po",
@@ -554,6 +563,19 @@ async def _outcomes(catalog: MockSalesCatalog, inbox: MockInbox) -> dict[str, Ou
                 ("routed_to_sales", "attachment_unreadable"),
                 frozenset(),
             )
+        elif message.references:
+            # A reply in a thread: on the case of the message it names, when
+            # that message is on one of the same customer's cases.
+            customer, _ = await _attribute(catalog, message, None)
+            named = [
+                outcomes[other.message_id]
+                for other in await inbox.list_messages(SCOPE)
+                if other.internet_message_id in message.references
+            ]
+            assert customer is not None and any(
+                o.customer == customer.code and o.disposition[0] != "routed_to_sales" for o in named
+            ), f"{mid}: a reply to nothing on a case"
+            outcome = Outcome(customer.code, "case_reply", ("attached_to_case", None), frozenset())
         else:
             assert not message.attachments, f"{mid} carries no known document"
             customer, _ = await _attribute(catalog, message, None)

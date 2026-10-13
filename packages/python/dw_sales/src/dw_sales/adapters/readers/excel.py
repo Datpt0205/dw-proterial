@@ -51,6 +51,7 @@ from pydantic import ValidationError
 
 from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules
 from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.layouts import LabelCell
 from dw_sales.domain.legacy_fonts import legacy_encoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
@@ -70,8 +71,12 @@ from dw_sales.domain.orders import (
     RegionFlag,
     Unreadable,
 )
+from dw_sales.domain.rfq_reading import parse_currency
 
-PARSER_VERSION = "excel_po_reader@1.3.0"
+PARSER_VERSION = "excel_po_reader@1.4.0"
+# A form need not print its revision: its POs then read as revision 0, the
+# value anchored where the PO number is (ticket 30).
+REQUIRED_HEADER = frozenset({"po_no", "po_date", "currency"})
 _PAGE_NUMBER = re.compile(r"(\d{1,3})\s*/\s*(\d{1,3})")
 _PLAIN_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 # The part a macro-enabled workbook carries its VBA in: such a file is not read (decision 13).
@@ -97,8 +102,8 @@ class ExcelLayout:
     date_format: str = "%d/%m/%Y"
 
     def __post_init__(self) -> None:
-        if set(self.header_labels) != set(get_args(PoHeaderField)):
-            raise ValueError(f"an Excel layout labels every header field {get_args(PoHeaderField)}")
+        if not REQUIRED_HEADER <= set(self.header_labels) <= set(get_args(PoHeaderField)):
+            raise ValueError(f"an Excel layout labels the header fields {sorted(REQUIRED_HEADER)}")
         if set(self.column_labels) != set(get_args(PoLineField)):
             raise ValueError(f"an Excel layout titles every line field {get_args(PoLineField)}")
 
@@ -129,6 +134,85 @@ class ExcelPoReader:
             return _read(book, layout, self._buyer(book))
         except _RefusedError as refused:
             return Unreadable(reason=refused.reason, anchor=refused.anchor)
+
+    def has_layout(self, customer_code: str) -> bool:
+        """Whether this reader holds the customer's layout."""
+        return customer_code in self._layouts
+
+    def read_with(
+        self,
+        document: AttachmentContent,
+        layout: ExcelLayout,
+        caps: IntakeCaps,
+        *,
+        layout_ref: str,
+    ) -> PoDocument | Unreadable:
+        """``document`` read with a tenant's own approved layout (ticket 30),
+        the PO stamped with which one."""
+        try:
+            values, formulas = _open(document.data, caps)
+            book = _Book(values, formulas, document.attachment)
+            read = _read(book, layout, self._buyer(book))
+        except _RefusedError as refused:
+            return Unreadable(reason=refused.reason, anchor=refused.anchor)
+        return read.model_copy(update={"layout_ref": layout_ref})
+
+    def label_cells(self, document: AttachmentContent, caps: IntakeCaps) -> list[LabelCell]:
+        """The workbook's visible text cells a label may be (ticket 30): what
+        a person would see, in the first rows of each visible sheet. Hidden
+        sheets, rows and columns and text in its fill colour are left out:
+        never a label, and the injection channel."""
+        try:
+            values, formulas = _open(document.data, caps)
+        except _RefusedError:
+            return []
+        book = _Book(values, formulas, document.attachment)
+        cells: list[LabelCell] = []
+        for sheet in book.sheets:
+            if sheet.worksheet.sheet_state != "visible":
+                continue
+            for row in sheet.worksheet.iter_rows(max_row=_LABEL_ROWS):
+                for cell in row:
+                    text = _label_text(cell)
+                    if text is None or not isinstance(cell, Cell) or sheet.flags(cell):
+                        continue
+                    cells.append(
+                        LabelCell(
+                            ref=f"{sheet.title}!{cell.coordinate}"[:64],
+                            sheet=sheet.title[:64],
+                            row=cell.row,
+                            column=cell.column,
+                            text=text,
+                        )
+                    )
+        return cells
+
+    def form_rows(self, document: AttachmentContent, caps: IntakeCaps) -> list[list[str]]:
+        """The first rows of the first visible sheet as a person reads them,
+        each its visible cells left to right: text as typed, a number as
+        printed, a date as ``YYYY-MM-DD``. What a person would not see is not
+        there."""
+        try:
+            values, formulas = _open(document.data, caps)
+        except _RefusedError:
+            return []
+        book = _Book(values, formulas, document.attachment)
+        visible = [s for s in book.sheets if s.worksheet.sheet_state == "visible"]
+        if not visible:
+            return []
+        sheet = visible[0]
+        rows: list[list[str]] = []
+        for row in sheet.worksheet.iter_rows(max_row=_LABEL_ROWS):
+            shown = [
+                text
+                for cell in row
+                if isinstance(cell, Cell)
+                and not sheet.flags(cell)
+                and (text := _shown(cell.value)) is not None
+            ]
+            if shown:
+                rows.append(shown)
+        return rows
 
     def buyer(self, document: AttachmentContent, caps: IntakeCaps) -> PrintedBuyer | None:
         """The buyer the workbook names, or None when it names none it can read."""
@@ -422,6 +506,9 @@ def _header(sheet: _Sheet, layout: ExcelLayout) -> PoHeader:
         anchors[field] = anchor
         flags.extend(FlaggedValue(field=field, flag=flag) for flag in sheet.flags(cell))
         legacy.extend(sheet.legacy(field, cell))
+    if "revision" not in values:
+        values["revision"] = 0
+        anchors["revision"] = anchors["po_no"]
     try:
         return PoHeader.model_validate(
             {
@@ -632,7 +719,38 @@ def _day(value: object) -> date:
 
 
 def _currency(value: object) -> str:
-    return _text(value).upper()
+    """The currency as ISO: a symbol or a word customers write for one
+    (`rfq_reading.parse_currency`, the one table of them), else as printed."""
+    text = _text(value)
+    return parse_currency(text) or text.upper()
+
+
+# How far down a sheet a label is looked for, and how long a label may be.
+_LABEL_ROWS = 60
+_LABEL_LENGTH = 80
+
+
+def _shown(value: object) -> str | None:
+    """A cell's value as a person reads it, or None for an empty one."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if _is_number(value):
+        return str(_number(value))
+    if isinstance(value, str) and value.strip():
+        return " ".join(value.split())[:200]
+    return None
+
+
+def _label_text(cell: object) -> str | None:
+    """A cell's text when it may be a label: text, short, not a number."""
+    if not isinstance(cell, Cell) or not isinstance(cell.value, str):
+        return None
+    text = " ".join(cell.value.split())
+    if not text or len(text) > _LABEL_LENGTH or _PLAIN_NUMBER.fullmatch(text):
+        return None
+    return text
 
 
 _HEADER_VALUES: Mapping[PoHeaderField, Callable[[object], object]] = {

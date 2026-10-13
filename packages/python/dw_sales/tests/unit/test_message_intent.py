@@ -221,7 +221,7 @@ async def test_each_kind_is_routed_to_the_customers_pic_with_its_reason(
         "sales.message_intent@1.0.0",
         "onprem",
         "structured_extraction",
-        "sales_order_rules@1.3.1",
+        "sales_order_rules@1.4.1",
     )
 
 

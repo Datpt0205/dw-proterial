@@ -211,6 +211,70 @@ class OrderLine(BaseModel):
 
 
 Layout = Literal["xlsx", "xlsx_sheet_per_page", "pdf", "pdf_image"]
+
+# What a customer's own form prints beside each label (ticket 30): the values
+# a PO header shows, and the columns of its table (``note`` and ``ordered``,
+# the PO date repeated on each line, map to no field).
+FormHeaderField = Literal["po_no", "revision", "po_date", "currency", "supplier", "remarks"]
+FormColumnField = Literal[
+    "line_no",
+    "customer_item_code",
+    "description",
+    "quantity",
+    "uom",
+    "unit_price",
+    "amount",
+    "requested_date",
+    "note",
+    "ordered",
+]
+_FORM_HEADER_NEEDS = frozenset({"po_no", "po_date", "currency"})
+_FORM_LINE_FIELDS = frozenset(
+    {
+        "line_no",
+        "customer_item_code",
+        "description",
+        "quantity",
+        "uom",
+        "unit_price",
+        "amount",
+        "requested_date",
+    }
+)
+
+
+class PoForm(BaseModel):
+    """A customer's own PO form, printed by their system (ticket 30): its
+    title, the labels of its header in print order, the titles of its table's
+    columns in print order, and the label of its total. A PDF form also says
+    how its numbers group and how its dates read; a workbook keeps numbers and
+    dates as numbers and dates."""
+
+    model_config = _FROZEN
+
+    title: str = Field(min_length=1)
+    sheet: str = Field(default="PO", min_length=1, max_length=31)
+    header: tuple[tuple[str, FormHeaderField], ...]
+    columns: tuple[tuple[str, FormColumnField], ...]
+    # None: the form prints no total row (an eval of a form no layout can take).
+    total: str | None = Field(min_length=1)
+    thousands: Literal[",", ".", " ", ""] = ","
+    decimal: Literal[".", ","] = "."
+    date_format: str = "%d/%m/%Y"
+
+    @model_validator(mode="after")
+    def _prints_what_a_po_needs(self) -> Self:
+        fields = [field for _, field in self.header]
+        if not set(fields) >= _FORM_HEADER_NEEDS or len(fields) != len(set(fields)):
+            raise ValueError("a form prints the PO number, date and currency, once each")
+        columns = [field for _, field in self.columns if field not in ("note", "ordered")]
+        if set(columns) != _FORM_LINE_FIELDS or len(columns) != len(_FORM_LINE_FIELDS):
+            raise ValueError("a form prints every line field in one column")
+        if self.columns[0][1] != "line_no":
+            raise ValueError("a form's first column numbers the lines")
+        return self
+
+
 # How a PO prints a line's schedules (ticket 21): rows under the line, each
 # with a quantity and a date and nothing else, the line's own date cell left
 # blank; or a "date: quantity; ..." list in the line's date cell.
@@ -249,6 +313,9 @@ class PurchaseOrderDocument(BaseModel):
     legacy_font_lines: tuple[int, ...] = ()
     # How the lines with schedules print them; set exactly when one has some.
     schedule_layout: ScheduleLayout | None = None
+    # The customer's own form (ticket 30), for a PO no platform layout reads:
+    # printed with its labels instead of the fixed ones, as an .xlsx or a PDF.
+    form: PoForm | None = None
     lines: tuple[OrderLine, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -280,6 +347,10 @@ class PurchaseOrderDocument(BaseModel):
             raise ValueError(f"{self.name}: schedule_layout goes with lines that have schedules")
         if self.schedule_layout == "rows" and self.layout not in ("xlsx", "xlsx_sheet_per_page"):
             raise ValueError(f"{self.name}: only an Excel layout prints schedule rows")
+        if self.form is not None and (
+            self.layout not in ("xlsx", "pdf") or self.schedule_layout or self.lines_per_page
+        ):
+            raise ValueError(f"{self.name}: a customer's form is one .xlsx sheet or one PDF page")
         pages = len(self.pages())
         if not all(1 <= page < pages for page in self.hidden_pages):
             # The last page carries the TOTAL, which stays visible.
@@ -451,14 +522,7 @@ def render_attachments(data_dir: Path = DATA_DIR) -> dict[str, bytes]:
     catalogue = _Catalogue(data_dir)
     rendered: dict[str, bytes] = {}
     for po in load_purchase_orders(data_dir):
-        match po.layout:
-            case "pdf":
-                data = _po_pdf(po, catalogue)
-            case "pdf_image":
-                data = _scanned_pdf(po)
-            case "xlsx" | "xlsx_sheet_per_page":
-                data = _po_xlsx(po, catalogue)
-        rendered[attachment_file_name(po.message_id, po.name)] = data
+        rendered[attachment_file_name(po.message_id, po.name)] = render_po(po, catalogue)
     for rfq in load_quote_requests(data_dir):
         customer = catalogue.customers[rfq.customer_code]
         rendered[attachment_file_name(rfq.message_id, rfq.name)] = _rfq_xlsx(
@@ -477,6 +541,26 @@ def render_attachments(data_dir: Path = DATA_DIR) -> dict[str, bytes]:
         assert free.name is not None  # the document's validator
         rendered[attachment_file_name(free.message_id, free.name)] = data
     return rendered
+
+
+def render_po(po: PurchaseOrderDocument, catalogue: _Catalogue) -> bytes:
+    """One PO file's bytes: the fixed layouts, a scan, or the customer's form."""
+    if po.form is not None:
+        if po.layout == "pdf":
+            return _form_pdf(po, po.form, catalogue)
+        return _form_xlsx(po, po.form, catalogue)
+    match po.layout:
+        case "pdf":
+            return _po_pdf(po, catalogue)
+        case "pdf_image":
+            return _scanned_pdf(po)
+        case "xlsx" | "xlsx_sheet_per_page":
+            return _po_xlsx(po, catalogue)
+
+
+def catalogue_of(data_dir: Path = DATA_DIR) -> _Catalogue:
+    """The master data a document prints its names and descriptions from."""
+    return _Catalogue(data_dir)
 
 
 def main() -> None:
@@ -837,6 +921,150 @@ def _fixed_zip(data: bytes) -> bytes:
             entry.create_system = 3
             entry.external_attr = 0o644 << 16
             target.writestr(entry, source.read(info.filename))
+    return buffer.getvalue()
+
+
+# --------------------------------------------------- a customer's form --
+
+
+def _form_values(
+    po: PurchaseOrderDocument, line: OrderLine, catalogue: _Catalogue
+) -> dict[str, _CellValue]:
+    return {
+        "line_no": line.no,
+        "customer_item_code": line.customer_item_code,
+        "description": catalogue.describe(
+            po.customer_code, line.customer_item_code, line.attributes, line.description
+        ),
+        "quantity": line.quantity,
+        "uom": line.uom,
+        "unit_price": line.unit_price,
+        "amount": _amount(line.quantity, line.unit_price, po.currency),
+        "requested_date": line.requested_date,
+        "note": None,
+        "ordered": po.po_date,
+    }
+
+
+def _form_header(po: PurchaseOrderDocument, field: FormHeaderField) -> _CellValue:
+    values: dict[str, _CellValue] = {
+        "po_no": po.po_no,
+        "revision": po.revision,
+        "po_date": po.po_date,
+        "currency": po.currency,
+        "supplier": SELLER_NAME,
+        "remarks": po.remarks,
+    }
+    return values[field]
+
+
+def _form_xlsx(po: PurchaseOrderDocument, form: PoForm, catalogue: _Catalogue) -> bytes:
+    """The form as one sheet: the buyer and the title, one header label per
+    row with its value beside it, the table under it, and the total row."""
+    buyer = catalogue.buyer(po)
+    workbook = _new_workbook()
+    sheet: Worksheet = workbook.create_sheet(form.sheet)
+    sheet["A1"] = buyer.name.upper()
+    sheet["A2"] = form.title
+    for offset, (label, field) in enumerate(form.header):
+        sheet.cell(row=4 + offset, column=1, value=label)
+        value = _form_header(po, field)
+        cell = sheet.cell(row=4 + offset, column=2, value=value)
+        if isinstance(value, date):
+            cell.number_format = "yyyy-mm-dd"
+    first = 4 + len(form.header) + 1
+    formats = {
+        "quantity": "#,##0",
+        "unit_price": _PRICE_FORMAT[po.currency],
+        "amount": _AMOUNT_FORMAT[po.currency],
+        "requested_date": "yyyy-mm-dd",
+        "ordered": "yyyy-mm-dd",
+    }
+    for column, (title, _) in enumerate(form.columns, start=1):
+        sheet.cell(row=first, column=column, value=title)
+    for offset, line in enumerate(po.lines, start=1):
+        values = _form_values(po, line, catalogue)
+        for column, (_, printed) in enumerate(form.columns, start=1):
+            _set(sheet, first + offset, column, values[printed])
+            if printed in formats:
+                sheet.cell(row=first + offset, column=column).number_format = formats[printed]
+    if form.total is not None:
+        total_row = first + len(po.lines) + 1
+        amount_column = next(i for i, (_, f) in enumerate(form.columns, start=1) if f == "amount")
+        sheet.cell(row=total_row, column=max(amount_column - 1, 1), value=form.total)
+        total = sheet.cell(row=total_row, column=amount_column, value=_total(po))
+        total.number_format = _AMOUNT_FORMAT[po.currency]
+    return _xlsx_bytes(workbook, creator=buyer.name, stamp=po.po_date)
+
+
+def _grouped(value: Decimal, thousands: str, decimal: str) -> str:
+    whole, _, fraction = f"{value:f}".partition(".")
+    grouped = f"{int(whole):,}".replace(",", thousands)
+    return f"{grouped}{decimal}{fraction}" if fraction else grouped
+
+
+def _form_pdf(po: PurchaseOrderDocument, form: PoForm, catalogue: _Catalogue) -> bytes:
+    """The form as one landscape page: ``Label: value`` header lines, the
+    table's titles and rows on columns wide apart, and ``Total: amount CUR``."""
+    buyer = catalogue.buyer(po)
+    pdfmetrics.registerFont(TTFont(_FONT, str(FONT_PATH)))
+    buffer = io.BytesIO()
+    width, height = landscape(A4)
+    canvas = Canvas(buffer, pagesize=(width, height), invariant=1, pageCompression=0)
+    canvas.setTitle(f"{form.title} {po.po_no}")
+    canvas.setAuthor(buyer.name)
+
+    def text(x: float, y: float, value: str, size: float = 9) -> None:
+        canvas.setFont(_FONT, size)
+        canvas.drawString(x, y, value)
+
+    def shown(value: _CellValue) -> str:
+        if isinstance(value, Decimal):
+            return _grouped(value, form.thousands, form.decimal)
+        if isinstance(value, date):
+            return value.strftime(form.date_format)
+        return "" if value is None else str(value)
+
+    y = height - 50
+    text(40, y, buyer.name.upper(), 12)
+    y -= 26
+    text(40, y, form.title, 14)
+    for label, field in form.header:
+        y -= 15
+        text(40, y, f"{label}: {shown(_form_header(po, field))}")
+    # Wide enough apart that the text layer keeps two spaces between cells.
+    widths = {
+        "line_no": 24,
+        "customer_item_code": 80,
+        "description": 400,
+        "quantity": 46,
+        "uom": 24,
+        "unit_price": 50,
+        "amount": 60,
+        "requested_date": 58,
+        "note": 36,
+        "ordered": 58,
+    }
+    xs: list[float] = []
+    x = 40.0
+    for title, printed in form.columns:
+        xs.append(x)
+        # A title wider than its column's values pushes the next column on.
+        x += max(widths[printed], pdfmetrics.stringWidth(title, _FONT, 8) + 14)
+    y -= 26
+    for (title, _), at in zip(form.columns, xs, strict=True):
+        text(at, y, title, 8)
+    for line in po.lines:
+        y -= 14
+        values = _form_values(po, line, catalogue)
+        for (_, printed), at in zip(form.columns, xs, strict=True):
+            cell = shown(values[printed]) or "-"
+            text(at, y, cell, 7.5)
+    if form.total is not None:
+        y -= 22
+        text(40, y, f"{form.total}: {shown(_total(po))} {po.currency}", 9)
+    canvas.showPage()
+    canvas.save()
     return buffer.getvalue()
 
 

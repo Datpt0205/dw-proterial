@@ -11,7 +11,10 @@ from collections.abc import Sequence
 from typing import Literal, Protocol
 
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.messages import AttachmentContent
+from dw_sales.application.threads import ThreadedCase
+from dw_sales.domain.catalog import Customer
+from dw_sales.domain.layouts import LayoutMapping, PoLayout
+from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps, OrderRules
 from dw_sales.domain.orders import OrderCase, PoDocument, PrintedBuyer, Unreadable
 
@@ -42,6 +45,22 @@ class PoDocumentReaderPort(Protocol):
     ) -> PoDocument | Unreadable:
         """``customer_code`` selects the customer's layout: where their PO keeps
         each value. A customer with no layout gets `Unreadable`."""
+        ...
+
+    def has_layout(self, customer_code: str, file_type: FileType) -> bool:
+        """Whether the platform's layouts read this customer's file of this type."""
+        ...
+
+    async def read_with(
+        self,
+        document: AttachmentContent,
+        mapping: LayoutMapping,
+        caps: IntakeCaps,
+        *,
+        layout_ref: str,
+    ) -> PoDocument | Unreadable:
+        """``document`` read with a layout people mapped and approved (ticket
+        30), the PO stamped with ``layout_ref``."""
         ...
 
 
@@ -82,4 +101,27 @@ class OrderCaseLookupPort(Protocol):
         self, scope: SalesScope, customer_code: str, po_no: str
     ) -> Sequence[OrderCase]:
         """Every case for this customer's PO number: any revision, any status."""
+        ...
+
+
+class ThreadLinkPort(Protocol):
+    """The case a reply's thread headers name (ticket 32): one case of the
+    sender's own customer whose message the reply answers, or None. Satisfied
+    by `ThreadLinks`; deterministic, no model."""
+
+    async def linked_case(
+        self, scope: SalesScope, message: InboundMessage, sender: Customer | None
+    ) -> ThreadedCase | None: ...
+
+
+class LayoutLookupPort(Protocol):
+    """The PO layouts a tenant approved for its customers (ticket 30), as
+    intake reads them: one short read per call, bound to the scope asked about."""
+
+    async def approved(self, scope: SalesScope, customer_code: str) -> Sequence[PoLayout]:
+        """The customer's approved layouts, one per kind of file at most."""
+        ...
+
+    async def read_count(self, scope: SalesScope, layout_ref: str) -> int:
+        """How many order cases were opened from a PO read through it."""
         ...

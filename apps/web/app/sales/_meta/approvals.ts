@@ -11,14 +11,16 @@ const CASE_PAGE: Record<string, string> = {
  * DW1's approvals (`sales.quote`, `sales.order.cross_check`) are decided on
  * their case's page, which sends the case version the decision is checked
  * against; `/approvals` sends none, so a decision there is refused. The
- * generic inbox links to the case instead. A payload that names no known
- * case links to the Sales work list, never outside the app.
+ * generic inbox links to the case instead, and a PO layout's
+ * (`sales.layout`, ticket 30) to the layouts page. A payload that names no
+ * known case links to the Sales work list, never outside the app.
  */
 export const salesApprovalHost: ApprovalHost = {
   prefix: "sales.",
   inbox: {
     label: "Mở hồ sơ để quyết định",
     href: (approval: Approval) => {
+      if (approval.approval_type === "sales.layout") return "/sales/layouts";
       const kind = String(approval.payload.case_kind ?? "");
       const caseId = String(approval.payload.case_id ?? "");
       const page = CASE_PAGE[kind];

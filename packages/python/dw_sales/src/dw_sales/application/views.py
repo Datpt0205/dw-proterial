@@ -31,7 +31,7 @@ from typing import Final, Literal
 from pydantic import BaseModel, ConfigDict
 
 from dw_sales.application.access import PriceView
-from dw_sales.application.case_store import WorkerState
+from dw_sales.application.case_store import LoggedMessage, WorkerState
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -47,6 +47,8 @@ from dw_sales.domain.catalog import (
 )
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
+from dw_sales.domain.handoffs import Handoff
+from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
 from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import (
@@ -73,6 +75,7 @@ from dw_sales.domain.quotes import (
     QuoteFinding,
     RequestReading,
 )
+from dw_sales.domain.reply_intent import CaseReply, ProposedStep, ReplyKind, proposed_step
 
 _VIEW = ConfigDict(frozen=True)
 
@@ -691,6 +694,62 @@ class OrderCaseView(BaseModel):
     # The last cross-check decision recorded and not applied, said while the
     # order still awaits its cross-check.
     unapplied_decision: UnappliedDecisionView | None
+    # The customer's replies its thread headers attached to the case (ticket 32).
+    replies: list[CaseReplyView] = []
+
+
+class CaseReplyView(BaseModel):
+    """A customer's reply attached to the case by its thread (ticket 32), with
+    what a model read of it and the step code proposes from that, now.
+
+    ``proposal`` is computed from the case's status as it is now, and only for
+    the newest reply: an older reply's reading does not pre-select anything.
+    It is a suggestion: the step is the existing one, which Sales confirms and
+    the server checks as for any other caller. The quotes are the customer's
+    sentences, shown to a case reader as the inbox shows the whole mail.
+    """
+
+    model_config = _VIEW
+
+    message_id: str
+    processed_at: datetime
+    linked_to: str
+    # None: no model was asked (the tenant's rules leave it off).
+    outcome: Literal["read", "unavailable"] | None
+    kind: ReplyKind | None
+    quotes: list[str]
+    prompt: str | None
+    proposal: ProposedStep | None
+
+
+def case_replies(
+    case_kind: CaseKind, case_id: uuid.UUID, status: str, logged: Sequence[LoggedMessage]
+) -> list[CaseReplyView]:
+    """The replies on one case, oldest first, the newest with its proposal."""
+    replies: list[tuple[LoggedMessage, CaseReply]] = [
+        (entry, entry.disposition.reply)
+        for entry in sorted(logged, key=lambda e: (e.processed_at, e.disposition.message_id))
+        if entry.disposition.reply is not None
+        and entry.disposition.case_kind is case_kind
+        and entry.disposition.case_id == case_id
+    ]
+    views: list[CaseReplyView] = []
+    for index, (entry, reply) in enumerate(replies):
+        reading = reply.reading
+        newest = index == len(replies) - 1
+        views.append(
+            CaseReplyView(
+                message_id=entry.disposition.message_id,
+                processed_at=entry.processed_at,
+                linked_to=reply.linked_to,
+                outcome=reading.outcome if reading else None,
+                kind=reading.kind if reading else None,
+                quotes=[quote.text for quote in reading.quotes] if reading else [],
+                prompt=reading.prompt if reading else None,
+                proposal=proposed_step(case_kind.value, status, reading) if newest else None,
+            )
+        )
+    return views
 
 
 def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummaryView:
@@ -718,6 +777,7 @@ def order_case(
     prices: PriceView,
     decision: PendingDecisionView | None = None,
     stalled: bool = False,
+    replies: Sequence[LoggedMessage] = (),
 ) -> OrderCaseView:
     document = case.document
     unapplied = case.unapplied_decision
@@ -807,6 +867,7 @@ def order_case(
             if unapplied
             else None
         ),
+        replies=case_replies(CaseKind.ORDER, case.case_id, case.status.value, replies),
     )
 
 
@@ -1184,6 +1245,8 @@ class QuoteCaseView(BaseModel):
     evidence: list[EvidenceView] | Hidden | None
     # The approval this quotation waits on, while it does.
     decision: PendingDecisionView | None = None
+    # The customer's replies its thread headers attached to the case (ticket 32).
+    replies: list[CaseReplyView] = []
 
 
 def _anchors(**named: SourceAnchor | None) -> dict[str, SourceAnchor]:
@@ -1216,6 +1279,7 @@ def quote_case(
     prices: PriceView,
     evidence_rows: Sequence[PriceEvidence] | None,
     decision: PendingDecisionView | None = None,
+    replies: Sequence[LoggedMessage] = (),
 ) -> QuoteCaseView:
     request = case.request
     document = request.document
@@ -1378,6 +1442,7 @@ def quote_case(
         ),
         evidence=evidence(evidence_rows, prices) if evidence_rows is not None else None,
         decision=decision,
+        replies=case_replies(CaseKind.QUOTE, case.case_id, case.status.value, replies),
     )
 
 
@@ -1398,6 +1463,14 @@ class MessageDispositionView(BaseModel):
     # What a model reading of the message's intent did (ticket 31): the kind
     # and language read, the numbers code resolved, and the call's stamp.
     reading: IntentReading | None = None
+    # A reply attached to its case by its thread headers (ticket 32).
+    reply: CaseReply | None = None
+    # The hand-off a model pre-filled for a routed message (ticket 33): what
+    # code located, parsed and resolved, and the call's stamp.
+    handoff: Handoff | None = None
+    # A model's pre-fill of the mapping of a PO form no layout reads (ticket
+    # 30), for the onboarding screen.
+    layout_prefill: LayoutPrefill | None = None
 
 
 def message_disposition(
@@ -1413,6 +1486,9 @@ def message_disposition(
         customer_code=disposition.customer_code,
         processed_at=processed_at,
         reading=disposition.reading,
+        reply=disposition.reply,
+        handoff=disposition.handoff,
+        layout_prefill=disposition.layout_prefill,
     )
 
 
@@ -1423,6 +1499,19 @@ class AttachmentView(BaseModel):
     name: str
     media_type: str
     size: int
+
+
+class HandoffDraftView(BaseModel):
+    """A routed message's hand-off as code wrote it from the template, for
+    Sales to review, edit and send from their own mailbox (ticket 33). ``to``
+    names the team, never an address: Sales picks the recipients."""
+
+    model_config = _VIEW
+
+    to: Literal["pc", "qa"]
+    subject: str
+    body: str
+    template_ref: str
 
 
 class InboxMessageView(BaseModel):
@@ -1437,9 +1526,14 @@ class InboxMessageView(BaseModel):
     attachments: list[AttachmentView]
     sender_verified: bool
     disposition: MessageDispositionView
+    handoff_draft: HandoffDraftView | None = None
 
 
-def inbox_message(message: InboundMessage, disposition: MessageDispositionView) -> InboxMessageView:
+def inbox_message(
+    message: InboundMessage,
+    disposition: MessageDispositionView,
+    handoff_draft: HandoffDraftView | None = None,
+) -> InboxMessageView:
     return InboxMessageView(
         message_id=message.message_id,
         sender=message.sender.address,
@@ -1455,6 +1549,7 @@ def inbox_message(message: InboundMessage, disposition: MessageDispositionView) 
         ],
         sender_verified=message.authentication.verified,
         disposition=disposition,
+        handoff_draft=handoff_draft,
     )
 
 

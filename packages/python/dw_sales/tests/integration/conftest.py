@@ -27,7 +27,10 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
-from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.adapters.persistence.repositories import (
+    SqlApprovalRepository,
+    SqlAuditRepository,
+)
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 
 
@@ -64,7 +67,9 @@ async def migrator(sales_db: DatabaseUrls) -> AsyncIterator[AsyncEngine]:
 
 @pytest.fixture
 def uow(app_sessions: async_sessionmaker[AsyncSession]) -> SqlSalesUnitOfWorkFactory:
-    return SqlSalesUnitOfWorkFactory(app_sessions, audit=SqlAuditRepository)
+    return SqlSalesUnitOfWorkFactory(
+        app_sessions, audit=SqlAuditRepository, approvals=SqlApprovalRepository
+    )
 
 
 @pytest.fixture

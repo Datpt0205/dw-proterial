@@ -1,0 +1,4 @@
+{
+  "_comment": "The recorded readings (onprem, qwen3.5-9b-dw, 2026-10-13) carry 0.945 of the 73 fields the 33 golden mails state, right, and no value the mails do not state. The replay is deterministic, so a lower score means the code changed; re-record with --live onprem --record when the prompt or the model changes.",
+  "min_right": 0.94
+}

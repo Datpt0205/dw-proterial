@@ -5,9 +5,10 @@
 context, so every policy on `sales.*` narrows to that workspace and a pooled
 connection carries nothing into the next caller.
 
-The platform audit repository is handed in as a factory over the session, by
-the composition root: the audit row is written in this same transaction, and
-this package names no platform adapter.
+The platform audit and approval repositories are handed in as factories over
+the session, by the composition root: the audit row, and the approval a PO
+layout's proposal opens, are written in this same transaction, and this
+package names no platform adapter.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_platform.application.ports import AuditRepositoryPort
+from dw_sales.adapters.persistence.layouts import SqlLayoutStore
 from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseRepository
 from dw_sales.adapters.persistence.records import (
@@ -30,9 +32,11 @@ from dw_sales.adapters.persistence.records import (
     SqlSourceServed,
     SqlWorkerSwitch,
 )
+from dw_sales.application.case_store import LayoutApprovalsPort
 from dw_sales.application.ports import SalesScope
 
 AuditFactory = Callable[[AsyncSession], AuditRepositoryPort]
+ApprovalsFactory = Callable[[AsyncSession], LayoutApprovalsPort]
 
 
 class SqlSalesUnitOfWork:
@@ -45,6 +49,8 @@ class SqlSalesUnitOfWork:
     served: SqlSourceServed
     artifacts: SqlArtifactLog
     worker: SqlWorkerSwitch
+    layouts: SqlLayoutStore
+    approvals: LayoutApprovalsPort
     audit: AuditRepositoryPort
 
     def __init__(
@@ -52,10 +58,12 @@ class SqlSalesUnitOfWork:
         session_factory: async_sessionmaker[AsyncSession],
         scope: SalesScope,
         audit: AuditFactory,
+        approvals: ApprovalsFactory,
     ) -> None:
         self._session_factory = session_factory
         self._scope = scope
         self._audit = audit
+        self._approvals = approvals
         self._session: AsyncSession | None = None
 
     async def __aenter__(self) -> Self:
@@ -81,6 +89,8 @@ class SqlSalesUnitOfWork:
         self.served = SqlSourceServed(session, scope)
         self.artifacts = SqlArtifactLog(session, scope)
         self.worker = SqlWorkerSwitch(session, scope)
+        self.layouts = SqlLayoutStore(session, scope)
+        self.approvals = self._approvals(session)
         self.audit = self._audit(session)
         return self
 
@@ -109,6 +119,7 @@ class SqlSalesUnitOfWorkFactory:
 
     session_factory: async_sessionmaker[AsyncSession]
     audit: AuditFactory
+    approvals: ApprovalsFactory
 
     def __call__(self, scope: SalesScope) -> SqlSalesUnitOfWork:
-        return SqlSalesUnitOfWork(self.session_factory, scope, self.audit)
+        return SqlSalesUnitOfWork(self.session_factory, scope, self.audit, self.approvals)

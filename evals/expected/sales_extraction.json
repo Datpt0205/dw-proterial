@@ -3,6 +3,7 @@
   "min_accuracy": 1.0,
   "routed": {
     "M15": "customer_unknown",
-    "M16": "attachment_unreadable"
+    "M16": "attachment_unreadable",
+    "M43": "attachment_unreadable"
   }
 }

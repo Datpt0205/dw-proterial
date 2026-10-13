@@ -34,6 +34,7 @@ const SALES_PAGES = [
   "/sales/orders",
   "/sales/quotes",
   "/sales/review",
+  "/sales/layouts",
   "/sales/master-data",
   "/sales/overview",
 ];

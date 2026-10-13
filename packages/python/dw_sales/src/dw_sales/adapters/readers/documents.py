@@ -16,7 +16,9 @@ from typing import Final
 from dw_sales.adapters.readers.excel import ExcelPoReader
 from dw_sales.adapters.readers.layouts import MOCK_EXCEL_LAYOUTS, MOCK_PDF_LAYOUTS
 from dw_sales.adapters.readers.pdf import PdfPoReader
+from dw_sales.adapters.readers.stored import excel_layout, pdf_layout
 from dw_sales.application.order_ports import FileType
+from dw_sales.domain.layouts import LayoutMapping, LayoutSource
 from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
@@ -76,6 +78,64 @@ class PoDocumentReaders:
         if kind == "pdf":
             return await asyncio.to_thread(self._pdf.read, document, customer_code, caps)
         return Unreadable(reason="not a PO format read in this slice (text PDF or .xlsx)")
+
+    def has_layout(self, customer_code: str, file_type: FileType) -> bool:
+        """Whether the platform's layouts read this customer's file of this type."""
+        if file_type == "xlsx":
+            return self._excel.has_layout(customer_code)
+        if file_type == "pdf":
+            return self._pdf.has_layout(customer_code)
+        return False
+
+    async def read_with(
+        self,
+        document: AttachmentContent,
+        mapping: LayoutMapping,
+        caps: IntakeCaps,
+        *,
+        layout_ref: str,
+    ) -> PoDocument | Unreadable:
+        """``document`` read with a layout people mapped (ticket 30): the same
+        reader as every other PO, given the tenant's labels."""
+        kind = sniff(document.data)
+        try:
+            if kind == "xlsx" and mapping.kind == "excel":
+                layout = excel_layout(mapping)
+                return await asyncio.to_thread(
+                    self._excel.read_with, document, layout, caps, layout_ref=layout_ref
+                )
+            if kind == "pdf" and mapping.kind == "pdf":
+                pdf = pdf_layout(mapping)
+                return await asyncio.to_thread(
+                    self._pdf.read_with, document, pdf, caps, layout_ref=layout_ref
+                )
+        except ValueError as refused:
+            return Unreadable(reason=f"the layout cannot be read with: {refused}"[:500])
+        return Unreadable(reason="the file is not of the kind the layout maps")
+
+    async def label_source(
+        self, document: AttachmentContent, caps: IntakeCaps
+    ) -> LayoutSource | None:
+        """The text cells of the form a label may be (ticket 30), or None for
+        a file that is no form a layout can map."""
+        kind = sniff(document.data)
+        if kind == "xlsx":
+            cells = await asyncio.to_thread(self._excel.label_cells, document, caps)
+            rows = await asyncio.to_thread(self._excel.form_rows, document, caps)
+            if not cells:
+                return None
+            return LayoutSource(
+                kind="excel", cells=tuple(cells[:2000]), rows=tuple(map(tuple, rows[:60]))
+            )
+        if kind == "pdf":
+            cells = await asyncio.to_thread(self._pdf.label_cells, document, caps)
+            rows = await asyncio.to_thread(self._pdf.form_rows, document, caps)
+            if not cells:
+                return None
+            return LayoutSource(
+                kind="pdf", cells=tuple(cells[:2000]), rows=tuple(map(tuple, rows[:60]))
+            )
+        return None
 
 
 def mock_po_readers() -> PoDocumentReaders:
