@@ -8,6 +8,62 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-14, tickets 25 and 27 built, pending measurement (agent; Đạt
+  decided "DW xử lý" asynchronous, the agent took the ticket's recommended
+  reader container while he was away; "As built", Comments and "Post-reboot
+  checks" in each ticket):
+    - **25.** "DW xử lý" and "DW xử lý tất cả" answer 202 with a job per
+      message (`sales.processing_jobs`, migration `0a78ca5e96d3`, parented
+      on 36's `26a5276840ba`); the worker's `sales_processing` lane runs
+      each as whoever asked, re-resolved and cut to `sales.inbox.process`,
+      through `Dw1Runs.process` (quota, pause, key unchanged); the reaper
+      settles a dead worker's job; the mailbox lane queues through the same
+      door. Every file is read in the `reader` container (`apps/reader`,
+      no network, one throwaway process per request under docgen's runner,
+      reached over a Unix socket); the API imports no reader. The inbox
+      shows each job's state and polls while any runs.
+    - **27.** In that container: `.xls`→`.xlsx` and `.doc`→PDF by
+      LibreOffice (fresh profile, macros disabled), anchors carrying both
+      hashes and the PO its converter; a scanned page OCRed by Tesseract
+      (`vie+eng`), every value flagged `ocr` (`value_uncertain`). A tool
+      failure routes the message with the reason. No `.xls` is committed
+      (the public-repo guard cannot read one); the scan fixture and its OCR
+      truth are generated.
+    - **Verified (no Docker).** ruff, mypy (627 files), lint-imports 12/12
+      (the new "API imports no reader" contract included), verify_architecture,
+      verify_invariants, release manifest and contracts current; unit 3,108
+      passed, 3 skipped; eval smoke all PASS (`sales_legacy@1.0.0` 6/6); web
+      typecheck, lint, 350 vitest, prettier. 36 mutations, all red (the
+      reader's body cap first survived and got two tests).
+    - **Owed after the reboot**: the image build, trivy, the image suite,
+      `scripts/measure_reader.py`, migration `0a78ca5e96d3` and the
+      integration suites, the full stack and the walk (ticket 25 "Post-reboot
+      checks", ticket 27's after them).
+
+- 2026-10-14, tickets 35 and 36 triaged and done (agent, Đạt away, on his
+  ask of 2026-10-14; uncommitted; Triage, "As built", "Owed" in each ticket):
+    - **35.** A split line is confirmed per schedule (decided by the agent:
+      one date per schedule, the recommended default): `OrderLine` holds a
+      date per delivery, the route takes `schedule_dates`, the draft
+      (`sales_emails@1.2.0`) and the portal checklist list each schedule,
+      the drawer asks per schedule. Migration `b2afb906fbf2` (`date[]`
+      replaces the one-date column, backfilled).
+    - **36.** Quote rules, pricing, e-mail and document copy, the Bravo
+      upload template and the hand-off copy resolve per tenant through the
+      rule book, ticket 19's routes unchanged (ADR 0004 option noted); a
+      quote case's later steps read its stamped rules, files of one case
+      version the copy the first stamped. Hand-off placeholders and e-mail
+      subjects are validated before a tenant can propose them. Migration
+      `26a5276840ba` (eight keys; the document check no longer passes a
+      NULL comparison).
+    - **Verified (no Docker).** ruff, mypy (619 files), lint-imports 12/12,
+      verify_architecture, verify_invariants, release manifest and
+      contracts current; unit 3,074 passed, 3 skipped (one collection error
+      in ticket 25's worker test, in progress in parallel); eval smoke all
+      PASS; web typecheck, lint, 346 vitest. 19 mutations, all red.
+    - **Owed after the reboot.** The integration runs and the two migration
+      round trips listed under "Owed" in tickets 35 and 36.
+
 - 2026-10-13, CI on 399920d: 6 of 7 jobs green (unit, evals, frontend with
   vitest, integration, container build, scaffold-smoke). The public-repo
   guard fails by design until Đạt creates the PUBLIC_REPO_DENYLIST secret.

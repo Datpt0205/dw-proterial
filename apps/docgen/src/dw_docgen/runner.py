@@ -37,9 +37,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO
-
-from dw_docgen.settings import DocgenSettings
+from typing import IO, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +58,36 @@ _KILL_ROUNDS = 10
 _KILL_ROUND_SECONDS = 0.05
 
 
+class Containment(Protocol):
+    """The budget a command runs under. `DocgenSettings` is one; the reader
+    sandbox (`apps/reader`, sales ticket 25) runs its one-use reading
+    processes through this module under its own."""
+
+    @property
+    def enforce_limits(self) -> bool: ...
+
+    @property
+    def shell_path(self) -> str: ...
+
+    @property
+    def cpu_seconds(self) -> int: ...
+
+    @property
+    def address_space_mb(self) -> int: ...
+
+    @property
+    def max_open_files(self) -> int: ...
+
+    @property
+    def max_processes(self) -> int: ...
+
+    @property
+    def max_file_bytes(self) -> int: ...
+
+    @property
+    def max_output_bytes(self) -> int: ...
+
+
 @dataclass(frozen=True)
 class CommandResult:
     output: str
@@ -68,7 +96,7 @@ class CommandResult:
     timed_out: bool
 
 
-def limit_preamble(settings: DocgenSettings) -> str:
+def limit_preamble(settings: Containment) -> str:
     """The shell prefix that caps the command, or `""` where it cannot apply.
 
     Fails closed: if any limit cannot be set the command never runs. A sandbox
@@ -99,7 +127,7 @@ def run_command(
     *,
     cwd: Path,
     sink_dir: Path,
-    settings: DocgenSettings,
+    settings: Containment,
     timeout_seconds: int,
 ) -> CommandResult:
     """Execute `command` with `cwd` as its working directory."""

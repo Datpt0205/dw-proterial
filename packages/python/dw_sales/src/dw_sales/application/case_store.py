@@ -216,6 +216,81 @@ class LoggedMessage:
     processed_at: datetime
 
 
+# Where a message's processing stands (ticket 25): `sales.processing_jobs`.
+JobStatus = Literal["queued", "running", "done", "failed"]
+# Why a job failed, from a fixed set the table's CHECK holds too:
+# - ``quota``: the plan's runs for the day are spent;
+# - ``not_permitted``: whoever asked may no longer process the mailbox there;
+# - ``paused``: DW1 was paused in the workspace before the job ran;
+# - ``conflict``: the message was processed meanwhile, or is on a case;
+# - ``not_found``: the mailbox no longer holds the message;
+# - ``unavailable``: the scanner or the reader did not answer, every attempt;
+# - ``model_retry``: a model gave no usable answer and the message is young
+#   enough to be read again later (ticket 31);
+# - ``abandoned``: the worker processing it died, every attempt;
+# - ``error``: anything else, logged by the worker.
+JobError = Literal[
+    "quota",
+    "not_permitted",
+    "paused",
+    "conflict",
+    "not_found",
+    "unavailable",
+    "model_retry",
+    "abandoned",
+    "error",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessingJob:
+    """A message's processing: queued by a person, or by DW1's mailbox lane,
+    and run by the worker (`dw_sales.application.processing`).
+
+    ``attempts`` counts the claims of this round and is the claim's token: a
+    settlement names it, and a worker whose claim was reaped settles nothing.
+    ``failures`` counts the rounds that ended failed in a row, which is how
+    long DW1's mailbox lane waits before queueing it again."""
+
+    job_id: uuid.UUID
+    message_id: str
+    status: JobStatus
+    requested_by: uuid.UUID
+    requested_at: datetime
+    attempts: int
+    failures: int
+    available_at: datetime
+    error: JobError | None
+    updated_at: datetime
+
+    @property
+    def active(self) -> bool:
+        """Queued or running: enqueueing it again changes nothing."""
+        return self.status in ("queued", "running")
+
+
+@dataclass(frozen=True, slots=True)
+class Settlement:
+    """How a claimed job ends its run: done, back in the queue (after an
+    outage, not before ``available_at``), or failed with its reason."""
+
+    status: Literal["done", "queued", "failed"]
+    error: JobError | None = None
+    available_at: datetime | None = None
+
+    @classmethod
+    def done(cls) -> Settlement:
+        return cls("done")
+
+    @classmethod
+    def retry(cls, at: datetime) -> Settlement:
+        return cls("queued", available_at=at)
+
+    @classmethod
+    def failed(cls, error: JobError) -> Settlement:
+        return cls("failed", error=error)
+
+
 @dataclass(frozen=True, slots=True)
 class LoggedEvent:
     """One case event as the overview reads it: a status move, when, by whom."""
@@ -320,6 +395,33 @@ class MessageLogPort(Protocol):
         ...
 
 
+class ProcessingJobsPort(Protocol):
+    """Each message's processing job in one workspace (ticket 25)."""
+
+    async def enqueue(
+        self, message_id: str, requested_by: uuid.UUID, at: datetime, job_id: uuid.UUID
+    ) -> tuple[ProcessingJob, bool]:
+        """The message's job, queued, and whether this call queued it.
+
+        A message with no job gets one (``job_id``); a done or failed job is
+        queued again, its attempts reset and ``requested_by`` the new asker.
+        A job already queued or running is returned as it is, unchanged: the
+        (workspace, message_id) pair is its idempotency key, so a second
+        press, or the lane and a person at once, queue it once.
+        """
+        ...
+
+    async def get(self, message_id: str) -> ProcessingJob | None: ...
+
+    async def list_all(self) -> Sequence[ProcessingJob]: ...
+
+    async def settle(self, job: ProcessingJob, outcome: Settlement, at: datetime) -> bool:
+        """End the run of ``job``, claimed with ``job.attempts``: False, and
+        nothing written, when the claim is no longer this caller's (the
+        reaper put the job back in the queue and another worker took it)."""
+        ...
+
+
 class SourceServedPort(Protocol):
     async def record(self, served: ServedSource) -> None:
         """Idempotent: the same region served again keeps its first record."""
@@ -379,6 +481,9 @@ class SalesUnitOfWork(Protocol):
 
     @property
     def layouts(self) -> LayoutStorePort: ...
+
+    @property
+    def jobs(self) -> ProcessingJobsPort: ...
 
     @property
     def approvals(self) -> LayoutApprovalsPort: ...

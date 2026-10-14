@@ -114,6 +114,24 @@ class QuoteRules(BaseModel):
         """What a quotation finding is stamped with: ``sales_quote_rules@1.0.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
+    @property
+    def ref(self) -> str:
+        """``key@x.y.z``, as a tenant's version of it is named (ticket 36)."""
+        return self.version
+
+
+class QuotePoliciesPort(Protocol):
+    """The quote rules and the pricing policy a scope's tenant has in force,
+    and the quote rules a case's stamp names (ticket 36)."""
+
+    async def quote_rules(self, scope: SalesScope) -> QuoteRules: ...
+
+    async def quote_rules_at(self, scope: SalesScope, ref: str) -> QuoteRules | None:
+        """The version ``ref`` names; None for one this process does not hold."""
+        ...
+
+    async def pricing(self, scope: SalesScope) -> SalesPricing: ...
+
 
 type NotExtractedReason = Literal[
     "no_request_file",
@@ -235,6 +253,12 @@ class QuotationService:
     Design's mailboxes are a key of the quote rules (`QuoteRules.design_mailboxes`),
     versioned with them: a reply sets the specification a customer is quoted
     and the copper weight the price floor is computed from.
+
+    The quote rules and the pricing policy are the tenant's (ticket 36): a
+    case is opened under the quote rules in force and stamps them, and every
+    later step of that case reads the stamped version; the pricing policy in
+    force prices each piece of evidence and each decision, which carry its
+    version. Design's mailboxes are the tenant's current ones.
     """
 
     catalog: SalesCatalogPort
@@ -243,8 +267,7 @@ class QuotationService:
     reply_reader: DesignReplyReaderPort
     cases: QuoteCaseLookupPort
     ledger: QuotationLedgerPort
-    rules: QuoteRules
-    pricing: SalesPricing
+    policies: QuotePoliciesPort
     # A model reading of a request the fixed-label reader does not read
     # (ticket 29), for a tenant whose rules turn it on. None: no model is
     # wired in this process, and such a request goes to a person as before.
@@ -277,9 +300,8 @@ class QuotationService:
         ``run`` is the DW1 run opening it: a model reads a request only
         inside one (ticket 29)."""
         request, as_of = await self._extract(scope, message_id, run)
-        return QuoteCase.open(
-            case_id, request, rules_version=self.rules.version, catalog_as_of=as_of
-        )
+        rules = await self.policies.quote_rules(scope)
+        return QuoteCase.open(case_id, request, rules_version=rules.version, catalog_as_of=as_of)
 
     async def _extract(
         self, scope: SalesScope, message_id: str, run: RunContext | None
@@ -357,7 +379,7 @@ class QuotationService:
         Sales.
         """
         message = await self._message(scope, message_id)
-        if not self._from_design(message):
+        if not self._from_design(message, await self.policies.quote_rules(scope)):
             return ReplyUnmatched(
                 message_id=message_id,
                 ycbg_no=None,
@@ -420,6 +442,8 @@ class QuotationService:
             )
         customer_code = case.customer_code
         currency = case.request.currency
+        pricing = await self.policies.pricing(scope)
+        rules = await self._rules_of(scope, case)
         lme = await self._lme_as_of(scope, as_of)
         since = _year_before(as_of)
         orders = [
@@ -431,12 +455,12 @@ class QuotationService:
             FreightEvidence(
                 incoterm=incoterm,
                 destination=destination,
-                rate=self.pricing.freight_rate(incoterm, destination),
+                rate=pricing.freight_rate(incoterm, destination),
             )
             if incoterm is not None and destination is not None
             else None
         )
-        rule = self.rules.reference_price
+        rule = rules.reference_price
         evidence = []
         for item in case.request.document.items:
             design = reply.line(item.line_no)
@@ -450,7 +474,7 @@ class QuotationService:
                 quotations, key=lambda q: (q.valid_from, q.quote_no), reverse=True
             )
             weight = design.copper_kg_per_km.value if design.copper_kg_per_km else None
-            copper = copper_component(weight, lme, item.uom.value, self.pricing)
+            copper = copper_component(weight, lme, item.uom.value, pricing)
             evidence.append(
                 PriceEvidence(
                     line_no=item.line_no,
@@ -458,7 +482,7 @@ class QuotationService:
                     prv_code=prv_code,
                     currency=currency,
                     as_of=as_of,
-                    pricing_policy=self.pricing.version,
+                    pricing_policy=pricing.version,
                     target_price=item.target_price.value if item.target_price else None,
                     own_history=tuple(q for q in newest_first if q.customer_code == customer_code),
                     other_customers=tuple(
@@ -474,7 +498,7 @@ class QuotationService:
                     ),
                     lme=lme,
                     copper=copper,
-                    floor=policy_floor(copper, currency, self.pricing),
+                    floor=policy_floor(copper, currency, pricing),
                     freight=freight,
                     reference=(
                         rule.reference_price(quotations, currency=currency, lme=lme, as_of=as_of)
@@ -499,13 +523,14 @@ class QuotationService:
         """
         latest = await self._lme_as_of(scope, decision.decided_at.date())
         await self._recorded_lme(scope, decision, latest)
+        rules = await self._rules_of(scope, case)
         findings = price_findings(
             case,
             decision,
             latest_lme=latest,
-            pricing=self.pricing,
-            prescribed_basis=self.rules.copper_basis,
-            quote_rules_version=self.rules.version,
+            pricing=await self.policies.pricing(scope),
+            prescribed_basis=rules.copper_basis,
+            quote_rules_version=rules.version,
         )
         return case.decide_price(decision, findings, by=by)
 
@@ -530,6 +555,7 @@ class QuotationService:
                 details={"case_id": str(case.case_id), "status": case.status.value},
             )
         customer = await self._customer(scope, case.customer_code)
+        rules = await self._rules_of(scope, case)
         sender = case.request.sender.address.lower()
         recipients = tuple(c for c in customer.contacts if c.address.lower() == sender)
         return CustomerQuoteDocument(
@@ -538,7 +564,7 @@ class QuotationService:
             recipients=recipients or customer.contacts,
             their_reference=case.request.rfq_no,
             issued_on=issued_on,
-            valid_to=issued_on + timedelta(days=self.rules.validity_days - 1),
+            valid_to=issued_on + timedelta(days=rules.validity_days - 1),
             currency=case.request.currency,
             lme=pricing.lme,
             lines=case.document_lines(),
@@ -597,9 +623,27 @@ class QuotationService:
 
     # --------------------------------------------------------- helpers --
 
-    def _from_design(self, message: InboundMessage) -> bool:
-        mailboxes = {address.lower() for address in self.rules.design_mailboxes}
+    @staticmethod
+    def _from_design(message: InboundMessage, rules: QuoteRules) -> bool:
+        mailboxes = {address.lower() for address in rules.design_mailboxes}
         return message.authentication.verified and message.sender.address.lower() in mailboxes
+
+    async def _rules_of(self, scope: SalesScope, case: QuoteCase) -> QuoteRules:
+        """The quote rules the case was opened under, read by its stamp
+        (ticket 36), as an order's recheck reads its own (ticket 19): a version
+        the tenant approved since does not reach a case opened before it.
+        Refused when this process no longer holds that version."""
+        rules = await self.policies.quote_rules_at(scope, case.rules_version)
+        if rules is None:
+            raise ConflictError(
+                "the case was opened under quote rules that no longer apply",
+                details={
+                    "case_id": str(case.case_id),
+                    "rules_version": case.rules_version,
+                    "reason": "rules_version_gone",
+                },
+            )
+        return rules
 
     async def _message(self, scope: SalesScope, message_id: str) -> InboundMessage:
         message = await self.inbox.get_message(scope, message_id)
@@ -625,7 +669,7 @@ class QuotationService:
                         "attachment_id": attachment.attachment_id,
                     },
                 )
-            document = read(content)
+            document = await read(content)
             if document is not None:
                 found.append((attachment, document))
         return found
@@ -756,7 +800,7 @@ class QuotationService:
 
 
 class _Reader[T](Protocol):
-    def __call__(self, content: AttachmentContent, /) -> T | None: ...
+    async def __call__(self, content: AttachmentContent, /) -> T | None: ...
 
 
 def _year_before(day: date) -> date:

@@ -7,8 +7,9 @@ cases already opened for a PO number.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Literal, Protocol
+from collections.abc import Mapping, Sequence
+from types import MappingProxyType
+from typing import Final, Literal, Protocol
 
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.threads import ThreadedCase
@@ -18,10 +19,17 @@ from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps, OrderRules
 from dw_sales.domain.orders import OrderCase, PoDocument, PrintedBuyer, Unreadable
 
-# What a file is by its bytes: read (``pdf``, ``xlsx``), or a document this
-# slice does not read (``unsupported``: image, legacy or encrypted Office
-# file, archive), which is routed to Sales as unreadable.
-FileType = Literal["pdf", "xlsx", "unsupported"]
+# What a file is by its bytes: read (``pdf``, ``xlsx``), read once the reader
+# sandbox has converted it (``xls``, ``doc``: a legacy Office file, ticket 27),
+# or a document DW1 does not read (``unsupported``: an image, an encrypted or
+# other legacy Office file, an archive), which is routed to Sales as unreadable.
+FileType = Literal["pdf", "xlsx", "xls", "doc", "unsupported"]
+
+# What a file of each type is read as (ticket 27): a legacy workbook converted
+# to .xlsx and a legacy Word file to PDF, then read, mapped and shown like one.
+READ_AS: Final[Mapping[str, Literal["pdf", "xlsx"]]] = MappingProxyType(
+    {"pdf": "pdf", "xlsx": "xlsx", "xls": "xlsx", "doc": "pdf"}
+)
 
 
 class PoDocumentReaderPort(Protocol):
@@ -47,7 +55,7 @@ class PoDocumentReaderPort(Protocol):
         each value. A customer with no layout gets `Unreadable`."""
         ...
 
-    def has_layout(self, customer_code: str, file_type: FileType) -> bool:
+    async def has_layout(self, customer_code: str, file_type: FileType) -> bool:
         """Whether the platform's layouts read this customer's file of this type."""
         ...
 
@@ -76,7 +84,7 @@ class QuoteFormPort(Protocol):
     word of the subject is read (ticket 31): recognition only, no value.
     """
 
-    def form(self, content: AttachmentContent) -> QuoteForm | None: ...
+    async def form(self, content: AttachmentContent) -> QuoteForm | None: ...
 
 
 class OrderRulesPort(Protocol):

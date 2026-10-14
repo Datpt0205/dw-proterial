@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -40,6 +40,7 @@ import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { GuardedButton } from "../../_components/guarded-button";
+import { Quantity } from "../../_components/money";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Dialog =
@@ -489,6 +490,38 @@ function CrossCheckDialog({
   );
 }
 
+type OrderLine = Order["lines"][number];
+type PickerDay = Parameters<typeof fromPickerDay>[0];
+
+/** The form field of one confirmed date: a line's, or one schedule's of a
+ * line the PO splits (ticket 35). */
+function dateField(line: OrderLine, schedule?: number): string {
+  return schedule === undefined
+    ? `d${line.line_no}`
+    : `d${line.line_no}_${schedule}`;
+}
+
+/** The lines a submitted form still lacks a date for. */
+function linesWithout(names: (string | number)[][]): number {
+  return new Set(names.map((name) => String(name[0]).split("_")[0])).size;
+}
+
+/** One cell per line, or a value per schedule of a split line. */
+function perSchedule(
+  line: OrderLine,
+  each: (s: OrderLine["schedules"][number], index: number) => ReactNode,
+  whole: () => ReactNode,
+): ReactNode {
+  if (!line.printed_schedules) return whole();
+  return (
+    <Space orientation="vertical" size={4}>
+      {line.schedules.map((s, index) => (
+        <span key={`${index}:${s.requested_date}`}>{each(s, index)}</span>
+      ))}
+    </Space>
+  );
+}
+
 function ConfirmDrawer({
   open,
   order,
@@ -499,6 +532,29 @@ function ConfirmDrawer({
 }: DialogProps) {
   const [form] = Form.useForm<Record<string, unknown>>();
   const [failed, setFailed] = useState(0);
+  const initial: Record<string, unknown> = {};
+  for (const l of order.lines) {
+    if (l.printed_schedules) {
+      l.schedules.forEach((s, index) => {
+        initial[dateField(l, index)] = toPickerDay(
+          s.confirmed_delivery_date ?? s.suggested_delivery_date,
+        );
+      });
+    } else {
+      initial[dateField(l)] = toPickerDay(
+        l.confirmed_delivery_date ?? l.suggested_delivery_date,
+      );
+    }
+  }
+  const picker = (name: string, ariaLabel: string) => (
+    <Form.Item
+      name={name}
+      className="!mb-0"
+      rules={[{ required: true, message: "Cần ngày xác nhận" }]}
+    >
+      <DatePicker format="DD/MM/YYYY" aria-label={ariaLabel} />
+    </Form.Item>
+  );
   return (
     <Drawer
       open={open}
@@ -520,9 +576,9 @@ function ConfirmDrawer({
       }
     >
       <Typography.Paragraph>
-        Nhập ngày giao Sales xác nhận cho từng dòng. Ngày DW1 gợi ý (ngày nhận
-        PO cộng lead time chuẩn) được điền sẵn và vẫn là gợi ý cho tới khi bạn
-        ghi.
+        Nhập ngày giao Sales xác nhận cho từng dòng; dòng PO chia nhiều đợt giao
+        được xác nhận từng đợt. Ngày DW1 gợi ý (ngày nhận PO cộng lead time
+        chuẩn) được điền sẵn và vẫn là gợi ý cho tới khi bạn ghi.
       </Typography.Paragraph>
       {failed ? (
         <Alert
@@ -535,26 +591,26 @@ function ConfirmDrawer({
         form={form}
         layout="vertical"
         scrollToFirstError={{ focus: true }}
-        initialValues={Object.fromEntries(
-          order.lines.map((l) => [
-            `d${l.line_no}`,
-            toPickerDay(l.confirmed_delivery_date ?? l.suggested_delivery_date),
-          ]),
-        )}
-        onFinishFailed={({ errorFields }) => setFailed(errorFields.length)}
+        initialValues={initial}
+        onFinishFailed={({ errorFields }) =>
+          setFailed(linesWithout(errorFields.map((f) => f.name)))
+        }
         onFinish={async (values) => {
           setFailed(0);
+          const day = (name: string) =>
+            fromPickerDay(values[name] as PickerDay) ?? "";
           const body = {
             case_version: order.case_version,
-            delivery_dates: order.lines.map((l) => ({
-              line_no: l.line_no,
-              confirmed_date:
-                fromPickerDay(
-                  values[`d${l.line_no}`] as Parameters<
-                    typeof fromPickerDay
-                  >[0],
-                ) ?? "",
-            })),
+            delivery_dates: order.lines.map((l) =>
+              l.printed_schedules
+                ? {
+                    line_no: l.line_no,
+                    schedule_dates: l.schedules.map((_, index) =>
+                      day(dateField(l, index)),
+                    ),
+                  }
+                : { line_no: l.line_no, confirmed_date: day(dateField(l)) },
+            ),
           };
           done(
             await run(
@@ -582,43 +638,64 @@ function ConfirmDrawer({
             {
               title: "Ngày yêu cầu",
               key: "req",
-              render: (_, l) => formatDate(l.requested_date),
+              render: (_, l) =>
+                perSchedule(
+                  l,
+                  (s) => (
+                    <>
+                      {formatDate(s.requested_date)} ·{" "}
+                      <Quantity value={s.quantity} uom={l.uom} />
+                    </>
+                  ),
+                  () => formatDate(l.requested_date),
+                ),
             },
             {
               title: "DW1 gợi ý",
               key: "sug",
               render: (_, l) =>
-                l.suggested_delivery_date ? (
-                  <StatusTag
-                    tone="gray"
-                    icon={<CalendarOutlined aria-hidden />}
-                  >
-                    Gợi ý {formatDate(l.suggested_delivery_date)}
-                  </StatusTag>
-                ) : (
-                  "Chưa có gợi ý"
+                perSchedule(
+                  l,
+                  (s) =>
+                    s.suggested_delivery_date ? (
+                      <SuggestedTag day={s.suggested_delivery_date} />
+                    ) : (
+                      "Chưa có gợi ý"
+                    ),
+                  () =>
+                    l.suggested_delivery_date ? (
+                      <SuggestedTag day={l.suggested_delivery_date} />
+                    ) : (
+                      "Chưa có gợi ý"
+                    ),
                 ),
             },
             {
               title: "Ngày xác nhận",
               key: "date",
-              render: (_, l) => (
-                <Form.Item
-                  name={`d${l.line_no}`}
-                  className="!mb-0"
-                  rules={[{ required: true, message: "Cần ngày xác nhận" }]}
-                >
-                  <DatePicker
-                    format="DD/MM/YYYY"
-                    aria-label={`Ngày xác nhận dòng ${l.line_no}`}
-                  />
-                </Form.Item>
-              ),
+              render: (_, l) =>
+                perSchedule(
+                  l,
+                  (_s, index) =>
+                    picker(
+                      dateField(l, index),
+                      `Ngày xác nhận dòng ${l.line_no} đợt ${index + 1}`,
+                    ),
+                  () => picker(dateField(l), `Ngày xác nhận dòng ${l.line_no}`),
+                ),
             },
           ]}
         />
       </Form>
     </Drawer>
+  );
+}
+
+function SuggestedTag({ day }: { day: string }) {
+  return (
+    <StatusTag tone="gray" icon={<CalendarOutlined aria-hidden />}>
+      Gợi ý {formatDate(day)}
+    </StatusTag>
   );
 }
 

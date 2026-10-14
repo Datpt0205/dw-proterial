@@ -29,8 +29,8 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, MOCK_ROOT
 from dw_sales.adapters.mock.generate_attachments import load_purchase_orders
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelQuoteForms
+from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.order_intake import (
     QUOTATION_KINDS,
     IntakeOutcome,
@@ -388,8 +388,8 @@ def _intake(
     return OrderIntake(
         catalog=catalog,
         inbox=inbox,
-        reader=mock_po_readers(),
-        quote_forms=ExcelQuoteForms(),
+        reader=ClientPoReaders(InProcessReaderTransport()),
+        quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=PlatformOrderRules(rules),
         cases=cases if cases is not None else InMemoryOrderCases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),

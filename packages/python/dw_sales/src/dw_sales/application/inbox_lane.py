@@ -2,7 +2,9 @@
 
 "DW xử lý" waits for a person. In production each new message must start
 processing without a click, and the mock mailbox exercises the same path, so
-a lane in the worker does on a timer what the button does.
+a lane in the worker does on a timer what the button does: since ticket 25,
+**it queues the message** (`ProcessingService.enqueue`, the button's own door)
+and the worker's `sales_processing` lane runs it, as it runs a person's.
 
 **Whose authority.** DW1's own service account in the tenant, "DW1 (tài khoản
 dịch vụ)" (decided 2026-10-12, shape (a)): a platform user, `dw1_subject`,
@@ -11,77 +13,73 @@ resolved by the platform like any member (`ServiceAccessPort`). The lane never
 builds a context of its own, and cuts the one it is given to the one scope it
 needs (`LANE_CEILING`): the account cannot prepare, cross-check, price or
 approve, and a role given to it by hand does not change what the lane does.
+The job names the account as who asked, and the drain resolves the account
+again when it runs it.
 
 **One tick, per workspace whose mailbox the host reads:**
 
 1. DW1's context there, or nothing at all: no account, a locked tenant, or a
    context for any other workspace than the one asked for.
 2. Nothing while DW1 is paused there ("enabled" is the pause state only,
-   decided 2026-10-12): pausing stops the lane on its next tick, before a run
-   is spent.
-3. Each message with no disposition when the tick began, oldest first, in a
-   DW1 run of its own, `Dw1Runs.process`: the door "DW xử lý" uses, so the
-   scope, the plan's daily runs (`RunAllowancePort`, where the run begins),
-   the pause and the message's idempotency key are checked in the same places
-   whoever pressed. A message a person processed is skipped, read again just
-   before its run (a person may have routed it, or paused DW1, since the tick
-   began); one a person processes while the lane's run works on it is refused
-   to whichever is second (`MessageLogPort.record`).
-4. Over the plan's runs for the day, the tick stops: the rest stay "Chưa xử
-   lý" in the inbox, where people see them, and the next tick tries again.
+   decided 2026-10-12): pausing stops the lane on its next tick.
+3. Each message with no disposition, oldest first, is queued, unless its job
+   is already queued or running, or failed less than its delay ago: a message
+   whose processing fails is not queued again on every tick, which would
+   spend a run a minute on one bad file. The delay doubles with the job's
+   failures in a row (`RETRY_FIRST`, at most `RETRY_LONGEST`), and it is the
+   job's row that remembers them, not this process. A person can still press
+   "DW xử lý" on it.
+4. The plan's runs for the day are counted where each run begins, by the
+   drain: a job over them fails (``quota``) and waits out its delay here.
 
-**It audits as itself.** For each message it had processed, one
-`lane_audit_event` from `system_actor("sales_inbox")`, naming the account it
-acted under. The case events and the processing's own audit rows name that
-account, never a person.
+**It audits as itself.** For each message it queued, one `lane_audit_event`
+from `system_actor("sales_inbox")`, naming the account it acted under; the
+queueing's own audit row names the account, never a person.
 
-A message whose run fails for any other reason is not retried on every tick,
-which would spend a run a minute on one bad file and leave a tenant's people
-none: it waits a doubling delay (`RETRY_FIRST`, at most `RETRY_LONGEST`),
-kept in memory and forgotten once the message has a disposition. A person can
-still press "DW xử lý" on it.
-
-The lane owns no job queue (it reads the mailbox and writes the message log),
-so the worker has nothing of it to reap.
+The lane owns no job queue of its own: the jobs are the processing queue's,
+which the worker's reaper settles (`sales_processing`).
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final, Literal, Protocol
 
 from dw_kernel.errors import (
     ConflictError,
     EntitlementDeniedError,
+    NotFoundError,
     PermissionDeniedError,
-    QuotaExceededError,
 )
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import MembershipAccess, context_from
 from dw_platform.domain.audit import lane_audit_event
-from dw_sales.application.access import SalesScopes, sales_scope
-from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.access import sales_scope
+from dw_sales.application.case_store import ProcessingJob, SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesScope
+from dw_sales.application.processing import PROCESSING_CEILING
 from dw_sales.application.support import DW1_WORKER_ID
-from dw_sales.application.views import MessageDispositionView
+from dw_sales.application.views import ProcessingJobView
 
 logger = logging.getLogger("dw_sales.inbox_lane")
 
 # The lane's worker registry name, and so its audit actor (ADR 0011): the
 # worker registers it under this constant, never a copy of the string.
 SALES_INBOX_LANE: Final = "sales_inbox"
-# What the lane does with DW1's account, and so all its context carries.
-LANE_CEILING: Final = frozenset({SalesScopes.INBOX_PROCESS.value})
-# A failed message waits this long before the lane tries it again, doubling.
+# What the lane does with DW1's account, and so all its context carries: what
+# processing needs, the drain's own ceiling.
+LANE_CEILING: Final = PROCESSING_CEILING
+# A message whose job failed waits this long before the lane queues it
+# again, doubling with the job's failures in a row.
 RETRY_FIRST: Final = timedelta(minutes=5)
 RETRY_LONGEST: Final = timedelta(hours=6)
 
-Stopped = Literal["no_account", "wrong_scope", "paused", "not_permitted", "quota"]
+Stopped = Literal["no_account", "wrong_scope", "paused", "not_permitted"]
 
 
 def dw1_subject(tenant_id: uuid.UUID) -> str:
@@ -92,6 +90,14 @@ def dw1_subject(tenant_id: uuid.UUID) -> str:
     it, and the demo roster does not list it.
     """
     return f"service|{DW1_WORKER_ID}|{tenant_id}"
+
+
+def retry_delay(failures: int) -> timedelta:
+    """How long a job failed ``failures`` times in a row waits for the lane.
+    The exponent is capped too: a file that fails for months must not
+    overflow the delay it is already held to."""
+    delay: timedelta = RETRY_FIRST * 2 ** min(max(failures, 1) - 1, 16)
+    return min(delay, RETRY_LONGEST)
 
 
 class ServiceAccessPort(Protocol):
@@ -107,40 +113,31 @@ class ServiceAccessPort(Protocol):
     ) -> MembershipAccess | None: ...
 
 
-class ProcessRunPort(Protocol):
-    """Processing one message in a DW1 run of its own: `Dw1Runs.process`,
-    the door "DW xử lý" uses."""
+class EnqueuePort(Protocol):
+    """Queueing one message, through the door "DW xử lý" uses:
+    `ProcessingService.enqueue`."""
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView: ...
+    async def enqueue(self, context: AccessContext, message_id: str) -> ProcessingJobView: ...
 
 
 @dataclass(frozen=True, slots=True)
 class LaneTick:
     """What one tick did in one workspace."""
 
-    # Processed by this tick, oldest first.
-    processed: tuple[str, ...] = ()
+    # Queued by this tick, oldest first.
+    queued: tuple[str, ...] = ()
     # Why the tick stopped before the mailbox was done, if it did.
     stopped: Stopped | None = None
 
 
-@dataclass(slots=True)
-class _Retry:
-    attempts: int
-    not_before: datetime
-
-
-@dataclass
+@dataclass(frozen=True)
 class InboxLane:
     uow: SalesUnitOfWorkFactory
     inbox: InboxPort
-    runs: ProcessRunPort
+    processing: EnqueuePort
     access: ServiceAccessPort
     clock: UtcClock
     ids: IdGenerator
-    # Failed messages waiting out their delay, per workspace. Bounded by the
-    # mailbox: a message leaves when it has a disposition or the mailbox drops it.
-    _retry: dict[tuple[SalesScope, str], _Retry] = field(default_factory=dict, repr=False)
 
     async def tick(self, scope: SalesScope) -> LaneTick:
         context = await self._context(scope)
@@ -155,48 +152,29 @@ class InboxLane:
             if (await work.worker.state()).paused:
                 return LaneTick(stopped="paused")
             done = {logged.disposition.message_id for logged in await work.messages.list_all()}
-        waiting = [
-            message.message_id
-            for message in await self.inbox.list_messages(scope)
-            if message.message_id not in done
-        ]
-        self._forget_all_but(scope, waiting)
-        processed: list[str] = []
-        for message_id in waiting:
-            if self._waits(scope, message_id):
+            jobs = {job.message_id: job for job in await work.jobs.list_all()}
+        now = self.clock.now()
+        queued: list[str] = []
+        for message in await self.inbox.list_messages(scope):
+            message_id = message.message_id
+            if message_id in done or not _due(jobs.get(message_id), now):
                 continue
-            # Read again just before its run: since the tick began a person may
-            # have processed it, or paused DW1. The log's key refuses a second
-            # disposition on a case, but a routed message may be processed
-            # again, so only this keeps the lane off one a person routed
-            # meanwhile; and a run the pause refuses is still a run spent.
-            async with self.uow(scope) as work:
-                if (await work.worker.state()).paused:
-                    return LaneTick(tuple(processed), stopped="paused")
-                if await work.messages.get(message_id) is not None:
-                    continue
             try:
-                view = await self.runs.process(context, message_id)
-            except QuotaExceededError:
-                logger.warning("sales_inbox: the plan's runs for today are spent; mail waits")
-                return LaneTick(tuple(processed), stopped="quota")
+                job = await self.processing.enqueue(context, message_id)
             except (PermissionDeniedError, EntitlementDeniedError):
                 logger.warning("sales_inbox: DW1's account may not process the mailbox")
-                return LaneTick(tuple(processed), stopped="not_permitted")
+                return LaneTick(tuple(queued), stopped="not_permitted")
             except ConflictError as refused:
                 if refused.details.get("rule") == "worker_paused":
-                    return LaneTick(tuple(processed), stopped="paused")
-                # Processed meanwhile (next tick it has a disposition), or a
-                # case that refuses it: either way, not again every tick.
-                self._failed(scope, message_id)
+                    return LaneTick(tuple(queued), stopped="paused")
+                # On a case since the tick began: not queued, and next tick
+                # it has its disposition.
                 continue
-            except Exception:
-                logger.exception("sales_inbox: processing %s failed; it waits", message_id)
-                self._failed(scope, message_id)
+            except NotFoundError:
                 continue
-            await self._audit(context, message_id, view)
-            processed.append(message_id)
-        return LaneTick(tuple(processed))
+            await self._audit(context, message_id, job)
+            queued.append(message_id)
+        return LaneTick(tuple(queued))
 
     # ------------------------------------------------------------- helpers --
 
@@ -207,17 +185,7 @@ class InboxLane:
         )
         return None if access is None else context_from(access)
 
-    async def _audit(
-        self, context: AccessContext, message_id: str, view: MessageDispositionView
-    ) -> None:
-        details: dict[str, object] = {
-            "disposition": view.kind,
-            # The account the lane acted under: the actor of the processing's
-            # own audit rows and case events.
-            "account_id": str(context.principal_id),
-        }
-        if view.case_kind is not None and view.case_id is not None:
-            details |= {"case_kind": view.case_kind.value, "case_id": str(view.case_id)}
+    async def _audit(self, context: AccessContext, message_id: str, job: ProcessingJobView) -> None:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             await work.audit.append(
@@ -226,28 +194,27 @@ class InboxLane:
                     event_id=self.ids.new_uuid(),
                     tenant_id=TenantId(scope.tenant_id.value),
                     workspace_id=WorkspaceId(scope.workspace_id.value),
-                    action="sales.message.processed_by_lane",
+                    action="sales.message.queued_by_lane",
                     resource_type="sales_message",
                     resource_id=message_id,
                     occurred_at=self.clock.now(),
-                    details=details,
+                    details={
+                        "job_id": str(job.job_id),
+                        # The account the lane acted under: who asked, on the job.
+                        "account_id": str(context.principal_id),
+                    },
                 )
             )
             await work.commit()
 
-    def _waits(self, scope: SalesScope, message_id: str) -> bool:
-        retry = self._retry.get((scope, message_id))
-        return retry is not None and self.clock.now() < retry.not_before
 
-    def _failed(self, scope: SalesScope, message_id: str) -> None:
-        earlier = self._retry.get((scope, message_id))
-        attempts = 1 if earlier is None else earlier.attempts + 1
-        # The exponent is capped too: a file that fails for months must not
-        # overflow the delay it is already held to.
-        delay = min(RETRY_FIRST * 2 ** min(attempts - 1, 16), RETRY_LONGEST)
-        self._retry[scope, message_id] = _Retry(attempts, self.clock.now() + delay)
-
-    def _forget_all_but(self, scope: SalesScope, waiting: list[str]) -> None:
-        still = set(waiting)
-        for key in [k for k in self._retry if k[0] == scope and k[1] not in still]:
-            del self._retry[key]
+def _due(job: ProcessingJob | None, now: datetime) -> bool:
+    """Whether the lane queues the message of ``job``: never asked, done
+    without a disposition, or failed past its delay; never while active."""
+    if job is None:
+        return True
+    if job.active:
+        return False
+    if job.status == "failed":
+        return now >= job.updated_at + retry_delay(job.failures)
+    return True

@@ -196,3 +196,57 @@ async def test_the_kpi_policy_resolves_per_tenant_for_the_overview() -> None:
     assert alpha.quotation_time.target_seconds == 3 * 86400.0
     beta = await world.services.overview.overview(OUTSIDER.context(BETA))
     assert beta.kpi_policy == world.policies.kpi.version
+
+
+# ------------------------------------------- quote rules and copy (36) --
+
+_SIX = (
+    RuleKey.QUOTE_RULES,
+    RuleKey.PRICING,
+    RuleKey.EMAILS,
+    RuleKey.DOCUMENTS,
+    RuleKey.BRAVO_UPLOAD,
+    RuleKey.HANDOFFS,
+)
+
+
+def _bumped(world: World, key: RuleKey, version: str) -> dict[str, Any]:
+    """The platform's document of ``key`` under a tenant's number: a policy
+    names it ``policy_version``, a copy file ``version``."""
+    document = dict(world.services.rules.book.platform[key].model_dump(mode="json", by_alias=True))
+    document["policy_version" if "policy_version" in document else "version"] = version
+    return document
+
+
+@pytest.mark.parametrize("key", _SIX, ids=[k.value for k in _SIX])
+async def test_each_key_is_proposed_approved_and_in_force_for_its_tenant_only(
+    key: RuleKey,
+) -> None:
+    world = _world()
+    rules = world.services.rules
+    proposed = await rules.propose(AN.context(), key, _bumped(world, key, "9.0.1"))
+    assert proposed.ref == f"{key.value}@9.0.1"
+    with pytest.raises(ConflictError) as reused:
+        await rules.propose(
+            AN.context(), key, _bumped(world, key, rules.book.platform[key].ref.partition("@")[2])
+        )
+    assert reused.value.details["rule"] == "platform_version_reused"
+
+    await rules.decide(GIANG.context(), proposed.version_id, RuleDecision(approve=True))
+
+    alpha = await rules.list(GIANG.context())
+    assert (alpha.in_force[key], alpha.layers[key]) == (f"{key.value}@9.0.1", "tenant")
+    resolved = await rules.book.current(ALPHA, key)
+    assert resolved.policy.ref == f"{key.value}@9.0.1"
+    beta = await rules.list(OUTSIDER.context(BETA))
+    assert beta.layers[key] == "platform" and beta.versions == []
+    assert (await rules.book.current(BETA, key)).policy.ref == rules.book.platform[key].ref
+    assert await rules.book.at(BETA, key, f"{key.value}@9.0.1") is None
+
+
+async def test_another_keys_document_is_no_version_of_a_copy_key() -> None:
+    world = _world()
+    with pytest.raises(DomainError):
+        await world.services.rules.propose(
+            AN.context(), RuleKey.EMAILS, _bumped(world, RuleKey.DOCUMENTS, "9.0.1")
+        )

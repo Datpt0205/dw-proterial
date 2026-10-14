@@ -235,15 +235,20 @@ async def test_the_plans_run_allowance_is_checked_where_processing_starts(
         an = api.as_(AN)
         await process(an, "M01")
 
+        # Queued (ticket 25): the plan is counted where the run begins, in
+        # the worker, and the job says why it did not run.
         one = await an.post("/inbox/M02/process")
+        assert one.status_code == 202, one.text
+        await api.run_queue()
         every = await an.post("/inbox/process-all")
+        assert every.status_code == 202, every.text
+        await api.run_queue()
 
-        assert one.status_code == 429, one.text
-        assert one.json()["details"]["quota"] == "runs_per_day"
-        assert every.status_code == 429
         inbox = (await an.get("/inbox")).json()
         done = [m["message_id"] for m in inbox if m["disposition"]["kind"] != "not_yet_processed"]
         assert done == ["M01"]
+        failed = {m["processing"]["error"] for m in inbox if m["message_id"] != "M01"}
+        assert failed == {"quota"}
 
 
 @pytest.mark.parametrize(

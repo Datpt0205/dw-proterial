@@ -19,11 +19,17 @@ from pathlib import Path
 import pytest
 
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_sales.adapters.memory_rules import platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.policy_files import load_pricing, load_quote_rules
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
+from dw_sales.adapters.reader_client import (
+    ClientDesignReplyReader,
+    ClientPoReaders,
+    ClientQuoteForms,
+    ClientRfqReader,
+)
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import PriceView
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -89,8 +95,8 @@ async def _order(message_id: str, kept: _Kept | None = None) -> OrderCase:
     intake = OrderIntake(
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=inbox,
-        reader=mock_po_readers(),
-        quote_forms=ExcelQuoteForms(),
+        reader=ClientPoReaders(InProcessReaderTransport()),
+        quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.5.0.yaml")),
         cases=kept if kept is not None else _NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(_IDS)),
@@ -200,12 +206,14 @@ async def _m10_priced() -> tuple[QuoteCase, QuotationService]:
     service = QuotationService(
         catalog=catalog,
         inbox=MockInbox.load(SCOPE),
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=ClientRfqReader(InProcessReaderTransport()),
+        reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=_NoCases(),
         ledger=catalog,
-        rules=load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml"),
-        pricing=load_pricing(POLICIES / "sales_pricing@1.0.0.yaml"),
+        policies=platform_book(
+            load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml"),
+            load_pricing(POLICIES / "sales_pricing@1.0.0.yaml"),
+        ),
     )
     case = await service.open_case(SCOPE, "M10", uuid.UUID(int=7))
     waiting = case.draft_ycbg().record_ycbg("YCBG-2609-030", by=PRICER, at=AT).send_to_design()

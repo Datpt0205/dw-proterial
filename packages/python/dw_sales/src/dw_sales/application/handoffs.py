@@ -36,9 +36,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any, Final, Literal
+from string import Formatter
+from typing import Any, Final, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from dw_agent_runtime.contracts import RunContext
 from dw_sales.application.model_reading import (
@@ -341,6 +342,28 @@ def _quotes(
 HandoffTeam = Literal["pc", "qa"]
 
 
+# What each template may name. A tenant writes its own version of this copy
+# (ticket 36) and it is filled with `str.format`, so a placeholder is a bare
+# name from these and nothing else: a format spec such as ``{customer:>999999999}``
+# would build a gigabyte on every read of the inbox, and ``{customer.__class__}``
+# reaches past the value.
+_TEMPLATE_NAMES: Final = frozenset(
+    {"customer", "po", "message_id", "lines", "lot", "quotes", "quantity"}
+)
+_LINE_NAMES: Final = frozenset({"line_no", "item", "quantity", "date"})
+_QUOTE_NAMES: Final = frozenset({"text"})
+
+
+def _plain_placeholders(text: str, names: frozenset[str]) -> str:
+    """``text`` when every placeholder in it is ``{name}`` for one of ``names``."""
+    for _, name, spec, conversion in Formatter().parse(text):
+        if name is None:
+            continue
+        if name not in names or spec or conversion is not None:
+            raise ValueError(f"a placeholder is one of {sorted(names)}, written {{name}}")
+    return text
+
+
 class HandoffTemplate(BaseModel):
     """One kind's words. Placeholders are filled by code from the hand-off:
     ``{customer}``, ``{po}``, ``{message_id}``, ``{lines}``, ``{lot}``,
@@ -351,6 +374,11 @@ class HandoffTemplate(BaseModel):
     to: HandoffTeam
     subject: str = Field(min_length=1, max_length=300)
     body: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("subject", "body")
+    @classmethod
+    def _placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, _TEMPLATE_NAMES)
 
 
 class HandoffCopy(BaseModel):
@@ -367,9 +395,25 @@ class HandoffCopy(BaseModel):
     quote: str = Field(min_length=1, max_length=60)
     templates: Mapping[HandoffKind, HandoffTemplate]
 
+    @field_validator("line")
+    @classmethod
+    def _line_placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, _LINE_NAMES)
+
+    @field_validator("quote")
+    @classmethod
+    def _quote_placeholders(cls, value: str) -> str:
+        return _plain_placeholders(value, _QUOTE_NAMES)
+
     @property
     def ref(self) -> str:
         return f"{self.copy_id}@{self.version}"
+
+
+class HandoffCopyPort(Protocol):
+    """The hand-off copy a scope's tenant writes with (ticket 36)."""
+
+    async def handoff_copy(self, scope: SalesScope) -> HandoffCopy: ...
 
 
 @dataclass(frozen=True, slots=True)

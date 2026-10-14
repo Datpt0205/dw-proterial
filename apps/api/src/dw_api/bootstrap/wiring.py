@@ -421,6 +421,7 @@ def build_sales(
     telemetry: TelemetryPort,
     model: ModelGateway | None = None,
     scanner: object | None = None,
+    reader: object | None = None,
 ) -> object:
     """The Sales context's mount, part of the seam above.
 
@@ -436,6 +437,11 @@ def build_sales(
     quotation and a recorded Bravo entry each start a run. Built by
     `dw_sales.adapters.assembly.build_dw1`, the call the worker's mailbox lane
     makes too, so both read the same mailbox the same way.
+
+    "DW xử lý" only queues here (ticket 25): the worker runs the job. Every
+    file this process opens (a source view, a PO layout's cells and preview)
+    is read by the reader sandbox (`HttpReaderTransport`); the API imports no
+    reader, which an import-linter contract holds.
     """
     from dw_kernel.ids import TenantId, WorkspaceId
     from dw_platform.adapters.persistence.repositories import (
@@ -444,6 +450,7 @@ def build_sales(
     )
     from dw_sales.adapters.assembly import build_dw1
     from dw_sales.adapters.clamd import malware_scanner
+    from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
     from dw_sales.application.malware import MalwareScanPort
     from dw_sales.application.ports import SalesScope
     from dw_sales.presentation.routes import SalesMount
@@ -478,6 +485,14 @@ def build_sales(
                 host=settings.sales_clamd_host,
                 port=settings.sales_clamd_port,
                 deployed=settings.is_deployed,
+            )
+        ),
+        # The reader sandbox (ticket 25); a test hands in its own.
+        reader=(
+            cast(ReaderTransport, reader)
+            if reader is not None
+            else HttpReaderTransport(
+                socket_path=settings.sales_reader_socket, base_url=settings.sales_reader_url
             )
         ),
     )

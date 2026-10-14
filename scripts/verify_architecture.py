@@ -44,6 +44,7 @@ IMPORT_TO_DIST = {
     "reportlab": "reportlab",
     "openpyxl": "openpyxl",
     "pypdf": "pypdf",
+    "PIL": "pillow",
     "langchain": "langchain",
     "langchain_core": "langchain-core",
     "langchain_openai": "langchain-openai",
@@ -58,6 +59,7 @@ IMPORT_TO_DIST = {
     "dw_api": "dw-api",
     "dw_worker": "dw-worker",
     "dw_docgen": "dw-docgen",
+    "dw_reader": "dw-reader",
     "dw_sales": "dw-sales",
 }
 
@@ -142,6 +144,7 @@ def main() -> int:
             REPO_ROOT / "apps" / "api",
             REPO_ROOT / "apps" / "chat",
             REPO_ROOT / "apps" / "docgen",
+            REPO_ROOT / "apps" / "reader",
             REPO_ROOT / "apps" / "worker",
         ]
     )

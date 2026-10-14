@@ -15,6 +15,8 @@ from openpyxl import Workbook
 
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockInbox
+from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quote_ports import (
@@ -115,10 +117,11 @@ def _refusal(**workbook: Any) -> QuoteFileUnreadableError:
 
 def test_the_reader_satisfies_the_port() -> None:
     # The check is mypy's: this assignment fails typecheck when a signature drifts.
-    port: RfqReaderPort = ExcelRfqReader()
-    replies: DesignReplyReaderPort = ExcelDesignReplyReader()
-    assert isinstance(port, ExcelRfqReader)
-    assert isinstance(replies, ExcelDesignReplyReader)
+    transport = InProcessReaderTransport()
+    port: RfqReaderPort = ClientRfqReader(transport)
+    replies: DesignReplyReaderPort = ClientDesignReplyReader(transport)
+    assert isinstance(port, ClientRfqReader)
+    assert isinstance(replies, ClientDesignReplyReader)
 
 
 def test_every_value_is_read_from_the_cell_its_label_or_column_names() -> None:

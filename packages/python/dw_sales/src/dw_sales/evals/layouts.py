@@ -50,7 +50,8 @@ from dw_sales.adapters.mock.generate_attachments import (
     catalogue_of,
     render_po,
 )
-from dw_sales.adapters.readers import mock_po_readers
+from dw_sales.adapters.reader_client import ClientPoReaders
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.layouts import LAYOUT_PROPOSAL, LayoutChecks, LayoutPrefiller
 from dw_sales.application.model_reading import ModelUnavailableError, PromptRef
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
@@ -218,7 +219,7 @@ async def prefill(model: Any, spec: Mapping[str, Any], **render_options: Any) ->
     rules = await _demo_rules().rules(ALPHA)
     run = _RUN.model_copy(update={"run_id": uuid.uuid4()})
     content = render(spec, **render_options)
-    checks = LayoutChecks(mock_po_readers(), catalog)
+    checks = LayoutChecks(ClientPoReaders(InProcessReaderTransport()), catalog)
     filled = await LayoutPrefiller(model, checks).prefill(ALPHA, content, customer, rules, run=run)
     assert filled is not None, spec["id"]
     return filled

@@ -209,8 +209,8 @@ def _uploaded(case: OrderCase | None = None) -> OrderCase:
     return _prepared(case).record_bravo_entry("SO26-1001", AN, T0, entry_compared=True)
 
 
-def _dates(case: OrderCase) -> dict[int, date]:
-    return {line.line_no: date(2026, 11, 27) for line in case.lines}
+def _dates(case: OrderCase) -> dict[int, list[date]]:
+    return {line.line_no: [date(2026, 11, 27)] * line.deliveries for line in case.lines}
 
 
 # --------------------------------------------------------------- happy path --
@@ -274,7 +274,7 @@ def test_every_line_gets_its_confirmed_date() -> None:
     crossed = _uploaded().cross_check(DIEU, T0)
 
     with pytest.raises(DomainError, match="every line"):
-        crossed.confirm(AN, T0, {1: date(2026, 11, 27)})
+        crossed.confirm(AN, T0, {1: [date(2026, 11, 27)]})
 
 
 # ------------------------------------------------------------ maker/checker --
@@ -856,3 +856,63 @@ def test_a_correction_after_a_resplit_keeps_the_schedules_change_against_the_ord
         ("unit_price", "0.042", "0.043"),
         ("schedules", "2026-11-27: 3050; 2026-12-11: 3050", "2026-11-27: 2050; 2026-12-11: 4050"),
     ]
+
+
+# ------------------------------------------- confirmed per schedule (35) --
+
+_NOV_16, _DEC_01 = date(2026, 11, 16), date(2026, 12, 1)
+
+
+def _split_line(number: int) -> OrderLine:
+    """Line ``number`` with 3,050 m on 16/11 and 3,050 m on 01/12."""
+    return OrderLine.model_validate(
+        {**dict(_line(number)), "po_line": _split(number, (_NOV_16, 3050), (_DEC_01, 3050))}
+    )
+
+
+def _crossed_with_a_split_line() -> OrderCase:
+    return _uploaded(_review(lines=(_line(1), _split_line(2)))).cross_check(DIEU, T0)
+
+
+def test_a_split_line_is_confirmed_with_a_date_per_schedule() -> None:
+    crossed = _crossed_with_a_split_line()
+
+    confirmed = crossed.confirm(
+        AN, T0, {1: [date(2026, 11, 27)], 2: [date(2026, 11, 20), date(2026, 12, 4)]}
+    )
+
+    one, split = confirmed.lines
+    assert (one.deliveries, split.deliveries) == (1, 2)
+    assert one.confirmed_delivery_date == date(2026, 11, 27)
+    assert one.confirmed_schedules() == ()
+    # A split line has no one date: each schedule has its own.
+    assert split.confirmed_delivery_date is None
+    assert [(s.quantity, s.requested_date, day) for s, day in split.confirmed_schedules()] == [
+        (Decimal(3050), _NOV_16, date(2026, 11, 20)),
+        (Decimal(3050), _DEC_01, date(2026, 12, 4)),
+    ]
+
+
+def test_a_line_given_another_count_of_dates_than_its_deliveries_is_refused() -> None:
+    crossed = _crossed_with_a_split_line()
+
+    with pytest.raises(DomainError, match="one confirmed date per delivery") as one_for_two:
+        crossed.confirm(AN, T0, {1: [date(2026, 11, 27)], 2: [date(2026, 11, 27)]})
+    with pytest.raises(DomainError) as two_for_one:
+        crossed.confirm(
+            AN, T0, {1: [date(2026, 11, 27)] * 2, 2: [date(2026, 11, 20), date(2026, 12, 4)]}
+        )
+
+    assert one_for_two.value.details["rule"] == "date_per_schedule"
+    assert one_for_two.value.details["lines"] == [2]
+    assert two_for_one.value.details["lines"] == [1]
+
+
+def test_a_line_holding_another_count_of_confirmed_dates_cannot_exist() -> None:
+    """Whatever writes or reads the line: a stored row included."""
+    with pytest.raises(ValidationError, match="1 dates for 2 deliveries"):
+        OrderLine.model_validate(
+            {**dict(_split_line(2)), "confirmed_delivery_dates": (date(2026, 11, 27),)}
+        )
+    with pytest.raises(ValidationError, match="2 dates for 1 deliveries"):
+        OrderLine.model_validate({**dict(_line(1)), "confirmed_delivery_dates": (_NOV_16, _DEC_01)})

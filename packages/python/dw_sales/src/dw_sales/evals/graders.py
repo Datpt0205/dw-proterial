@@ -973,7 +973,7 @@ async def grade_schedules_kept(
         return GradeResult.fail("the message opened no order case", message=message_id)
     up = await world.walk_to_uploaded(AN, case.case_id)
     services, context = world.services.artifacts, AN.context()
-    layout = world.policies.artifact_copy.upload
+    layout = world.policies.upload
     headers: dict[str, str] = {c.field: c.header for c in layout.columns}
     downloads: dict[str, bytes] = {}
     for kind in ("bravo_upload", "cross_check_sheet"):

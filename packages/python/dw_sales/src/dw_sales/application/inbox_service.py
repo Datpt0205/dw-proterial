@@ -40,7 +40,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     SalesUnitOfWorkFactory,
 )
-from dw_sales.application.handoffs import HandoffCopy, render
+from dw_sales.application.handoffs import HandoffCopy, HandoffCopyPort, render
 from dw_sales.application.order_intake import (
     QUOTATION_KINDS,
     Classification,
@@ -84,7 +84,8 @@ from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 
-_ON_A_CASE = frozenset({DispositionKind.CASE_CREATED, DispositionKind.ATTACHED_TO_CASE})
+# A message on a case is not processed again ("DW xử lý lại" is for a routed one).
+ON_A_CASE = frozenset({DispositionKind.CASE_CREATED, DispositionKind.ATTACHED_TO_CASE})
 
 # A message's disposition, and the case it left as stored, if it is on one.
 type _Processed = tuple[MessageDisposition, OrderCase | QuoteCase | None]
@@ -97,14 +98,21 @@ class InboxQueries:
     uow: SalesUnitOfWorkFactory
     gate: Gate
     inbox: InboxPort
-    # The words a routed message's hand-off is written with (ticket 33).
-    handoffs: HandoffCopy
+    # The words a routed message's hand-off is written with (ticket 33),
+    # the tenant's own where it has a version (ticket 36).
+    handoffs: HandoffCopyPort
 
     async def messages(self, context: AccessContext) -> list[InboxMessageView]:
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type="sales_message")
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             logged = {m.disposition.message_id: m for m in await work.messages.list_all()}
+            jobs = {job.message_id: job for job in await work.jobs.list_all()}
+        copy = (
+            await self.handoffs.handoff_copy(scope)
+            if any(m.disposition.handoff is not None for m in logged.values())
+            else None
+        )
         views = []
         for message in await self.inbox.list_messages(scope):
             seen = logged.get(message.message_id)
@@ -113,19 +121,24 @@ class InboxQueries:
                 if seen is not None
                 else message_disposition(MessageDisposition.pending(message.message_id), None)
             )
-            views.append(inbox_message(message, disposition, self._draft(seen)))
+            views.append(
+                inbox_message(
+                    message, disposition, self._draft(seen, copy), jobs.get(message.message_id)
+                )
+            )
         return views
 
-    def _draft(self, seen: LoggedMessage | None) -> HandoffDraftView | None:
+    @staticmethod
+    def _draft(seen: LoggedMessage | None, copy: HandoffCopy | None) -> HandoffDraftView | None:
         """A routed message's hand-off, written from the template: the
         values code kept, empty where it kept none, for Sales to fill."""
         if seen is None or seen.disposition.handoff is None:
             return None
         disposition = seen.disposition
-        assert disposition.handoff is not None  # narrowed above
+        assert disposition.handoff is not None and copy is not None  # read above
         written = render(
             disposition.handoff,
-            self.handoffs,
+            copy,
             customer_code=disposition.customer_code or "",
             message_id=disposition.message_id,
         )
@@ -166,9 +179,9 @@ class InboxProcessing:
         await self._authorize(context, message_id)
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            await _running(work)
+            await require_running(work)
             existing = await work.messages.get(message_id)
-        if existing is not None and existing.kind in _ON_A_CASE:
+        if existing is not None and existing.kind in ON_A_CASE:
             raise ConflictError(
                 "the message is already on a case",
                 details={"message_id": message_id, "disposition": existing.kind.value},
@@ -182,7 +195,7 @@ class InboxProcessing:
         await self._authorize(context, None)
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            await _running(work)
+            await require_running(work)
             done = {m.disposition.message_id for m in await work.messages.list_all()}
         results = []
         for message in await self.inbox.list_messages(scope):
@@ -254,7 +267,7 @@ class InboxProcessing:
         case = outcome.case
         before: OrderCase | None = None
         async with self.uow(scope) as work:
-            await _running(work)
+            await require_running(work)
             if case is not None:
                 stored = await work.orders.get(case.case_id)
                 if stored is None:
@@ -348,7 +361,7 @@ class InboxProcessing:
             reading=reading,
         )
         async with self.uow(scope) as work:
-            await _running(work)
+            await require_running(work)
             origin = CaseOrigin(
                 assigned_to=await self._assignee(context, case.customer_code),
                 release_manifest_ref=self.release_manifest_ref,
@@ -399,7 +412,7 @@ class InboxProcessing:
             )
         replied: QuoteCase | None = None
         async with self.uow(scope) as work:
-            await _running(work)
+            await require_running(work)
             if isinstance(outcome, ReplyAttached):
                 stored = await work.quotes.get(outcome.case.case_id)
                 if stored is None:
@@ -432,7 +445,7 @@ class InboxProcessing:
             reading=reading,
         )
         async with self.uow(scope) as work:
-            await _running(work)
+            await require_running(work)
             await self._record(work, context, disposition, ingest)
             await work.commit()
         return disposition
@@ -500,7 +513,7 @@ def _replied(stored: QuoteCase, outcome: ReplyAttached) -> QuoteCase:
     return outcome.case
 
 
-async def _running(work: SalesUnitOfWork) -> None:
+async def require_running(work: SalesUnitOfWork) -> None:
     """409 while DW1 is paused in the workspace, naming who paused it and when."""
     state = await work.worker.state()
     if state.paused:

@@ -20,7 +20,6 @@ from dw_sales.application.artifact_content import (
     SalesDocumentCopy,
     SalesEmailCopy,
 )
-from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.application.rules import Policy, RuleKey, RuleVersionLookupPort, TenantRuleBook
@@ -63,28 +62,20 @@ def load_copy[T: (SalesEmailCopy, SalesDocumentCopy, HandoffCopy)](path: Path, m
     return loaded
 
 
-def load_artifact_copy(
-    *, emails: Path, documents: Path, upload: Path, quote_rules: QuoteRules
-) -> ArtifactCopy:
-    """What every Sales artifact is rendered with, each file pinned by the
-    release manifest; Design's mailboxes are the quote rules' own."""
-    return ArtifactCopy(
-        emails=load_copy(emails, SalesEmailCopy),
-        documents=load_copy(documents, SalesDocumentCopy),
-        upload=load_bravo_upload(upload),
-        design_mailboxes=quote_rules.design_mailboxes,
-    )
-
-
 @dataclass(frozen=True, slots=True)
 class SalesPolicies:
-    """The platform layer DW1 runs: every policy and copy file, loaded."""
+    """The platform layer DW1 runs: every policy and copy file, loaded. A
+    service reads none of it directly: each resolves its tenant's version
+    through the rule book (`rule_book`, tickets 19 and 36)."""
 
     order_rules: OrderRules
     quote_rules: QuoteRules
     pricing: SalesPricing
     kpi: SalesKpi
-    artifact_copy: ArtifactCopy
+    # What every artifact is drawn with, each file pinned by the release manifest.
+    emails: SalesEmailCopy
+    documents: SalesDocumentCopy
+    upload: BravoUploadLayout
     # The words of a hand-off to PC or QA (ticket 33).
     handoff_copy: HandoffCopy
 
@@ -96,18 +87,14 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
     an eval grades the rules the API serves, not a version a second list of
     file names still points at.
     """
-    quote_rules = load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml")
     return SalesPolicies(
         order_rules=load_order_rules(policies_dir / "sales_order_rules@1.5.0.yaml"),
-        quote_rules=quote_rules,
+        quote_rules=load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml"),
         pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),
-        artifact_copy=load_artifact_copy(
-            emails=copy_dir / "sales_emails@1.1.0.yaml",
-            documents=copy_dir / "sales_documents@1.2.0.yaml",
-            upload=policies_dir / "sales_bravo_upload@1.1.0.yaml",
-            quote_rules=quote_rules,
-        ),
+        emails=load_copy(copy_dir / "sales_emails@1.2.0.yaml", SalesEmailCopy),
+        documents=load_copy(copy_dir / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
+        upload=load_bravo_upload(policies_dir / "sales_bravo_upload@1.1.0.yaml"),
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.0.0.yaml", HandoffCopy),
     )
 
@@ -118,5 +105,11 @@ def rule_book(policies: SalesPolicies, stored: RuleVersionLookupPort) -> TenantR
     platform: dict[RuleKey, Policy] = {
         RuleKey.ORDER_RULES: policies.order_rules,
         RuleKey.KPI: policies.kpi,
+        RuleKey.QUOTE_RULES: policies.quote_rules,
+        RuleKey.PRICING: policies.pricing,
+        RuleKey.EMAILS: policies.emails,
+        RuleKey.DOCUMENTS: policies.documents,
+        RuleKey.BRAVO_UPLOAD: policies.upload,
+        RuleKey.HANDOFFS: policies.handoff_copy,
     }
     return TenantRuleBook(platform=platform, stored=stored)

@@ -3,8 +3,8 @@ mailbox, DW1 running, and the personas seeded.
 
 What it removes, in the tenants the personas belong to (and nowhere else):
 every order and quote case with its revisions, lines and findings, the case
-events, the message log, the sources served, the artifact records and the
-pause switch; and DW1's runs, their checkpoints and the `sales.` approvals
+events, the message log, the processing queue, the sources served, the
+artifact records and the pause switch; and DW1's runs, their checkpoints and the `sales.` approvals
 they paused on with their decisions, so the approvals inbox starts empty and
 a rehearsal does not spend the next one's daily runs. It writes nothing to
 the audit log, which is append-only: the trail of earlier rehearsals stays,
@@ -60,6 +60,9 @@ _CLEARED = (
     tables.source_served,
     tables.artifacts,
     tables.messages,
+    # The processing queue (ticket 25): a job left from an earlier rehearsal
+    # would hold its message "đang chờ" in an unread mailbox.
+    tables.processing_jobs,
     tables.worker_state,
     tables.order_cases,
     tables.quote_cases,

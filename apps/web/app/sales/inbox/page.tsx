@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Key,
 } from "react";
@@ -32,7 +33,13 @@ import { compareVi, matches } from "../../../lib/search";
 import { useNow } from "../../../lib/use-now";
 import { salesApi } from "../_lib/api";
 import { ActionError } from "../_lib/errors";
-import { INTENT_KIND, label, REPLY_KIND, ROUTING_REASON } from "../_lib/labels";
+import {
+  INTENT_KIND,
+  label,
+  PROCESSING_ERROR,
+  REPLY_KIND,
+  ROUTING_REASON,
+} from "../_lib/labels";
 import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
@@ -49,7 +56,7 @@ import {
 } from "../_components/list-parts";
 import { SCOPE, useSalesFrame } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
-import { MessageDispositionTag } from "../_components/tags";
+import { MessageDispositionTag, ProcessingTag } from "../_components/tags";
 import { HandoffDraft } from "./handoff-draft";
 
 type Message = SalesSchemas["InboxMessageView"];
@@ -67,11 +74,24 @@ const SORTS = ["newest", "oldest", "sender"] as const;
 const inTab = (tab: Tab, m: Message) =>
   tab === "all" || GROUP[tab]!.includes(m.disposition.kind);
 
+/** Queued or running: DW1 has the message (ticket 25), nothing to press. */
+const working = (m: Message) =>
+  m.processing?.status === "queued" || m.processing?.status === "running";
+
+/** How often the page reads the inbox again while DW1 has work. */
+const POLL_MS = 3_000;
+
 /**
  * Hộp thư (mock): every sample message with the one disposition it ended in,
  * the reason and the owner of a message routed to Sales, and "DW xử lý" per
- * message or for all. The mock inbox stands in for a mailbox; processing
- * starts from the button. A message's link (`?message=`) opens it here.
+ * message or for all. The mock inbox stands in for a mailbox. A message's link
+ * (`?message=`) opens it here.
+ *
+ * "DW xử lý" queues (ticket 25): the API answers with the job at once and the
+ * worker processes it, reading every file in the reader sandbox. While any
+ * message is queued or running the page reads the inbox again every few
+ * seconds, keeping what is shown, and each row says where its job stands;
+ * a job that failed says why, and the button is there to press again.
  */
 export default function InboxPage() {
   return (
@@ -108,6 +128,26 @@ function Inbox() {
   const waiting = messages.filter(
     (m) => m.disposition.kind === "not_yet_processed",
   ).length;
+  const busy = messages.filter(working).length;
+  // What "DW xử lý tất cả" would queue: waiting, and not with DW1 already.
+  const pressable = messages.filter(
+    (m) => m.disposition.kind === "not_yet_processed" && !working(m),
+  ).length;
+
+  // While DW1 has work, read the inbox again; once it has none, the overview
+  // (the nav's counts) once more, for what the work changed.
+  const reloadInbox = inbox.reload;
+  const reloadOverview = overview.reload;
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setInterval(reloadInbox, POLL_MS);
+    return () => clearInterval(timer);
+  }, [busy, reloadInbox]);
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && !busy) reloadOverview();
+    wasBusy.current = busy > 0;
+  }, [busy, reloadOverview]);
   const routed = messages.filter(
     (m) => m.disposition.kind === "routed_to_sales",
   );
@@ -162,7 +202,7 @@ function Inbox() {
         "inbox/all",
         null,
         (key) => salesApi().processAll(key),
-        "DW1 đã xử lý các thư đang chờ",
+        "Đã xếp các thư đang chờ cho DW1 xử lý",
       ),
     );
 
@@ -172,7 +212,7 @@ function Inbox() {
         `inbox/${message.message_id}`,
         null,
         (key) => salesApi().processMessage(message.message_id, key),
-        `DW1 đã xử lý thư ${message.message_id}`,
+        `Đã xếp thư ${message.message_id} cho DW1 xử lý`,
       ),
     );
 
@@ -219,7 +259,7 @@ function Inbox() {
         title="Hộp thư (giả lập)"
         subtitle={
           inbox.data
-            ? `${messages.length} thư · ${waiting} chưa xử lý · ${routed.length} chuyển Sales. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách.`
+            ? `${messages.length} thư · ${waiting} chưa xử lý${busy ? ` (${busy} DW1 đang xử lý)` : ""} · ${routed.length} chuyển Sales. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách.`
             : "Thư mẫu kèm PO, yêu cầu báo giá và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
         }
         actions={
@@ -229,13 +269,15 @@ function Inbox() {
             loading={pending === "inbox/all"}
             reason={
               processReason ??
-              (inbox.data && waiting === 0
-                ? "Mọi thư đã có hướng xử lý."
+              (inbox.data && pressable === 0
+                ? busy
+                  ? "DW1 đang xử lý các thư đã xếp, chờ xong rồi xem kết quả."
+                  : "Mọi thư đã có hướng xử lý."
                 : null)
             }
             onClick={processAll}
           >
-            DW xử lý tất cả ({waiting})
+            DW xử lý tất cả ({pressable})
           </GuardedButton>
         }
       />
@@ -475,17 +517,31 @@ function Inbox() {
                 key: "process",
                 fixed: "right",
                 render: (_, m) =>
-                  m.disposition.kind === "not_yet_processed" ? (
-                    <GuardedButton
-                      size="small"
-                      inlineReason={false}
-                      reason={processReason}
-                      loading={pending === `inbox/${m.message_id}`}
-                      onClick={() => processOne(m)}
-                      aria-label={`DW xử lý thư ${m.message_id}`}
-                    >
-                      DW xử lý
-                    </GuardedButton>
+                  m.processing && working(m) ? (
+                    <span role="status">
+                      <ProcessingTag status={m.processing.status} />
+                    </span>
+                  ) : m.disposition.kind === "not_yet_processed" ? (
+                    <span className="flex flex-col items-start gap-1">
+                      {m.processing?.status === "failed" ? (
+                        <>
+                          <ProcessingTag status="failed" />
+                          <Typography.Text>
+                            {label(PROCESSING_ERROR, m.processing.error)}
+                          </Typography.Text>
+                        </>
+                      ) : null}
+                      <GuardedButton
+                        size="small"
+                        inlineReason={false}
+                        reason={processReason}
+                        loading={pending === `inbox/${m.message_id}`}
+                        onClick={() => processOne(m)}
+                        aria-label={`DW xử lý thư ${m.message_id}`}
+                      >
+                        DW xử lý
+                      </GuardedButton>
+                    </span>
                   ) : m.disposition.processed_at ? (
                     <span className="flex flex-col items-start">
                       <Typography.Text type="secondary">

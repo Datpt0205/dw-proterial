@@ -1,9 +1,10 @@
-"""DW1's mailbox lane, in one process (ticket 16).
+"""DW1's mailbox lane, in one process (ticket 16), queueing since ticket 25.
 
 The real Sales services, runner and DW1 graph over in-memory stores
 (`open_world`), with the lane built over them as the worker builds it
-(`InboxLane`). The platform's half, resolving DW1's service account from its
-membership, is tested against PostgreSQL in `dw_platform`'s
+(`InboxLane`) and the worker's processing lane draining what it queued
+(`ProcessingDrain`). The platform's half, resolving DW1's service account from
+its membership, is tested against PostgreSQL in `dw_platform`'s
 `test_service_access.py` and in the worker's `test_sales_inbox_lane_db.py`;
 here it is a fake that keeps the same contract (the ceiling cut, no role,
 nobody outside the account's own workspace).
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -27,19 +29,22 @@ from dw_sales.application.inbox_lane import (
     RETRY_FIRST,
     SALES_INBOX_LANE,
     InboxLane,
+    LaneTick,
     dw1_subject,
+    retry_delay,
 )
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.processing import SALES_PROCESSING_LANE, ProcessingDrain
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.evals.graders import AN, CALLERS, GIANG
-from dw_sales.evals.world import ALPHA, BETA, NOW, SampleSet, World, open_world
+from dw_sales.evals.world import ALPHA, BETA, NOW, Directory, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
 # DW1's service account in tenant alpha's workspace: a member, no email.
 DW1_ACCOUNT = uuid.UUID(int=0xD1D1)
-LANE_ACTION = "sales.message.processed_by_lane"
+QUEUED_BY_LANE = "sales.message.queued_by_lane"
 
 
 def _world(**options: object) -> World:
@@ -57,7 +62,9 @@ def _where(scope: SalesScope) -> Where:
 class Accounts:
     """`ServiceAccessPort` as the platform answers it
     (`SqlMembershipLookup.find_service_access`): the account's own membership,
-    its scopes cut to the ceiling and no role; nobody anywhere else.
+    its scopes cut to the ceiling and no role; nobody anywhere else. And
+    `RequesterAccessPort` for the drain: the account by its user id, the same
+    way, and the eval's people as the world's directory answers for them.
 
     ``holds`` is what the membership's roles give: the role `sales_dw1`, or
     more if someone added a role to the account by hand.
@@ -82,6 +89,20 @@ class Accounts:
             return None
         return _access((tenant_id, workspace_id), user_id, self.holds & ceiling)
 
+    async def find_linked_access(
+        self,
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        ceiling: frozenset[str],
+    ) -> MembershipAccess | None:
+        where = (tenant_id, workspace_id)
+        if where in [w for (_, w), u in self.members.items() if u == user_id]:
+            return _access(where, user_id, self.holds & ceiling)
+        return await Directory(CALLERS).find_linked_access(
+            user_id, tenant_id, workspace_id, ceiling
+        )
+
 
 def _access(where: Where, user_id: uuid.UUID, scopes: frozenset[str]) -> MembershipAccess:
     return MembershipAccess(
@@ -97,17 +118,50 @@ def _access(where: Where, user_id: uuid.UUID, scopes: frozenset[str]) -> Members
     )
 
 
-def _lane(
-    world: World, accounts: Accounts | None = None, clock: FixedClock | None = None
-) -> InboxLane:
-    return InboxLane(
-        world.store,
-        world.inbox,
-        world.services.dw1,
-        accounts or Accounts(),
-        clock or FixedClock(NOW),
-        Uuid4Generator(),
-    )
+@dataclass
+class Setup:
+    """The lane, and the worker's drain of what it queues, over one world."""
+
+    world: World
+    accounts: Accounts = field(default_factory=Accounts)
+    runs: object | None = None
+
+    @property
+    def clock(self) -> FixedClock:
+        """The world's clock: the lane, the drain and the services read it."""
+        return self.world.store.clock
+
+    @property
+    def lane(self) -> InboxLane:
+        world = self.world
+        return InboxLane(
+            world.store,
+            world.inbox,
+            world.services.processing,
+            self.accounts,
+            self.clock,
+            Uuid4Generator(),
+        )
+
+    @property
+    def drain(self) -> ProcessingDrain:
+        world = self.world
+        return ProcessingDrain(
+            world.store,
+            world.store,
+            self.runs or world.services.dw1,  # type: ignore[arg-type]
+            self.accounts,
+            world.store.clock,
+            Uuid4Generator(),
+        )
+
+    async def tick(self, scope: SalesScope = ALPHA) -> LaneTick:
+        """One lane tick, then the drain until nothing is due."""
+        tick = await self.lane.tick(scope)
+        drain = self.drain
+        while await drain.drain_one():
+            pass
+        return tick
 
 
 async def _mailbox(world: World, scope: SalesScope = ALPHA) -> list[str]:
@@ -116,6 +170,10 @@ async def _mailbox(world: World, scope: SalesScope = ALPHA) -> list[str]:
 
 def _dispositions(world: World, scope: SalesScope = ALPHA) -> dict[str, str]:
     return {k: v.disposition.kind.value for k, v in world.store.state(scope).messages.items()}
+
+
+def _jobs(world: World, scope: SalesScope = ALPHA) -> dict[str, tuple[str, str | None]]:
+    return {k: (j.status, j.error) for k, j in world.store.state(scope).jobs.items()}
 
 
 def _runs(world: World) -> list[tuple[uuid.UUID, str | None]]:
@@ -129,33 +187,47 @@ def _runs(world: World) -> list[tuple[uuid.UUID, str | None]]:
 # ------------------------------------------- 2. every new message, once --
 
 
-async def test_each_new_message_is_processed_oldest_first_in_a_run_of_its_own() -> None:
+async def test_each_new_message_is_queued_oldest_first_and_run_once_as_the_account() -> None:
     world = _world()
     mailbox = await _mailbox(world)
 
-    tick = await _lane(world).tick(ALPHA)
+    tick = await Setup(world).tick()
 
-    assert tick.processed == tuple(mailbox)
+    assert tick.queued == tuple(mailbox)
     assert tick.stopped is None
+    assert {j.requested_by for j in world.store.state(ALPHA).jobs.values()} == {DW1_ACCOUNT}
     assert set(_dispositions(world)) == set(mailbox)
     assert "not_yet_processed" not in _dispositions(world).values()
+    assert set(_jobs(world).values()) == {("done", None)}
     # One run per message, in the mailbox's order, each as DW1's account.
     assert _runs(world) == [(DW1_ACCOUNT, message_id) for message_id in mailbox]
 
 
-async def test_a_second_tick_finds_nothing_and_spends_no_run() -> None:
+async def test_a_second_tick_queues_nothing_and_spends_no_run() -> None:
     world = _world()
-    lane = _lane(world)
-    await lane.tick(ALPHA)
+    setup = Setup(world)
+    await setup.tick()
     runs = len(world.runtime.runs.rows)
 
-    tick = await lane.tick(ALPHA)
+    tick = await setup.tick()
 
-    assert tick.processed == ()
+    assert tick.queued == ()
     assert len(world.runtime.runs.rows) == runs
 
 
-async def test_a_message_a_person_processed_is_not_processed_again() -> None:
+async def test_a_message_already_queued_is_not_queued_again_before_it_runs() -> None:
+    world = _world()
+    setup = Setup(world)
+    await setup.lane.tick(ALPHA)
+    jobs = dict(world.store.state(ALPHA).jobs)
+
+    again = await setup.lane.tick(ALPHA)
+
+    assert again.queued == ()
+    assert world.store.state(ALPHA).jobs == jobs
+
+
+async def test_a_message_a_person_processed_is_not_queued_again() -> None:
     """Acceptance 7: one already on a case and one routed to Sales alike."""
     world = _world()
     seen = await world.process_each(AN, ["M01", "M11"])
@@ -163,18 +235,32 @@ async def test_a_message_a_person_processed_is_not_processed_again() -> None:
     assert seen["M11"][0].kind == "routed_to_sales"
     before = dict(world.store.state(ALPHA).messages)
 
-    tick = await _lane(world).tick(ALPHA)
+    tick = await Setup(world).tick()
 
-    assert "M01" not in tick.processed and "M11" not in tick.processed
+    assert "M01" not in tick.queued and "M11" not in tick.queued
     for message_id in ("M01", "M11"):
         assert world.store.state(ALPHA).messages[message_id] == before[message_id]
         assert [m for _, m in _runs(world)].count(message_id) == 1
 
 
+async def test_a_person_and_the_lane_queueing_one_message_queue_it_once() -> None:
+    """The (workspace, message_id) key holds across the race: whoever asks
+    second is handed the job the first queued, and the message runs once."""
+    world = _world()
+    queued = await world.services.processing.enqueue(AN.context(), "M01")
+
+    tick = await Setup(world).tick()
+
+    assert "M01" not in tick.queued
+    job = world.store.state(ALPHA).jobs["M01"]
+    assert (job.job_id, job.requested_by, job.status) == (queued.job_id, AN.user_id, "done")
+    assert [actor for actor, m in _runs(world) if m == "M01"] == [AN.user_id]
+
+
 @dataclass
 class PersonFirst:
-    """`Dw1Runs.process` with a person pressing "DW xử lý" on one message
-    between the lane's read of the mailbox and its own run on that message."""
+    """`Dw1Runs.process` with a person pressing on one message (in a run of
+    their own, as before ticket 25) just before the drain's run of it."""
 
     world: World
     message_id: str
@@ -185,73 +271,46 @@ class PersonFirst:
         return await self.world.services.dw1.process(context, message_id)
 
 
-async def test_a_person_getting_there_first_meanwhile_keeps_the_message_on_one_case() -> None:
-    """The idempotency key holds across the race: the lane's run is refused,
-    the message stays on the one case the person's run opened."""
+async def test_a_run_that_meets_a_message_processed_meanwhile_fails_and_keeps_one_case() -> None:
     world = _world()
-    lane = _lane(world)
-    lane.runs = PersonFirst(world, "M01")
+    setup = Setup(world, runs=PersonFirst(world, "M01"))
 
-    tick = await lane.tick(ALPHA)
+    await setup.tick()
 
-    assert "M01" not in tick.processed
     m01 = world.store.state(ALPHA).messages["M01"].disposition
     assert m01.kind.value == "case_created"
     assert [s.case.message_id for s in world.store.state(ALPHA).orders.values()].count("M01") == 1
-    # The person's run, and the lane's refused one.
+    assert _jobs(world)["M01"] == ("failed", "conflict")
+    # The person's run, and the drain's refused one as the account.
     assert [actor for actor, m in _runs(world) if m == "M01"] == [AN.user_id, DW1_ACCOUNT]
-
-
-@dataclass
-class PersonMeanwhile:
-    """A person presses "DW xử lý" on a later message while the lane's run
-    works on an earlier one of the same tick."""
-
-    world: World
-    during: str
-    pressed: str
-
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
-        if message_id == self.during:
-            await self.world.process_each(AN, [self.pressed])
-        return await self.world.services.dw1.process(context, message_id)
-
-
-async def test_a_message_a_person_routes_during_the_tick_is_not_processed_again() -> None:
-    """A routed message may be processed again, so the log's key would let the
-    lane's run through: the lane reads the message again before its run."""
-    world = _world()
-    mailbox = await _mailbox(world)
-    assert mailbox.index("M11") > 0
-    lane = _lane(world)
-    lane.runs = PersonMeanwhile(world, during=mailbox[0], pressed="M11")
-
-    tick = await lane.tick(ALPHA)
-
-    assert "M11" not in tick.processed
-    assert [actor for actor, m in _runs(world) if m == "M11"] == [AN.user_id]
-    assert not [e for e in world.audit() if e.action == LANE_ACTION and e.resource_id == "M11"]
 
 
 # ------------------------------------------- 3. it audits as itself --
 
 
-async def test_the_lane_audits_as_itself_naming_the_account_it_acted_under() -> None:
+async def test_both_lanes_audit_as_themselves_naming_the_account_it_acted_under() -> None:
     world = _world()
 
-    tick = await _lane(world).tick(ALPHA)
+    tick = await Setup(world).tick()
 
     audit = world.audit()
-    lane_rows = [e for e in audit if e.action == LANE_ACTION]
-    assert [e.resource_id for e in lane_rows] == list(tick.processed)
-    for event in lane_rows:
+    queued = [e for e in audit if e.action == QUEUED_BY_LANE]
+    assert [e.resource_id for e in queued] == list(tick.queued)
+    for event in queued:
         assert event.actor_id == system_actor(SALES_INBOX_LANE)
         assert event.details["actor"] == "system:sales_inbox"
         assert event.details["account_id"] == str(DW1_ACCOUNT)
-    # Everything else the processing wrote names the account, never a person.
+    ran = [e for e in audit if e.action == "sales.message.processing_done"]
+    assert sorted(e.resource_id for e in ran) == sorted(tick.queued)
+    for event in ran:
+        assert event.actor_id == system_actor(SALES_PROCESSING_LANE)
+        assert event.details["requested_by"] == str(DW1_ACCOUNT)
+    # Everything else the queueing and processing wrote names the account,
+    # never a person.
+    lanes = {system_actor(SALES_INBOX_LANE), system_actor(SALES_PROCESSING_LANE)}
     people = {caller.user_id for caller in CALLERS}
     assert not [e for e in audit if e.actor_id.value in people]
-    assert {e.actor_id.value for e in audit if e.action != LANE_ACTION} == {DW1_ACCOUNT}
+    assert {e.actor_id.value for e in audit if e.actor_id not in lanes} == {DW1_ACCOUNT}
 
 
 # ----------------------------------- 4. sales.inbox.process, and only it --
@@ -259,19 +318,18 @@ async def test_the_lane_audits_as_itself_naming_the_account_it_acted_under() -> 
 
 async def test_the_lane_asks_for_the_inbox_scope_only() -> None:
     accounts = Accounts()
-    await _lane(_world(), accounts).tick(ALPHA)
+    await Setup(_world(), accounts).lane.tick(ALPHA)
 
     assert accounts.ceilings == [frozenset({"sales.inbox.process"})] == [LANE_CEILING]
 
 
-async def test_a_role_added_to_the_account_by_hand_widens_nothing_the_lane_carries() -> None:
+async def test_a_role_added_to_the_account_by_hand_widens_nothing_a_run_carries() -> None:
     """The account given `sales_head` by hand: the runs still carry the
     inbox scope alone, so nothing the lane starts can prepare, cross-check,
     price or approve."""
     world = _world()
-    accounts = Accounts(holds=GIANG.scopes)
 
-    await _lane(world, accounts).tick(ALPHA)
+    await Setup(world, Accounts(holds=GIANG.scopes)).tick()
 
     scopes = {run.context.scopes for run in world.runtime.runs.rows.values()}
     roles = {run.context.roles for run in world.runtime.runs.rows.values()}
@@ -279,22 +337,22 @@ async def test_a_role_added_to_the_account_by_hand_widens_nothing_the_lane_carri
     assert roles == {frozenset()}
 
 
-async def test_an_account_without_the_inbox_scope_processes_nothing_and_spends_no_run() -> None:
+async def test_an_account_without_the_inbox_scope_queues_nothing_and_spends_no_run() -> None:
     world = _world()
 
-    tick = await _lane(world, Accounts(holds=frozenset())).tick(ALPHA)
+    tick = await Setup(world, Accounts(holds=frozenset())).tick()
 
-    assert (tick.processed, tick.stopped) == ((), "not_permitted")
+    assert (tick.queued, tick.stopped) == ((), "not_permitted")
     assert world.runtime.runs.rows == {}
-    assert _dispositions(world) == {}
+    assert _dispositions(world) == {} and _jobs(world) == {}
 
 
 async def test_a_workspace_without_dw1s_account_is_left_alone() -> None:
     world = _world()
 
-    tick = await _lane(world, Accounts(members={})).tick(ALPHA)
+    tick = await Setup(world, Accounts(members={})).tick()
 
-    assert (tick.processed, tick.stopped) == ((), "no_account")
+    assert (tick.queued, tick.stopped) == ((), "no_account")
     assert world.runtime.runs.rows == {}
 
 
@@ -309,22 +367,23 @@ class _ThreeRunsADay:
         return None
 
 
-async def test_over_the_plans_runs_the_rest_stays_unprocessed_and_visible() -> None:
+async def test_over_the_plans_runs_the_rest_fail_quota_and_stay_unprocessed_and_visible() -> None:
     world = _world(allowance=_ThreeRunsADay())
     mailbox = await _mailbox(world)
-    lane = _lane(world)
+    setup = Setup(world)
 
-    first = await lane.tick(ALPHA)
-    second = await lane.tick(ALPHA)
+    first = await setup.tick()
+    second = await setup.tick()
 
-    assert (first.processed, first.stopped) == (tuple(mailbox[:3]), "quota")
-    assert (second.processed, second.stopped) == ((), "quota")
+    assert first.queued == tuple(mailbox)
+    # Failed jobs wait out their delay: the next tick queues nothing.
+    assert second.queued == ()
     assert len(world.runtime.runs.rows) == 3
-    # Visibly: the inbox shows the rest as "Chưa xử lý".
-    shown = {
-        m.message_id: m.disposition.kind for m in await world.services.inbox.messages(AN.context())
-    }
-    assert [m for m in mailbox if shown[m] == "not_yet_processed"] == mailbox[3:]
+    assert [m for m in mailbox if _jobs(world)[m] == ("failed", "quota")] == mailbox[3:]
+    # Visibly: the inbox shows the rest as "Chưa xử lý", and why.
+    shown = {m.message_id: m for m in await world.services.inbox.messages(AN.context())}
+    assert [m for m in mailbox if shown[m].disposition.kind == "not_yet_processed"] == mailbox[3:]
+    assert {shown[m].processing.error for m in mailbox[3:]} == {"quota"}  # type: ignore[union-attr]
 
 
 # ------------------------------------------------ 6. pausing stops it --
@@ -332,24 +391,24 @@ async def test_over_the_plans_runs_the_rest_stays_unprocessed_and_visible() -> N
 
 async def test_a_paused_workspace_is_skipped_until_the_head_resumes_dw1() -> None:
     world = _world()
-    lane = _lane(world)
+    setup = Setup(world)
     await world.services.worker.pause(AN.context(), "Kiểm tra lại convert list")
 
-    paused = await lane.tick(ALPHA)
+    paused = await setup.tick()
 
-    assert (paused.processed, paused.stopped) == ((), "paused")
+    assert (paused.queued, paused.stopped) == ((), "paused")
     assert world.runtime.runs.rows == {}
-    assert _dispositions(world) == {}
+    assert _dispositions(world) == {} and _jobs(world) == {}
 
     await world.services.worker.resume(GIANG.context(), "Đã kiểm tra xong")
-    resumed = await lane.tick(ALPHA)
+    resumed = await setup.tick()
 
-    assert resumed.processed == tuple(await _mailbox(world))
+    assert resumed.queued == tuple(await _mailbox(world))
 
 
 @dataclass
 class PausedAfter:
-    """A PIC pauses DW1 while the lane is between two messages."""
+    """A PIC pauses DW1 while the drain is between two messages."""
 
     world: World
     after: str
@@ -361,18 +420,17 @@ class PausedAfter:
         return view
 
 
-async def test_a_pause_in_the_middle_of_a_tick_stops_it_at_the_next_message() -> None:
+async def test_a_pause_while_the_queue_drains_fails_the_rest_paused() -> None:
     world = _world()
-    lane = _lane(world)
     mailbox = await _mailbox(world)
-    lane.runs = PausedAfter(world, mailbox[1])
+    setup = Setup(world, runs=PausedAfter(world, mailbox[1]))
 
-    tick = await lane.tick(ALPHA)
+    await setup.tick()
 
-    assert (tick.processed, tick.stopped) == (tuple(mailbox[:2]), "paused")
     assert set(_dispositions(world)) == set(mailbox[:2])
-    # Stopped before the third message's run, not by it: no run spent on it.
-    assert [m for _, m in _runs(world)] == mailbox[:2]
+    assert {_jobs(world)[m] for m in mailbox[2:]} == {("failed", "paused")}
+    # The rest were refused before any processing: no disposition, no case.
+    assert all(m not in _dispositions(world) for m in mailbox[2:])
 
 
 # ------------------------------------------ 7. never across workspaces --
@@ -384,10 +442,10 @@ async def test_workspace_bs_tick_reads_bs_mailbox_only_and_writes_nothing_in_a()
         members={(dw1_subject(BETA.tenant_id.value), _where(BETA)): uuid.UUID(int=0xBEBE)}
     )
 
-    tick = await _lane(world, accounts).tick(BETA)
+    tick = await Setup(world, accounts).tick(BETA)
 
-    assert tick.processed == ()
-    assert _dispositions(world, ALPHA) == {}
+    assert tick.queued == ()
+    assert _dispositions(world, ALPHA) == {} and _jobs(world, ALPHA) == {}
     assert world.store.state(ALPHA).orders == {}
     assert world.runtime.runs.rows == {}
 
@@ -396,13 +454,13 @@ async def test_alphas_account_is_nobody_in_beta() -> None:
     """The subject names the tenant: alpha's account is not resolved in beta."""
     world = _world()
 
-    tick = await _lane(world).tick(BETA)
+    tick = await Setup(world).lane.tick(BETA)
 
     assert tick.stopped == "no_account"
 
 
 @dataclass
-class AnswersForAlpha:
+class AnswersForAlpha(Accounts):
     """A lookup that answers for alpha's workspace whatever it is asked."""
 
     async def find_service_access(
@@ -414,19 +472,40 @@ class AnswersForAlpha:
     ) -> MembershipAccess | None:
         return _access(_where(ALPHA), DW1_ACCOUNT, frozenset(ceiling))
 
+    async def find_linked_access(
+        self,
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        ceiling: frozenset[str],
+    ) -> MembershipAccess | None:
+        return _access(_where(ALPHA), user_id, frozenset(ceiling))
 
-async def test_a_context_for_another_workspace_is_refused_before_any_run() -> None:
-    """Workspace B's tick handed workspace A's context processes nothing at
-    all: neither B's mail under A's context nor A's mail in B's tick."""
+
+async def test_a_context_for_another_workspace_is_refused_before_anything_is_queued() -> None:
+    """Workspace B's tick handed workspace A's context queues nothing at all:
+    neither B's mail under A's context nor A's mail in B's tick."""
     world = _world()
-    lane = _lane(world)
-    lane.access = AnswersForAlpha()
 
-    tick = await lane.tick(BETA)
+    tick = await Setup(world, AnswersForAlpha()).lane.tick(BETA)
 
-    assert (tick.processed, tick.stopped) == ((), "wrong_scope")
+    assert (tick.queued, tick.stopped) == ((), "wrong_scope")
     assert world.runtime.runs.rows == {}
-    assert _dispositions(world, ALPHA) == {}
+    assert _jobs(world, ALPHA) == {} and _jobs(world, BETA) == {}
+
+
+async def test_the_drain_refuses_a_context_for_another_workspace_before_any_run() -> None:
+    world = _world()
+    async with world.store(BETA) as work:
+        await work.jobs.enqueue("M01", AN.user_id, NOW, uuid.uuid4())
+        await work.commit()
+    setup = Setup(world, AnswersForAlpha())
+
+    while await setup.drain.drain_one():
+        pass
+
+    assert world.runtime.runs.rows == {}
+    assert _jobs(world, BETA)["M01"] == ("failed", "not_permitted")
 
 
 # --------------------------------- a failing message waits, not a loop --
@@ -450,46 +529,52 @@ class FailsOn:
 
 async def test_a_failing_message_does_not_hold_up_the_rest_nor_spend_a_run_every_tick() -> None:
     world = _world()
-    clock = FixedClock(NOW)
-    lane = _lane(world, clock=clock)
     mailbox = await _mailbox(world)
     # The newest: no later message depends on it having been read.
     bad = mailbox[-1]
     failing = FailsOn(world, bad)
-    lane.runs = failing
+    setup = Setup(world, runs=failing)
 
-    first = await lane.tick(ALPHA)
-    assert first.processed == tuple(mailbox[:-1])
+    first = await setup.tick()
+    assert first.queued == tuple(mailbox)
+    assert _jobs(world)[bad] == ("failed", "error")
+    assert set(_dispositions(world)) == set(mailbox[:-1])
 
     # The next tick, a minute on: it waits out its delay.
-    clock.advance_to(NOW + RETRY_FIRST / 5)
-    await lane.tick(ALPHA)
+    setup.clock.advance_to(NOW + RETRY_FIRST / 5)
+    await setup.tick()
     assert failing.calls.count(bad) == 1
 
-    # Past the delay it is tried again, and processed once it can be.
+    # Past the delay it is queued again, and processed once it can be.
     failing.failing = False
-    clock.advance_to(NOW + RETRY_FIRST)
-    again = await lane.tick(ALPHA)
-    assert again.processed == (bad,)
+    setup.clock.advance_to(NOW + RETRY_FIRST)
+    again = await setup.tick()
+    assert again.queued == (bad,)
     assert failing.calls.count(bad) == 2
+    assert _jobs(world)[bad] == ("done", None)
 
 
-async def test_the_delay_doubles_and_is_forgotten_once_the_message_has_a_disposition() -> None:
+async def test_the_delay_doubles_with_each_failure_and_is_forgotten_once_done() -> None:
     world = _world()
-    clock = FixedClock(NOW)
-    lane = _lane(world, clock=clock)
     bad = (await _mailbox(world))[-1]
     failing = FailsOn(world, bad)
-    lane.runs = failing
-    await lane.tick(ALPHA)
+    setup = Setup(world, runs=failing)
+    await setup.tick()
 
-    clock.advance_to(NOW + RETRY_FIRST)
-    await lane.tick(ALPHA)  # the second failure: it waits twice as long now
-    clock.advance_to(NOW + RETRY_FIRST + RETRY_FIRST)
-    await lane.tick(ALPHA)
+    setup.clock.advance_to(NOW + RETRY_FIRST)
+    await setup.tick()  # the second failure: it waits twice as long now
+    assert world.store.state(ALPHA).jobs[bad].failures == 2
+    setup.clock.advance_to(NOW + RETRY_FIRST + RETRY_FIRST)
+    await setup.tick()
     assert failing.calls.count(bad) == 2
 
-    # A person processes it: the lane forgets it.
-    await world.process_each(AN, [bad])
-    await lane.tick(ALPHA)
-    assert lane._retry == {}
+    failing.failing = False
+    setup.clock.advance_to(NOW + RETRY_FIRST + retry_delay(2))
+    await setup.tick()
+    assert world.store.state(ALPHA).jobs[bad].failures == 0
+
+
+def test_the_delay_is_capped() -> None:
+    assert retry_delay(1) == RETRY_FIRST
+    assert retry_delay(2) == RETRY_FIRST * 2
+    assert retry_delay(10_000) == timedelta(hours=6)

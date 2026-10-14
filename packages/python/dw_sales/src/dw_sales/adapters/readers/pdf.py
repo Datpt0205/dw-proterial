@@ -33,11 +33,21 @@ line has no requested date, anchored at the row's line number, and the checks
 raise `requested_date_missing`. Any other short row is not a table row, as
 before.
 
-Scans are not read: a PDF with no text layer comes back `Unreadable`, and the
-message is routed to Sales. A numbered row-shaped line outside the table (a
-wrapped description, a page without the table header) is counted as printed
-and not read, which `line_total_mismatch` reports. A refusal names fields and
-pages, never a value from the file (spec decision 8).
+**A scanned page is read by OCR** where the reader is given an engine
+(ticket 27, `readers.ocr`; the reader sandbox gives it Tesseract): a page with
+no text layer is rasterised and its words, with their boxes, become the
+page's lines and rows, read by the same layout. Every value of a document a
+page of which was OCRed is flagged `ocr` (`value_uncertain` until Sales
+confirms it, whatever the engine's confidence), and the document says which
+engine read it (`Derivation`). A PDF whose pages have no text and no words
+the engine could read, or read where there is no engine, comes back
+`Unreadable` and the message is routed to Sales; an engine that fails is the
+same, never a failed run.
+
+A numbered row-shaped line outside the table (a wrapped description, a page
+without the table header) is counted as printed and not read, which
+`line_total_mismatch` reports. A refusal names fields and pages, never a value
+from the file (spec decision 8).
 """
 
 from __future__ import annotations
@@ -54,14 +64,16 @@ from typing import get_args
 from pydantic import ValidationError
 from pypdf import PdfReader
 
+from dw_sales.adapters.readers.ocr import OcrError, OcrPage, PageOcrPort
 from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules, no_date
 from dw_sales.domain.anchors import PageBox, SourceAnchor
-from dw_sales.domain.layouts import LabelCell
+from dw_sales.domain.layouts import LabelCell, flagged_everywhere
 from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import (
     DeliverySchedule,
+    Derivation,
     LegacyText,
     PoDocument,
     PoHeader,
@@ -71,6 +83,7 @@ from dw_sales.domain.orders import (
     PoLineAnchors,
     PoLineField,
     PrintedTotal,
+    RegionFlag,
     Unreadable,
 )
 from dw_sales.domain.rfq_reading import parse_currency
@@ -179,10 +192,13 @@ def _extent(size: float, start: float) -> float:
 
 
 class PdfPoReader:
-    """Reads a text PDF PO with the layout of the customer who sent it."""
+    """Reads a PDF PO with the layout of the customer who sent it: its text
+    layer, and a scanned page by OCR where ``ocr`` is given (module
+    docstring)."""
 
-    def __init__(self, layouts: Mapping[str, PdfLayout]) -> None:
+    def __init__(self, layouts: Mapping[str, PdfLayout], *, ocr: PageOcrPort | None = None) -> None:
         self._layouts = dict(layouts)
+        self._ocr = ocr
 
     def read(
         self, document: AttachmentContent, customer_code: str, caps: IntakeCaps
@@ -191,8 +207,8 @@ class PdfPoReader:
         if layout is None:
             return Unreadable(reason=f"no PDF PO layout for customer {customer_code}")
         try:
-            pages = _pages(document.data, caps)
-            return _Pdf(pages, layout, document.attachment).read()
+            pages, ocr = _pages(document.data, caps, self._ocr)
+            return _ocr_stamped(_Pdf(pages, layout, document.attachment).read(), ocr)
         except _RefusedError as refused:
             return Unreadable(reason=refused.reason, anchor=refused.anchor)
 
@@ -211,17 +227,18 @@ class PdfPoReader:
         """``document`` read with a tenant's own approved layout (ticket 30),
         the PO stamped with which one."""
         try:
-            read = _Pdf(_pages(document.data, caps), layout, document.attachment).read()
+            pages, ocr = _pages(document.data, caps, self._ocr)
+            read = _Pdf(pages, layout, document.attachment).read()
         except _RefusedError as refused:
             return Unreadable(reason=refused.reason, anchor=refused.anchor)
-        return read.model_copy(update={"layout_ref": layout_ref})
+        return _ocr_stamped(read, ocr).model_copy(update={"layout_ref": layout_ref})
 
     def label_cells(self, document: AttachmentContent, caps: IntakeCaps) -> list[LabelCell]:
         """The first page's text a label may be (ticket 30): each line split
         into its cells as the reader splits a table row, and a ``Label: value``
         line as its label alone."""
         try:
-            pages = _pages(document.data, caps)
+            pages, _ = _pages(document.data, caps, self._ocr)
         except _RefusedError:
             return []
         page = pages[0]
@@ -248,7 +265,7 @@ class PdfPoReader:
         """The first page's lines as a person reads them: a ``Label: value``
         line as its label and its value, any other line as its cells."""
         try:
-            pages = _pages(document.data, caps)
+            pages, _ = _pages(document.data, caps, self._ocr)
         except _RefusedError:
             return []
         rows: list[list[str]] = []
@@ -264,7 +281,34 @@ class PdfPoReader:
 _LABEL_LENGTH = 80
 
 
-def _pages(data: bytes, caps: IntakeCaps) -> list[_Page]:
+def _ocr_stamped(document: PoDocument, ocr: str | None) -> PoDocument:
+    """``document``, every value flagged `ocr` and the engine named, when a
+    page of it was read by ``ocr``; as it was otherwise."""
+    if ocr is None:
+        return document
+    flagged = flagged_everywhere(document, RegionFlag.OCR)
+    return flagged.model_copy(update={"derivation": Derivation(method="ocr", tool=ocr)})
+
+
+def _scanned(number: int, page: OcrPage) -> _Page:
+    """A page read by OCR, in the shape a text layer is read in: each line
+    its cells two spaces or more apart, each row its cells as runs."""
+    lines = ["    ".join(cell.text for cell in line) for line in page.lines]
+    rows = [
+        [
+            # A run's origin is its baseline, from the page's bottom (`box`).
+            _Run(cell.text, cell.left, page.height - cell.top - 0.9 * cell.height, cell.height)
+            for cell in line
+        ]
+        for line in page.lines
+    ]
+    return _Page(number, page.width, page.height, lines, rows)
+
+
+def _pages(
+    data: bytes, caps: IntakeCaps, ocr: PageOcrPort | None = None
+) -> tuple[list[_Page], str | None]:
+    """The pages, and the OCR engine's name when a page was read by it."""
     if len(data) > caps.max_attachment_bytes:
         raise _RefusedError(f"the file is over the {caps.max_attachment_bytes} bytes read here")
     try:
@@ -304,9 +348,36 @@ def _pages(data: bytes, caps: IntakeCaps) -> list[_Page]:
         raise
     except Exception as exc:  # any parser failure on a sender's file is "unreadable"
         raise _RefusedError("not a PDF pypdf can read") from exc
-    if not any(line.strip() for page in pages for line in page.lines):
+    if ocr is not None and not all(_has_text(page) for page in pages):
+        return _with_ocr(data, pages, ocr)
+    if not any(_has_text(page) for page in pages):
         raise _RefusedError("the PDF has no text layer: a scan or an image")
-    return pages
+    return pages, None
+
+
+def _has_text(page: _Page) -> bool:
+    return any(line.strip() for line in page.lines)
+
+
+def _with_ocr(data: bytes, pages: list[_Page], ocr: PageOcrPort) -> tuple[list[_Page], str | None]:
+    """Each page with no text layer read by ``ocr``. An engine that cannot
+    run reads nothing (the PDF is then as unreadable as without one); one that
+    reads no word on a page leaves it empty."""
+    try:
+        tool = ocr.tool()
+        read = [
+            page
+            if _has_text(page)
+            else _scanned(page.number, ocr.page(data, page.number, (page.width, page.height)))
+            for page in pages
+        ]
+    except OcrError:
+        if not any(_has_text(page) for page in pages):
+            raise _RefusedError("the PDF has no text layer: a scan or an image") from None
+        return pages, None
+    if not any(_has_text(page) for page in read):
+        raise _RefusedError("the PDF has no text layer, and OCR read no text on it")
+    return read, tool
 
 
 def _base_font(font: object) -> str | None:

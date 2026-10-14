@@ -42,6 +42,13 @@ API and the plan use the English terms. The spec is
   (`line_total_mismatch` otherwise). The lead time is checked per schedule,
   the MOQ, pack and price per line; the upload file has a row per schedule
   (ticket 21). A split line's dates are asked of the customer, never typed.
+  Sales confirms a split line per schedule, one date each, and the
+  confirmation lists each schedule's quantity with its date (ticket 35).
+- **Tenant version** (Phiên bản riêng): a customer's own version of a Sales
+  rule or copy file (order and quote rules, pricing, KPI, e-mail and document
+  copy, the Bravo upload template, the hand-off copy), proposed by a PIC or
+  the head and approved by the head, never its proposer. It applies to that
+  tenant only; a case keeps reading the version it stamped (tickets 19, 36).
 - **Malware scan** (Quét mã độc): every attachment is scanned by ClamAV
   before anything reads it, then held to its name (ticket 25). An infected
   one routes its message to Sales (`malware_detected`) with nothing in it
@@ -255,6 +262,26 @@ YCBG), `sample_request` (Yêu cầu hàng mẫu), `customer_unknown` (Chưa xác
 được khách hàng), `attachment_unreadable` (Không đọc được file),
 `malware_detected` (Tệp đính kèm có mã độc), `reply_to_case` (Trả lời về hồ
 sơ đang xử lý), `other` (Khác).
+
+## Processing jobs
+
+"DW xử lý", "DW xử lý tất cả" and DW1's mailbox lane queue a message; the
+worker processes it, reading every file in the reader sandbox (ticket 25). A
+message's job is in one state, beside its disposition:
+
+| State     | Label               |
+| --------- | ------------------- |
+| `queued`  | Đang chờ DW1        |
+| `running` | DW1 đang xử lý      |
+| `done`    | DW1 đã xử lý        |
+| `failed`  | DW1 chưa xử lý được |
+
+Processing failures: `quota` (Hết lượt chạy DW1 trong ngày của gói),
+`not_permitted` (Người yêu cầu không còn quyền xử lý hộp thư), `paused` (DW1
+tạm dừng trước khi xử lý), `conflict` (Thư đã được xử lý trong lúc chờ),
+`not_found` (Hộp thư không còn thư này), `unavailable` (Chưa quét hoặc chưa
+đọc được tệp đính kèm), `model_retry` (Mô hình chưa đọc được thư, DW1 thử lại
+sau), `abandoned` (Lượt xử lý bị gián đoạn), `error` (Lỗi khi xử lý).
 
 ## Finding dispositions
 

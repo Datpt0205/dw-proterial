@@ -20,7 +20,7 @@ in a request names either.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal
@@ -259,9 +259,10 @@ class OrderCommands:
         case_id: uuid.UUID,
         *,
         case_version: int,
-        delivery_dates: Mapping[int, date],
+        delivery_dates: Mapping[int, Sequence[date]],
     ) -> CaseChangeView:
-        """Step 10, with the date Sales confirms for every line."""
+        """Step 10, with the dates Sales confirms for every line: one per
+        delivery schedule (ticket 35)."""
         return await self._decide(
             context,
             case_id,

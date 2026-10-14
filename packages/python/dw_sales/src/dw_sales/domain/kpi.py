@@ -57,3 +57,8 @@ class SalesKpi(BaseModel):
     @property
     def version(self) -> str:
         return f"{self.policy_id}@{self.policy_version}"
+
+    @property
+    def ref(self) -> str:
+        """``key@x.y.z``, as a tenant's version of it is named (ticket 36)."""
+        return self.version

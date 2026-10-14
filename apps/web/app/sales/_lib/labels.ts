@@ -111,6 +111,27 @@ export const ROUTING_REASON = {
   other: "Khác",
 } as const;
 
+/** "Processing jobs": where a message's "DW xử lý" stands (ticket 25). */
+export const PROCESSING_STATE = {
+  queued: "Đang chờ DW1",
+  running: "DW1 đang xử lý",
+  done: "DW1 đã xử lý",
+  failed: "DW1 chưa xử lý được",
+} as const;
+
+/** "Processing failures": why a message's job failed. */
+export const PROCESSING_ERROR = {
+  quota: "Hết lượt chạy DW1 trong ngày của gói",
+  not_permitted: "Người yêu cầu không còn quyền xử lý hộp thư",
+  paused: "DW1 tạm dừng trước khi xử lý",
+  conflict: "Thư đã được xử lý trong lúc chờ",
+  not_found: "Hộp thư không còn thư này",
+  unavailable: "Chưa quét hoặc chưa đọc được tệp đính kèm",
+  model_retry: "Mô hình chưa đọc được thư, DW1 thử lại sau",
+  abandoned: "Lượt xử lý bị gián đoạn",
+  error: "Lỗi khi xử lý",
+} as const;
+
 /** "Finding dispositions". */
 export const FINDING_DISPOSITION = {
   open: "Chưa quyết định",
@@ -167,6 +188,7 @@ export const GLOSSARY_TABLES = {
   "Order case states": ORDER_STATE,
   "Quote case states": QUOTE_STATE,
   "Message dispositions": MESSAGE_DISPOSITION,
+  "Processing jobs": PROCESSING_STATE,
   "Finding dispositions": FINDING_DISPOSITION,
   "Finding codes": FINDING_CODE,
   "Roles and permission sets": SALES_ROLE,
@@ -177,6 +199,7 @@ export const GLOSSARY_LISTS = {
   "Close reasons": CLOSE_REASON,
   "Decline reasons": DECLINE_REASON,
   "Routing reasons": ROUTING_REASON,
+  "Processing failures": PROCESSING_ERROR,
   "Not-applied reasons": NOT_APPLIED_REASON,
 } as const;
 
@@ -279,6 +302,12 @@ export const PROCEDURE = {
   "WIV-03-023": "Báo giá (WIV-03-023)",
 } as const;
 
+/** How the bytes a PO was read from were made (ticket 27), as the case's facts say. */
+export const DERIVATION = {
+  converted: "Đọc từ bản chuyển đổi",
+  ocr: "Đọc bằng OCR",
+} as const;
+
 /** Flags a reader raises on a value it does not take on trust. */
 export const REGION_FLAG = {
   hidden_sheet: "Sheet ẩn",
@@ -289,6 +318,7 @@ export const REGION_FLAG = {
   model_read: "Mô hình đọc, cần xác nhận",
   new_layout: "Mẫu PO mới duyệt, cần xác nhận",
   print_differs: "Bản in PDF ghi khác",
+  ocr: "Đọc bằng OCR, cần xác nhận",
 } as const;
 
 /** The fields a source anchor names, as a person reads them. */

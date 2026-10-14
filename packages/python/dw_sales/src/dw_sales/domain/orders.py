@@ -125,6 +125,9 @@ class RegionFlag(StrEnum):
     # value differently (ticket 34): the workbook is the source of record, the
     # print is kept beside it, and a person decides which the customer meant.
     PRINT_DIFFERS = "print_differs"
+    # Read by OCR from a scanned page (ticket 27): what the engine saw is not
+    # what the page says until a person compares them, whatever its confidence.
+    OCR = "ocr"
 
 
 class FlaggedValue(BaseModel):
@@ -406,6 +409,28 @@ class PrintCopy(BaseModel):
         return self
 
 
+class Derivation(BaseModel):
+    """How the bytes a PO was read from were made from the customer's file
+    (ticket 27): converted from a legacy Office format, or read by OCR from
+    images of its pages. The tool's own version is kept: another converter or
+    engine is another reading of the same file."""
+
+    model_config = _FROZEN
+
+    method: Literal["converted", "ocr"]
+    # `soffice --version`'s first line, or `tesseract --version`'s with its
+    # languages: what produced the reading, as it named itself.
+    tool: str = Field(min_length=1, max_length=200)
+    # The converted copy's sha256; None for OCR, which makes no file.
+    derived_sha256: Sha256Hex | None = None
+
+    @model_validator(mode="after")
+    def _a_copy_is_named_by_its_hash(self) -> Self:
+        if (self.method == "converted") != (self.derived_sha256 is not None):
+            raise ValueError("a converted copy names its hash, and an OCR reading none")
+        return self
+
+
 class PoDocument(BaseModel):
     """What a reader got out of one attachment, and how it read it."""
 
@@ -432,6 +457,9 @@ class PoDocument(BaseModel):
     layout_ref: str | None = Field(default=None, pattern=r"^po_layout:[0-9a-f-]{36}@\d+$")
     # Its PDF print, attached to the same mail (ticket 34); None: none was.
     print_copy: PrintCopy | None = None
+    # How the bytes it was read from were made from the attachment (ticket 27);
+    # None: read from the attachment itself.
+    derivation: Derivation | None = None
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
@@ -440,10 +468,12 @@ class PoDocument(BaseModel):
             raise ValueError("more lines read than rows printed")
         if (self.buyer is None) != (self.buyer_anchor is None):
             raise ValueError("a buyer and its anchor go together")
+        derived = None if self.derivation is None else self.derivation.derived_sha256
         for anchor in self.anchors():
-            if (anchor.attachment_id, anchor.attachment_sha256) != (
+            if (anchor.attachment_id, anchor.attachment_sha256, anchor.derived_sha256) != (
                 self.attachment_id,
                 self.attachment_sha256,
+                derived,
             ):
                 raise ValueError(f"an anchor points outside attachment {self.attachment_id}")
         if self.print_copy is not None and self.print_copy.attachment_id == self.attachment_id:
@@ -898,8 +928,11 @@ class OrderLine(BaseModel):
     # max(requested date, received date + lead time): DW1's proposal, labelled
     # as one. None when the line has no item to take a lead time from.
     suggested_delivery_date: date | None = None
-    # What Sales confirms to the customer, entered at confirmation.
-    confirmed_delivery_date: date | None = None
+    # What Sales confirms to the customer, entered at confirmation: one date
+    # per delivery (`deliveries`), so a line the PO splits over several dates
+    # has one per schedule, in the schedules' order (ticket 35). Empty until
+    # the order is confirmed.
+    confirmed_delivery_dates: tuple[date, ...] = ()
     # Who agreed a short lead time with PC (outside the portal), and when.
     pc_confirmed_by: ActorId | None = None
     pc_confirmed_at: AwareDatetime | None = None
@@ -911,6 +944,16 @@ class OrderLine(BaseModel):
     def _pc_confirmation_names_who_and_when(self) -> Self:
         if (self.pc_confirmed_by is None) != (self.pc_confirmed_at is None):
             raise ValueError("a PC confirmation names who and when")
+        return self
+
+    @model_validator(mode="after")
+    def _a_confirmed_date_per_delivery(self) -> Self:
+        dates = self.confirmed_delivery_dates
+        if dates and len(dates) != self.deliveries:
+            raise ValueError(
+                f"line {self.line_no} is confirmed with {len(dates)} dates"
+                f" for {self.deliveries} deliveries"
+            )
         return self
 
     @model_validator(mode="after")
@@ -943,6 +986,29 @@ class OrderLine(BaseModel):
 
     def correction(self, field: str) -> ValueCorrection | None:
         return next((c for c in self.corrections if c.field == field), None)
+
+    @property
+    def deliveries(self) -> int:
+        """How many dates the line is confirmed with: one per schedule the PO
+        prints apart from the line, else one (a line printed with no date is
+        still delivered once, on the date Sales confirms)."""
+        return len(self.effective.schedules) if self.effective.prints_schedules else 1
+
+    @property
+    def confirmed_delivery_date(self) -> date | None:
+        """The date Sales confirmed for a line delivered once; None before
+        confirmation and for a split line, whose dates are per schedule
+        (`confirmed_schedules`)."""
+        dates = self.confirmed_delivery_dates
+        return dates[0] if len(dates) == 1 and not self.effective.prints_schedules else None
+
+    def confirmed_schedules(self) -> tuple[tuple[DeliverySchedule, date], ...]:
+        """A split line's schedules, each with the date Sales confirmed for
+        it; empty for any other line, or before confirmation."""
+        po = self.effective
+        if not po.prints_schedules or not self.confirmed_delivery_dates:
+            return ()
+        return tuple(zip(po.schedules, self.confirmed_delivery_dates, strict=True))
 
     def suggested_date(self, schedule: DeliverySchedule) -> date | None:
         """DW1's proposal for one of the line's schedules: its date when the
@@ -2056,8 +2122,12 @@ class OrderCase(BaseModel):
             self.status, lines=tuple(OrderLine.model_validate(dict(x)) for x in lines)
         )
 
-    def confirm(self, actor: Actor, at: datetime, delivery_dates: Mapping[int, date]) -> OrderCase:
-        """-> confirmed, with the date Sales confirms for every line (step 10).
+    def confirm(
+        self, actor: Actor, at: datetime, delivery_dates: Mapping[int, Sequence[date]]
+    ) -> OrderCase:
+        """-> confirmed, with the dates Sales confirms for every line (step 10):
+        one per delivery, so a line split over several schedules gets one per
+        schedule, in their order (ticket 35), and any other line one.
 
         From ``cross_checked``; from ``uploaded_to_bravo`` only when the rules
         stamped on the case need no cross-check. Refused while
@@ -2086,9 +2156,18 @@ class OrderCase(BaseModel):
             )
         if set(delivery_dates) != {line.line_no for line in self.lines}:
             raise DomainError("every line gets its confirmed delivery date", details=details)
+        if miscounted := [
+            line.line_no
+            for line in self.lines
+            if len(delivery_dates[line.line_no]) != line.deliveries
+        ]:
+            raise DomainError(
+                "a line gets one confirmed date per delivery schedule",
+                details={**details, "lines": miscounted, "rule": "date_per_schedule"},
+            )
         lines = tuple(
             OrderLine.model_validate(
-                {**dict(line), "confirmed_delivery_date": delivery_dates[line.line_no]}
+                {**dict(line), "confirmed_delivery_dates": tuple(delivery_dates[line.line_no])}
             )
             for line in self.lines
         )
@@ -2329,7 +2408,7 @@ def _rechecked_line(line: OrderLine, check: LineCheck, findings: Iterable[Findin
             **dict(check.line),
             "po_line": line.po_line,
             "corrections": line.corrections,
-            "confirmed_delivery_date": line.confirmed_delivery_date,
+            "confirmed_delivery_dates": line.confirmed_delivery_dates,
             "pc_confirmed_by": line.pc_confirmed_by if same else None,
             "pc_confirmed_at": line.pc_confirmed_at if same else None,
         }

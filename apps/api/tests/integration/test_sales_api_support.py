@@ -235,7 +235,8 @@ async def test_every_case_the_inbox_opens_reads_without_a_price(api: Api, staff:
     walked over every case the mock inbox opens, not only the two decided."""
     await _decided_world(api)
     processed = await api.as_(AN).post("/inbox/process-all")
-    assert processed.status_code == 200, processed.text
+    assert processed.status_code == 202, processed.text
+    await api.run_queue()
 
     bodies = await _every_case(staff)
 

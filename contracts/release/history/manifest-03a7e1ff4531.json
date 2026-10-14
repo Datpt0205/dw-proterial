@@ -1,0 +1,233 @@
+{
+  "api_version": "0.1.0",
+  "approval_policy_version": "1.0.0",
+  "copy_bundles": [
+    {
+      "checksum": "2866325cda2ce8ea08d86d4869fdd677572499e0d17f36344a255e6516979410",
+      "copy_id": "platform.runtime",
+      "version": "1.3.0"
+    },
+    {
+      "checksum": "d15eb453fc6e6c8a12f13bce4776ad5ea54c92d45725cb4bf08c2c8b8c05f5f5",
+      "copy_id": "platform.runtime",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "dcfeed6e919c29bac34362aea015040597fcec5657dbc8fe82a86866fc9ec1db",
+      "copy_id": "platform.runtime",
+      "version": "1.5.0"
+    },
+    {
+      "checksum": "f7cd2b502af52c5a650162e7392e1ee3b3b841387f44e6726afaf7bad67fe5f7",
+      "copy_id": "platform.runtime",
+      "version": "1.6.0"
+    },
+    {
+      "checksum": "a4d226832c9a75737bd25da430a2ee0465eb1891626d9fdc2e26a8f4b7ad7af1",
+      "copy_id": "sales_documents",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "597bf7df393c3f258460311369d4b78b61ff531d566ef375c8facc3f929fd13a",
+      "copy_id": "sales_documents",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "a61185efa41caa79ba3ccb5bec201038008c23661fd20b689de99ef359f50eed",
+      "copy_id": "sales_documents",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "b95c6c69ad61aa72716e6ba750f203733839ce5476384724b4cedb2f6af1677e",
+      "copy_id": "sales_emails",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "ea318214f4439ce3bb6847b1c821cab54d9e41e6b4c4860676501f02091cd5b5",
+      "copy_id": "sales_emails",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "a325d36f0503673b5acb5b6aa48b926bac25780724ae3cc3a0014dcb6b02b0a7",
+      "copy_id": "sales_emails",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "b2de9c2a52c5860c7b10dc8740a9b0797af39f153f6602a791e704b87cca8aa2",
+      "copy_id": "sales_handoffs",
+      "version": "1.0.0"
+    }
+  ],
+  "eval_datasets": [
+    {
+      "checksum": "2c3569c4af18d9543cbb0223b5dd1c59bf2e4932260ec193975baa1ac38d9d9d",
+      "dataset_id": "platform_smoke",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "00e48ebcfefacba2c4c356d14594d9320572ca8da5446b44a1c5d75b15c52666",
+      "dataset_id": "sales",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "ab96c8413892c34e6e2f9b135b5d133d615876bb92211f5c1f740b58f407ba42",
+      "dataset_id": "sales_descriptions",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "b63f78744909befe486740e4357f840bd6fb23b105f42c1796540816b0a06732",
+      "dataset_id": "sales_handoff",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "8bf3d30de9221cb371c03de43c267f47d6429352a86e4cce219090cf5f09e45c",
+      "dataset_id": "sales_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "13eae6ce8f5dc17a882224d169f584f0b46879808e0c475ea32cc797c59e7b86",
+      "dataset_id": "sales_layout",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "1fd0f4ef4a0f90c2752a9391888a929fe898162a8963c995c4438b4b94c4de6a",
+      "dataset_id": "sales_legacy",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "571d54f37357dec46615e7de4d2c18c210978ea7ad877abe4e182b8d37880a30",
+      "dataset_id": "sales_reply",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "11d9045b7f626ef62ab1cd626e40f94c06d9bc0c42fdd2df78ce557cc6a9ac2a",
+      "dataset_id": "sales_rfq",
+      "version": "1.0.0"
+    }
+  ],
+  "knowledge_index_version": "2026-07-25.structure-1",
+  "memory_policy_version": "2.0.0",
+  "platform_version": "0.1.0",
+  "policies": [
+    {
+      "checksum": "bbebba26b5708933b6f8ab5c43a08f57d4c6ef595e09afb1a9422df0b7d6b49c",
+      "policy_id": "attachment_ingest",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "c0ec53bf9f752948ddcb910c88cfb61f04020ee4c1e437aae74f77623fcaf075",
+      "policy_id": "retention",
+      "version": "1.7.0"
+    },
+    {
+      "checksum": "c5035251d916d76a355d7d647388dd2844f933a9ae5b3d0846a48788c5dc14ef",
+      "policy_id": "sales_bravo_upload",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "ac58b074437b025af24f2be7ee5b93d789004f53d42a07883c6844793f2bd689",
+      "policy_id": "sales_bravo_upload",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
+      "policy_id": "sales_kpi",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "21647449c62ab1c35dd24ba5b954c3cffab439dd584d616584fe3e7220fe4cf7",
+      "policy_id": "sales_order_rules",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "24444d00e5f67716d9ba336b39fd6f6293db1ee19f8446715317b74f59ba2b00",
+      "policy_id": "sales_order_rules",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "e7492a6191affc885e581adad4c427a50dcffa22c9b04bd419f2e8fb808c9ba5",
+      "policy_id": "sales_order_rules",
+      "version": "1.3.0"
+    },
+    {
+      "checksum": "6e84ce584ebd76202516a8bb7a5ef4766c5e8744958869fabb4b3095f12c8d5a",
+      "policy_id": "sales_order_rules",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "4b9ab643aae271bf1f74e9d8b87eaaf0ca5ffee5dfd4e6f56ca4befdddb9cf9c",
+      "policy_id": "sales_order_rules",
+      "version": "1.5.0"
+    },
+    {
+      "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",
+      "policy_id": "sales_pricing",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "2cfb95e54ff95e5f4e2ab3fa726f56a7e857d72a6c43f5ed7291bd6b377af4c5",
+      "policy_id": "sales_quote_rules",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",
+      "policy_id": "worker_runs",
+      "version": "1.0.0"
+    }
+  ],
+  "prompt_bundles": [
+    {
+      "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
+      "prompt_id": "platform.untrusted_demo",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "40b7dcacc569ed4fc4050054058fc39e2d4148144d3f85362bde04e25243ff75",
+      "prompt_id": "sales.description_attributes",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "8d09212cc494ecdd4d1cbb1f7f7ebf3de9f91260d77eb3beb9cc6bfab5015c0f",
+      "prompt_id": "sales.message_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "e6d0b5c04acea026f0708dbe42135b0b3e9f6b487609e6684d55b0c311cbcd2b",
+      "prompt_id": "sales.po_layout_proposal",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "bf2bae5ec7698fa474e690214153b0e75f7040f3e748103577652f5ae7e7b8e9",
+      "prompt_id": "sales.reply_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "5f033a5e6738e6892fda8ea499a90475ce2858f03063432808f804a1d9533138",
+      "prompt_id": "sales.request_handoff",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "a810fe957f277681649f1b0a143f6a971f5f1632c4267de91b871c76b376de6a",
+      "prompt_id": "sales.rfq_extraction",
+      "version": "1.0.0"
+    }
+  ],
+  "rubrics": [],
+  "schema_version": "1.0",
+  "tool_specs": [],
+  "toolsets": [],
+  "workers": [
+    {
+      "agent_prompt_id": null,
+      "agent_prompt_version": null,
+      "autonomy_level": "A1",
+      "graph_version": "1.0.0",
+      "memory_policy_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "prompt_bundle_version": "1.1.0",
+      "toolset_version": null,
+      "worker_id": "sales-dw1",
+      "worker_version": "1.0.0"
+    }
+  ]
+}

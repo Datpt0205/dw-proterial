@@ -51,18 +51,27 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install Chromium
         run: pnpm --filter @dw/web exec playwright install --with-deps chromium
-      - name: Start Postgres, object storage, cache and vector store
+      - name: Start Postgres, object storage, cache, vector store and the reader
         # The integration job's pattern, without Keycloak and the document
         # sandbox: the walk signs in through the dev-auth session bridge, and
         # Sales prints its own files (dw_sales.adapters.artifact_files). The
-        # buckets are a one-shot; `run` returns its exit code, where `up --wait`
-        # would read its normal exit as a failure.
+        # reader sandbox (ticket 25) reads every attachment, for the API's
+        # source views and the worker's processing, through its loopback
+        # gateway. The buckets are a one-shot; `run` returns its exit code,
+        # where `up --wait` would read its normal exit as a failure.
         run: |
           cp .env.example .env
-          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey s3
+          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait --build postgres qdrant valkey s3 reader reader-gateway
           docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra run --rm s3-setup
       - name: Migrate
         run: make db-migrate
+      - name: Start the worker
+        # "DW xử lý" queues (ticket 25): the worker's `sales_processing` lane
+        # runs what the walk presses. The mailbox lane stays off, as the walk
+        # presses the buttons itself (demo.md, section 1).
+        run: |
+          set -a; . ./.env; set +a
+          DW_WORKER_SALES_INBOX_LANE=false nohup uv run python -m dw_worker.main > worker.log 2>&1 &
       - name: DW1 walk
         # Playwright starts the dev-auth API and the web itself (playwright.config.ts
         # `webServer`); the spec resets the demo tenants first. No retries: a
@@ -80,6 +89,7 @@ jobs:
           path: |
             apps/web/test-results/
             apps/web/playwright-report/
+            worker.log
           retention-days: 14
       - name: Stop infra
         if: always()

@@ -23,6 +23,7 @@ import { salesApi } from "../../_lib/api";
 import {
   ACTION,
   CLOSE_REASON,
+  DERIVATION,
   FIELD,
   label,
   NOT_APPLIED_REASON,
@@ -487,6 +488,17 @@ function OrderDetail() {
                     label: "Bộ đọc",
                     children: data.parser_version,
                   },
+                  ...(data.derivation
+                    ? [
+                        {
+                          key: "derivation",
+                          label: DERIVATION[data.derivation.method],
+                          children: data.derivation.derived_sha256
+                            ? `${data.derivation.tool} · bản chuyển ${data.derivation.derived_sha256.slice(0, 16)}…`
+                            : data.derivation.tool,
+                        },
+                      ]
+                    : []),
                   {
                     key: "asof",
                     label: "Dữ liệu đến ngày",

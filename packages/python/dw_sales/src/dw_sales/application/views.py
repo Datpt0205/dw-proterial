@@ -31,7 +31,13 @@ from typing import Final, Literal
 from pydantic import BaseModel, ConfigDict
 
 from dw_sales.application.access import PriceView
-from dw_sales.application.case_store import LoggedMessage, WorkerState
+from dw_sales.application.case_store import (
+    JobError,
+    JobStatus,
+    LoggedMessage,
+    ProcessingJob,
+    WorkerState,
+)
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -56,6 +62,7 @@ from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
     AskCustomer,
     CorrectedBySales,
+    Derivation,
     DispositionKind,
     Finding,
     FindingCode,
@@ -413,8 +420,9 @@ class LineBasisView(BaseModel):
 
 class DeliveryScheduleView(BaseModel):
     """One delivery of a line's quantity (ticket 21), as the line is entered
-    (a schedule the PO prints is never typed over): where it is printed, and
-    DW1's suggested date for it."""
+    (a schedule the PO prints is never typed over): where it is printed,
+    DW1's suggested date for it, and, on a line the PO splits, the date Sales
+    confirmed for it (ticket 35)."""
 
     model_config = _VIEW
 
@@ -422,6 +430,9 @@ class DeliveryScheduleView(BaseModel):
     requested_date: date
     anchor: SourceAnchor
     suggested_delivery_date: date | None
+    # None before confirmation, and on a line delivered once, whose date is
+    # the line's `confirmed_delivery_date`.
+    confirmed_delivery_date: date | None
 
 
 class OrderLineView(BaseModel):
@@ -449,6 +460,7 @@ class OrderLineView(BaseModel):
     mapping: MappingView
     basis: LineBasisView
     suggested_delivery_date: date | None
+    # A line delivered once; a split line's dates are its schedules' (ticket 35).
     confirmed_delivery_date: date | None
     pc_confirmed_by: uuid.UUID | None
     pc_confirmed_at: datetime | None
@@ -528,6 +540,7 @@ def _reading(reading: DescriptionReading | None) -> DescriptionReadingView | Non
 def order_line(case: OrderCase, line: OrderLine, prices: PriceView) -> OrderLineView:
     po = line.po_line
     mapping = line.mapping
+    confirmed = {index: day for index, (_, day) in enumerate(line.confirmed_schedules())}
     return OrderLineView(
         line_no=po.line_no,
         customer_item_code=po.customer_item_code,
@@ -543,8 +556,9 @@ def order_line(case: OrderCase, line: OrderLine, prices: PriceView) -> OrderLine
                 requested_date=s.requested_date,
                 anchor=s.anchor,
                 suggested_delivery_date=line.suggested_date(s),
+                confirmed_delivery_date=confirmed.get(index),
             )
-            for s in line.effective.schedules
+            for index, s in enumerate(line.effective.schedules)
         ],
         printed_schedules=po.prints_schedules,
         anchors=_seen_anchors(po.anchors, prices),
@@ -663,6 +677,9 @@ class OrderCaseView(BaseModel):
     # Stamped when checked (spec decision 11) and when opened (G22).
     rules_version: str | None
     parser_version: str
+    # How the bytes the PO was read from were made from the attachment (ticket
+    # 27): a converted copy, or an OCR reading; None: read as it was sent.
+    derivation: Derivation | None = None
     catalog_as_of: datetime | None
     release_manifest_ref: str | None
     cross_check_required: bool | None
@@ -872,6 +889,7 @@ def order_case(
         ],
         rules_version=case.rules_version,
         parser_version=document.parser_version,
+        derivation=document.derivation,
         catalog_as_of=case.catalog_as_of,
         release_manifest_ref=release_manifest_ref,
         cross_check_required=case.cross_check_required,
@@ -1572,12 +1590,41 @@ class InboxMessageView(BaseModel):
     sender_verified: bool
     disposition: MessageDispositionView
     handoff_draft: HandoffDraftView | None = None
+    # Its processing, once someone asked for it (ticket 25): what the page
+    # shows while DW1 works, and why it stopped if it failed.
+    processing: ProcessingJobView | None = None
+
+
+class ProcessingJobView(BaseModel):
+    """A message's processing job (ticket 25): ids, a status and a reason
+    code, never anything read from the message."""
+
+    model_config = _VIEW
+
+    job_id: uuid.UUID
+    message_id: str
+    status: JobStatus
+    requested_at: datetime
+    attempts: int
+    error: JobError | None
+
+
+def processing_job(job: ProcessingJob) -> ProcessingJobView:
+    return ProcessingJobView(
+        job_id=job.job_id,
+        message_id=job.message_id,
+        status=job.status,
+        requested_at=job.requested_at,
+        attempts=job.attempts,
+        error=job.error,
+    )
 
 
 def inbox_message(
     message: InboundMessage,
     disposition: MessageDispositionView,
     handoff_draft: HandoffDraftView | None = None,
+    processing: ProcessingJob | None = None,
 ) -> InboxMessageView:
     return InboxMessageView(
         message_id=message.message_id,
@@ -1595,6 +1642,7 @@ def inbox_message(
         sender_verified=message.authentication.verified,
         disposition=disposition,
         handoff_draft=handoff_draft,
+        processing=None if processing is None else processing_job(processing),
     )
 
 

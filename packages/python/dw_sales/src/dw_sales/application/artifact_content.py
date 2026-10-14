@@ -215,7 +215,9 @@ class Bound[T: _Words]:
 
 
 class EmailTemplate(_Words):
-    subject: _Text
+    # One header line: a tenant writes its own copy (ticket 36), and a line
+    # break here would leave a draft the mail writer refuses to build.
+    subject: Annotated[str, Field(min_length=1, max_length=4000, pattern=r"^[^\x00-\x1f\x7f]+$")]
     body: _Text
     # One line of the draft's list, joined into the body's ``${lines}``.
     line: _Text | None = None
@@ -382,3 +384,8 @@ class BravoUploadLayout(BaseModel):
     def version(self) -> str:
         """``id@version``, as the release manifest pins it and an artifact records it."""
         return f"{self.policy_id}@{self.policy_version}"
+
+    @property
+    def ref(self) -> str:
+        """``key@x.y.z``, as a tenant's version of it is named (ticket 36)."""
+        return self.version

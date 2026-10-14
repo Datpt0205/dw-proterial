@@ -222,6 +222,12 @@ kind of change nobody makes and everybody works around.
   inbound event starts runs no request ever touched. The limit comes from the
   plan through `RunAllowancePort`, which the runtime declares and the platform
   satisfies, so neither package reads the other's table.
+- A customer's file is parsed in a sandbox, never in the API: Sales reads
+  every attachment in the `reader` container (`apps/reader`: no network, one
+  throwaway process per file under `ulimit` and a wall clock, reached over a
+  Unix socket), and an import-linter contract keeps every parser out of
+  `dw_api`. Work that reads files is queued for the worker, not awaited by a
+  request (sales ticket 25).
 - Channels are reached through a port, never a provider's client. `ChatSenderPort`
   is the narrow intersection every channel can satisfy; code needing one
   provider's own features takes that provider's client and says so in its type.

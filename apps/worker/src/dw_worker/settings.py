@@ -337,6 +337,26 @@ class WorkerSettings(BaseSettings):
         default=3310, validation_alias=AliasChoices("DW_SALES_CLAMD_PORT")
     )
 
+    # --- Sales: the reader sandbox (ticket 25) ---
+    # Every customer file is read by the `reader` compose service: over its
+    # Unix socket where this container mounts it (compose fixes the path),
+    # else over the loopback gateway a host-run local process reaches
+    # (`reader-gateway`, profile `infra`).
+    sales_reader_socket: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_SALES_READER_SOCKET")
+    )
+    sales_reader_url: str = Field(
+        default="http://127.0.0.1:8120", validation_alias=AliasChoices("DW_SALES_READER_URL")
+    )
+    # `sandbox` reads there. `in_process` reads in this process, with no
+    # containment: for a host-run local worker without the reader image only,
+    # refused in a deployed profile (here, and where it is built,
+    # `dw_worker.main.sales_reader`). The API has no such switch: it imports
+    # no reader at all (an import-linter contract).
+    sales_reader: Literal["sandbox", "in_process"] = Field(
+        default="sandbox", validation_alias=AliasChoices("DW_SALES_READER")
+    )
+
     def sales_demo_scope(self) -> tuple[uuid.UUID, uuid.UUID] | None:
         """The one (tenant, workspace) DW1's mocks stand in for, or None.
 
@@ -412,6 +432,11 @@ class WorkerSettings(BaseSettings):
             raise RuntimeError(
                 f"unscanned attachments are forbidden in the {self.profile} profile:"
                 " DW_SALES_MALWARE_SCAN=skip"
+            )
+        if self.sales_reader == "in_process" and self.sales_demo_scope() is not None:
+            raise RuntimeError(
+                "reading attachments outside the reader sandbox is forbidden in the "
+                f"{self.profile} profile: DW_SALES_READER=in_process"
             )
         if self.embedding_provider == "hash":
             raise RuntimeError(

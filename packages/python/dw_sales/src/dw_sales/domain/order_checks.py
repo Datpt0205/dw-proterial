@@ -199,6 +199,11 @@ class OrderRules(BaseModel):
         """What a finding is stamped with: ``sales_order_rules@1.5.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
+    @property
+    def ref(self) -> str:
+        """``key@x.y.z``, as a tenant's version of it is named (ticket 36)."""
+        return self.version
+
     def finding(
         self,
         code: FindingCode,

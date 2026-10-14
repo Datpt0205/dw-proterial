@@ -33,6 +33,7 @@ members = [
     "dw-memory",
     "dw-observability",
     "dw-platform",
+    "dw-reader",
     "dw-sales",
     "dw-worker",
 ]
@@ -1216,6 +1217,29 @@ requires-dist = [
 ]
 
 [[package]]
+name = "dw-reader"
+version = "0.1.0"
+source = { editable = "apps/reader" }
+dependencies = [
+    { name = "dw-docgen" },
+    { name = "dw-sales" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dw-docgen", editable = "apps/docgen" },
+    { name = "dw-sales", editable = "packages/python/dw_sales" },
+    { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "pydantic-settings", specifier = ">=2.7,<3" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
+]
+
+[[package]]
 name = "dw-sales"
 version = "0.1.0"
 source = { editable = "packages/python/dw_sales" }
@@ -1225,8 +1249,10 @@ dependencies = [
     { name = "dw-observability" },
     { name = "dw-platform" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "langgraph" },
     { name = "openpyxl" },
+    { name = "pillow" },
     { name = "pydantic" },
     { name = "pypdf" },
     { name = "pyyaml" },
@@ -1247,8 +1273,10 @@ requires-dist = [
     { name = "dw-observability", editable = "packages/python/dw_observability" },
     { name = "dw-platform", editable = "packages/python/dw_platform" },
     { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "httpx", specifier = ">=0.28,<1" },
     { name = "langgraph", specifier = ">=0.6,<2" },
     { name = "openpyxl", specifier = ">=3.1,<4" },
+    { name = "pillow", specifier = ">=10.0" },
     { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "pypdf", specifier = ">=6,<7" },
     { name = "pyyaml", specifier = ">=6,<7" },

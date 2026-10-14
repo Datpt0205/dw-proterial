@@ -57,7 +57,8 @@ from dw_evals.graders import GraderContext, GradeResult
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH
-from dw_sales.adapters.readers.text_parts import AttachmentTexts
+from dw_sales.adapters.reader_client import ClientTexts
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.model_reading import (
     DescriptionReader,
     ModelUnavailableError,
@@ -182,7 +183,8 @@ def _xlsx(rows: Sequence[Sequence[Any]], hidden: Sequence[int]) -> bytes:
 
 def _reader(model: Any) -> RfqModelReader:
     catalog = MockSalesCatalog.load(ALPHA)
-    return RfqModelReader(model, AttachmentTexts(), catalog, DescriptionReader(_Down()))
+    texts = ClientTexts(InProcessReaderTransport())
+    return RfqModelReader(model, texts, catalog, DescriptionReader(_Down()))
 
 
 async def read_request(model: Any, spec: Mapping[str, Any]) -> RequestRead | str:
@@ -682,8 +684,9 @@ def _service(ctx: GraderContext, inbox: MockInbox, catalog: MockSalesCatalog, mo
     """The quotation flow over ``inbox``, with the demo tenant's rules as the
     API composes them (the step on for the demo tenant, off for any other)."""
     from dw_sales.adapters.assembly import model_requests
-    from dw_sales.adapters.policy_files import load_sales_policies
-    from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+    from dw_sales.adapters.memory_rules import MemoryRuleVersions
+    from dw_sales.adapters.policy_files import load_sales_policies, rule_book
+    from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader
     from dw_sales.application.quotation import QuotationService
     from dw_sales.evals.world import MemoryStore
 
@@ -693,13 +696,15 @@ def _service(ctx: GraderContext, inbox: MockInbox, catalog: MockSalesCatalog, mo
     return QuotationService(
         catalog=catalog,
         inbox=inbox,
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=ClientRfqReader(InProcessReaderTransport()),
+        reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=MemoryStore(),
         ledger=catalog,
-        rules=policies.quote_rules,
-        pricing=policies.pricing,
-        requests=model_requests(model, catalog, _demo_rules()),
+        # The platform's quote rules and pricing: no tenant holds a version here.
+        policies=rule_book(policies, MemoryRuleVersions()),
+        requests=model_requests(
+            model, catalog, _demo_rules(), ClientTexts(InProcessReaderTransport())
+        ),
     )
 
 

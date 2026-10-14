@@ -41,7 +41,7 @@ class QuoteFileUnreadableError(DomainError):
 class RfqReaderPort(Protocol):
     """Reads a customer's request-for-quotation file."""
 
-    def read(self, content: AttachmentContent) -> RfqDocument | None:
+    async def read(self, content: AttachmentContent) -> RfqDocument | None:
         """What the file states, every value anchored to its place in it.
 
         None when the file is not a request for quotation in a layout this
@@ -56,7 +56,7 @@ class RfqReaderPort(Protocol):
 class DesignReplyReaderPort(Protocol):
     """Reads Design's reply to a YCBG."""
 
-    def read(self, content: AttachmentContent) -> DesignReplyDocument | None:
+    async def read(self, content: AttachmentContent) -> DesignReplyDocument | None:
         """None when the file is not a Design reply this reader knows; raises
         `QuoteFileUnreadableError` when it is one with a value it cannot read."""
         ...

@@ -540,9 +540,17 @@ def flagged_as_new(document: PoDocument) -> PoDocument:
     """``document`` with every value it read flagged `new_layout`: the header,
     each line and the total, so each is `value_uncertain` and Sales confirms
     it field by field (`layout_onboarding.uncertain_first_pos`)."""
+    return flagged_everywhere(document, RegionFlag.NEW_LAYOUT)
+
+
+def flagged_everywhere(document: PoDocument, flag: RegionFlag) -> PoDocument:
+    """``document`` with every value it read flagged ``flag``: the header,
+    each line and the total, so each is `value_uncertain` until Sales
+    confirms it field by field (a new layout's first POs; an OCR reading,
+    ticket 27)."""
 
     def flags(existing: tuple[FlaggedValue, ...], fields: Iterable[str]) -> list[FlaggedValue]:
-        added = [FlaggedValue(field=field, flag=RegionFlag.NEW_LAYOUT) for field in fields]
+        added = [FlaggedValue(field=field, flag=flag) for field in fields]
         return [*existing, *added]
 
     header = document.header.model_dump()

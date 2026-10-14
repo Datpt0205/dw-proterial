@@ -47,6 +47,7 @@ from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
+from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.persistence.uow import (
@@ -55,11 +56,8 @@ from dw_sales.adapters.persistence.uow import (
     SqlSalesUnitOfWorkFactory,
 )
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.readers.text_parts import AttachmentTexts
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
+from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.access import SalesAuthorizationPort
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
@@ -77,9 +75,14 @@ from dw_sales.application.ports import (
     SalesScope,
     ScopeHoldersPort,
 )
+from dw_sales.application.processing import (
+    ProcessingDrain,
+    ProcessingQueuePort,
+    RequesterAccessPort,
+)
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
-from dw_sales.application.rfq_reading import ModelRequests, RfqModelReader
+from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
 from dw_sales.application.rules import RuleBookOrderRules
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.telemetry import SpanPort
@@ -111,6 +114,10 @@ class Dw1Mount:
     services: SalesServices
     # Built only for a process that runs the mailbox lane (`lane_access`).
     lane: InboxLane | None
+    # Built only for a process that drains the processing queue
+    # (`requester_access`, ticket 25), with the queue its reaper settles.
+    drain: ProcessingDrain | None = None
+    queue: ProcessingQueuePort | None = None
 
 
 def build_dw1(
@@ -131,7 +138,9 @@ def build_dw1(
     runtime: Dw1Runtime,
     telemetry: SpanPort,
     scanner: MalwareScanPort,
+    reader: ReaderTransport,
     lane_access: ServiceAccessPort | None = None,
+    requester_access: RequesterAccessPort | None = None,
     model: ModelGateway | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
@@ -139,13 +148,18 @@ def build_dw1(
     approval made strict and checked by the context before it is recorded
     (`dw_sales.workflows.graph.register`); its spans through ``telemetry``,
     the process's own, cut to Sales' allowlist (`dw_sales.application.telemetry`);
-    and, given ``lane_access``, the mailbox lane over the same services.
-    Every attachment is scanned by ``scanner`` before anything reads it
-    (ticket 25): the mailbox each service holds is the scanned one."""
+    and, given ``lane_access``, the mailbox lane over the same services;
+    given ``requester_access``, the drain of the processing queue that "DW
+    xử lý" and the lane fill (ticket 25), which runs each job as whoever
+    asked, resolved again by the platform. Every attachment is scanned by
+    ``scanner`` before anything reads it (ticket 25): the mailbox each service
+    holds is the scanned one. Every file is then read through ``reader``, the
+    reader sandbox wherever a process is deployed
+    (`dw_sales.adapters.reader_client`)."""
     catalog = MockSalesCatalog.load(scope)
-    readers = mock_po_readers()
-    inbox = ScannedInbox(MockInbox.load(scope), scanner, readers)
     policies = load_sales_policies(configs / "policies", configs / "copy")
+    readers = client_readers(reader, policies.order_rules.intake)
+    inbox = ScannedInbox(MockInbox.load(scope), scanner, readers.po)
     # The platform's rules, with a tenant's own approved version where it has
     # one (ticket 19): stored, proposed and approved through `/sales/rules`.
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
@@ -157,30 +171,29 @@ def build_dw1(
         None if model is None else interpretation_for(model, configs, worker.default_model_profile)
     )
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
-    layout_checks = LayoutChecks(readers, catalog)
+    layout_checks = LayoutChecks(readers.po, catalog)
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=readers.rfq,
+        reply_reader=readers.design_reply,
         cases=SqlQuoteCaseLookup(session_factory),
         ledger=catalog,
-        rules=policies.quote_rules,
-        pricing=policies.pricing,
+        policies=book,
         requests=(
             None
             if interpretation is None
-            else model_requests(interpretation, catalog, tenant_rules)
+            else model_requests(interpretation, catalog, tenant_rules, readers.texts)
         ),
     )
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
-        reader=readers,
+        reader=readers.po,
         rules=tenant_rules,
         cases=order_cases,
         new_case_id=ids.new_uuid,
-        quote_forms=ExcelQuoteForms(),
+        quote_forms=readers.forms,
         descriptions=None if interpretation is None else DescriptionReader(interpretation),
         intents=(
             None if interpretation is None else IntentReader(interpretation, catalog, order_cases)
@@ -212,15 +225,13 @@ def build_dw1(
         inbox=inbox,
         intake=intake,
         quotation=quotation,
-        files=FileSourceView(policies.order_rules.intake),
+        files=readers.source,
         book=book,
         directory=directory,
         holders=holders,
         notifications=notifications,
         artifact_bytes=artifact_bytes,
         artifact_writer=ArtifactFiles(),
-        artifact_copy=policies.artifact_copy,
-        handoff_copy=policies.handoff_copy,
         layout_checks=layout_checks,
         release_manifest_ref=release_manifest_ref,
         runs=runs,
@@ -238,9 +249,13 @@ def build_dw1(
     lane = (
         None
         if lane_access is None
-        else InboxLane(uow, inbox, assembly.services.dw1, lane_access, clock, ids)
+        else InboxLane(uow, inbox, assembly.services.processing, lane_access, clock, ids)
     )
-    return Dw1Mount(services=assembly.services, lane=lane)
+    if requester_access is None:
+        return Dw1Mount(services=assembly.services, lane=lane)
+    queue = SqlProcessingQueue(session_factory)
+    drain = ProcessingDrain(queue, uow, assembly.services.dw1, requester_access, clock, ids)
+    return Dw1Mount(services=assembly.services, lane=lane, drain=drain, queue=queue)
 
 
 def build_layout_settlement(
@@ -260,12 +275,15 @@ def build_layout_settlement(
 
 
 def model_requests(
-    model: InterpretationPort, catalog: SalesCatalogPort, rules: OrderRulesPort
+    model: InterpretationPort,
+    catalog: SalesCatalogPort,
+    rules: OrderRulesPort,
+    texts: AttachmentTextPort,
 ) -> ModelRequests:
     """The quotation flow's model step over ``model`` (ticket 29): requests
-    read from the mail and the attachments' text, item descriptions as
+    read from the mail and the attachments' ``texts``, item descriptions as
     ticket 28 reads them, switched by the tenant's rules."""
-    reader = RfqModelReader(model, AttachmentTexts(), catalog, DescriptionReader(model))
+    reader = RfqModelReader(model, texts, catalog, DescriptionReader(model))
     return ModelRequests(reader=reader, rules=rules)
 
 

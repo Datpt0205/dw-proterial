@@ -27,6 +27,7 @@ from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
+from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.runs import Dw1Runs
 from dw_sales.application.source import SourceService
@@ -73,6 +74,8 @@ quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE)
 quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 # The routes' way to start DW1, and the steps the run takes: both check.
 dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
+# "DW xử lý" queues (ticket 25): it checks before reading the mailbox too.
+processing = ProcessingService(STORE, GATE, CLOCK, IDS, STORE)
 steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE)
 RUN = uuid.UUID(int=10)
 sources = SourceService(STORE, GATE, CLOCK, STORE, STORE)
@@ -109,6 +112,8 @@ CALLS: dict[str, tuple[str, Call]] = {
     ),
     "dw1.process": ("sales.inbox.process", lambda c: dw1.process(c, "M01")),
     "dw1.process_all": ("sales.inbox.process", dw1.process_all),
+    "processing.enqueue": ("sales.inbox.process", lambda c: processing.enqueue(c, "M01")),
+    "processing.enqueue_waiting": ("sales.inbox.process", processing.enqueue_waiting),
     "dw1.record_bravo_entry": (
         "sales.order.prepare",
         lambda c: dw1.record_bravo_entry(

@@ -29,10 +29,16 @@ dependencies = [
     # Writes the mock text-PDF attachments (`adapters/mock/generate_attachments.py`)
     # with an embedded font, so Vietnamese survives into the text layer.
     "reportlab>=5,<6",
+    # Draws ticket 27's scanned PO fixture (`adapters/mock/generate_scan.py`),
+    # a PDF with no text layer. The range `apps/docgen` already declares.
+    "pillow>=10.0",
     # Loads `configs/policies/sales_order_rules@*.yaml`, beside the model that
     # validates it, as `dw_platform` and `dw_knowledge` load their policies. The
     # range those packages already declare.
     "pyyaml>=6,<7",
+    # The reader sandbox's client (`adapters/reader_client.py`, ticket 25): HTTP
+    # over its Unix socket. The range `dw_agent_runtime` declares for docgen's.
+    "httpx>=0.28,<1",
 ]
 
 [project.optional-dependencies]

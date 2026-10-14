@@ -22,13 +22,19 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_sales.adapters.memory_rules import platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
+from dw_sales.adapters.reader_client import (
+    ClientDesignReplyReader,
+    ClientPoReaders,
+    ClientQuoteForms,
+    ClientRfqReader,
+)
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.case_store import CaseEvent, CaseOrigin, EventActor
 from dw_sales.application.order_intake import IntakeOutcome, OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -142,8 +148,8 @@ async def run_mailbox(
     intake = OrderIntake(
         catalog=MockSalesCatalog.load(scope),
         inbox=inbox,
-        reader=mock_po_readers(),
-        quote_forms=ExcelQuoteForms(),
+        reader=ClientPoReaders(InProcessReaderTransport()),
+        quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.5.0.yaml")),
         # Duplicates and revisions are recognised against the cases as stored.
         cases=SqlOrderCaseLookup(sessions),
@@ -191,12 +197,14 @@ async def run_m10(
     service = QuotationService(
         catalog=catalog,
         inbox=MockInbox.load(scope),
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=ClientRfqReader(InProcessReaderTransport()),
+        reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=SqlQuoteCaseLookup(sessions),
         ledger=catalog,
-        rules=QuoteRules.model_validate(_policy("sales_quote_rules@1.1.0.yaml")),
-        pricing=SalesPricing.model_validate(_policy("sales_pricing@1.0.0.yaml")),
+        policies=platform_book(
+            QuoteRules.model_validate(_policy("sales_quote_rules@1.1.0.yaml")),
+            SalesPricing.model_validate(_policy("sales_pricing@1.0.0.yaml")),
+        ),
     )
     steps: list[QuoteCase] = []
     clock = iter(T0 + timedelta(minutes=minute) for minute in range(100))

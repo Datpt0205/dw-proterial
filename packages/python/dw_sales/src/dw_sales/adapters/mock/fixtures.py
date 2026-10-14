@@ -14,6 +14,9 @@ from pydantic import BaseModel, ValidationError
 MOCK_ROOT = Path(__file__).resolve().parent
 DATA_DIR = MOCK_ROOT / "data"
 ATTACHMENTS_DIR = MOCK_ROOT / "attachments"
+# Ticket 27's fixtures, kept out of the mailbox: a legacy .xls PO, a scanned
+# PDF PO and what a perfect OCR of it reads (`generate_legacy.py`).
+LEGACY_DIR = MOCK_ROOT / "legacy"
 
 
 def read_records[RecordT: BaseModel](path: Path, model: type[RecordT]) -> tuple[RecordT, ...]:
