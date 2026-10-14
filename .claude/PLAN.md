@@ -32,7 +32,9 @@ own file and a row here.
 - 2026-10-13/14 (agent, Đạt away): sales 19, 21, 23, 24, 34, 35, 36 done;
   25 ("DW xử lý" queued, files read in the `reader` container) and 27
   (LibreOffice, Tesseract there) built, owing the post-reboot checks.
-- **Next:** reboot, then 25/27's post-reboot checks; Đạt reviews 28–33.
+- **Next:** CI green on 1621cbc but for the public-repo guard (Đạt: create
+  the PUBLIC_REPO_DENYLIST secret). After a reboot: ticket 27's reader
+  timings and the support-access 03 walk. Đạt reviews 28–33 and ADR 0005.
 
 ## Decisions Đạt owes
 
