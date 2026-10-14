@@ -387,6 +387,32 @@ def test_a_scanned_po_is_read_by_ocr_with_the_layout_and_every_value_is_flagged(
     assert FindingCode.VALUE_UNCERTAIN in {f.code for f in findings}
 
 
+def test_a_scan_whose_labels_lost_their_diacritics_is_read_by_its_layout() -> None:
+    """What Tesseract 5.3 with `vie+eng` made of the scan's labels and column
+    titles (ticket 27, measured 2026-10-14; CI run 38513561151 refused the scan
+    "no line holds the currency"): `Đơn vị tiền tệ` as `Don vị tiền tệ`,
+    `ĐVT`, `Đơn giá`, `Thành tiền`, `Ngày giao` as `DVT`, `Don gia`, `Thanh
+    tién`, `Ngay giao`. A label is matched without its diacritics on a scanned
+    page; what it labels is still flagged `ocr`."""
+    misread = {
+        "Đơn": "Don",
+        "ĐVT": "DVT",
+        "giá": "gia",
+        "Thành": "Thanh",
+        "tiền": "tién",
+        "Ngày": "Ngay",
+    }
+
+    read = PdfPoReader(MOCK_PDF_LAYOUTS, ocr=TruthOcr(edit=misread)).read(
+        _content(SCANNED), "BRN", CAPS
+    )
+
+    assert isinstance(read, PoDocument), read
+    assert (read.header.currency, read.header.po_date.isoformat()) == ("VND", "2026-09-23")
+    assert len(read.lines) == 3
+    assert all({f.flag for f in line.flags} == {RegionFlag.OCR} for line in read.lines)
+
+
 @pytest.mark.parametrize(
     ("ocr", "reason"),
     [

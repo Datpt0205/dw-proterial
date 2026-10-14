@@ -22,6 +22,7 @@ import statistics
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, LEGACY_DIR
@@ -29,6 +30,7 @@ from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.adapters.reader_client import HttpReaderTransport
 from dw_sales.adapters.reader_wire import ReaderArgs, ReaderOp, ReaderRequest
 from dw_sales.domain.messages import Attachment, AttachmentContent
+from dw_sales.testing.reading_tools import xls_made_in_reader
 
 REPO = Path(__file__).resolve().parent.parent
 CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.5.0.yaml").intake
@@ -42,11 +44,27 @@ COMPOSE = [
     "--profile",
     "infra",
 ]
-CASES = (
-    ("text PDF PO (M03, 2 pages)", ATTACHMENTS_DIR / "M03_BRN-PO-2609-031.pdf", "BRN"),
-    ("xlsx PO (M01)", ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx", "VLX"),
-    (".xls PO, LibreOffice", LEGACY_DIR / "legacy_VLX-PO-2610-0021.xls", "VLX"),
-    ("scanned PO (2 pages), Tesseract", LEGACY_DIR / "scan_BRN-PO-2610-027.pdf", "BRN"),
+# Each file's bytes: the `.xls` is made in the image, none being committed.
+CASES: tuple[tuple[str, str, Callable[[], bytes], str], ...] = (
+    (
+        "text PDF PO (M03, 2 pages)",
+        "M03_BRN-PO-2609-031.pdf",
+        (ATTACHMENTS_DIR / "M03_BRN-PO-2609-031.pdf").read_bytes,
+        "BRN",
+    ),
+    (
+        "xlsx PO (M01)",
+        "M01_VLX-PO-2609-0118.xlsx",
+        (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes,
+        "VLX",
+    ),
+    (".xls PO, LibreOffice", "VLX-PO-2610-0021.xls", lambda: xls_made_in_reader(COMPOSE), "VLX"),
+    (
+        "scanned PO (2 pages), Tesseract",
+        "scan_BRN-PO-2610-027.pdf",
+        (LEGACY_DIR / "scan_BRN-PO-2610-027.pdf").read_bytes,
+        "BRN",
+    ),
 )
 
 # Run inside the container: one reading process on the request given on
@@ -64,12 +82,11 @@ print(json.dumps({"exit": done.returncode, "seconds": round(took, 2), "peak_mib"
 """
 
 
-def _request(path: Path, customer: str) -> ReaderRequest:
-    data = path.read_bytes()
+def _request(name: str, data: bytes, customer: str) -> ReaderRequest:
     content = AttachmentContent(
         attachment=Attachment(
             attachment_id="A1",
-            name=path.name,
+            name=name,
             media_type="application/octet-stream",
             size=len(data),
             sha256=hashlib.sha256(data).hexdigest(),
@@ -112,8 +129,8 @@ def main() -> int:
     args = parser.parse_args()
     print("| file | via gateway (median) | outcome | one reading process | peak memory |")
     print("| ---- | -------------------- | ------- | ------------------- | ----------- |")
-    for label, path, customer in CASES:
-        request = _request(path, customer)
+    for label, name, data, customer in CASES:
+        request = _request(name, data(), customer)
         median, outcome = asyncio.run(_through_the_gateway(request, args.runs))
         probe = _in_the_container(request)
         print(

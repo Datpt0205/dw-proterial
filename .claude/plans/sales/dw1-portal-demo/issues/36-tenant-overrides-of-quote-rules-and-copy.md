@@ -232,3 +232,10 @@ version is stored.
   `sales.price.read`: moot while only PIC and head can list.
 
 ## Comments
+
+- 2026-10-14, CI run 38513561151 (agent):
+  `test_a_tenants_email_copy_writes_its_drafts_and_the_file_names_it`
+  unpacked the render's response as a list, but it is `{"artifacts": [...]}`
+  (`RenderedView`), so the one key came back as `view` and indexing it
+  raised `TypeError`. A test bug; it now reads `["artifacts"]`. Re-run on CI
+  owed.
