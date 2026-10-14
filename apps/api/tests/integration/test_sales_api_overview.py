@@ -32,7 +32,9 @@ async def test_the_overview_counts_the_mailbox_and_the_steps(api: Api) -> None:
     assert before["quotation_time"]["target_seconds"] == 86400.0
 
     processed = await an.post("/inbox/process-all")
-    assert processed.status_code == 200, processed.text
+    assert processed.status_code == 202, processed.text
+    assert len(processed.json()["jobs"]) == MAILBOX
+    assert await api.run_queue() == MAILBOX
     after = (await ha.get("/overview")).json()
 
     assert after["messages"]["without_disposition"] == 0

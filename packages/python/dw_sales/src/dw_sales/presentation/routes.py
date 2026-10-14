@@ -26,8 +26,8 @@ names neither implementation (it may not import the app).
   quotation and cross-checking or returning an order are decisions on a
   platform approval (`POST /api/v1/approvals/{id}/decisions`), which DW1's
   run pauses on and applies (dw_sales ADR 0004). The routes that raise them
-  (`submit`, `bravo-entry`, `resend-cross-check`) and "DW xử lý" start a
-  DW1 run (`svc.dw1`).
+  (`submit`, `bravo-entry`, `resend-cross-check`) start a DW1 run
+  (`svc.dw1`); "DW xử lý" queues one for the worker (`svc.processing`, 202).
 """
 
 # No `from __future__ import annotations` here: the routes annotate their
@@ -44,7 +44,7 @@ from typing import Annotated, Any, Literal, Protocol
 
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi import Path as PathParam
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dw_kernel.errors import InfrastructureError
 from dw_kernel.pagination import MAX_PAGE_SIZE, Page
@@ -68,10 +68,10 @@ from dw_sales.application.views import (
     ItemView,
     LmeView,
     MasterDataView,
-    MessageDispositionView,
     OpenYcbgView,
     OrderCaseView,
     OrderSummaryView,
+    ProcessingJobView,
     QuotationRowView,
     QuoteCaseView,
     QuoteSummaryView,
@@ -158,10 +158,28 @@ class AssigneeBody(VersionBody):
 
 
 class LineDate(BaseModel):
+    """The date Sales confirms for a line delivered once, or, for a line the
+    PO splits over several schedules, one per schedule in their order
+    (ticket 35): exactly one of the two."""
+
     model_config = _BODY
 
     line_no: int = Field(ge=1)
-    confirmed_date: date
+    confirmed_date: date | None = None
+    schedule_dates: list[date] | None = Field(default=None, min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def _one_of_the_two(self) -> "LineDate":
+        if (self.confirmed_date is None) == (self.schedule_dates is None):
+            raise ValueError("a line gets confirmed_date or schedule_dates, not both")
+        return self
+
+    @property
+    def dates(self) -> list[date]:
+        if self.schedule_dates is not None:
+            return self.schedule_dates
+        assert self.confirmed_date is not None  # one of the two, above
+        return [self.confirmed_date]
 
 
 class ConfirmBody(VersionBody):
@@ -238,10 +256,12 @@ class IdempotentRecorder(Protocol):
     async def record[M: BaseModel](self, result: M, *, status_code: int = 200) -> M: ...
 
 
-class ProcessAllView(BaseModel):
+class ProcessingQueuedView(BaseModel):
+    """What "DW xử lý tất cả" queued (ticket 25): one job per message."""
+
     model_config = ConfigDict(frozen=True)
 
-    results: list[MessageDispositionView]
+    jobs: list[ProcessingJobView]
 
 
 class RenderedView(BaseModel):
@@ -325,24 +345,29 @@ def build_router(
     async def inbox(context: Ctx, svc: Svc) -> list[InboxMessageView]:
         return await svc.inbox.messages(context)
 
+    # "DW xử lý" queues (ticket 25): 202 with the job, which the worker runs;
+    # the inbox shows where it stands (`InboxMessageView.processing`).
     @router.post(
         "/inbox/process-all",
-        response_model=ProcessAllView,
+        response_model=ProcessingQueuedView,
+        status_code=202,
         dependencies=[scopes(SalesScopes.INBOX_PROCESS)],
     )
-    async def process_all(context: Ctx, svc: Svc, idem: Idem) -> ProcessAllView:
-        results = await svc.dw1.process_all(context)
-        return await idem.record(ProcessAllView(results=results))
+    async def process_all(context: Ctx, svc: Svc, idem: Idem) -> ProcessingQueuedView:
+        jobs = await svc.processing.enqueue_waiting(context)
+        return await idem.record(ProcessingQueuedView(jobs=jobs), status_code=202)
 
     @router.post(
         "/inbox/{message_id}/process",
-        response_model=MessageDispositionView,
+        response_model=ProcessingJobView,
+        status_code=202,
         dependencies=[scopes(SalesScopes.INBOX_PROCESS)],
     )
     async def process(
         message_id: _MessageId, context: Ctx, svc: Svc, idem: Idem
-    ) -> MessageDispositionView:
-        return await idem.record(await svc.dw1.process(context, message_id))
+    ) -> ProcessingJobView:
+        job = await svc.processing.enqueue(context, message_id)
+        return await idem.record(job, status_code=202)
 
     # -------------------------------------------------------------- orders --
 
@@ -603,7 +628,7 @@ def build_router(
             context,
             case_id,
             case_version=body.case_version,
-            delivery_dates={d.line_no: d.confirmed_date for d in body.delivery_dates},
+            delivery_dates={d.line_no: d.dates for d in body.delivery_dates},
         )
         return await idem.record(change)
 

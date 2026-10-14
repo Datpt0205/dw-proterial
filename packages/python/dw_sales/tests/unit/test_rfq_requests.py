@@ -22,12 +22,13 @@ from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.errors import ConflictError, DomainError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.assembly import model_requests
+from dw_sales.adapters.memory_rules import platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_tenant_order_rules
 from dw_sales.adapters.policy_files import load_sales_policies
-from dw_sales.adapters.readers.text_parts import AttachmentTexts
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader, ClientTexts
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService, RequestNotExtractedError
@@ -133,25 +134,27 @@ def _service(model: Any, *, on: bool = True, inbox: MockInbox | None = None) -> 
     assert DEMO is not None
     catalog = MockSalesCatalog.load(SCOPE)
     rules = PlatformOrderRules(DEMO if on else POLICIES.order_rules)
-    requests = model_requests(model, catalog, rules)
+    requests = model_requests(model, catalog, rules, ClientTexts(InProcessReaderTransport()))
     # Descriptions are read by ticket 28's reader; here it is down, so a
     # line's candidates say so and nothing else moves.
     reader = requests.reader
     requests = type(requests)(
         reader=type(reader)(
-            reader.model, AttachmentTexts(), catalog, type(reader.descriptions)(_Down())
+            reader.model,
+            ClientTexts(InProcessReaderTransport()),
+            catalog,
+            type(reader.descriptions)(_Down()),
         ),
         rules=rules,
     )
     return QuotationService(
         catalog=catalog,
         inbox=inbox or MockInbox.load(SCOPE),
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=ClientRfqReader(InProcessReaderTransport()),
+        reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=MemoryStore(),
         ledger=catalog,
-        rules=POLICIES.quote_rules,
-        pricing=POLICIES.pricing,
+        policies=platform_book(POLICIES.quote_rules, POLICIES.pricing),
         requests=requests,
     )
 

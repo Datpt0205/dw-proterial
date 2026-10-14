@@ -113,7 +113,8 @@ def _line_columns(line: OrderLine) -> dict[str, Any]:
         "mapping_confirmed_at": mapping.confirmed_at,
         "check_basis": line.basis.model_dump(mode="json"),
         "suggested_delivery_date": line.suggested_delivery_date,
-        "confirmed_delivery_date": line.confirmed_delivery_date,
+        # NULL until confirmed: one date per delivery (ticket 35).
+        "confirmed_delivery_dates": list(line.confirmed_delivery_dates) or None,
         "pc_confirmed_by": line.pc_confirmed_by,
         "pc_confirmed_at": line.pc_confirmed_at,
         "corrections": _corrections(line.corrections),
@@ -243,7 +244,7 @@ def _order_line(row: RowMapping) -> OrderLine:
         ),
         basis=LineBasis.model_validate(row["check_basis"]),
         suggested_delivery_date=row["suggested_delivery_date"],
-        confirmed_delivery_date=row["confirmed_delivery_date"],
+        confirmed_delivery_dates=tuple(row["confirmed_delivery_dates"] or ()),
         pc_confirmed_by=row["pc_confirmed_by"],
         pc_confirmed_at=row["pc_confirmed_at"],
         corrections=tuple(ValueCorrection.model_validate(c) for c in row["corrections"]),

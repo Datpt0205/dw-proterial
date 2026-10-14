@@ -51,7 +51,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     SalesUnitOfWorkFactory,
 )
-from dw_sales.application.drafting import ArtifactCopy, Drafting, People, Rendered
+from dw_sales.application.drafting import ArtifactCopyPort, Drafting, People, Rendered
 from dw_sales.application.order_artifacts import (
     OrderDrafting,
     bravo_upload,
@@ -298,7 +298,8 @@ class ArtifactService:
     clock: UtcClock
     ids: IdGenerator
     writer: ArtifactWriterPort
-    copy: ArtifactCopy
+    # The tenant's copy, at the versions the case version's files stamped (ticket 36).
+    copy: ArtifactCopyPort
     catalog: SalesCatalogPort
     directory: MemberDirectoryPort
     design: DesignRequestSource
@@ -392,11 +393,12 @@ class ArtifactService:
             same_version(case_id, case.case_version, case_version)
             if not gate.open_in(case, context, self.gate):
                 raise _closed(kind, case.status.value)
-            current = [
+            drawn = [
                 record
                 for record in await work.artifacts.for_case(cases.kind, case_id)
-                if record.kind == kind and record.case_version == case.case_version
+                if record.case_version == case.case_version
             ]
+            current = [record for record in drawn if record.kind == kind]
             if not current:
                 drafting = Drafting(
                     case=case,
@@ -407,7 +409,9 @@ class ArtifactService:
                     ),
                     drafter=context.principal_id,
                     at=now,
-                    copy=self.copy,
+                    copy=await self.copy.artifact_copy(
+                        scope, [record.template_ref for record in drawn]
+                    ),
                     writer=self.writer,
                     scope=scope,
                 )

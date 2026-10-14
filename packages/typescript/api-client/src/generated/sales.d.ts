@@ -1291,11 +1291,14 @@ export interface components {
         /**
          * DeliveryScheduleView
          * @description One delivery of a line's quantity (ticket 21), as the line is entered
-         *     (a schedule the PO prints is never typed over): where it is printed, and
-         *     DW1's suggested date for it.
+         *     (a schedule the PO prints is never typed over): where it is printed,
+         *     DW1's suggested date for it, and, on a line the PO splits, the date Sales
+         *     confirmed for it (ticket 35).
          */
         DeliveryScheduleView: {
             anchor: components["schemas"]["SourceAnchor"];
+            /** Confirmed Delivery Date */
+            confirmed_delivery_date: string | null;
             /** Quantity */
             quantity: string;
             /**
@@ -1305,6 +1308,24 @@ export interface components {
             requested_date: string;
             /** Suggested Delivery Date */
             suggested_delivery_date: string | null;
+        };
+        /**
+         * Derivation
+         * @description How the bytes a PO was read from were made from the customer's file
+         *     (ticket 27): converted from a legacy Office format, or read by OCR from
+         *     images of its pages. The tool's own version is kept: another converter or
+         *     engine is another reading of the same file.
+         */
+        Derivation: {
+            /** Derived Sha256 */
+            derived_sha256?: string | null;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "converted" | "ocr";
+            /** Tool */
+            tool: string;
         };
         /**
          * DescriptionReading
@@ -1613,6 +1634,7 @@ export interface components {
             handoff_draft?: components["schemas"]["HandoffDraftView"] | null;
             /** Message Id */
             message_id: string;
+            processing?: components["schemas"]["ProcessingJobView"] | null;
             /**
              * Received At
              * Format: date-time
@@ -1948,15 +1970,19 @@ export interface components {
             /** Line No */
             line_no: number;
         };
-        /** LineDate */
+        /**
+         * LineDate
+         * @description The date Sales confirms for a line delivered once, or, for a line the
+         *     PO splits over several schedules, one per schedule in their order
+         *     (ticket 35): exactly one of the two.
+         */
         LineDate: {
-            /**
-             * Confirmed Date
-             * Format: date
-             */
-            confirmed_date: string;
+            /** Confirmed Date */
+            confirmed_date?: string | null;
             /** Line No */
             line_no: number;
+            /** Schedule Dates */
+            schedule_dates?: string[] | null;
         };
         /**
          * LmeBand
@@ -2201,6 +2227,7 @@ export interface components {
             /** Customer Code */
             customer_code: string;
             decision?: components["schemas"]["PendingDecisionView"] | null;
+            derivation?: components["schemas"]["Derivation"] | null;
             /** Duplicate Of Case */
             duplicate_of_case: string | null;
             /** Duplicate Of So */
@@ -2566,10 +2593,41 @@ export interface components {
             /** Line No */
             line_no: number | null;
         };
-        /** ProcessAllView */
-        ProcessAllView: {
-            /** Results */
-            results: components["schemas"]["MessageDispositionView"][];
+        /**
+         * ProcessingJobView
+         * @description A message's processing job (ticket 25): ids, a status and a reason
+         *     code, never anything read from the message.
+         */
+        ProcessingJobView: {
+            /** Attempts */
+            attempts: number;
+            /** Error */
+            error: ("quota" | "not_permitted" | "paused" | "conflict" | "not_found" | "unavailable" | "model_retry" | "abandoned" | "error") | null;
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** Message Id */
+            message_id: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed";
+        };
+        /**
+         * ProcessingQueuedView
+         * @description What "DW xử lý tất cả" queued (ticket 25): one job per message.
+         */
+        ProcessingQueuedView: {
+            /** Jobs */
+            jobs: components["schemas"]["ProcessingJobView"][];
         };
         /** QuotationBasisView */
         QuotationBasisView: {
@@ -2869,7 +2927,7 @@ export interface components {
          *     would see something else than the reader read.
          * @enum {string}
          */
-        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs";
+        RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs" | "ocr";
         /**
          * RenderBody
          * @description An artifact kind to render from the case at the version the caller saw;
@@ -3000,10 +3058,10 @@ export interface components {
         };
         /**
          * RuleKey
-         * @description The Sales policies a tenant may hold its own version of.
+         * @description The Sales policies and copy a tenant may hold its own version of.
          * @enum {string}
          */
-        RuleKey: "sales_order_rules" | "sales_kpi";
+        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs";
         /**
          * RuleProposalBody
          * @description A whole policy document for one key, validated by that key's schema.
@@ -3169,6 +3227,8 @@ export interface components {
             /** Cell Ref */
             cell_ref?: string | null;
             chars?: components["schemas"]["TextRange"] | null;
+            /** Derived Sha256 */
+            derived_sha256?: string | null;
             /** Page */
             page?: number | null;
             /** Quote */
@@ -3577,12 +3637,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProcessAllView"];
+                    "application/json": components["schemas"]["ProcessingQueuedView"];
                 };
             };
             /** @description Validation Error */
@@ -3611,12 +3671,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MessageDispositionView"];
+                    "application/json": components["schemas"]["ProcessingJobView"];
                 };
             };
             /** @description Validation Error */

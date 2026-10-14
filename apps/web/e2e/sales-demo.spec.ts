@@ -29,18 +29,23 @@ import {
  * asked for it; processing M04 first shows the procedure's order (WIV-03-012
  * step 8, then the revision supersedes it in the same case).
  *
- * DW1's mailbox lane (ticket 16) would process the reset mailbox on its own
- * within a minute, before any button is pressed. A worker running beside a
- * reused API therefore runs with `DW_WORKER_SALES_INBOX_LANE=false` (demo.md,
- * section 1); CI starts no worker. The lane itself is tested in
- * `dw_sales/tests/unit/test_inbox_lane.py` and against Postgres in
+ * "DW xử lý" queues (ticket 25): the API answers at once and a WORKER
+ * processes the message, reading its files through the reader sandbox (the
+ * `reader` and `reader-gateway` compose services). The walk therefore needs a
+ * worker running beside the API, with its mailbox lane off
+ * (`DW_WORKER_SALES_INBOX_LANE=false`, demo.md section 1): the lane would
+ * otherwise queue the reset mailbox on its own within a minute, before any
+ * button is pressed. CI starts both (web-e2e.yml). Without a worker, the first
+ * press waits on "Đang chờ DW1" until the step's timeout. The lane itself is
+ * tested in `dw_sales/tests/unit/test_inbox_lane.py` and against Postgres in
  * `apps/worker/tests/integration/test_sales_inbox_lane_db.py`.
  */
 
-// A dev server compiles each route on its first visit, and the API reads the
-// attachments on its first call, so the first screenful of a page can take
-// longer than the suite's default; so can a database shared with other
-// containers on a busy machine.
+// A dev server compiles each route on its first visit, and the worker reads the
+// attachments in the reader sandbox (one throwaway process per file), so the
+// first screenful of a page, or a pressed "DW xử lý", can take longer than the
+// suite's default; so can a database shared with other containers on a busy
+// machine.
 const expect = baseExpect.configure({ timeout: 60_000 });
 
 const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8000";

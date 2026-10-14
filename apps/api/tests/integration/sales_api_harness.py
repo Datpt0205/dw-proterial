@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -48,6 +48,10 @@ from dw_platform.adapters.persistence.idempotency_store import SqlIdempotencySto
 from dw_platform.adapters.persistence.identity_provisioning import SqlIdentityBootstrap
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
+from dw_platform.adapters.persistence.repositories import (
+    SqlApprovalRepository,
+    SqlAuditRepository,
+)
 from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.support_grants import (
     SqlStaffGrants,
@@ -64,6 +68,11 @@ from dw_platform.application.support_access import (
     SupportGrantService,
 )
 from dw_platform.testing.seed_env import sid
+from dw_sales.adapters.persistence.processing import SqlProcessingQueue
+from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.processing import ProcessingDrain
+from dw_sales.presentation.routes import SalesMount
 from dw_sales.testing.scanners import NoMalware
 
 SECRET = "sales-api-integration-secret-0123456789"
@@ -107,6 +116,9 @@ class Persona:
     subject: str
     tenant: str = ALPHA
     calls: list[httpx.Response] = field(default_factory=list)
+    # The worker's processing lane over the same database (ticket 25):
+    # "DW xử lý" only queues, and a test runs what it queued with this.
+    run_queue: Callable[[], Awaitable[int]] | None = None
 
     @property
     def id(self) -> uuid.UUID:
@@ -185,9 +197,18 @@ class Api:
     # Where a test reaches the decision guards (ticket 14 puts a version bump
     # between the guard and the resume).
     approval_flow: ApproveAndResumeService
+    # The worker's `sales_processing` lane over this database (ticket 25).
+    processing: ProcessingDrain
 
     def as_(self, subject: str, tenant: str = ALPHA) -> Persona:
-        return Persona(self.client, subject, tenant)
+        return Persona(self.client, subject, tenant, run_queue=self.run_queue)
+
+    async def run_queue(self) -> int:
+        """Every job "DW xử lý" queued, run as the worker runs it; how many."""
+        handled = 0
+        while await self.processing.drain_one():
+            handled += 1
+        return handled
 
 
 @asynccontextmanager
@@ -288,6 +309,21 @@ async def build_app(
         # No clamd beside this suite (ticket 25): every file is clean here,
         # and the scan is the unit suite's and clamd's integration test's.
         scanner=NoMalware(),
+        # Nor a reader sandbox: the files are read in process, through its
+        # wire; the sandbox's image is `apps/reader`'s integration suite's.
+        reader=InProcessReaderTransport(),
+    )
+    sales = container.sales
+    assert isinstance(sales, SalesMount) and sales.services is not None
+    processing = ProcessingDrain(
+        SqlProcessingQueue(sessions),
+        SqlSalesUnitOfWorkFactory(
+            sessions, audit=SqlAuditRepository, approvals=SqlApprovalRepository
+        ),
+        sales.services.dw1,
+        SqlMembershipLookup(sessions),
+        clock,
+        ids,
     )
     app = create_app(container)
     try:
@@ -297,7 +333,7 @@ async def build_app(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client,
         ):
-            yield Api(client, artifacts, sessions, app, runner, approval_flow)
+            yield Api(client, artifacts, sessions, app, runner, approval_flow, processing)
     finally:
         await engine.dispose()
 

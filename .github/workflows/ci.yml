@@ -249,6 +249,17 @@ jobs:
           load: true
           cache-from: type=gha,scope=docgen
           cache-to: type=gha,mode=max,scope=docgen
+      - name: Prebuild the reader image (cached)
+        # Sales ticket 25/27: the reader sandbox, LibreOffice and Tesseract out
+        # of apt. Cached and loaded under compose's tag, as docgen's above.
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/reader.Dockerfile
+          tags: dw-reader:local
+          load: true
+          cache-from: type=gha,scope=reader
+          cache-to: type=gha,mode=max,scope=reader
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.11.31"
@@ -262,7 +273,7 @@ jobs:
         run: |
           cp .env.example .env
           docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d
-          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey s3 keycloak docgen docgen-gateway
+          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra up -d --wait postgres qdrant valkey s3 keycloak docgen docgen-gateway reader reader-gateway
       - name: Start the malware scanner
         # The `clamav` service as compose pins it, its port published on the
         # loopback by the test overlay alone (sales ticket 25). The suite
@@ -273,6 +284,9 @@ jobs:
       - name: Integration tests
         env:
           DW_TEST_CLAMD: 127.0.0.1:3310
+          # The reader sandbox through its loopback gateway (ticket 25): its
+          # image suite fails, rather than skips, when this is missing on CI.
+          DW_TEST_READER: http://127.0.0.1:8120
         run: uv run pytest -m integration
       - name: E2E tests
         # Its own marker, so `-m integration` never collected it and the step
@@ -335,7 +349,7 @@ jobs:
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             | tar -xz trivy
           ./trivy --version
-          for image in dw-api:local dw-worker:local dw-docgen:local dw-web:local; do
+          for image in dw-api:local dw-worker:local dw-docgen:local dw-reader:local dw-web:local; do
             echo "== $image"
             ./trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
               --exit-code 1 --quiet "$image"
@@ -346,7 +360,7 @@ jobs:
         # nobody could read.
         if: failure()
         run: |
-          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile full logs --no-color --tail 120 api worker docgen migrate
+          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile full logs --no-color --tail 120 api worker docgen reader migrate
       - name: Container status
         if: always()
         run: docker compose --env-file .env -f infra/compose/docker-compose.yml --profile full ps

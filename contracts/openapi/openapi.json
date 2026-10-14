@@ -1604,10 +1604,22 @@
         "type": "object"
       },
       "DeliveryScheduleView": {
-        "description": "One delivery of a line's quantity (ticket 21), as the line is entered\n(a schedule the PO prints is never typed over): where it is printed, and\nDW1's suggested date for it.",
+        "description": "One delivery of a line's quantity (ticket 21), as the line is entered\n(a schedule the PO prints is never typed over): where it is printed,\nDW1's suggested date for it, and, on a line the PO splits, the date Sales\nconfirmed for it (ticket 35).",
         "properties": {
           "anchor": {
             "$ref": "#/components/schemas/SourceAnchor"
+          },
+          "confirmed_delivery_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Delivery Date"
           },
           "quantity": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -1636,7 +1648,8 @@
           "quantity",
           "requested_date",
           "anchor",
-          "suggested_delivery_date"
+          "suggested_delivery_date",
+          "confirmed_delivery_date"
         ],
         "title": "DeliveryScheduleView",
         "type": "object"
@@ -1687,6 +1700,44 @@
           "workspace_id"
         ],
         "title": "DemoUser",
+        "type": "object"
+      },
+      "Derivation": {
+        "additionalProperties": false,
+        "description": "How the bytes a PO was read from were made from the customer's file\n(ticket 27): converted from a legacy Office format, or read by OCR from\nimages of its pages. The tool's own version is kept: another converter or\nengine is another reading of the same file.",
+        "properties": {
+          "derived_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived Sha256"
+          },
+          "method": {
+            "enum": [
+              "converted",
+              "ocr"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "tool": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "tool"
+        ],
+        "title": "Derivation",
         "type": "object"
       },
       "DescriptionReading": {
@@ -2902,6 +2953,16 @@
           "message_id": {
             "title": "Message Id",
             "type": "string"
+          },
+          "processing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcessingJobView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "received_at": {
             "format": "date-time",
@@ -4170,21 +4231,45 @@
       },
       "LineDate": {
         "additionalProperties": false,
+        "description": "The date Sales confirms for a line delivered once, or, for a line the\nPO splits over several schedules, one per schedule in their order\n(ticket 35): exactly one of the two.",
         "properties": {
           "confirmed_date": {
-            "format": "date",
-            "title": "Confirmed Date",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Date"
           },
           "line_no": {
             "minimum": 1.0,
             "title": "Line No",
             "type": "integer"
+          },
+          "schedule_dates": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "maxItems": 1000,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Dates"
           }
         },
         "required": [
-          "line_no",
-          "confirmed_date"
+          "line_no"
         ],
         "title": "LineDate",
         "type": "object"
@@ -5621,6 +5706,16 @@
               }
             ]
           },
+          "derivation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Derivation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "duplicate_of_case": {
             "anyOf": [
               {
@@ -7008,20 +7103,86 @@
         "title": "PrintDifferenceView",
         "type": "object"
       },
-      "ProcessAllView": {
+      "ProcessingJobView": {
+        "description": "A message's processing job (ticket 25): ids, a status and a reason\ncode, never anything read from the message.",
         "properties": {
-          "results": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quota",
+                  "not_permitted",
+                  "paused",
+                  "conflict",
+                  "not_found",
+                  "unavailable",
+                  "model_retry",
+                  "abandoned",
+                  "error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "message_id",
+          "status",
+          "requested_at",
+          "attempts",
+          "error"
+        ],
+        "title": "ProcessingJobView",
+        "type": "object"
+      },
+      "ProcessingQueuedView": {
+        "description": "What \"DW xử lý tất cả\" queued (ticket 25): one job per message.",
+        "properties": {
+          "jobs": {
             "items": {
-              "$ref": "#/components/schemas/MessageDispositionView"
+              "$ref": "#/components/schemas/ProcessingJobView"
             },
-            "title": "Results",
+            "title": "Jobs",
             "type": "array"
           }
         },
         "required": [
-          "results"
+          "jobs"
         ],
-        "title": "ProcessAllView",
+        "title": "ProcessingQueuedView",
         "type": "object"
       },
       "QuotationBasisView": {
@@ -8015,7 +8176,8 @@
           "formula_without_cached_value",
           "model_read",
           "new_layout",
-          "print_differs"
+          "print_differs",
+          "ocr"
         ],
         "title": "RegionFlag",
         "type": "string"
@@ -8443,10 +8605,16 @@
         "type": "object"
       },
       "RuleKey": {
-        "description": "The Sales policies a tenant may hold its own version of.",
+        "description": "The Sales policies and copy a tenant may hold its own version of.",
         "enum": [
           "sales_order_rules",
-          "sales_kpi"
+          "sales_kpi",
+          "sales_quote_rules",
+          "sales_pricing",
+          "sales_emails",
+          "sales_documents",
+          "sales_bravo_upload",
+          "sales_handoffs"
         ],
         "title": "RuleKey",
         "type": "string"
@@ -9051,6 +9219,18 @@
                 "type": "null"
               }
             ]
+          },
+          "derived_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived Sha256"
           },
           "page": {
             "anyOf": [
@@ -13725,11 +13905,11 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProcessAllView"
+                  "$ref": "#/components/schemas/ProcessingQueuedView"
                 }
               }
             },
@@ -13786,11 +13966,11 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDispositionView"
+                  "$ref": "#/components/schemas/ProcessingJobView"
                 }
               }
             },

@@ -36,7 +36,7 @@ TEST_DB = "dw_test_sales_api"
 # append-only and stays; every test reads its own rows by id.
 _CLEAR = (
     "TRUNCATE sales.order_cases, sales.quote_cases, sales.messages, sales.artifacts,"
-    " sales.po_layouts,"
+    " sales.po_layouts, sales.processing_jobs,"
     " sales.source_served, sales.worker_state, sales.case_events,"
     " platform.approval_decisions, platform.approval_requests, platform.worker_runs,"
     " platform.run_checkpoint_writes, platform.run_checkpoints,"

@@ -539,7 +539,7 @@ def _patch_import_linter(text: str, ctx: Context) -> str:
 name = "{ctx.title} is independent"
 type = "forbidden"
 source_modules = ["{ctx.package}"]
-forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]
+forbidden_modules = ["dw_api", "dw_worker", "dw_docgen", "dw_reader"]
 
 [[tool.importlinter.contracts]]
 # Clean/Hexagonal direction inside the context: adapters and presentation

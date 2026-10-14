@@ -62,6 +62,7 @@ export function order(overrides: Partial<Order> = {}): Order {
         requested_date: "2026-11-16",
         anchor: anchor(4),
         suggested_delivery_date: "2026-11-16",
+        confirmed_delivery_date: null,
       },
     ],
     printed_schedules: false,

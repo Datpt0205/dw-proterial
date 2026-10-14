@@ -50,8 +50,8 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, read_records
 from dw_sales.adapters.order_rules import PlatformOrderRules
 from dw_sales.adapters.policy_files import load_sales_policies
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelQuoteForms
+from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.message_intent import MESSAGE_INTENT, IntentReader
 from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.application.order_intake import (
@@ -216,8 +216,8 @@ def _intake(
     return OrderIntake(
         catalog=MockSalesCatalog.load(ALPHA),
         inbox=inbox,
-        reader=mock_po_readers(),
-        quote_forms=ExcelQuoteForms(),
+        reader=ClientPoReaders(InProcessReaderTransport()),
+        quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=rules,
         cases=_NoCases(),
         new_case_id=uuid.uuid4,

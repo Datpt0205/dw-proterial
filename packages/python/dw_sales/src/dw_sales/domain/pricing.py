@@ -73,6 +73,11 @@ class SalesPricing(BaseModel):
         """What a quotation finding is stamped with: ``sales_pricing@1.0.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
+    @property
+    def ref(self) -> str:
+        """``key@x.y.z``, as a tenant's version of it is named (ticket 36)."""
+        return self.version
+
     def copper_adder(self, lme: LmeMonth) -> CopperAdder | None:
         """The adder for the month's LME, or None outside the table.
 

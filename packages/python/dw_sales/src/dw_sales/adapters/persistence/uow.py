@@ -25,6 +25,7 @@ from dw_platform.application.ports import AuditRepositoryPort
 from dw_sales.adapters.persistence.layouts import SqlLayoutStore
 from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
 from dw_sales.adapters.persistence.overview import SqlOverviewReader
+from dw_sales.adapters.persistence.processing import SqlProcessingJobs
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseRepository
 from dw_sales.adapters.persistence.records import (
     SqlArtifactLog,
@@ -52,6 +53,7 @@ class SqlSalesUnitOfWork:
     artifacts: SqlArtifactLog
     worker: SqlWorkerSwitch
     layouts: SqlLayoutStore
+    jobs: SqlProcessingJobs
     approvals: LayoutApprovalsPort
     audit: AuditRepositoryPort
 
@@ -93,6 +95,7 @@ class SqlSalesUnitOfWork:
         self.artifacts = SqlArtifactLog(session, scope)
         self.worker = SqlWorkerSwitch(session, scope)
         self.layouts = SqlLayoutStore(session, scope)
+        self.jobs = SqlProcessingJobs(session, scope)
         self.approvals = self._approvals(session)
         self.audit = self._audit(session)
         return self

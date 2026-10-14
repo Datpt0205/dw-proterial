@@ -1,0 +1,4 @@
+{
+  "messages": ["M90", "M91"],
+  "note": "The messages are added to the fictional mailbox by the grader (dw_sales.evals.legacy): M90 a VLX PO as a legacy .xls, M91 a BRN PO as a scan (adapters/mock/legacy/scan_BRN-PO-2610-027.pdf). The converter and the OCR engine are scripted stand-ins (dw_sales.testing.reading_tools)."
+}

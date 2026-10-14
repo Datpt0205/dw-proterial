@@ -20,6 +20,12 @@ file that changed, or was parsed again into different bytes, no longer
 matches, so an anchor can never point into a file other than the one its
 value was read from. dw_sales ADR 0002 records why
 the type lives here until a second context needs it.
+
+A value read from a converted copy of a legacy file (ticket 27, ADR 0009: a
+legacy .xls read as the .xlsx LibreOffice made of it) carries both hashes:
+the customer's file's, and the copy's (``derived_sha256``), so the place is
+named in the file the customer sent and the reading in the bytes it was made
+from.
 """
 
 from __future__ import annotations
@@ -97,6 +103,8 @@ class SourceAnchor(BaseModel):
     attachment_id: AttachmentId | None
     # The attachment's bytes' sha256; for the message part, its text's.
     attachment_sha256: Sha256Hex
+    # The converted copy's sha256, when the value was read from one (ticket 27).
+    derived_sha256: Sha256Hex | None = None
     cell_ref: str | None = Field(default=None, max_length=64)
     page: int | None = Field(default=None, ge=1)
     boxes: tuple[PageBox, ...] = ()

@@ -27,9 +27,16 @@ from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.adapters.policy_files import load_sales_policies
-from dw_sales.application.handoffs import PROMPT_TOKENS, REQUEST_HANDOFF, HandoffReader, render
+from dw_sales.application.handoffs import (
+    PROMPT_TOKENS,
+    REQUEST_HANDOFF,
+    HandoffCopy,
+    HandoffReader,
+    render,
+)
 from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.rules import RuleDecision, RuleKey
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.handoffs import (
     Handoff,
@@ -42,7 +49,7 @@ from dw_sales.domain.handoffs import (
 from dw_sales.domain.mail_parts import newest_part
 from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.orders import OrderCase
-from dw_sales.evals.graders import AN, CALLERS
+from dw_sales.evals.graders import AN, CALLERS, GIANG
 from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
 
@@ -302,6 +309,60 @@ async def test_a_routed_complaint_carries_its_hand_off_and_the_inbox_writes_it()
     assert draft is not None and draft.to == "qa"
     assert draft.template_ref == "sales_handoffs@1.0.0#complaint"
     assert "VLX-PO-2608-0102" in draft.subject and "LOT-2609-118" in draft.subject
+
+
+async def test_the_inbox_writes_a_hand_off_in_the_tenants_own_copy() -> None:
+    """Ticket 36: a hand-off copy the tenant proposed and its head approved
+    writes the draft, and the draft names that version."""
+    model = Recorded(
+        raw={
+            "po_no_span": "VLX-PO-2608-0102",
+            "lot_no_span": "LOT-2609-118",
+            "problem_quote_spans": ["có 2 cuộn bị móp lõi cuộn, dây bên trong bị trầy vỏ"],
+        }
+    )
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, model=_with_intent(model))
+    await world.process_each(AN, ["M31"])
+    document = COPY.model_dump(mode="json")
+    document["templates"]["complaint"]["subject"] = "[Khiếu nại] {customer} {po} lô {lot}"
+    proposed = await world.services.rules.propose(
+        AN.context(), RuleKey.HANDOFFS, {**document, "version": "9.0.1"}
+    )
+    await world.services.rules.decide(
+        GIANG.context(), proposed.version_id, RuleDecision(approve=True)
+    )
+
+    listed = {m.message_id: m for m in await world.services.inbox.messages(AN.context())}
+
+    draft = listed["M31"].handoff_draft
+    assert draft is not None and draft.template_ref == "sales_handoffs@9.0.1#complaint"
+    assert draft.subject == "[Khiếu nại] VLX VLX-PO-2608-0102 lô LOT-2609-118"
+
+
+@pytest.mark.parametrize(
+    ("field", "text"),
+    [
+        ("line", "{line_no:>999999999}"),
+        ("line", "{line_no.__class__}"),
+        ("line", "{line_no!r}"),
+        ("quote", "{secret}"),
+        ("quote", "{0}"),
+        ("subject", "{customer[0]}"),
+        ("body", "{po:{lot}}"),
+    ],
+)
+def test_a_hand_off_copy_names_only_its_placeholders_bare(field: str, text: str) -> None:
+    """A tenant's version is filled with `str.format`: a format spec builds a
+    string as long as it asks for, an attribute or an index reaches past the
+    value. Each is refused before the copy can be proposed (ticket 36)."""
+    document = COPY.model_dump(mode="json")
+    if field in ("subject", "body"):
+        document["templates"]["complaint"][field] = text
+    else:
+        document[field] = text
+
+    with pytest.raises(ValidationError, match="placeholder"):
+        HandoffCopy.model_validate(document)
 
 
 async def test_with_the_switch_off_no_model_is_asked_and_the_message_routes_as_before(

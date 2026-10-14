@@ -125,6 +125,20 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")
 
 
+async def _process(client: httpx.AsyncClient, world: World, message_id: str) -> dict[str, Any]:
+    """ "DW xử lý" as the page presses it (ticket 25): queued by the route (202),
+    run by the worker's lane, and the disposition read back from the inbox."""
+    response = await client.post(f"/api/v1/sales/inbox/{message_id}/process")
+    assert response.status_code == 202, response.text
+    await world.drain()
+    inbox = await client.get("/api/v1/sales/inbox")
+    assert inbox.status_code == 200, inbox.text
+    shown: dict[str, Any] = next(
+        m["disposition"] for m in inbox.json() if m["message_id"] == message_id
+    )
+    return shown
+
+
 def _amounts(*values: Decimal | None) -> set[str]:
     """An amount as text, as stored and normalised, with and without thousands
     separators. One too short to be told from an id's hex digits is left out:
@@ -201,9 +215,7 @@ async def test_a_fixture_po_leaves_no_document_value_in_spans_logs_or_errors(
         # 1. DW1 processes the POs, through the route and its run.
         processed = {}
         for message_id in (WALKED, *PROCESSED):
-            response = await client.post(f"/api/v1/sales/inbox/{message_id}/process")
-            assert response.status_code == 200, response.text
-            processed[message_id] = response.json()
+            processed[message_id] = await _process(client, world, message_id)
         case_id = uuid.UUID(processed[WALKED]["case_id"])
         assert processed["M16"]["kind"] == "routed_to_sales"
 
@@ -287,8 +299,8 @@ async def test_a_sales_span_carries_only_listed_attributes() -> None:
     exported = _Exported()
     world = open_world(REPO, SampleSet.of(REPO, None), CALLERS, telemetry=exported.telemetry)
     async with _client(_app(world)) as client:
-        response = await client.post(f"/api/v1/sales/inbox/{WALKED}/process")
-    case = world.order(uuid.UUID(response.json()["case_id"]))
+        processed = await _process(client, world, WALKED)
+    case = world.order(uuid.UUID(processed["case_id"]))
 
     (span,) = [
         s
@@ -437,9 +449,8 @@ async def test_a_model_reading_for_sales_exports_no_prompt_or_answer(
         model=_model(exported, server),
     )
     async with _client(_app(world)) as client:
-        processed = await client.post("/api/v1/sales/inbox/M36/process")
-        assert processed.status_code == 200, processed.text
-        case = world.order(uuid.UUID(processed.json()["case_id"]))
+        processed = await _process(client, world, "M36")
+        case = world.order(uuid.UUID(processed["case_id"]))
         shown = await client.get(f"/api/v1/sales/orders/{case.case_id}")
         assert shown.status_code == 200
 

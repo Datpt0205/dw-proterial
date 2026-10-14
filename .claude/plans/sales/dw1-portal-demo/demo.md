@@ -13,11 +13,23 @@ Phần tự động của kịch bản (đường chính và các lần bị t�
 ## 1. Chuẩn bị (một lần, trước buổi demo)
 
 ```sh
-make infra-up          # Postgres, Keycloak, S3, ... trong Docker
+make infra-up          # Postgres, Keycloak, S3, reader, ... trong Docker
 make db-migrate
 make demo-reset        # trạng thái bắt đầu của demo (xem dưới)
-DW_WORKER_SALES_INBOX_LANE=false make dev   # API :8300, web :3300 theo .env (DW_WEB_PORT=3300)
+DW_WORKER_SALES_INBOX_LANE=false make dev   # API :8300, web :3300, và worker
 ```
+
+**"DW xử lý" chạy trong worker (ticket 25).** Bấm **DW xử lý** (một thư hay
+tất cả) chỉ xếp thư vào hàng chờ: API trả lời ngay, worker xử lý, đọc mọi tệp
+đính kèm trong container `reader` (không mạng, mỗi tệp một tiến trình dùng một
+lần). Hộp thư tự đọc lại vài giây một lần khi còn thư đang chờ: cột DW1 hiện
+"Đang chờ DW1", rồi "DW1 đang xử lý", rồi hướng xử lý của thư. Vì vậy **worker
+phải chạy** (`make dev` chạy nó); thiếu worker, thư đứng mãi ở "Đang chờ DW1".
+`make infra-up` dựng `reader` và cổng `reader-gateway` (127.0.0.1:8120) cho
+API và worker chạy trên máy. Lần đầu build image `reader` mất vài phút
+(LibreOffice, Tesseract). "DW xử lý tất cả" giờ là một lượt chạy cho **mỗi**
+thư, như làn hộp thư vẫn đếm, nên cả hộp thư mất vài phút; một thư lỗi hiện lý
+do và nút để bấm lại.
 
 **Vì sao tắt làn hộp thư.** Từ ticket 16, worker có làn `sales_inbox`: mỗi
 phút DW1 tự xử lý mọi thư mới (cũ nhất trước), bằng tài khoản dịch vụ DW1 của
@@ -32,9 +44,10 @@ trong một workspace hay không.
 `make demo-reset` đưa stack về **đúng một trạng thái bắt đầu**, lần nào cũng
 như nhau:
 
-- xóa mọi hồ sơ đơn hàng và báo giá, nhật ký thư, sự kiện hồ sơ, nguồn đã mở,
-  bản ghi tệp và công tắc tạm dừng của **hai tenant demo** (tenant-alpha,
-  tenant-beta) — không đụng tenant khác, không xóa audit log (append-only);
+- xóa mọi hồ sơ đơn hàng và báo giá, nhật ký thư, hàng chờ xử lý thư, sự
+  kiện hồ sơ, nguồn đã mở, bản ghi tệp và công tắc tạm dừng của **hai tenant
+  demo** (tenant-alpha, tenant-beta) — không đụng tenant khác, không xóa audit
+  log (append-only);
 - xóa các lượt chạy (run) của DW1, checkpoint của chúng và các yêu cầu duyệt
   `sales.*` cùng quyết định, nên hộp duyệt bắt đầu trống và buổi diễn tập
   trước không ăn vào số lượt chạy trong ngày của gói;
@@ -87,8 +100,8 @@ người quyết định phải khác mọi người đã làm hồ sơ và **ph
 khách (M07) sẽ vào hồ sơ M04 trước khi ai yêu cầu khách sửa. Vì vậy An làm M04
 trước, đúng thứ tự WIV-03-012 bước 8.
 
-1. **An** mở _Sales → Hộp thư_, bấm **DW xử lý** trên M04. Thư sang "Đã vào hồ
-   sơ".
+1. **An** mở _Sales → Hộp thư_, bấm **DW xử lý** trên M04. Thư hiện "Đang chờ
+   DW1" rồi, sau vài giây, "Đã vào hồ sơ".
 2. Mở hồ sơ M04: hai cờ `price_mismatch` dòng 2 và `code_unmapped` dòng 3.
 3. _Bị từ chối:_ gọi thẳng API `POST /orders/{id}/prepare` khi cờ còn mở trả
    **409**, nêu tên cờ (`price_mismatch:2`).
@@ -98,9 +111,10 @@ trước, đúng thứ tự WIV-03-012 bước 8.
 
 ### 3.2 An xử lý cả hộp thư
 
-1. Ở hộp thư, bấm **DW xử lý tất cả (32)**. Thanh "Cần xử lý" về 0 thư chưa xử
-   lý: _không thư nào bị bỏ sót_ (spec quyết định 10); mỗi thư chuyển Sales có
-   lý do và người phụ trách.
+1. Ở hộp thư, bấm **DW xử lý tất cả** (số trong ngoặc là số thư sẽ xếp). Các
+   thư chuyển "Đang chờ DW1", worker xử lý lần lượt, cũ nhất trước; sau vài
+   phút thanh "Cần xử lý" về 0 thư chưa xử lý: _không thư nào bị bỏ sót_ (spec
+   quyết định 10); mỗi thư chuyển Sales có lý do và người phụ trách.
     - M07 (Rev.1) "Đã gắn vào hồ sơ" — **cùng hồ sơ** M04: hồ sơ hiện "Đang xem
       Rev.1", M04 ở mục bản đã thay thế, bảng thay đổi so với bản gốc, cờ
       `revised_po`; mọi kiểm tra chạy lại.

@@ -9,7 +9,7 @@ license = { text = "Proprietary" }
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "apps/docgen", "apps/worker", "packages/python/*"]
+members = ["apps/api", "apps/docgen", "apps/reader", "apps/worker", "packages/python/*"]
 
 [tool.uv.sources]
 dw-kernel = { workspace = true }
@@ -23,6 +23,7 @@ dw-evals = { workspace = true }
 dw-sales = { workspace = true }
 dw-api = { workspace = true }
 dw-docgen = { workspace = true }
+dw-reader = { workspace = true }
 dw-worker = { workspace = true }
 # Docling (the worker's optional `parsers` extra) pulls torch, whose default
 # wheels bundle a multi-GB CUDA runtime. Document parsing runs fine on CPU, so
@@ -75,6 +76,7 @@ src = [
     "packages/python/*/src",
     "apps/api/src",
     "apps/docgen/src",
+    "apps/reader/src",
     "apps/worker/src",
     "scripts",
 ]
@@ -120,6 +122,7 @@ known-first-party = [
     "dw_api",
     "dw_sales",
     "dw_docgen",
+    "dw_reader",
     "dw_worker",
 ]
 
@@ -143,6 +146,7 @@ files = [
     "packages/python",
     "apps/api/src",
     "apps/docgen/src",
+    "apps/reader/src",
     "apps/worker/src",
     "scripts",
 ]
@@ -159,6 +163,7 @@ mypy_path = [
     "packages/python/dw_sales/src",
     "apps/api/src",
     "apps/docgen/src",
+    "apps/reader/src",
     "apps/worker/src",
     "tests/support",
     "packages/python/dw_platform/tests/integration",
@@ -198,6 +203,7 @@ testpaths = [
     "packages/python",
     "apps/api/tests",
     "apps/docgen/tests",
+    "apps/reader/tests",
     "apps/worker/tests",
 ]
 pythonpath = [".", "tests/support", "packages/python/dw_agent_runtime/tests/integration"]
@@ -231,6 +237,7 @@ source = [
     "apps/api/src",
     "packages/python/dw_sales/src",
     "apps/docgen/src",
+    "apps/reader/src",
     "apps/worker/src",
 ]
 omit = ["*/tests/*", "*/conftest.py", "*/__pycache__/*"]
@@ -271,7 +278,7 @@ root_packages = [
 name = "Sales is independent"
 type = "forbidden"
 source_modules = ["dw_sales"]
-forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]
+forbidden_modules = ["dw_api", "dw_worker", "dw_docgen", "dw_reader"]
 
 [[tool.importlinter.contracts]]
 # The Sales domain decides from values it is handed: no framework, no store,
@@ -298,6 +305,25 @@ forbidden_modules = [
     "openpyxl",
     "pypdf",
     "reportlab",
+]
+
+[[tool.importlinter.contracts]]
+# Sales ticket 25 (ADR 0010 decisions 2 and 6): the API parses no customer
+# file. A source view, a PO layout's cells and its preview are read by the
+# reader sandbox (`dw_sales.adapters.reader_client`, over the `reader`
+# container's socket), and "DW xử lý" only queues: the worker runs it, reading
+# through the same sandbox. A parser imported here, directly or through any
+# module, would bring a file of a sender's choosing back into the process that
+# holds every tenant's session.
+name = "The API imports no reader of customer files"
+type = "forbidden"
+source_modules = ["dw_api"]
+forbidden_modules = [
+    "dw_sales.adapters.readers",
+    "dw_sales.adapters.rfq_excel",
+    "dw_sales.adapters.source_view",
+    "dw_reader",
+    "pypdf",
 ]
 
 [[tool.importlinter.contracts]]
@@ -477,4 +503,4 @@ source_modules = [
     "dw_connectors",
     "dw_observability",
 ]
-forbidden_modules = ["dw_api", "dw_worker", "dw_docgen"]
+forbidden_modules = ["dw_api", "dw_worker", "dw_docgen", "dw_reader"]

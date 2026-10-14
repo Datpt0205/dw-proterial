@@ -44,6 +44,14 @@ volumes:
   # Rendered from alertmanager.yml.template by the alertmanager-config
   # service below — Alertmanager's own YAML has no env-var substitution.
   alertmanager-config:
+  # The reader sandbox's Unix socket (Sales ticket 25): the only way into a
+  # container with no network. RAM, owned by the one uid (1001) the reader,
+  # the api and the worker share, and readable by nobody else.
+  reader-socket:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "uid=1001,gid=1001,mode=0750,size=1m"
 
 services:
   # ------------------------------------------------------------------ data --
@@ -315,11 +323,20 @@ services:
       # not switch the scan off for a container that can reach clamd.
       DW_SALES_MALWARE_SCAN: clamd
       DW_SALES_CLAMD_HOST: clamav
+      # Every file the API opens (a source view, a PO layout's cells) is read
+      # by the `reader` sandbox over its socket (ticket 25). Fixed here, never
+      # from .env: a host-run API's gateway URL must not reach a container.
+      DW_SALES_READER_SOCKET: /run/dw-reader/reader.sock
     ports:
       - "127.0.0.1:${DW_API_HOST_PORT:-8000}:8000"
     networks: [dw-internal, dw-edge, dw-scan]
+    # Read-only: connecting needs the socket, never a write to the volume.
+    volumes:
+      - reader-socket:/run/dw-reader:ro
     depends_on:
       clamav:
+        condition: service_healthy
+      reader:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -379,6 +396,78 @@ services:
       retries: 5
       # Loading the signatures takes about a minute on the dev machine.
       start_period: 180s
+    restart: unless-stopped
+
+  # -------------------------------------------------------------- reader --
+  # Reads every customer attachment (Sales ticket 25, ADR 0010 decisions 2
+  # and 6; decided 2026-10-14: a reader container of its own, with docgen's
+  # containment). Each file is read by a one-use process under `ulimit`, a
+  # wall clock that kills its process group and a capped answer
+  # (`apps/reader`); a legacy .xls/.doc is converted and a scanned page OCRed
+  # in the same process (ticket 27).
+  #
+  # `network_mode: none`: no network at all, not even an internal one, so a
+  # parser a hostile file breaks can send nothing anywhere and reach no
+  # sibling. The api and the worker reach it through a Unix socket on the
+  # `reader-socket` volume, mounted read-only there; a host-run api or worker
+  # through `reader-gateway` below.
+  #
+  # In `infra` as well as `full`, like docgen: a host-run API opens a source
+  # view through it. Built and measured after the WSL reboot of 2026-10-13
+  # (ticket 25, "Post-reboot checks").
+  reader:
+    build:
+      context: ../..
+      dockerfile: infra/docker/reader.Dockerfile
+    image: dw-reader:local
+    profiles: ["infra", "full"]
+    network_mode: none
+    volumes:
+      - reader-socket:/run/dw-reader
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    # The only writable paths, RAM that dies with the container. Each request
+    # is a directory under /work, removed once its answer is read; LibreOffice
+    # writes its throwaway profile there and its pipe under /tmp.
+    tmpfs:
+      - /work:mode=1777,size=512m,nosuid,nodev,noexec
+      - /tmp:mode=1777,size=128m,nosuid,nodev,noexec
+    mem_limit: 3g
+    pids_limit: 512
+    # tini as PID 1, for the reason docgen gives: a killed reading process's
+    # orphans (soffice daemonises) must be reaped, or they keep `ulimit -u`.
+    init: true
+    restart: unless-stopped
+
+  # The reader for a host-run api or worker (profile `infra` only): a TCP port
+  # on the host's loopback forwarded to the reader's socket, by the gateway
+  # docgen uses. It runs no reading process and holds no state. The api and
+  # worker containers (`full`) mount the socket and never come through here.
+  reader-gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/reader.Dockerfile
+    image: dw-reader:local
+    profiles: ["infra"]
+    depends_on: [reader]
+    volumes:
+      - ./docgen-gateway.py:/opt/docgen-gateway.py:ro
+      - reader-socket:/run/dw-reader:ro
+    command: ["python", "/opt/docgen-gateway.py"]
+    environment:
+      GATEWAY_LISTEN_PORT: "8120"
+      GATEWAY_TARGET_UDS: /run/dw-reader/reader.sock
+    ports:
+      - "127.0.0.1:${DW_READER_HOST_PORT:-8120}:8120"
+    networks: [dw-edge]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
     restart: unless-stopped
 
   # ------------------------------------------------------------- sandbox --
@@ -526,9 +615,17 @@ services:
       # The mailbox lane scans as the API does (ticket 25), fixed likewise.
       DW_SALES_MALWARE_SCAN: clamd
       DW_SALES_CLAMD_HOST: clamav
+      # "DW xử lý" runs here and reads every file in the `reader` sandbox
+      # (ticket 25), fixed likewise: `in_process` is for a host-run worker.
+      DW_SALES_READER: sandbox
+      DW_SALES_READER_SOCKET: /run/dw-reader/reader.sock
     networks: [dw-internal, dw-edge, dw-scan]
+    volumes:
+      - reader-socket:/run/dw-reader:ro
     depends_on:
       clamav:
+        condition: service_healthy
+      reader:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully

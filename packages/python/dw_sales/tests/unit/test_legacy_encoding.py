@@ -33,9 +33,10 @@ from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, attachment_file_name
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH, load_purchase_orders
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
-from dw_sales.adapters.readers import ExcelPoReader, PdfPoReader, mock_po_readers
+from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
+from dw_sales.adapters.readers import ExcelPoReader, PdfPoReader
 from dw_sales.adapters.readers.layouts import MOCK_EXCEL_LAYOUTS, MOCK_PDF_LAYOUTS
-from dw_sales.adapters.rfq_excel import ExcelQuoteForms
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import PriceView
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import InboxPort, SalesScope
@@ -472,8 +473,8 @@ def _intake(inbox: InboxPort, cases: _Cases) -> OrderIntake:
     return OrderIntake(
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=inbox,
-        reader=mock_po_readers(),
-        quote_forms=ExcelQuoteForms(),
+        reader=ClientPoReaders(InProcessReaderTransport()),
+        quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=PlatformOrderRules(RULES),
         cases=cases,
         new_case_id=lambda: uuid.UUID(int=next(ids)),

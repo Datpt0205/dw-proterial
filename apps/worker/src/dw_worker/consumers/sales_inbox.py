@@ -2,9 +2,9 @@
 
 Each tick hands every workspace whose mailbox this host reads to
 `dw_sales.application.inbox_lane.InboxLane`, which decides everything: DW1's
-own access context, the pause switch, which messages, the plan's runs. This
-module only paces it and keeps one workspace's failure from costing the
-others their tick.
+own access context, the pause switch, which messages to queue (ticket 25:
+the `sales_processing` lane runs them). This module only paces it and keeps
+one workspace's failure from costing the others their tick.
 """
 
 from __future__ import annotations
@@ -41,8 +41,8 @@ def build_sales_inbox_consumer(
                 # still gets its tick.
                 logger.exception("sales_inbox: the tick failed in one workspace")
                 continue
-            if tick.processed:
-                logger.info("sales_inbox: DW1 processed %d message(s)", len(tick.processed))
+            if tick.queued:
+                logger.info("sales_inbox: DW1 queued %d message(s)", len(tick.queued))
             if tick.stopped is not None:
                 logger.info("sales_inbox: stopped early in a workspace: %s", tick.stopped)
 

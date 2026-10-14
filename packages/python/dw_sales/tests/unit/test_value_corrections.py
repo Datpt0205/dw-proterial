@@ -24,8 +24,8 @@ from dw_kernel.errors import ConflictError, DomainError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelQuoteForms
+from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import PriceView
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -455,8 +455,8 @@ def _intake() -> OrderIntake:
     return OrderIntake(
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=MockInbox.load(SCOPE),
-        reader=mock_po_readers(),
-        quote_forms=ExcelQuoteForms(),
+        reader=ClientPoReaders(InProcessReaderTransport()),
+        quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.5.0.yaml")),
         cases=_NoCases(),
         new_case_id=uuid.uuid4,

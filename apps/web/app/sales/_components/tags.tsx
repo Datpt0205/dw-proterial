@@ -21,6 +21,7 @@ import {
   MAPPING_STATUS,
   MESSAGE_DISPOSITION,
   ORDER_STATE,
+  PROCESSING_STATE,
   QUOTE_STATE,
   READ_BY,
   VALUE_STATE,
@@ -164,6 +165,23 @@ const MESSAGE_LOOK: Record<string, Look> = {
 export function MessageDispositionTag({ kind }: { kind: string }) {
   return (
     <Chip look={MESSAGE_LOOK[kind]}>{label(MESSAGE_DISPOSITION, kind)}</Chip>
+  );
+}
+
+const PROCESSING_LOOK: Record<string, Look> = {
+  queued: ["gray", i.clock],
+  running: ["pri", i.sync],
+  done: ["ok", i.check],
+  failed: ["warn", i.warn],
+};
+
+/** Where a message's "DW xử lý" stands (ticket 25): queued, running, done
+ * or failed, beside the disposition it ends in. */
+export function ProcessingTag({ status }: { status: string }) {
+  return (
+    <Chip look={PROCESSING_LOOK[status]}>
+      {label(PROCESSING_STATE, status)}
+    </Chip>
   );
 }
 

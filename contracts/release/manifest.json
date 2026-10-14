@@ -48,6 +48,11 @@
       "version": "1.1.0"
     },
     {
+      "checksum": "a325d36f0503673b5acb5b6aa48b926bac25780724ae3cc3a0014dcb6b02b0a7",
+      "copy_id": "sales_emails",
+      "version": "1.2.0"
+    },
+    {
       "checksum": "b2de9c2a52c5860c7b10dc8740a9b0797af39f153f6602a791e704b87cca8aa2",
       "copy_id": "sales_handoffs",
       "version": "1.0.0"
@@ -85,6 +90,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "1fd0f4ef4a0f90c2752a9391888a929fe898162a8963c995c4438b4b94c4de6a",
+      "dataset_id": "sales_legacy",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "571d54f37357dec46615e7de4d2c18c210978ea7ad877abe4e182b8d37880a30",
       "dataset_id": "sales_reply",
       "version": "1.0.0"
@@ -95,7 +105,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "e97042b5f8ba2444930478cb5851e0ca0083dc5c",
+  "git_sha": "878934fef100f14174a90d545e7a1c4a28f04848",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "platform_version": "0.1.0",

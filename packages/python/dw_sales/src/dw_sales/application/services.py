@@ -23,8 +23,6 @@ from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.decisions import CaseDecisions
-from dw_sales.application.drafting import ArtifactCopy
-from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
 from dw_sales.application.master_data_service import MasterDataService
@@ -39,6 +37,7 @@ from dw_sales.application.ports import (
     SalesCatalogPort,
     ScopeHoldersPort,
 )
+from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.rules import SalesRulesService, TenantRuleBook
@@ -52,6 +51,8 @@ from dw_sales.application.worker_service import WorkerService
 class SalesServices:
     overview: OverviewService
     inbox: InboxQueries
+    # "DW xử lý": the routes queue a message (ticket 25); the worker runs it.
+    processing: ProcessingService
     dw1: Dw1Runs
     orders: OrderQueries
     order_commands: OrderCommands
@@ -93,8 +94,6 @@ def assemble(
     notifications: NotificationSenderPort,
     artifact_bytes: ArtifactBytesPort,
     artifact_writer: ArtifactWriterPort,
-    artifact_copy: ArtifactCopy,
-    handoff_copy: HandoffCopy,
     layout_checks: LayoutChecks,
     release_manifest_ref: str | None,
     runs: Dw1RunsPort,
@@ -118,7 +117,8 @@ def assemble(
     )
     services = SalesServices(
         overview=OverviewService(uow, gate, clock, inbox, book, directory, pending),
-        inbox=InboxQueries(uow, gate, inbox, handoff_copy),
+        inbox=InboxQueries(uow, gate, inbox, book),
+        processing=ProcessingService(uow, gate, clock, ids, inbox),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=OrderQueries(uow, gate, pending),
         order_commands=OrderCommands(uow, gate, clock, ids, intake, pending),
@@ -132,7 +132,7 @@ def assemble(
             clock,
             ids,
             artifact_writer,
-            artifact_copy,
+            book,
             catalog,
             directory,
             quotation,

@@ -27,6 +27,13 @@ type Json<
   ? R
   : never;
 
+/** A request the API queued (202): what it answers is the job, not the result. */
+type Accepted<P extends keyof paths> = paths[P]["post"] extends {
+  responses: { 202: { content: { "application/json": infer R } } };
+}
+  ? R
+  : never;
+
 type PutJson<P extends keyof paths> = paths[P]["put"] extends {
   responses: { 200: { content: { "application/json": infer R } } };
 }
@@ -58,6 +65,8 @@ export type Artifact = SalesSchemas["ArtifactView"];
  * (`ApiClient.decideApproval`), never on a Sales route.
  */
 export type PendingDecision = SalesSchemas["PendingDecisionView"];
+/** A message's processing job (ticket 25): "DW xử lý" queues it, the worker runs it. */
+export type ProcessingJob = SalesSchemas["ProcessingJobView"];
 
 export class SalesApi {
   constructor(private readonly client: ApiClient) {}
@@ -73,6 +82,16 @@ export class SalesApi {
   ): Promise<Json<P, "post">> {
     return this.client.request("POST", path, shaped<Json<P, "post">>(), {
       body,
+      idempotencyKey,
+    });
+  }
+
+  private postAccepted<P extends keyof paths>(
+    path: string,
+    idempotencyKey: string,
+  ): Promise<Accepted<P>> {
+    return this.client.request("POST", path, shaped<Accepted<P>>(), {
+      body: undefined,
       idempotencyKey,
     });
   }
@@ -126,18 +145,19 @@ export class SalesApi {
     return this.get<"/api/v1/sales/inbox">("/api/v1/sales/inbox");
   }
 
+  /** "DW xử lý": queues the message (202); the worker processes it, and
+   * the inbox's `processing` says where it stands (ticket 25). */
   processMessage(messageId: string, key: string) {
-    return this.post<"/api/v1/sales/inbox/{message_id}/process">(
+    return this.postAccepted<"/api/v1/sales/inbox/{message_id}/process">(
       `/api/v1/sales/inbox/${enc(messageId)}/process`,
-      undefined,
       key,
     );
   }
 
+  /** "DW xử lý tất cả": one job per message still without a disposition. */
   processAll(key: string) {
-    return this.post<"/api/v1/sales/inbox/process-all">(
+    return this.postAccepted<"/api/v1/sales/inbox/process-all">(
       "/api/v1/sales/inbox/process-all",
-      undefined,
       key,
     );
   }

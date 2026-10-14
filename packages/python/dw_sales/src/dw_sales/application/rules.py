@@ -22,8 +22,16 @@ tenant's layer is a version a person proposed and a second person approved.
 
 A key a tenant may override is one whose readers resolve it per tenant
 (`OVERRIDABLE`): order rules (intake, checks, layouts) and the KPI policy (the
-overview). Proposing any other key is refused (422): a stored version nothing
-reads would look like a safeguard and be none (failure-modes #1).
+overview), since ticket 19; the quote rules and the pricing policy (the
+quotation flow), the e-mail and document copy and the Bravo upload template
+(every artifact), and the hand-off copy (the inbox), since ticket 36.
+Proposing any other key is refused (422): a stored version nothing reads would
+look like a safeguard and be none (failure-modes #1).
+
+Where a case stamps the version it used, a later read takes the stamp: the
+order rules a case was checked under, the quote rules a quotation was opened
+under (`quote_rules_at`), and the copy the files of one case version were
+drawn with (`artifact_copy`), so a file drawn again is the file drawn before.
 """
 
 from __future__ import annotations
@@ -45,28 +53,63 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.artifact_content import (
+    BravoUploadLayout,
+    SalesDocumentCopy,
+    SalesEmailCopy,
+)
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.drafting import ArtifactCopy
+from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.quotation import QuoteRules
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
+from dw_sales.domain.pricing import SalesPricing
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 _RESOURCE: Final = "sales_rule_version"
 
 
 class RuleKey(StrEnum):
-    """The Sales policies a tenant may hold its own version of."""
+    """The Sales policies and copy a tenant may hold its own version of."""
 
     ORDER_RULES = "sales_order_rules"
     KPI = "sales_kpi"
+    QUOTE_RULES = "sales_quote_rules"
+    PRICING = "sales_pricing"
+    EMAILS = "sales_emails"
+    DOCUMENTS = "sales_documents"
+    BRAVO_UPLOAD = "sales_bravo_upload"
+    HANDOFFS = "sales_handoffs"
 
 
-# Each key's schema: what a proposal is validated by and what is resolved.
-OVERRIDABLE: Final[Mapping[RuleKey, type[OrderRules] | type[SalesKpi]]] = MappingProxyType(
-    {RuleKey.ORDER_RULES: OrderRules, RuleKey.KPI: SalesKpi}
+type Policy = (
+    OrderRules
+    | SalesKpi
+    | QuoteRules
+    | SalesPricing
+    | SalesEmailCopy
+    | SalesDocumentCopy
+    | BravoUploadLayout
+    | HandoffCopy
 )
 
-type Policy = OrderRules | SalesKpi
+# Each key's schema: what a proposal is validated by and what is resolved.
+OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
+    {
+        RuleKey.ORDER_RULES: OrderRules,
+        RuleKey.KPI: SalesKpi,
+        RuleKey.QUOTE_RULES: QuoteRules,
+        RuleKey.PRICING: SalesPricing,
+        RuleKey.EMAILS: SalesEmailCopy,
+        RuleKey.DOCUMENTS: SalesDocumentCopy,
+        RuleKey.BRAVO_UPLOAD: BravoUploadLayout,
+        RuleKey.HANDOFFS: HandoffCopy,
+    }
+)
+# The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
+_ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
 RuleStatus = Literal["proposed", "approved", "rejected", "superseded"]
 Layer = Literal["platform", "tenant"]
 
@@ -141,7 +184,11 @@ class Resolved:
 
 @dataclass(frozen=True)
 class TenantRuleBook:
-    """The rules in force for a scope's tenant, and the ones a stamp names."""
+    """The rules in force for a scope's tenant, and the ones a stamp names.
+
+    Each reader asks through its own port, which a typed method here
+    satisfies: `KpiPort`, `QuotePoliciesPort`, `ArtifactCopyPort` and
+    `HandoffCopyPort`; `OrderRulesPort` through `RuleBookOrderRules`."""
 
     platform: Mapping[RuleKey, Policy]
     stored: RuleVersionLookupPort
@@ -162,7 +209,7 @@ class TenantRuleBook:
         (approved now or since superseded). None for a platform version this
         process no longer ships."""
         platform = self.platform[key]
-        if ref == platform.version:
+        if ref == platform.ref:
             return platform
         policy_id, _, version = ref.partition("@")
         if policy_id != key.value:
@@ -181,6 +228,64 @@ class TenantRuleBook:
         policy = (await self.current(scope, RuleKey.KPI)).policy
         assert isinstance(policy, SalesKpi)
         return policy
+
+    async def quote_rules(self, scope: SalesScope) -> QuoteRules:
+        policy = (await self.current(scope, RuleKey.QUOTE_RULES)).policy
+        assert isinstance(policy, QuoteRules)
+        return policy
+
+    async def quote_rules_at(self, scope: SalesScope, ref: str) -> QuoteRules | None:
+        policy = await self.at(scope, RuleKey.QUOTE_RULES, ref)
+        return policy if isinstance(policy, QuoteRules) else None
+
+    async def pricing(self, scope: SalesScope) -> SalesPricing:
+        policy = (await self.current(scope, RuleKey.PRICING)).policy
+        assert isinstance(policy, SalesPricing)
+        return policy
+
+    async def handoff_copy(self, scope: SalesScope) -> HandoffCopy:
+        policy = (await self.current(scope, RuleKey.HANDOFFS)).policy
+        assert isinstance(policy, HandoffCopy)
+        return policy
+
+    async def artifact_copy(self, scope: SalesScope, stamps: Sequence[str]) -> ArtifactCopy:
+        """What an artifact is drawn with: each copy at the version ``stamps``
+        name (the template refs of the files already drawn at the case's
+        version, the first that names that copy), else the tenant's current
+        one; Design's mailboxes from the tenant's current quote rules, which
+        the reply check reads too. A stamp this process no longer holds is
+        refused: a file drawn again must be the file drawn before."""
+        found: dict[RuleKey, Policy] = {}
+        named = [_copy_ref(stamp) for stamp in stamps]
+        for key in _ARTIFACT_COPY:
+            stamped = next((ref for ref in named if ref.startswith(f"{key.value}@")), None)
+            if stamped is None:
+                found[key] = (await self.current(scope, key)).policy
+                continue
+            policy = await self.at(scope, key, stamped)
+            if policy is None:
+                raise ConflictError(
+                    "mẫu của các tệp đã tạo ở phiên bản hồ sơ này không còn",
+                    details={"copy": stamped, "reason": "template_version_gone"},
+                )
+            found[key] = policy
+        emails, documents, upload = (found[key] for key in _ARTIFACT_COPY)
+        assert isinstance(emails, SalesEmailCopy)
+        assert isinstance(documents, SalesDocumentCopy)
+        assert isinstance(upload, BravoUploadLayout)
+        return ArtifactCopy(
+            emails=emails,
+            documents=documents,
+            upload=upload,
+            design_mailboxes=(await self.quote_rules(scope)).design_mailboxes,
+        )
+
+
+def _copy_ref(template_ref: str) -> str:
+    """``sales_emails.confirmation_draft.vi@1.2.0`` as the copy it names,
+    ``sales_emails@1.2.0``; an upload file's ref names its template already."""
+    name, _, version = template_ref.rpartition("@")
+    return f"{name.split('.', 1)[0]}@{version}"
 
 
 @dataclass(frozen=True)
@@ -290,14 +395,13 @@ class SalesRulesService:
         layers: dict[RuleKey, Layer] = {}
         for key in OVERRIDABLE:
             resolved = await self.book.current(scope, key)
-            in_force[key] = resolved.policy.version
+            in_force[key] = resolved.policy.ref
             layers[key] = resolved.layer
         return RulesInForceView(
             in_force=in_force,
             layers=layers,
             platform=[
-                PlatformRuleView(key=key, ref=self.book.platform[key].version)
-                for key in OVERRIDABLE
+                PlatformRuleView(key=key, ref=self.book.platform[key].ref) for key in OVERRIDABLE
             ],
             versions=[_view(v) for v in versions],
         )
@@ -308,7 +412,7 @@ class SalesRulesService:
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         policy = _validated(key, document)
         platform = self.book.platform[key]
-        if policy.version == platform.version:
+        if policy.ref == platform.ref:
             raise ConflictError(
                 "a tenant version needs a number the platform does not ship",
                 details={"key": key.value, "rule": "platform_version_reused"},
@@ -316,7 +420,7 @@ class SalesRulesService:
         version = RuleVersion(
             version_id=self.ids.new_uuid(),
             key=key,
-            version=policy.policy_version,
+            version=policy.ref.partition("@")[2],
             document=policy.model_dump(mode="json", by_alias=True),
             status="proposed",
             proposed_by=context.principal_id,
@@ -351,7 +455,7 @@ class SalesRulesService:
                 )
             superseding = None
             if decision.approve:
-                if proposed.ref == self.book.platform[proposed.key].version:
+                if proposed.ref == self.book.platform[proposed.key].ref:
                     raise ConflictError(
                         "the platform now ships this version number",
                         details={**details, "rule": "platform_version_reused"},

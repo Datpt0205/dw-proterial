@@ -23,19 +23,23 @@ from pydantic import ValidationError
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_sales.adapters.memory_rules import MemoryRuleVersions, platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.generate_attachments import load_quote_requests
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelRfqReader
+from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import (
     NotADesignReplyError,
     QuotationService,
+    QuotePoliciesPort,
     QuoteRules,
     ReplyAttached,
     ReplyUnmatched,
     RequestNotExtractedError,
     ScreeningRow,
 )
+from dw_sales.application.rules import RuleKey, TenantRuleBook
 from dw_sales.domain.catalog import LmeBand, LmeMonth, Quotation
 from dw_sales.domain.dispositions import RoutingReason
 from dw_sales.domain.messages import (
@@ -121,6 +125,7 @@ def _service(
     ledger: Any = None,
     rules: QuoteRules = RULES,
     design_mailboxes: frozenset[str] | None = None,
+    policies: QuotePoliciesPort | None = None,
 ) -> QuotationService:
     if design_mailboxes is not None:
         rules = QuoteRules.model_validate(
@@ -130,12 +135,11 @@ def _service(
     return QuotationService(
         catalog=catalog,
         inbox=inbox or MockInbox.load(SCOPE),
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=ClientRfqReader(InProcessReaderTransport()),
+        reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=cases or FakeCases(),
         ledger=ledger or catalog,
-        rules=rules,
-        pricing=PRICING,
+        policies=policies or platform_book(rules, PRICING),
     )
 
 
@@ -824,3 +828,114 @@ async def test_screening_lists_exactly_what_the_mock_erp_history_implies() -> No
         ScreeningRow(customer_code="NRV", prv_code="CB-2006", quote_nos=("Q26-0123",)),
         ScreeningRow(customer_code="QRL", prv_code="CB-2013", quote_nos=("Q26-0204",)),
     )
+
+
+# --------------------------------------- the tenant's own versions (36) --
+
+
+def _book() -> tuple[TenantRuleBook, MemoryRuleVersions]:
+    """The shipped quote rules and pricing as the platform layer, and the
+    tenants' versions, none yet."""
+    versions = MemoryRuleVersions()
+    book = TenantRuleBook(
+        platform={RuleKey.QUOTE_RULES: RULES, RuleKey.PRICING: PRICING}, stored=versions
+    )
+    return book, versions
+
+
+def _rules(version: str, **changes: Any) -> QuoteRules:
+    return QuoteRules.model_validate(RULES.model_dump() | {"policy_version": version, **changes})
+
+
+async def test_a_case_is_opened_under_its_tenants_quote_rules_and_every_step_reads_its_stamp() -> (
+    None
+):
+    """The quote rules a case was opened under hold for it: a version the
+    tenant approves later reaches the next case, not this one's quotation."""
+    book, versions = _book()
+    versions.seed_approved(SCOPE.tenant_id.value, _rules("9.0.1", validity_days=30))
+    cases = FakeCases()
+    service = _service(cases=cases, policies=book)
+    case = await _m10_replied(service, cases)
+    versions.seed_approved(SCOPE.tenant_id.value, _rules("9.0.2", validity_days=120))
+
+    submitted = await service.submit(
+        SCOPE,
+        await service.decide_price(SCOPE, case, _decision(), by=PRICER),
+        quote_no="Q26-0301",
+        issued_on=ISSUED,
+        by=PRICER,
+        at=AT,
+    )
+
+    assert case.rules_version == "sales_quote_rules@9.0.1"
+    assert submitted.submission is not None
+    document = submitted.submission.document
+    assert (document.valid_to - document.issued_on).days + 1 == 30
+    later = await service.open_case(SCOPE, "M10", uuid.uuid4())
+    assert later.rules_version == "sales_quote_rules@9.0.2"
+
+
+async def test_another_tenant_resolves_the_platforms_quote_rules_never_this_ones() -> None:
+    book, versions = _book()
+    versions.seed_approved(SCOPE.tenant_id.value, _rules("9.0.1", validity_days=30))
+
+    assert (await book.quote_rules(SCOPE)).ref == "sales_quote_rules@9.0.1"
+    assert (await book.quote_rules(OTHER_TENANT)).ref == RULES.ref
+    assert await book.quote_rules_at(OTHER_TENANT, "sales_quote_rules@9.0.1") is None
+
+
+async def test_a_case_stamped_with_quote_rules_no_longer_held_is_refused_not_repriced() -> None:
+    cases = FakeCases()
+    service = _service(cases=cases)
+    case = await _m10_replied(service, cases)
+    gone = QuoteCase.model_validate({**dict(case), "rules_version": "sales_quote_rules@0.9.0"})
+
+    with pytest.raises(ConflictError) as refused:
+        await service.decide_price(SCOPE, gone, _decision(), by=PRICER)
+    with pytest.raises(ConflictError):
+        await service.price_evidence(SCOPE, gone, as_of=ISSUED)
+
+    assert refused.value.details["reason"] == "rules_version_gone"
+
+
+async def test_the_evidence_and_the_findings_are_priced_by_the_tenants_pricing_policy() -> None:
+    book, versions = _book()
+    cases = FakeCases()
+    service = _service(cases=cases, policies=book)
+    case = await _m10_replied(service, cases)
+    (platform,) = await service.price_evidence(SCOPE, case, as_of=ISSUED)
+    stricter = PRICING.model_copy(
+        update={"policy_version": "9.0.1", "floor_margin": Decimal("0.9")}
+    )
+    versions.seed_approved(
+        SCOPE.tenant_id.value, SalesPricing.model_validate(stricter.model_dump())
+    )
+
+    (own,) = await service.price_evidence(SCOPE, case, as_of=ISSUED)
+    priced = await service.decide_price(SCOPE, case, _decision(), by=PRICER)
+
+    assert (platform.pricing_policy, own.pricing_policy) == (
+        "sales_pricing@1.0.0",
+        "sales_pricing@9.0.1",
+    )
+    assert platform.floor is not None and own.floor is not None
+    assert own.floor.price > platform.floor.price
+    assert {v for f in priced.findings for v in f.rule_versions} >= {"sales_pricing@9.0.1"}
+
+
+async def test_a_reply_is_taken_only_from_the_tenants_current_design_mailboxes() -> None:
+    """Design moved: the tenant's version names another mailbox, so the reply
+    from the platform's is routed unread."""
+    book, versions = _book()
+    cases = FakeCases()
+    service = _service(cases=cases, policies=book)
+    cases.put(SCOPE, await _awaiting_design(service, "M10", "YCBG-2609-030"))
+    versions.seed_approved(
+        SCOPE.tenant_id.value, _rules("9.0.1", design_mailboxes=("thietke@seller.example",))
+    )
+
+    outcome = await service.take_design_reply(SCOPE, "M25")
+
+    assert isinstance(outcome, ReplyUnmatched)
+    assert outcome.reason is RoutingReason.OTHER

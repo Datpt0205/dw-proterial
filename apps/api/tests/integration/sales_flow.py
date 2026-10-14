@@ -10,9 +10,17 @@ from sales_api_harness import DECIDED_PRICE, Persona
 
 
 async def process(persona: Persona, message_id: str) -> dict[str, Any]:
+    """ "DW xử lý" as the page presses it (ticket 25): queued (202), run by the
+    worker's lane, and the message's disposition read back from the inbox."""
     response = await persona.post(f"/inbox/{message_id}/process")
-    assert response.status_code == 200, response.text
-    body: dict[str, Any] = response.json()
+    assert response.status_code == 202, response.text
+    assert persona.run_queue is not None
+    await persona.run_queue()
+    inbox = await persona.get("/inbox")
+    assert inbox.status_code == 200, inbox.text
+    body: dict[str, Any] = next(
+        m["disposition"] for m in inbox.json() if m["message_id"] == message_id
+    )
     return body
 
 
@@ -109,7 +117,13 @@ async def uploaded(
 
 
 def dates(case: dict[str, Any], day: str = "2026-11-27") -> list[dict[str, Any]]:
-    return [{"line_no": line["line_no"], "confirmed_date": day} for line in case["lines"]]
+    """``day`` for every line, once per schedule of a split line (ticket 35)."""
+    return [
+        {"line_no": line["line_no"], "schedule_dates": [day] * len(line["schedules"])}
+        if line["printed_schedules"]
+        else {"line_no": line["line_no"], "confirmed_date": day}
+        for line in case["lines"]
+    ]
 
 
 async def approval_of(persona: Persona, case: dict[str, Any]) -> str:

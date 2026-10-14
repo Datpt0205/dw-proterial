@@ -29,6 +29,7 @@ from reportlab.pdfgen.canvas import Canvas
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH
 from dw_sales.adapters.order_rules import load_order_rules
+from dw_sales.adapters.reader_client import ClientPoReaders
 from dw_sales.adapters.readers import (
     ExcelLayout,
     ExcelPoReader,
@@ -43,6 +44,7 @@ from dw_sales.adapters.readers.layouts import (
     ONE_SHEET,
     VIETNAMESE_PDF,
 )
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.readers.pdf import _without_trailing_words
 from dw_sales.adapters.readers.schedules import listed_schedules
 from dw_sales.application.order_ports import PoDocumentReaderPort
@@ -879,7 +881,7 @@ def test_a_file_is_what_its_bytes_say(data: bytes, kind: str | None) -> None:
 
 
 def test_the_readers_satisfy_the_port() -> None:
-    port: PoDocumentReaderPort = mock_po_readers()
+    port: PoDocumentReaderPort = ClientPoReaders(InProcessReaderTransport())
 
     assert port.sniff(_fixture(M01)) == "xlsx"
 

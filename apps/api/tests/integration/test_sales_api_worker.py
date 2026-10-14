@@ -67,7 +67,7 @@ async def test_a_pic_cannot_resume_and_the_head_resumes_with_a_reason(
     resumed = await giang.post("/worker/resume", {"reason": "Đã kiểm tra xong"})
     assert resumed.status_code == 200, resumed.text
     assert resumed.json()["paused"] is False
-    assert (await an.post("/inbox/M11/process")).status_code == 200
+    assert (await an.post("/inbox/M11/process")).status_code == 202
 
     async with migrator.connect() as conn:
         (details,) = (

@@ -104,7 +104,8 @@ order_lines = sa.Table(
     sa.Column("mapping_confirmed_at", _TS),
     sa.Column("check_basis", JSONB, nullable=False),
     sa.Column("suggested_delivery_date", sa.Date),
-    sa.Column("confirmed_delivery_date", sa.Date),
+    # One per delivery, NULL until confirmed (ticket 35, migration owning it).
+    sa.Column("confirmed_delivery_dates", ARRAY(sa.Date)),
     sa.Column("pc_confirmed_by", UUID(as_uuid=True)),
     sa.Column("pc_confirmed_at", _TS),
     sa.Column("corrections", JSONB, nullable=False, server_default="[]"),
@@ -284,6 +285,27 @@ rule_versions = sa.Table(
     sa.Column("decided_by", UUID(as_uuid=True)),
     sa.Column("decided_at", _TS),
     sa.Column("comment", sa.Text),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# Each message's processing job (ticket 25, migration 0a78ca5e96d3).
+processing_jobs = sa.Table(
+    "processing_jobs",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("message_id", sa.Text, nullable=False),
+    # The order jobs queued at one instant run in (an identity: never written).
+    sa.Column("seq", sa.BigInteger, sa.Identity(always=True), nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("requested_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("requested_at", _TS, nullable=False),
+    sa.Column("attempts", sa.Integer, nullable=False),
+    sa.Column("failures", sa.Integer, nullable=False),
+    sa.Column("available_at", _TS, nullable=False),
+    sa.Column("claimed_at", _TS),
+    sa.Column("error", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

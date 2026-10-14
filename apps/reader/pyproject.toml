@@ -1,0 +1,25 @@
+[project]
+name = "dw-reader"
+version = "0.1.0"
+description = "Reader sandbox: reads a customer's attachment in a one-use process with no network, no secrets and no database (sales ticket 25)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+    # The readers and their wire (`dw_sales.adapters.readers.operations`,
+    # `dw_sales.adapters.reader_wire`): what a reading process runs.
+    "dw-sales",
+    # The containment: one shell command under ulimits, a wall clock that kills
+    # its process group, a capped output (`dw_docgen.runner`). One owner for
+    # the budget code, shared by both sandboxes.
+    "dw-docgen",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dw_reader"]

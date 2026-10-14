@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping
 from datetime import date
+from decimal import Decimal
 from typing import Final
 
 from dw_kernel.errors import ConflictError
@@ -184,9 +185,11 @@ def _line_findings(case: OrderCase, line: OrderLine, field: str) -> list[Finding
     return found
 
 
-def _confirmed_date(case: OrderCase, line: OrderLine) -> date:
-    """The date Sales confirmed for the line; a draft without one is refused."""
-    if line.confirmed_delivery_date is None:
+def _confirmed(case: OrderCase, line: OrderLine) -> tuple[tuple[Decimal, date], ...]:
+    """Each delivery of the line with the date Sales confirmed for it: a
+    split line's schedules, each its quantity (ticket 35), or the line's
+    quantity on its one date. A draft without them is refused."""
+    if not line.confirmed_delivery_dates:
         raise ConflictError(
             "chưa có ngày giao xác nhận cho mọi dòng",
             details={
@@ -195,7 +198,29 @@ def _confirmed_date(case: OrderCase, line: OrderLine) -> date:
                 "reason": "confirmed_date_missing",
             },
         )
-    return line.confirmed_delivery_date
+    if schedules := line.confirmed_schedules():
+        return tuple((schedule.quantity, day) for schedule, day in schedules)
+    (day,) = line.confirmed_delivery_dates
+    return ((line.effective.quantity, day),)
+
+
+def _confirmed_text(
+    bound: Bound[EmailTemplate], case: OrderCase, line: OrderLine, language: Language
+) -> str:
+    """The line's confirmed date, or a split line's schedules one by one."""
+    deliveries = _confirmed(case, line)
+    if not line.confirmed_schedules():
+        return day_text(deliveries[0][1], language)
+    listed = "; ".join(
+        bound.word(
+            "schedule",
+            quantity=quantity,
+            uom=line.effective.uom,
+            confirmed_date=day_text(day, language),
+        )
+        for quantity, day in deliveries
+    )
+    return bound.word("schedules", count=len(deliveries), schedules=listed)
 
 
 def _require_channel(d: OrderDrafting, channel: str) -> None:
@@ -399,7 +424,8 @@ def _disposition_text(doc: Bound[DocumentTemplate], finding: Finding) -> str:
 
 def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
     """O10: the confirmation to the customer, naming the PIC who prepared it and
-    the colleague who cross-checked it, with the date Sales confirmed per line."""
+    the colleague who cross-checked it, with the date Sales confirmed per line,
+    or per schedule for a line the PO splits (ticket 35)."""
     case = d.case
     _require_channel(d, "email")
     bound, draft = d.customer_email("confirmation_draft")
@@ -416,7 +442,7 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
                 "uom": line.effective.uom,
                 "unit_price": line.effective.unit_price,
                 "currency": case.effective_header.currency,
-                "confirmed_date": day_text(_confirmed_date(case, line), language),
+                "confirmed_date": _confirmed_text(bound, case, line, language),
             },
         )
         for line in case.lines
@@ -436,7 +462,8 @@ def confirmation_draft(d: OrderDrafting) -> tuple[Rendered, ...]:
 
 def portal_checklist(d: OrderDrafting) -> tuple[Rendered, ...]:
     """O10 for a customer who confirms on their own portal: what to enter there,
-    line by line, with a column to tick."""
+    line by line, a row per schedule for a line the PO splits (ticket 35),
+    with a column to tick."""
     case = d.case
     _require_channel(d, "portal")
     doc = d.internal("portal_checklist")
@@ -456,14 +483,15 @@ def portal_checklist(d: OrderDrafting) -> tuple[Rendered, ...]:
             line.line_no,
             line.effective.customer_item_code,
             line.mapping.prv_code,
-            line.effective.quantity,
+            quantity,
             line.effective.uom,
             line.effective.unit_price,
             case.effective_header.currency,
-            _confirmed_date(case, line),
+            day,
             None,
         )
         for line in case.lines
+        for quantity, day in _confirmed(case, line)
     )
     heading: tuple[tuple[str, Value], ...] = (
         (label(doc, "customer"), f"{case.customer_code} — {d.customer.name}"),

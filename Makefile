@@ -39,11 +39,15 @@ bootstrap: ## Install all Python + Node dependencies and local config
 # long-running services and s3-setup is started on its own.
 # docgen is here rather than only in `full`: an agent offers document
 # generation whenever the sandbox answers, and `make dev` runs the apps on the
-# host. It costs one ~1GB image build the first time.
-INFRA_SERVICES = postgres qdrant valkey s3 keycloak docgen docgen-gateway
+# host. It costs one ~1GB image build the first time. The reader sandbox (Sales
+# ticket 25) likewise: a host-run API and worker read every attachment through
+# `reader-gateway`, which only the `infra` profile starts.
+DATA_SERVICES = postgres qdrant valkey s3 keycloak docgen docgen-gateway reader
+INFRA_SERVICES = $(DATA_SERVICES) reader-gateway
 # Same reason for the full stack: migrate, seed and s3-setup all run once and
 # exit, so `--wait` on the whole profile reports a healthy stack as a failure.
-FULL_SERVICES = $(INFRA_SERVICES) api worker web
+# Its api and worker mount the reader's socket and need no gateway.
+FULL_SERVICES = $(DATA_SERVICES) api worker web
 
 infra-up: ## Start data plane (Postgres/Qdrant/Valkey/S3/Keycloak) in Docker
 	$(COMPOSE) --profile infra up -d

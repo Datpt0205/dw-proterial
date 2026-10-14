@@ -31,7 +31,7 @@ GOLDEN = json.loads(
     (Path(__file__).parent / "golden" / "bravo_upload_rows@1.0.0.json").read_text(encoding="utf-8")
 )
 SHIPPED = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy")
-LAYOUT = SHIPPED.artifact_copy.upload
+LAYOUT = SHIPPED.upload
 
 
 def _text(value: Value) -> object:

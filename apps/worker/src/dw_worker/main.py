@@ -89,11 +89,14 @@ from dw_platform.application.approval_codes import ApprovalSubjectVersions, Deci
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.retention_policy import load_retention_policy
-from dw_sales.adapters.assembly import build_dw1, build_layout_settlement
+from dw_sales.adapters.assembly import Dw1Mount, build_dw1, build_layout_settlement
 from dw_sales.adapters.clamd import malware_scanner
-from dw_sales.application.inbox_lane import SALES_INBOX_LANE, InboxLane
+from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.processing import SALES_PROCESSING_LANE
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
@@ -119,6 +122,10 @@ from dw_worker.consumers.retention import RetentionPrunePort, build_retention_co
 from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTERVAL_SECONDS
 from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
 from dw_worker.consumers.sales_layouts import build_layout_decided_handler
+from dw_worker.consumers.sales_processing import (
+    INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_processing import build_sales_processing_consumer
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -133,6 +140,12 @@ logger = logging.getLogger("dw_worker")
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
 RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.7.0.yaml"
+# How long a processing job may run before the reaper takes it for a dead
+# worker's (Sales ticket 25). A job is one message: its scan, a few files read
+# in the reader sandbox (each killed at its own wall clock) and a model call or
+# two (each with its own timeout). Fifteen minutes is several times the worst
+# of those added up, so a healthy job is never mistaken for an abandoned one.
+PROCESSING_STALE_AFTER = timedelta(minutes=15)
 
 
 def _build_worker_telemetry(settings: WorkerSettings) -> TelemetryPort:
@@ -270,27 +283,48 @@ def build_zalo_inbound(
     )
 
 
-def build_sales_inbox_lane(
+def sales_reader(settings: WorkerSettings) -> ReaderTransport:
+    """Where this process reads a customer's file (ticket 25): the reader
+    sandbox over its socket in a container that mounts it, else over its
+    loopback gateway; or, for a host-run local worker only, in this process
+    (`DW_SALES_READER=in_process`), which a deployed profile refuses here as
+    well as at startup (`WorkerSettings.validate_for_profile`)."""
+    if settings.sales_reader == "in_process":
+        if settings.is_deployed:
+            raise RuntimeError(
+                "reading attachments outside the reader sandbox is forbidden in the "
+                f"{settings.profile} profile: DW_SALES_READER=in_process"
+            )
+        return InProcessReaderTransport()
+    return HttpReaderTransport(
+        socket_path=settings.sales_reader_socket, base_url=settings.sales_reader_url
+    )
+
+
+def build_sales(
     settings: WorkerSettings,
     sessions: async_sessionmaker[AsyncSession],
     *,
     clock: UtcClock,
     ids: IdGenerator,
     telemetry: TelemetryPort,
-) -> tuple[InboxLane, SalesScope] | None:
-    """DW1's mailbox lane over the workspace its mock mailbox is bound to, or
-    None where no mailbox is (a deployed profile without SALES_DEMO_*).
+) -> tuple[Dw1Mount, SalesScope] | None:
+    """DW1 over the workspace its mock mailbox is bound to, or None where no
+    mailbox is (a deployed profile without SALES_DEMO_*): the drain of the
+    processing queue "DW xử lý" fills (ticket 25), and, with the host's
+    switch on, the mailbox lane (ticket 16).
 
     DW1 is built by the call the API makes (`build_dw1`), over a runner of
-    this process's own: its runs are the runs "DW xử lý" starts, counted
-    against the same plan, and the lane acts as DW1's service account,
-    resolved by the platform's membership lookup like any member.
+    this process's own: its runs are counted against the same plan. A job
+    runs as whoever asked, a person or DW1's service account, each resolved
+    again by the platform's membership lookup like any member.
     """
     demo = settings.sales_demo_scope()
     if demo is None:
         return None
     scope = SalesScope(TenantId(demo[0]), WorkspaceId(demo[1]))
     runtime = build_workflow_runtime(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
+    lookup = SqlMembershipLookup(sessions)
     mount = build_dw1(
         scope=scope,
         configs=REPO_ROOT / "configs",
@@ -307,7 +341,8 @@ def build_sales_inbox_lane(
         release_manifest_ref=release_manifest_ref(),
         runtime=runtime,
         telemetry=telemetry,
-        lane_access=SqlMembershipLookup(sessions),
+        lane_access=lookup if settings.sales_inbox_lane else None,
+        requester_access=lookup,
         # Every attachment scanned before it is read (ticket 25), by the one
         # rule the API reads too.
         scanner=malware_scanner(
@@ -316,12 +351,12 @@ def build_sales_inbox_lane(
             port=settings.sales_clamd_port,
             deployed=settings.is_deployed,
         ),
+        reader=sales_reader(settings),
         # As the API passes it: only a process that reaches a model server of
         # its own reads a description through one (dw_sales ADR 0005).
         model=runtime.gateway if Provider.ONPREM in runtime.gateway.adapters else None,
     )
-    assert mount.lane is not None  # built with lane_access
-    return mount.lane, scope
+    return mount, scope
 
 
 def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
@@ -387,6 +422,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # services are built whole, files included), a bound mailbox, and the
     # host's switch on.
     sales_inbox_consumer: Callable[[], Awaitable[None]] | None = None
+    # DW1's processing queue (Sales ticket 25): the same, switch or no switch:
+    # "DW xử lý" queues a job whether or not the lane runs.
+    sales_processing_consumer: Callable[[], Awaitable[None]] | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -503,13 +541,16 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     clock=clock,
                 )
             )
-            if settings.sales_inbox_lane:
-                sales = build_sales_inbox_lane(
-                    settings, sessions, clock=clock, ids=ids, telemetry=telemetry
+            sales = build_sales(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
+            if sales is not None:
+                mount, mailbox = sales
+                assert mount.drain is not None and mount.queue is not None  # requester_access
+                sales_processing_consumer = build_sales_processing_consumer(mount.drain)
+                reap_targets.append(
+                    ReapTarget(SALES_PROCESSING_LANE, mount.queue, PROCESSING_STALE_AFTER)
                 )
-                if sales is not None:
-                    lane, mailbox = sales
-                    sales_inbox_consumer = build_sales_inbox_consumer(lane, [mailbox])
+                if mount.lane is not None:
+                    sales_inbox_consumer = build_sales_inbox_consumer(mount.lane, [mailbox])
         registry.register(
             "outbox",
             build_outbox_consumer(
@@ -538,9 +579,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # visible change. A context appends a `ReapTarget` for every job queue it
     # owns, so abandoned rows are settled by the one reaper.
     #
-    # Sales: DW1's mailbox lane (ticket 16), under the name its audit actor is
-    # derived from. It owns no job queue (it reads the mailbox and writes the
-    # message log), so it has no ReapTarget.
+    # Sales: DW1's processing queue (ticket 25), under the name its audit actor
+    # is derived from, its ReapTarget appended where it was built; and the
+    # mailbox lane (ticket 16), which only queues, so it has no ReapTarget.
+    if sales_processing_consumer is not None:
+        registry.register(
+            SALES_PROCESSING_LANE,
+            sales_processing_consumer,
+            interval_seconds=SALES_PROCESSING_INTERVAL_SECONDS,
+        )
     if sales_inbox_consumer is not None:
         registry.register(
             SALES_INBOX_LANE, sales_inbox_consumer, interval_seconds=SALES_INBOX_INTERVAL_SECONDS

@@ -32,7 +32,7 @@ import shutil
 import tempfile
 import uuid
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from types import TracebackType
@@ -49,26 +49,28 @@ from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
+from dw_platform.application.identity import MembershipAccess
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.assembly import model_requests
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
-from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
+from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies, rule_book
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
+from dw_sales.adapters.reader_client import ReaderTransport, client_readers
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.case_store import (
     ArtifactRecord,
     CaseEvent,
     CaseOrigin,
     LoggedEvent,
     LoggedMessage,
+    ProcessingJob,
     SalesUnitOfWork,
     ServedSource,
+    Settlement,
     SourceRegion,
     Stored,
     WorkerState,
@@ -85,6 +87,7 @@ from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import InboxPort, SalesScope
+from dw_sales.application.processing import ClaimedJob, ProcessingDrain
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rules import RuleBookOrderRules
@@ -139,7 +142,9 @@ class SampleWith:
     temporary copy (a context manager). A message names its ``message_id``,
     ``sender``, ``subject``, ``received_at``, ``body`` and ``authentication``,
     and may name ``internet_message_id`` and ``references`` (a reply in a
-    thread, ticket 32)."""
+    thread, ticket 32) and ``attachments``, each its ``attachment_id``,
+    ``name``, ``media_type`` and the ``file`` (a path) its bytes are copied
+    from (ticket 27's legacy and scanned POs)."""
 
     def __init__(self, messages: Sequence[Mapping[str, Any]]) -> None:
         self._messages = messages
@@ -153,6 +158,11 @@ class SampleWith:
         inbox = root / "data" / "inbox.json"
         listed = json.loads(inbox.read_text(encoding="utf-8"))
         for spec in self._messages:
+            for attached in spec.get("attachments", ()):
+                shutil.copyfile(
+                    attached["file"],
+                    attachment_path(root / "attachments", spec["message_id"], attached["name"]),
+                )
             listed.append(
                 {
                     "message_id": spec["message_id"],
@@ -160,7 +170,10 @@ class SampleWith:
                     "subject": spec["subject"],
                     "received_at": spec["received_at"],
                     "body_text": spec["body"],
-                    "attachments": [],
+                    "attachments": [
+                        {k: a[k] for k in ("attachment_id", "name", "media_type")}
+                        for a in spec.get("attachments", ())
+                    ],
                     "authentication": spec["authentication"],
                     "internet_message_id": spec.get("internet_message_id"),
                     "references": list(spec.get("references", ())),
@@ -221,6 +234,7 @@ class _ScopeState:
     worker: WorkerState = field(default_factory=lambda: WorkerState(paused=False))
     audit: list[AuditEvent] = field(default_factory=list)
     layouts: dict[uuid.UUID, PoLayout] = field(default_factory=dict)
+    jobs: dict[str, ProcessingJob] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -234,6 +248,7 @@ class _ScopeState:
             worker=self.worker,
             audit=list(self.audit),
             layouts=dict(self.layouts),
+            jobs=dict(self.jobs),
         )
 
 
@@ -326,6 +341,56 @@ class _Messages:
 
     async def list_all(self) -> Sequence[LoggedMessage]:
         return list(reversed(self._held.values()))
+
+
+class _Jobs:
+    """`ProcessingJobsPort` in memory, refusing what the SQL one refuses."""
+
+    def __init__(self, held: dict[str, ProcessingJob]) -> None:
+        self._held = held
+
+    async def enqueue(
+        self, message_id: str, requested_by: uuid.UUID, at: datetime, job_id: uuid.UUID
+    ) -> tuple[ProcessingJob, bool]:
+        earlier = self._held.get(message_id)
+        if earlier is not None and earlier.active:
+            return earlier, False
+        job = ProcessingJob(
+            job_id=job_id if earlier is None else earlier.job_id,
+            message_id=message_id,
+            status="queued",
+            requested_by=requested_by,
+            requested_at=at,
+            attempts=0,
+            failures=0 if earlier is None else earlier.failures,
+            available_at=at,
+            error=None,
+            updated_at=at,
+        )
+        self._held[message_id] = job
+        return job, True
+
+    async def get(self, message_id: str) -> ProcessingJob | None:
+        return self._held.get(message_id)
+
+    async def list_all(self) -> Sequence[ProcessingJob]:
+        return list(self._held.values())
+
+    async def settle(self, job: ProcessingJob, outcome: Settlement, at: datetime) -> bool:
+        held = self._held.get(job.message_id)
+        if held is None or held.status != "running" or held.attempts != job.attempts:
+            return False
+        self._held[job.message_id] = replace(
+            held,
+            status=outcome.status,
+            error=outcome.error,
+            available_at=outcome.available_at or held.available_at,
+            failures={"done": 0, "queued": held.failures, "failed": held.failures + 1}[
+                outcome.status
+            ],
+            updated_at=at,
+        )
+        return True
 
 
 class _Served:
@@ -451,6 +516,7 @@ class _Work:
         self.worker = _Worker(state)
         self.audit = _Audit(state.audit)
         self.layouts = _Layouts(state.layouts)
+        self.jobs = _Jobs(state.jobs)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)
@@ -487,11 +553,15 @@ class _Work:
 
 class MemoryStore:
     """Implements `SalesUnitOfWorkFactory`, `OrderCaseLookupPort`,
-    `QuoteCaseLookupPort` and `LayoutLookupPort` in memory, per scope: what one
-    scope committed no other scope reads."""
+    `QuoteCaseLookupPort`, `LayoutLookupPort` and `ProcessingQueuePort` in
+    memory, per scope: what one scope committed no other scope reads.
+    ``clock`` says when a queued job is due."""
 
-    def __init__(self, approvals: MemoryApprovals | None = None) -> None:
+    def __init__(
+        self, approvals: MemoryApprovals | None = None, clock: FixedClock | None = None
+    ) -> None:
         self.states: dict[SalesScope, _ScopeState] = {}
+        self.clock = clock or FixedClock(NOW)
         self.approvals = approvals or MemoryApprovals(FixedClock(NOW))
         # A tenant's own rule versions: per tenant, not per workspace (ticket 19).
         self.rule_versions = MemoryRuleVersions()
@@ -501,6 +571,23 @@ class MemoryStore:
 
     def __call__(self, scope: SalesScope) -> SalesUnitOfWork:
         return _Work(self, scope)
+
+    async def claim(self) -> ClaimedJob | None:
+        """`ProcessingQueuePort.claim`: the oldest due job of any scope,
+        running, committed at once as the SQL claim commits."""
+        for scope, state in self.states.items():
+            now = self.clock.now()
+            due = [j for j in state.jobs.values() if j.status == "queued" and j.available_at <= now]
+            if due:
+                job = min(due, key=lambda j: j.available_at)
+                running = replace(job, status="running", attempts=job.attempts + 1)
+                state.jobs[job.message_id] = running
+                return ClaimedJob(scope, running)
+        return None
+
+    async def reap_stale(self, *, older_than: datetime) -> Sequence[uuid.UUID]:
+        """`ProcessingQueuePort.reap_stale`: in memory nothing dies mid-run."""
+        return []
 
     async def cases_for_po(
         self, scope: SalesScope, customer_code: str, po_no: str
@@ -551,6 +638,30 @@ class Directory:
         self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, scopes: frozenset[str]
     ) -> list[uuid.UUID]:
         return [c.user_id for c in self.callers if c.scopes & scopes]
+
+    async def find_linked_access(
+        self,
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        ceiling: frozenset[str],
+    ) -> MembershipAccess | None:
+        """`RequesterAccessPort`: a caller's scopes cut to ``ceiling``, no role,
+        as the platform's lookup answers; None for a stranger."""
+        caller = next((c for c in self.callers if c.user_id == user_id), None)
+        if caller is None:
+            return None
+        return MembershipAccess(
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            principal_id=user_id,
+            roles=frozenset(),
+            scopes=caller.scopes & ceiling,
+            groups=frozenset(),
+            clearance="internal",
+            plan_id="professional",
+            feature_flags=frozenset(),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -617,6 +728,8 @@ class World:
     runtime: MemoryRuntime
     runs: RuntimeDw1Runs
     layout_settlement: LayoutSettlement
+    # The worker's `sales_processing` lane over this world (ticket 25).
+    processing: ProcessingDrain
 
     async def decide_layout(
         self,
@@ -659,6 +772,13 @@ class World:
             await self.layout_settlement.settle(
                 uuid.UUID(str(event.payload["approval_id"])), decider
             )
+
+    async def drain(self) -> int:
+        """Every job "DW xử lý" queued, run as the worker runs it; how many."""
+        handled = 0
+        while await self.processing.drain_one():
+            handled += 1
+        return handled
 
     async def process_each(
         self,
@@ -771,7 +891,7 @@ class World:
             pic.context(),
             case_id,
             case_version=case.case_version,
-            delivery_dates={line.line_no: day for line in case.lines},
+            delivery_dates={line.line_no: [day] * line.deliveries for line in case.lines},
         )
         return self.order(case_id)
 
@@ -786,6 +906,7 @@ def open_world(
     telemetry: TelemetryPort | None = None,
     model: InterpretationPort | None = None,
     scanner: MalwareScanPort | None = None,
+    reader: ReaderTransport | None = None,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -796,7 +917,11 @@ def open_world(
     ``model`` is what reads a description DW1's vocabulary does not (dw_sales
     ADR 0005): a recorded or scripted one in the smoke, the local model in the
     live lane. None, as in a process with no model server: no model is called
-    at all."""
+    at all.
+
+    ``reader`` reads every file: the readers in this process unless a test
+    hands in its own (`InProcessReaderTransport`, through the same wire as
+    the reader sandbox)."""
     telemetry = telemetry or NullTelemetry()
     policies = load_sales_policies(
         repo_root / "configs" / "policies", repo_root / "configs" / "copy"
@@ -804,16 +929,16 @@ def open_world(
     clock = FixedClock(NOW)
     ids = Uuid4Generator()
     runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance, telemetry=telemetry)
-    store = MemoryStore(runtime.approvals)
+    store = MemoryStore(runtime.approvals, clock)
     catalog = MockSalesCatalog.load(bound_to, sample.data_dir)
-    readers = mock_po_readers()
+    readers = client_readers(reader or InProcessReaderTransport(), policies.order_rules.intake)
     # The mailbox every service reads, at the door `build_dw1` puts in front of
     # it (ticket 25): scanned, then held to its names. Nothing is found in the
     # sample set unless ``scanner`` says so.
     inbox = ScannedInbox(
         MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir),
         scanner or NoMalware(),
-        readers,
+        readers.po,
     )
     # The bound tenant's own order rules, where the sample set holds them, as
     # a version two people approved (the API stores it through `/sales/rules`).
@@ -822,23 +947,24 @@ def open_world(
         store.rule_versions.seed_approved(bound_to.tenant_id.value, own)
     book = rule_book(policies, store.rule_versions)
     order_rules = RuleBookOrderRules(book)
-    layout_checks = LayoutChecks(readers, catalog)
+    layout_checks = LayoutChecks(readers.po, catalog)
     quotation = QuotationService(
         catalog=catalog,
         inbox=inbox,
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=readers.rfq,
+        reply_reader=readers.design_reply,
         cases=store,
         ledger=catalog,
-        rules=policies.quote_rules,
-        pricing=policies.pricing,
-        requests=(None if model is None else model_requests(model, catalog, order_rules)),
+        policies=book,
+        requests=(
+            None if model is None else model_requests(model, catalog, order_rules, readers.texts)
+        ),
     )
     intake = OrderIntake(
         catalog=catalog,
         inbox=inbox,
-        reader=readers,
-        quote_forms=ExcelQuoteForms(),
+        reader=readers.po,
+        quote_forms=readers.forms,
         rules=order_rules,
         cases=store,
         new_case_id=ids.new_uuid,
@@ -872,15 +998,13 @@ def open_world(
         inbox=inbox,
         intake=intake,
         quotation=quotation,
-        files=FileSourceView(policies.order_rules.intake),
+        files=readers.source,
         book=book,
         directory=directory,
         holders=directory,
         notifications=notifications,
         artifact_bytes=objects,
         artifact_writer=ArtifactFiles(),
-        artifact_copy=policies.artifact_copy,
-        handoff_copy=policies.handoff_copy,
         layout_checks=layout_checks,
         release_manifest_ref="sha256:eval",
         runs=runs,
@@ -907,6 +1031,7 @@ def open_world(
         runtime,
         runs,
         LayoutSettlement(store, clock, ids),
+        ProcessingDrain(store, store, assembly.services.dw1, directory, clock, ids),
     )
 
 

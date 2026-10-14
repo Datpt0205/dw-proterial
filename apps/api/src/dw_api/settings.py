@@ -137,6 +137,18 @@ class ApiSettings(BaseSettings):
         default=3310, validation_alias=AliasChoices("DW_SALES_CLAMD_PORT")
     )
 
+    # --- Sales: the reader sandbox (ticket 25) ---
+    # Every customer file is read by the `reader` compose service: over its
+    # Unix socket where this container mounts it (compose fixes the path),
+    # else over the loopback gateway a host-run local process reaches
+    # (`reader-gateway`, profile `infra`).
+    sales_reader_socket: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_SALES_READER_SOCKET")
+    )
+    sales_reader_url: str = Field(
+        default="http://127.0.0.1:8120", validation_alias=AliasChoices("DW_SALES_READER_URL")
+    )
+
     # --- artifact storage (MinIO/S3) ---
     s3_endpoint_url: str | None = Field(
         default=None, validation_alias=AliasChoices("DW_API_S3_ENDPOINT_URL", "S3_ENDPOINT_URL")

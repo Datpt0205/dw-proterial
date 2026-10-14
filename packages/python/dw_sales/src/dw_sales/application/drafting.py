@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Protocol
 
 from dw_kernel.errors import ConflictError
 from dw_platform.application.directory import WorkspaceMember
@@ -49,6 +50,16 @@ class ArtifactCopy:
     documents: SalesDocumentCopy
     upload: BravoUploadLayout
     design_mailboxes: tuple[str, ...]
+
+
+class ArtifactCopyPort(Protocol):
+    """The copy a scope's tenant draws its artifacts with (ticket 36)."""
+
+    async def artifact_copy(self, scope: SalesScope, stamps: Sequence[str]) -> ArtifactCopy:
+        """The tenant's copy, each at the version ``stamps`` name where one
+        does: the template refs of the files already drawn at the case
+        version being drawn, so files drawn together say the same."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)

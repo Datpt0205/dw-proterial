@@ -18,7 +18,7 @@ import uuid
 import zipfile
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from email import policy
 from pathlib import Path
@@ -27,6 +27,7 @@ from typing import Any, Self, cast
 
 import pytest
 from openpyxl import load_workbook
+from pydantic import ValidationError
 from pypdf import PdfReader
 
 from dw_kernel.errors import (
@@ -43,17 +44,30 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
+from dw_sales.adapters.memory_rules import MemoryRuleVersions, platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_order_rules
 from dw_sales.adapters.policy_files import (
-    load_artifact_copy,
+    load_bravo_upload,
+    load_copy,
     load_pricing,
     load_quote_rules,
 )
-from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
-from dw_sales.application.access import Gate
-from dw_sales.application.artifact_content import EML, PDF, XLSX, SalesEmailCopy
+from dw_sales.adapters.reader_client import (
+    ClientDesignReplyReader,
+    ClientPoReaders,
+    ClientQuoteForms,
+    ClientRfqReader,
+)
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.access import Gate, PriceView
+from dw_sales.application.artifact_content import (
+    EML,
+    PDF,
+    XLSX,
+    SalesDocumentCopy,
+    SalesEmailCopy,
+)
 from dw_sales.application.artifacts_service import (
     ORDER_GATES,
     QUOTE_GATES,
@@ -61,10 +75,13 @@ from dw_sales.application.artifacts_service import (
     ArtifactView,
 )
 from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored
-from dw_sales.application.drafting import ArtifactCopy
+from dw_sales.application.drafting import ArtifactCopy, ArtifactCopyPort, Drafting, People
+from dw_sales.application.order_artifacts import portal_checklist
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.quotation import QuotationService, ReplyAttached
+from dw_sales.application.quotation import QuotationService, QuoteRules, ReplyAttached
+from dw_sales.application.rules import Policy, TenantRuleBook
+from dw_sales.application.views import order_line
 from dw_sales.domain.catalog import LmeBand, LmeMonth, Quotation
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
@@ -116,11 +133,17 @@ INTERNAL_PRICES = ("0.7120", "0.6980", "0.7050")
 GUIDANCE = "Chỉ đạo nội bộ: không thấp hơn giá khách khác"
 
 QUOTE_RULES = load_quote_rules(POLICIES / "sales_quote_rules@1.1.0.yaml")
-ARTIFACT_COPY = load_artifact_copy(
-    emails=COPY / "sales_emails@1.1.0.yaml",
-    documents=COPY / "sales_documents@1.2.0.yaml",
-    upload=POLICIES / "sales_bravo_upload@1.1.0.yaml",
-    quote_rules=QUOTE_RULES,
+PRICING = load_pricing(POLICIES / "sales_pricing@1.0.0.yaml")
+ARTIFACT_COPY = ArtifactCopy(
+    emails=load_copy(COPY / "sales_emails@1.2.0.yaml", SalesEmailCopy),
+    documents=load_copy(COPY / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
+    upload=load_bravo_upload(POLICIES / "sales_bravo_upload@1.1.0.yaml"),
+    design_mailboxes=QUOTE_RULES.design_mailboxes,
+)
+# The platform layer every service here resolves through: no tenant holds a
+# version of its own until a test proposes one.
+BOOK = platform_book(
+    QUOTE_RULES, PRICING, ARTIFACT_COPY.emails, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload
 )
 WRITER = ArtifactFiles()
 GATE = Gate(ScopeAuthorizationService())
@@ -278,12 +301,11 @@ def quotation_service(cases: QuoteCases | None = None) -> QuotationService:
     return QuotationService(
         catalog=catalog,
         inbox=MockInbox.load(SCOPE),
-        rfq_reader=ExcelRfqReader(),
-        reply_reader=ExcelDesignReplyReader(),
+        rfq_reader=ClientRfqReader(InProcessReaderTransport()),
+        reply_reader=ClientDesignReplyReader(InProcessReaderTransport()),
         cases=cases or QuoteCases(),
         ledger=catalog,
-        rules=QUOTE_RULES,
-        pricing=load_pricing(POLICIES / "sales_pricing@1.0.0.yaml"),
+        policies=BOOK,
     )
 
 
@@ -293,7 +315,7 @@ def _factory(world: World) -> Any:
     return lambda scope: Work(world, scope)
 
 
-def service(world: World, copy: ArtifactCopy = ARTIFACT_COPY) -> ArtifactService:
+def service(world: World, copy: ArtifactCopyPort = BOOK) -> ArtifactService:
     return ArtifactService(
         uow=_factory(world),
         gate=GATE,
@@ -317,8 +339,8 @@ def intake(cases: OrderCases) -> OrderIntake:
     return OrderIntake(
         catalog=MockSalesCatalog.load(SCOPE),
         inbox=MockInbox.load(SCOPE),
-        reader=mock_po_readers(),
-        quote_forms=ExcelQuoteForms(),
+        reader=ClientPoReaders(InProcessReaderTransport()),
+        quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=_INTAKE_RULES,
         cases=cases,
         new_case_id=uuid.uuid4,
@@ -393,7 +415,9 @@ def cross_checked(case: OrderCase) -> OrderCase:
 def confirmed(case: OrderCase) -> OrderCase:
     checked = cross_checked(case)
     return checked.confirm(
-        Actor(user_id=AN), T0, {line.line_no: CONFIRMED_ON for line in checked.lines}
+        Actor(user_id=AN),
+        T0,
+        {line.line_no: [CONFIRMED_ON] * line.deliveries for line in checked.lines},
     )
 
 
@@ -974,6 +998,114 @@ async def test_the_confirmation_names_the_pic_the_checker_and_a_date_per_line() 
     assert {a.addr_spec for a in message["To"].addresses} == {c.address for c in customer.contacts}
 
 
+# M34 (VLX, Vietnamese): line 1 is split in two, line 3 in three; line 2 has one date.
+_M34_DATES = {
+    1: [date(2026, 11, 18), date(2026, 12, 2)],
+    2: [date(2026, 11, 27)],
+    3: [date(2026, 11, 27), date(2026, 12, 11), date(2026, 12, 29)],
+}
+
+
+async def _confirmed_m34() -> OrderCase:
+    checked = cross_checked(decided_all(await in_review("M34")))
+    return checked.confirm(Actor(user_id=AN), T0, _M34_DATES)
+
+
+async def test_a_split_line_is_confirmed_to_the_customer_schedule_by_schedule() -> None:
+    """Ticket 35: each schedule's quantity with the date confirmed for it, not
+    the line's whole quantity on one day."""
+    case = await _confirmed_m34()
+    body = _body(await _one(case, "confirmation_draft"))
+    lines = {
+        int(row.split(":")[0].removeprefix("- Dòng ")): row
+        for row in body.splitlines()
+        if row.startswith("- Dòng")
+    }
+
+    assert lines[1].endswith(
+        "ngày giao xác nhận theo 2 đợt: 6100 m ngày 18/11/2026; 6100 m ngày 02/12/2026"
+    )
+    assert lines[3].endswith(
+        "ngày giao xác nhận theo 3 đợt: 1500 m ngày 27/11/2026; 900 m ngày 11/12/2026;"
+        " 600 m ngày 29/12/2026"
+    )
+    assert lines[2].endswith("ngày giao xác nhận 27/11/2026")
+    assert "đợt" not in lines[2]
+
+
+async def test_a_portal_checklist_has_a_row_per_schedule_of_a_split_line() -> None:
+    """VLX confirms by email; the checklist is drawn for it as if on a portal."""
+    case = await _confirmed_m34()
+    customer = (await MockSalesCatalog.load(SCOPE).customer_by_code(SCOPE, "VLX")).data
+    assert customer is not None
+    drafting = Drafting(
+        case=case,
+        case_version=case.case_version,
+        customer=customer.model_copy(update={"confirmation_channel": "portal"}),
+        people=People({m.user_id: m for m in MEMBERS}),
+        drafter=AN,
+        at=NOW,
+        copy=ARTIFACT_COPY,
+        writer=WRITER,
+        scope=SCOPE,
+    )
+
+    (rendered,) = portal_checklist(drafting)
+
+    rows = _sheet_rows(rendered.data)
+    header_at = next(i for i, row in enumerate(rows) if row and row[0] == "Dòng")
+    listed = [(row[0], Decimal(str(row[3])), row[7]) for row in rows[header_at + 1 :] if row[0]]
+    as_dates = [
+        (no, qty, day.date() if isinstance(day, datetime) else day) for no, qty, day in listed
+    ]
+    assert as_dates == [
+        (1, Decimal(6100), date(2026, 11, 18)),
+        (1, Decimal(6100), date(2026, 12, 2)),
+        (2, case.line(2).effective.quantity, date(2026, 11, 27)),
+        (3, Decimal(1500), date(2026, 11, 27)),
+        (3, Decimal(900), date(2026, 12, 11)),
+        (3, Decimal(600), date(2026, 12, 29)),
+    ]
+
+
+async def test_m35s_short_split_line_is_confirmed_per_schedule_once_pc_agreed() -> None:
+    """M35 (BRN, PDF): line 2's schedules are too soon. PC's agreement is per
+    line, covering every schedule its finding names; then each schedule is
+    confirmed on its own date."""
+    review = await in_review("M35")
+    # Line 1's schedules add up to 5,490 where it prints 6,100: Sales takes the
+    # schedules' sum, as the customer's PO meant.
+    review = review.dispose(
+        "line_total_mismatch:-",
+        CorrectedBySales(value="5490", source="PO gốc", by=AN, at=T0),
+        Actor(user_id=AN),
+    )
+    checked = cross_checked(decided_all(review))
+    short = next(f for f in checked.findings if f.code is FindingCode.REQUESTED_DATE_SHORT_LT)
+    assert short.line_no == 2
+    dates = {
+        line.line_no: [CONFIRMED_ON + timedelta(days=7 * n) for n in range(line.deliveries)]
+        for line in checked.lines
+    }
+    assert len(dates[2]) == checked.line(2).deliveries > 1
+
+    with pytest.raises(ConflictError, match="no PC-confirmed date"):
+        checked.confirm(Actor(user_id=AN), T0, dates)
+    agreed = checked.record_pc_confirmation(2, Actor(user_id=AN), T0)
+    case = agreed.confirm(Actor(user_id=AN), T0, dates)
+
+    body = _body(await _one(case, "confirmation_draft"))
+    (line_2,) = [row for row in body.splitlines() if row.startswith("- Dòng 2:")]
+    schedules = case.line(2).effective.schedules
+    assert line_2.endswith(
+        f"theo {len(schedules)} đợt: "
+        + "; ".join(
+            f"{s.quantity} {case.line(2).effective.uom} ngày {day:%d/%m/%Y}"
+            for s, day in zip(schedules, dates[2], strict=True)
+        )
+    )
+
+
 async def test_a_customer_who_confirms_on_their_portal_gets_a_checklist_not_an_email() -> None:
     case = await _confirmed_m13()  # NRV confirms on its portal
 
@@ -1047,11 +1179,8 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
             },
         }
     )
-    copy = ArtifactCopy(
-        emails=without_ja,
-        documents=ARTIFACT_COPY.documents,
-        upload=ARTIFACT_COPY.upload,
-        design_mailboxes=ARTIFACT_COPY.design_mailboxes,
+    copy = platform_book(
+        QUOTE_RULES, PRICING, without_ja, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload
     )
     world = World()
     case = await m10("approved")
@@ -1062,7 +1191,7 @@ async def test_a_missing_language_refuses_to_render_and_stores_nothing() -> None
     assert refused.value.details == {
         "kind": "send_draft",
         "language": "ja",
-        "copy": "sales_emails@1.1.0",
+        "copy": "sales_emails@1.2.0",
         "reason": "template_missing",
     }
     assert not world.objects and not world.artifacts
@@ -1205,6 +1334,94 @@ async def test_the_ycbg_and_the_design_request_go_to_design_in_vietnamese() -> N
     assert YCBG_M10 in str(message["Subject"])
 
 
+# ------------------------------------- the tenant's own copy (ticket 36) --
+
+
+def _tenant_book() -> TenantRuleBook:
+    """The platform's copy and quote rules, and room for a tenant's own."""
+    return platform_book(
+        QUOTE_RULES, PRICING, ARTIFACT_COPY.emails, ARTIFACT_COPY.documents, ARTIFACT_COPY.upload
+    )
+
+
+def _seed(book: TenantRuleBook, scope: SalesScope, policy: Policy) -> None:
+    assert isinstance(book.stored, MemoryRuleVersions)
+    book.stored.seed_approved(scope.tenant_id.value, policy)
+
+
+def _documents(version: str, title: str) -> SalesDocumentCopy:
+    copy = ARTIFACT_COPY.documents.model_dump(mode="json", by_alias=True)
+    for template in copy["documents"]["quotation"].values():
+        template["title"] = title
+    return SalesDocumentCopy.model_validate({**copy, "version": version})
+
+
+async def test_drafts_are_written_in_the_tenants_own_copy_and_record_it() -> None:
+    book = _tenant_book()
+    emails = ARTIFACT_COPY.emails.model_dump(mode="json", by_alias=True)
+    emails["emails"]["confirmation_draft"]["vi"]["subject"] = "PO ${po_no} đã xác nhận (demo)"
+    _seed(book, SCOPE, SalesEmailCopy.model_validate({**emails, "version": "9.0.1"}))
+    world = World()
+    case = await _confirmed_m01()
+
+    (view,) = await render(world, case, "confirmation_draft", svc=service(world, book))
+
+    data = world.objects[world.artifacts[(SCOPE, view.artifact_id)].object_key(SCOPE)]
+    assert view.template_ref == "sales_emails.confirmation_draft.vi@9.0.1"
+    assert _eml(data)["Subject"] == f"PO {case.header.po_no} đã xác nhận (demo)"
+    other = await book.artifact_copy(OTHER, [])
+    assert other.emails.ref == ARTIFACT_COPY.emails.ref
+
+
+async def test_the_send_draft_attaches_the_final_files_drawn_before_a_new_documents_copy() -> None:
+    """A documents version approved between the final quotation and its send
+    draft does not reach the attachments: files drawn at one case version
+    read the copy the first of them stamped."""
+    book = _tenant_book()
+    world = World()
+    svc = service(world, book)
+    case = await m10("approved")
+    finals = await render(world, case, "quotation_final", svc=svc)
+    _seed(book, SCOPE, _documents("9.0.1", "BÁO GIÁ MỚI"))
+
+    (draft,) = await render(world, case, "send_draft", svc=svc)
+
+    message = _eml(world.objects[world.artifacts[(SCOPE, draft.artifact_id)].object_key(SCOPE)])
+    attached = {
+        hashlib.sha256(part.get_content()).hexdigest() for part in message.iter_attachments()
+    }
+    assert attached == {view.sha256 for view in finals}
+    assert {view.template_ref for view in finals} == {"sales_documents.quotation.ja@1.2.0"}
+    # The next case version draws with the tenant's version.
+    assert (await book.artifact_copy(SCOPE, [])).documents.ref == "sales_documents@9.0.1"
+
+
+async def test_a_file_whose_stamped_copy_is_no_longer_held_is_refused() -> None:
+    book = _tenant_book()
+    with pytest.raises(ConflictError) as refused:
+        await book.artifact_copy(SCOPE, ["sales_documents.quotation.ja@0.9.0"])
+    assert refused.value.details == {
+        "copy": "sales_documents@0.9.0",
+        "reason": "template_version_gone",
+    }
+
+
+async def test_the_design_drafts_go_to_the_tenants_current_design_mailboxes() -> None:
+    book = _tenant_book()
+    moved = QUOTE_RULES.model_copy(
+        update={"policy_version": "9.0.1", "design_mailboxes": ("thietke@seller.example",)}
+    )
+    _seed(book, SCOPE, QuoteRules.model_validate(moved.model_dump()))
+    world = World()
+
+    (view,) = await render(
+        world, await m10("ycbg_recorded"), "design_request_draft", svc=service(world, book)
+    )
+
+    message = _eml(world.objects[world.artifacts[(SCOPE, view.artifact_id)].object_key(SCOPE)])
+    assert [a.addr_spec for a in message["To"].addresses] == ["thietke@seller.example"]
+
+
 # ----------------------------------------------------------------- the copy --
 
 
@@ -1238,3 +1455,27 @@ def test_a_value_is_substituted_as_text_never_read_as_a_template() -> None:
     from dw_sales.application.artifact_content import fill
 
     assert fill("${a}", {"a": "${b} $c"}, ref="t@1.0.0") == "${b} $c"
+
+
+def test_a_subject_with_a_line_break_is_refused_before_it_can_be_a_tenants_copy() -> None:
+    """Ticket 36: a tenant's e-mail copy is proposed by a person; a subject is
+    one header line, which the mail writer would refuse to build."""
+    copy = ARTIFACT_COPY.emails.model_dump(mode="json", by_alias=True)
+    copy["emails"]["send_draft"]["vi"]["subject"] = "Báo giá ${quote_no}\nBcc: x@example.com"
+
+    with pytest.raises(ValidationError, match="subject"):
+        SalesEmailCopy.model_validate(copy)
+
+
+async def test_the_order_view_shows_each_schedules_confirmed_date_and_no_line_date() -> None:
+    """Ticket 35: a split line's dates are on its schedules; a line delivered
+    once keeps its one date on the line."""
+    case = await _confirmed_m34()
+    prices = PriceView(amounts=True, other_customers=False)
+
+    split, single = order_line(case, case.line(1), prices), order_line(case, case.line(2), prices)
+
+    assert [s.confirmed_delivery_date for s in split.schedules] == _M34_DATES[1]
+    assert split.confirmed_delivery_date is None
+    assert single.confirmed_delivery_date == _M34_DATES[2][0]
+    assert [s.confirmed_delivery_date for s in single.schedules] == [None]

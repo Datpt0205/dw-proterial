@@ -7,6 +7,9 @@ another case's or another tenant's 404.
 
 from __future__ import annotations
 
+import email
+import email.message
+import email.policy
 import hashlib
 import io
 import uuid
@@ -19,6 +22,7 @@ from openpyxl import load_workbook
 from sales_api_harness import AN, BAO, DIEU, GIANG, HA, Api, Persona, user_id
 from sales_flow import (
     approve,
+    cross_checked,
     decide,
     order_of,
     prepared,
@@ -190,6 +194,66 @@ async def test_a_line_split_over_several_dates_keeps_each_through_the_store_and_
         for s in line["schedules"]
     ]
     assert len(rows) == 6
+
+
+async def test_a_split_line_is_confirmed_per_schedule_through_the_store_and_the_draft(
+    api: Api,
+) -> None:
+    """Ticket 35, read back from PostgreSQL: one date for a line M34 splits is
+    refused; a date per schedule is stored, shown per schedule and drafted
+    to the customer schedule by schedule."""
+    an, dieu = api.as_(AN), api.as_(DIEU)
+    crossed = await cross_checked(dieu, await uploaded(an, await order_of(an, "M34")))
+    path = f"/orders/{crossed['case_id']}/confirm"
+
+    one_date = await an.post(
+        path,
+        {
+            "case_version": crossed["case_version"],
+            "delivery_dates": [
+                {"line_no": line["line_no"], "confirmed_date": "2026-11-27"}
+                for line in crossed["lines"]
+            ],
+        },
+    )
+    per_schedule = {
+        1: ["2026-11-18", "2026-12-02"],
+        2: ["2026-11-27"],
+        3: ["2026-11-27", "2026-12-11", "2026-12-29"],
+    }
+    confirmed = await decide(
+        an,
+        crossed,
+        "confirm",
+        {
+            "delivery_dates": [
+                {"line_no": 2, "confirmed_date": "2026-11-27"},
+                {"line_no": 1, "schedule_dates": per_schedule[1]},
+                {"line_no": 3, "schedule_dates": per_schedule[3]},
+            ]
+        },
+    )
+
+    assert one_date.status_code == 422, one_date.text
+    assert one_date.json()["details"]["lines"] == [1, 3]
+    assert confirmed["status"] == "confirmed"
+    by_line = {line["line_no"]: line for line in confirmed["lines"]}
+    assert [s["confirmed_delivery_date"] for s in by_line[1]["schedules"]] == per_schedule[1]
+    assert [s["confirmed_delivery_date"] for s in by_line[3]["schedules"]] == per_schedule[3]
+    assert by_line[1]["confirmed_delivery_date"] is None
+    assert by_line[2]["confirmed_delivery_date"] == "2026-11-27"
+    (draft,) = await _render(an, "orders", confirmed, "confirmation_draft")
+    served = await an.get(f"/orders/{confirmed['case_id']}/artifacts/{draft['artifact_id']}")
+    assert served.status_code == 200
+    message = email.message_from_bytes(served.content, policy=email.policy.default)
+    assert isinstance(message, email.message.EmailMessage)
+    part = message.get_body(("plain",))
+    assert part is not None
+    body = str(part.get_content())
+    assert "theo 2 đợt: 6100 m ngày 18/11/2026; 6100 m ngày 02/12/2026" in body
+    assert "theo 3 đợt: 1500 m ngày 27/11/2026; 900 m ngày 11/12/2026; 600 m ngày 29/12/2026" in (
+        body
+    )
 
 
 async def test_the_upload_file_is_refused_once_an_edit_bumped_the_case(api: Api) -> None:

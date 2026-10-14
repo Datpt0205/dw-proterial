@@ -19,6 +19,8 @@ from pg_test_db import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_sales.application.case_store import JobError, JobStatus
+from dw_sales.application.rules import RuleKey
 from dw_sales.domain import dispositions, orders, quotes
 
 pytestmark = pytest.mark.integration
@@ -62,6 +64,11 @@ _SETS: dict[str, set[str]] = {
     "ck_messages_disposition": _values(dispositions.DispositionKind),
     "ck_messages_routing_reason": _values(dispositions.RoutingReason),
     "ck_quote_cases_status": _values(quotes.QuoteStatus),
+    # The keys a tenant may hold its own version of (tickets 19 and 36).
+    "ck_rule_versions_key": _values(RuleKey),
+    # A message's processing job and why it failed (ticket 25).
+    "ck_processing_jobs_status": set(get_args(JobStatus)),
+    "ck_processing_jobs_error_code": set(get_args(JobError)),
 }
 
 

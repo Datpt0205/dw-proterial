@@ -83,6 +83,9 @@ function Schedules({ line }: { line: Line }) {
           s.suggested_delivery_date !== s.requested_date
             ? ` → gợi ý ${formatDate(s.suggested_delivery_date)}`
             : null}
+          {s.confirmed_delivery_date
+            ? ` · đã xác nhận ${formatDate(s.confirmed_delivery_date)}`
+            : null}
         </Typography.Text>
       ))}
     </Space>
@@ -287,6 +290,15 @@ export function LinesTable({
                     icon={<CheckCircleOutlined aria-hidden />}
                   >
                     Đã xác nhận {formatDate(line.confirmed_delivery_date)}
+                  </StatusTag>
+                ) : line.schedules.some((s) => s.confirmed_delivery_date) ? (
+                  // A split line is confirmed per schedule (ticket 35): each
+                  // date is on its schedule, under "Ngày yêu cầu".
+                  <StatusTag
+                    tone="ok"
+                    icon={<CheckCircleOutlined aria-hidden />}
+                  >
+                    Đã xác nhận theo {line.schedules.length} đợt
                   </StatusTag>
                 ) : null}
                 {line.suggested_delivery_date ? (

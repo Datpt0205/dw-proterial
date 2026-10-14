@@ -28,7 +28,7 @@ class _Lane:
         self.ticked.append(scope)
         if scope == self.failing:
             raise RuntimeError("the database went away")
-        return LaneTick(processed=("M01",))
+        return LaneTick(queued=("M01",))
 
 
 async def test_every_workspace_gets_its_tick_even_when_one_fails() -> None:

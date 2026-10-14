@@ -61,6 +61,7 @@ from dw_sales.application.malware import AttachmentInfectedError, AttachmentRefu
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (
+    READ_AS,
     LayoutLookupPort,
     OrderCaseLookupPort,
     OrderRulesPort,
@@ -367,11 +368,11 @@ class OrderIntake:
             content = item.content
             if content is None:
                 continue
-            form = self.quote_forms.form(content)
+            form = await self.quote_forms.form(content)
             if form is not None:
                 kinds.add(MessageKind(form))
             elif (
-                self.reader.sniff(content.data) in ("pdf", "xlsx")
+                READ_AS.get(self.reader.sniff(content.data) or "") is not None
                 and content.attachment.size <= caps.max_attachment_bytes
             ):
                 readable.append(content)
@@ -539,7 +540,8 @@ class OrderIntake:
                 reasons.append(f"{content.attachment.attachment_id}: {result.reason}")
             else:
                 documents.append(result)
-                kinds.append(self.reader.sniff(content.data) or "")
+                # A legacy workbook pairs with its print as a workbook does.
+                kinds.append(READ_AS.get(self.reader.sniff(content.data) or "", ""))
         if not documents:
             routed = self._routed(message, kind, unreadable, customer, "; ".join(reasons))
             return await self._with_prefill(scope, routed, readable, customer, rules, run)
@@ -593,7 +595,8 @@ class OrderIntake:
     ) -> PoLayout | None:
         if self.layouts is None:
             return None
-        kind = {"xlsx": "excel", "pdf": "pdf"}.get(self.reader.sniff(content.data) or "")
+        read_as = READ_AS.get(self.reader.sniff(content.data) or "", "")
+        kind = {"xlsx": "excel", "pdf": "pdf"}.get(read_as)
         approved = await self.layouts.approved(scope, customer_code)
         return next((layout for layout in approved if layout.kind == kind), None)
 
@@ -618,7 +621,7 @@ class OrderIntake:
             file_type = self.reader.sniff(content.data)
             if file_type is None or file_type == "unsupported":
                 continue
-            if self.reader.has_layout(customer.code, file_type):
+            if await self.reader.has_layout(customer.code, file_type):
                 continue
             if await self._stored_layout(scope, customer.code, content) is not None:
                 continue

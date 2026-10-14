@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -20,9 +21,14 @@ vi.mock("../../../../lib/auth/auth-context", () => ({
 vi.mock("../../../../lib/session", () => ({
   apiClient: () => ({ listWorkspaceMembers: vi.fn().mockResolvedValue([]) }),
 }));
-vi.mock("../api", () => ({ salesApi: () => ({}) }));
+const api = vi.hoisted(() => ({
+  confirm: vi.fn(),
+  artifacts: vi.fn(),
+}));
+vi.mock("../api", () => ({ salesApi: () => api }));
 
 import { LinesTable } from "../../orders/[caseId]/lines";
+import { OrderActions } from "../../orders/[caseId]/actions";
 
 const PIC = { principalId: AN, hasScope: () => true };
 
@@ -47,12 +53,14 @@ function split() {
             requested_date: "2026-10-06",
             anchor: at,
             suggested_delivery_date: "2026-10-30",
+            confirmed_delivery_date: null,
           },
           {
             quantity: "1000",
             requested_date: "2026-11-30",
             anchor: at,
             suggested_delivery_date: "2026-11-30",
+            confirmed_delivery_date: null,
           },
         ],
       },
@@ -113,5 +121,72 @@ describe("a PO line split over several delivery dates (ticket 21)", () => {
 
     expect(screen.queryByText(/đợt giao/)).toBeNull();
     expect(screen.getByText("16/11/2026").textContent).toBe("16/11/2026");
+  });
+});
+
+describe("a split line is confirmed per schedule (ticket 35)", () => {
+  it("asks a date for each schedule, pre-filled with DW1's suggestion, and sends one per schedule", async () => {
+    api.confirm.mockResolvedValue({});
+    api.artifacts.mockResolvedValue({
+      case_version: 9,
+      available: [],
+      artifacts: [],
+    });
+    const crossed = { ...split(), status: "cross_checked", findings: [] };
+    render(
+      <UiProvider>
+        <OrderActions
+          order={crossed as ReturnType<typeof order>}
+          viewer={PIC}
+          sourceOpened
+          onChanged={() => {}}
+        />
+      </UiProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Đã gửi xác nhận$/ }));
+    expect(screen.getByLabelText("Ngày xác nhận dòng 1 đợt 1")).toBeTruthy();
+    expect(screen.getByLabelText("Ngày xác nhận dòng 1 đợt 2")).toBeTruthy();
+    expect(screen.queryByLabelText("Ngày xác nhận dòng 1")).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Ghi đã gửi xác nhận$/ }),
+    );
+
+    await waitFor(() => expect(api.confirm).toHaveBeenCalledTimes(1));
+    const [, body] = api.confirm.mock.calls[0] as [string, unknown];
+    expect(body).toEqual({
+      case_version: crossed.case_version,
+      delivery_dates: [
+        { line_no: 1, schedule_dates: ["2026-10-30", "2026-11-30"] },
+      ],
+    });
+  });
+
+  it("shows each schedule's confirmed date on the line", () => {
+    const data = split();
+    const [line] = data.lines;
+    if (line === undefined) throw new Error("no line");
+    renderLines({
+      ...data,
+      lines: [
+        {
+          ...line,
+          schedules: line.schedules.map((s, index) => ({
+            ...s,
+            confirmed_delivery_date: index === 0 ? "2026-11-02" : "2026-12-04",
+          })),
+        },
+      ],
+    });
+
+    const row = screen.getByText("2 đợt giao").closest("tr") as HTMLElement;
+    const cells = within(row);
+    expect(cells.getByText(/06\/10\/2026 ·/).textContent).toContain(
+      "đã xác nhận 02/11/2026",
+    );
+    expect(cells.getByText(/30\/11\/2026 ·/).textContent).toContain(
+      "đã xác nhận 04/12/2026",
+    );
+    expect(cells.getByText("Đã xác nhận theo 2 đợt")).toBeTruthy();
   });
 });

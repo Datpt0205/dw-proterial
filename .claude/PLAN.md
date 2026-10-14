@@ -29,11 +29,10 @@ own file and a row here.
   `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.2.0`.
 - dw_sales ADR 0004 (checker decisions on the runtime) is Proposed, Đạt to
   review. Platform pieces waiting for a first caller: `platform-runtime.md`.
-- 2026-10-13 (agent, Đạt away, uncommitted): sales 21, 23 (reviewed), 24,
-  19 (order rules and KPI; the rest is ticket 36) and 34 done;
-  support-access 02 step 10 reviewed, 03 (web session) built. Spans no
-  longer carry exception text (platform).
-- **Next:** 35, 36; 25 and 27 are needs-info (sandbox, WSL); Đạt reviews 28–33.
+- 2026-10-13/14 (agent, Đạt away): sales 19, 21, 23, 24, 34, 35, 36 done;
+  25 ("DW xử lý" queued, files read in the `reader` container) and 27
+  (LibreOffice, Tesseract there) built, owing the post-reboot checks.
+- **Next:** reboot, then 25/27's post-reboot checks; Đạt reviews 28–33.
 
 ## Decisions Đạt owes
 
@@ -57,7 +56,7 @@ own file and a row here.
       94.5%, 30 98.2%; ADR 0004's amendment (run-less layout approval);
     - the interim defaults listed in `sales.md` Open;
     - whether pausing DW1 also stops rendering drafts and files.
-    - the reader sandbox for 25/27 (docgen or its own); restart WSL (admin).
+    - restart WSL (admin): 25/27's image, trivy and integration runs wait.
 
 ## How a feature is checked here
 

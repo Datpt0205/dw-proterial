@@ -195,6 +195,25 @@ def test_dw1s_mailbox_lane_needs_a_database_object_storage_and_a_mailbox() -> No
     assert "sales_inbox" not in build_registry(deployed).all()
 
 
+def test_dw1s_processing_queue_runs_whether_or_not_the_mailbox_lane_does() -> None:
+    """Sales ticket 25: "DW xử lý" queues a job whether or not the mailbox
+    lane runs, so the drain is wired with DW1 (a database, object storage, a
+    mailbox), switch or no switch, every few seconds; and its queue is the
+    reaper's, so a job a dead worker left running is not stuck there."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    assert "sales_processing" not in build_registry(bare_settings(database_url=db)).all()
+
+    switched_off = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    registry = build_registry(switched_off)
+    assert "sales_processing" in registry.all()
+    assert registry.interval_for("sales_processing", 1.0) == 3.0
+    assert "reaper" in registry.all()
+
+    deployed = bare_settings(database_url=db, s3_endpoint_url=s3, profile="uat")
+    assert "sales_processing" not in build_registry(deployed).all()
+
+
 def test_the_pinned_retention_policy_promises_only_classes_code_can_assign() -> None:
     """A memory class nothing can put on a row is a promise in a compliance
     file that the code does not keep (`failure-modes.md` #1). `sensitive`,

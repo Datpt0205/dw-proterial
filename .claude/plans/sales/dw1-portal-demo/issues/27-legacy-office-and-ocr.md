@@ -1,8 +1,11 @@
 # 27 — Legacy `.xls`/`.doc` are converted and image PDFs are OCRed (G17, part 2)
 
-Status: needs-info (2026-10-13, agent, Đạt away): waits on ticket 25's sandbox
-question, and on WSL being restarted on the dev machine (Comments)
-Blocked by: 25
+Status: built-pending-measurement (2026-10-14, agent): conversion and OCR
+built in ticket 25's reader container, tested at their seams and in the
+evals (`sales_legacy@1.0.0`); what the real LibreOffice and Tesseract make of
+the fixtures, and their time and memory, are measured on the image after the
+WSL reboot ("Post-reboot checks" below)
+Blocked by: — (25 built)
 Category: enhancement
 
 Split from ticket 12 on 2026-10-12.
@@ -39,7 +42,92 @@ PO yields values with page coordinates.
 - `docs/adr/0009-parser-page-output-with-coordinates.md`,
   `docs/adr/0010-document-intake-at-real-size-and-format.md` (both Proposed).
 
+## As built (2026-10-14, agent)
+
+1. **Conversion, in the reader sandbox** (`readers/legacy.py`,
+   `LibreOfficeConverter`): an `.xls` to `.xlsx` and a `.doc` to PDF by
+   LibreOffice headless, started by the one-use reading process (ticket 25),
+   so under its `ulimit`s, its process group and its wall clock, with no
+   network. A throwaway profile per conversion (`-env:UserInstallation` in the
+   request's own directory), written before LibreOffice starts with
+   `DisableMacrosExecution` true and macro security "very high";
+   `--norestore --nologo --nodefault --nolockcheck`, no filter option; its own
+   90 s clock. The copy is read as any `.xlsx`/PDF (the same layouts), and
+   the PO says how (`PoDocument.derivation`: `converted`, the tool's own
+   `soffice --version`, the copy's sha256); **every anchor carries both
+   hashes** (`attachment_sha256` the customer's file, `derived_sha256` the
+   copy), and the PO refuses an anchor naming another copy. A source view of
+   a legacy file shows its copy (converted again). The type is told by the
+   bytes: `formats.sniff` reads a compound file's directory (`Workbook`/`Book`
+   → `xls`, `WordDocument` → `doc`, a name taken only at a directory entry),
+   and `READ_AS` maps each to what it is read as (layouts, pairing, the
+   platform's layouts).
+2. **OCR** (`readers/ocr.py`, `TesseractOcr`; `readers/pdf.py`): a PDF page
+   with no text layer is rasterised (`pdftoppm -r 300`, one page) and read by
+   `tesseract -l vie+eng --psm 6 tsv`; its words, by line, become the page's
+   lines and rows (a gap wider than 1.2 word heights ends a cell), so the
+   customer's PDF layout reads it unchanged and each value keeps its page and
+   a box. **Every value of a PO a page of which was OCRed is flagged `ocr`**
+   (`RegionFlag.OCR`, so `value_uncertain` until Sales confirms it, whatever
+   the confidence; a word under 30 is dropped as noise), and the PO names the
+   engine (`derivation`: `ocr`, `tesseract --version` and the languages).
+3. **Pinned**: the base image by tag and digest; LibreOffice
+   (`libreoffice-calc-nogui`, `libreoffice-writer-nogui`), Tesseract
+   (`tesseract-ocr`, `tesseract-ocr-vie`) and poppler from Debian bookworm,
+   each reading stamped with the tool's own version. Memory and time per page:
+   owed (below).
+4. **Fixtures** (fictional, from the fictional mocks):
+   `adapters/mock/legacy/scan_BRN-PO-2610-027.pdf` (M03 drawn as a bilevel
+   300 dpi scan, no text layer) and its `.tsv` (what a perfect OCR reads),
+   made by `python -m dw_sales.adapters.mock.generate_scan`, deterministic.
+   **No `.xls` is committed**: the public-repo guard cannot read a binary
+   Office file and counts one a finding; the unit suite and the evals hand
+   the reader a compound file naming a workbook stream with the converter
+   scripted, and the image suite makes real `.xls`/`.doc` files in the image
+   with LibreOffice. Evals `sales_legacy@1.0.0` (6/6, full security coverage):
+   converted (both hashes, the converter), OCR (every value `ocr`,
+   `value_uncertain`), a failed conversion routed with the reason, an
+   instruction printed on a scan kept as a flagged value that moves nothing,
+   another tenant reaching nothing (and nothing converted), a scan OCR reads
+   nothing on yielding no value.
+5. **A converter or OCR failure is a finding on the message, not a failed
+   run**: the PO is `Unreadable` ("the xls file could not be converted:
+   LibreOffice exited 81"; "the PDF has no text layer, and OCR read no text
+   on it"), the message routed `attachment_unreadable` with that reason. A
+   tool that is not installed (in process, on a developer's machine) reads
+   as before: unreadable, with the reason.
+
 ## Comments
+
+- 2026-10-14, agent: built inside ticket 25's reader container (Đạt decided
+  "DW xử lý" asynchronous; the container was the ticket's recommendation,
+  taken by the agent while Đạt was away).
+- Decided by the agent: Tesseract 5 with `vie` first (the plan below); page
+  segmentation mode 6 and 300 dpi are starting values the measurement
+  confirms or changes. The fixture's type is small (the long description
+  column puts about 190 characters on a landscape line, about 6 pt): if
+  Tesseract misreads it at 300 dpi, try 400 dpi before another engine.
+- Decided by the agent: each read of a legacy file converts it again (the
+  sandbox keeps nothing between requests, and intake reads a PO twice);
+  caching the copy is a follow-up if the measurement says it is slow.
+- Not done: a fixture with a macro that would act if run, to show that it
+  does not (LibreOffice writes such a file only with its own macro editor);
+  the disabled profile is tested as written, not as obeyed. Owed with the
+  reboot: make one in the image and convert it.
+- **Post-reboot checks** (after ticket 25's, which build the image):
+    1. `DW_TEST_READER=http://127.0.0.1:8120 uv run pytest -m integration apps/reader/tests/integration -k "libreoffice or tesseract or legacy or bars"`:
+       the `.xls` made from M01 converted and read with both hashes; the scan
+       read by Tesseract to the same quantities and prices as M03 (prints
+       what it read); M16 (bars) still unreadable; a `.doc` shown as its PDF.
+    2. `uv run python scripts/measure_reader.py --runs 3`: seconds and peak
+       memory per reading process for the `.xls` (LibreOffice) and the 2-page
+       scan (Tesseract); record them here (acceptance 3).
+    3. If Tesseract misreads the scan: rerun with `DPI = 400` in
+       `readers/ocr.py`, then `--psm 4`, and record each; RapidOCR only if
+       both fail (the plan below).
+    4. A macro fixture: in the reader container, write a `.xls` with an
+       `Auto_Open` that writes a file, convert it through the reader, and
+       check no file was written.
 
 - 2026-10-13, needs-info (agent, Đạt away). Not started in code, for two
   reasons, each with its question:

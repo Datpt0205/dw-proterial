@@ -26,6 +26,12 @@ back, not an onward hop.
 Both the host and the chat container come through here — the host for the
 development loop where the chat runs outside compose, the chat container
 because it no longer shares a network with the sandbox.
+
+The reader sandbox (Sales ticket 25) is reached the same way by a host-run
+API or worker (`reader-gateway`, profile `infra`): it has no network at all
+and listens on a Unix socket, so its gateway forwards to that socket
+(`GATEWAY_TARGET_UDS`) instead of a host and port. Still one fixed target,
+read from the environment.
 """
 
 from __future__ import annotations
@@ -36,6 +42,8 @@ import os
 GATEWAY_LISTEN_PORT = int(os.environ.get("GATEWAY_LISTEN_PORT", "8110"))
 GATEWAY_TARGET_HOST = os.environ.get("GATEWAY_TARGET_HOST", "docgen")
 GATEWAY_TARGET_PORT = int(os.environ.get("GATEWAY_TARGET_PORT", "8110"))
+# A Unix socket to forward to instead of the host and port, when set.
+GATEWAY_TARGET_UDS = os.environ.get("GATEWAY_TARGET_UDS", "")
 
 
 async def _pump(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -51,9 +59,14 @@ async def _pump(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> N
 
 async def _handle(client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter) -> None:
     try:
-        upstream_reader, upstream_writer = await asyncio.open_connection(
-            GATEWAY_TARGET_HOST, GATEWAY_TARGET_PORT
-        )
+        if GATEWAY_TARGET_UDS:
+            upstream_reader, upstream_writer = await asyncio.open_unix_connection(
+                GATEWAY_TARGET_UDS
+            )
+        else:
+            upstream_reader, upstream_writer = await asyncio.open_connection(
+                GATEWAY_TARGET_HOST, GATEWAY_TARGET_PORT
+            )
     except OSError:
         client_writer.close()
         return
