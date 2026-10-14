@@ -12,7 +12,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   amendments) and 0005 (with its addenda) **Accepted**; the bars of tickets
   29–33 kept as proposed; every released rules version kept readable
   (ticket 37); rule versions decided on the platform's approvals (ticket
-  38); ticket 28 with thinking on is being measured (no result yet). Built by
+  38); ticket 28 with thinking on measured: unusable on this card. Built by
   the agent:
     - **37.** The rule book holds every platform version the checkout ships
       (`TenantRuleBook.released`); a version written before a field of its
@@ -248,6 +248,16 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       route): VI/EN 97.8%, JA 100%, 1 of 67 lines to a person, 0 wrong
       single candidates, 0 injection effects, p50 11.6 s per call (9 calls).
       The gap is the model, not the code: verification is the same.
+    - **Thinking on (2026-10-14).** Qwen 9B with thinking on (a throwaway
+      Ollama model at num_ctx 32768, 2,000 output tokens per line, 600 s
+      timeout) on the GTX 1080: 189 minutes for the set, p50 808 s per
+      10-line call, 5 of 9 calls failed (44 of 67 lines unavailable); of the
+      23 lines answered, 1 read and 22 refused by code (9 lines left out of
+      the answer, 11 text not covered). VI/EN 0%, 0 wrong candidates, 0
+      injection effects. Thinking is not usable on this card; the context
+      that thinking needs spilled part of the model off the GPU, so a 16 GB
+      card would be faster, not measured. The live lane reported [PASS]
+      with every call unavailable: it grades the guards, not the bar.
     - **Live portal flow.** The whole mailbox in 57.5 s; M36 lines 1 and 3
       suggested correctly and confirmable.
     - **Shipped with it.** Migration `a9977d62e09b`, mock `M36` (the mailbox
