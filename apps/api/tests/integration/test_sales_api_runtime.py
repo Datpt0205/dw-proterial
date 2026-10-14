@@ -162,8 +162,10 @@ async def test_approvals_and_runs_carry_ids_a_version_and_a_hash_never_an_amount
         approvals = (
             await conn.execute(
                 sa.text(
+                    # The approvals a DW1 run raised: the demo tenant's own rules
+                    # also wait on a run-less `sales.rules` one (ticket 38).
                     "SELECT payload, required_scope FROM platform.approval_requests"
-                    " WHERE tenant_id = :t"
+                    " WHERE tenant_id = :t AND run_id IS NOT NULL"
                 ),
                 {"t": ALPHA_TENANT},
             )
