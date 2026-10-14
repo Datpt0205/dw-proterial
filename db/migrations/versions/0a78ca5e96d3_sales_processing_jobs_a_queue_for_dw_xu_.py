@@ -59,7 +59,10 @@ _ERRORS = (
     "('quota', 'not_permitted', 'paused', 'conflict', 'not_found', 'unavailable',"
     " 'model_retry', 'abandoned', 'error')"
 )
-_MESSAGE_ID = r"'^[!-~]{1,512}$'"
+# Postgres caps a regex repetition count at 255, so the length is its own
+# test: '{1,512}' made this CHECK fail to create (CI run 38512154819). The
+# migration had never applied anywhere, so it is corrected in place.
+_MESSAGE_ID = r"'^[!-~]+$'"
 
 _TABLE = f"""
     CREATE TABLE sales.processing_jobs (
@@ -85,7 +88,8 @@ _TABLE = f"""
         CONSTRAINT fk_processing_jobs_workspace_id_workspaces FOREIGN KEY (workspace_id)
             REFERENCES platform.workspaces (id) ON DELETE CASCADE,
         CONSTRAINT uq_processing_jobs_message UNIQUE (tenant_id, workspace_id, message_id),
-        CONSTRAINT ck_processing_jobs_message_id CHECK (message_id ~ {_MESSAGE_ID}),
+        CONSTRAINT ck_processing_jobs_message_id
+            CHECK (message_id ~ {_MESSAGE_ID} AND char_length(message_id) <= 512),
         CONSTRAINT ck_processing_jobs_status CHECK (status IN {_STATUSES}),
         CONSTRAINT ck_processing_jobs_attempts CHECK (attempts >= 0),
         CONSTRAINT ck_processing_jobs_failures CHECK (failures >= 0),
