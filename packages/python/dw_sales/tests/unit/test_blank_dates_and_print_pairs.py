@@ -257,7 +257,7 @@ async def test_m45s_workbook_and_print_are_one_case_with_the_differing_date_unce
     )
     copy = document.print_copy
     assert copy is not None
-    assert (copy.attachment_id, copy.parser_version) == ("M45-A2", "pdf_po_reader@1.5.0")
+    assert (copy.attachment_id, copy.parser_version) == ("M45-A2", "pdf_po_reader@1.6.0")
     ((difference),) = copy.differences
     assert (difference.line_no, difference.field) == (1, "requested_date")
     assert (difference.anchor.page, difference.anchor.quote) == (1, "23/11/2026")

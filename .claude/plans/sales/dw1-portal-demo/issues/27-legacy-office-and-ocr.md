@@ -129,6 +129,44 @@ PO yields values with page coordinates.
        `Auto_Open` that writes a file, convert it through the reader, and
        check no file was written.
 
+- 2026-10-14, CI run 38513561151, the first run of the image suite (agent):
+    - **The `.xls` test read a file that does not exist**
+      (`legacy/legacy_VLX-PO-2610-0021.xls`): none is committed, as this
+      ticket says, so the test and `scripts/measure_reader.py` now make it
+      in the running image (`reading_tools.xls_made_in_reader`: M01 as
+      `VLX-PO-2610-0021`, written by the image's LibreOffice as
+      `xls:MS Excel 97`). What LibreOffice's round trip does to M01's cells
+      is unmeasured until CI runs it.
+    - **The scan was refused "no line holds the currency"**. Measured
+      locally (Docker down): Tesseract 5.3.4 from conda-forge with
+      tessdata_fast 4.1.0 `vie`+`eng`, on this repository's own `ocr.py`.
+      Not the image's build (Debian bookworm's 5.3.0), but it reproduced
+      CI's refusal exactly. Page 1 reads clean except where a mixed-case
+      label carries a stacked or barred letter: `Đơn vị tiền tệ` came back
+      as `Don vị tiền tệ`, and the column titles `ĐVT`, `Đơn giá`,
+      `Thành tiền`, `Ngày giao` as `DVT`, `Don gia`, `Thanh tién`,
+      `Ngay giao`. The labels and titles are matched exactly, so nothing
+      matched. Every number read right (`6.100`, `1.150`, `7.015.000`,
+      dates). Settings tried, before the fix:
+      300 dpi `--psm 6` (the shipped one), `--psm 4` and `--psm 3`: no
+      currency; 400 dpi `--psm 6` and `--psm 4`: no table; 600 dpi: no PO
+      number (`S6 don hang`); `vie` alone at 300 dpi: titles right but `ĐVT`
+      dropped, no table; `vie` alone at 400 dpi: read, but 1 line of 3
+      (`6100`, `2_`). Tuning settings for this one fixture was not a fix.
+    - **Fix** (`readers/pdf.py`, `pdf_po_reader@1.6.0`): on a page read by
+      OCR, a label and the column titles are matched without diacritics
+      (`đ` as `d`). A text-layer page is matched exactly, as before. The
+      values are unchanged and every one of them is still flagged `ocr`, so
+      nothing is trusted that was not before. After it, at 300 dpi
+      `--psm 6` `vie+eng`, the scan reads `BRN-PO-2610-027`, VND,
+      23/09/2026, and 3 lines whose quantities and prices equal M03's, all
+      flagged `ocr`, in about 4.6 s for both pages in process on this
+      machine (not the sandbox; acceptance 3's numbers still come from
+      `measure_reader.py` on the image). 400 dpi also reads 3/3, and
+      `--psm 4` 1 of 3, so 300 dpi and `--psm 6` stay. Unit test
+      `test_a_scan_whose_labels_lost_their_diacritics_is_read_by_its_layout`
+      feeds the measured misreads through `TruthOcr`, and it fails without
+      the fix.
 - 2026-10-13, needs-info (agent, Đạt away). Not started in code, for two
   reasons, each with its question:
     1. **Blocked by ticket 25's acceptance 5**, now needs-info: acceptance 1

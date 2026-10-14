@@ -154,3 +154,12 @@ dates differ), and the mutation "the persistence writes only the first date"
 against the integration test above.
 
 ## Comments
+
+- 2026-10-14, CI run 38513561151 (agent): the API integration test asserted
+  `details.lines == [1, 3]`; the error envelope turns every detail into a
+  string (`exception_handlers.py`, `{k: str(v)}`, the contract other tests
+  already read, e.g. `"['findings']"`), so the API answers `"[1, 3]"`. The
+  test was wrong and now reads the string; the refusal itself held (422, the
+  two split lines). The confirmation's send-draft test now expects
+  `sales_emails.send_draft.ja@1.2.0`: this ticket bumped the whole
+  `sales_emails` copy to 1.2.0 and every draft of it names that version.

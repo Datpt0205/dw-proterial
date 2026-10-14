@@ -746,7 +746,7 @@ def test_a_text_pdf_is_read_with_every_value_at_its_page_and_box() -> None:
     assert (po.rows_printed, po.regions, po.parser_version) == (
         3,
         ("page 1",),
-        "pdf_po_reader@1.5.0",
+        "pdf_po_reader@1.6.0",
     )
 
 

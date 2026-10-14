@@ -235,7 +235,8 @@ async def test_a_split_line_is_confirmed_per_schedule_through_the_store_and_the_
     )
 
     assert one_date.status_code == 422, one_date.text
-    assert one_date.json()["details"]["lines"] == [1, 3]
+    # The error envelope's details are strings (`exception_handlers.py`).
+    assert one_date.json()["details"]["lines"] == "[1, 3]"
     assert confirmed["status"] == "confirmed"
     by_line = {line["line_no"]: line for line in confirmed["lines"]}
     assert [s["confirmed_delivery_date"] for s in by_line[1]["schedules"]] == per_schedule[1]
@@ -366,7 +367,7 @@ async def test_giang_downloads_the_approved_quotation_and_the_send_draft_attache
         for row in load_workbook(io.BytesIO(served[XLSX].content)).worksheets[0].iter_rows()
         for c in row
     )
-    assert draft["template_ref"] == "sales_emails.send_draft.ja@1.1.0"
+    assert draft["template_ref"] == "sales_emails.send_draft.ja@1.2.0"
     # A preview is for the pricer and approvers, and only while it waits.
     stale = await giang.get(f"/quotes/{final['case_id']}/artifacts/{previews[0]['artifact_id']}")
     assert stale.status_code == 409

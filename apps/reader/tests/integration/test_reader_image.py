@@ -26,6 +26,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from dw_sales.adapters.formats import sniff
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, LEGACY_DIR
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.adapters.reader_client import (
@@ -36,6 +37,7 @@ from dw_sales.adapters.reader_client import (
 from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.orders import PoDocument, RegionFlag
+from dw_sales.testing.reading_tools import LEGACY_PO_NO, xls_made_in_reader
 
 pytestmark = pytest.mark.integration
 
@@ -153,14 +155,16 @@ def test_a_reading_process_starts_under_its_limits() -> None:
 async def test_libreoffice_converts_the_legacy_po_and_both_hashes_are_on_it(
     reader: HttpReaderTransport,
 ) -> None:
-    data = (LEGACY_DIR / "legacy_VLX-PO-2610-0021.xls").read_bytes()
+    # Made here, in the image: no `.xls` is committed (ticket 27, fixtures).
+    data = xls_made_in_reader(COMPOSE)
+    assert sniff(data) == "xls"
 
     started = time.perf_counter()
     read = await ClientPoReaders(reader).read(_content("po.xls", data), "VLX", CAPS)
     seconds = time.perf_counter() - started
 
     assert isinstance(read, PoDocument), read
-    assert read.header.po_no == "VLX-PO-2610-0021"
+    assert read.header.po_no == LEGACY_PO_NO
     assert read.derivation is not None and read.derivation.tool.startswith("LibreOffice")
     assert read.attachment_sha256 == hashlib.sha256(data).hexdigest()
     assert {a.derived_sha256 for a in read.anchors()} == {read.derivation.derived_sha256}

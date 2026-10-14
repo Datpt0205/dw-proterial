@@ -38,6 +38,16 @@ AN = uuid.uuid4()
 NOW = datetime(2026, 10, 14, 3, 0, tzinfo=UTC)
 
 
+@pytest.fixture(autouse=True)
+async def _empty_queue(migrator: AsyncEngine) -> None:
+    """Every test starts on an empty queue. The claim and the reaper cross
+    tenants by design, so a job an earlier test left queued or running is one
+    this test claims or reaps (CI run 38513561151: a fourth job claimed, a
+    job of another world reaped). The migrator is the one role past RLS."""
+    async with migrator.begin() as conn:
+        await conn.execute(sa.text("TRUNCATE sales.processing_jobs"))
+
+
 async def _enqueue(
     uow: SqlSalesUnitOfWorkFactory, world: World, message_id: str, at: datetime = NOW
 ) -> uuid.UUID:

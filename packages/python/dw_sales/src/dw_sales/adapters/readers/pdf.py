@@ -36,7 +36,8 @@ before.
 **A scanned page is read by OCR** where the reader is given an engine
 (ticket 27, `readers.ocr`; the reader sandbox gives it Tesseract): a page with
 no text layer is rasterised and its words, with their boxes, become the
-page's lines and rows, read by the same layout. Every value of a document a
+page's lines and rows, read by the same layout, its labels and column titles
+matched without diacritics (OCR loses those first). Every value of a document a
 page of which was OCRed is flagged `ocr` (`value_uncertain` until Sales
 confirms it, whatever the engine's confidence), and the document says which
 engine read it (`Derivation`). A PDF whose pages have no text and no words
@@ -88,7 +89,7 @@ from dw_sales.domain.orders import (
 )
 from dw_sales.domain.rfq_reading import parse_currency
 
-PARSER_VERSION = "pdf_po_reader@1.5.0"
+PARSER_VERSION = "pdf_po_reader@1.6.0"
 # A form need not print its revision: its POs then read as revision 0 (ticket 30).
 REQUIRED_HEADER = frozenset({"po_no", "po_date", "currency"})
 _CELL_GAP = re.compile(r"\s{2,}")
@@ -151,6 +152,9 @@ class _Page:
     # Runs grouped by baseline, top of the page first, each row left to right.
     rows: list[list[_Run]] = field(default_factory=list)
     used: set[int] = field(default_factory=set)
+    # Read by OCR: its labels and column titles are matched without their
+    # diacritics (`_key`), the marks OCR loses first.
+    scanned: bool = False
 
     @property
     def legacy(self) -> LegacyEncoding | None:
@@ -302,7 +306,7 @@ def _scanned(number: int, page: OcrPage) -> _Page:
         ]
         for line in page.lines
     ]
-    return _Page(number, page.width, page.height, lines, rows)
+    return _Page(number, page.width, page.height, lines, rows, scanned=True)
 
 
 def _pages(
@@ -410,7 +414,6 @@ class _Pdf:
         number = re.escape(layout.thousands_separator)
         decimals = re.escape(layout.decimal_separator)
         self._number = re.compile(rf"(?:\d{{1,3}}(?:{number}\d{{3}})+|\d+)(?:{decimals}\d+)?")
-        self._titles = [_key(title) for title, _ in layout.columns]
         self._header_values: Mapping[PoHeaderField, Callable[[str], object]] = {
             "po_no": _one_line,
             "revision": _whole_number,
@@ -435,7 +438,7 @@ class _Pdf:
         tabled: set[tuple[int, int]] = set()
         for page in self._pages:
             for index, text in enumerate(page.lines):
-                if [_key(cell) for cell in _cells(text)] == self._titles:
+                if self._is_title_row(page, text):
                     rows = self._rows(page, index + 1, tabled)
                     if rows and f"page {page.number}" not in regions:
                         regions.append(f"page {page.number}")
@@ -463,13 +466,17 @@ class _Pdf:
         except ValidationError as exc:
             raise _RefusedError(f"the lines do not form one PO: {_first_error(exc)}") from exc
 
+    def _is_title_row(self, page: _Page, text: str) -> bool:
+        titles = [_key(title, scanned=page.scanned) for title, _ in self._layout.columns]
+        return [_key(cell, scanned=page.scanned) for cell in _cells(text)] == titles
+
     def _labelled(self, label: str) -> list[tuple[SourceAnchor, str, _Run | None, _Page]]:
         """Every ``label: value`` line, with the anchor of what printed it, the
         run that did when one matched, and its page."""
         found: list[tuple[SourceAnchor, str, _Run | None, _Page]] = []
         for page in self._pages:
             for text in page.lines:
-                value = _labelled(text, label)
+                value = _labelled(text, label, scanned=page.scanned)
                 if value is None:
                     continue
                 row = page.find_row([text.strip()])
@@ -656,14 +663,23 @@ def _cells(text: str) -> Sequence[str]:
     return _CELL_GAP.split(stripped) if stripped else []
 
 
-def _key(text: str) -> str:
-    return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+def _key(text: str, *, scanned: bool = False) -> str:
+    """``text`` as a label or a column title is compared. On a scanned page,
+    also without diacritics: Tesseract read the scan fixture's `Đơn vị tiền
+    tệ` as `Don vị tiền tệ` and `Thành tiền` as `Thanh tién` (ticket 27,
+    measured), and a label is structure, not a value; every value read there
+    is flagged `ocr` whatever it matched."""
+    key = " ".join(unicodedata.normalize("NFKC", text).casefold().split())
+    if not scanned:
+        return key
+    bare = "".join(c for c in unicodedata.normalize("NFKD", key) if not unicodedata.combining(c))
+    return bare.replace("đ", "d")
 
 
-def _labelled(text: str, label: str) -> str | None:
+def _labelled(text: str, label: str, *, scanned: bool = False) -> str | None:
     """The value on a ``Label: value`` line, or None when the line is not one."""
     head, colon, value = text.strip().partition(":")
-    if not colon or _key(head) != _key(label):
+    if not colon or _key(head, scanned=scanned) != _key(label, scanned=scanned):
         return None
     return value.strip()
 

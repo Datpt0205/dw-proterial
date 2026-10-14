@@ -5,6 +5,9 @@ where these run.
 - `compound_file`: the bytes of a legacy Office file as far as DW1 tells one
   (an OLE compound file whose directory names a workbook or Word stream).
   None is committed: the public-repo guard cannot read a binary Office file.
+- `xls_made_in_reader`: a real `.xls`, written by the running reader
+  container's own LibreOffice, for the image suite and
+  `scripts/measure_reader.py`, which need one and cannot find one committed.
 - `ScriptedConverter`: answers a conversion with the bytes it is given, as
   LibreOffice's would be, or with a failure.
 - `TruthOcr`: reads the scanned fixture through what a perfect OCR answers
@@ -16,7 +19,10 @@ reader's integration suite, owed after the WSL reboot).
 
 from __future__ import annotations
 
+import base64
 import io
+import subprocess
+from collections.abc import Sequence
 from typing import Final
 
 from openpyxl import load_workbook
@@ -29,6 +35,13 @@ _OLE: Final = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 SCAN: Final = LEGACY_DIR / "scan_BRN-PO-2610-027.pdf"
 TRUTH: Final = LEGACY_DIR / "scan_BRN-PO-2610-027.tsv"
 CONVERTER: Final = "LibreOffice 7.4.7.2 (scripted)"
+LEGACY_PO_NO: Final = "VLX-PO-2610-0021"
+# Run in the reader container: M01's workbook on stdin, written out as an
+# Excel 97-2003 file by the image's LibreOffice, in a throwaway directory.
+_TO_XLS: Final = (
+    'cd "$(mktemp -d)" && cat > po.xlsx && HOME=$PWD soffice --headless'
+    " --convert-to 'xls:MS Excel 97' po.xlsx >/dev/null 2>&1 && base64 -w0 po.xls"
+)
 
 
 def compound_file(stream: str = "Workbook") -> bytes:
@@ -47,6 +60,23 @@ def m01_as(po_no: str) -> bytes:
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+def xls_made_in_reader(compose: Sequence[str]) -> bytes:
+    """M01 under `LEGACY_PO_NO` as an `.xls`, written by the LibreOffice of
+    the reader container ``compose`` (the `docker compose` command and its
+    flags) runs."""
+    made = subprocess.run(
+        [*compose, "exec", "-T", "reader", "bash", "-c", _TO_XLS],
+        input=m01_as(LEGACY_PO_NO),
+        capture_output=True,
+        timeout=180,
+        check=False,
+    )
+    if made.returncode != 0 or not made.stdout:
+        stderr = made.stderr.decode("utf-8", errors="replace")[-300:]
+        raise RuntimeError(f"the reader's LibreOffice wrote no .xls: {stderr}")
+    return base64.b64decode(made.stdout)
 
 
 class ScriptedConverter:

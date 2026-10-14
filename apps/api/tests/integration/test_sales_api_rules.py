@@ -256,7 +256,7 @@ async def test_a_tenants_email_copy_writes_its_drafts_and_the_file_names_it(
     )
 
     assert rendered.status_code == 200, rendered.text
-    (view,) = rendered.json()
+    (view,) = rendered.json()["artifacts"]
     assert view["template_ref"] == "sales_emails.confirmation_draft.vi@9.0.1"
     served = await an.get(f"/orders/{confirmed['case_id']}/artifacts/{view['artifact_id']}")
     assert served.status_code == 200
