@@ -8,6 +8,17 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-14, CI on 1621cbc: every job green (integration incl. the
+  processing queue, the reader image with LibreOffice and Tesseract, tickets
+  35/36; container build and trivy; the DW1 browser walk in 13m38s) except
+  the public-repo guard, which fails by design until Đạt creates the
+  PUBLIC_REPO_DENYLIST secret (the repo has no secrets at all). The first
+  CI run of tests written while Docker was down found a regex repetition
+  over 255 in a CHECK, an unquoted .env.example value, OCR labels losing
+  their diacritics (now matched without accents on OCR pages) and five
+  stale tests. Still local-only after a reboot (WSL hung since 2026-10-13):
+  measure_reader timings for ticket 27 and the support-access 03 walk.
+
 - 2026-10-14, tickets 25 and 27 built, pending measurement (agent; Đạt
   decided "DW xử lý" asynchronous, the agent took the ticket's recommended
   reader container while he was away; "As built", Comments and "Post-reboot
