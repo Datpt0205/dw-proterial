@@ -76,9 +76,15 @@ async def migrator(sales_api_db: DatabaseUrls) -> AsyncIterator[AsyncEngine]:
 
 
 @pytest.fixture
-async def clean_sales(migrator: AsyncEngine) -> None:
+async def clean_sales(sales_api_db: DatabaseUrls, migrator: AsyncEngine) -> None:
     async with migrator.begin() as conn:
         await conn.execute(sa.text(_CLEAR))
+    # A rule version names the approval it was decided on (ticket 38,
+    # `fk_rule_versions_approval_requests`), so truncating the approvals
+    # truncates the demo tenant's own rules with them: put them back the way
+    # the session seeded them. Missed once: 12 tests ran on the platform's
+    # rules in CI run 38537473712.
+    await seed_demo_rules(sales_api_db.app)
 
 
 @pytest.fixture
