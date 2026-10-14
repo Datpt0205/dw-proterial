@@ -21,14 +21,14 @@ After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-10-13)
+## Now (2026-10-14)
 
 - **Proterial product repo** (`origin` `Datpt0205/dw-proterial`; platform
   seed in `Datpt0205/codebase`). DW1 (Đơn hàng & Báo giá) on mock data:
   `sales.md`, spec and tickets under `sales/dw1-portal-demo/`; demo runbook
   `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.2.0`.
-- dw_sales ADR 0004 (checker decisions on the runtime) is Proposed, Đạt to
-  review. Platform pieces waiting for a first caller: `platform-runtime.md`.
+- dw_sales ADRs 0004 and 0005 Proposed (Đạt to review); idle platform
+  pieces: `platform-runtime.md`.
 - 2026-10-13/14 (agent, Đạt away): sales 19, 21, 23, 24, 34, 35, 36 done;
   25 ("DW xử lý" queued, files read in the `reader` container) and 27
   (LibreOffice, Tesseract there) built, owing the post-reboot checks.
