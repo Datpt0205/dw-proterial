@@ -56,7 +56,7 @@ from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, La
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
-from dw_sales.application.rules import RuleDecision, RuleKey, RulesInForceView, RuleVersionView
+from dw_sales.application.rules import RuleKey, RulesInForceView, RuleVersionView
 from dw_sales.application.services import SalesServices
 from dw_sales.application.source import SourceView
 from dw_sales.application.views import (
@@ -918,9 +918,10 @@ def build_router(
         )
 
     # ---------------------------------- a tenant's own rules (ticket 19) --
-    # A PIC or the head proposes a version of one key (`sales.rules.propose`);
-    # the head, who did not propose it, approves or rejects it
-    # (`sales.rules.approve`). An unknown key, or one no reader resolves per
+    # A PIC or the head proposes a version of one key (`sales.rules.propose`),
+    # which opens a `sales.rules` platform approval; the head, who did not
+    # propose it, decides it there (`sales.rules.approve`, ticket 38): no
+    # Sales route decides. An unknown key, or one no reader resolves per
     # tenant yet, is not a path this router has: 422.
 
     @router.get(
@@ -940,16 +941,6 @@ def build_router(
         key: RuleKey, body: RuleProposalBody, context: Ctx, svc: Svc, idem: Idem
     ) -> RuleVersionView:
         return await idem.record(await svc.rules.propose(context, key, body.document))
-
-    @router.post(
-        "/rules/versions/{version_id}/decision",
-        response_model=RuleVersionView,
-        dependencies=[scopes(SalesScopes.RULES_APPROVE)],
-    )
-    async def decide_rules(
-        version_id: uuid.UUID, body: RuleDecision, context: Ctx, svc: Svc, idem: Idem
-    ) -> RuleVersionView:
-        return await idem.record(await svc.rules.decide(context, version_id, body))
 
     return router
 

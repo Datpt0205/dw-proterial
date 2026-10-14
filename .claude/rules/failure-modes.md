@@ -16,7 +16,7 @@ checklist as sufficient would miss exactly the dangerous half.
 
 ---
 
-## 0. A check that cannot see the thing it checks (found 2×)
+## 0. A check that cannot see the thing it checks (found 3×)
 
 Numbered zero because it comes before the rest: a check you trust that is blind
 to part of what it covers makes every finding below it unreliable.
@@ -38,6 +38,12 @@ result with `SUPPORT_ALLOWED_ROUTES`. FastAPI 0.141 keeps an included router as
 one `_IncludedRouter` entry, so the walk found no included route at all and the
 test compared two empty sets for as long as both were empty. It went unnoticed
 until the first route was opened (sales ticket 22).
+
+The third was a list of suffixes. `test_no_sales_route_decides_what_a_checker_decides`
+looked for routes ending in `/approval`, `/approve` and `/cross-check`, and
+the tenant rules route that decided a version ended in `/decision`: a
+checker's decision on a Sales route, passing the test written to forbid it,
+from ticket 19 until ticket 38 removed it.
 
 **Ask:** what can this check NOT see? A check over source text cannot see what the
 database creates on its own. Where the truth lives in a running system, ask the

@@ -38,6 +38,7 @@ def _version(row: RowMapping) -> RuleVersion:
         decided_by=row["decided_by"],
         decided_at=row["decided_at"],
         comment=row["comment"],
+        approval_id=row["approval_id"],
     )
 
 
@@ -74,6 +75,7 @@ class SqlRuleVersionStore:
                     status=version.status,
                     proposed_by=version.proposed_by,
                     proposed_at=version.proposed_at,
+                    approval_id=version.approval_id,
                 )
             )
 

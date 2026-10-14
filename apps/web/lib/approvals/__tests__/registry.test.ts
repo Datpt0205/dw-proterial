@@ -37,6 +37,13 @@ const HOSTS: ApprovalHost[] = [
     inbox: { label: "x", href: () => "https://evil.example/inbox" },
   },
   { prefix: "proto.", inbox: { label: "x", href: () => "//evil.example/x" } },
+  {
+    prefix: "mix.",
+    inbox: {
+      label: "Mở trang",
+      href: (a) => (a.approval_type === "mix.here" ? null : "/mix"),
+    },
+  },
 ];
 
 describe("the approvals registry", () => {
@@ -56,6 +63,14 @@ describe("the approvals registry", () => {
   it("returns null without a match, or for a host with no inbox", () => {
     expect(inboxFor(HOSTS, approval("tool.y"))).toBeNull();
     expect(inboxFor(HOSTS, approval("svc.z"))).toBeNull();
+  });
+
+  it("leaves on /approvals a type its host gives no inbox, and links the rest", () => {
+    expect(inboxFor(HOSTS, approval("mix.here"))).toBeNull();
+    expect(inboxFor(HOSTS, approval("mix.there"))).toMatchObject({
+      kind: "link",
+      href: "/mix",
+    });
   });
 
   it("picks the host's client, and the platform's when it has none", () => {

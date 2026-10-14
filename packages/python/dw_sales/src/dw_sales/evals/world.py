@@ -90,7 +90,7 @@ from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.processing import ClaimedJob, ProcessingDrain
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
-from dw_sales.application.rules import RuleBookOrderRules
+from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSettlement
 from dw_sales.application.runs import subject_of
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.source import required_regions
@@ -730,6 +730,7 @@ class World:
     layout_settlement: LayoutSettlement
     # The worker's `sales_processing` lane over this world (ticket 25).
     processing: ProcessingDrain
+    rule_settlement: RuleSettlement
 
     async def decide_layout(
         self,
@@ -755,11 +756,44 @@ class World:
         await self.settle_layouts()
 
     async def settle_layouts(self) -> None:
-        """Each `sales.layout.decided` the decisions announced, handed to the
-        settlement with the envelope's tenancy and the decider, as the
-        worker's handler hands it (`dw_worker.consumers.sales_layouts`)."""
+        """Each `sales.layout.decided` the decisions announced, carried out."""
+        await self._settle(LAYOUT_DECIDED, self.layout_settlement)
+
+    async def decide_rules(
+        self,
+        caller: Caller,
+        version_id: uuid.UUID,
+        *,
+        approve: bool,
+        comment: str,
+        scope: SalesScope = ALPHA,
+    ) -> None:
+        """A decision on the approval a rule version's proposal opened, as
+        the API's `POST /approvals/{id}/decisions` makes it (no subject
+        version: the document never changes); then carried out as the worker
+        carries it out (`settle_rules`)."""
+        version = await self.store.rule_versions.for_tenant(scope.tenant_id.value).get(version_id)
+        if version is None or version.approval_id is None:
+            raise LookupError(f"no rule version {version_id} waits on an approval")
+        await self.runtime.approval_flow.decide(
+            approval_id=version.approval_id,
+            approve=approve,
+            comment=comment,
+            context=caller.context(scope),
+            authorization=ScopeAuthorizationService(),
+        )
+        await self.settle_rules()
+
+    async def settle_rules(self) -> None:
+        """Each `sales.rules.decided` the decisions announced, carried out."""
+        await self._settle(RULES_DECIDED, self.rule_settlement)
+
+    async def _settle(self, event_type: str, settlement: LayoutSettlement | RuleSettlement) -> None:
+        """Each event of ``event_type`` handed to its settlement with the
+        envelope's tenancy and the decider, as the worker's handler hands it
+        (`dw_worker.consumers.sales_decisions`)."""
         events = self.runtime.outbox.events
-        for event in [e for e in events if e.event_type == LAYOUT_DECIDED]:
+        for event in [e for e in events if e.event_type == event_type]:
             events.remove(event)
             decider = AccessContext(
                 tenant_id=event.tenant_id.value,
@@ -769,9 +803,7 @@ class World:
                 scopes=frozenset(),
                 plan_id="background",
             )
-            await self.layout_settlement.settle(
-                uuid.UUID(str(event.payload["approval_id"])), decider
-            )
+            await settlement.settle(uuid.UUID(str(event.payload["approval_id"])), decider)
 
     async def drain(self) -> int:
         """Every job "DW xử lý" queued, run as the worker runs it; how many."""
@@ -1017,6 +1049,7 @@ def open_world(
         approvals=runtime.approval_flow,
         steps=assembly.decisions,
         layouts=assembly.layout_decisions,
+        rules=assembly.rule_decisions,
         worker_file=worker_file,
     )
     return World(
@@ -1032,6 +1065,7 @@ def open_world(
         runs,
         LayoutSettlement(store, clock, ids),
         ProcessingDrain(store, store, assembly.services.dw1, directory, clock, ids),
+        RuleSettlement(store, book, clock, ids),
     )
 
 

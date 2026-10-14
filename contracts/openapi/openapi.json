@@ -8577,33 +8577,6 @@
         "title": "RoleView",
         "type": "object"
       },
-      "RuleDecision": {
-        "additionalProperties": false,
-        "properties": {
-          "approve": {
-            "title": "Approve",
-            "type": "boolean"
-          },
-          "comment": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comment"
-          }
-        },
-        "required": [
-          "approve"
-        ],
-        "title": "RuleDecision",
-        "type": "object"
-      },
       "RuleKey": {
         "description": "The Sales policies and copy a tenant may hold its own version of.",
         "enum": [
@@ -8638,6 +8611,18 @@
       "RuleVersionView": {
         "description": "A version as the rules list shows it: who proposed and decided it, and\nthe document only to whoever may propose (it can hold price rules).",
         "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
           "comment": {
             "anyOf": [
               {
@@ -8735,7 +8720,8 @@
           "decided_by",
           "decided_at",
           "comment",
-          "document"
+          "document",
+          "approval_id"
         ],
         "title": "RuleVersionView",
         "type": "object"
@@ -16873,77 +16859,6 @@
           }
         },
         "summary": "Rules In Force",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/rules/versions/{version_id}/decision": {
-      "post": {
-        "operationId": "decide_rules_api_v1_sales_rules_versions__version_id__decision_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "version_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Version Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RuleDecision"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuleVersionView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Decide Rules",
         "tags": [
           "sales"
         ]

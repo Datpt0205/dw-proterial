@@ -47,7 +47,8 @@ API and the plan use the English terms. The spec is
 - **Tenant version** (Phiên bản riêng): a customer's own version of a Sales
   rule or copy file (order and quote rules, pricing, KPI, e-mail and document
   copy, the Bravo upload template, the hand-off copy), proposed by a PIC or
-  the head and approved by the head, never its proposer. It applies to that
+  the head and approved by the head, never its proposer, on a `sales.rules`
+  platform approval. It applies to that
   tenant only; a case keeps reading the version it stamped (tickets 19, 36).
 - **Malware scan** (Quét mã độc): every attachment is scanned by ClamAV
   before anything reads it, then held to its name (ticket 25). An infected
@@ -86,11 +87,12 @@ API and the plan use the English terms. The spec is
   names the version it was made on.
 - **Checker's decision** (Quyết định của người kiểm): approving or returning
   a quotation (WIV-03-023 step 9), cross-checking or returning an order
-  (WIV-03-012 step 9), approving or rejecting a PO layout (ticket 30). Made
-  on a platform approval, never on a Sales route: the one DW1's run pauses on
-  (`sales.quote`, `sales.order.cross_check`), or the run-less one a layout's
-  proposal opens (`sales.layout`); a maker's own steps are not checker's
-  decisions (dw_sales ADR 0004).
+  (WIV-03-012 step 9), approving or rejecting a PO layout (ticket 30) or a
+  tenant version (ticket 38). Made on a platform approval, never on a Sales
+  route: the one DW1's run pauses on (`sales.quote`,
+  `sales.order.cross_check`), or the run-less one a layout's or a tenant
+  version's proposal opens (`sales.layout`, `sales.rules`); a maker's own
+  steps are not checker's decisions (dw_sales ADR 0004).
 - **DW1 run** (Lượt chạy DW1): one thing DW1 is asked to do ("DW xử lý", a
   quotation submitted, a Bravo entry recorded), on the agent runtime,
   counted against the tenant's plan.

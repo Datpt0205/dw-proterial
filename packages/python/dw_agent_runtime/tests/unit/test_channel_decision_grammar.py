@@ -240,4 +240,9 @@ def test_only_the_web_route_and_the_chat_decision_service_reach_decide() -> None
         # graph, a tool or a chat.
         "packages/python/dw_sales/src/dw_sales/evals/graders.py",
         "packages/python/dw_sales/src/dw_sales/evals/world.py",
+        # The demo seed (Sales ticket 38): the demo tenant's rule version is
+        # decided on its `sales.rules` approval as the head on the web would,
+        # by `make demo-reset` and the API integration suite only; the seed
+        # refuses any profile but local and test.
+        "packages/python/dw_sales/src/dw_sales/testing/seed_rules.py",
     }

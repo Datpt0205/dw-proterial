@@ -12,14 +12,18 @@ const CASE_PAGE: Record<string, string> = {
  * their case's page, which sends the case version the decision is checked
  * against; `/approvals` sends none, so a decision there is refused. The
  * generic inbox links to the case instead, and a PO layout's
- * (`sales.layout`, ticket 30) to the layouts page. A payload that names no
- * known case links to the Sales work list, never outside the app.
+ * (`sales.layout`, ticket 30) to the layouts page. A rule version's
+ * (`sales.rules`, ticket 38) names no subject version (its document never
+ * changes) and has no page of its own, so it is decided on `/approvals`. A
+ * payload that names no known case links to the Sales work list, never
+ * outside the app.
  */
 export const salesApprovalHost: ApprovalHost = {
   prefix: "sales.",
   inbox: {
     label: "Mở hồ sơ để quyết định",
     href: (approval: Approval) => {
+      if (approval.approval_type === "sales.rules") return null;
       if (approval.approval_type === "sales.layout") return "/sales/layouts";
       const kind = String(approval.payload.case_kind ?? "");
       const caseId = String(approval.payload.case_id ?? "");

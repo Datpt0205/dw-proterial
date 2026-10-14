@@ -34,11 +34,11 @@ from dw_sales.adapters.persistence.records import (
     SqlWorkerSwitch,
 )
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionStore
-from dw_sales.application.case_store import LayoutApprovalsPort
+from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.ports import SalesScope
 
 AuditFactory = Callable[[AsyncSession], AuditRepositoryPort]
-ApprovalsFactory = Callable[[AsyncSession], LayoutApprovalsPort]
+ApprovalsFactory = Callable[[AsyncSession], RunLessApprovalsPort]
 
 
 class SqlSalesUnitOfWork:
@@ -54,7 +54,7 @@ class SqlSalesUnitOfWork:
     worker: SqlWorkerSwitch
     layouts: SqlLayoutStore
     jobs: SqlProcessingJobs
-    approvals: LayoutApprovalsPort
+    approvals: RunLessApprovalsPort
     audit: AuditRepositoryPort
 
     def __init__(

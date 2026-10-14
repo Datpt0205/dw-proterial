@@ -15,9 +15,10 @@ export interface ApprovalHost {
    * there instead of offering a comment and the two decisions. Navigation,
    * not authorization: the platform route still accepts a decision from a
    * holder of `approvals.decide`, and a context that must refuse one checks
-   * where its run resumes. `href` must be an in-app path ("/…").
+   * where its run resumes. `href` must be an in-app path ("/…"), or null
+   * for a type of the host that is decided on `/approvals` itself.
    */
-  inbox?: { label: string; href: (approval: Approval) => string };
+  inbox?: { label: string; href: (approval: Approval) => string | null };
 }
 
 /** Where a pending approval is decided, when it is not on `/approvals`. */

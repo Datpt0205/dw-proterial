@@ -14,7 +14,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed            |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–24, 26, 28–34 done         |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–24, 26, 28–38 done         |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
 
 After working in an area, update its file. Update this index only when an
@@ -27,8 +27,9 @@ own file and a row here.
   seed in `Datpt0205/codebase`). DW1 (Đơn hàng & Báo giá) on mock data:
   `sales.md`, spec and tickets under `sales/dw1-portal-demo/`; demo runbook
   `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.2.0`.
-- dw_sales ADRs 0004 and 0005 Proposed (Đạt to review); idle platform
-  pieces: `platform-runtime.md`.
+- dw_sales ADRs 0004 and 0005 Accepted 2026-10-14; 37 (released rules stay
+  readable) and 38 (rules on platform approvals) built; idle platform pieces:
+  `platform-runtime.md`.
 - 2026-10-13/14 (agent, Đạt away): sales 19, 21, 23, 24, 34, 35, 36 done;
   25 ("DW xử lý" queued, files read in the `reader` container) and 27
   (LibreOffice, Tesseract there) built, owing the post-reboot checks.
@@ -53,8 +54,8 @@ own file and a row here.
     - backfill ADRs with a status (`docs/agents/domain.md`): 46 citations of
       ADR-001..003 point at documents this repo never had.
 - **Sales:**
-    - dw_sales ADR 0005, bars 28 71%, 29 94.6%, 31 90.9%, 32 95.7%, 33
-      94.5%, 30 98.2%; ADR 0004's amendment (run-less layout approval);
+    - ticket 28's bar (71.1% thinking off; API 97.8%; thinking-on run in
+      `sales.md`); the other bars kept as proposed;
     - the interim defaults listed in `sales.md` Open;
     - whether pausing DW1 also stops rendering drafts and files.
     - restart WSL (admin): 25/27's image, trivy and integration runs wait.

@@ -36,7 +36,7 @@ from dw_sales.application.handoffs import (
 )
 from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.rules import RuleDecision, RuleKey
+from dw_sales.application.rules import RuleKey
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.handoffs import (
     Handoff,
@@ -328,9 +328,7 @@ async def test_the_inbox_writes_a_hand_off_in_the_tenants_own_copy() -> None:
     proposed = await world.services.rules.propose(
         AN.context(), RuleKey.HANDOFFS, {**document, "version": "9.0.1"}
     )
-    await world.services.rules.decide(
-        GIANG.context(), proposed.version_id, RuleDecision(approve=True)
-    )
+    await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
 
     listed = {m.message_id: m for m in await world.services.inbox.messages(AN.context())}
 

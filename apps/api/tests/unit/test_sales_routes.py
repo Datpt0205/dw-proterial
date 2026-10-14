@@ -82,12 +82,17 @@ def test_every_case_mutation_names_the_version_it_was_decided_on() -> None:
 
 def test_no_sales_route_decides_what_a_checker_decides() -> None:
     """The quotation approval and the cross-check are decided on the platform
-    approval DW1's run pauses on (ticket 10, dw_sales ADR 0004): the routes
-    that decided them on the case are gone, and none has taken their place."""
+    approval DW1's run pauses on (ticket 10, dw_sales ADR 0004), a PO layout
+    (ticket 30) and a rule version (ticket 38) on run-less ones: the routes
+    that decided them in Sales are gone, and none has taken their place. The
+    rules route ended in `/decision`, a suffix this test did not look for
+    until it was removed."""
     paths = {route.path for route in _routes()}
     assert "/api/v1/sales/quotes/{case_id}/approval" not in paths
     assert "/api/v1/sales/orders/{case_id}/cross-check" not in paths
-    assert not [p for p in paths if p.endswith(("/approval", "/approve", "/cross-check"))]
+    assert "/api/v1/sales/rules/versions/{version_id}/decision" not in paths
+    deciding = ("/approval", "/approve", "/cross-check", "/decision", "/decisions")
+    assert not [p for p in paths if p.endswith(deciding)]
 
 
 # ------------------------------------------------------------- the gating --

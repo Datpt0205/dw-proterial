@@ -89,7 +89,12 @@ from dw_platform.application.approval_codes import ApprovalSubjectVersions, Deci
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.retention_policy import load_retention_policy
-from dw_sales.adapters.assembly import Dw1Mount, build_dw1, build_layout_settlement
+from dw_sales.adapters.assembly import (
+    Dw1Mount,
+    build_dw1,
+    build_layout_settlement,
+    build_rule_settlement,
+)
 from dw_sales.adapters.clamd import malware_scanner
 from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
@@ -97,6 +102,7 @@ from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
+from dw_sales.application.rules import RULES_DECIDED
 from dw_worker.composition import (
     REPO_ROOT,
     build_embeddings,
@@ -119,9 +125,9 @@ from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
+from dw_worker.consumers.sales_decisions import build_decided_handler
 from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTERVAL_SECONDS
 from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
-from dw_worker.consumers.sales_layouts import build_layout_decided_handler
 from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
@@ -460,14 +466,28 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # approval, carried out here once decided. Wired whether or not this
         # host reads a mailbox: the layout and the approval are rows of the
         # approval's own tenant, and an unhandled event would wait forever.
-        handlers[LAYOUT_DECIDED] = build_layout_decided_handler(
+        handlers[LAYOUT_DECIDED] = build_decided_handler(
             build_layout_settlement(
                 session_factory=sessions,
                 audit=SqlAuditRepository,
                 approvals=SqlApprovalRepository,
                 clock=clock,
                 ids=ids,
-            )
+            ),
+            applied="layout decision applied",
+        )
+        # A tenant's rule version (Sales ticket 38): a run-less `sales.rules`
+        # approval, carried out the same way.
+        handlers[RULES_DECIDED] = build_decided_handler(
+            build_rule_settlement(
+                configs=REPO_ROOT / "configs",
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                clock=clock,
+                ids=ids,
+            ),
+            applied="rules decision applied",
         )
         # Pinned by filename, like every other versioned artifact here: the
         # answer to a retention question has to name the version that gave it.

@@ -8,6 +8,28 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-14, Đạt's decisions (afternoon): dw_sales ADRs 0004 (with both
+  amendments) and 0005 (with its addenda) **Accepted**; the bars of tickets
+  29–33 kept as proposed; every released rules version kept readable
+  (ticket 37); rule versions decided on the platform's approvals (ticket
+  38); ticket 28 measured with thinking on (see ticket 28 below). Built by
+  the agent:
+    - **37.** The rule book holds every platform version the checkout ships
+      (`TenantRuleBook.released`); a version written before a field of its
+      schema existed reads it as the platform's current version has it
+      (`read_over`), tenant versions included (the next required field
+      would otherwise have stopped DW1 for every tenant with its own
+      version). A stamp asks the tenant first. A file any release manifest
+      pinned is never edited or deleted (test over `contracts/release`); the
+      two deleted 1.0.0 files are restored byte for byte.
+    - **38.** Proposing a version opens a run-less `sales.rules` approval
+      (migration `218118b8f0e5`); `RuleDecisions` guards it, the worker
+      carries out `sales.rules.decided` (`RuleSettlement`), `/approvals`
+      decides it in place; the Sales decision route is gone, and the
+      "no Sales route decides" test, which could not see a `/decision`
+      suffix, now does. Integration tests rewritten, owed while Docker is
+      down.
+
 - 2026-10-14, CI on 1621cbc: every job green (integration incl. the
   processing queue, the reader image with LibreOffice and Tesseract, tickets
   35/36; container build and trivy; the DW1 browser walk in 13m38s) except
@@ -530,10 +552,9 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 ## Open
 
 - From tickets 32, 33 and 30 (2026-10-13, agent, Đạt away):
-    - Đạt to accept ADR 0005's addendum and ADR 0004's amendment (a PO
-      layout decided on a run-less `sales.layout` approval the worker
-      carries out; the first build's direct route failed the "no Sales
-      route decides" test and is gone).
+    - ADR 0005's addendum and ADR 0004's amendment (a PO layout decided
+      on a run-less `sales.layout` approval the worker carries out):
+      accepted by Đạt 2026-10-14.
     - `layout_onboarding.uncertain_first_pos` = 3 is an interim default,
       Proterial's call.
     - Delivery changes in DW1 or DW2 (ticket 33's question): built in DW1;
@@ -556,8 +577,9 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
       do).
 
 - From tickets 29 and 31 (2026-10-13, agent, Đạt away):
-    - Đạt to accept ADR 0005 with its addendum, the two bars (85% and 90%),
-      and `model_assist.unread_retry_hours` (24 h, an interim value).
+    - ADR 0005 with its addendum and the two bars (85% and 90%): accepted
+      by Đạt 2026-10-14. `model_assist.unread_retry_hours` (24 h) stays an
+      interim value.
     - Confirming a model-read value is not gated on the server on the person
       having opened its source, as an order's prepare is (`require_served`):
       the mail text has no served record yet.
