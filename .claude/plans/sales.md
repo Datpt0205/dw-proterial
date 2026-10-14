@@ -220,6 +220,12 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
     - **Measured.** VI/EN gold code among the candidates 71.1% (bar 80%,
       Đạt's to set), JA 50.0%; 0 wrong single candidates, 0 injection
       effects; about 77 s per 10-line call.
+    - **Against an API model (2026-10-14).** The same set on `luna`
+      (gpt-5.6-luna; a throwaway copy of the profile adding
+      `max_input_tokens: 6000`, which `luna` does not declare for DW1's
+      route): VI/EN 97.8%, JA 100%, 1 of 67 lines to a person, 0 wrong
+      single candidates, 0 injection effects, p50 11.6 s per call (9 calls).
+      The gap is the model, not the code: verification is the same.
     - **Live portal flow.** The whole mailbox in 57.5 s; M36 lines 1 and 3
       suggested correctly and confirmable.
     - **Shipped with it.** Migration `a9977d62e09b`, mock `M36` (the mailbox
