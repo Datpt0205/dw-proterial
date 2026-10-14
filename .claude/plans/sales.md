@@ -12,7 +12,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   amendments) and 0005 (with its addenda) **Accepted**; the bars of tickets
   29–33 kept as proposed; every released rules version kept readable
   (ticket 37); rule versions decided on the platform's approvals (ticket
-  38); ticket 28 measured with thinking on (see ticket 28 below). Built by
+  38); ticket 28 with thinking on is being measured (no result yet). Built by
   the agent:
     - **37.** The rule book holds every platform version the checkout ships
       (`TenantRuleBook.released`); a version written before a field of its
