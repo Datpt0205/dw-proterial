@@ -69,14 +69,22 @@ moves the eight rule keys onto the same path.
   the platform's strict rule); the settlement not idempotent, settling a
   pending approval; the guard not registered; the worker not wired.
 
-## Owed (Docker down)
+## Checked in CI (Docker down locally)
 
-- `apps/api/tests/integration/test_sales_api_rules.py` (rewritten: the
-  approval path, 404 for a decider without the stamp and for another
-  tenant, the three new constraints), the migration round trip, and a
-  `make demo-reset` (the reset deletes `sales.` approvals, which now
-  cascades to the demo tenant's rule versions; the seed proposes 1.5.1
-  again).
+- CI run 38545008947 on `99cb905`: integration green, the migration
+  applied, `test_sales_api_rules.py` (the approval path, 404 for a decider
+  without the stamp and for another tenant, the three new constraints)
+  passing. On the way, 8894874 turned 12 API tests red: the fixture's
+  `TRUNCATE platform.approval_requests ... CASCADE` now truncates
+  `sales.rule_versions` too, so the seeded 1.5.1 vanished before every test
+  (fixed in `82814a7`, seeding again after each truncate; `99cb905` narrowed
+  one runtime test to the approvals a run raised).
+
+## Owed (local Docker)
+
+- The migration's downgrade round trip, and a `make demo-reset` (the reset
+  deletes `sales.` approvals, which cascades to the demo tenant's rule
+  versions; the seed proposes 1.5.1 again).
 
 ## Left open
 
