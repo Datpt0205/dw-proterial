@@ -8,10 +8,15 @@ artifacts"). The platform layer is the file in ``configs/policies``; a
 tenant's layer is a version a person proposed and a second person approved.
 
 - **Proposed** by a holder of `sales.rules.propose` (PIC or head), validated by
-  the key's own schema; **approved or rejected** by a holder of
-  `sales.rules.approve` (the head), never by its proposer (maker/checker, as
-  in the rest of DW1; `ck_rule_versions_checker_not_maker` holds it whatever
-  writes the row). Each step is audited in its transaction.
+  the key's own schema; the proposal opens a run-less platform approval,
+  `sales.rules`, in its transaction, stamped with `sales.rules.approve` and
+  naming the proposer as its maker (dw_sales ADR 0004, ticket 38).
+- **Approved or rejected** on that approval by a holder of the stamp (the
+  head), never by its proposer: `sales.` is strict, `RuleDecisions.check` (the
+  decision guard) refuses what the version would refuse before it is
+  recorded, and `ck_rule_versions_checker_not_maker` holds it whatever writes
+  the row. The worker carries out `sales.rules.decided` through
+  `RuleSettlement.settle`. Each step is audited in its transaction.
 - **Resolved** through `TenantOverlay`: the tenant's approved version where it
   has one, the platform's otherwise, never another tenant's. The tenant is the
   scope's, from the run or the verified access context; no request names it.
@@ -19,6 +24,10 @@ tenant's layer is a version a person proposed and a second person approved.
   check reads that version (`TenantRuleBook.at`), not whatever is in force.
   A tenant version takes a number the platform layer does not ship, so a
   stamp names one document, and the rules list says which layer it is.
+- **Still read after a deploy**: every platform version the checkout ever
+  released stays loadable (`released`), and a version written before a field
+  of its schema existed reads that field as the platform's current version
+  has it (`read_over`), so a case keeps its rules across a release.
 
 A key a tenant may override is one whose readers resolve it per tenant
 (`OVERRIDABLE`): order rules (intake, checks, layouts) and the KPI policy (the
@@ -36,21 +45,25 @@ drawn with (`artifact_copy`), so a file drawn again is the file drawn before.
 
 from __future__ import annotations
 
+import typing
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum, StrEnum
 from types import MappingProxyType
 from typing import Any, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from dw_kernel.errors import ConflictError, DomainError, NotFoundError
+from dw_agent_runtime.approval_flow import ProposedDecision
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.overlay import TenantOverlay
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.authorization import ApprovalAudience
+from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus, decided_event_type
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import (
@@ -69,6 +82,15 @@ from dw_sales.domain.pricing import SalesPricing
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 _RESOURCE: Final = "sales_rule_version"
+
+# The platform approval a version's proposal opens, and the event its decision
+# is announced by. Under `sales.`, so the strict rule (a second person who is
+# not the maker, and a written comment) holds for it as for every Sales one.
+RULES_APPROVAL: Final = "sales.rules"
+RULES_DECIDED: Final = decided_event_type(RULES_APPROVAL)
+_RULES_REASON: Final = (
+    "Phiên bản quy tắc chờ duyệt: Sales đề xuất, Trưởng bộ phận duyệt (ticket 38)"
+)
 
 
 class RuleKey(StrEnum):
@@ -130,6 +152,9 @@ class RuleVersion(BaseModel):
     decided_by: uuid.UUID | None = None
     decided_at: AwareDatetime | None = None
     comment: str | None = Field(default=None, max_length=500)
+    # The `sales.rules` approval it is decided on; None on a version decided
+    # before ticket 38 moved the decision onto the platform's approvals.
+    approval_id: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _decided_by_another(self) -> Self:
@@ -144,8 +169,56 @@ class RuleVersion(BaseModel):
     def ref(self) -> str:
         return f"{self.key.value}@{self.version}"
 
-    def policy(self) -> Policy:
-        return OVERRIDABLE[self.key].model_validate(dict(self.document))
+
+def read_over(schema: type[Policy], document: Mapping[str, Any], platform: Policy) -> Policy:
+    """``document``, written under an earlier schema, read by today's.
+
+    A field the document predates takes the value the platform's current
+    version has: what the platform ships is what a tenant without its own
+    version runs, so it is the default this deployment already stands behind.
+    Only the schema's own shape is filled — its fields, at any depth, and the
+    keys of a mapping over a closed set (a severity per finding code). A
+    mapping of data (a customer's lead time, a template by name) is the
+    version's own and is never topped up with the platform's entries.
+    """
+    base = platform.model_dump(mode="json", by_alias=True)
+    return schema.model_validate(_predated(schema, document, base))
+
+
+def _predated(
+    model: type[BaseModel], document: Mapping[str, Any], base: Mapping[str, Any]
+) -> dict[str, Any]:
+    filled = dict(document)
+    for name, spec in model.model_fields.items():
+        key = spec.alias or name
+        if key not in base:
+            continue
+        if key not in filled:
+            filled[key] = base[key]
+            continue
+        mine, theirs = filled[key], base[key]
+        if not (isinstance(mine, Mapping) and isinstance(theirs, Mapping)):
+            continue
+        if (nested := _model_in(spec.annotation)) is not None:
+            filled[key] = _predated(nested, mine, theirs)
+        elif _closed_keys(spec.annotation):
+            filled[key] = {**theirs, **mine}
+    return filled
+
+
+def _model_in(annotation: Any) -> type[BaseModel] | None:
+    for candidate in (annotation, *typing.get_args(annotation)):
+        if isinstance(candidate, type) and issubclass(candidate, BaseModel):
+            return candidate
+    return None
+
+
+def _closed_keys(annotation: Any) -> bool:
+    """A mapping whose keys are an enum or a literal: every key is a field."""
+    if typing.get_origin(annotation) not in (Mapping, dict):
+        return False
+    keys = typing.get_args(annotation)[0]
+    return typing.get_origin(keys) is Literal or (isinstance(keys, type) and issubclass(keys, Enum))
 
 
 class RuleVersionLookupPort(Protocol):
@@ -192,6 +265,17 @@ class TenantRuleBook:
 
     platform: Mapping[RuleKey, Policy]
     stored: RuleVersionLookupPort
+    # Every platform version the checkout still ships, by ref, the current
+    # ones included (`policy_files.load_sales_policies`): what a stamp made
+    # before a release resolves to after it.
+    released: Mapping[str, Policy] = field(default_factory=dict)
+
+    def ships(self, key: RuleKey, ref: str) -> bool:
+        """Whether ``ref`` is a number the platform layer has released."""
+        return ref == self.platform[key].ref or ref in self.released
+
+    def _read(self, version: RuleVersion) -> Policy:
+        return read_over(OVERRIDABLE[version.key], version.document, self.platform[version.key])
 
     async def current(self, scope: SalesScope, key: RuleKey) -> Resolved:
         """The tenant's approved version, or the platform's: never sideways."""
@@ -199,25 +283,28 @@ class TenantRuleBook:
         overlay.put(key, Resolved(self.platform[key], "platform"))
         own = await self.stored.approved(scope, key)
         if own is not None:
-            overlay.put(key, Resolved(own.policy(), "tenant"), tenant_id=scope.tenant_id.value)
+            overlay.put(key, Resolved(self._read(own), "tenant"), tenant_id=scope.tenant_id.value)
         resolved = overlay.get(key, tenant_id=scope.tenant_id.value)
         assert resolved is not None  # the platform layer is always put
         return resolved
 
     async def at(self, scope: SalesScope, key: RuleKey, ref: str) -> Policy | None:
-        """The version a stamp names: the platform's, or one of the tenant's
-        (approved now or since superseded). None for a platform version this
-        process no longer ships."""
-        platform = self.platform[key]
-        if ref == platform.ref:
-            return platform
+        """The version a stamp names: one of the tenant's (approved now or
+        since superseded), else one the platform released. None for a number
+        neither holds.
+
+        The tenant's is asked first: a tenant version takes a number the
+        platform had not released, so where the platform ships that number
+        later, every stamp of it on this tenant's cases still means the
+        tenant's document."""
         policy_id, _, version = ref.partition("@")
         if policy_id != key.value:
             return None
         own = await self.stored.find(scope, key, version)
-        if own is None or own.status not in ("approved", "superseded"):
-            return None
-        return own.policy()
+        if own is not None and own.status in ("approved", "superseded"):
+            return self._read(own)
+        platform = self.platform[key]
+        return platform if ref == platform.ref else self.released.get(ref)
 
     async def order_rules(self, scope: SalesScope) -> OrderRules:
         policy = (await self.current(scope, RuleKey.ORDER_RULES)).policy
@@ -323,6 +410,8 @@ class RuleVersionView(BaseModel):
     decided_at: datetime | None
     comment: str | None
     document: Mapping[str, Any]
+    # The platform approval it is decided on (`POST /approvals/{id}/decisions`).
+    approval_id: uuid.UUID | None
 
 
 class PlatformRuleView(BaseModel):
@@ -357,20 +446,34 @@ def _view(version: RuleVersion) -> RuleVersionView:
         decided_at=version.decided_at,
         comment=version.comment,
         document=version.document,
+        approval_id=version.approval_id,
     )
 
 
-class RuleDecision(BaseModel):
+class RuleApprovalAsked(BaseModel):
+    """The approval's payload: ids, the key and the version, never the
+    document (it can hold price rules, and the inbox serves the payload to
+    whoever may decide it)."""
+
     model_config = _FROZEN
 
-    approve: bool
-    comment: str | None = Field(default=None, min_length=1, max_length=500)
+    approval_type: Literal["sales.rules"]
+    required_scope: str
+    version_id: uuid.UUID
+    key: RuleKey
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
+    makers: tuple[uuid.UUID, ...]
 
-    @model_validator(mode="after")
-    def _a_rejection_says_why(self) -> Self:
-        if not self.approve and self.comment is None:
-            raise ValueError("a rejection says why")
-        return self
+    @classmethod
+    def of(cls, version: RuleVersion) -> RuleApprovalAsked:
+        return cls(
+            approval_type="sales.rules",
+            required_scope=SalesScopes.RULES_APPROVE.value,
+            version_id=version.version_id,
+            key=version.key,
+            version=version.version,
+            makers=(version.proposed_by,),
+        )
 
 
 # ------------------------------------------------------------- service --
@@ -411,8 +514,7 @@ class SalesRulesService:
     ) -> RuleVersionView:
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         policy = _validated(key, document)
-        platform = self.book.platform[key]
-        if policy.ref == platform.ref:
+        if self.book.ships(key, policy.ref):
             raise ConflictError(
                 "a tenant version needs a number the platform does not ship",
                 details={"key": key.value, "rule": "platform_version_reused"},
@@ -425,41 +527,164 @@ class SalesRulesService:
             status="proposed",
             proposed_by=context.principal_id,
             proposed_at=self.clock.now(),
+            approval_id=self.ids.new_uuid(),
         )
+        approval_id = version.approval_id
+        assert approval_id is not None
         async with self.uow(sales_scope(context)) as work:
+            await work.approvals.add(
+                ApprovalRequest(
+                    id=approval_id,
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    approval_type=RULES_APPROVAL,
+                    requested_by=UserId(context.principal_id),
+                    reason=_RULES_REASON,
+                    payload=RuleApprovalAsked.of(version).model_dump(mode="json"),
+                    required_scope=SalesScopes.RULES_APPROVE.value,
+                )
+            )
+            # After its approval: the row names it (`fk_rule_versions_approval_requests`).
             await work.rule_versions.add(version)
-            await work.audit.append(self._audit(context, "sales.rules.proposed", version))
+            await work.audit.append(
+                _audit(self.ids, self.clock, context, "sales.rules.proposed", version)
+            )
             await work.commit()
         return _view(version)
 
-    async def decide(
-        self, context: AccessContext, version_id: uuid.UUID, decision: RuleDecision
-    ) -> RuleVersionView:
-        await self.gate.require(
-            context, SalesScopes.RULES_APPROVE, resource_type=_RESOURCE, resource_id=str(version_id)
+
+# ----------------------------------------------------------- the decision --
+
+
+def _asked(request: ApprovalRequest) -> RuleApprovalAsked:
+    """The approval as a proposal opened it, or a refusal: its payload
+    unreadable, or stamped with a scope other than `sales.rules.approve`
+    (the column, which the platform's decision enforced)."""
+    refused = ConflictError(
+        "the approval is not one a rules proposal opened",
+        details={"approval_id": str(request.id)},
+    )
+    if request.approval_type != RULES_APPROVAL:
+        raise refused
+    try:
+        asked = RuleApprovalAsked.model_validate(request.payload)
+    except ValidationError:
+        raise refused from None
+    if request.required_scope != SalesScopes.RULES_APPROVE.value or (
+        asked.required_scope != request.required_scope
+    ):
+        raise PermissionDeniedError(
+            "a rule version is decided with sales.rules.approve",
+            details={"approval_type": request.approval_type},
         )
-        details: dict[str, object] = {"version_id": str(version_id)}
+    return asked
+
+
+def _waiting(version: RuleVersion | None, request: ApprovalRequest) -> RuleVersion:
+    """The version this approval was opened for, still waiting on it."""
+    if version is None:
+        raise NotFoundError("no such rule version", details={"approval_id": str(request.id)})
+    if version.approval_id != request.id or version.status != "proposed":
+        raise ConflictError(
+            "phiên bản quy tắc không còn chờ quyết định này",
+            details={
+                "version_id": str(version.version_id),
+                "status": version.status,
+                "rule": "decision_stale",
+            },
+        )
+    return version
+
+
+def _unreleased(book: TenantRuleBook, version: RuleVersion) -> None:
+    """Refuses approving a number the platform has released since it was
+    proposed: a stamp of it would name two documents."""
+    if book.ships(version.key, version.ref):
+        raise ConflictError(
+            "the platform now ships this version number",
+            details={"version_id": str(version.version_id), "rule": "platform_version_reused"},
+        )
+
+
+@dataclass(frozen=True)
+class RuleDecisions:
+    """The platform's `ApprovalDecisionGuard` for `sales.rules`: the decision
+    as the version would take it, refused or not, unwritten. Called after the
+    decider's scope and the separation of duties, before it is recorded. A
+    version's document never changes after it is proposed, so a decision
+    names no subject version."""
+
+    uow: SalesUnitOfWorkFactory
+    book: TenantRuleBook
+
+    async def check(
+        self, request: ApprovalRequest, decision: ProposedDecision, context: AccessContext
+    ) -> None:
+        asked = _asked(request)
         async with self.uow(sales_scope(context)) as work:
-            proposed = await work.rule_versions.get(version_id)
-            if proposed is None:
-                raise NotFoundError("no such rule version", details=details)
-            if proposed.status != "proposed":
-                raise ConflictError(
-                    "the version is decided already",
-                    details={**details, "status": proposed.status},
+            version = _waiting(await work.rule_versions.get(asked.version_id), request)
+        if version.proposed_by == context.principal_id:
+            raise ConflictError(
+                "the proposer of a version does not decide it",
+                details={"version_id": str(version.version_id), "rule": "maker_checker"},
+            )
+        if decision.approve:
+            _unreleased(self.book, version)
+
+
+@dataclass(frozen=True)
+class RuleSettlement:
+    """Carries out a decided `sales.rules` approval: the worker's handler for
+    `RULES_DECIDED` calls it with the decider's tenancy and identity, from the
+    event's envelope."""
+
+    uow: SalesUnitOfWorkFactory
+    book: TenantRuleBook
+    clock: UtcClock
+    ids: IdGenerator
+
+    async def settle(self, approval_id: uuid.UUID, decider: AccessContext) -> RuleVersionView:
+        """The decision on the version, as its decider. What was decided is
+        read from the approval row, which the decision wrote, not from the
+        event; the reason given stays on the approval's decision. Idempotent:
+        a redelivery finds the version decided on this approval and writes
+        nothing. Raises the refusals the version makes (409, 404); none
+        changes on a retry."""
+        # Read as the decider holding the stamp the platform required of them
+        # when they decided: nobody reaches here but through that decision.
+        audience = ApprovalAudience(
+            context=decider.model_copy(
+                update={"scopes": frozenset({SalesScopes.RULES_APPROVE.value})}
+            ),
+            holds_decide=True,
+        )
+        async with self.uow(sales_scope(decider)) as work:
+            request = await work.approvals.get(
+                approval_id, workspace_id=decider.workspace_id, audience=audience
+            )
+            if request is None:
+                raise NotFoundError(
+                    "rules approval not found", details={"approval_id": str(approval_id)}
                 )
-            if proposed.proposed_by == context.principal_id:
+            asked = _asked(request)
+            stored = await work.rule_versions.get(asked.version_id)
+            # Settled already, by an earlier delivery of the same event.
+            if (
+                stored is not None
+                and stored.approval_id == request.id
+                and stored.status != "proposed"
+            ):
+                return _view(stored)
+            proposed = _waiting(stored, request)
+            if request.status is ApprovalStatus.PENDING:
                 raise ConflictError(
-                    "the proposer of a version does not decide it",
-                    details={**details, "rule": "maker_checker"},
+                    "the rules approval is not decided yet",
+                    details={"approval_id": str(approval_id)},
                 )
+            approve = request.status is ApprovalStatus.APPROVED
             superseding = None
-            if decision.approve:
-                if proposed.ref == self.book.platform[proposed.key].ref:
-                    raise ConflictError(
-                        "the platform now ships this version number",
-                        details={**details, "rule": "platform_version_reused"},
-                    )
+            if approve:
+                _unreleased(self.book, proposed)
                 current = next(
                     (
                         v
@@ -469,38 +694,43 @@ class SalesRulesService:
                     None,
                 )
                 superseding = current.version_id if current is not None else None
-            decided = proposed.model_copy(
-                update={
-                    "status": "approved" if decision.approve else "rejected",
-                    "decided_by": context.principal_id,
+            decided = RuleVersion.model_validate(
+                {
+                    **proposed.model_dump(),
+                    "status": "approved" if approve else "rejected",
+                    "decided_by": decider.principal_id,
                     "decided_at": self.clock.now(),
-                    "comment": decision.comment,
                 }
             )
-            decided = RuleVersion.model_validate(decided.model_dump())
             await work.rule_versions.decide(decided, superseding=superseding)
-            action = "sales.rules.approved" if decision.approve else "sales.rules.rejected"
-            await work.audit.append(self._audit(context, action, decided))
+            action = "sales.rules.approved" if approve else "sales.rules.rejected"
+            await work.audit.append(_audit(self.ids, self.clock, decider, action, decided))
             await work.commit()
         return _view(decided)
 
-    def _audit(self, context: AccessContext, action: str, version: RuleVersion) -> AuditEvent:
-        """The key, the version and its status: never the document."""
-        return AuditEvent(
-            id=self.ids.new_uuid(),
-            tenant_id=TenantId(context.tenant_id),
-            workspace_id=WorkspaceId(context.workspace_id),
-            actor_id=UserId(context.principal_id),
-            action=action,
-            resource_type=_RESOURCE,
-            resource_id=str(version.version_id),
-            occurred_at=self.clock.now(),
-            details={
-                "key": version.key.value,
-                "version": version.version,
-                "status": version.status,
-            },
-        )
+
+def _audit(
+    ids: IdGenerator, clock: UtcClock, context: AccessContext, action: str, version: RuleVersion
+) -> AuditEvent:
+    """The key, the version, its status and its approval: never the document."""
+    details: dict[str, object] = {
+        "key": version.key.value,
+        "version": version.version,
+        "status": version.status,
+    }
+    if version.approval_id is not None:
+        details["approval_id"] = str(version.approval_id)
+    return AuditEvent(
+        id=ids.new_uuid(),
+        tenant_id=TenantId(context.tenant_id),
+        workspace_id=WorkspaceId(context.workspace_id),
+        actor_id=UserId(context.principal_id),
+        action=action,
+        resource_type=_RESOURCE,
+        resource_id=str(version.version_id),
+        occurred_at=clock.now(),
+        details=details,
+    )
 
 
 def _validated(key: RuleKey, document: Mapping[str, Any]) -> Policy:

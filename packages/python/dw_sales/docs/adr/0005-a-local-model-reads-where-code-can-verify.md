@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-13
+accepted: 2026-10-14 (Đạt, with the addenda below)
 supersedes: spec decision 13's "no model turn reads document content" and the spec's "no model call" non-goal
 ---
 
@@ -8,8 +9,8 @@ supersedes: spec decision 13's "no model turn reads document content" and the sp
 
 Proposed by the agent while Đạt was away (he pre-authorised the work on
 2026-10-12/13: "turn the tasks a model can take off people over to the local
-Qwen3.5-9B and run them"). Đạt accepts or amends it; until then it is the
-rule the code follows, recorded rather than assumed.
+Qwen3.5-9B and run them"). Accepted by Đạt on 2026-10-14, with the
+addenda below.
 
 ## Context
 

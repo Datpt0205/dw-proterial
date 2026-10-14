@@ -94,7 +94,8 @@ whether rule decisions move onto platform approvals.
 /sales/rules/versions/{id}/decision`, `GET /sales/rules`); the six keys
   join the same `RuleKey` path parameter. If Đạt accepts ADR 0004's
   amendment for rules, the decision route moves to a `sales.rules` platform
-  approval, as `sales.layout` did, for all eight keys at once.
+  approval, as `sales.layout` did, for all eight keys at once. (Đạt chose
+  that on 2026-10-14: ticket 38.)
 - **Decided by the agent (Đạt away), 2026-10-14: Design's mailboxes are the
   tenant's current quote rules', in both readers** (the reply check and the
   YCBG/Design drafts), not a case's stamp: where Design is now is not a rule
@@ -105,7 +106,7 @@ whether rule decisions move onto platform approvals.
   order rules, for the quote rules a case was opened under and for a copy an
   artifact at the same case version recorded. Open for Đạt: holding every
   shipped platform version in the platform layer would keep such cases
-  workable across a deploy.
+  workable across a deploy. (Đạt chose that on 2026-10-14: ticket 37.)
 
 Brief: `RuleKey`/`OVERRIDABLE`/`ck_rule_versions_key` gain the six keys in
 one change (new migration; `ck_rule_versions_document` also reads a copy's

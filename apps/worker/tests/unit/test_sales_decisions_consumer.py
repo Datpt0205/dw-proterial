@@ -1,4 +1,4 @@
-"""A decided PO layout approval reaches DW1 (Sales ticket 30).
+"""A decided run-less Sales approval reaches DW1 (Sales tickets 30 and 38).
 
 The handler decides nothing: it parses the run-less decision's payload, takes
 the tenancy from the envelope and the decider from the payload, and hands both
@@ -19,8 +19,9 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.layouts import LAYOUT_DECIDED
+from dw_sales.application.rules import RULES_DECIDED
 from dw_worker.consumers.outbox import UndeliverableEventError
-from dw_worker.consumers.sales_layouts import build_layout_decided_handler
+from dw_worker.consumers.sales_decisions import build_decided_handler
 
 pytestmark = pytest.mark.unit
 
@@ -63,7 +64,8 @@ def _decided(payload: dict[str, Any] | None = None) -> OutboxEvent:
 async def test_a_decision_is_settled_in_the_envelopes_tenancy_by_the_decider() -> None:
     settlement = _Settlement()
 
-    assert await build_layout_decided_handler(settlement)(_decided()) == "layout decision applied"
+    handler = build_decided_handler(settlement, applied="layout decision applied")
+    assert await handler(_decided()) == "layout decision applied"
 
     ((approval_id, decider),) = settlement.calls
     assert approval_id == APPROVAL
@@ -81,25 +83,26 @@ async def test_a_payload_naming_a_tenant_is_refused_before_anything_is_settled()
     settlement = _Settlement()
 
     with pytest.raises(UndeliverableEventError):
-        await build_layout_decided_handler(settlement)(_decided(body))
+        await build_decided_handler(settlement, applied="x")(_decided(body))
     assert settlement.calls == []
 
 
 async def test_a_refusal_is_undeliverable_and_an_outage_is_retried() -> None:
     refused = _Settlement(ConflictError("mẫu PO không còn chờ quyết định này"))
     with pytest.raises(UndeliverableEventError):
-        await build_layout_decided_handler(refused)(_decided())
+        await build_decided_handler(refused, applied="x")(_decided())
 
     down = _Settlement(InfrastructureError("database unavailable"))
     with pytest.raises(InfrastructureError):
-        await build_layout_decided_handler(down)(_decided())
+        await build_decided_handler(down, applied="x")(_decided())
 
 
-def test_the_worker_hands_every_layout_decision_to_the_settlement(
+def test_the_worker_hands_every_layout_and_rules_decision_to_its_settlement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Wired with a database alone, mailbox or not: an event with no handler
-    stays in the outbox, and the layout would wait on its decision forever."""
+    stays in the outbox, and the layout or the rule version would wait on its
+    decision forever."""
     from test_worker import bare_settings
 
     import dw_worker.main as main
@@ -117,4 +120,4 @@ def test_the_worker_hands_every_layout_decision_to_the_settlement(
     monkeypatch.setattr(main, "build_outbox_consumer", capture)
     main.build_registry(bare_settings(database_url="postgresql+asyncpg://dw:dw@localhost/dw"))
 
-    assert LAYOUT_DECIDED in seen
+    assert LAYOUT_DECIDED in seen and RULES_DECIDED in seen

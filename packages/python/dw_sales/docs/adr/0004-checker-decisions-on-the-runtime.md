@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-06
+accepted: 2026-10-14 (Đạt, with both amendments)
 supersedes: 0001-case-decision-before-runtime.md
 ---
 
@@ -130,7 +131,8 @@ in the platform merge of 2026-10-07 (`chore/platform-merge-2`).
 
 ## Amendment 2026-10-13: a checker's decision with no run (ticket 30)
 
-Recorded by the agent while Đạt was away; Proposed with the rest of this ADR.
+Recorded by the agent while Đạt was away; accepted by Đạt with the rest of
+this ADR on 2026-10-14.
 
 Approving or rejecting a PO layout a PIC mapped is a checker's decision on
 someone else's work, so it is a platform approval, but no DW1 run waits on it:
@@ -154,3 +156,34 @@ approval with no run announces its decision"):
 `test_no_sales_route_decides_what_a_checker_decides` holds the rule: the
 direct `/layouts/{id}/approve` route the first build of ticket 30 had failed
 it and is gone.
+
+## Amendment 2026-10-14: a tenant's rule version too (ticket 38)
+
+Decided by Đạt on 2026-10-14 ("move it"), built by the agent. Ticket 19
+decided a tenant's rule version on a Sales route,
+`POST /sales/rules/versions/{id}/decision`, with the maker/checker rule held
+by the service and a CHECK. It was the one checker's decision in DW1 left off
+the platform's approvals, and `test_no_sales_route_decides_what_a_checker_decides`
+did not see it: the test looked for the suffixes `/approval`, `/approve` and
+`/cross-check`, and this route ended in `/decision` (failure-modes #0).
+
+It now takes the layout's path, for all eight rule keys at once:
+
+- proposing opens `sales.rules` in the proposal's transaction, stamped
+  `sales.rules.approve`, payload ids, the key and the version only (never the
+  document, which can hold price rules), `makers` the proposer; the version
+  row names its approval (`fk_rule_versions_approval_requests`, migration
+  `218118b8f0e5`);
+- `RuleDecisions.check`, registered for `sales.rules`, refuses a version no
+  longer proposed, an approval no proposal opened or stamped otherwise, the
+  proposer, and approving a number the platform has released since. A
+  version's document never changes after it is proposed, so the decision
+  names no subject version and `/approvals` decides it in place (there is no
+  rules page yet);
+- the worker carries out `sales.rules.decided` (`RuleSettlement.settle`),
+  reading the outcome from the approval row, idempotent on redelivery. The
+  reason a decider gave stays on the approval's decision; the version's own
+  `comment` is no longer written.
+
+The route is gone and the test now looks for `/decision` and `/decisions`
+too.

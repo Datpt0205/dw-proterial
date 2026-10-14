@@ -43,6 +43,8 @@ export function inboxFor(
   const inbox = findHost(hosts, approval.approval_type)?.inbox;
   if (!inbox) return null;
   const href = inbox.href(approval);
+  // The host says this type has no inbox of its own: decided here.
+  if (href === null) return null;
   // A host that points outside the app is a configuration error. Showing the
   // platform's decision instead would open the second door this exists to
   // close, so it fails closed: no link, no decision (failure-modes #7).

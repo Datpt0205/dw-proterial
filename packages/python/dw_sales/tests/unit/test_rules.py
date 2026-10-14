@@ -1,15 +1,27 @@
-"""A tenant's own Sales rule versions: proposed, decided, resolved (ticket 19)."""
+"""A tenant's own Sales rule versions: proposed, decided, resolved (ticket 19);
+decided on a `sales.rules` platform approval (ticket 38)."""
 
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
-from dw_sales.application.rules import RuleDecision, RuleKey
+from dw_agent_runtime.approval_flow import ProposedDecision
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
+from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.domain.approval import ApprovalRequest
+from dw_sales.application.rules import (
+    RULES_APPROVAL,
+    RuleDecisions,
+    RuleKey,
+    RuleVersionView,
+    TenantRuleBook,
+)
+from dw_sales.domain.order_checks import OrderRules
 from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, OUTSIDER, READER
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, open_world
 
@@ -39,10 +51,13 @@ async def _approved(world: World, version: str = "9.0.1") -> uuid.UUID:
     proposed = await world.services.rules.propose(
         AN.context(), RuleKey.ORDER_RULES, _version(world, version, cross_check_required=False)
     )
-    await world.services.rules.decide(
-        GIANG.context(), proposed.version_id, RuleDecision(approve=True)
-    )
+    await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
     return proposed.version_id
+
+
+async def _listed(world: World, version_id: object) -> RuleVersionView:
+    listed = await world.services.rules.list(GIANG.context())
+    return next(v for v in listed.versions if v.version_id == version_id)
 
 
 async def test_a_pic_proposes_and_the_head_approves_and_it_applies_to_the_tenant() -> None:
@@ -61,9 +76,26 @@ async def test_a_pic_proposes_and_the_head_approves_and_it_applies_to_the_tenant
     # Proposed is not in force.
     assert (await world.services.layouts.rules.rules(ALPHA)).version == before.version
 
-    decided = await world.services.rules.decide(
-        GIANG.context(), proposed.version_id, RuleDecision(approve=True)
+    # Proposing opened a platform approval, stamped, the proposer its maker,
+    # its payload ids, the key and the version and never the document.
+    assert proposed.approval_id is not None
+    approval = world.runtime.approvals.rows[proposed.approval_id]
+    assert (approval.approval_type, approval.required_scope) == (
+        RULES_APPROVAL,
+        "sales.rules.approve",
     )
+    assert approval.makers == {AN.user_id}
+    assert set(approval.payload) == {
+        "approval_type",
+        "required_scope",
+        "version_id",
+        "key",
+        "version",
+        "makers",
+    }
+
+    await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
+    decided = await _listed(world, proposed.version_id)
     assert (decided.status, decided.decided_by) == ("approved", GIANG.user_id)
     in_force = await world.services.layouts.rules.rules(ALPHA)
     assert in_force.version == "sales_order_rules@9.0.1"
@@ -76,7 +108,16 @@ async def test_a_pic_proposes_and_the_head_approves_and_it_applies_to_the_tenant
     actions = [e.action for e in world.store.state(ALPHA).audit]
     assert actions[-2:] == ["sales.rules.proposed", "sales.rules.approved"]
     details = world.store.state(ALPHA).audit[-1].details
-    assert details == {"key": "sales_order_rules", "version": "9.0.1", "status": "approved"}
+    assert details == {
+        "key": "sales_order_rules",
+        "version": "9.0.1",
+        "status": "approved",
+        "approval_id": str(proposed.approval_id),
+    }
+    # A redelivery of the decision writes nothing.
+    settled = await world.rule_settlement.settle(proposed.approval_id, GIANG.context())
+    assert settled == decided
+    assert [e.action for e in world.store.state(ALPHA).audit] == actions
 
 
 async def test_an_override_never_resolves_for_another_tenant() -> None:
@@ -98,9 +139,7 @@ async def test_the_proposer_cannot_approve_their_own_version() -> None:
         GIANG.context(), RuleKey.ORDER_RULES, _version(world, "9.0.2")
     )
     with pytest.raises(ConflictError) as refused:
-        await world.services.rules.decide(
-            GIANG.context(), proposed.version_id, RuleDecision(approve=True)
-        )
+        await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Tự duyệt")
     assert refused.value.details["rule"] == "maker_checker"
     assert await world.services.layouts.rules.rules(ALPHA) == before
 
@@ -110,10 +149,9 @@ async def test_a_pic_cannot_approve_and_a_reader_cannot_propose() -> None:
     proposed = await world.services.rules.propose(
         AN.context(), RuleKey.ORDER_RULES, _version(world, "9.0.3")
     )
-    with pytest.raises(PermissionDeniedError):
-        await world.services.rules.decide(
-            DIEU.context(), proposed.version_id, RuleDecision(approve=True)
-        )
+    # Without `sales.rules.approve` the stamped approval is not even visible.
+    with pytest.raises(NotFoundError):
+        await world.decide_rules(DIEU, proposed.version_id, approve=True, comment="Đồng ý")
     with pytest.raises(PermissionDeniedError):
         await world.services.rules.propose(
             READER.context(), RuleKey.ORDER_RULES, _version(world, "9.0.4")
@@ -163,9 +201,7 @@ async def test_a_newer_approval_supersedes_and_a_stamp_still_reads_its_version()
     rejected = await world.services.rules.propose(
         AN.context(), RuleKey.ORDER_RULES, _version(world, "9.3.0")
     )
-    await world.services.rules.decide(
-        GIANG.context(), rejected.version_id, RuleDecision(approve=False, comment="chưa duyệt")
-    )
+    await world.decide_rules(GIANG, rejected.version_id, approve=False, comment="chưa duyệt")
     assert await port.rules_at(ALPHA, "sales_order_rules@9.3.0") is None
     assert first != rejected.version_id
 
@@ -174,11 +210,14 @@ async def test_a_decided_version_is_not_decided_again_and_a_rejection_says_why()
     world = _world()
     version_id = await _approved(world, "9.4.0")
     with pytest.raises(ConflictError):
-        await world.services.rules.decide(
-            GIANG.context(), version_id, RuleDecision(approve=False, comment="x")
-        )
-    with pytest.raises(ValueError, match="says why"):
-        RuleDecision(approve=False)
+        await world.decide_rules(GIANG, version_id, approve=False, comment="x")
+    proposed = await world.services.rules.propose(
+        AN.context(), RuleKey.ORDER_RULES, _version(world, "9.4.1")
+    )
+    # `sales.` is strict: a decision says why.
+    with pytest.raises(ConflictError):
+        await world.decide_rules(GIANG, proposed.version_id, approve=False, comment="")
+    assert (await _listed(world, proposed.version_id)).status == "proposed"
 
 
 async def test_the_kpi_policy_resolves_per_tenant_for_the_overview() -> None:
@@ -187,9 +226,7 @@ async def test_the_kpi_policy_resolves_per_tenant_for_the_overview() -> None:
     document["policy_version"] = "9.0.0"
     document["quotation_target_days"] = 3
     proposed = await world.services.rules.propose(AN.context(), RuleKey.KPI, document)
-    await world.services.rules.decide(
-        GIANG.context(), proposed.version_id, RuleDecision(approve=True)
-    )
+    await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
 
     alpha = await world.services.overview.overview(GIANG.context())
     assert alpha.kpi_policy == "sales_kpi@9.0.0"
@@ -232,7 +269,7 @@ async def test_each_key_is_proposed_approved_and_in_force_for_its_tenant_only(
         )
     assert reused.value.details["rule"] == "platform_version_reused"
 
-    await rules.decide(GIANG.context(), proposed.version_id, RuleDecision(approve=True))
+    await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
 
     alpha = await rules.list(GIANG.context())
     assert (alpha.in_force[key], alpha.layers[key]) == (f"{key.value}@9.0.1", "tenant")
@@ -250,3 +287,93 @@ async def test_another_keys_document_is_no_version_of_a_copy_key() -> None:
         await world.services.rules.propose(
             AN.context(), RuleKey.EMAILS, _bumped(world, RuleKey.DOCUMENTS, "9.0.1")
         )
+
+
+# ------------------------------------------- the decision guard (ticket 38) --
+
+
+def _decision(approve: bool = True) -> ProposedDecision:
+    return ProposedDecision(approve=approve, comment="Đồng ý", reasons={}, subject_version=None)
+
+
+async def _opened(world: World, version: str) -> tuple[RuleVersionView, ApprovalRequest]:
+    proposed = await world.services.rules.propose(
+        AN.context(), RuleKey.ORDER_RULES, _version(world, version)
+    )
+    assert proposed.approval_id is not None
+    return proposed, world.runtime.approvals.rows[proposed.approval_id]
+
+
+async def test_the_guard_refuses_an_approval_no_proposal_opened_or_stamped_otherwise() -> None:
+    world = _world()
+    guard = RuleDecisions(world.store, world.services.rules.book)
+    _, request = await _opened(world, "9.6.0")
+
+    for forged in (
+        replace(request, approval_type="sales.layout"),
+        replace(request, payload={**request.payload, "version_id": "not-a-uuid"}),
+    ):
+        with pytest.raises(ConflictError):
+            await guard.check(forged, _decision(), GIANG.context())
+    with pytest.raises(PermissionDeniedError):
+        await guard.check(
+            replace(request, required_scope="sales.quote.approve"), _decision(), GIANG.context()
+        )
+    # The proposer, asked directly: the platform's strict rule refuses them
+    # first, and this is the line behind it.
+    with pytest.raises(ConflictError) as maker:
+        await guard.check(request, _decision(), AN.context())
+    assert maker.value.details["rule"] == "maker_checker"
+    # The approval as opened passes.
+    await guard.check(request, _decision(), GIANG.context())
+
+
+async def test_the_guard_refuses_a_version_no_longer_waiting_and_a_number_released_since() -> None:
+    world = _world()
+    proposed, request = await _opened(world, "9.7.0")
+    await world.decide_rules(GIANG, proposed.version_id, approve=False, comment="Chưa")
+    guard = RuleDecisions(world.store, world.services.rules.book)
+    with pytest.raises(ConflictError) as stale:
+        await guard.check(request, _decision(), GIANG.context())
+    assert stale.value.details["rule"] == "decision_stale"
+
+    proposed, request = await _opened(world, "9.8.0")
+    book = world.services.rules.book
+    later = OrderRules.model_validate(_version(world, "9.8.0"))
+    released = TenantRuleBook(book.platform, book.stored, {**book.released, later.ref: later})
+    with pytest.raises(ConflictError) as reused:
+        await RuleDecisions(world.store, released).check(request, _decision(), GIANG.context())
+    assert reused.value.details["rule"] == "platform_version_reused"
+    # Rejecting it is still allowed: nothing is stamped with a rejected number.
+    await RuleDecisions(world.store, released).check(request, _decision(False), GIANG.context())
+
+
+async def test_a_pending_approval_is_not_settled_and_a_rejection_is_recorded() -> None:
+    world = _world()
+    proposed, request = await _opened(world, "9.9.0")
+    with pytest.raises(ConflictError):
+        await world.rule_settlement.settle(request.id, GIANG.context())
+
+    await world.decide_rules(GIANG, proposed.version_id, approve=False, comment="Chưa đủ")
+
+    rejected = await _listed(world, proposed.version_id)
+    assert (rejected.status, rejected.decided_by) == ("rejected", GIANG.user_id)
+    assert world.store.state(ALPHA).audit[-1].action == "sales.rules.rejected"
+    assert await world.services.layouts.rules.rules_at(ALPHA, proposed.ref) is None
+
+
+async def test_another_tenant_neither_decides_nor_carries_out_a_rules_approval() -> None:
+    world = _world()
+    proposed, request = await _opened(world, "9.9.1")
+
+    with pytest.raises(NotFoundError):
+        await world.runtime.approval_flow.decide(
+            approval_id=request.id,
+            approve=True,
+            comment="Đồng ý",
+            context=GIANG.context(BETA),
+            authorization=ScopeAuthorizationService(),
+        )
+    with pytest.raises(NotFoundError):
+        await world.rule_settlement.settle(request.id, GIANG.context(BETA))
+    assert (await _listed(world, proposed.version_id)).status == "proposed"

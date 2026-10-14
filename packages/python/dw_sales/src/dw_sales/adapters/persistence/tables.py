@@ -285,6 +285,10 @@ rule_versions = sa.Table(
     sa.Column("decided_by", UUID(as_uuid=True)),
     sa.Column("decided_at", _TS),
     sa.Column("comment", sa.Text),
+    # The platform approval (`sales.rules`) the proposal waits on, of the same
+    # tenant and workspace (`fk_rule_versions_approval_requests`, ticket 38);
+    # null on a version decided before it.
+    sa.Column("approval_id", UUID(as_uuid=True)),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

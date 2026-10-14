@@ -54,6 +54,14 @@ describe("a DW1 approval in the generic inbox", () => {
     ).toMatchObject({ kind: "link", href: "/sales/layouts" });
   });
 
+  it("leaves a rule version's approval on /approvals, where it is decided", () => {
+    expect(
+      approvalInbox(
+        approval("sales.rules", { key: "sales_order_rules", version: "1.6.0" }),
+      ),
+    ).toBeNull();
+  });
+
   it("never builds a path from a payload it does not recognise", () => {
     for (const payload of [
       {},

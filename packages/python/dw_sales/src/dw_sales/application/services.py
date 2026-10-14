@@ -40,7 +40,7 @@ from dw_sales.application.ports import (
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
-from dw_sales.application.rules import SalesRulesService, TenantRuleBook
+from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
 from dw_sales.application.source import SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
@@ -75,6 +75,8 @@ class SalesAssembly:
     decisions: CaseDecisions
     # The decision guard of a PO layout's approval (`sales.layout`, ticket 30).
     layout_decisions: LayoutDecisions
+    # The decision guard of a rule version's approval (`sales.rules`, ticket 38).
+    rule_decisions: RuleDecisions
 
 
 def assemble(
@@ -146,5 +148,8 @@ def assemble(
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing)
     return SalesAssembly(
-        services=services, decisions=decisions, layout_decisions=LayoutDecisions(uow, clock)
+        services=services,
+        decisions=decisions,
+        layout_decisions=LayoutDecisions(uow, clock),
+        rule_decisions=RuleDecisions(uow, book),
     )

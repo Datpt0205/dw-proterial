@@ -83,7 +83,7 @@ from dw_sales.application.processing import (
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
-from dw_sales.application.rules import RuleBookOrderRules
+from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.telemetry import SpanPort
 from dw_sales.application.threads import ThreadLinks
@@ -244,6 +244,7 @@ def build_dw1(
         approvals=runtime.approval_flow,
         steps=assembly.decisions,
         layouts=assembly.layout_decisions,
+        rules=assembly.rule_decisions,
         worker_file=worker_file,
     )
     lane = (
@@ -272,6 +273,26 @@ def build_layout_settlement(
     decided approval's own tenant and workspace."""
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     return LayoutSettlement(uow, clock, ids)
+
+
+def build_rule_settlement(
+    *,
+    configs: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> RuleSettlement:
+    """What carries out a decided rule version approval (`sales.rules.decided`,
+    ticket 38), for the worker's outbox handler. The version and the approval
+    are rows of the approval's own tenant; the platform's files say which
+    numbers it has released, which an approved version may not take."""
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    policies = load_sales_policies(configs / "policies", configs / "copy")
+    return RuleSettlement(
+        uow, rule_book(policies, SqlRuleVersionLookup(session_factory)), clock, ids
+    )
 
 
 def model_requests(

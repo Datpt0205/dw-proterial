@@ -881,23 +881,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/rules/versions/{version_id}/decision": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Decide Rules */
-        post: operations["decide_rules_api_v1_sales_rules_versions__version_id__decision_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sales/rules/{key}/versions": {
         parameters: {
             query?: never;
@@ -3049,13 +3032,6 @@ export interface components {
              */
             returned_by: string;
         };
-        /** RuleDecision */
-        RuleDecision: {
-            /** Approve */
-            approve: boolean;
-            /** Comment */
-            comment?: string | null;
-        };
         /**
          * RuleKey
          * @description The Sales policies and copy a tenant may hold its own version of.
@@ -3078,6 +3054,8 @@ export interface components {
          *     the document only to whoever may propose (it can hold price rules).
          */
         RuleVersionView: {
+            /** Approval Id */
+            approval_id: string | null;
             /** Comment */
             comment: string | null;
             /** Decided At */
@@ -5330,44 +5308,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RulesInForceView"];
-                };
-            };
-        };
-    };
-    decide_rules_api_v1_sales_rules_versions__version_id__decision_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                version_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RuleDecision"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RuleVersionView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

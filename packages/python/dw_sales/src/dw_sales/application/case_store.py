@@ -362,10 +362,11 @@ class LayoutStorePort(Protocol):
         ...
 
 
-class LayoutApprovalsPort(Protocol):
-    """The platform's approvals, as a PO layout's decision uses them
-    (ticket 30): opened in the proposal's transaction, and read back when
-    the decision is carried out. The narrow side of `ApprovalRepositoryPort`."""
+class RunLessApprovalsPort(Protocol):
+    """The platform's approvals, as a run-less Sales decision uses them (a PO
+    layout's, ticket 30; a rule version's, ticket 38): opened in the
+    proposal's transaction, and read back when the decision is carried out.
+    The narrow side of `ApprovalRepositoryPort`."""
 
     async def add(self, request: ApprovalRequest) -> None: ...
 
@@ -486,7 +487,7 @@ class SalesUnitOfWork(Protocol):
     def jobs(self) -> ProcessingJobsPort: ...
 
     @property
-    def approvals(self) -> LayoutApprovalsPort: ...
+    def approvals(self) -> RunLessApprovalsPort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...
