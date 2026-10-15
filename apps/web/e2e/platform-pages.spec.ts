@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signIn } from "./dev-login";
 
 /**
  * Every platform page, rebuilt on antd and in Vietnamese, at a 320px phone and
@@ -10,7 +11,6 @@ import { expect, test, type Page } from "@playwright/test";
  * platform_admin and a platform operator).
  */
 
-const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8000";
 const SUBJECT = "dev|chi.le";
 
 const PAGES: [string, string][] = [
@@ -29,19 +29,8 @@ const PAGES: [string, string][] = [
   ["/platform", "Nền tảng"],
 ];
 
-async function login(page: Page): Promise<void> {
-  const users = await (
-    await page.request.get(`${API_URL}/api/v1/dev/demo-users`)
-  ).json();
-  const index = users.findIndex(
-    (user: { subject: string }) => user.subject === SUBJECT,
-  );
-  expect(index).toBeGreaterThanOrEqual(0);
-  await page.goto("/dev-login");
-  const buttons = page.getByRole("button", { name: "Đăng nhập" });
-  await buttons.first().waitFor({ state: "visible" });
-  await buttons.nth(index).click();
-  await page.waitForURL("**/");
+function login(page: Page): Promise<void> {
+  return signIn(page, SUBJECT);
 }
 
 /** CSP violations and uncaught errors, collected for the whole test. */

@@ -19,7 +19,7 @@ COMPOSE := docker compose --env-file .env -f infra/compose/docker-compose.yml
 .PHONY: help bootstrap infra-up infra-down dev docker-up docker-down \
         db-migrate migrate lint format typecheck \
         test-unit coverage test-integration test-architecture test-contract test-hooks \
-        test-e2e test-web test-web-sales demo-reset test-all eval-smoke test-eval-smoke \
+        test-e2e test-web test-web-sales web-screens demo-reset test-all eval-smoke test-eval-smoke \
         generate-contracts new-context release-manifest release-manifest-check ci
 
 help: ## List available targets
@@ -124,6 +124,12 @@ test-web-sales: ## DW1 demo walk in a browser as each persona (RESETS the demo d
 	# API and web unless ones answer on E2E_API_URL / E2E_WEB_URL. The spec
 	# resets the demo tenants' Sales data first (dw_sales.testing.demo_reset).
 	pnpm --filter @dw/web exec playwright test e2e/sales-demo.spec.ts
+
+web-screens: ## Screenshots of every page for review, per persona and viewport (requires the stack)
+	# Asserts nothing: apps/web/e2e/screens.spec.ts captures every nav page into
+	# apps/web/screens/<project>/<persona>/. DW_SCREENS_AS picks the personas,
+	# and --project one viewport: make web-screens ARGS="--project wide-1440".
+	DW_SCREENS=1 pnpm --filter @dw/web exec playwright test e2e/screens.spec.ts $(ARGS)
 
 demo-reset: ## DW1 demo start state: clear Sales cases, seed personas, Keycloak logins (local only)
 	uv run python -m dw_sales.testing.demo_reset
