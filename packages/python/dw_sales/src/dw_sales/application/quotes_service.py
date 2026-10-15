@@ -20,7 +20,7 @@ from master data, never taken from the request (`QuotationService`).
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -31,7 +31,7 @@ from dw_kernel.errors import ConflictError, DomainError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesCatalogPort
 from dw_sales.application.quotation import QuotationService, ScreeningRow
 from dw_sales.application.runs import (
@@ -40,6 +40,7 @@ from dw_sales.application.runs import (
     subject_of,
     withdraw_if_left,
 )
+from dw_sales.application.source import require_value_served
 from dw_sales.application.support import (
     decided,
     person_event,
@@ -204,16 +205,20 @@ class QuoteCommands:
         """Sales types what the request lacked (`rfq_incomplete`), confirms
         the customer of a forwarded one (`customer_unknown`), or confirms one
         value a model read, typing it as it should be (`value_uncertain`,
-        ticket 29)."""
+        ticket 29) once the caller was served where it was read, at this
+        version (`require_value_served`, as an order's prepare)."""
         code, line_no = parse_finding_key(finding_key)
         uncertain = code is QuoteFindingCode.VALUE_UNCERTAIN
+        if uncertain and (field is None or value is None):
+            raise DomainError("the field and its value are named", details={"field": "field"})
+
+        async def opened(work: SalesUnitOfWork, case: QuoteCase) -> None:
+            assert field is not None
+            await require_value_served(work, context.principal_id, case, line_no, field)
 
         def step(case: QuoteCase, actor: QuoteActor, at: datetime) -> QuoteCase:
             if uncertain:
-                if field is None or value is None:
-                    raise DomainError(
-                        "the field and its value are named", details={"field": "field"}
-                    )
+                assert field is not None and value is not None
                 return case.confirm_value(line_no, field, value, by=actor.user_id, at=at)
             if code is QuoteFindingCode.CUSTOMER_UNKNOWN:
                 if customer_code is None:
@@ -241,6 +246,7 @@ class QuoteCommands:
             step,
             finding_key=finding_key,
             field=field if uncertain else None,
+            guard=opened if uncertain else None,
         )
 
     async def ycbg(
@@ -417,12 +423,15 @@ class QuoteCommands:
         finding_key: str | None = None,
         field: str | None = None,
         reason_code: str | None = None,
+        guard: Callable[[SalesUnitOfWork, QuoteCase], Awaitable[None]] | None = None,
     ) -> CaseChangeView:
         await self._require(context, case_id, SalesScopes.QUOTE_PREPARE)
         actor, now = quote_actor(context, self.gate), self.clock.now()
         async with self.uow(sales_scope(context)) as work:
             case = (await stored_quote(work, case_id)).case
             same_version(case_id, case.case_version, case_version)
+            if guard is not None:
+                await guard(work, case)
             after = decided(lambda: step(case, actor, now))
             event = person_event(
                 action,

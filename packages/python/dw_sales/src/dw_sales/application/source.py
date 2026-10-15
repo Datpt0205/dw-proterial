@@ -14,6 +14,12 @@ order's source and every page or sheet holding a flagged or hand-entered
 value (`require_served`). The checker needs their own record: the preparer's
 does not count for them.
 
+A quotation's value a model read (ticket 29) is confirmed under the same
+gate, per value (`require_value_served`): the page or sheet it was read
+from, or, for a value read from the mail, the message's text, which is
+served on its own (`quote_message_text`) and recorded as a region with no
+attachment (`MESSAGE_TEXT`), never inside the case view.
+
 A source view carries amounts, so the route also requires
 `sales.price.read`; the scopes are the presentation's to declare and this
 service's to check.
@@ -34,6 +40,7 @@ from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import (
+    MESSAGE_TEXT,
     SalesUnitOfWork,
     SalesUnitOfWorkFactory,
     ServedSource,
@@ -44,7 +51,7 @@ from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CorrectedBySales, OrderCase, PoDocument
-from dw_sales.domain.quotes import QuoteCase
+from dw_sales.domain.quotes import QuoteCase, QuoteFindingCode, Sourced
 
 _VIEW = ConfigDict(frozen=True)
 
@@ -127,6 +134,19 @@ class SourceView(BaseModel):
     sheets: list[str] = Field(default_factory=list)
     grid: SheetGrid | None = None
     anchors: list[LabelledAnchor]
+    served_at: datetime
+
+
+class MessageTextView(BaseModel):
+    """The message's newest part a model read a quotation from, as the case
+    holds it: what its values' ``chars`` index into. It may state a price."""
+
+    model_config = _VIEW
+
+    case_id: uuid.UUID
+    case_version: int
+    text: str
+    sha256: str
     served_at: datetime
 
 
@@ -275,7 +295,7 @@ async def require_served(work: SalesUnitOfWork, principal_id: uuid.UUID, case: O
     served = await work.served.served(principal_id, CaseKind.ORDER, case.case_id, case.case_version)
     missing = sorted(
         required_regions(case) - served,
-        key=lambda r: (r.attachment_id, r.page or 0, r.sheet or ""),
+        key=lambda r: (r.attachment_id or "", r.page or 0, r.sheet or ""),
     )
     if missing:
         raise ConflictError(
@@ -290,6 +310,66 @@ async def require_served(work: SalesUnitOfWork, principal_id: uuid.UUID, case: O
                 ],
             },
         )
+
+
+def value_region(case: QuoteCase, line_no: int | None, field: str) -> SourceRegion | None:
+    """Where a value a model read, still to be confirmed, was read: a page or
+    sheet of the request's file, or the message's text. None for anything
+    else, which the case refuses to confirm on its own, and for an anchor
+    that names no page or sheet (nothing can be served for it)."""
+    found = next(
+        (
+            f
+            for f in case.findings
+            if f.key == (QuoteFindingCode.VALUE_UNCERTAIN, line_no) and f.is_open
+        ),
+        None,
+    )
+    if found is None or field not in found.flagged:
+        return None
+    document = case.request.document
+    holder = (
+        document
+        if line_no is None
+        else next((item for item in document.items if item.line_no == line_no), None)
+    )
+    held = getattr(holder, field, None)
+    if not isinstance(held, Sourced):
+        return None
+    if held.source.attachment_id is None:
+        return MESSAGE_TEXT
+    return _region(held.source)
+
+
+async def require_value_served(
+    work: SalesUnitOfWork,
+    principal_id: uuid.UUID,
+    case: QuoteCase,
+    line_no: int | None,
+    field: str,
+) -> None:
+    """409 "chưa mở nguồn" until ``principal_id`` was served, for the case's
+    current version, the place the value was read (`value_region`)."""
+    region = value_region(case, line_no, field)
+    if region is None:
+        return
+    served = await work.served.served(principal_id, CaseKind.QUOTE, case.case_id, case.case_version)
+    if region in served:
+        return
+    raise ConflictError(
+        "chưa mở nguồn: mở nơi giá trị được đọc, ở phiên bản hồ sơ này, trước khi xác nhận",
+        details={
+            "case_id": str(case.case_id),
+            "case_version": case.case_version,
+            "rule": "source_not_served",
+            "missing": [
+                "message_text"
+                if region == MESSAGE_TEXT
+                else f"{region.attachment_id}:"
+                f"{'page ' + str(region.page) if region.page else region.sheet}"
+            ],
+        },
+    )
 
 
 # ------------------------------------------------------------------ service --
@@ -371,6 +451,42 @@ class SourceService:
         )
         return await self._serve(
             context, CaseKind.QUOTE, case_id, case.case_version, found, attachment_id, page, sheet
+        )
+
+    async def quote_message_text(
+        self, context: AccessContext, case_id: uuid.UUID
+    ) -> MessageTextView:
+        """The message's text a model read the request from, served and
+        recorded like a page of a file: what confirming a value read from it
+        requires (`require_value_served`)."""
+        await self._authorize(context, "sales_quote_case", case_id)
+        scope, now = sales_scope(context), self.clock.now()
+        async with self.uow(scope) as work:
+            case = (await stored_quote(work, case_id)).case
+            body = case.request.body
+            if body is None:
+                raise NotFoundError(
+                    "the request was not read from the message's text",
+                    details={"case_id": str(case_id)},
+                )
+            await work.served.record(
+                ServedSource(
+                    principal_id=context.principal_id,
+                    case_kind=CaseKind.QUOTE,
+                    case_id=case_id,
+                    case_version=case.case_version,
+                    attachment_id=None,
+                    attachment_sha256=body.sha256,
+                    served_at=now,
+                )
+            )
+            await work.commit()
+        return MessageTextView(
+            case_id=case_id,
+            case_version=case.case_version,
+            text=body.text,
+            sha256=body.sha256,
+            served_at=now,
         )
 
     async def _authorize(

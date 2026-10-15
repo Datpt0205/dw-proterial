@@ -58,7 +58,7 @@ from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.rules import RuleKey, RulesInForceView, RuleVersionView
 from dw_sales.application.services import SalesServices
-from dw_sales.application.source import SourceView
+from dw_sales.application.source import MessageTextView, SourceView
 from dw_sales.application.views import (
     BravoOrderView,
     CaseChangeView,
@@ -685,6 +685,14 @@ def build_router(
         return await svc.sources.quote_source(
             context, case_id, attachment_id, page=page, sheet=sheet
         )
+
+    @router.get(
+        "/quotes/{case_id}/message-text",
+        response_model=MessageTextView,
+        dependencies=[scopes(SalesScopes.CASE_READ, SalesScopes.PRICE_READ)],
+    )
+    async def quote_message_text(case_id: uuid.UUID, context: Ctx, svc: Svc) -> MessageTextView:
+        return await svc.sources.quote_message_text(context, case_id)
 
     @router.get("/quotes/{case_id}/artifacts", response_model=ArtifactListView)
     async def quote_artifacts(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ArtifactListView:
