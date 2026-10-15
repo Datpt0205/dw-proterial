@@ -63,10 +63,11 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import (
-    SERVICE_SUBJECT_PREFIX,
     MembershipAccess,
     context_from,
+    service_subject,
 )
+from dw_platform.application.provisioning import ServiceAccount
 from dw_platform.domain.audit import lane_audit_event
 from dw_sales.application.access import sales_scope
 from dw_sales.application.case_store import ProcessingJob, SalesUnitOfWorkFactory
@@ -91,6 +92,15 @@ RETRY_LONGEST: Final = timedelta(hours=6)
 
 Stopped = Literal["no_account", "wrong_scope", "paused", "not_permitted"]
 
+# DW1's service account: the role that gives it `sales.inbox.process` and
+# nothing else, and the account every tenant is created with (registered with
+# the platform's provisioning at the composition root; the demo seed writes
+# the same account for the seeded tenants).
+DW1_ROLE: Final = "sales_dw1"
+DW1_SERVICE_ACCOUNT: Final = ServiceAccount(
+    worker_id=DW1_WORKER_ID, display_name="DW1 (tài khoản dịch vụ)", role_keys=(DW1_ROLE,)
+)
+
 
 def dw1_subject(tenant_id: uuid.UUID) -> str:
     """DW1's service account in one tenant: the subject its platform user has.
@@ -99,7 +109,7 @@ def dw1_subject(tenant_id: uuid.UUID) -> str:
     across the platform). It is no sign-in name: no identity provider issues
     it, and the demo roster does not list it.
     """
-    return f"{SERVICE_SUBJECT_PREFIX}{DW1_WORKER_ID}|{tenant_id}"
+    return service_subject(DW1_SERVICE_ACCOUNT.worker_id, tenant_id)
 
 
 def retry_delay(failures: int) -> timedelta:

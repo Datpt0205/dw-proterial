@@ -43,7 +43,7 @@ from sqlalchemy.pool import NullPool
 
 from dw_platform.adapters.persistence import tables
 from dw_platform.testing.seed_env import seed_test_env, sid
-from dw_sales.application.inbox_lane import dw1_subject
+from dw_sales.application.inbox_lane import DW1_ROLE, DW1_SERVICE_ACCOUNT, dw1_subject
 
 # The catalogue keys this context owns (CONTEXT.md, "Roles and permission
 # sets"). A key with this prefix on a persona's membership is the seed's to set;
@@ -157,8 +157,7 @@ async def seed_sales_personas(database_url: str, personas: Sequence[Persona] = P
 # account for its mailbox lane. tenant-beta's PIC has an empty mailbox and no
 # lane, which is what the cross-tenant tests need of it.
 DW1_ACCOUNT_TENANTS: tuple[str, ...] = ("tenant-alpha",)
-DW1_ACCOUNT_NAME = "DW1 (tài khoản dịch vụ)"
-DW1_ROLE = "sales_dw1"
+DW1_ACCOUNT_NAME = DW1_SERVICE_ACCOUNT.display_name
 
 
 async def seed_dw1_accounts(

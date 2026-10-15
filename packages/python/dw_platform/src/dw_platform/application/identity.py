@@ -22,6 +22,12 @@ from dw_platform.application.ports import TokenVerifierPort, VerifiedIdentity
 SERVICE_SUBJECT_PREFIX: Final = "service|"
 
 
+def service_subject(worker_id: str, tenant_id: UUID) -> str:
+    """The subject of ``worker_id``'s service account in one tenant. The tenant
+    is part of it: a subject is unique across the platform."""
+    return f"{SERVICE_SUBJECT_PREFIX}{worker_id}|{tenant_id}"
+
+
 @dataclass(frozen=True)
 class ServiceSubjectsRefused:
     """`TokenVerifierPort` around the deployment's verifier: a token naming a

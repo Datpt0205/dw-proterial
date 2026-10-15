@@ -32,10 +32,16 @@ from sqlalchemy.pool import NullPool
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ports import SystemClock, Uuid4Generator
+from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.identity_provisioning import SqlIdentityBootstrap
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.provisioning_repo import SqlProvisioningRepository
-from dw_platform.application.provisioning import ProvisioningContext, ProvisioningService
+from dw_platform.application.identity import service_subject
+from dw_platform.application.provisioning import (
+    ProvisioningContext,
+    ProvisioningService,
+    ServiceAccount,
+)
 from dw_platform.testing.seed_env import seed_test_env
 
 pytestmark = pytest.mark.integration
@@ -53,7 +59,9 @@ _PLATFORM_GRANTS = (
     # Migration 5d9d89ffc716.
     "GRANT SELECT, INSERT, UPDATE ON platform.tenant_offboarding_requests TO dw_provisioner",
     "GRANT SELECT ON platform.roles TO dw_provisioner",
-    "GRANT SELECT ON platform.users TO dw_provisioner",
+    # INSERT as the baseline (0001_platform_grants.sql) grants it: a new
+    # tenant's service accounts are users the provisioner creates.
+    "GRANT SELECT, INSERT ON platform.users TO dw_provisioner",
     "GRANT SELECT ON platform.plans TO dw_provisioner",
 )
 
@@ -123,6 +131,52 @@ async def test_operator_creates_a_tenant_and_it_lists(provisioner_engine: AsyncE
     assert match and match[0].slug == slug
     assert match[0].plan_id == "professional"
     assert match[0].workspace_count == 1  # the default 'main' workspace
+
+
+async def test_a_new_tenant_has_its_service_accounts_and_no_sign_in_finds_them(
+    provisioner_engine: AsyncEngine, db_urls: DatabaseUrls
+) -> None:
+    """A context's worker gets its account with the tenant, in the main
+    workspace, holding exactly its roles; the lane's door resolves it and
+    sign-in never does (sales ticket 16)."""
+    account = ServiceAccount(worker_id="probe-worker", display_name="Probe", role_keys=("member",))
+    repo = SqlProvisioningRepository(async_sessionmaker(provisioner_engine, expire_on_commit=False))
+    service = ProvisioningService(
+        repo=repo, clock=SystemClock(), ids=Uuid4Generator(), service_accounts=[account]
+    )
+    slug = f"svc-{uuid.uuid4().hex[:8]}"
+
+    created = await service.create_tenant(_ctx(), slug=slug, name="Svc Co", plan_id="basic")
+
+    subject = service_subject("probe-worker", created.tenant_id)
+    async with provisioner_engine.connect() as conn:
+        (row,) = (
+            await conn.execute(
+                sa.select(
+                    tables.users.c.email,
+                    tables.users.c.display_name,
+                    tables.memberships.c.workspace_id,
+                    tables.memberships.c.role_keys,
+                    tables.memberships.c.permission_set_keys,
+                )
+                .join(tables.memberships, tables.memberships.c.user_id == tables.users.c.id)
+                .where(tables.users.c.subject == subject)
+            )
+        ).all()
+    assert (row.email, row.display_name) == (None, "Probe")
+    assert (row.workspace_id, row.role_keys, row.permission_set_keys) == (
+        created.workspace_id,
+        ["member"],
+        [],
+    )
+    app_engine = create_async_engine(db_urls.app, poolclass=NullPool)
+    try:
+        lookup = SqlMembershipLookup(async_sessionmaker(app_engine, expire_on_commit=False))
+        where = (created.tenant_id, created.workspace_id)
+        assert await lookup.find_service_access(subject, *where, frozenset({"x"})) is not None
+        assert await lookup.find_access(subject, "dw-dev", *where) is None
+    finally:
+        await app_engine.dispose()
 
 
 async def test_operator_renames_a_tenant(provisioner_engine: AsyncEngine) -> None:
