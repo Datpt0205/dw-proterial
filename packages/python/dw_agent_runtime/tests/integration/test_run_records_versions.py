@@ -79,4 +79,16 @@ async def test_the_row_cannot_disagree_with_the_worker(store: SqlWorkerRunStore)
         recorded.toolset_version,
         recorded.policy_version,
         recorded.memory_policy_version,
+        recorded.model_profile,
     )
+
+
+async def test_a_run_records_the_model_profile_its_worker_pins(store: SqlWorkerRunStore) -> None:
+    """Migration 271bdb87af91. A profile other than the demo worker's own, so a
+    write or a read stuck on the default cannot pass."""
+    worker = DEMO_WORKER.model_copy(update={"default_model_profile": "low_cost"})
+    context = make_run_context(thread_id=uuid.uuid4())
+
+    await store.create(context, worker=worker, input_payload={})
+
+    assert (await store.get(context, context.run_id)).model_profile == "low_cost"

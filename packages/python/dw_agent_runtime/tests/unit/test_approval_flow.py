@@ -147,6 +147,7 @@ class FakeRunStore:
             toolset_version="1.0.0",
             policy_version="1.0.0",
             memory_policy_version="1.0.0",
+            model_profile="balanced",
             autonomy_level=REQUESTER_AUTONOMY,
             approval_policy_version="1.0.0",
             input={},

@@ -545,32 +545,23 @@ async def test_another_tenants_global_document_cannot_be_cited(
     assert await _counts(session_factory) == before
 
 
-async def test_a_document_labelled_off_the_ladder_is_refused_not_ranked(
-    service: tuple[MemoryService, async_sessionmaker[AsyncSession]],
-    seeded: Seeded,
+async def test_a_document_labelled_off_the_ladder_never_exists_to_be_ranked(
     urls: RuntimeUrls,
 ) -> None:
-    """`knowledge.documents.classification` has no CHECK yet. Ranking `public`
-    would be a guess about who may recall the memory built on it."""
-    memory_service, session_factory = service
+    """Ranking `public` would be a guess about who may recall the memory built
+    on it. `knowledge.documents.classification` holds the ladder (CHECK,
+    0d8f03566652), so such a document is refused where it would be written;
+    `classification_rank` still raises for one behind it (dw_knowledge's
+    `test_knowledge_contracts.py`)."""
     engine = create_async_engine(urls.migrator, poolclass=NullPool)
     try:
-        async with engine.begin() as conn:
-            odd = await _seed_document(
-                conn, workspace=WORKSPACE, content=b"Nhan la.", classification="public"
-            )
+        with pytest.raises(sa.exc.IntegrityError, match="ck_documents_classification"):
+            async with engine.begin() as conn:
+                await _seed_document(
+                    conn, workspace=WORKSPACE, content=b"Nhan la.", classification="public"
+                )
     finally:
         await engine.dispose()
-    before = await _counts(session_factory)
-
-    with pytest.raises(DomainError, match="unknown classification"):
-        await memory_service.propose(
-            candidate(seeded, provenance_refs=corroborated(seeded, cite(odd))),
-            make_context(),
-            created_by_run_id=seeded.run_id,
-        )
-
-    assert await _counts(session_factory) == before
 
 
 # ------------------------------------------------------- policy, and audit --

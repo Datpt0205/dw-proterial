@@ -97,6 +97,7 @@ def _record(run_id: uuid.UUID, workspace: uuid.UUID) -> RunRecord:
         toolset_version=None,
         policy_version=None,
         memory_policy_version=None,
+        model_profile=None,
         autonomy_level=None,
         approval_policy_version=None,
         input={},
