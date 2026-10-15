@@ -301,7 +301,6 @@ function FindingCard({
             order={order}
             finding={finding}
             canEdit={offer !== null && !offer.reason}
-            canTypeAmounts={viewer.hasScope("sales.price.read")}
             onCorrected={onDecided}
           />
         ) : null}
