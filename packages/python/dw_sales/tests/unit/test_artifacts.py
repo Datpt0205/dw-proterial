@@ -104,6 +104,7 @@ from dw_sales.domain.quotes import (
     QuoteCapability,
     QuoteCase,
 )
+from dw_sales.evals.world import MemoryStore
 
 pytestmark = pytest.mark.unit
 
@@ -816,6 +817,24 @@ async def test_a_commit_that_went_through_keeps_its_objects() -> None:
 
     (record,) = world.artifacts.values()
     assert set(world.objects) == {record.object_key(SCOPE)}
+
+
+async def test_the_eval_worlds_log_records_one_file_of_a_kind_per_version() -> None:
+    """The eval world stands in for `sales.artifacts` and its unique key: a
+    second record of one kind and content type at one version is not
+    recorded; another content type, or the next version, is."""
+    first = _record(await _prepared_m01(), "bravo_upload")
+    again = first.model_copy(update={"artifact_id": uuid.uuid4()})
+    pdf = again.model_copy(update={"artifact_id": uuid.uuid4(), "content_type": "application/pdf"})
+    later = again.model_copy(
+        update={"artifact_id": uuid.uuid4(), "case_version": first.case_version + 1}
+    )
+    async with MemoryStore()(SCOPE) as work:
+        assert await work.artifacts.add(first)
+        assert not await work.artifacts.add(again)
+        assert await work.artifacts.get(again.artifact_id) is None
+        assert await work.artifacts.add(pdf)
+        assert await work.artifacts.add(later)
 
 
 async def test_an_unknown_kind_is_refused() -> None:
