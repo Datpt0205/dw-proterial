@@ -169,7 +169,7 @@ async def test_the_person_who_mapped_a_form_cannot_approve_it() -> None:
         await world.decide_layout(AN, layout_id, approve=True, comment="Tự duyệt")
     # The head who mapped one is its maker: `sales.` is strict.
     giang_maps = await world.services.layouts.propose(GIANG.context(), "M43", "M43-A1", _mapping())
-    with pytest.raises(ConflictError, match="separation of duties"):
+    with pytest.raises(ConflictError, match="tách nhiệm"):
         await world.decide_layout(GIANG, giang_maps.layout_id, approve=True, comment="Tự duyệt")
     stored = world.store.state(ALPHA).layouts
     assert {layout.status for layout in stored.values()} == {"proposed"}

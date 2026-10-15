@@ -3,12 +3,22 @@ import { SALES_REFUSALS } from "../app/sales/_meta/refusals";
 
 /**
  * Vietnamese for a refusal the API names by a code in its details, where the
- * server's own sentence is still English. A context owns its codes' words.
+ * server's own sentence is still English, by the context that owns the codes.
+ * A code belongs to one table only, and never to a refusal the platform
+ * raises: the platform words its own sentences, and a code in two tables would
+ * read whichever was merged last. `error-message.test.ts` holds both.
  */
-const REFUSALS: Readonly<Record<string, string>> = {
-  // PLUG-IN POINT: a bounded context adds its refusals here, as Sales does.
-  ...SALES_REFUSALS,
+export const REFUSAL_TABLES: Readonly<
+  Record<string, Readonly<Record<string, string>>>
+> = {
+  // PLUG-IN POINT: a bounded context adds its table here, as Sales does.
+  sales: SALES_REFUSALS,
 };
+
+const REFUSALS: Readonly<Record<string, string>> = Object.assign(
+  {},
+  ...Object.values(REFUSAL_TABLES),
+);
 
 /** The Vietnamese for a refusal's `details.rule`, else `details.reason`. */
 function refusalSentence(details: Record<string, unknown> | undefined) {

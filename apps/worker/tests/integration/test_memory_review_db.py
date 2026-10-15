@@ -409,7 +409,7 @@ async def test_the_person_whose_run_proposed_it_cannot_approve_it(
 ) -> None:
     approval_id = await hold(lane, tenancy)
 
-    with pytest.raises(ConflictError, match="separation of duties"):
+    with pytest.raises(ConflictError, match="tách nhiệm"):
         await decide(lane, approval_id, access(tenancy, principal=tenancy.proposer), approve=True)
 
     await _still_pending(lane, tenancy, approval_id)

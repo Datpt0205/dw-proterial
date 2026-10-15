@@ -23,6 +23,7 @@ from dw_sales.adapters.persistence import tables
 from dw_sales.application.case_store import CaseEvent
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.orders import MAKER_CHECKER_REFUSAL
 
 
 def scope_values(scope: SalesScope) -> dict[str, uuid.UUID]:
@@ -38,10 +39,14 @@ def constraint_of(error: IntegrityError) -> str | None:
 
 
 # The separation-of-duties constraints, by the rule a caller reports (spec
-# decision 7): the same `rule` the domain's own refusal names.
+# decision 7) and the sentence a person reads: the same `rule`, and for the
+# order the same sentence, the domain's own refusal names.
 _RULES = {
-    "ck_order_cases_checker_not_maker": "maker_checker",
-    "ck_quote_cases_approver_not_pricer": "approver_not_pricer",
+    "ck_order_cases_checker_not_maker": ("maker_checker", MAKER_CHECKER_REFUSAL),
+    "ck_quote_cases_approver_not_pricer": (
+        "approver_not_pricer",
+        "tách nhiệm: người định giá báo giá này không tự duyệt được",
+    ),
 }
 
 
@@ -54,12 +59,15 @@ async def refusals_named(session: AsyncSession, **details: object) -> AsyncItera
             yield
     except IntegrityError as exc:
         constraint = constraint_of(exc) or "unknown"
-        rule = _RULES.get(constraint)
+        named = _RULES.get(constraint)
+        if named is None:
+            raise ConflictError(
+                "the sales store refused the change",
+                details={**details, "constraint": constraint},
+            ) from None
+        rule, sentence = named
         raise ConflictError(
-            "separation of duties: a maker of the case cannot check it"
-            if rule
-            else "the sales store refused the change",
-            details={**details, "constraint": constraint, **({"rule": rule} if rule else {})},
+            sentence, details={**details, "constraint": constraint, "rule": rule}
         ) from None
 
 
