@@ -599,6 +599,29 @@ export class SalesApi {
       key,
     );
   }
+
+  // ---- a tenant's own rules (tickets 19, 38) ----------------------------------
+
+  /** What applies per key, and every version the tenant holds, documents included. */
+  rules() {
+    return this.get<"/api/v1/sales/rules">("/api/v1/sales/rules");
+  }
+
+  /**
+   * Proposes a version of one key. It opens a `sales.rules` platform
+   * approval, decided on `/approvals` by someone other than the proposer.
+   */
+  proposeRule(
+    ruleKey: SalesSchemas["RuleKey"],
+    body: Body<"/api/v1/sales/rules/{key}/versions">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/rules/{key}/versions">(
+      `/api/v1/sales/rules/${enc(ruleKey)}/versions`,
+      body,
+      key,
+    );
+  }
 }
 
 /** A page of a PDF, or a sheet of a workbook: what the source route opens. */
