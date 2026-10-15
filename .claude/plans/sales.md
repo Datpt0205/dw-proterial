@@ -58,6 +58,12 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       the worker image rebuild, the Đ-after-D collation on Postgres 16.15, a
       real Keycloak expiry, `make web-screens`. The walk is blocking since
       2026-10-15 (ticket 18: six consecutive green `sales-walk` jobs).
+    - **CI on `9bbce15` (pushed before Đạt's "no pushes").** Green but for
+      three: the artifacts' new unique keys did not lead with tenant and
+      workspace; a lane test read DW1's account through sign-in, which ticket
+      16 now refuses; the walk passed 13/13 and then setup-uv's cache prune
+      waited on the still-running worker. Fixed locally in `fac68c8`, not
+      pushed: they run again at the next push or on local Docker.
     - **Owed to Đạt.** The ClamAV bump's
       Actions setting (ticket 25); the `PUBLIC_REPO_DENYLIST` secret (ticket
       26); the Open items below dated 2026-10-15.
