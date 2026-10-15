@@ -155,7 +155,8 @@ class MessageTextView(BaseModel):
 
 def _region(anchor: SourceAnchor) -> SourceRegion | None:
     if anchor.attachment_id is None:
-        # The message's own text: the case shows it, no file is served.
+        # The message's own text is never a file region: a quote serves it
+        # by its own route (`quote_message_text`, `value_region`).
         return None
     if anchor.page is not None:
         return SourceRegion(anchor.attachment_id, anchor.page, None)
