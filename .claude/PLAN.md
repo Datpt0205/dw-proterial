@@ -48,8 +48,9 @@ own file and a row here.
   `Datpt0205/codebase`; 46 citations of ADR-001..003 point at documents this
   repo never had; renumbering duplicate ADRs (left as they are).
 - **Runtime:** a plan quota on direct model calls (the runner's only).
-- **Ops:** the `PUBLIC_REPO_DENYLIST` secret; allow Actions to open PRs
-  (ClamAV bump, ticket 25); restart WSL for 25/27's checks.
+- **Ops:** the `PUBLIC_REPO_DENYLIST` secret; the ClamAV bump is disabled
+  on GitHub and nothing is pushed until Đạt says so (ticket 25); restart WSL
+  for 25/27's checks.
 - **On premises:** Proterial's AD details for LDAP federation, and whether
   the plant keeps internet (M365, Exchange Online) or none.
 - **Sales:** Proterial's real data replaces the mock (`sales.md` Inputs
