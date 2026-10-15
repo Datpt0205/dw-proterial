@@ -1059,6 +1059,14 @@ class Corrected(NamedTuple):
     remapped: bool
 
 
+class BravoHistory(NamedTuple):
+    """The PO's history against Bravo, checked again on the values as entered:
+    the sales order it duplicates, or the one its revision is of."""
+
+    duplicate_of_so: str | None
+    base_so_no: str | None
+
+
 class Recheck(NamedTuple):
     """The checks run again on a case's corrected values, under its rules."""
 
@@ -1067,6 +1075,9 @@ class Recheck(NamedTuple):
     # raised them can raise: those of the case are replaced, the others kept.
     po_findings: tuple[Finding, ...]
     po_codes: frozenset[FindingCode]
+    # Set when the history check ran again (its codes are then in
+    # ``po_codes``): what the case names in Bravo, replaced.
+    bravo: BravoHistory | None = None
 
 
 # ---------------------------------------------------------------- revisions --
@@ -1887,6 +1898,14 @@ class OrderCase(BaseModel):
             f.line_no is not None or f.code not in recheck.po_codes for f in recheck.po_findings
         ):
             raise DomainError("the PO was checked again by other checks", details=details)
+        history: dict[str, object] = {}
+        if recheck.bravo is not None:
+            # Only a PO no other DW1 case holds was checked against Bravo alone.
+            if self.superseded or self.duplicate_of_case is not None:
+                raise DomainError(
+                    "the history of a PO another case holds is not checked again", details=details
+                )
+            history = recheck.bravo._asdict()
         remapped = {corrected.line_no} if corrected.remapped else set()
         raised = [
             f
@@ -1944,6 +1963,7 @@ class OrderCase(BaseModel):
             # Validated again: model_copy alone skips the invariants.
             findings=tuple(Finding.model_validate(dict(f)) for f in findings),
             header_corrections=corrected.header_corrections,
+            **history,
             # A revision's change list is what the PIC applies in Bravo: its
             # after is the value as entered, as the upload file's is. A case
             # never revised lists none.

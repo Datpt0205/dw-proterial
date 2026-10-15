@@ -28,14 +28,16 @@ from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import PriceView
 from dw_sales.application.order_intake import OrderIntake
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import SalesScope, Snapshot
 from dw_sales.application.views import order_case, order_finding
 from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.catalog import BravoOrder, BravoOrderLine
 from dw_sales.domain.order_checks import DOCUMENT_CHECK_CODES, check_document
 from dw_sales.domain.orders import (
     Accepted,
     Actor,
     AskCustomer,
+    BravoHistory,
     CorrectedBySales,
     DeliverySchedule,
     Finding,
@@ -414,6 +416,26 @@ def test_checks_run_on_other_values_or_lines_are_refused() -> None:
         )
 
 
+def test_the_history_of_a_po_another_case_holds_is_not_checked_against_bravo_alone() -> None:
+    """A duplicate of another DW1 case had its history decided by that case,
+    not by Bravo: a recheck that names Bravo's orders for it is refused."""
+    case = _case()
+    duplicate = _finding(FindingCode.DUPLICATE_PO, expected="a revision after 0", actual="0")
+    case = OrderCase.model_validate(
+        {
+            **dict(case),
+            "findings": (*case.findings, duplicate),
+            "duplicate_of_case": uuid.UUID(int=9),
+        }
+    )
+    correction = _typed("quantity", "6710")
+    same = _same_checks(case, KEY, correction, AN)
+
+    with pytest.raises(DomainError, match="another case holds"):
+        case.correct_value(KEY, correction, AN, same._replace(bravo=BravoHistory(None, None)))
+    assert case.correct_value(KEY, correction, AN, same).duplicate_of_case == uuid.UUID(int=9)
+
+
 def test_a_value_is_corrected_only_where_values_are_decided() -> None:
     case = _correct(_case(), "quantity", "6710")
     uploaded = (
@@ -451,22 +473,34 @@ class _NoCases:
         return ()
 
 
-def _intake() -> OrderIntake:
+class _HeldBy:
+    """`OrderCasesPort` with these cases for every PO."""
+
+    def __init__(self, *cases: OrderCase) -> None:
+        self.cases = cases
+
+    async def cases_for_po(
+        self, scope: SalesScope, customer_code: str, po_no: str
+    ) -> Sequence[OrderCase]:
+        return self.cases
+
+
+def _intake(catalog: MockSalesCatalog | None = None, cases: _HeldBy | None = None) -> OrderIntake:
     return OrderIntake(
-        catalog=MockSalesCatalog.load(SCOPE),
+        catalog=catalog or MockSalesCatalog.load(SCOPE),
         inbox=MockInbox.load(SCOPE),
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
         rules=PlatformOrderRules(load_order_rules(POLICIES / "sales_order_rules@1.5.0.yaml")),
-        cases=_NoCases(),
+        cases=cases or _NoCases(),
         new_case_id=uuid.uuid4,
     )
 
 
-async def _m27() -> OrderCase:
+async def _m27(intake: OrderIntake | None = None) -> OrderCase:
     message = await MockInbox.load(SCOPE).get_message(SCOPE, "M27")
     assert message is not None
-    outcome = await _intake().process(SCOPE, message)
+    outcome = await (intake or _intake()).process(SCOPE, message)
     assert outcome.case is not None
     return outcome.case.start_review()
 
@@ -561,6 +595,83 @@ async def test_a_corrected_price_is_hidden_from_who_may_not_read_prices() -> Non
     )
     finding = next(f for f in hidden["findings"] if f["key"] == KEY)
     assert finding["fields"] == sorted(case.line(2).po_line.flagged)
+
+
+class _KeyedByHand(MockSalesCatalog):
+    """The mock ERP, with M27's PO already keyed by hand in Bravo, line 2 at
+    the price the customer meant (0.0475) rather than the one read."""
+
+    async def orders_for_po(
+        self, scope: SalesScope, customer_code: str, po_no: str
+    ) -> Snapshot[Sequence[BravoOrder]]:
+        held = await super().orders_for_po(scope, customer_code, po_no)
+        if po_no != "CVG-261001-02":
+            return held
+        keyed = BravoOrder(
+            so_no="SO26-0999",
+            customer_code="CVG",
+            po_no=po_no,
+            po_revision=0,
+            order_date=date(2026, 10, 1),
+            currency="USD",
+            lines=tuple(
+                BravoOrderLine(
+                    line_no=number,
+                    prv_code=prv,
+                    quantity=Decimal(quantity),
+                    unit_price=Decimal(price),
+                    delivery_date=day,
+                )
+                for number, prv, quantity, price, day in (
+                    (1, "HW-1003", 6100, "0.0385", date(2026, 12, 14)),
+                    (2, "HW-1004", 6100, "0.0475", date(2026, 12, 14)),
+                    (3, "HW-1006", 6100, "0.059", date(2026, 12, 14)),
+                    (4, "HW-1003", 12200, "0.0385", date(2027, 1, 11)),
+                    (5, "CB-2004", 3000, "0.905", date(2027, 1, 11)),
+                    (6, "CB-2009", 5000, "1.18", date(2027, 1, 18)),
+                    (7, "HW-1004", 12200, "0.0465", date(2027, 2, 8)),
+                )
+            ),
+        )
+        return Snapshot((*held.data, keyed), held.as_of)
+
+
+async def test_a_correction_checks_the_pos_history_against_bravo_again() -> None:
+    """Ticket 15 left the history unchecked after a correction; the Bravo
+    comparison reads each line's price, so a typed price can make the PO a
+    duplicate of an order keyed by hand, or stop it being one."""
+    intake = _intake(_KeyedByHand.load(SCOPE))
+    case = await _m27(intake)
+    # As read, line 2's price differs from Bravo's: a revision of SO26-0999.
+    assert {f.code for f in case.findings} >= {FindingCode.REVISED_PO}
+    assert (case.base_so_no, case.duplicate_of_so) == ("SO26-0999", None)
+
+    duplicate = await intake.correct_value(SCOPE, case, KEY, "unit_price", "0.0475", AN, T0)
+
+    codes = {f.code for f in duplicate.findings}
+    assert FindingCode.DUPLICATE_PO in codes and FindingCode.REVISED_PO not in codes
+    assert (duplicate.duplicate_of_so, duplicate.base_so_no) == ("SO26-0999", None)
+
+    again = await intake.correct_value(SCOPE, duplicate, KEY, "unit_price", "0.0465", AN, T0)
+
+    codes = {f.code for f in again.findings}
+    assert FindingCode.REVISED_PO in codes and FindingCode.DUPLICATE_PO not in codes
+    assert (again.duplicate_of_so, again.base_so_no) == (None, "SO26-0999")
+
+
+async def test_the_history_is_not_checked_again_while_another_case_holds_the_po() -> None:
+    """Another DW1 case for the PO decided its history at intake (it would
+    have been joined), so Bravo alone cannot decide it again."""
+    catalog = _KeyedByHand.load(SCOPE)
+    case = await _m27(_intake(catalog))
+    other = case.model_copy(update={"case_id": uuid.UUID(int=7)})
+    intake = _intake(catalog, _HeldBy(case, other))
+
+    corrected = await intake.correct_value(SCOPE, case, KEY, "unit_price", "0.0475", AN, T0)
+
+    codes = {f.code for f in corrected.findings}
+    assert FindingCode.REVISED_PO in codes and FindingCode.DUPLICATE_PO not in codes
+    assert (corrected.duplicate_of_so, corrected.base_so_no) == (None, "SO26-0999")
 
 
 # ---------------------------------------- delivery schedules (ticket 21) --
