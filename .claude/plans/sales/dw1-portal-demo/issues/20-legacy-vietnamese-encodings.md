@@ -152,11 +152,30 @@ a PO as text and match attributes against garbage. Nothing detects it
 - Open: a legacy encoding outside the list (VPS, VietWare, BK HCM) is still
   read as text. The PostScript name a real TCVN3 PDF gives `.VnTime` was not
   measured (only generated fixtures were); a real file should be checked when
-  one arrives. Excel rich-text runs with their own font are not read
-  (openpyxl `rich_text=False`). The line grid does not draw a legacy-font
-  value as its own value state; the PO-level finding blocks instead. The
-  RFQ reader (`adapters/rfq_excel.py`) does not check fonts, because the
-  ticket names the PO readers only.
+  one arrives. The line grid does not draw a legacy-font value as its own
+  value state; the PO-level finding blocks instead.
+- 2026-10-15 (`bda82a6`): the Excel PO reader reads each rich-text run's
+  font from the "as written" workbook (`rich_text=True`), measured on
+  openpyxl 3.1.5 for inline and shared strings; `excel_po_reader@1.6.0`,
+  mutation-checked. Only generated fixtures were measured; a real customer
+  file with rich-text TCVN3 runs has not been checked.
+- 2026-10-15 (`c6f0d95`, `71b724f`), decided by the agent (Đạt: làm luôn):
+  an RFQ value in a TCVN3/VNI font makes the file unreadable
+  (`QuoteFileUnreadableError` naming the encoding and the cell), routed to a
+  person as `attachment_unreadable`; no case, no model, no migration
+  (`excel_rfq_reader@1.1.0`). Not `value_uncertain`: on a quote that would
+  let Sales type over legacy text. The Design reply reader refuses the same
+  way. The buyer cell is read as it stands on both the PO and the RFQ side:
+  it is only compared with master data by exact name, so garbled text
+  matches no customer. Đạt may revisit refusal versus a quote-side finding.
+  Still open: in read-only mode a run's font is seen only for shared strings
+  (as Excel writes them), so a legacy-font run in an inline string (what
+  openpyxl and other non-Excel generators write) is read as garbled text
+  into a case (`test_a_run_kept_inline_is_read_as_text_the_measured_limit`
+  pins it); legacy-font text in a non-form `.xlsx` RFQ reaches the model
+  through `text_parts`, flagged `model_read` but not detected. Owed on
+  Docker: the API integration suite (`test_sales_api_quotes.py` pins
+  `excel_rfq_reader@1.1.0`).
 - 2026-10-15: `legacy_text_anchor` was the first legacy value whatever its
   field, so a PO whose first legacy text was a price handed that price's
   anchor (a PDF anchor quotes the printed words) to a viewer without

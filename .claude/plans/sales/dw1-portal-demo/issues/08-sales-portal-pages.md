@@ -1,6 +1,6 @@
 # 08 — Sales portal pages
 
-Status: built (2026-10-05, committed in 88fb7b6); walked as an.nguyen, dieu.hoang, giang.do, khoa.lam, ha.vu, binh.tran, bao.pham. Owed to the API: role names and permission-set scopes in /auth/bootstrap (landed 2026-10-05), the attributes DW1 read per line for the candidate picker, WorkItem.due for orders
+Status: built (2026-10-05, committed in 88fb7b6); walked as an.nguyen, dieu.hoang, giang.do, khoa.lam, ha.vu, binh.tran, bao.pham. Owed to the API: role names and permission-set scopes in /auth/bootstrap (landed 2026-10-05), the attributes DW1 read per line for the candidate picker (landed 2026-10-15, `136893d`, `734dccd`), WorkItem.due for orders (landed 2026-10-15, `27e36bb`), server time (landed 2026-10-15, `7ed84b6`), Vietnamese refusals (landed 2026-10-15 for every refusal with a rule code, `4fa6799`, `04708ec`, `e9cd4bc`; see `sales.md` State)
 Blocked by: 05, 06, 07, 11
 
 ## What
@@ -116,3 +116,14 @@ default theme already in `@dw/ui`.
 - A Playwright walk-through follows the spec's "Done when" as the personas,
   with screenshots, including each persona's refusals. It never signs in as
   `platform_admin`.
+
+## Comments
+
+- 2026-10-15 (`136893d`, `734dccd`, `b5c0137`; migration `1a8fd934194f`).
+  `LineBasis.stated_attributes` is stamped at mapping and served as
+  `LineBasisView.stated_attributes`. A line checked before the migration
+  shows "Trong mô tả" as before. The reading rows are marked
+  "(DW1 đọc từ mô tả)". Owed on Docker: the round trip of `1a8fd934194f`;
+  `test_sales_schema.py::test_a_check_basis_holds_the_keys_of_line_basis`
+  (the key list now includes `stated_attributes`);
+  `test_sales_constraints.py`'s refusal of a bare-string `stated_attributes`.

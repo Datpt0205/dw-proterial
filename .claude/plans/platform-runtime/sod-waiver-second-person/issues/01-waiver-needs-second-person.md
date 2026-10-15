@@ -36,7 +36,18 @@ Area: platform-runtime
   `ck_roles_sod_memberships` thành 409 kèm danh sách như đường thu hồi.
 - Trang web vẫn dùng shadcn: chuyển sang antd thuộc ticket `web-ui/antd-shell`, không làm
   ở đây. (Đã chuyển 8/10/2026, `3d1f9a5`.)
-- Chưa phủ: đổi scope của chính một quy tắc (`platform.sod_rules`).
+- Chưa phủ: đổi scope của chính một quy tắc (`platform.sod_rules`). Closed
+  2026-10-15 (`b02ab0e`, `d11231d`, `48deb6a`; migration `d82a60870baf`,
+  constraint `ck_sod_rules_memberships`): changing a rule's key, sides or
+  `waivable`, or inserting a rule, is refused while a membership would break
+  it without a confirmed waiver of its own tenant; a write that changes no
+  side is not checked. Decided by the agent 2026-10-15 (Đạt: làm luôn):
+  INSERT is covered too. The triggers are created and dropped idempotently.
+  Owed on Docker: `test_sod_waivers.py` (the 3 new tests and the existing
+  ones under the INSERT trigger), `test_separation_of_duties.py`, dw_sales
+  `test_sales_roles.py`, the round trip, and the mutations (the trigger
+  never raises: the 3 new tests red; drop the `w.tenant_id = m.tenant_id`
+  join: the Beta step red; drop the `WHEN` clause: the same-value step red).
 
 ## Tiêu chí chấp nhận
 

@@ -152,7 +152,18 @@ Open:
 - The object is written before the record commits: a failed commit leaves an
   object under the tenant's prefix with no record (offboarding purges it;
   retention is ticket 12). Two simultaneous renders of one kind and version
-  both store; a unique index would need a migration.
+  both store; a unique index would need a migration. Resolved 2026-10-15
+  (`76c3792`, `0ce43fe`; migration `358bfa9b231f`): a kind is recorded once
+  per case version and content type
+  (`uq_artifacts_*_case_version_kind_content_type`), the losing concurrent
+  render answers the first one's files, and objects whose records did not
+  commit are removed (the store asked first; kept and logged when it cannot
+  say). An orphan remains only if the process dies between put and commit,
+  purged with the tenant prefix; retention stays ticket 12's. Decided by the
+  agent 2026-10-15 (Đạt: làm luôn): clean up, not write after commit. The
+  eval world's artifact log refuses the same duplicate. Owed on Docker: the
+  round trip of `358bfa9b231f` and
+  `test_sales_store.py::test_a_kind_is_recorded_once_per_version_even_by_two_renders_at_once`.
 - Rendering is not refused while DW1 is paused (the pause stops processing).
   Đạt to decide whether drafting is DW1's work for the stop control.
 - A person named on a case who has left the workspace refuses the render

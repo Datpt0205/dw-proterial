@@ -316,7 +316,19 @@ format.
 - 2026-10-13, decided by the agent (Đạt away): `buyer_as_written_span` is
   left out of the schema: nothing would read it (the customer is the sender
   domain's), and a forwarded request's buyer is deterministic work.
-- Open: confirming a value is not gated on the person having opened its
-  source on the server, as an order's prepare is (`require_served`): the
-  screen opens it, the server does not require it. A served-source record
-  for the mail text would be needed first.
+- ~~Open: confirming a value is not gated on the person having opened its
+  source on the server.~~ Resolved 2026-10-15 (`5c0e28d`, `27d50da`,
+  `6f6f360`, `aab02b9`; migration `546a6a81e58c`): confirming a model-read
+  value requires (`require_value_served`) that the caller was served, at the
+  current version, the page or sheet of its file or the mail text. The mail
+  text is served by `GET /quotes/{id}/message-text` and recorded in
+  `source_served` with `attachment_id` NULL; a 409 names it "nội dung thư".
+  Decided by the agent 2026-10-15 (Đạt: làm luôn): `message_text` left the
+  case view, so a served record means the text was sent. This amends the
+  2026-10-13 decision above: still price-gated, now on its own route.
+  ui-quality §7 now holds for quotes too. Owed on Docker: the round trip of
+  `546a6a81e58c`; `test_sales_api_model_steps.py` (409 before the text is
+  served, then 200; viewer 403, other tenant 404 on the route);
+  `test_sales_constraints.py::test_a_served_region_is_a_page_a_sheet_or_a_quotations_message_text`;
+  walk step 2b (An, who never opened the mail, gets 409; needs a model
+  server).

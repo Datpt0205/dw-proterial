@@ -164,12 +164,20 @@ identity fields; hiding a typed price; typist is a maker; line recheck;
 document recheck; remap; store of corrections; audit field; the CHECK's
 "no other key"; the web price-input guard.
 
-**Not done / owed.** The PO history check (duplicate, revision) is not run
-again on a header correction: its keys (PO number, revision) cannot change,
-but the Bravo comparison also reads the currency, so a currency correction
-that would make the PO a duplicate of a Bravo entry is not detected (edge,
-not in the mock set). No mock PO flags a header value, so the header path is
-covered by hand-built cases only. Re-checking reads today's master data, as
+**Not done / owed.** ~~The PO history check (duplicate, revision) is not
+run again on a header correction~~ (closed 2026-10-15, `70fdb91`; tests
+`91891cd`, `3f5f32d`): a correction now checks the PO's history against
+Bravo again, but only for a PO no other case holds and with no earlier
+revision of its own, and not once Bravo holds a later revision (`stale`); a
+revised case keeps the history it joined with. Owed on Docker: the
+correction tests in `test_sales_api_orders.py` (the new `cases_for_po` and
+`orders_for_po` reads, the `duplicate_of_so`/`base_so_no` update on
+Postgres). ~~No mock PO flags a header value~~: 2026-10-15 (`852aa35`,
+`798f409`), decided by the agent (Đạt: làm luôn): an eval-only fixture, M92
+(M01 under VLX-PO-2610-0031 with the PO date white on white), outside the
+mailbox (still 45), is eval case `sales-exc-header-correction` (grader
+`sales.header_corrected`, each of its four checks shown failing) in
+`sales@1.3.0` (13 cases). Re-checking reads today's master data, as
 `confirm_mapping` already did, and does not move `catalog_as_of`.
 
 ## Review (2026-10-12, adversarial reviewer)
@@ -207,16 +215,22 @@ says turns the new vitest red.
 
 Still open (not fixed here):
 
-- The web keeps its own list of amount fields (`AMOUNTS` in
-  `value-corrections.tsx`) to lock a price input. The server enforces it
-  (403), so a drift costs an error after an offered input, not a leak. Reading
-  `isHidden(row.read)` instead would remove the copy.
+- ~~The web keeps its own list of amount fields (`AMOUNTS` in
+  `value-corrections.tsx`) to lock a price input.~~ Closed 2026-10-15
+  (`f1a3e87`, `c6051c7`): the lock reads `isHidden` from the server's view
+  and `canTypeAmounts` is gone; a hidden total is locked like a hidden price.
 - Someone with `sales.order.prepare` but without `sales.price.read` could type
   quantities and watch `line_total_mismatch` appear and go (its values stay
   hidden) to narrow down an amount. No such persona exists (ADR 0003).
-- The lines table shows the entered quantity, price, amount and requested
-  date; a corrected item code, description or unit still shows as read there
-  (the finding card and every file show the entered one).
+- ~~The lines table shows a corrected item code, description or unit as
+  read.~~ Closed 2026-10-15 (`7b80e8d`, `e65f218`): it shows them as
+  entered, a split line's delivery quantities in the entered unit included.
+  Still open (follow-up): the candidate picker's "Đơn vị tính", MOQ and pack
+  rows compare `line.uom` and `line.quantity` as read, while DW1's checks run
+  on the entered line (`OrderLine.effective`), so after a unit or quantity
+  correction the picker can say lệch where the check passed; compare the
+  entered values, moving `enteredUom` from `lines.tsx` into a shared `_lib`
+  helper.
 - `line_total_mismatch` still takes a free-text `corrected_by_sales` that no
   file reads, the same shape as this ticket's bug; out of this ticket's scope.
 - The tenant isolation test (Beta's PIC gets 404) rests on the workspace-scoped

@@ -175,4 +175,36 @@ acceptance 4).
   run's transaction); runs record `channel="web"`; sign-in's
   `users.subject` match would resolve DW1's account if an identity provider
   ever issued that subject (nothing refuses `service|` subjects at sign-in);
-  no production tenant's account is provisioned.
+  no production tenant's account is provisioned. (All four closed
+  2026-10-15, next comment.)
+
+- 2026-10-15, the open items closed (agent, Đạt: "làm luôn"; batch merge):
+    - **Channel** (`e4cbb09`): the lane's runs carry `dw.channel=sales_inbox`,
+      derived from the job's asker (DW1's account), with no column on the
+      job. Recorded, not changed, decided by the agent: `configs/workers/sales.yaml`
+      declares `supported_channels: [web]` and nothing reads it
+      (failure-modes #1); enforcing it would stop the lane. Open: add
+      `sales_inbox` at DW1's next worker version bump (with
+      `DW1_WORKER_VERSION`, the harnesses and the manifest), or decide what
+      `supported_channels` means for a lane.
+    - **Sign-in** (`cf9744c`): a `service|` subject is refused at the
+      verifier wrapper and in `find_access`'s SQL; `find_service_access`
+      still resolves it.
+    - **Provisioning** (`ecce3d7`, `97a5bde`): a context registers a
+      `ServiceAccount` at the composition root; every new tenant gets it in
+      its main workspace, in the create-tenant transaction. The demo seed
+      writes the membership as provisioning does (department left at the
+      default). Tenants created before (only the seeded demo tenants) keep
+      the seed's account; no backfill path exists for an existing production
+      tenant. The `platform.tenant.create` audit row is still written after
+      that transaction (pre-existing). Open, for Đạt: offboarding never
+      deletes `platform.users`, so a purged tenant leaves DW1's per-tenant
+      user row behind (failure-modes #6); should the purge delete users
+      whose subject is `service_subject(*, <purged tenant>)`?
+    - **Lane audit row** (`5d65589`, `d5d8989`): written in the job's
+      transaction; a job a person queued gets no lane row.
+    - **Owed on Docker:** `test_service_access.py` (`find_access` by the
+      account's subject and by an identity mapped to it resolves nothing),
+      `test_provisioning.py::test_a_new_tenant_has_its_service_accounts_and_no_sign_in_finds_them`,
+      `apps/worker/tests/integration/test_sales_inbox_lane_db.py` (channel
+      and lane rows) and dw_sales `test_sales_inbox_lane.py`.

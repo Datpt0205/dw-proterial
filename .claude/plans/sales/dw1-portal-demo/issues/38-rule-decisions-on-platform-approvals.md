@@ -88,7 +88,23 @@ moves the eight rule keys onto the same path.
 
 ## Left open
 
-- A decider's reason is on the approval's decision, not on the version: the
-  rules list shows `comment` only for versions decided before this ticket.
-- No rules page in the web app yet: the head sees the key and the version on
-  `/approvals`, the document through `GET /sales/rules` only.
+- ~~A decider's reason is on the approval's decision, not on the
+  version.~~ Closed 2026-10-15 (`525a4ce`, `e05215a`, `a9fffad`): the reason
+  is stamped on the version at settlement, cut to 500 characters; the
+  approval keeps it whole. `SqlApprovalRepository.latest_decision` has a SQL
+  negative test (another tenant, another workspace, a member outside the
+  stamp read nothing). Owed on Docker: `test_sales_api_rules.py` (the head's
+  "Đồng ý" on 9.0.1 after settlement) and
+  `test_approval_visibility.py::test_a_decision_is_read_by_the_requests_audience_in_its_workspace_only`,
+  green, then red with `requests.c.workspace_id == workspace_id` removed.
+- ~~No rules page in the web app yet.~~ Closed 2026-10-15 (`bd666a7`,
+  `d91337e`): `/sales/rules` lists what applies per key and proposes a
+  version; it decides nothing and links each version to `/approvals/<id>`.
+  Decided by the agent 2026-10-15 (Đạt: làm luôn): the editor is a raw JSON
+  `TextArea`; it starts from the tenant's version in force (else the latest
+  company version; the hint says which) because the platform document is
+  not served; the nav entry and the page are gated by `sales.rules.propose`;
+  closing an edited drawer asks first. It is the ninth Sales nav item, which
+  makes the bar's overflow worse (`sales.md` Open, the Sales bar). The walk
+  proposes on it and decides on `/approvals` (step 11). Owed: a look at the
+  rendered page on the stack.

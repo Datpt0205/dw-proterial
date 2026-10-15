@@ -6,8 +6,15 @@ in the first product (Elmich supply chain, `feat/elmich-a-d-s1`) and
 upstreamed here without its product commands, on 2026-10-07. The slice ids
 are the product's, so its commit messages and this file name the same work.
 
-Decisions: ADR 0005 (the channel, the link, inbound commands), and the ADRs
-each slice below names.
+Decisions: `docs/adr/0005-zalo-bot-is-the-first-chat-channel.md` (the
+channel, the link, inbound commands), and the ADRs each slice below names.
+Two files share each of the numbers 0005, 0006, 0007, 0009, 0010 and 0011
+in `docs/adr`, so an ADR is
+cited by file name (`CLAUDE.md` Domain docs, 2026-10-15): 0006 is
+`0006-provider-neutral-channel-delivery-outbox.md`, 0007
+`0007-chat-decisions-after-a-portal-view.md`, 0008
+`0008-chat-updates-poll-locally-webhook-when-hosted.md`, 0009
+`0009-hosting-on-three-hostnames-behind-caddy.md`.
 
 | Slice | What it is                                                                                                                                                                                                                                                                               | Platform commit |
 | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
@@ -16,6 +23,7 @@ each slice below names.
 | Z2    | Notifications out through a linked chat: `channel_deliveries` queued by `deliver_notification`, the `channel_delivery` lane (SKIP LOCKED, link and membership re-checked, 1/2/4/8 min backoff, fail at 5), prune lane; ADR 0006                                                          | `8f1928f`       |
 | Z5    | Decide in a chat after a portal view: view receipts, single-use 6-digit HMAC codes (10 min, lock at 5), `decide(channel=, admission=)`, the `DUYỆT`/`KHÔNG` command builder for a context's runner, `/approvals/[id]` with "Lấy mã"; ADR 0007                                            | `3da0138`       |
 | Z3    | Webhook for hosted deployments: `POST /zalo/webhook` under `ZALO_UPDATES_MODE=webhook` (header secret, 64 KB, schema), `channel_inbound_updates` queue, `zalo_webhook_drain` lane, mode guard, https and 32-character secret required when deployed, `scripts/zalo_webhook.py`; ADR 0008 | `0231c1a`       |
+| —     | Channel delivery expiry: a delivery pending past `retention@1.7.0.yaml` `channel_deliveries.pending_expiry_days` (7) fails as `channel_unconfigured`, audited (`platform-runtime/channel-delivery-expiry/01`, ADR 0006 amendment)                                                        | `7a3e438`       |
 
 Upstreamed in the same pass, outside this area: the shared model-stack
 builder and `DailyAllowance` (`dc40a33`, ADR 0005 amendment), the Caddy host

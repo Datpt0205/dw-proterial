@@ -103,4 +103,7 @@ moving it to antd comes first; closed by the platform's `approval-inbox-link`,
 passed the guard and failed in the run (a one-request race) has no step that
 raises its cross-check again (closed by ticket 14); DW1 has no service
 principal (ticket 12; closed by ticket 16, role `sales_dw1`); processing's
-audit rows do not carry the run id (the decision rows do).
+audit rows do not carry the run id (the decision rows do; closed 2026-10-15,
+`79be08d`, `3ae0618`: `sales.message.processed` and the case rows written in
+the same step name the DW1 run that processed the message; owed on Docker:
+`test_sales_api_runtime.py::test_the_processed_audit_row_names_the_run_that_processed_the_message`).

@@ -192,7 +192,13 @@ Sales suites, 153 passed.
   expectations or the truth files they name (`purchase_orders.json`, the
   README): editing an expectation changes the grade without changing the
   release ref. A platform question (`release_manifest._eval_datasets`), not
-  fixed here.
+  fixed here. Closed 2026-10-15 (`5452299`, `26d97dd`): the manifest pins
+  the fixtures, expectations and truth files a dataset names as path values
+  (a MIME value is not followed). Still not pinned: data a grader opens by
+  its own code and names only in prose (the sales mailbox,
+  `adapters/mock/data/items.json`, `adapters/mock/legacy/scan_*.pdf`); the
+  dataset would have to name it as a path value. This is platform code that
+  also lives upstream (`Datpt0205/codebase`): upstreaming it is Đạt's call.
 - The approval panel does not refresh after the approver renders the
   document preview from "Tệp và thư nháp DW1 soạn" (`approval.tsx`
   `useLatestPdf` reads the file list on its own): it says "Chưa có bản xem

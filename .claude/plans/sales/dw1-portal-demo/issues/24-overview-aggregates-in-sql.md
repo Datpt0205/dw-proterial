@@ -79,6 +79,15 @@ volume (a year of POs) every page view reads the whole history.
   work-list step ever lands on one.
 - `CaseEventLogPort` and `SqlCaseEventLog` had the overview as their one
   reader and are removed with it.
+- 2026-10-15 (`27e36bb`, `ec22c7c`, `9b84bf7`; migration `2dd12f5b9c88`,
+  re-parented at merge on `1a8fd934194f`): the order branch is no longer a
+  constant no-due group. An order is due on the earliest requested date of
+  its `requested_date_short_lt` lines (decided by the agent, Đạt: làm luôn),
+  stored in `order_cases.due` and carried by the rebuilt
+  `ix_order_cases_open_work`. Owed on Docker: the round trip of
+  `2dd12f5b9c88` (its `min()` backfill never executed, nor tested with two
+  short lines) and `test_sales_overview_sql.py` (M06's order paged in group
+  `2026-09-30`; the generic plan still one Sort Key on the index).
 
 ### Review (2026-10-13)
 

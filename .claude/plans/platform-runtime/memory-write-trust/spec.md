@@ -86,7 +86,8 @@ Lát nền tảng, trung tính với sản phẩm. Nguồn: audit harness 6/10/2
 - Bằng chứng không phải chunk knowledge (bản ghi nghiệp vụ, tin nhắn): chờ context đầu
   tiên cần, qua một Protocol do consumer khai (audit, gap medium, real chưa xác nhận).
 - CHECK cho cột phân loại của `knowledge.*`: cùng dạng lỗi, ghi vào Open của area nếu
-  lát này xác nhận.
+  lát này xác nhận. Landed 2026-10-15 (`9591389`, `db31fa0`; migration
+  `0d8f03566652`), see issue 01 Comments.
 - Hàng đợi REVIEW: lát `memory-review-queue`.
 
 ## Quy tắc và kiểm soát

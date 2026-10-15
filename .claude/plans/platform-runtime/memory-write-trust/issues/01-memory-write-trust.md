@@ -119,7 +119,10 @@ và kiểm soát".
   hạn trước hay sau. Handler giờ ánh xạ `DomainError` từ `propose` sang
   `UndeliverableEventError` để lý do ghi lại đúng loại. Docstring của
   `UndeliverableEventError` hứa nhiều hơn những gì `_deliver` làm: ghi ở area Open,
-  không sửa ở đây.
+  không sửa ở đây. Closed 2026-10-15 by rewording (`d8d7f32`): an
+  undeliverable event keeps the bounded retry, reported as the event's
+  fault. A dead letter for undeliverable events, if ever wanted, is its own
+  ticket (a drain port method, SQL, an integration test).
 - **Retention**: gỡ `sensitive`, `ephemeral`, `legal_hold` (YAML `retention@1.5.0`, lý do
   ghi trong file). `dw_memory.service.RETENTION_CLASS` là đường gán duy nhất;
   `dw_worker.main.RETENTION_POLICY_PATH` là tệp đang ghim; test so bằng nhau hai chiều.
@@ -178,3 +181,16 @@ Thêm từ `reviewing-feature-security` (§1, §6): test chunk của tài liệu
 khác** bị từ chối (truy vấn evidence giờ join `knowledge.documents`, mà RLS của nó cho
 mọi tenant đọc tài liệu global; chunk vẫn chỉ RLS tenant), và test nhãn ngoài thang ở
 trên.
+
+**2026-10-15 (agent, Đạt: "làm luôn"):** the knowledge classification CHECKs
+landed (migration `0d8f03566652`, `9591389`) with a catalog test against
+`_CLEARANCE_ALLOWS`; `test_memory_service_db`'s off-ladder document test now
+asserts the database refusal. The ladder is also checked by
+`EnqueueIngestCommand` (a validator every enqueue passes, `db31fa0`); the
+upload route builds the command before staging, so an off-ladder value (and
+an empty title, which used to 500 after staging) is a 422 before
+`put_object`. The CHECK stays the last line. Owed on Docker:
+`test_classification_checks_db.py`, `test_memory_service_db.py`, the round
+trip, validating the CHECK against existing local or demo rows (the upgrade
+fails on an off-ladder row, by intent), and the mutation run (drop one
+constraint: its refusal case and the catalog test go red).

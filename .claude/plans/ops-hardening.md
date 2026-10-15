@@ -37,7 +37,8 @@ context. All five are done and on `main`. The full narrative is at
     - a Prometheus reader is always installed;
     - `dw-api` serves `/metrics` at the root;
     - `dw-worker` serves its own scrape port (9464);
-    - six alert rules, each against a metric the code really emits.
+    - seven alert rules, each against a metric the code really emits
+      (`DwNodeRepeatedlyFailing` since 2026-10-15).
 - **Object storage is SeaweedFS** (`chrislusf/seaweedfs:4.48`, `weed mini`;
   compose service `s3`), since 2026-09-29.
     - MinIO withdrew its images from Docker Hub and then quay.io. Đạt chose
@@ -62,7 +63,17 @@ context. All five are done and on `main`. The full narrative is at
   `test_export_holds_each_row_of_a_partitioned_table_once`. Platform code:
   owed upstream to `Datpt0205/codebase`.
 - **Offboarding loses in-app notifications unexported** (measured 2026-10-03,
-  `workspace-scope-offboarding/01` step 4). `platform.notifications` is read
+  `workspace-scope-offboarding/01` step 4; fixed 2026-10-15, `fb3fefb`,
+  migration `2e0354b50d10`: the notifications SELECT policy is tenant AND
+  (recipient OR `app.workspace_scope`), only SELECT widened; reusing
+  `app.workspace_scope` rather than a second lane setting was decided by the
+  agent, Đạt: làm luôn, and `CLAUDE.md` Tenancy records it. Owed on
+  Docker/CI: `test_offboarding.py`, `test_rls_coverage.py`,
+  `test_privileges.py`, `test_notifications.py`, the round trip, and the
+  mutation run: downgrade the revision, then
+  `test_export_holds_every_persons_notifications_of_the_tenant` and
+  `test_a_narrowed_table_lets_offboarding_read_every_row_of_the_tenant` go
+  red). `platform.notifications` is read
   only by its recipient (`app.user_id`), so the lane's export lists the table
   with 0 rows and its purge deletes none; the purge of `platform.workspaces`
   then CASCADEs them away. Measured on the test database: a tenant with one
@@ -87,8 +98,28 @@ context. All five are done and on `main`. The full narrative is at
   registers none. The header of `infra/prometheus/alerts.yml` still says no
   context registers one (checked 2026-10-15).
 - **`dw_node_failure_total` is declared and emitted by nothing**
-  (`dw_observability/metrics.py`), so no rule uses it.
+  (`dw_observability/metrics.py`), so no rule uses it. Closed 2026-10-15
+  (`fbe99ac`, `c732366`): the runner counts it once per failed run (not a
+  cancellation), with the worker-graph node read from LangGraph's exception
+  note (`test_node_failure_metric.py` pins it against the real library),
+  after the run is settled, so a raising sink cannot leave a run RUNNING;
+  alert `DwNodeRepeatedlyFailing` reads it. Owed: promtool on
+  `infra/prometheus/alerts.yml` (or the file loaded in the observability
+  profile), and the series on a live `/metrics` after a failing run.
 - **No Grafana dashboards.**
+- **Image pins (2026-10-15, `f14490f`).** Every third-party compose image is
+  exact-pinned (postgres `16.15-alpine`, valkey `8.1.10-alpine`, clickhouse
+  `24.8.14.39-alpine`, langfuse and langfuse-worker `3.225.11`, alpine
+  `3.20.10`), each the version its floating tag resolved to that day. Still
+  open: no check stops a floating tag coming back (a `verify_invariants.py`
+  check would be its own item); the Dockerfile bases float
+  (`python:3.12-slim-bookworm` in api/docgen/worker, `node:22-alpine` in
+  web). Owed on Docker: pull the pinned images and run trivy; re-measure the
+  Vietnamese collation (Đ after D, measured on 16.14) on 16.15, which CI has
+  run since 2026-09-21, ideally as an integration test. The worker image
+  drops docling and torch (`e0f8ed3`): rebuild, trivy, compose smoke owed.
+  ClamAV's pin moves by a weekly workflow (`clamav-bump.yml`, sales ticket
+  25), built, not yet run: Đạt allows Actions to create pull requests.
 - **Accepted CVEs.** About 39–44 HIGH/CRITICAL remain per image, mostly
   transitive Go stdlib/x code. Pins: `prometheus:v3.6.0` (a newer tag did not
   help), `postgres-exporter:v0.17.1`, `alertmanager:v0.28.1`. Re-scan on every

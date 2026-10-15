@@ -136,6 +136,14 @@ owed.
 - **What blocking means here:** `main` is not protected, so a red walk on
   `main` turns the commit and the run red; it does not refuse the push. A
   merge gate would be branch protection, which nobody has asked for.
+- **Count (2026-10-15):** by "What counts" the condition is met. Six
+  consecutive green `sales-walk` jobs since the red 38545009082 (`99cb905`:
+  the seed and the worker raced to settle the seed's `sales.rules` decision,
+  fixed in `9704778`): 38548179383, 38554501750, 38644832623, 38664301595,
+  38667353972, 38669232021. Only the last two ran on commits after the race
+  fix `9704778`. Flipped 2026-10-15 by the agent (the rule is met; waiting for a third post-fix green would be stricter than it):
+  `continue-on-error` is gone from `web-e2e.yml`, the commit naming
+  38664301595, 38667353972 and 38669232021.
 
 ## Still to prove (needs real CI runs)
 

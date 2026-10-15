@@ -44,3 +44,7 @@ nhập lại hay báo thiếu quyền.
 
 - Quyết định tạm (Đạt giao): header challenge cho mọi 401, không riêng `unauthenticated`
   (RFC 9110 §15.5.2 bắt buộc với 401).
+- 2026-10-15 (`47d4590`, `3774ffa`): a 401 on a request that carried a token
+  no longer navigates to `/`; it marks the session ended and the shell's
+  banner offers "Đăng nhập lại". A working token refresh
+  (`onAuthRefreshSuccess`) clears an end a 401 raised. See `web-ui.md`.

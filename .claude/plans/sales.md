@@ -8,6 +8,50 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-15, batch merge (agent; Đạt: "còn task nào và ticket nào còn
+  sót lại không làm luôn đi"): every open Sales, platform and CI item that
+  needed no decision of Đạt's was taken up in eight batches, each reviewed
+  and its findings fixed, and merged on `main` from `0bc1395` (`b2ea975` ..
+  `57d3c20`). Two are partial (`web-ui.md`: the support routes'
+  Idempotency-Key; offline on ten platform screens). Each ticket records its
+  part; choices the agents made read "decided by the agent 2026-10-15 (Đạt:
+  làm luôn)".
+    - **Sales.** Processing's audit rows name the run (10); a pause whose
+      notification fails still answers (05); My work offers `confirm` when
+      no cross-check is needed (14); a correction re-checks the PO's
+      history, the price lock reads the server, corrected values show as
+      entered (15); the mailbox lane's channel, `service|` subjects refused
+      at sign-in, DW1's account provisioned with every new tenant, its row
+      in the job's transaction (16); KPI keys a closed set (37); a version
+      shows its decider's reason, `/sales/rules` proposes (38); the inbox
+      links an intent's PO to its case (31); the picker compares with what
+      DW1 read (08); orders are due on their short-LT date (24); one file
+      of a kind per version, orphans removed (06); a model-read quote value
+      waits for its source to be served (29); rich-text fonts read, legacy
+      RFQ values refused (20); the live lane fails when nothing was read
+      (28); eval-only M92, `sales@1.3.0` (13 cases); refusals in
+      Vietnamese by rule code; the walk visits a reply, the layouts page, a
+      hand-off draft and a rule decision (step 11).
+    - **Platform, web and CI.** In `platform-runtime.md`, `web-ui.md`,
+      `ops-hardening.md` and `channels.md`. Migrations `1a8fd934194f`,
+      `2dd12f5b9c88`, `358bfa9b231f`, `546a6a81e58c`, `2e0354b50d10`,
+      `d82a60870baf`, `0d8f03566652`, `271bdb87af91`; re-chained at merge
+      (`2dd12f5b9c88` on `1a8fd934194f`, `2e0354b50d10` on
+      `546a6a81e58c`), one head `271bdb87af91`.
+    - **Verified (no Docker).** Contracts, API types and the release
+      manifest regenerated; ruff, mypy (637 files), lint-imports 12/12,
+      verify_invariants, manifest `--check`, web typecheck, lint, format,
+      416 vitest, eval smoke 9/9; the full unit suite green.
+    - **Owed to CI/Docker.** Every integration test the batches wrote, the
+      eight migrations' round trips and mutation runs (listed per ticket),
+      the walk with its new steps, promtool, the pinned images with trivy,
+      the worker image rebuild, the Đ-after-D collation on Postgres 16.15, a
+      real Keycloak expiry, `make web-screens`. The walk is blocking since
+      2026-10-15 (ticket 18: six consecutive green `sales-walk` jobs).
+    - **Owed to Đạt.** The bar layout (ticket 39); the ClamAV bump's
+      Actions setting (ticket 25); the `PUBLIC_REPO_DENYLIST` secret (ticket
+      26); the Open items below dated 2026-10-15.
+
 - 2026-10-15 (Đạt: "làm luôn mục 1–3, 5, 6"): `legacy_text_anchor` no
   longer hands a price's anchor to a viewer who may not see amounts (tickets
   20/22, `953086f`); the API integration price scan looks for VND prices
@@ -275,6 +319,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       that thinking needs spilled part of the model off the GPU, so a 16 GB
       card would be faster, not measured. The live lane reported [PASS]
       with every call unavailable: it grades the guards, not the bar.
+      Fixed 2026-10-15 (`b279cc2`, `6d837e0`): a live run fails when the
+      model read nothing; a case's bar is reported, not enforced.
     - **Live portal flow.** The whole mailbox in 57.5 s; M36 lines 1 and 3
       suggested correctly and confirmable.
     - **Shipped with it.** Migration `a9977d62e09b`, mock `M36` (the mailbox
@@ -395,7 +441,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       every push; the walk on `main` and nightly, blocking after three green
       runs in a row). Built and adversarially reviewed 2026-10-12, committed
       in `395dbf3`; the walk first passed on a runner on `e97042b`, and is
-      still non-blocking (`continue-on-error`).
+      blocking since 2026-10-15.
 - Tickets 01 and 07 committed 2026-10-03; 01 follow-up (fixtures M13–M32,
   mock Bravo history, open YCBG list, snapshot as_of, one SourceAnchor) and
   02/03 reworked to the amended spec, adversarially reviewed and committed
@@ -506,12 +552,28 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   green on 13 of 16 finished runs from `e97042b` to 2026-10-14); the
   platform specs and `make check-rerank` are still not run.
 - Next: 12 (needs-info since its triage on 2026-10-12).
-  Owed by the API to the pages: the PO-read attributes for the candidate
-  picker, order due dates in my-work, Vietnamese refusal messages, server
-  time. (Role names and permission-set scopes landed in `/auth/bootstrap`
-  on 2026-10-05; the web stopgap roster is gone.)
+  Owed by the API to the pages: delivered 2026-10-15 (refusals only where a
+  rule code exists). The PO-read attributes for the candidate picker
+  (`136893d`, `734dccd`; stamped at mapping, decided by the agent: the stamp
+  rule, four attributes only),
+  order due dates in my-work (`27e36bb`), server time (`7ed84b6`: the API
+  exposes `Date`, `lib/server-clock.ts` keeps the offset, `useNow` counts by
+  it), Vietnamese refusals (`4fa6799`, `04708ec`, `e9cd4bc`: decided by the
+  agent, the web words only codes whose server sentence is still English,
+  one table per context in `lib/error-message.ts` `REFUSAL_TABLES`;
+  separation-of-duties refusals and `stale_case_version` are worded by the
+  server (owed on Docker: `test_sales_store.py`,
+  `test_sales_constraints.py`)). Still English: refusals with no code (e.g.
+  "the approval is not one DW1 raised", "the layout is already decided", order/quote status
+  moves, the pricer refusal in `domain/quotes.py`); each needs a
+  `details.rule` and a table entry, or a Vietnamese server sentence. The
+  picker's khớp/lệch mirrors `StatedAttributes.fits` (a test holds it);
+  the lasting fix is the server sending each candidate's fit. (Role names
+  and permission-set scopes landed in `/auth/bootstrap` on 2026-10-05; the
+  web stopgap roster is gone.)
 - Offboarding export reads a partitioned parent and its partitions, so audit
-  and event rows come out twice (pre-existing; platform).
+  and event rows come out twice (pre-existing; platform; fixed 2026-10-15,
+  `953086f`).
 - Open from the 02/03 pass: routing reasons (complaint, sample request,
   delivery change) are keyword tables, against operator guideline §6,
   accepted by the spec for the demo; ticket 03 added the ledger to the mock
@@ -536,11 +598,21 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   returns `role_names` and the effective scopes (roles + permission sets,
   via `effective_scopes`); OpenAPI and TS types regenerated.
   Left different from the prototype: lists on white tables; no command
-  palette; the bar overflows "…" between 992 and ~1250px; customer names come
+  palette; the bar overflows "…" between 992 and ~1250px (re-measured
+  2026-10-15: from 992 to beyond 1600 px with nine pages; the bar needs
+  about 1580 px; Đạt's choice of layout, ticket 39); customer names come
   from the mock master data (a code it lacks shows the code).
 - Dev: realm redirect URIs allow port 3300 only; `.env` sets
   `DW_WEB_PORT=3300`, but `scripts/dev.sh` defaults to 3000, so a run
-  without the env var cannot sign in.
+  without the env var cannot sign in. Fixed 2026-10-15 (`9c08926`):
+  `dev.sh` reads the port from `DW_PUBLIC_WEB_URL`, and `.env.example`
+  uses port 3300. Still open: the local keycloak service gets no
+  `DW_PUBLIC_WEB_URL` (the realm falls back to 3300), and the Docker web
+  publishes `DW_WEB_HOST_PORT=3000`, so a Docker stack in dev auth at :3000
+  is refused by CORS and by Keycloak; follow-up: default
+  `DW_WEB_HOST_PORT` to 3300 and change CI's smoke curl (`ci.yml`,
+  `http://localhost:3000`) in the same change. A real `make dev` sign-in
+  is owed (Docker).
 
 ## Inputs owed by Proterial
 
@@ -582,6 +654,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 | 25, 27 | `8adbe08` | "DW xử lý" queued, every file read in the `reader` container; legacy Office and OCR (scanning `399920d`) |
 | 35, 36 | `8adbe08` | A split line confirmed per schedule; a tenant's own quote rules, pricing, copy and upload template       |
 | 37, 38 | `8894874` | Released rules versions stay readable; rule versions decided on platform approvals                       |
+| batch  | `57d3c20` | Eight batches merged 2026-10-15 (`b2ea975`..`57d3c20`): open items of 05-38 closed (State)               |
 
 ## Open
 
@@ -608,7 +681,12 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
       every authenticated request waited about 4 s on the cache and the
       order page never loaded within the walk's 60 s. The walk does not yet
       visit the layouts page or a reply or hand-off (unit, API and web tests
-      do).
+      do). Done 2026-10-15, owed one green run (`b478685`, `70df3ff`): it
+      visits a case reply (M42 on M04), the layouts page (M43), a hand-off
+      draft (2d, skipped without a model server) and a `sales.rules`
+      decision on `/approvals` (step 11, proposed on `/sales/rules`); it
+      runs only in CI or on a local stack. If a platform release ships
+      `sales_order_rules` 1.5.99, step 11's version must change.
 
 - From tickets 29 and 31 (2026-10-13, agent, Đạt away):
     - ADR 0005 with its addendum and the two bars (85% and 90%): accepted
@@ -616,7 +694,9 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
       interim value.
     - Confirming a model-read value is not gated on the server on the person
       having opened its source, as an order's prepare is (`require_served`):
-      the mail text has no served record yet.
+      the mail text has no served record yet. Resolved 2026-10-15
+      (`5c0e28d`, migration `546a6a81e58c`; ticket 29 Comments): gated per
+      value; the mail text has its own route and served record.
     - A request stating no currency goes to a person (`currency_missing`);
       a quantity whose unit is only in a column header is asked for. Both
       by design, both cost recall (ticket 29's misses).
@@ -626,6 +706,30 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
       cannot have passed in between.
     - The intent's resolved references are stamped and shown; ticket 33
       resolves its own PO from the mail, so they are still read by no route.
+      2026-10-15 (`0d8806b`): the inbox reads `order_case_id` (a link to
+      the case). No route reads them to decide: 32 keeps thread headers, 33
+      resolves its own PO; switching either to the intent's numbers is
+      Đạt's call.
+
+- From the batch merge (2026-10-15, agent, Đạt: làm luôn):
+    - The review page (`app/sales/review/page.tsx`) lists every
+      `uploaded_to_bravo` order as a cross-check, while My work (`867d330`)
+      offers `confirm` when `cross_check_required` is false: two screens
+      disagree about one order (ticket 14). `OrderCase.confirm()` accepts
+      `cross_check_required=None` at `uploaded_to_bravo`, `awaiting()`
+      treats None as needing one.
+    - `supported_channels: [web]` in `configs/workers/sales.yaml` is read
+      by nothing, while the lane's runs carry `sales_inbox` (ticket 16).
+    - Offboarding never deletes `platform.users`, so a purged tenant leaves
+      DW1's per-tenant user row (ticket 16); Đạt to decide whether the
+      purge deletes service subjects of that tenant.
+    - The candidate picker compares the unit and quantity as read, DW1's
+      checks the entered ones (ticket 15).
+    - A legacy-font run in an inline string, and legacy text reaching the
+      model through a non-form `.xlsx` RFQ, are not detected; refusal
+      versus a quote-side finding is Đạt's to revisit (ticket 20).
+    - The final eval bars are Đạt's; until then a live run fails only when
+      the model read nothing (ticket 28).
 
 - **Sales roles decide unstamped approvals** (owed, Đạt; from
   `ac31ff0f2087`). Every Sales approval type is stamped, and since the
@@ -643,7 +747,9 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 - From ticket 09 (2026-10-06): the approval panel needed a page reload after
   the approver rendered the preview (closed by ticket 13); whether submit should render the preview
   itself (Đạt); the release manifest pins an eval dataset file but not the
-  fixtures and truth files it names (platform); the mock README's
+  fixtures and truth files it names (platform; pinned since 2026-10-15,
+  `5452299`, except data a grader opens by its own code: ticket 09 Open);
+  the mock README's
   Design-reply dispositions assume Sales recorded the YCBG first (the eval
   states those steps); CI does not run `make test-web-sales` (ticket 18); the walk passed
   11/11 once, then a re-run timed out on Hà's overview ("Loading…", 60 s)
@@ -654,7 +760,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 - From ticket 06 (2026-10-05): a `value_uncertain` correction is one value
   for a whole region, so the upload file carries the values as read
   (closed by ticket 15, 2026-10-12); an object written before its record commits can be orphaned
-  (purged by offboarding); rendering is not stopped by the pause (Đạt to
+  (purged by offboarding; removed when its record does not commit since
+  2026-10-15, `76c3792`, ticket 06); rendering is not stopped by the pause (Đạt to
   decide); the web client types need `pnpm run generate:api-types` (current:
   CI's "Generated API client is current" check was green on `99cb905`).
 
@@ -671,7 +778,10 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
       text, and a download is saved under the name the file list gives, so
       the header need not be exposed.
     - A pause commits before its notification: a delivery failure answers
-      500 while DW1 is paused (a retry answers 409 "đã tạm dừng").
+      500 while DW1 is paused (a retry answers 409 "đã tạm dừng"). Closed
+      2026-10-15 (`55ade02`): the failure is logged and the pause answers
+      as one. A failed notification is not retried; if retries are wanted,
+      it moves to an outbox event.
     - The committed OpenAPI snapshot was stale on `main` before 05 (the
       contract test failed); 05 regenerated it, platform drift included.
 - Ticket 11 (2026-10-05): the full demo seed is
@@ -691,7 +801,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   sơ để quyết định", linking to the case page, instead of the decide
   buttons. An order whose decision passed the guard and then failed in its
   run had no step that raises its cross-check again: closed by ticket 14. Processing's
-  audit rows do not name the run (decision rows do). No mailbox consumer
+  audit rows do not name the run (decision rows do): closed 2026-10-15
+  (`79be08d`). No mailbox consumer
   exists, and one must start a DW1 run to be counted: ticket 16 (built
   2026-10-12; each message is its own counted run).
 - Public repo: the repo name and these plan files name Proterial and its

@@ -179,3 +179,10 @@ packages/python/dw_knowledge`: 344 passed (gồm `test_rls_coverage`,
 **Còn lại, không chặn:** chưa có eval prompt-injection riêng cho mỏ neo compaction
 (spec để eval cho worker đầu tiên bật compaction); thread không có dòng run nào chỉ
 được offboarding dọn.
+
+**2026-10-15:** the summary prompts are registry artifacts
+(`platform.context_summary@1.0.0`, `platform.context_summary_update@1.0.0`,
+`6eafd74`; `prompt-containment/01`). The transcript is now escaped twice
+inside the summary block (`&amp;lt;` is `<`), which both prompts state
+(`f1f50d9`); the token count per unit is taken on the escaped text
+(`7e6b6d5`). No Docker path exercises compaction; no worker enables it yet.
