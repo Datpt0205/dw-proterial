@@ -10,7 +10,10 @@ tất cả" and DW1's mailbox lane (ticket 16) all **enqueue**, and the worker's
 otherwise), the message in the mailbox (404) and not already on a case (409),
 then one row per message (`ProcessingJobsPort.enqueue`, idempotent per
 (workspace, message_id): a second press, or the lane and a person at once,
-queue it once), and an audit row naming who asked. "All" enqueues every
+queue it once), and an audit row naming who asked. A background lane that
+queues under its account (DW1's mailbox lane) names itself, and its own
+audit row (`lane_audit_event`) is written in the same transaction as the
+job: a queued job never lacks the row saying which lane queued it. "All" enqueues every
 message still without a disposition, oldest first: one job, and one DW1 run,
 per message, as the mailbox lane always counted it.
 
@@ -23,7 +26,9 @@ processes nothing, and a role cannot widen what the lane does. It then runs
 the same door the button used before (`Dw1Runs.process`, a DW1 run counted
 against the plan by `RunAllowancePort` where it begins), so the pause, the
 quota, the message's own idempotency key and every check of the processing
-apply exactly as they did. The job settles as:
+apply exactly as they did. The run is recorded under the channel its asker
+came by (`RunChannelPort`): the mailbox lane's own for a job the lane queued,
+"web" for a person's. The job settles as:
 
 - ``done``: the message has its disposition (the inbox shows it);
 - back to ``queued`` after an outage (`InfrastructureError`: the scanner or
@@ -70,6 +75,7 @@ from dw_sales.application.case_store import (
 )
 from dw_sales.application.inbox_service import ON_A_CASE, require_running
 from dw_sales.application.ports import InboxPort, SalesScope
+from dw_sales.application.runs import WEB_CHANNEL
 from dw_sales.application.views import MessageDispositionView, ProcessingJobView, processing_job
 from dw_sales.domain.dispositions import DispositionKind
 
@@ -103,7 +109,16 @@ class RequesterAccessPort(Protocol):
 class ProcessRunPort(Protocol):
     """Processing one message in a DW1 run of its own: `Dw1Runs.process`."""
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView: ...
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView: ...
+
+
+class RunChannelPort(Protocol):
+    """The channel a job's run is recorded under, by who asked for it:
+    `InboxLane.channel_of`, the lane being the one that knows its account."""
+
+    async def channel_of(self, scope: SalesScope, requested_by: uuid.UUID) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +153,9 @@ class ProcessingService:
     ids: IdGenerator
     inbox: InboxPort
 
-    async def enqueue(self, context: AccessContext, message_id: str) -> ProcessingJobView:
+    async def enqueue(
+        self, context: AccessContext, message_id: str, *, lane: str | None = None
+    ) -> ProcessingJobView:
         await self.gate.require(
             context,
             SalesScopes.INBOX_PROCESS,
@@ -156,7 +173,7 @@ class ProcessingService:
                     "the message is already on a case",
                     details={"message_id": message_id, "disposition": existing.kind.value},
                 )
-            job = await self._enqueue(work, context, message_id)
+            job = await self._enqueue(work, context, message_id, lane)
             await work.commit()
         return processing_job(job)
 
@@ -177,12 +194,34 @@ class ProcessingService:
         return [processing_job(job) for job in jobs]
 
     async def _enqueue(
-        self, work: SalesUnitOfWork, context: AccessContext, message_id: str
+        self,
+        work: SalesUnitOfWork,
+        context: AccessContext,
+        message_id: str,
+        lane: str | None = None,
     ) -> ProcessingJob:
         now = self.clock.now()
         job, queued = await work.jobs.enqueue(
             message_id, context.principal_id, now, self.ids.new_uuid()
         )
+        if queued and lane is not None:
+            await work.audit.append(
+                lane_audit_event(
+                    lane=lane,
+                    event_id=self.ids.new_uuid(),
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    action="sales.message.queued_by_lane",
+                    resource_type="sales_message",
+                    resource_id=message_id,
+                    occurred_at=now,
+                    details={
+                        "job_id": str(job.job_id),
+                        # The account the lane acted under: who asked, on the job.
+                        "account_id": str(context.principal_id),
+                    },
+                )
+            )
         if queued:
             await work.audit.append(
                 AuditEvent(
@@ -210,6 +249,8 @@ class ProcessingDrain:
     access: RequesterAccessPort
     clock: UtcClock
     ids: IdGenerator
+    # None where no mailbox lane runs: every job is then a person's.
+    channels: RunChannelPort | None = None
 
     async def drain_one(self) -> bool:
         """One due job processed and settled; False when none was due."""
@@ -232,8 +273,13 @@ class ProcessingDrain:
             # Never one workspace's mail under another's context.
             logger.error("sales_processing: a context for another workspace was refused")
             return Settlement.failed("not_permitted"), None
+        channel = (
+            WEB_CHANNEL
+            if self.channels is None
+            else await self.channels.channel_of(scope, job.requested_by)
+        )
         try:
-            view = await self.runs.process(context, job.message_id)
+            view = await self.runs.process(context, job.message_id, channel=channel)
         except QuotaExceededError:
             return Settlement.failed("quota"), None
         except (PermissionDeniedError, EntitlementDeniedError):

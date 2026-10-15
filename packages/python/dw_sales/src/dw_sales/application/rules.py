@@ -63,7 +63,12 @@ from dw_kernel.overlay import TenantOverlay
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
-from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus, decided_event_type
+from dw_platform.domain.approval import (
+    ApprovalDecision,
+    ApprovalRequest,
+    ApprovalStatus,
+    decided_event_type,
+)
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import (
@@ -646,7 +651,9 @@ class RuleSettlement:
     async def settle(self, approval_id: uuid.UUID, decider: AccessContext) -> RuleVersionView:
         """The decision on the version, as its decider. What was decided is
         read from the approval row, which the decision wrote, not from the
-        event; the reason given stays on the approval's decision. Idempotent:
+        event; the reason given is the decision's comment, stamped on the
+        version as the rules list shows it (cut to the version's 500
+        characters; the approval keeps it whole). Idempotent:
         a redelivery finds the version decided on this approval and writes
         nothing, and so does one that lost a race with another delivery (the
         worker and the demo seed both carry the same decision out). Raises the
@@ -704,6 +711,9 @@ class RuleSettlement:
                     details={"approval_id": str(approval_id)},
                 )
             approve = request.status is ApprovalStatus.APPROVED
+            decision = await work.approvals.latest_decision(
+                approval_id, workspace_id=decider.workspace_id, audience=audience
+            )
             superseding = None
             if approve:
                 _unreleased(self.book, proposed)
@@ -722,6 +732,7 @@ class RuleSettlement:
                     "status": "approved" if approve else "rejected",
                     "decided_by": decider.principal_id,
                     "decided_at": self.clock.now(),
+                    "comment": _reason(decision),
                 }
             )
             await work.rule_versions.decide(decided, superseding=superseding)
@@ -729,6 +740,20 @@ class RuleSettlement:
             await work.audit.append(_audit(self.ids, self.clock, decider, action, decided))
             await work.commit()
         return _view(decided)
+
+
+# What `rule_versions.comment` holds (`ck_rule_versions_comment`).
+_COMMENT_LIMIT: Final = 500
+
+
+def _reason(decision: ApprovalDecision | None) -> str | None:
+    """The decider's comment as the version keeps it: None for none."""
+    comment = "" if decision is None else decision.comment.strip()
+    if not comment:
+        return None
+    if len(comment) <= _COMMENT_LIMIT:
+        return comment
+    return comment[: _COMMENT_LIMIT - 1] + "…"
 
 
 def _audit(

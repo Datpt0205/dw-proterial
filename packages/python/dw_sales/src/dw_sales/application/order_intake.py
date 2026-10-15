@@ -89,6 +89,7 @@ from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import (
     CUSTOMER_CHECK_CODES,
     DOCUMENT_CHECK_CODES,
+    HISTORY_CHECK_CODES,
     IntakeCaps,
     MappedLine,
     OrderRules,
@@ -103,6 +104,7 @@ from dw_sales.domain.order_checks import (
 )
 from dw_sales.domain.orders import (
     Actor,
+    BravoHistory,
     Finding,
     FindingCode,
     LineCheck,
@@ -815,6 +817,14 @@ class OrderIntake:
         mapping; once the tenant's rules have moved on it is refused. What the
         case keeps and reopens is the case's to decide
         (`OrderCase.correct_value`).
+
+        The PO's history against Bravo is checked again too: the comparison
+        reads the currency and each line's code, quantity, price and date, so
+        a correction can make the PO a duplicate of an order keyed by hand,
+        or stop it being one. Only for a PO no other DW1 case holds, and no
+        earlier revision of this one: its history Bravo alone decided, as it
+        does again. Not when Bravo now holds a later revision, which intake
+        routes and no finding names.
         """
         details: dict[str, object] = {"case_id": str(case.case_id), "finding": finding_key}
         correction = decided(
@@ -846,7 +856,24 @@ class OrderIntake:
         if corrected.line_no is None:
             po_findings += await self._customer_findings(scope, case, header.po_date, rules)
             po_codes |= CUSTOMER_CHECK_CODES
-        recheck = Recheck(tuple(checks), tuple(po_findings), po_codes)
+        bravo: BravoHistory | None = None
+        others = [
+            other
+            for other in await self.cases.cases_for_po(scope, case.customer_code, header.po_no)
+            if other.case_id != case.case_id
+        ]
+        if not others and not case.superseded and case.duplicate_of_case is None:
+            codes = {line.line_no: line.mapping.checked_against for line in corrected.lines}
+            codes |= {c.line.line_no: c.line.mapping.checked_against for c in checks}
+            orders = await self.catalog.orders_for_po(scope, case.customer_code, header.po_no)
+            history = check_history(
+                case.customer_code, corrected.document, codes, (), orders.data, rules=rules
+            )
+            if not history.stale:
+                po_findings += [] if history.finding is None else [history.finding]
+                po_codes |= HISTORY_CHECK_CODES
+                bravo = BravoHistory(history.duplicate_of_so, history.base_so_no)
+        recheck = Recheck(tuple(checks), tuple(po_findings), po_codes, bravo)
         return decided(lambda: case.correct_value(finding_key, correction, actor, recheck))
 
     async def _read(

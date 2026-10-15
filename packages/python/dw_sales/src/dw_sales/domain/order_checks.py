@@ -596,6 +596,10 @@ def _quotation_basis(quotation: Quotation | None) -> QuotationBasis | None:
 DOCUMENT_CHECK_CODES: Final = frozenset(
     {FindingCode.LINE_TOTAL_MISMATCH, FindingCode.VALUE_UNCERTAIN, FindingCode.LEGACY_ENCODING}
 )
+# What `check_history` can raise.
+HISTORY_CHECK_CODES: Final = frozenset(
+    {FindingCode.DUPLICATE_PO, FindingCode.REVISED_PO, FindingCode.REVISION_WITHOUT_BASE}
+)
 CUSTOMER_CHECK_CODES: Final = frozenset(
     {
         FindingCode.CUSTOMER_UNKNOWN,

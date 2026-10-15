@@ -8,7 +8,7 @@ never share the ``dw_app`` pool.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -24,6 +24,7 @@ from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.adapters.persistence.support_grants import grant_from_row, support_staff_conflict
 from dw_platform.application.provisioning import (
+    NewServiceAccount,
     OffboardingStatus,
     OperatorRef,
     SupportRequestSummary,
@@ -149,6 +150,7 @@ class SqlProvisioningRepository:
         slug: str,
         name: str,
         plan_id: str,
+        service_accounts: Sequence[NewServiceAccount] = (),
     ) -> None:
         async with self.session_factory() as session, session.begin():
             await session.execute(
@@ -169,6 +171,23 @@ class SqlProvisioningRepository:
                     id=entitlement_id, tenant_id=tenant_id, plan_id=plan_id
                 )
             )
+            for account in service_accounts:
+                await session.execute(
+                    sa.insert(tables.users).values(
+                        id=account.user_id,
+                        subject=account.subject,
+                        display_name=account.display_name,
+                    )
+                )
+                await session.execute(
+                    sa.insert(tables.memberships).values(
+                        id=account.membership_id,
+                        tenant_id=tenant_id,
+                        workspace_id=workspace_id,
+                        user_id=account.user_id,
+                        role_keys=list(account.role_keys),
+                    )
+                )
 
     async def set_tenant_status(self, tenant_id: UUID, status: str) -> bool:
         async with self.session_factory() as session, session.begin():

@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.hierarchy_repo import SUBTREE_QUERY
 from dw_platform.application.authorization import PLATFORM_ADMIN_ROLE
-from dw_platform.application.identity import MembershipAccess
+from dw_platform.application.identity import SERVICE_SUBJECT_PREFIX, MembershipAccess
 
 _SET_LOOKUP_CONTEXT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
 _SET_LINKED_CONTEXT = text(
@@ -210,9 +210,17 @@ class SqlMembershipLookup:
                 )
             )
 
+            # A service account signs in nowhere: not by its own subject, and
+            # not through an identity someone mapped to it.
+            service_accounts = sa.select(tables.users.c.id).where(
+                tables.users.c.subject.startswith(SERVICE_SUBJECT_PREFIX, autoescape=True)
+            )
             return await _access_in(
                 session,
-                tables.memberships.c.user_id.in_(candidate_users),
+                sa.and_(
+                    tables.memberships.c.user_id.in_(candidate_users),
+                    tables.memberships.c.user_id.not_in(service_accounts),
+                ),
                 tenant_id,
                 workspace_id,
             )

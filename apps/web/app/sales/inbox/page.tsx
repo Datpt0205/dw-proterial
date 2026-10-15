@@ -581,7 +581,8 @@ function Inbox() {
 /**
  * What a model read the message as (ticket 31): the kind, beside the reason
  * code routed it with, and the numbers code resolved against the sender's
- * own records. A machine's reading, so it says so.
+ * own records, a PO with the one live order case DW1 holds for it as a link
+ * to that case. A machine's reading, so it says so.
  */
 function IntentTag({
   reading,
@@ -600,12 +601,20 @@ function IntentTag({
       {reading.references.length ? (
         <Typography.Text>
           Nhắc tới:{" "}
-          {reading.references
-            .map(
-              (r) =>
-                `${r.record === "purchase_order" ? "PO" : "YCBG/RFQ"} ${r.number}`,
-            )
-            .join(", ")}
+          {reading.references.map((r, i) => {
+            const name = `${r.record === "purchase_order" ? "PO" : "YCBG/RFQ"} ${r.number}`;
+            return (
+              <span key={`${r.record}:${r.number}`}>
+                {i ? ", " : null}
+                {/* The one live order case code resolved the PO to. */}
+                {r.order_case_id ? (
+                  <Link href={`/sales/orders/${r.order_case_id}`}>{name}</Link>
+                ) : (
+                  name
+                )}
+              </span>
+            );
+          })}
         </Typography.Text>
       ) : null}
     </span>

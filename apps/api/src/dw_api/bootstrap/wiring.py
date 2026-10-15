@@ -105,7 +105,7 @@ from dw_platform.application.membership_admin import (
 )
 from dw_platform.application.notifications import NotificationService
 from dw_platform.application.ports import WorkspaceDirectoryPort
-from dw_platform.application.provisioning import ProvisioningService
+from dw_platform.application.provisioning import ProvisioningService, ServiceAccount
 from dw_platform.application.separation_of_duties import SeparationOfDutiesService
 from dw_platform.application.support_access import (
     SupportAccessContextFactory,
@@ -286,6 +286,9 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     # ---- provisioning ----------------------------------------------------
     # A second engine as the provisioner role: writes across tenants but holds
     # no grant on any business schema. No URL → /platform is not mounted.
+    # Every new tenant gets the contexts' service accounts, which they add at
+    # the seam below.
+    service_accounts: list[ServiceAccount] = []
     if settings.provisioner_database_url:
         provisioner_engine = create_async_engine(
             settings.provisioner_database_url, pool_pre_ping=True
@@ -297,6 +300,7 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
             ),
             clock=clock,
             ids=ids,
+            service_accounts=service_accounts,
         )
 
     # ---- runs ------------------------------------------------------------
@@ -384,12 +388,14 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
         model=(wiring.seam.gateway if Provider.ONPREM in wiring.seam.gateway.adapters else None),
     )
     register_sales_support(container.support_catalog)
+    register_sales_service_accounts(service_accounts)
 
     # Build your context from `container.runtime` (the RuntimeSeam) and attach
     # its handlers, then mount its router in `main.create_app`. Nothing above
     # this line may import a business package. A context offering support
     # access registers here too: `container.support_catalog.register(...)`
-    # and `.register_resource(...)` (ADR 0024).
+    # and `.register_resource(...)` (ADR 0024). A context whose worker acts on
+    # its own adds its `ServiceAccount` to `service_accounts`.
 
     return container
 
@@ -517,6 +523,15 @@ def register_sales_support(catalog: SupportScopeCatalog) -> None:
     catalog.register(
         SUPPORT_SCOPE_SET_KEY, SUPPORT_SCOPE_SET_LABEL, SUPPORT_SCOPES, SUPPORT_RESOURCE_TYPES
     )
+
+
+def register_sales_service_accounts(accounts: list[ServiceAccount]) -> None:
+    """DW1's service account (ticket 16), part of the seam above: every tenant
+    the platform creates gets it in its main workspace, holding `sales_dw1`
+    and nothing else, so the mailbox lane has an account to act under."""
+    from dw_sales.application.inbox_lane import DW1_SERVICE_ACCOUNT
+
+    accounts.append(DW1_SERVICE_ACCOUNT)
 
 
 def build_engine(url: str, *, pool_pre_ping: bool = True) -> AsyncEngine:

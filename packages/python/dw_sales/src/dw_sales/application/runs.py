@@ -73,6 +73,9 @@ DECIDE_SCOPES: Final[Mapping[DecisionType, SalesScopes]] = MappingProxyType(
 # second person, and a written comment) with `strict_approval_prefixes`, and
 # registers this context's decision guard under it.
 APPROVAL_PREFIX: Final = "sales."
+# The channel a run is recorded under when a person started it from the
+# portal: every run but a mailbox lane's (`InboxLane.channel_of`).
+WEB_CHANNEL: Final = "web"
 
 # The words an approval carries as its reason: what is decided, no figure.
 _REASONS: Final[Mapping[DecisionType, str]] = MappingProxyType(
@@ -215,7 +218,12 @@ class Dw1RunsPort(Protocol):
     """
 
     async def run(
-        self, context: AccessContext, task: Dw1Task, *, subject_ref: str | None
+        self,
+        context: AccessContext,
+        task: Dw1Task,
+        *,
+        subject_ref: str | None,
+        channel: str = WEB_CHANNEL,
     ) -> None: ...
 
 
@@ -302,7 +310,9 @@ class Dw1Runs:
     runs: Dw1RunsPort
     decisions: PendingDecisionsPort
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str = WEB_CHANNEL
+    ) -> MessageDispositionView:
         await self.gate.require(
             context,
             SalesScopes.INBOX_PROCESS,
@@ -310,7 +320,10 @@ class Dw1Runs:
             resource_id=message_id,
         )
         await self.runs.run(
-            context, Dw1Task(kind="process", message_id=message_id), subject_ref=None
+            context,
+            Dw1Task(kind="process", message_id=message_id),
+            subject_ref=None,
+            channel=channel,
         )
         logged = await self._logged(context)
         # Absent: the model gave no usable answer and the message is young

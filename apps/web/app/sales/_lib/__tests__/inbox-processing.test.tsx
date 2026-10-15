@@ -210,3 +210,56 @@ describe('"DW xử lý" queues and the inbox shows where it stands (ticket 25)',
     SLOW,
   );
 });
+
+describe("what a model read is shown with the case code resolved it to (ticket 31)", () => {
+  it(
+    "links a PO reference to the order case DW1 holds for it, and no other",
+    async () => {
+      inbox = [
+        message("M40", {
+          disposition: {
+            kind: "routed_to_sales",
+            reason: "reply_to_case",
+            processed_at: "2026-10-01T03:05:00Z",
+            reading: {
+              prompt: "sales.message_intent@1.0.0",
+              model_profile: "local-small",
+              route: "onprem",
+              rules: "sales_order_rules@1.5.1",
+              outcome: "read",
+              kind: "reply_to_case",
+              language: "vi",
+              references: [
+                {
+                  number: "VLX-PO-2609-0118",
+                  record: "purchase_order",
+                  order_case_id: "c-9",
+                },
+                {
+                  number: "VLX-PO-2609-0119",
+                  record: "purchase_order",
+                  order_case_id: null,
+                },
+                { number: "YCBG-2609-030", record: "quote_request" },
+              ],
+            },
+          },
+        }),
+      ];
+      page();
+
+      const link = await screen.findByRole("link", {
+        name: "PO VLX-PO-2609-0118",
+      });
+      expect(link.getAttribute("href")).toBe("/sales/orders/c-9");
+      expect(
+        screen.queryByRole("link", { name: "PO VLX-PO-2609-0119" }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("link", { name: "YCBG/RFQ YCBG-2609-030" }),
+      ).toBeNull();
+      expect(screen.getByText(/YCBG\/RFQ YCBG-2609-030/)).toBeTruthy();
+    },
+    SLOW,
+  );
+});
