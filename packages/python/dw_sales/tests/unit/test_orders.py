@@ -48,7 +48,7 @@ from dw_sales.domain.orders import (
     rebase_changes,
     transition,
 )
-from dw_sales.domain.process import WIV_STEPS, Coverage, Procedure, step
+from dw_sales.domain.process import WIV_STEPS, Coverage, Procedure, StepId, step
 
 pytestmark = pytest.mark.unit
 
@@ -770,6 +770,8 @@ def test_the_suggested_date_and_a_pc_confirmation_name_who_and_when() -> None:
 def test_every_surveyed_step_is_mapped_once_and_names_real_order_states() -> None:
     ids = [s.step_id for s in WIV_STEPS]
     assert ids == [f"O{n}" for n in range(1, 12)] + [f"Q{n}" for n in range(1, 13)]
+    # The closed set a value kept per step is keyed by: the same ids.
+    assert [str(step_id) for step_id in StepId] == ids
     order_states = {
         state for s in WIV_STEPS if s.procedure is Procedure.ORDER_ENTRY for state in s.states
     }
