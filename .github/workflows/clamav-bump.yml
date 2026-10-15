@@ -3,7 +3,8 @@ name: ClamAV signatures bump
 # The malware scanner's signatures live inside its image (sales ticket 25):
 # `clamav/clamav:<version>` is rebuilt daily with the day's signatures, and
 # compose pins it by tag AND digest, so the pin ages unless someone moves it.
-# This job moves it: pull the pinned tag, stop if its digest has not changed,
+# This job moves it: pull the pinned tag, fail if the tag is no longer
+# rebuilt (built more than 8 days ago), stop if its digest has not changed,
 # otherwise scan the new image with trivy, pin it, start clamd on it and run
 # the EICAR suite (test_clamd.py), and only then open a pull request.
 #
@@ -55,6 +56,18 @@ jobs:
           new=${new#*@}
           echo "pinned $tag_ref@$old"
           echo "today  $tag_ref@$new"
+          # An unchanged digest must mean "rebuilt today, same image", never
+          # "this tag stopped being rebuilt" (a newer ClamAV version shipped):
+          # then every week would read as nothing to do while the signatures
+          # age, which is what this job exists to prevent.
+          created=$(docker image inspect --format '{{.Created}}' "$tag_ref")
+          built=$(date -u -d "$created" +%s)
+          age_days=$(( ($(date -u +%s) - built) / 86400 ))
+          echo "built  $created ($age_days day(s) ago)"
+          if [ "$age_days" -gt 8 ]; then
+            echo "::error::$tag_ref was built $age_days days ago: the tag is no longer rebuilt. Bump the ClamAV version in $COMPOSE_FILE_PATH."
+            exit 1
+          fi
           {
             echo "tag_ref=$tag_ref"
             echo "old=$old"
