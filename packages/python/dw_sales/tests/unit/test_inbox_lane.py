@@ -288,6 +288,19 @@ async def test_a_person_and_the_lane_queueing_one_message_queue_it_once() -> Non
     assert [actor for actor, m in _runs(world) if m == "M01"] == [AN.user_id]
 
 
+async def test_the_lane_meeting_a_job_a_person_queued_writes_no_lane_row() -> None:
+    """The lane's row explains a job the lane queued. Handed a person's job,
+    the lane queued nothing, and a row would claim the person's job as its own."""
+    world = _world()
+    processing = world.services.processing
+    queued = await processing.enqueue(AN.context(), "M01")
+
+    met = await processing.enqueue(AN.context(), "M01", lane=SALES_INBOX_LANE)
+
+    assert met.job_id == queued.job_id
+    assert not [e for e in world.audit() if e.action == QUEUED_BY_LANE]
+
+
 @dataclass
 class PersonFirst:
     """`Dw1Runs.process` with a person pressing on one message (in a run of
