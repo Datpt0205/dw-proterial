@@ -62,7 +62,11 @@ from dw_kernel.errors import (
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_platform.application.identity import MembershipAccess, context_from
+from dw_platform.application.identity import (
+    SERVICE_SUBJECT_PREFIX,
+    MembershipAccess,
+    context_from,
+)
 from dw_platform.domain.audit import lane_audit_event
 from dw_sales.application.access import sales_scope
 from dw_sales.application.case_store import ProcessingJob, SalesUnitOfWorkFactory
@@ -95,7 +99,7 @@ def dw1_subject(tenant_id: uuid.UUID) -> str:
     across the platform). It is no sign-in name: no identity provider issues
     it, and the demo roster does not list it.
     """
-    return f"service|{DW1_WORKER_ID}|{tenant_id}"
+    return f"{SERVICE_SUBJECT_PREFIX}{DW1_WORKER_ID}|{tenant_id}"
 
 
 def retry_delay(failures: int) -> timedelta:
