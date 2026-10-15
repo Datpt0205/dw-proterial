@@ -122,9 +122,9 @@ describe("a value DW1 was not sure of, corrected field by field (ticket 15)", ()
     expect(within(quantity).getByRole("textbox")).toBeTruthy();
   }, 20_000);
 
-  it("locks a price input by what the server hid, not by a list of its own", () => {
+  it("locks a hidden total like a hidden price", () => {
     // The server hides every amount the viewer may not read; a flagged total
-    // it hid is locked like a price, without the web naming the field.
+    // it hid is locked the same way a hidden unit price is.
     const { order: o } = flagged(false);
     render(
       <UiProvider>
