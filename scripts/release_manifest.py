@@ -1,7 +1,8 @@
 """Generate the immutable release manifest.
 
 Collects every versioned artifact — platform, API, workers, graphs, prompt
-bundles, toolsets, policies, knowledge index, eval datasets — plus the git SHA,
+bundles, toolsets, policies, knowledge index, eval datasets and the fixtures,
+expectations and truth files they name — plus the git SHA,
 canonicalizes to JSON and derives a content-addressed reference:
 
     sha256:<hex>          → contracts/release/manifest.json
@@ -20,9 +21,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -188,7 +191,15 @@ def _rubrics() -> list[dict[str, str]]:
     return rubrics
 
 
-def _eval_datasets() -> list[dict[str, str]]:
+def _eval_datasets() -> list[dict[str, Any]]:
+    """Each dataset, and every file its grade depends on, pinned by content.
+
+    The dataset file alone was not enough: its cases name fixtures and
+    expectations, and those name the truth they are graded against (a mock
+    data file, a README's table). Editing an expectation changed a grade
+    without moving the ref, so two releases grading the same model
+    differently looked identical here.
+    """
     datasets = []
     for path in sorted((REPO_ROOT / "evals" / "datasets").glob("*.json")):
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -197,9 +208,52 @@ def _eval_datasets() -> list[dict[str, str]]:
                 "dataset_id": raw["dataset_id"],
                 "version": raw["dataset_version"],
                 "checksum": _checksum(path),
+                "files": _named_files(raw, named_by=path),
             }
         )
     return datasets
+
+
+# A JSON string that is nothing but a repo-relative file path: segments of
+# word characters, dots, @ and dashes, joined by "/", ending in an extension.
+# Prose that mentions a path ("... (adapters/mock/data/items.json) ...") is not
+# one; a URL is not one either (the scheme's ":" is not a segment character).
+_REPO_PATH = re.compile(r"^[\w.@-]+(?:/[\w.@-]+)+\.[A-Za-z0-9]+$")
+
+
+def _path_values(node: Any) -> Iterator[str]:
+    if isinstance(node, dict):
+        for value in node.values():
+            yield from _path_values(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _path_values(value)
+    elif isinstance(node, str) and _REPO_PATH.match(node):
+        yield node
+
+
+def _named_files(document: Any, *, named_by: Path) -> list[dict[str, str]]:
+    """Every file `document` names, followed through the JSON files it names.
+
+    A named file that does not exist stops the manifest: a reference nothing
+    resolves is a grade nobody can reproduce, and pinning around it would hide
+    exactly that.
+    """
+    pinned: dict[str, str] = {}
+    root = REPO_ROOT.resolve()
+    pending = [(rel, named_by.name) for rel in _path_values(document)]
+    while pending:
+        rel, parent = pending.pop()
+        if rel in pinned:
+            continue
+        path = (root / rel).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise SystemExit(f"ERROR: {parent} names {rel}, which is not a file")
+        pinned[rel] = _checksum(path)
+        if path.suffix == ".json":
+            named = _path_values(json.loads(path.read_text(encoding="utf-8")))
+            pending.extend((child, rel) for child in named)
+    return [{"path": rel, "checksum": pinned[rel]} for rel in sorted(pinned)]
 
 
 def build_manifest() -> dict[str, Any]:
