@@ -353,6 +353,30 @@ def known_price_strings() -> frozenset[str]:
     all. A string that is also a printed quantity is left out, and so is
     anything shorter than five characters, so a quantity or a lead time never
     reads as a leak."""
+    prices, quantities = _known_prices()
+    found = {text for value in prices for text in _printed(value)}
+    for row in json.loads((MOCK_DATA / "lme.json").read_text(encoding="utf-8")):
+        found.add(str(row["usd_per_tonne"]))
+    found.add(DECIDED_PRICE)
+    found -= {text for value in quantities for text in _printed(value)}
+    return frozenset(s for s in found if len(s) >= 5)
+
+
+def known_price_values() -> frozenset[Decimal]:
+    """The same prices as numbers, for a JSON number: none that is also a
+    quantity, and a whole number only from 100,000 up (a VND amount), since a
+    smaller one could be a count or a requested quantity. Printed prices,
+    VND ones included, are matched as text by `known_price_strings`."""
+    prices, quantities = _known_prices()
+    values = {*prices, Decimal(DECIDED_PRICE)}
+    for row in json.loads((MOCK_DATA / "lme.json").read_text(encoding="utf-8")):
+        values.add(Decimal(str(row["usd_per_tonne"])))
+    return frozenset(v for v in values - quantities if v != v.to_integral_value() or v >= 100_000)
+
+
+def _known_prices() -> tuple[set[Decimal], set[Decimal]]:
+    """Every price in the mock data (unit prices, line amounts, PO totals)
+    and every quantity, as numbers."""
     prices: set[Decimal] = set()
     quantities: set[Decimal] = set()
     for row in json.loads((MOCK_DATA / "quotations.json").read_text(encoding="utf-8")):
@@ -374,12 +398,7 @@ def known_price_strings() -> frozenset[str]:
                 total += amount
         if total:
             prices.add(total)
-    found = {text for value in prices for text in _printed(value)}
-    for row in json.loads((MOCK_DATA / "lme.json").read_text(encoding="utf-8")):
-        found.add(str(row["usd_per_tonne"]))
-    found.add(DECIDED_PRICE)
-    found -= {text for value in quantities for text in _printed(value)}
-    return frozenset(s for s in found if len(s) >= 5)
+    return prices, quantities
 
 
 def _printed(value: Decimal) -> set[str]:
