@@ -153,6 +153,7 @@ class Setup:
             self.accounts,
             world.store.clock,
             Uuid4Generator(),
+            channels=self.lane,
         )
 
     async def tick(self, scope: SalesScope = ALPHA) -> LaneTick:
@@ -201,6 +202,21 @@ async def test_each_new_message_is_queued_oldest_first_and_run_once_as_the_accou
     assert set(_jobs(world).values()) == {("done", None)}
     # One run per message, in the mailbox's order, each as DW1's account.
     assert _runs(world) == [(DW1_ACCOUNT, message_id) for message_id in mailbox]
+
+
+async def test_the_lanes_runs_are_recorded_on_its_own_channel_and_a_persons_on_the_web() -> None:
+    """A trace tells a run the lane queued from one a person pressed for."""
+    world = _world()
+    await world.services.processing.enqueue(AN.context(), "M01")
+
+    await Setup(world).tick()
+
+    channels = {
+        run.input["task"]["message_id"]: run.context.channel
+        for run in world.runtime.runs.rows.values()
+    }
+    assert channels.pop("M01") == "web"
+    assert channels and set(channels.values()) == {SALES_INBOX_LANE}
 
 
 async def test_a_second_tick_queues_nothing_and_spends_no_run() -> None:
@@ -265,10 +281,12 @@ class PersonFirst:
     world: World
     message_id: str
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView:
         if message_id == self.message_id:
             await self.world.services.dw1.process(AN.context(), message_id)
-        return await self.world.services.dw1.process(context, message_id)
+        return await self.world.services.dw1.process(context, message_id, channel=channel)
 
 
 async def test_a_run_that_meets_a_message_processed_meanwhile_fails_and_keeps_one_case() -> None:
@@ -413,8 +431,10 @@ class PausedAfter:
     world: World
     after: str
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
-        view = await self.world.services.dw1.process(context, message_id)
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView:
+        view = await self.world.services.dw1.process(context, message_id, channel=channel)
         if message_id == self.after:
             await self.world.services.worker.pause(AN.context(), None)
         return view
@@ -520,11 +540,13 @@ class FailsOn:
     failing: bool = True
     calls: list[str] = field(default_factory=list)
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView:
         self.calls.append(message_id)
         if message_id == self.message_id and self.failing:
             raise RuntimeError("the attachment reader crashed")
-        return await self.world.services.dw1.process(context, message_id)
+        return await self.world.services.dw1.process(context, message_id, channel=channel)
 
 
 async def test_a_failing_message_does_not_hold_up_the_rest_nor_spend_a_run_every_tick() -> None:

@@ -32,6 +32,11 @@ again when it runs it.
 4. The plan's runs for the day are counted where each run begins, by the
    drain: a job over them fails (``quota``) and waits out its delay here.
 
+**Its runs say so.** The drain records a job's run under the channel
+`channel_of` names: the lane's own name for a job DW1's account asked for,
+which only this lane queues as (no sign-in resolves a `service|` subject),
+so a trace tells a lane's run from a click.
+
 **It audits as itself.** For each message it queued, one `lane_audit_event`
 from `system_actor("sales_inbox")`, naming the account it acted under; the
 queueing's own audit row names the account, never a person.
@@ -63,6 +68,7 @@ from dw_sales.application.access import sales_scope
 from dw_sales.application.case_store import ProcessingJob, SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.processing import PROCESSING_CEILING
+from dw_sales.application.runs import WEB_CHANNEL
 from dw_sales.application.support import DW1_WORKER_ID
 from dw_sales.application.views import ProcessingJobView
 
@@ -175,6 +181,17 @@ class InboxLane:
             await self._audit(context, message_id, job)
             queued.append(message_id)
         return LaneTick(tuple(queued))
+
+    async def channel_of(self, scope: SalesScope, requested_by: uuid.UUID) -> str:
+        """`RunChannelPort`: this lane's name for a job DW1's account asked
+        for in ``scope``, "web" for anyone else's."""
+        tenant_id, workspace_id = scope.tenant_id.value, scope.workspace_id.value
+        account = await self.access.find_service_access(
+            dw1_subject(tenant_id), tenant_id, workspace_id, LANE_CEILING
+        )
+        if account is not None and account.principal_id == requested_by:
+            return SALES_INBOX_LANE
+        return WEB_CHANNEL
 
     # ------------------------------------------------------------- helpers --
 

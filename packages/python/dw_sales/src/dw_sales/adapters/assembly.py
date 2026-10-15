@@ -255,7 +255,9 @@ def build_dw1(
     if requester_access is None:
         return Dw1Mount(services=assembly.services, lane=lane)
     queue = SqlProcessingQueue(session_factory)
-    drain = ProcessingDrain(queue, uow, assembly.services.dw1, requester_access, clock, ids)
+    drain = ProcessingDrain(
+        queue, uow, assembly.services.dw1, requester_access, clock, ids, channels=lane
+    )
     return Dw1Mount(services=assembly.services, lane=lane, drain=drain, queue=queue)
 
 
