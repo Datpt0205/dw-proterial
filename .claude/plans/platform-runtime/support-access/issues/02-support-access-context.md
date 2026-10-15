@@ -195,7 +195,8 @@ FROM PUBLIC`, `dw_app` EXECUTE. `GET /support/my-grants` (chỉ nhân viên hỗ
   kể cả DEFAULT; `downgrade -1` rồi `upgrade head` chạy sạch. Kiểm scope và
   lọc workspace của route không đổi (ticket 02 của
   `approval-audit-and-workspace`). Web trang `/audit` chưa dùng hai trường mới
-  (zod `auditEventSchema` bỏ qua trường lạ): việc của web.
+  (zod `auditEventSchema` bỏ qua trường lạ): việc của web. (Xong 15/10/2026,
+  `de7e91f`, xem Comments cuối.)
 - **Test, mutation:** integration
   `test_sa10_the_customer_reads_a_grants_trail_and_who_acted_under_it`
   (quyền thật, ba `support.access`; nhân viên ghi mã quyền khác → `user`; mã
@@ -238,3 +239,11 @@ FROM PUBLIC`, `dw_app` EXECUTE. `GET /support/my-grants` (chỉ nhân viên hỗ
   `packages/python/dw_platform/tests/integration/test_support_staff_access.py`
   (một test). `test_support_staff_access.py`, `test_rls_coverage.py`,
   `test_privileges.py`: 31 passed.
+- 2026-10-15 (agent, Đạt: "làm luôn"): step 10's web part is done
+  (`de7e91f`). `/audit` shows `actor_display_name` and `actor_kind`, marks
+  the support team, links a grant's rows to `/audit?support_grant_id=`, and
+  a zod mirror test fails when `auditEventSchema` drifts from
+  `AuditEventView`. The MFA path through `auth_methods(amr)` is now
+  unit-tested at `KeycloakTokenVerifier` (`3413901`). Still open: the realm
+  change applied by hand to a running Keycloak; conflict of interest at
+  assignment. Optional: a browser look at `/audit` after a support session.

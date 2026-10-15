@@ -115,11 +115,49 @@ the theme, the shell and the shared composites, not primitive wrappers.
 - Still open from the 2026-09-30 ui-quality gaps:
     - (closed 2026-10-08 by the platform merge: Vietnamese platform
       screens, no sonner);
-    - the API client sends no `Idempotency-Key`;
-    - no screenshot script (viewport projects and the Vietnam `timezoneId`
-      came with the platform merge, for the platform pages spec);
-    - no offline banner or session-expiry warning (the header's workspace
-      switcher, bell and account menu are antd since 2026-10-05).
+    - the API client sends no `Idempotency-Key`: partly closed 2026-10-15
+      (`e44b897`): `/approvals` decide, the admin members grant/role/revoke
+      and every Sales mutation send a key from `lib/idempotency.ts`. Still
+      open: the `/platform` support-staff and support-requests assign
+      routes do not read the header (no `RequireIdempotency`); add it with
+      integration tests (Docker), then send keys from the support console.
+      The customer `/support/grants*` routes have no web screen. Owed: a
+      browser check that `/approvals` decides with a key;
+    - no screenshot script: closed 2026-10-15 (`70696ca`):
+      `make web-screens` (`e2e/screens.spec.ts`, `DW_SCREENS=1`) captures every
+      nav page per persona and project into `apps/web/screens/`; owed a run
+      on the stack and a look. Playwright projects since `aa5001a`:
+      320/991/992/1440 px and `tz-los-angeles` (ui-quality §12's
+      non-Vietnam timezone), light only;
+    - no offline banner or session-expiry warning: partly closed 2026-10-15.
+      Offline (`6e2bf35`): the `@dw/ui` shell detects it once (`useOnline`,
+      `OFFLINE_REASON`) and draws the banner; `/approvals` and every Sales
+      step (`GuardedButton`, `useAction`) disable or refuse while offline.
+      Still open: admin hierarchy, separation-of-duties, settings,
+      workspaces, members-manager, `/knowledge`, `/platform`, the support
+      console, `/support` and the feedback dialog, each to be wired as
+      `/approvals` is, with a vitest that goes red without it. Session
+      expiry (`47d4590`, `3774ffa`, WCAG 2.2.1): the banner warns 5 minutes
+      ahead and offers "Tiếp tục phiên", then "Đăng nhập lại" once ended;
+      the page never navigates by itself (a 401 no longer redirects to
+      `/`); a working token refresh clears an end a 401 raised. Owed: a
+      real SSO expiry on the Keycloak stack (Playwright uses dev auth), and
+      a browser check with the network off on a Sales case and `/approvals`.
+- 2026-10-15, also (agent, Đạt: làm luôn): relative deadlines count against
+  the server's clock (`7ed84b6`, `11d6336`): the API exposes `Date` through
+  CORS, `lib/server-clock.ts` keeps the offset and `useNow` counts by it on
+  every tick (ui-quality §8 holds for every `useNow` user); owed: confirm on
+  the stack that `Access-Control-Expose-Headers` carries `Date` and the
+  Caddy overlay keeps it. `/audit` names the actor the server names, marks
+  the support team and reads one grant's trail (`de7e91f`). A refusal
+  message has one owner per context (`REFUSAL_TABLES` in
+  `lib/error-message.ts`; a vitest fails on a code in two tables or one
+  the platform raises).
+- The Sales bar overflows "…" from 992 to beyond 1600 px with nine pages
+  (measured 2026-10-15; about 1580 px needed): a layout choice for Đạt,
+  sales ticket 39; option (c) would change `CLAUDE.md` "Web UI".
+- `pnpm audit` (2026-10-15): 2 moderate next.js advisories, fixed in next
+  15.5.27, below the high gate; bumping next is a separate item.
 
 ## Theme from the E-HSDT v3 prototype (2026-10-05, committed in `92b155a`)
 

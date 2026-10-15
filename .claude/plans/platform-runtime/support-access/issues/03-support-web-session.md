@@ -45,8 +45,9 @@ nền tảng; chữ của băng, menu và trang chặn trong ngữ cảnh hỗ t
 - [x] Vitest: registry trang đích trả `href` của mục khớp, `/` khi không khớp.
 - [ ] Playwright (stack local, một context test đăng ký trang đích trong fixture): nhân viên
       có token dev hai lớp thấy quyền ở `/support`, bấm "Mở" tới trang đích, request kế tiếp
-      có header; token không có yếu tố thứ hai → trang chặn; 320px, 992px, 1440px, sáng và
-      tối; project `tz-los-angeles` của antd-shell ticket 05 vẫn ghi giờ Việt Nam.
+      có header; token không có yếu tố thứ hai → trang chặn; 320px, 992px, 1440px và
+      múi giờ Los Angeles (project `tz-los-angeles` vẫn ghi giờ Việt Nam); sản phẩm chỉ có
+      giao diện sáng (`web-ui.md`), không có project tối.
 - [x] Mục menu có `supportStaffOnly` chỉ hiện với nhân viên hỗ trợ; gỡ nhánh lọc → test đỏ.
 - [x] `pnpm lint`, `pnpm typecheck`, `pnpm build` xanh; `reviewing-deployment-security` trên
       header mới ở client và trang `/support` (build: bước "Build web" của CI run
@@ -133,6 +134,14 @@ nền tảng; chữ của băng, menu và trang chặn trong ngữ cảnh hỗ t
   động lại WSL (dịch vụ của máy, dùng chung với dự án khác). Còn nợ khi
   Docker lên lại: `make db-migrate`, `make demo-reset`, rồi
   `pnpm --filter @dw/web exec playwright test e2e/support-session.spec.ts`;
-  thêm vào `playwright.config.ts` các project 320px, 992px, 1440px tối và
-  múi giờ Los Angeles cho spec này (cấu hình chưa có project
-  `tz-los-angeles` của antd-shell ticket 05).
+  thêm vào `playwright.config.ts` các project 320px, 992px, 1440px và
+  múi giờ Los Angeles cho spec này (xong 15/10/2026, `aa5001a`: project
+  `wide-1440` và `tz-los-angeles`, các project viewport khớp
+  `support-session.spec.ts`; không có project tối vì sản phẩm chỉ có giao
+  diện sáng).
+- 2026-10-15 (agent, Đạt: "làm luôn"; `aa5001a`): Playwright now runs the
+  platform pages and the support session at 320/991/992/1440 px and in Los
+  Angeles time; every project runs both specs, and each support-session
+  project creates its own staff user and grant in tenant-alpha. Owed on the
+  stack: `make db-migrate`, `make demo-reset`, then
+  `pnpm --filter @dw/web exec playwright test e2e/support-session.spec.ts e2e/platform-pages.spec.ts`.

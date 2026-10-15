@@ -126,7 +126,16 @@ Not seen, and said so in the script's docstring (open, not fixed here):
 - A spreadsheet stores a price as a bare number: a price belongs on the
   deny-list without separators too, or a cell holding it is not matched.
 - Commit messages and branch names are published too and are not files;
-  nothing scans them.
+  nothing scans them. Closed 2026-10-15 (`1ee9422`, `7064f72`, `7ce11b9`):
+  CI scans them. Decided by the agent 2026-10-15 (Đạt: làm luôn): a push
+  scans every message reachable from the head (`--commits "$GITHUB_SHA"`,
+  21 s for 211 commits locally), a pull request `base..head`, so a push
+  whose run `cancel-in-progress` cancelled is still read by the next. Still
+  not seen: PR titles and bodies, a message before it is committed (no
+  `commit-msg` hook), and a branch pushed without a pull request (CI runs on
+  `main` and on PRs; covering it is a small workflow on
+  `push: branches: ['**']`, left to Đạt). A hit in a pushed message is fixed
+  only by rewriting history.
 - CI is detection, not prevention: by the time it runs, the pushed branch is
   public. The hooks are the prevention, and they run only where a deny-list
   file exists.
@@ -176,3 +185,14 @@ Not seen, and said so in the script's docstring (open, not fixed here):
   purpose but not its value. Left as is and named here. (Corrected in review:
   running `main`'s copy of the script would not close this, since such a
   branch can change the workflow too; see "Review".)
+
+## 2026-10-15 (agent, Đạt: "làm luôn")
+
+- The guard is its own job, `public-repo-guard` (`998e5a9`): a red guard no
+  longer skips bandit, pip-audit, pnpm audit and trivy. It stays red until
+  the `PUBLIC_REPO_DENYLIST` secret exists (Đạt). Not yet seen on Actions:
+  needs a push.
+- Local scans 2026-10-15: bandit clean (it covers `apps/reader/src` since
+  `56f51d5`: one low, B404, by design), pip-audit clean, pnpm audit 2
+  moderate next.js advisories (fixed in next 15.5.27, below the high gate).
+  Bumping next to >=15.5.27 is a separate item.

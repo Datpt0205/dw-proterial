@@ -14,27 +14,25 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening                      | `.claude/plans/ops-hardening.md`    | Done; numbers owed            |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–24, 26, 28–38 done         |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–38 built; 39 needs-info    |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-10-14)
+## Now (2026-10-15)
 
 - **Proterial product repo** (`origin` `Datpt0205/dw-proterial`; platform
   seed in `Datpt0205/codebase`). DW1 (Đơn hàng & Báo giá) on mock data:
   `sales.md`, spec and tickets under `sales/dw1-portal-demo/`; demo runbook
-  `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.2.0`.
-- dw_sales ADRs 0004 and 0005 Accepted 2026-10-14; 37 (released rules stay
-  readable) and 38 (rules on platform approvals) built; idle platform pieces:
-  `platform-runtime.md`.
-- 2026-10-13/14 (agent, Đạt away): sales 19, 21, 23, 24, 34, 35, 36 done;
-  25 ("DW xử lý" queued, files read in the `reader` container) and 27
-  (LibreOffice, Tesseract there) built, owing the post-reboot checks.
-- **Next:** Đạt creates the PUBLIC_REPO_DENYLIST secret (the only red CI
-  job); after a reboot, ticket 27's timings and the support-access 03 walk.
+  `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.3.0`.
+- 2026-10-15: eight batches merged (`b2ea975`..`57d3c20`) closed the open
+  items needing no decision but two partial ones (`web-ui.md`); integration
+  tests, eight migration round trips and the walk's new steps: owed to CI.
+- **Next:** push, watch CI (the DW1 walk is blocking since 2026-10-15,
+  ticket 18); Đạt: the PUBLIC_REPO_DENYLIST secret;
+  after a reboot, 25/27's checks and the support-access 03 walk.
 
 ## Decisions Đạt owes
 
@@ -46,17 +44,19 @@ own file and a row here.
     - the model profile and key for uat/production (local runs on `luna`,
       gpt-5.6-luna, `make check-model`; the key is only in local `.env`);
     - the rerank key for uat/production (FPT Cloud locally, `make check-rerank`);
-- **Ops:**
-    - spend guard dollar thresholds per plan;
-    - a retention term for offboarding export bundles;
-    - how many superseded document versions to keep.
+- **Ops:** spend guard dollar thresholds per plan; a retention term for
+  offboarding export bundles; how many superseded document versions to keep.
 - **Platform:**
-    - take `953086f`'s offboarding fix upstream to `Datpt0205/codebase`;
-    - backfill ADRs with a status (`docs/agents/domain.md`): 46 citations of
-      ADR-001..003 point at documents this repo never had.
+    - upstream `953086f` (offboarding) and `5452299`+`26d97dd` (manifest
+      pins) to `Datpt0205/codebase`; offboard tenant service users (sales 16);
+    - ADR 0024's support masking clause; backfill ADRs with a status
+      (`docs/agents/domain.md`): 46 citations of ADR-001..003 point at
+      documents this repo never had.
 - **Sales:**
     - the interim defaults listed in `sales.md` Open;
-    - whether pausing DW1 also stops rendering drafts and files.
+    - whether pausing DW1 also stops rendering drafts and files;
+    - the Sales bar layout (ticket 39: two rows, a submenu, or the drawer
+      below `xl`); allow Actions to open PRs (ClamAV bump, ticket 25);
     - restart WSL (admin): 25/27's image, trivy and integration runs wait.
 
 ## How a feature is checked here

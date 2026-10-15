@@ -34,7 +34,13 @@ như lời của chính prompt. Registry phải tự giam để không prompt n�
   raw, nên thêm raw là một lần sửa test có người duyệt.
 - **Ngoài phạm vi registry:** prompt tóm tắt của compaction (`configs/copy/runtime@*.yaml`,
   `context_compaction._render`) không đi qua registry; nó đưa message vào qua
-  `get_buffer_string(format="xml")`. Ghi lại, chưa sửa.
+  `get_buffer_string(format="xml")`. Ghi lại, chưa sửa. Done 2026-10-15
+  (`6eafd74`, `7e6b6d5`, `f1f50d9`): compaction renders
+  `platform.context_summary@1.0.0` and `platform.context_summary_update@1.0.0`
+  through `PromptRegistry`; copy `runtime@1.7.0` drops the two prompts and
+  the API loads it. The transcript is escaped twice inside the block, the
+  prompts say so, and a unit is measured escaped, as the summariser is sent
+  it (an escape-heavy test goes red with the old count).
 
 ## Tiêu chí chấp nhận
 

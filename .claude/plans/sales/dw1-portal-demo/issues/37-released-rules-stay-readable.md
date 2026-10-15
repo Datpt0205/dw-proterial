@@ -60,4 +60,5 @@ tenant.
 - A mapping keyed by plain strings that a validator holds to a closed set
   (`SalesKpi.manual_baseline_minutes` per step code) is not filled; a KPI step
   added later would make an older KPI version unreadable. Typing those keys
-  as a closed set brings them under the rule.
+  as a closed set brings them under the rule. Closed 2026-10-15 (`681a23a`):
+  the keys are a closed set of step ids (`StepId`).

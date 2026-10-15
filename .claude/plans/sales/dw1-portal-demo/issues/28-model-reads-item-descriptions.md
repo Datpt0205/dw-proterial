@@ -312,3 +312,13 @@ and the code restored; 15 of 15 went red:
   2026-10-14 and is not usable on the GTX 1080 (`sales.md`). ADR 0005
   accepted 2026-10-14. The margin is 1.1 points: a prompt, model or
   verification change that loses one line in 45 falls below it.
+- 2026-10-15 (`b279cc2`, `6d837e0`, `a981611`): the live lane no longer
+  reports [PASS] when the model read nothing. Every sales grader fails a
+  live case whose model gave no usable answer
+  (`recorded.failing_without_live_answers`, wrapped once over
+  `dw_sales.evals.GRADERS`), and `run_evals.py --live` exits 1 with [FAIL]
+  when nothing was read; a dataset with no model step therefore fails, as
+  its help text says (decided by the agent, Đạt: làm luôn: documented, not
+  special-cased, to keep one owner of "which datasets have a model step").
+  A golden case's bar is shown in its summary line, not enforced, until Đạt
+  sets the final bars. The live lane itself was not run (needs a model).

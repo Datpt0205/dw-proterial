@@ -124,7 +124,16 @@ re-submitting withdraws and raises a fresh approval.
 - **My work**: `cross_check` only while an approval is pending; a stalled
   order is `resend_cross_check` for its Bravo recorder (the head acts from
   the page). Left as it was: an order at `uploaded_to_bravo` whose rules need
-  no cross-check still shows the `cross_check` item (pre-existing).
+  no cross-check still shows the `cross_check` item (pre-existing; closed
+  2026-10-15, `867d330`: My work offers `confirm` to the PIC for such an
+  order). Still open: the web review page (`app/sales/review/page.tsx`)
+  lists every `uploaded_to_bravo` order as a cross-check without reading
+  `cross_check_required`, so it and My work disagree about one order (read
+  path drift); it should filter on the field or read `awaiting()` from the
+  API. Carried with it: `OrderCase.confirm()` accepts
+  `cross_check_required=None` (legacy) at `uploaded_to_bravo`, while
+  `awaiting()` treats None as needing a cross-check. Owed on Docker:
+  `test_sales_overview_sql.py`.
 - **Mutation checks** (each turned a test red, after a baseline run passed):
   the case's authority check; the pending and the unfinished-run refusals;
   the bravo-entry status pre-check; the trace in `apply`; the stalled branch

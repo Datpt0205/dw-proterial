@@ -105,7 +105,8 @@ xanh, trong khi nó mở mọi tenant cho bất kỳ giao dịch nào gắn sett
       `app.workspace_scope = 'tenant'` trong một câu `set_config(..., true)`
       (`_SET_TENANT_ALL_WORKSPACES`); `mark_status` giữ `_SET_TENANT`.
     - `test_rls_coverage.py`: luật 1 (`scope_outside_a_tenant_clause`) và luật 2
-      (`workspace_tables_blind_to_scope`), hàm thuần trên `pg_policies`, áp cho mọi
+      (`workspace_tables_blind_to_scope`, renamed `narrowed_tables_blind_to_scope`
+      on 2026-10-15), hàm thuần trên `pg_policies`, áp cho mọi
       schema dò từ catalog. Đo trước trên Postgres 16: biểu thức policy luôn in
       đủ ngoặc (`a AND b OR c` thành `((a AND b) OR c)`). Thêm
       `test_the_scope_rules_catch_the_wrong_shapes`: tạo trong một giao dịch rồi
@@ -129,5 +130,10 @@ xanh, trong khi nó mở mọi tenant cho bất kỳ giao dịch nào gắn sett
     - Bước 4, đo trên DB test: một tenant có một thông báo, `export_rows` liệt kê
       `platform.notifications` với 0 dòng, sau `purge_rows` còn 0 thông báo (mất
       theo CASCADE từ `workspaces`). Có bẫy; ghi ở `ops-hardening.md` Open, không
-      sửa ở đây.
+      sửa ở đây. Fixed 2026-10-15 (`fb3fefb`, migration `2e0354b50d10`): the
+      notifications SELECT policy is tenant AND (recipient OR
+      `app.workspace_scope`); only SELECT is widened. Decided by the agent
+      (Đạt: làm luôn): reuse `app.workspace_scope` rather than a second lane
+      setting; `CLAUDE.md` Tenancy records it. `narrowed_tables_blind_to_scope`
+      now also covers tables narrowed by `app.user_id`.
     - Bước 5: một dòng ở `CLAUDE.md` "Tenancy and authorization".

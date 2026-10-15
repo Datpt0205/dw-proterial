@@ -141,5 +141,7 @@ packages/python/dw_agent_runtime/tests/integration apps/worker/tests apps/api/te
 - `SubAgentSpec.system_prompt` vẫn là chuỗi tự do (ngoài phạm vi ticket).
 - Mặc định khi chạy process trần: API `model_profile="balanced"`, worker `"gateway"`.
   Compose đặt cả hai từ `DW_API_MODEL_PROFILE` nên không lệch khi deploy; chưa sửa.
+  Closed 2026-10-15 (`a3f621e`): `DEFAULT_PROFILE_ID` in
+  `dw_agent_runtime.model.profiles` is the one default both read.
 - Test ledger đi qua `runner._metered` + `LangchainUsageMeter` thật, không qua
   `runner.start` đầy đủ.

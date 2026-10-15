@@ -167,4 +167,7 @@ Còn mở, không thuộc ticket này:
   ngay khi xong, không cần sửa gì ở đây; nên làm 02 trước khi một sản phẩm phát
   `memory.candidate_proposed`.
 - Event `<type>.decided` của approval không run mà không ai đăng ký handler nằm mãi trong
-  outbox (ghi ở area file, mục Memory).
+  outbox (ghi ở area file, mục Memory). Recorded 2026-10-15 (`619b0fa`,
+  `c0fa33a`): in `platform-runtime.md` "Memory, as it stands" and in
+  `decided_event_type`'s docstring; by design, it stays until the tenant is
+  offboarded.

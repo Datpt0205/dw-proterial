@@ -342,7 +342,7 @@ Theo bảng "Promises and what this demo shows" của `spec.md`:
 
 - Đo trên bộ giả lập: thư không có hướng xử lý = 0, thư chuyển Sales không có
   người phụ trách = 0; mọi dòng PO được đọc và kiểm (câu "Đã đọc N/N dòng");
-  bộ eval `sales@1.2.0` chấm trích xuất (mã PRV, số lượng, đơn giá, ngày yêu
+  bộ eval `sales@1.3.0` (13 ca) chấm trích xuất (mã PRV, số lượng, đơn giá, ngày yêu
   cầu) và phát hiện (recall/precision) — `make eval-smoke`.
 - **Không** khẳng định tỷ lệ, số giờ tiết kiệm hay thời gian đầu-cuối: bộ giả
   lập quá nhỏ, và các bước trùng kế hoạch Bravo của Proterial không được tính.

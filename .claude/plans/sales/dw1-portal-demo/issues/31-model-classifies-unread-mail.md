@@ -190,7 +190,11 @@ them are this ticket's.
   (its number or the RFQ number it was raised for) of the sender's customer,
   exactly one kind or nothing; the order case's id is kept when exactly one
   live case holds the PO. It is stamped on the disposition and shown in the
-  inbox, for tickets 32 and 33; no route reads it yet.
+  inbox, for tickets 32 and 33; no route reads it yet. 2026-10-15
+  (`0d8806b`): the inbox now reads `order_case_id` and links the PO to the
+  case DW1 holds for it. No route reads the references to decide: 32 keeps
+  thread headers, 33 resolves its own PO; switching either to the intent's
+  numbers is Đạt's call.
 - 2026-10-13, decided by the agent (Đạt away): the retry window
   (Verification 5) is `model_assist.unread_retry_hours` (24 h in both
   versions), counted from `received_at`: a message older than that is routed

@@ -38,8 +38,75 @@ Mốc 6 (running many customers) is half done:
 - **Writes are asynchronous:** the outbox handler for
   `memory.candidate_proposed` calls `propose` with the event id as the
   idempotency key, and tenancy comes from the envelope, not the payload.
+- **An unhandled decided event stays.** A `<type>.decided` event from a
+  run-less approval whose type no worker handles stays in
+  `platform.outbox_events` for good: never claimed, outside
+  `dw_outbox_backlog_size`, and no retention rule reads the outbox, so it
+  stays until the tenant is offboarded (`purge_rows`). By design: a later
+  handler finds the history. A context opening run-less approvals owes a
+  handler (`memory.review`, `sales.layout` and `sales.rules` have theirs).
+  Recorded in `decided_event_type`'s docstring (`619b0fa`, `c0fa33a`).
+  Stale, not touched: `dw_worker/consumers/outbox.py`'s module docstring
+  ("No effect is wired today").
 
 ## Open
+
+- **2026-10-15, batch merge** (agent, Đạt: "làm luôn"; `sales.md` State has
+  the merge). Platform items closed, each with its ticket updated:
+    - `KeycloakTokenVerifier` tested against a local RS256 key and JWKS
+      (`3413901`); support-access 02's MFA path through `amr` with it.
+    - Compaction's summary prompts are registry artifacts
+      (`platform.context_summary@1.0.0`, `..._update@1.0.0`; `6eafd74`,
+      `7e6b6d5`, `f1f50d9`); copy `runtime@1.7.0` drops them
+      (`prompt-containment/01`, `compaction/01`).
+    - The runner emits `dw_node_failure_total` once per failed run
+      (`fbe99ac`, `c732366`; `ops-hardening.md`).
+    - The release manifest pins the fixtures, expectations and truth files a
+      dataset names (`5452299`, `26d97dd`) and the model profiles by content
+      (`6147ecf`); a run records its worker's `default_model_profile` in
+      `platform.worker_runs.model_profile` (migration `271bdb87af91`,
+      `0fc6a81`; `RunRecord.model_profile`, `d6036eb`).
+    - One default model profile, `DEFAULT_PROFILE_ID` (`a3f621e`,
+      `retrieval-correctness/01`).
+    - `UndeliverableEventError` says what `_deliver` does: a bounded retry
+      (`d8d7f32`, `memory-write-trust/01`).
+    - Offboarding exports in-app notifications (`fb3fefb`, migration
+      `2e0354b50d10`, `workspace-scope-offboarding/01`).
+    - A separation-of-duties rule cannot change, nor be inserted, under
+      memberships that would break it (`b02ab0e`, `d11231d`, `48deb6a`;
+      migration `d82a60870baf`; `sod-waiver-second-person/01`). Decided by
+      the agent 2026-10-15 (Đạt: làm luôn): INSERT covered too.
+    - Knowledge classification columns hold the clearance ladder (CHECKs,
+      migration `0d8f03566652`, `9591389`; `EnqueueIngestCommand` validates
+      it, `db31fa0`; `memory-write-trust/01`).
+    - Every new tenant gets the contexts' service accounts in its
+      create-tenant transaction (`ecce3d7`), and no sign-in resolves a
+      `service|` subject (`cf9744c`; sales ticket 16).
+    - `latest_decision` is read only by the request's audience in its
+      workspace (`a9fffad`, a SQL negative test; sales ticket 38).
+    - ADRs are cited by file name where two files share a number
+      (`5f022d8`, `f8a9443`, `8fae6e6`; the rule is in `CLAUDE.md` Domain
+      docs; renumbering stays Đạt's). Owed:
+      `docs/adr/0024-customer-granted-support-access.md` does not restate
+      the platform's decision 5 (restricted fields such as CCCD and salary
+      masked in the support context); restoring it is Đạt's or the plan's.
+    - `ApproveAndResumeService`'s separation-of-duties refusal is worded in
+      Vietnamese by the platform (`04708ec`, from Sales). A web vitest fails
+      when a context's refusal table names a code the platform raises
+      (`lib/error-message.ts` `REFUSAL_TABLES`). Owed on Docker:
+      `test_approval_decision_audit.py`,
+      `apps/worker/tests/integration/test_memory_review_db.py`.
+    - Owed on Docker/CI: `test_run_records_versions.py`,
+      `test_offboarding.py`, `test_rls_coverage.py`, `test_privileges.py`,
+      `test_notifications.py`, `test_sod_waivers.py`,
+      `test_separation_of_duties.py`, `test_classification_checks_db.py`,
+      `test_memory_service_db.py`, `test_provisioning.py`,
+      `test_service_access.py`, `test_approval_visibility.py`, the round
+      trips of `2e0354b50d10`, `d82a60870baf`, `0d8f03566652`,
+      `271bdb87af91`, and each ticket's mutation run. Seen, not touched: in
+      `test_the_row_cannot_disagree_with_the_worker` the `pinned` dict is
+      keyed by values, so equal `worker_version` and `graph_version` collapse
+      one comparison (failure-modes #3).
 
 - **CI is green** on run 37427518778 (2026-10-06, commit 46b7e2c), all seven
   jobs, for the first time since 2026-10-02. What it took (detail in the
@@ -51,8 +118,8 @@ Mốc 6 (running many customers) is half done:
     - `braces` <=3.0.3 is audit-ignored for GHSA-vfj7-8cjw-p6xm only (no
       fixed release; dev-only lint dependency). Remove the ignore and add a
       capped override when 3.0.4 ships.
-    - `KeycloakTokenVerifier` (RS256/JWKS) has no test; pyjwt 2.15.1 was
-      checked by hand only.
+    - ~~`KeycloakTokenVerifier` (RS256/JWKS) has no test~~: tested since
+      2026-10-15 (`3413901`, `test_keycloak_verifier.py`).
     - CI did not run the web vitest suite or the Sales browser walk.
       Built 2026-10-12 (sales ticket 18): vitest in `frontend-quality`,
       the walk in `web-e2e.yml`. Both green on a runner 2026-10-14 (the
@@ -70,7 +137,11 @@ Mốc 6 (running many customers) is half done:
   Found on the way, still owed:
     - **Nothing imports docling** (failure-modes #1): no `.py` file in the
       repository has named it since the baseline commit, yet the worker
-      image carries it with torch. Wire a parser or drop the extra.
+      image carries it with torch. Wire a parser or drop the extra. Closed
+      2026-10-15 (`e0f8ed3`): the `parsers` extra is dropped, not wired,
+      because customer files are parsed in the reader sandbox (sales ticket
+      25). Owed: rebuild the worker image (much smaller), trivy, and the
+      compose smoke test (Docker/CI).
     - **pip-audit and `trivy fs` cannot see it** (failure-modes #0): CI's
       `uv export --all-packages` leaves out extras, so pip-audit never
       audited docling (it knows eight advisories against 2.128.0 when
@@ -78,7 +149,8 @@ Mốc 6 (running many customers) is half done:
       Only the image scan saw it. `--all-extras` on the export would close
       the first. Done 2026-10-12 (sales ticket 18): the export now carries
       the extras and pip-audit finds nothing; it still skips `torch` and
-      `torchvision`, whose `+cpu` versions PyPI does not know.
+      `torchvision`, whose `+cpu` versions PyPI does not know. Closed
+      2026-10-15 (`e0f8ed3`): with the extra gone pip-audit skips nothing.
 
 - **CI: the three run-state announcement timeouts were a plugin race**
   (fixed 2026-10-02). pytest-asyncio (auto mode) and anyio's pytest plugin both
@@ -104,7 +176,8 @@ Mốc 6 (running many customers) is half done:
   policy that reads it outside `tenant AND (workspace OR scope)` and a
   workspace-narrowed table that does not read it. Needed before the first
   context narrows its tables by workspace. Found on the way: offboarding loses
-  in-app notifications unexported (`ops-hardening.md` Open).
+  in-app notifications unexported (`ops-hardening.md` Open; fixed 2026-10-15,
+  `fb3fefb`, migration `2e0354b50d10`).
 - **Approval decisions audited; approvals, runs and audit read by workspace**
   (`platform-runtime/approval-audit-and-workspace/`): HITL-11 and the rest of
   TEN-04. Ticket 01 **resolved 2026-10-08** (`feat/security-debts`): every
@@ -215,10 +288,17 @@ Mốc 6 (running many customers) is half done:
   yet, which is why it waits.
 - **The release manifest does not pin model profiles.** They carry
   `routing_policy_version` but no run records which profile it used, except
-  the usage recorders (now the effective id).
+  the usage recorders (now the effective id). Closed 2026-10-15: the
+  manifest pins them by content (`6147ecf`) and a run records its worker's
+  default profile (`0fc6a81`, `d6036eb`, migration `271bdb87af91`). Still
+  open: the run does not record the tenant-resolved
+  `routing_policy_version`, and the chat path reads the platform profile
+  (above).
 - **`make check-deepgram` and `make check-search` run scripts that do not
   exist**, left over from the product this was extracted from.
-  `make check-model` was the third, and works since 2026-09-28.
+  `make check-model` was the third, and works since 2026-09-28. Closed
+  2026-10-15 (`e3c9fad`, `d6ec590`): both targets and `.env.example`'s
+  mention are gone.
 
 ## Security debts (2026-10-08, `feat/security-debts`)
 
@@ -229,7 +309,7 @@ recorded in each ticket.
 - **`prompt-containment/01`:** `PromptRegistry` wraps every interpolated
   value in an escaped `<input name>` block; `raw_variables` with a reason
   opts out (ADR 0010). Open: the compaction summary prompt is copy, not a
-  registry artifact, and is not covered.
+  registry artifact, and is not covered. Done 2026-10-15 (`6eafd74`).
 - **`approval-audit-and-workspace/01`:** above.
 - **`system-actor/01`:** a lane audits as `system_actor(<lane>)`
   (`lane_audit_event`, `append_across_tenants`, ADR 0011); memory expiry and
@@ -238,7 +318,8 @@ recorded in each ticket.
 - **`sod-waiver-second-person/01`:** a waiver lifts nothing until a second
   admin confirms it; a role or permission set cannot gain a scope that puts a
   membership in breach (`f381f1694395`, ADR 0012). Open: a rule's own scopes
-  changing under memberships.
+  changing under memberships. Closed 2026-10-15 (`b02ab0e`, migration
+  `d82a60870baf`, `ck_sod_rules_memberships`); integration owed.
 - **`unauthenticated-401/01`:** missing or unverifiable bearer is 401 with
   `WWW-Authenticate`; the web bounces only a request that carried a token.
 - **`channel-delivery-expiry/01`:** a delivery pending past
@@ -275,7 +356,8 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   `details` key as a parameter, which a generic plan cannot match to the
   index; the key is written into the statement now, held by a
   `force_generic_plan` test. Open: the web `/audit` page does not show the
-  two fields yet; the realm change is applied by hand to a running Keycloak.
+  two fields yet (done 2026-10-15, `de7e91f`); the realm change is applied
+  by hand to a running Keycloak.
 
 - **`support-access/03`** (built 2026-10-13, committed in `399920d`): the
   web support session (`lib/support/`: the grant in `sessionStorage`, the
@@ -284,7 +366,8 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   (Sales lands on its orders), the `/support` page, `supportStaffOnly`;
   `/support/my-grants` returns the grant's stamped scopes and the web holds
   exactly those under a grant. Owed: the Playwright run (spec written;
-  Docker was down).
+  Docker was down). Its projects exist since 2026-10-15 (`aa5001a`:
+  320/991/992/1440 px and Los Angeles time; light only).
 
 - **Spans record no exception text** (2026-10-13, from Sales ticket 23's
   review): `OtelTelemetry` records an exception's type and a `DWError`'s
