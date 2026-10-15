@@ -237,10 +237,14 @@ export function comparisonRows(
 ): Row[] {
   const qty = Number(line.quantity);
   const stated = line.basis.stated_attributes;
-  // What the description stated, as DW1 read it when it mapped the line; a
-  // line it did not read keeps the attribute in the description.
+  // What the description stated, as DW1 read it when it mapped the line,
+  // marked as a reading so it never looks like a value printed in a PO field
+  // of its own (ui-quality §7); a line it did not read keeps the attribute
+  // in the description.
   const po = <T,>(value: T | null | undefined, show: (v: T) => string) =>
-    !stated ? "Trong mô tả" : value == null ? "Không ghi" : show(value);
+    !stated
+      ? "Trong mô tả"
+      : `${value == null ? "Không ghi" : show(value)} (DW1 đọc từ mô tả)`;
   // Mirrors StatedAttributes.fits: exact equality per stated attribute.
   // test_descriptions.py pins fits to that, so a fits that starts to forgive
   // a spelling fails there, not as a picker saying lệch where DW1 matched.
