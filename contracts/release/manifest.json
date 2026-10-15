@@ -424,9 +424,46 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "fbe99ac2de1e451d40ccf7cf95be29640af43dbd",
+  "git_sha": "5452299181f75e3f03a6b2892a200368391d8186",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
+  "model_profiles": [
+    {
+      "checksum": "e1fcdefc185f28c5529e45f4afe63662f78f5a005a707a91b097c24eb3a59a1f",
+      "profile_id": "balanced",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "64b7e0793671de3f5e53965e756672a41cc62963978f821950483ad07c8fab6b",
+      "profile_id": "deepseek",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "a13657f7fd491b49904ceb96d78aabd0f621a3df5611015ff61fb4980dc898e0",
+      "profile_id": "gateway",
+      "routing_policy_version": "2.0.0"
+    },
+    {
+      "checksum": "04a7e1c0625d64a4dee6583ba439c08b88649d3ccd8d61b486eb49bd9360d119",
+      "profile_id": "low_cost",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "30b34c01e90f7e69716b24d85630c7bb454c099180280cd422ed0e8abec3631a",
+      "profile_id": "luna",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "41dfd1172845ae72833801980a40844f237e79a6739753ec57a95c0e250028d3",
+      "profile_id": "onprem",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "a47c4db56d769ec1cff1ae08cea3ece76d8ff99c64af8233bb9ebb0043fb34a0",
+      "profile_id": "openai",
+      "routing_policy_version": "1.0.0"
+    }
+  ],
   "platform_version": "0.1.0",
   "policies": [
     {

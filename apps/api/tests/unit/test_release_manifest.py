@@ -37,6 +37,7 @@ def test_manifest_contains_every_required_section() -> None:
         "tool_specs",
         "toolsets",
         "policies",
+        "model_profiles",
         "knowledge_index_version",
         "memory_policy_version",
         # A run stamps this on its own row and the policy refuses to decide for a
@@ -147,3 +148,19 @@ def test_a_named_file_that_does_not_exist_stops_the_manifest(
 
     with pytest.raises(SystemExit, match=r"names data/truth.json"):
         script._eval_datasets()
+
+
+def test_every_model_profile_is_pinned_by_content() -> None:
+    """The profile decides which provider reads a customer's text and what a
+    run costs; editing one has to move the ref like editing a prompt does."""
+    script = _load_script()
+    manifest = script.build_manifest()
+    shipped = {
+        script.yaml.safe_load(path.read_text(encoding="utf-8"))["profile_id"]: path
+        for path in (REPO_ROOT / "configs" / "models").glob("*.yaml")
+    }
+
+    pins = {p["profile_id"]: p for p in manifest["model_profiles"]}
+    assert set(pins) == set(shipped)
+    for profile_id, path in shipped.items():
+        assert pins[profile_id]["checksum"] == script._checksum(path)

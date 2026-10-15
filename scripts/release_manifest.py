@@ -1,7 +1,7 @@
 """Generate the immutable release manifest.
 
 Collects every versioned artifact — platform, API, workers, graphs, prompt
-bundles, toolsets, policies, knowledge index, eval datasets and the fixtures,
+bundles, toolsets, policies, model profiles, knowledge index, eval datasets and the fixtures,
 expectations and truth files they name — plus the git SHA,
 canonicalizes to JSON and derives a content-addressed reference:
 
@@ -165,6 +165,28 @@ def _toolsets() -> list[dict[str, Any]]:
     return toolsets
 
 
+def _model_profiles() -> list[dict[str, str]]:
+    """Which model answers each kind of call, at what price and under what
+    ceiling, pinned by content.
+
+    A profile is configuration a deployment edits without touching Python, and
+    it decides what a run costs and which provider reads a customer's text.
+    `routing_policy_version` names the routing a profile follows, but it moves
+    only when someone remembers to bump it; the checksum moves on any edit.
+    """
+    profiles = []
+    for path in sorted((REPO_ROOT / "configs" / "models").glob("*.yaml")):
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        profiles.append(
+            {
+                "profile_id": raw["profile_id"],
+                "routing_policy_version": raw["routing_policy_version"],
+                "checksum": _checksum(path),
+            }
+        )
+    return profiles
+
+
 def _rubrics() -> list[dict[str, str]]:
     """Scoring rubrics and the company thresholds they are read against.
 
@@ -272,6 +294,7 @@ def build_manifest() -> dict[str, Any]:
         "tool_specs": _tool_specs(),
         "toolsets": _toolsets(),
         "rubrics": _rubrics(),
+        "model_profiles": _model_profiles(),
         "policies": _policies(),
         "knowledge_index_version": INDEX_VERSION,
         "memory_policy_version": MemoryWritePolicy().policy_version,
