@@ -69,6 +69,7 @@ jobs:
         run: |
           set -a; . ./.env; set +a
           DW_WORKER_SALES_INBOX_LANE=false nohup uv run python -m dw_worker.main > worker.log 2>&1 &
+          echo $! > worker.pid
       - name: DW1 walk
         # Playwright starts the dev-auth API and the web itself (playwright.config.ts
         # `webServer`); the spec resets the demo tenants first. No retries: a
@@ -90,4 +91,10 @@ jobs:
           retention-days: 14
       - name: Stop infra
         if: always()
-        run: docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra down -v
+        # The worker first: a `uv run` still alive holds uv's cache lock, and
+        # setup-uv's post-job prune then waited five minutes and failed the job
+        # (run 38692586930, after the walk itself passed 13/13).
+        run: |
+          if [ -f worker.pid ]; then kill "$(cat worker.pid)" 2>/dev/null || true; fi
+          pkill -f "dw_worker.main" || true
+          docker compose --env-file .env -f infra/compose/docker-compose.yml --profile infra down -v
