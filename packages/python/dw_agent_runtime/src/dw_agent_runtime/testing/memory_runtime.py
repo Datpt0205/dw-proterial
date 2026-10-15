@@ -131,6 +131,7 @@ class MemoryRuns:
             toolset_version=row.worker.toolset_version,
             policy_version=row.worker.policy_version,
             memory_policy_version=row.worker.memory_policy_version,
+            model_profile=row.worker.default_model_profile,
             autonomy_level=started.autonomy_level,
             approval_policy_version=started.approval_policy_version,
             input=row.input,
