@@ -84,6 +84,9 @@ _REFUSE = """
 
 def upgrade() -> None:
     op.execute(_REFUSE)
+    # Idempotent, as f381f1694395 is: a product carrying the same triggers
+    # lands on this state instead of failing.
+    op.execute("DROP TRIGGER IF EXISTS trg_sod_rules_memberships_insert ON platform.sod_rules")
     op.execute(
         """
         CREATE TRIGGER trg_sod_rules_memberships_insert
@@ -92,6 +95,7 @@ def upgrade() -> None:
         EXECUTE FUNCTION platform.refuse_rule_change_breaking_memberships()
         """
     )
+    op.execute("DROP TRIGGER IF EXISTS trg_sod_rules_memberships_update ON platform.sod_rules")
     op.execute(
         """
         CREATE TRIGGER trg_sod_rules_memberships_update
@@ -107,6 +111,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP TRIGGER trg_sod_rules_memberships_update ON platform.sod_rules")
-    op.execute("DROP TRIGGER trg_sod_rules_memberships_insert ON platform.sod_rules")
-    op.execute("DROP FUNCTION platform.refuse_rule_change_breaking_memberships()")
+    op.execute("DROP TRIGGER IF EXISTS trg_sod_rules_memberships_update ON platform.sod_rules")
+    op.execute("DROP TRIGGER IF EXISTS trg_sod_rules_memberships_insert ON platform.sod_rules")
+    op.execute("DROP FUNCTION IF EXISTS platform.refuse_rule_change_breaking_memberships()")
