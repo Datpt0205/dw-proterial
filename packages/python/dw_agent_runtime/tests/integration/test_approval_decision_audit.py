@@ -153,7 +153,7 @@ async def test_a_refused_decision_writes_no_audit_row(
         id_generator=Uuid4Generator(),
         strict_approval_prefixes=frozenset({"demo."}),
     )
-    with pytest.raises(ConflictError, match="separation of duties"):
+    with pytest.raises(ConflictError, match="tách nhiệm"):
         await strict.decide(
             approval_id=approval_id,
             approve=True,

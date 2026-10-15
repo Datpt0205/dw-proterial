@@ -20,6 +20,11 @@ import {
   setActiveWorkspace,
 } from "../session";
 import { useSupportGrant } from "../support/session";
+import {
+  markSessionAlive,
+  markSessionEnded,
+  tokenExpiry,
+} from "../session-expiry";
 
 export interface Membership {
   tenantId: string;
@@ -62,6 +67,12 @@ interface AuthContextValue {
   logout: () => void;
   selectWorkspace: (workspaceId: string) => void;
   refreshDevSession: () => void;
+  /** When the sign-in ends (ms), as the tokens say; null when unknown. */
+  sessionExpiresAt: number | null;
+  /** Ask for more time; true when the end moved later. */
+  extendSession: () => Promise<boolean>;
+  /** Sign in again and come back to this page. Navigates: the person presses it. */
+  reauthenticate: () => void;
 }
 
 interface BootstrapMembership {
@@ -112,6 +123,14 @@ async function fetchBootstrap(token: string): Promise<BootstrapResponse> {
   return (await res.json()) as BootstrapResponse;
 }
 
+/** When the Keycloak sign-in ends: the refresh token's expiry (the SSO
+ * session), else the access token's. */
+function keycloakSessionEnd(): number | null {
+  const kc = getKeycloak();
+  const exp = kc.refreshTokenParsed?.exp ?? kc.tokenParsed?.exp;
+  return typeof exp === "number" ? exp * 1000 : null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<Membership | null>(null);
   const [isPlatformOperator, setIsPlatformOperator] = useState(false);
   const [isSupportStaff, setIsSupportStaff] = useState(false);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
   const initStarted = useRef(false);
 
   const activate = useCallback(
@@ -182,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setStatus("loading");
+    setSessionExpiresAt(tokenExpiry(token));
     fetchBootstrap(token)
       .then(applyBootstrap)
       .catch((e: unknown) => {
@@ -218,13 +239,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setStatus("unauthenticated");
           return;
         }
+        setSessionExpiresAt(keycloakSessionEnd());
+        kc.onAuthRefreshSuccess = () => {
+          // A refresh that worked shows the SSO session alive: a 401 that
+          // raced an expiring access token does not leave the banner up.
+          markSessionAlive();
+          setSessionExpiresAt(keycloakSessionEnd());
+        };
         kc.onTokenExpired = () => {
-          // Refresh in place; when the SSO session itself has expired, fall
-          // back to a full sign-in instead of limping on with a dead token.
-          kc.updateToken(30).catch(() => {
-            clearActiveWorkspace();
-            void kc.login({ redirectUri: window.location.href });
-          });
+          // Refresh in place; when the SSO session itself has expired, say so
+          // and let the person sign in again when they are ready. A redirect
+          // from here would throw away whatever was being typed.
+          kc.updateToken(30).catch(() => markSessionEnded());
         };
         try {
           applyBootstrap(await fetchBootstrap(kc.token));
@@ -238,6 +264,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("error");
       });
   }, [applyBootstrap, loadDevSession]);
+
+  const extendSession = useCallback(async () => {
+    if (AUTH_MODE === "dev") return false; // a dev token has no refresh
+    const before = keycloakSessionEnd();
+    try {
+      await getKeycloak().updateToken(-1);
+    } catch {
+      return false;
+    }
+    const after = keycloakSessionEnd();
+    setSessionExpiresAt(after);
+    return after !== null && (before === null || after > before);
+  }, []);
+
+  const reauthenticate = useCallback(() => {
+    if (AUTH_MODE === "dev") {
+      window.location.href = "/dev-login";
+      return;
+    }
+    void getKeycloak().login({ redirectUri: window.location.href });
+  }, []);
 
   const login = useCallback(() => {
     if (AUTH_MODE === "dev") {
@@ -303,6 +350,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       selectWorkspace,
       refreshDevSession: loadDevSession,
+      sessionExpiresAt,
+      extendSession,
+      reauthenticate,
     };
   }, [
     status,
@@ -321,6 +371,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     selectWorkspace,
     loadDevSession,
+    sessionExpiresAt,
+    extendSession,
+    reauthenticate,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

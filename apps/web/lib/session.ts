@@ -3,6 +3,8 @@
 import { ApiClient, type ApiClientOptions } from "@dw/api-client";
 import { API_BASE_URL, AUTH_MODE } from "./auth/config";
 import { getKeycloak } from "./auth/keycloak";
+import { noteServerDate } from "./server-clock";
+import { markSessionEnded } from "./session-expiry";
 import {
   endSupportGrant,
   openSupportGrant,
@@ -128,9 +130,6 @@ async function currentAccessToken(): Promise<string | null> {
   return kc.token ?? null;
 }
 
-// Guard so a burst of concurrent 401s triggers exactly one redirect.
-let redirectingOn401 = false;
-
 export function apiClient(): ApiClient {
   return new ApiClient(clientOptions(API_BASE_URL));
 }
@@ -163,6 +162,8 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
         }
       }
       const res = await fetch(input, { ...init, headers });
+      // Every answer carries the server's clock; relative labels count by it.
+      noteServerDate(res.headers.get("Date"));
       // The grant expired, was revoked or lost its granter, or the sign-in
       // has no second factor: close it here, so the next request is made as
       // the person again, not refused again; /support says why.
@@ -173,20 +174,14 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
           endSupportGrant({ mfaRequired: true });
       }
       // 401 = the session is no longer authenticated (token died mid-use).
-      // Clear local state and bounce to the login screen instead of leaving the
-      // user staring at a failed action. (403 = permission, handled per-call.)
-      // Only for a request that carried a token: one sent without any (the
-      // login screen's own calls) also answers 401 since the API split 401
-      // from 403, and bouncing it would reload the login page forever.
-      if (
-        res.status === 401 &&
-        headers.has("Authorization") &&
-        typeof window !== "undefined" &&
-        !redirectingOn401
-      ) {
-        redirectingOn401 = true;
-        clearActiveWorkspace();
-        window.location.href = "/";
+      // The shell's banner says so and offers to sign in again, instead of
+      // leaving the user staring at a failed action; it does not navigate on
+      // its own, which would throw away what was typed (ui-quality §4).
+      // (403 = permission, handled per-call.) Only for a request that carried
+      // a token: one sent without any (the login screen's own calls) also
+      // answers 401 since the API split 401 from 403.
+      if (res.status === 401 && headers.has("Authorization")) {
+        markSessionEnded();
       }
       return res;
     },

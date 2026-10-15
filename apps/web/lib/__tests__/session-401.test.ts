@@ -5,10 +5,12 @@ vi.mock("../auth/keycloak", () => ({ getKeycloak: () => ({}) }));
 
 /**
  * A missing or unverifiable bearer token is 401 since the platform split it
- * from 403 (platform-runtime/unauthenticated-401). The client bounces to the
- * login screen on a 401 - but only for a request that carried a token, i.e. a
- * session that died. A request sent without one (the login screen's own calls)
- * answering 401 must not bounce, or the login page reloads itself forever.
+ * from 403 (platform-runtime/unauthenticated-401). On a 401 the client marks
+ * the session ended, which the shell's banner reads to offer signing in again
+ * - but only for a request that carried a token, i.e. a session that died. A
+ * request sent without one (the login screen's own calls) answering 401 is
+ * not a session ending. It never navigates by itself: a page that leaves on
+ * its own takes what was being typed with it (ui-quality §4).
  */
 
 let assigned: string[] = [];
@@ -45,26 +47,34 @@ async function fetchImpl() {
   return impl;
 }
 
-describe("the 401 bounce", () => {
-  it("sends a session whose token died back to sign in, once per burst", async () => {
+async function ended(): Promise<boolean> {
+  const { useSessionEnded } = await import("../session-expiry");
+  const { renderHook } = await import("@testing-library/react");
+  return renderHook(() => useSessionEnded()).result.current;
+}
+
+describe("a 401", () => {
+  it("marks a session whose token died as ended, and stays on the page", async () => {
     const impl = await fetchImpl();
     const withToken = { headers: { Authorization: "Bearer expired" } };
+    expect(await ended()).toBe(false);
 
     await Promise.all([
       impl("http://api.test/a", withToken),
       impl("http://api.test/b", withToken),
-      impl("http://api.test/c", withToken),
     ]);
 
-    expect(assigned).toEqual(["/"]);
+    expect(await ended()).toBe(true);
+    expect(assigned).toEqual([]);
   });
 
-  it("does not bounce a request that carried no token", async () => {
+  it("is no session ending for a request that carried no token", async () => {
     const impl = await fetchImpl();
 
     const response = await impl("http://api.test/auth/bootstrap", {});
 
     expect(response.status).toBe(401);
+    expect(await ended()).toBe(false);
     expect(assigned).toEqual([]);
   });
 
@@ -79,6 +89,7 @@ describe("the 401 bounce", () => {
       headers: { Authorization: "Bearer ok" },
     });
 
+    expect(await ended()).toBe(false);
     expect(assigned).toEqual([]);
   });
 });

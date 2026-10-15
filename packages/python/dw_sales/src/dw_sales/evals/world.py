@@ -62,6 +62,7 @@ from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.application.case_store import (
+    STALE_CASE_VERSION,
     ArtifactRecord,
     CaseEvent,
     CaseOrigin,
@@ -301,7 +302,7 @@ class _Cases[CaseT: (OrderCase, QuoteCase)]:
     async def save(self, case: CaseT, *, expected_version: int, event: CaseEvent) -> None:
         stored = self._held.get(case.case_id)
         if stored is None or stored.case.case_version != expected_version:
-            raise ConflictError("the case changed since it was read")
+            raise ConflictError(STALE_CASE_VERSION, details={"rule": "stale_case_version"})
         if case.case_version <= expected_version:
             raise ConflictError("a saved case moves to a later version")
         self._held[case.case_id] = Stored(case, stored.origin)

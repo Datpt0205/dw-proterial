@@ -3,10 +3,12 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Approval } from "@dw/contracts";
+import { OFFLINE_REASON } from "@dw/ui";
 
 const BOARD_SCOPE = "demo.approve.board";
 const REASON = `Chỉ người có quyền ${BOARD_SCOPE} được quyết yêu cầu này`;
@@ -171,5 +173,89 @@ describe("/approvals and the stamped scope (ADR 0011-approval-decider-stamped-as
     expect(screen.getByText(REASON)).toBeTruthy();
     fireEvent.click(approve);
     expect(decideApproval).not.toHaveBeenCalled();
+  });
+});
+
+describe("/approvals sends one Idempotency-Key per press (ui-quality §3)", () => {
+  async function pressApprove() {
+    const approve = await screen.findByRole("button", { name: /^Duyệt$/ });
+    // A loading button drops clicks: press once the last decision settled.
+    await waitFor(() => expect(approve.className).not.toContain("loading"));
+    fireEvent.click(approve);
+  }
+
+  function keyOfCall(n: number): string {
+    return decideApproval.mock.calls[n]![2] as string;
+  }
+
+  it("reuses the key on a retry of the same decision, and mints a new one after it lands", async () => {
+    const item = approval({ required_scope: null, can_decide: true });
+    decideApproval
+      .mockRejectedValueOnce(new Error("mất mạng"))
+      .mockResolvedValueOnce({ ...item, status: "approved" })
+      .mockResolvedValueOnce({ ...item, status: "approved" });
+    await renderWith(["approvals.read", "approvals.decide"], item);
+
+    await pressApprove();
+    await screen.findByText("mất mạng");
+    await pressApprove();
+    await waitFor(() => expect(decideApproval).toHaveBeenCalledTimes(2));
+    expect(keyOfCall(0)).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keyOfCall(1)).toBe(keyOfCall(0));
+
+    await pressApprove();
+    await waitFor(() => expect(decideApproval).toHaveBeenCalledTimes(3));
+    expect(keyOfCall(2)).not.toBe(keyOfCall(0));
+  });
+
+  it("mints a new key once the comment is edited after a failure", async () => {
+    const item = approval({ required_scope: null, can_decide: true });
+    decideApproval
+      .mockRejectedValueOnce(new Error("mất mạng"))
+      .mockResolvedValueOnce({ ...item, status: "approved" });
+    await renderWith(["approvals.read", "approvals.decide"], item);
+
+    await pressApprove();
+    await screen.findByText("mất mạng");
+    fireEvent.change(screen.getByLabelText("Nhận xét (không bắt buộc)"), {
+      target: { value: "đã xem lại" },
+    });
+    await pressApprove();
+    await waitFor(() => expect(decideApproval).toHaveBeenCalledTimes(2));
+    expect(decideApproval.mock.calls[1]![1]).toEqual({
+      approve: true,
+      comment: "đã xem lại",
+    });
+    expect(keyOfCall(1)).not.toBe(keyOfCall(0));
+  });
+});
+
+describe("/approvals while the browser is offline (ui-quality §4)", () => {
+  it("disables both decisions with the offline reason and sends nothing", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "onLine",
+    );
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      get: () => false,
+    });
+    try {
+      const { approve, reject } = await renderWith(
+        ["approvals.read", "approvals.decide"],
+        approval({ required_scope: null, can_decide: true }),
+      );
+      expect(approve.disabled).toBe(true);
+      expect(reject.disabled).toBe(true);
+      fireEvent.mouseEnter(approve.parentElement as HTMLElement);
+      const tooltip = await screen.findByRole("tooltip");
+      expect(within(tooltip).getByText(OFFLINE_REASON)).toBeTruthy();
+      fireEvent.click(approve);
+      expect(decideApproval).not.toHaveBeenCalled();
+    } finally {
+      if (descriptor)
+        Object.defineProperty(window.navigator, "onLine", descriptor);
+      else delete (window.navigator as { onLine?: boolean }).onLine;
+    }
   });
 });

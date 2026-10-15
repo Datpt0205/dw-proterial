@@ -60,6 +60,8 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+# Screenshots for review (make web-screens): looked at, not committed.
+apps/web/screens/
 
 # Agent worktrees — throwaway checkouts, never part of the repo.
 .claude/worktrees/

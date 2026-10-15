@@ -154,8 +154,9 @@ async def test_a_decision_on_a_stale_version_is_refused(
         await work.commit()
     # A second decision made on the version both callers read.
     async with uow(order_run.scope) as work:
-        with pytest.raises(ConflictError, match="changed since it was read"):
+        with pytest.raises(ConflictError, match="hồ sơ đã thay đổi từ khi bạn mở") as refused:
             await work.orders.save(reviewing, expected_version=case.case_version, event=event)
+    assert refused.value.details["rule"] == "stale_case_version"
 
 
 async def test_a_disposition_reads_back_with_who_and_when(

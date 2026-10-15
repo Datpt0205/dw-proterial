@@ -60,6 +60,11 @@ _CORS_HEADERS = [
     "Idempotency-Key",
 ]
 _CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+# Response headers the browser client may read. `Date` is the server's clock,
+# which every response already carries (RFC 9110): the web counts "còn X giờ"
+# against it rather than against a device whose clock may be wrong
+# (ui-quality §8). A cross-origin page cannot read it unless it is listed.
+_CORS_EXPOSED = ["X-Request-ID", "Retry-After", "Date"]
 
 
 def _local_web_origins(public_web_url: str) -> list[str]:
@@ -123,7 +128,7 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
             allow_origins=cors_origins,
             allow_methods=_CORS_METHODS,
             allow_headers=_CORS_HEADERS,
-            expose_headers=["X-Request-ID", "Retry-After"],
+            expose_headers=_CORS_EXPOSED,
         )
 
     register_exception_handlers(app)
