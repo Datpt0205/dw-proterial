@@ -47,6 +47,7 @@ from dw_sales.domain.catalog import (
     Uom,
 )
 from dw_sales.domain.description_reading import DescriptionReading
+from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.legacy_fonts import LegacyEncoding
 from dw_sales.domain.messages import AttachmentId, Sha256Hex
 
@@ -915,6 +916,14 @@ class LineBasis(BaseModel):
     # asked, because the convert list or DW1's own vocabulary mapped the line,
     # or the tenant has it off.
     description_reading: DescriptionReading | None = None
+    # The attributes the candidates were computed from: what DW1's own
+    # vocabulary read from the description, or what code accepted of a model's
+    # reading. Shown against each candidate (the candidate picker), so the
+    # screen compares with the reading the mapping used, never a later one.
+    # None: the description was not read (a convert entry decided, the text
+    # was not understood or typed in a legacy font), or the line was checked
+    # before this was stamped.
+    stated_attributes: StatedAttributes | None = None
 
     @model_validator(mode="after")
     def _lead_time_names_its_source(self) -> Self:

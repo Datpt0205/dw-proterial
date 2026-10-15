@@ -14,7 +14,8 @@ const CASE_PAGE: Record<string, string> = {
  * generic inbox links to the case instead, and a PO layout's
  * (`sales.layout`, ticket 30) to the layouts page. A rule version's
  * (`sales.rules`, ticket 38) names no subject version (its document never
- * changes) and has no page of its own, so it is decided on `/approvals`. A
+ * changes), so it is decided on `/approvals`; the rules page (`/sales/rules`)
+ * shows the document and links to the approval, and decides nothing. A
  * payload that names no known case links to the Sales work list, never
  * outside the app.
  */

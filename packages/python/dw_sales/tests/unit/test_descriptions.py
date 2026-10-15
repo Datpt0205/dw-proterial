@@ -101,3 +101,35 @@ def test_every_family_conductor_and_shield_has_a_printed_word() -> None:
     assert set(FAMILY_WORDS) == set(get_args(ItemFamily))
     assert set(CONDUCTOR_WORDS) == set(get_args(Conductor))
     assert set(SHIELD_WORDS) == set(get_args(Shield))
+
+
+def _another_spelling(value: object) -> object:
+    if isinstance(value, str):
+        return value.lower() if value != value.lower() else value.upper()
+    if isinstance(value, int):
+        return value + 1
+    raise AssertionError(f"no other spelling for {value!r}")
+
+
+@pytest.mark.parametrize("field", ["spec_no", "family", "cores", "gauge"])
+def test_the_picker_attributes_fit_by_exact_equality(field: str) -> None:
+    """The candidate picker in apps/web (candidate-picker.tsx, `against`) marks
+    spec, family, cores and gauge khớp/lệch with `===` beside what DW1 read.
+    That is a copy of this rule, held to it here: if `fits` starts to forgive
+    a spelling (case, a gauge written another way), this fails, and the picker
+    must take the server's verdict instead of saying lệch where DW1 matched."""
+    item = ITEMS[0]
+    own = {
+        "spec_no": item.attributes.spec_no,
+        "family": item.family,
+        "cores": item.attributes.cores,
+        "gauge": item.attributes.gauge,
+    }[field]
+    other = (
+        next(f for f in get_args(ItemFamily) if f != own)
+        if field == "family"
+        else _another_spelling(own)
+    )
+
+    assert StatedAttributes.model_validate({field: own}).fits(item)
+    assert not StatedAttributes.model_validate({field: other}).fits(item)

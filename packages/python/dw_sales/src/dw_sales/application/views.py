@@ -52,6 +52,7 @@ from dw_sales.domain.catalog import (
     Quotation,
 )
 from dw_sales.domain.description_reading import DescriptionReading
+from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.handoffs import Handoff
 from dw_sales.domain.layouts import LayoutPrefill
@@ -404,6 +405,19 @@ class DescriptionReadingView(BaseModel):
     spans: list[SpanReadView]
 
 
+class StatedAttributesView(BaseModel):
+    """What the description stated of the attributes the candidate picker
+    compares with each item (`ItemView`), as stamped when the line was
+    mapped (`LineBasis.stated_attributes`). None: not stated."""
+
+    model_config = _VIEW
+
+    spec_no: str | None
+    family: str | None
+    cores: int | None
+    gauge: str | None
+
+
 class LineBasisView(BaseModel):
     model_config = _VIEW
 
@@ -417,6 +431,9 @@ class LineBasisView(BaseModel):
     checks_run: list[str]
     # None: no model was asked about this line.
     description_reading: DescriptionReadingView | None
+    # None: DW1 did not read the description (a convert entry decided, or
+    # the text was not understood), or the line predates the stamp.
+    stated_attributes: StatedAttributesView | None
 
 
 class DeliveryScheduleView(BaseModel):
@@ -523,6 +540,15 @@ def _basis(line: OrderLine, prices: PriceView) -> LineBasisView:
         lead_time_source=basis.lead_time_source,
         checks_run=list(basis.checks_run),
         description_reading=_reading(basis.description_reading),
+        stated_attributes=_stated(basis.stated_attributes),
+    )
+
+
+def _stated(stated: StatedAttributes | None) -> StatedAttributesView | None:
+    if stated is None:
+        return None
+    return StatedAttributesView(
+        spec_no=stated.spec_no, family=stated.family, cores=stated.cores, gauge=stated.gauge
     )
 
 

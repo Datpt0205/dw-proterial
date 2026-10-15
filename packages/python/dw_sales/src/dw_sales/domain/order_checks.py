@@ -255,6 +255,8 @@ class MappedLine(NamedTuple):
     # A model's reading of the description, when one was asked for
     # (`map_read_line`); stamped on the line's basis.
     reading: DescriptionReading | None = None
+    # The attributes the candidates were computed from; stamped on the basis.
+    stated: StatedAttributes | None = None
 
 
 def map_line(po_line: PoLine, *, entry: ConvertEntry | None, items: Sequence[Item]) -> MappedLine:
@@ -310,16 +312,22 @@ def _by_description(
 ) -> MappedLine:
     fitting = candidates(stated, items) if stated is not None else ()
     if not fitting:
-        return MappedLine(LineMapping(status=MappingStatus.UNMAPPED), None, reading=reading)
+        return MappedLine(
+            LineMapping(status=MappingStatus.UNMAPPED), None, reading=reading, stated=stated
+        )
     codes = tuple(i.prv_code for i in fitting)
     if len(fitting) == 1:
         return MappedLine(
             LineMapping(status=MappingStatus.CANDIDATE, candidates=codes),
             fitting[0],
             reading=reading,
+            stated=stated,
         )
     return MappedLine(
-        LineMapping(status=MappingStatus.AMBIGUOUS, candidates=codes), None, reading=reading
+        LineMapping(status=MappingStatus.AMBIGUOUS, candidates=codes),
+        None,
+        reading=reading,
+        stated=stated,
     )
 
 
@@ -409,6 +417,7 @@ def check_line(
         candidates=mapping.candidates,
         checks_run=tuple(run),
         description_reading=mapped.reading,
+        stated_attributes=mapped.stated,
     )
     if item is None:
         return LineCheck(
@@ -500,6 +509,7 @@ def check_line(
         lead_time_source=source,
         checks_run=tuple(run),
         description_reading=mapped.reading,
+        stated_attributes=mapped.stated,
     )
     line = OrderLine(
         po_line=po_line,

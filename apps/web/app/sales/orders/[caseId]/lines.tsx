@@ -41,28 +41,39 @@ function weakest(states: Record<string, string>): string {
   return STATE_ORDER.find((s) => values.includes(s)) ?? "dw";
 }
 
+/** The line's unit as it is entered: what Sales typed, else as read. */
+function enteredUom(line: Line): string {
+  const typed = line.corrections.find((c) => c.field === "uom")?.value;
+  return typeof typed === "string" ? typed : line.uom;
+}
+
 /**
  * A line's value as it is entered: what Sales typed for it (ticket 15), with
  * the value as read under it, or the value as read when nothing was typed.
+ * `withUnit`: the value is shown with the line's unit, so a unit Sales typed
+ * counts as a correction of it too, and the value as read keeps its unit.
  */
 function Entered({
   line,
   field,
   show,
+  withUnit = false,
 }: {
   line: Line;
   field: string;
-  show: (value: Words) => ReactNode;
+  show: (value: Words, uom: string) => ReactNode;
+  withUnit?: boolean;
 }) {
   const read = new Map<string, unknown>(Object.entries(line)).get(
     field,
   ) as Words;
   const typed = line.corrections.find((c) => c.field === field);
-  if (!typed) return <>{show(read)}</>;
+  const unitTyped = withUnit && line.corrections.some((c) => c.field === "uom");
+  if (!typed && !unitTyped) return <>{show(read, line.uom)}</>;
   return (
     <Space orientation="vertical" size={0}>
-      {show(typed.value)}
-      <Typography.Text>Đọc được: {show(read)}</Typography.Text>
+      {show(typed ? typed.value : read, enteredUom(line))}
+      <Typography.Text>Đọc được: {show(read, line.uom)}</Typography.Text>
     </Space>
   );
 }
@@ -78,7 +89,7 @@ function Schedules({ line }: { line: Line }) {
       {line.schedules.map((s, index) => (
         <Typography.Text key={`${index}:${s.requested_date}`}>
           {formatDate(s.requested_date)} ·{" "}
-          <Quantity value={s.quantity} uom={line.uom} />
+          <Quantity value={s.quantity} uom={enteredUom(line)} />
           {s.suggested_delivery_date &&
           s.suggested_delivery_date !== s.requested_date
             ? ` → gợi ý ${formatDate(s.suggested_delivery_date)}`
@@ -170,18 +181,34 @@ export function LinesTable({
         }}
         columns={[
           { title: "Dòng", dataIndex: "line_no", width: 64, fixed: "left" },
-          { title: "Mã của khách", dataIndex: "customer_item_code" },
+          {
+            title: "Mã của khách",
+            key: "customer_item_code",
+            render: (_, line) => (
+              <Entered
+                line={line}
+                field="customer_item_code"
+                show={(v) => String(v)}
+              />
+            ),
+          },
           {
             title: "Mô tả",
-            dataIndex: "description",
+            key: "description",
             width: 280,
-            render: (text: string) => (
-              <Typography.Text
-                ellipsis={{ tooltip: text }}
-                className="max-w-[17rem]"
-              >
-                {text}
-              </Typography.Text>
+            render: (_, line) => (
+              <Entered
+                line={line}
+                field="description"
+                show={(v) => (
+                  <Typography.Text
+                    ellipsis={{ tooltip: String(v) }}
+                    className="max-w-[17rem]"
+                  >
+                    {String(v)}
+                  </Typography.Text>
+                )}
+              />
             ),
           },
           {
@@ -228,10 +255,11 @@ export function LinesTable({
               <Entered
                 line={line}
                 field="quantity"
-                show={(v) => (
+                withUnit
+                show={(v, uom) => (
                   <Quantity
                     value={typeof v === "string" ? v : null}
-                    uom={line.uom}
+                    uom={uom}
                   />
                 )}
               />
