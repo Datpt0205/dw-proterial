@@ -8,7 +8,7 @@ of this tenant, except the invitation's lookup by email, which reveals nothing
 beyond "already a member here" (409).
 
 Names sort with the ICU Vietnamese collation (`vi-VN-x-icu`), present in the
-pinned `postgres:16-alpine` image (measured 2026-10-08: Đ after D, Ê after E;
+postgres image infra/compose pins (measured 2026-10-08 on 16.14-alpine: Đ after D, Ê after E;
 the database default puts every accented name after Z). The list is not paged:
 it is one tenant's people, read through `ix_memberships_tenant_user`.
 """

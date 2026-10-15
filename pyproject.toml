@@ -25,17 +25,6 @@ dw-api = { workspace = true }
 dw-docgen = { workspace = true }
 dw-reader = { workspace = true }
 dw-worker = { workspace = true }
-# Docling (the worker's optional `parsers` extra) pulls torch, whose default
-# wheels bundle a multi-GB CUDA runtime. Document parsing runs fine on CPU, so
-# pin the CPU-only build: far smaller and faster to install, and the only
-# sensible default for a host with no GPU.
-torch = [{ index = "pytorch-cpu" }]
-torchvision = [{ index = "pytorch-cpu" }]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
 
 [dependency-groups]
 dev = [

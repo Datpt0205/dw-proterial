@@ -135,12 +135,6 @@ check-model: ## Probe the configured LLM gateway (live call, needs OPENAI_* in .
 check-rerank: ## Probe the configured reranker (live call, needs DW_API_RERANK_* in .env)
 	uv run python scripts/check_rerank.py
 
-check-deepgram: ## Probe Deepgram transcription (live call, needs DEEPGRAM_API_KEY in .env)
-	python scripts/check_deepgram.py
-
-check-search: ## Probe the search providers (live calls, needs SERPER/EXA/TAVILY keys in .env)
-	python scripts/check_search_providers.py
-
 eval-smoke: ## Evaluation smoke suite (deterministic safety-gate graders)
 	uv run python scripts/run_evals.py --smoke
 

@@ -329,3 +329,74 @@ def test_a_tracked_document_under_docs_fails(repo: Path) -> None:
     assert result.returncode == 1
     assert "docs/sales/requirements.docx is tracked" in result.stdout
     assert "docs/design/handoff.png is tracked" in result.stdout
+
+
+def test_a_term_in_a_pushed_commit_message_fails_and_the_output_never_names_it(
+    repo: Path, tmp_path: Path
+) -> None:
+    """A message is published with the push; only the range given is read."""
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "clean subject")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", f"fix: the order\n\nAsked by {NAME}.")
+
+    result = run(repo, deny(tmp_path, NAME), "--commits", f"{base}..HEAD")
+
+    assert result.returncode == 1, result.stdout
+    assert "(its message):3: deny-list line 2" in result.stdout
+    assert "1 deny-list hit(s) in 2 commit message(s)." in result.stdout
+    assert "nhung" not in (result.stdout + result.stderr).lower()
+
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a later clean commit")
+    later = run(repo, deny(tmp_path, NAME), "--commits", "HEAD~1..HEAD")
+    assert later.returncode == 0, later.stdout
+    assert "0 deny-list hit(s) in 1 commit message(s)." in later.stdout
+
+
+def test_a_push_scan_reads_a_message_an_earlier_cancelled_run_never_read(
+    repo: Path, tmp_path: Path
+) -> None:
+    """CI scans a push as `--commits <head>`, not `before..head`.
+
+    Push 1 lands a message with a term; push 2 lands before push 1's run gets
+    to the guard, and `cancel-in-progress` cancels it. Push 2's `before` is
+    push 1's tip, so the range form never reads push 1's message.
+    """
+    _git(repo, "commit", "-q", "--allow-empty", "-m", f"push 1\n\nAsked by {NAME}.")
+    push_1_tip = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "push 2, clean")
+
+    range_form = run(repo, deny(tmp_path, NAME), "--commits", f"{push_1_tip}..HEAD")
+    head_form = run(repo, deny(tmp_path, NAME), "--commits", "HEAD")
+
+    assert range_form.returncode == 0, range_form.stdout
+    assert head_form.returncode == 1, head_form.stdout
+    assert "(its message):3: deny-list line 2" in head_form.stdout
+
+
+def test_a_commit_range_git_cannot_read_fails(repo: Path, tmp_path: Path) -> None:
+    result = run(repo, deny(tmp_path, NAME), "--commits", "no-such-rev..HEAD")
+
+    assert result.returncode == 1
+    assert "git cannot list the commits" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "branch", ["po/doan-thi-hong-nhung", "Doan_Thi_Hong_Nhung", "fix.doan.thi.hong.nhung"]
+)
+def test_a_term_in_the_branch_name_fails(repo: Path, tmp_path: Path, branch: str) -> None:
+    result = run(repo, deny(tmp_path, NAME), "--branch", branch)
+
+    assert result.returncode == 1, result.stdout
+    assert "branch name:1: deny-list line 2" in result.stdout
+    assert "nhung" not in (result.stdout + result.stderr).lower()
+
+
+def test_a_clean_branch_name_passes(repo: Path, tmp_path: Path) -> None:
+    result = run(repo, deny(tmp_path, NAME), "--branch", "feat/sales-ticket-26")
+
+    assert result.returncode == 0, result.stdout
+    assert "0 deny-list hit(s) in the branch name." in result.stdout

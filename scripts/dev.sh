@@ -15,18 +15,33 @@ fi
 # .env.example gains keys over time and `make bootstrap` only writes .env when
 # it is absent, so a stale .env otherwise fails deep inside one child process
 # whose stack trace scrolls past in the shared log.
-for var in DW_API_DATABASE_URL DW_WORKER_DATABASE_URL DW_CHAT_DATABASE_URL; do
+for var in DW_API_DATABASE_URL DW_WORKER_DATABASE_URL DW_CHAT_DATABASE_URL DW_PUBLIC_WEB_URL; do
   [ -n "${!var:-}" ] || {
     echo "!! $var is missing — copy the new keys from .env.example into .env" >&2
     exit 1
   }
 done
 
-# `make dev` and `make docker-up` both want 3000/8000/8100, and so does a second
+# The web runs on the port of DW_PUBLIC_WEB_URL: the origin the API allows
+# (CORS) and the worker links to, and the one the local Keycloak realm must
+# allow as a redirect (infra/keycloak/dw-realm.json, localhost:3300, which is
+# what .env.example sets). A port chosen here instead signs in nowhere.
+# DW_WEB_PORT still overrides it, for a checkout that moves everything.
+web_port="${DW_PUBLIC_WEB_URL##*:}"
+web_port="${web_port%%/*}"
+WEB_PORT="${DW_WEB_PORT:-$web_port}"
+case "$WEB_PORT" in
+  '' | *[!0-9]*)
+    echo "!! DW_PUBLIC_WEB_URL ($DW_PUBLIC_WEB_URL) names no port: set DW_WEB_PORT" >&2
+    exit 1
+    ;;
+esac
+
+# `make dev` and `make docker-up` both want the API and web ports, and so does a second
 # `make dev`. Left alone the loser dies quietly in a shared log and the stack
 # looks half-up, so name the conflict and stop.
 busy=""
-for spec in "${DW_API_PORT:-8000}:API" "${DW_WEB_PORT:-3000}:web"; do
+for spec in "${DW_API_PORT:-8000}:API" "$WEB_PORT:web"; do
   port="${spec%%:*}"
   if ss -ltn "sport = :$port" 2>/dev/null | grep -q LISTEN; then
     busy="$busy  port $port (${spec##*:}) is already in use"$'\n'
@@ -72,8 +87,8 @@ pids+=($!)
 
 pids+=($!)
 
-echo ">> starting web on :${DW_WEB_PORT:-3000}"
-pnpm --filter @dw/web dev --port "${DW_WEB_PORT:-3000}" &
+echo ">> starting web on :$WEB_PORT"
+pnpm --filter @dw/web dev --port "$WEB_PORT" &
 pids+=($!)
 
 wait

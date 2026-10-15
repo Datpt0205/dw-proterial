@@ -1,0 +1,153 @@
+name: ClamAV signatures bump
+
+# The malware scanner's signatures live inside its image (sales ticket 25):
+# `clamav/clamav:<version>` is rebuilt daily with the day's signatures, and
+# compose pins it by tag AND digest, so the pin ages unless someone moves it.
+# This job moves it: pull the pinned tag, fail if the tag is no longer
+# rebuilt (built more than 8 days ago), stop if its digest has not changed,
+# otherwise scan the new image with trivy, pin it, start clamd on it and run
+# the EICAR suite (test_clamd.py), and only then open a pull request.
+#
+# Only the digest moves. A new ClamAV version (a different tag) is a
+# deliberate change by a person, like any other image bump.
+#
+# Two things this workflow cannot do for itself:
+# - Opening the pull request needs the repository setting "Allow GitHub
+#   Actions to create and approve pull requests" (Settings > Actions >
+#   General). Without it the branch is pushed and the last step fails, which
+#   says so.
+# - A pull request opened with the workflow's own token starts no other
+#   workflow, so CI does not run on it by itself: that is why the scan and
+#   the EICAR suite run here. Close and reopen the pull request (or push to
+#   it) to run CI before merging.
+
+on:
+  schedule:
+    - cron: "0 20 * * 0" # Monday 03:00 Asia/Ho_Chi_Minh
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: clamav-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Pin the ClamAV image to today's digest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE_PATH: infra/compose/docker-compose.yml
+      BRANCH: bot/clamav-digest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull the pinned tag and compare digests
+        id: digest
+        run: |
+          line=$(grep -E '^ +image: clamav/clamav:' "$COMPOSE_FILE_PATH")
+          ref=${line#*image: }
+          tag_ref=${ref%@*}
+          old=${ref#*@}
+          docker pull "$tag_ref"
+          new=$(docker image inspect --format '{{index .RepoDigests 0}}' "$tag_ref")
+          new=${new#*@}
+          echo "pinned $tag_ref@$old"
+          echo "today  $tag_ref@$new"
+          # An unchanged digest must mean "rebuilt today, same image", never
+          # "this tag stopped being rebuilt" (a newer ClamAV version shipped):
+          # then every week would read as nothing to do while the signatures
+          # age, which is what this job exists to prevent.
+          created=$(docker image inspect --format '{{.Created}}' "$tag_ref")
+          built=$(date -u -d "$created" +%s)
+          age_days=$(( ($(date -u +%s) - built) / 86400 ))
+          echo "built  $created ($age_days day(s) ago)"
+          if [ "$age_days" -gt 8 ]; then
+            echo "::error::$tag_ref was built $age_days days ago: the tag is no longer rebuilt. Bump the ClamAV version in $COMPOSE_FILE_PATH."
+            exit 1
+          fi
+          {
+            echo "tag_ref=$tag_ref"
+            echo "old=$old"
+            echo "new=$new"
+            echo "changed=$([ "$old" != "$new" ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+      - name: trivy (HIGH+ with a fix available, as for the platform's images)
+        if: steps.digest.outputs.changed == 'true'
+        env:
+          IMAGE: ${{ steps.digest.outputs.tag_ref }}
+        run: |
+          # ci.yml owns the trivy pin; read it rather than keep a second copy.
+          TRIVY_VERSION=$(sed -n 's/^ *TRIVY_VERSION: "\([0-9.]*\)"$/\1/p' .github/workflows/ci.yml)
+          [ "$(printf '%s\n' "$TRIVY_VERSION" | grep -c .)" = 1 ] \
+            || { echo "::error::expected one TRIVY_VERSION pin in ci.yml, found: '$TRIVY_VERSION'"; exit 1; }
+          curl --fail -sSL \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz trivy
+          ./trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --quiet "$IMAGE"
+          rm trivy
+      - name: Pin the new digest
+        if: steps.digest.outputs.changed == 'true'
+        env:
+          TAG_REF: ${{ steps.digest.outputs.tag_ref }}
+          OLD: ${{ steps.digest.outputs.old }}
+          NEW: ${{ steps.digest.outputs.new }}
+        run: |
+          sed -i "s|$TAG_REF@$OLD|$TAG_REF@$NEW|" "$COMPOSE_FILE_PATH"
+          git diff --exit-code --quiet -- "$COMPOSE_FILE_PATH" && { echo "the pin did not change"; exit 1; }
+          git diff -- "$COMPOSE_FILE_PATH"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.digest.outputs.changed == 'true'
+        with:
+          version: "0.11.31"
+          enable-cache: true
+      - name: Start clamd on the new pin
+        if: steps.digest.outputs.changed == 'true'
+        run: |
+          cp .env.example .env
+          docker compose --env-file .env -f "$COMPOSE_FILE_PATH" \
+            -f infra/compose/docker-compose.scan-test.yml --profile scan up -d --wait clamav
+      - name: EICAR suite against it
+        if: steps.digest.outputs.changed == 'true'
+        env:
+          DW_TEST_CLAMD: 127.0.0.1:3310
+        run: |
+          uv sync --all-packages
+          uv run pytest -m integration packages/python/dw_sales/tests/integration/test_clamd.py
+      - name: Open or update the pull request
+        if: steps.digest.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_REF: ${{ steps.digest.outputs.tag_ref }}
+          NEW: ${{ steps.digest.outputs.new }}
+        run: |
+          version=$(docker run --rm --entrypoint clamscan "$TAG_REF" --version) || version="clamscan --version failed"
+          title="build(compose): ClamAV signatures refreshed, ${TAG_REF#*:} at today's digest"
+          body=$(printf '%s\n' \
+            "The scheduled bump (.github/workflows/clamav-bump.yml) moved the pinned digest." \
+            "" \
+            "- image: \`$TAG_REF@$NEW\`" \
+            "- clamscan --version: \`$version\`" \
+            "- trivy HIGH+ with a fix: none" \
+            "- EICAR suite (test_clamd.py) against clamd on this image: passed" \
+            "" \
+            "CI does not start on a pull request this workflow opens: close and reopen it to run CI before merging.")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add "$COMPOSE_FILE_PATH"
+          git commit -m "$title" -m "Pinned $TAG_REF@$NEW ($version). trivy HIGH+ with a fix: none; EICAR suite passed."
+          git push --force origin "$BRANCH"
+          if [ "$(gh pr list --head "$BRANCH" --state open --json number --jq length)" = "0" ]; then
+            gh pr create --base main --head "$BRANCH" --title "$title" --body "$body"
+          else
+            gh pr edit "$BRANCH" --title "$title" --body "$body"
+          fi
+      - name: Stop clamd
+        if: always() && steps.digest.outputs.changed == 'true'
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE_PATH" \
+            -f infra/compose/docker-compose.scan-test.yml --profile scan down -v || true

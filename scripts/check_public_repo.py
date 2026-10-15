@@ -9,6 +9,19 @@ the checkout, named by `DW_PUBLIC_REPO_DENYLIST`, and in CI it is the
 
     uv run python scripts/check_public_repo.py            every file git ls-files lists
     uv run python scripts/check_public_repo.py --staged   what the next commit holds
+    ... --commits REVISIONS --branch NAME                 also what a push publishes besides files
+
+A commit message and a branch name are published as surely as a file. CI
+passes `--commits` every commit reachable from a pushed head (not the pushed
+range: a cancelled run would leave a push's range unread) or a pull request's
+base..head, and `--commits` takes anything `git log` does; it passes the
+branch to `--branch`, where `-`, `/` and `.` also count as the spaces
+between a term's words (`po-nguyen-van-a`). Neither
+can be scanned before a commit (the pre-commit hook runs before the message
+exists), and a hit in a pushed message is only fixed by rewriting history.
+Not seen: pull request titles and bodies, and a branch pushed without a pull
+request, whose name and messages GitHub publishes while CI runs only on main
+and on pull requests.
 
 The deny-list is UTF-8, one term per line; blank lines and `#` lines are
 skipped. A term matches as a SUBSTRING of a file's text after both are
@@ -173,16 +186,22 @@ def texts(where: str, data: bytes) -> Iterator[tuple[str, str]]:
         yield where, _U_ESCAPE.sub(_unescaped_char, html.unescape(text))
 
 
-def scan_file(path: str, data: bytes, terms: list[Term]) -> list[str]:
+def scan_text(where: str, text: str, terms: list[Term]) -> list[str]:
     """One line per hit, naming the place and the deny-list line, never the term."""
+    found: list[str] = []
+    normalised = normalise(text)
+    for term in terms:
+        for match in term.pattern.finditer(normalised):
+            line = normalised.count("\n", 0, match.start()) + 1
+            found.append(f"{where}:{line}: deny-list line {term.entry}")
+    return found
+
+
+def scan_file(path: str, data: bytes, terms: list[Term]) -> list[str]:
     found: list[str] = []
     try:
         for where, text in chain([(f"{path} (its name)", path)], texts(path, data)):
-            normalised = normalise(text)
-            for term in terms:
-                for match in term.pattern.finditer(normalised):
-                    line = normalised.count("\n", 0, match.start()) + 1
-                    found.append(f"{where}:{line}: deny-list line {term.entry}")
+            found.extend(scan_text(where, text, terms))
     except UnseenError as exc:
         print(f"{path}: NOT CHECKED ({exc}); this scan cannot see its content")
     except Exception as exc:  # any parser failure is the same answer: not checked
@@ -213,6 +232,21 @@ def staged_files(root: Path) -> Iterator[tuple[str, bytes]]:
         yield path, _git(root, "show", f":{path}")
 
 
+def commit_messages(root: Path, revisions: str) -> Iterator[tuple[str, str]]:
+    """Each commit `git log <revisions>` lists, as (sha, message)."""
+    output = _git(root, "log", "-z", "--format=%H%n%B", revisions, "--")
+    for entry in output.decode("utf-8", errors="replace").split("\0"):
+        sha, _, message = entry.strip("\n").partition("\n")
+        if sha:
+            yield sha, message
+
+
+def scan_branch(name: str, terms: list[Term]) -> list[str]:
+    """A branch name separates words with `-`, `/` or `.`, where a term has spaces."""
+    spaced = re.sub(r"[-/.]+", " ", name)
+    return sorted({hit for text in (name, spaced) for hit in scan_text("branch name", text, terms)})
+
+
 def gitignore_problems(root: Path) -> list[str]:
     problems = []
     for probe in IGNORED_PROBES:
@@ -229,7 +263,14 @@ def gitignore_problems(root: Path) -> list[str]:
     return problems
 
 
-def run(root: Path, *, staged: bool, environ: dict[str, str]) -> int:
+def run(
+    root: Path,
+    *,
+    staged: bool,
+    environ: dict[str, str],
+    commits: str | None = None,
+    branch: str | None = None,
+) -> int:
     problems = gitignore_problems(root)
     for problem in problems:
         print(problem)
@@ -264,6 +305,28 @@ def run(root: Path, *, staged: bool, environ: dict[str, str]) -> int:
         print(finding)
     scope = "staged" if staged else "tracked"
     print(f"{len(findings)} deny-list hit(s) in {scope} files, {len(terms)} term(s) checked.")
+
+    if commits is not None:
+        try:
+            listed = list(commit_messages(root, commits))
+        except subprocess.CalledProcessError:
+            print(f"FAILED: git cannot list the commits in {commits!r}, so none was checked")
+            return 1
+        hits = [
+            found
+            for sha, message in listed
+            for found in scan_text(f"commit {sha[:12]} (its message)", message, terms)
+        ]
+        for finding in hits:
+            print(finding)
+        print(f"{len(hits)} deny-list hit(s) in {len(listed)} commit message(s).")
+        findings.extend(hits)
+    if branch is not None:
+        hits = scan_branch(branch, terms)
+        for finding in hits:
+            print(finding)
+        print(f"{len(hits)} deny-list hit(s) in the branch name.")
+        findings.extend(hits)
     return 1 if findings or problems else 0
 
 
@@ -272,9 +335,15 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     parser.add_argument("--staged", action="store_true", help="scan the index, for a commit")
+    parser.add_argument(
+        "--commits", metavar="REVISIONS", help="also scan the messages `git log REVISIONS` lists"
+    )
+    parser.add_argument("--branch", metavar="NAME", help="also scan this branch name")
     args = parser.parse_args()
     root = Path(_git(Path.cwd(), "rev-parse", "--show-toplevel").decode().strip())
-    return run(root, staged=args.staged, environ=dict(os.environ))
+    return run(
+        root, staged=args.staged, environ=dict(os.environ), commits=args.commits, branch=args.branch
+    )
 
 
 if __name__ == "__main__":
