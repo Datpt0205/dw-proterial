@@ -66,7 +66,6 @@ function control(prices: boolean, onCorrected = () => {}) {
         order={o}
         finding={f}
         canEdit
-        canTypeAmounts={prices}
         onCorrected={onCorrected}
       />
     </UiProvider>,
@@ -121,5 +120,32 @@ describe("a value DW1 was not sure of, corrected field by field (ticket 15)", ()
     // The quantity is no price: it is still typed.
     const quantity = screen.getByRole("row", { name: /Số lượng/ });
     expect(within(quantity).getByRole("textbox")).toBeTruthy();
+  }, 20_000);
+
+  it("locks a hidden total like a hidden price", () => {
+    // The server hides every amount the viewer may not read; a flagged total
+    // it hid is locked the same way a hidden unit price is.
+    const { order: o } = flagged(false);
+    render(
+      <UiProvider>
+        <ValueCorrections
+          order={{ ...o, total: { hidden: true } }}
+          finding={finding({
+            key: "value_uncertain:total",
+            code: "value_uncertain",
+            line_no: null,
+            expected: null,
+            actual: "hidden_row",
+            allowed: ["ask_customer"],
+            fields: ["total", "po_no"],
+          })}
+          canEdit
+          onCorrected={() => {}}
+        />
+      </UiProvider>,
+    );
+    const total = screen.getByRole("row", { name: /Tổng/ });
+    expect(within(total).queryByRole("textbox")).toBeNull();
+    expect(within(total).getByText(PRICE_SENTENCE)).toBeTruthy();
   }, 20_000);
 });

@@ -57,10 +57,11 @@ function fit(fits: boolean | null) {
 
 /**
  * The candidate picker (G13): the PO line beside each candidate item, one
- * attribute per row, PO value | item value | khớp/lệch. Only the attributes the
- * PO states as its own fields are compared here (unit, quantity against MOQ
- * and pack); the cable attributes stay in the PO's description, shown above:
- * a second reader in the browser would be a second answer. Where a local
+ * attribute per row, PO value | item value | khớp/lệch. The PO's own fields
+ * are compared as printed (unit, quantity against MOQ and pack); the cable
+ * attributes are what DW1 read from the description when it mapped the line
+ * (`basis.stated_attributes`), never a second reading in the browser. A line
+ * DW1 did not read keeps them in the description, shown above. Where a local
  * model read the description (ticket 28), what it read is shown with the text
  * each attribute came from and who read it (`DescriptionReadingPanel`). DW1
  * checks the line again against the code Sales confirms, and any finding it
@@ -193,7 +194,7 @@ export function CandidatePicker({
             pagination={false}
             loading={items.loading}
             scroll={{ x: "max-content" }}
-            dataSource={rows(line, shown, byCode)}
+            dataSource={comparisonRows(line, shown, byCode)}
             columns={[
               { title: "Thuộc tính", dataIndex: "attribute" },
               { title: "Trên PO", dataIndex: "po" },
@@ -227,8 +228,28 @@ export function CandidatePicker({
   );
 }
 
-function rows(line: Line, codes: string[], byCode: Map<string, Item>): Row[] {
+/** The comparison table's rows: one per attribute, the PO's value, then
+ * each candidate's. Exported for its test. */
+export function comparisonRows(
+  line: Line,
+  codes: string[],
+  byCode: Map<string, Item>,
+): Row[] {
   const qty = Number(line.quantity);
+  const stated = line.basis.stated_attributes;
+  // What the description stated, as DW1 read it when it mapped the line,
+  // marked as a reading so it never looks like a value printed in a PO field
+  // of its own (ui-quality §7); a line it did not read keeps the attribute
+  // in the description.
+  const po = <T,>(value: T | null | undefined, show: (v: T) => string) =>
+    !stated
+      ? "Trong mô tả"
+      : `${value == null ? "Không ghi" : show(value)} (DW1 đọc từ mô tả)`;
+  // Mirrors StatedAttributes.fits: exact equality per stated attribute.
+  // test_descriptions.py pins fits to that, so a fits that starts to forgive
+  // a spelling fails there, not as a picker saying lệch where DW1 matched.
+  const against = <T,>(value: T | null | undefined, own: T | null) =>
+    !stated || value == null ? null : own === value;
   const each = (pick: (item: Item) => { text: string; fits: boolean | null }) =>
     Object.fromEntries(
       codes.map((c) => {
@@ -243,26 +264,38 @@ function rows(line: Line, codes: string[], byCode: Map<string, Item>): Row[] {
     {
       key: "spec",
       attribute: "Số spec",
-      po: "Trong mô tả",
-      values: each((i) => ({ text: i.spec_no, fits: null })),
+      po: po(stated?.spec_no, String),
+      values: each((i) => ({
+        text: i.spec_no,
+        fits: against(stated?.spec_no, i.spec_no),
+      })),
     },
     {
       key: "family",
       attribute: "Họ cáp",
-      po: "Trong mô tả",
-      values: each((i) => ({ text: i.family ?? "Không rõ", fits: null })),
+      po: po(stated?.family, String),
+      values: each((i) => ({
+        text: i.family ?? "Không rõ",
+        fits: against(stated?.family, i.family),
+      })),
     },
     {
       key: "cores",
       attribute: "Số lõi",
-      po: "Trong mô tả",
-      values: each((i) => ({ text: String(i.cores), fits: null })),
+      po: po(stated?.cores, String),
+      values: each((i) => ({
+        text: String(i.cores),
+        fits: against(stated?.cores, i.cores),
+      })),
     },
     {
       key: "gauge",
       attribute: "Tiết diện",
-      po: "Trong mô tả",
-      values: each((i) => ({ text: i.gauge, fits: null })),
+      po: po(stated?.gauge, String),
+      values: each((i) => ({
+        text: i.gauge,
+        fits: against(stated?.gauge, i.gauge),
+      })),
     },
     {
       key: "uom",

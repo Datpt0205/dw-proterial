@@ -4173,6 +4173,16 @@
                 "type": "null"
               }
             ]
+          },
+          "stated_attributes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatedAttributesView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4184,7 +4194,8 @@
           "lead_time_days",
           "lead_time_source",
           "checks_run",
-          "description_reading"
+          "description_reading",
+          "stated_attributes"
         ],
         "title": "LineBasisView",
         "type": "object"
@@ -9517,6 +9528,63 @@
           "at"
         ],
         "title": "StampView",
+        "type": "object"
+      },
+      "StatedAttributesView": {
+        "description": "What the description stated of the attributes the candidate picker\ncompares with each item (`ItemView`), as stamped when the line was\nmapped (`LineBasis.stated_attributes`). None: not stated.",
+        "properties": {
+          "cores": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cores"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "gauge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gauge"
+          },
+          "spec_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec No"
+          }
+        },
+        "required": [
+          "spec_no",
+          "family",
+          "cores",
+          "gauge"
+        ],
+        "title": "StatedAttributesView",
         "type": "object"
       },
       "StepCount": {

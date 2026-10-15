@@ -1064,6 +1064,22 @@ async def test_a_candidate_is_confirmed_and_its_line_checked_again_against_the_i
     assert all(not f.is_open for f in confirmed.findings if f.key == f"code_ambiguous:{line_no}")
 
 
+async def test_the_attributes_a_line_was_mapped_by_stay_on_its_basis_after_a_confirm() -> None:
+    """The candidate picker compares each candidate with what the description
+    stated, so the stamp is the one the candidates came from and a confirm or
+    a recheck keeps it; a line the convert list decided was never read."""
+    intake, case = await _in_review("M05")
+    stated = case.line(2).basis.stated_attributes
+    item = (await CATALOG.item_by_prv_code(SCOPE, "CB-2005")).data
+    assert stated is not None and item is not None and stated.fits(item)
+    assert case.line(1).basis.stated_attributes is not None
+    assert case.line(3).basis.stated_attributes is None
+
+    confirmed = await intake.confirm_mapping(SCOPE, case, 2, "CB-2005", AN, T0)
+
+    assert confirmed.line(2).basis.stated_attributes == stated
+
+
 async def test_a_code_typed_for_an_unmapped_line_must_be_in_the_item_master() -> None:
     """M04 line 3 has no candidate, so Sales may type a code: one the item
     master holds, which the line is then checked against, and no other."""

@@ -1,6 +1,7 @@
 import {
   AuditOutlined,
   BuildOutlined,
+  ControlOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   FileTextOutlined,
@@ -17,7 +18,8 @@ import { SALES_BADGE } from "./badge-keys";
  * into `lib/nav/registry.ts` once.
  *
  * Each item is keyed to the scope its page reads with (ticket 05): the case
- * pages to `sales.case.read`, the overview to `sales.overview.read`. So a
+ * pages to `sales.case.read`, the overview to `sales.overview.read`, the
+ * rules to `sales.rules.propose` (the documents can hold price rules). So a
  * viewer who reads aggregates only (`sales_viewer`) is shown the overview and
  * nothing else, and someone with no `sales.*` scope sees no Sales group.
  * Navigation, never authorization: every route checks its scope again.
@@ -78,6 +80,13 @@ export const salesNav: NavEntry[] = [
         hint: "Mẫu PO của từng khách: Sales lập một lần, Trưởng bộ phận duyệt, DW1 đọc các PO sau theo mẫu",
         icon: BuildOutlined,
         scope: "sales.case.read",
+      },
+      {
+        href: "/sales/rules",
+        label: "Quy tắc",
+        hint: "Quy tắc và nội dung của công ty: đang áp dụng bản nào, đề xuất phiên bản mới, người khác duyệt",
+        icon: ControlOutlined,
+        scope: "sales.rules.propose",
       },
       {
         href: "/sales/master-data",

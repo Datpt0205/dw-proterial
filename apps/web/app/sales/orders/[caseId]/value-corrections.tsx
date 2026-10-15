@@ -37,9 +37,11 @@ type Order = SalesSchemas["OrderCaseView"];
 type Finding = SalesSchemas["OrderFindingView"];
 type Correction = SalesSchemas["ValueCorrectionView"];
 
-// How each value is typed: a display choice. What each field holds, and who
-// may type an amount, is the case's to decide (`OrderCase.corrected`, 422 or
-// 403 otherwise); this only picks the antd control.
+// How each value is shown and typed: a display choice. What each field holds,
+// and who may type an amount, is the case's to decide (`OrderCase.corrected`,
+// 422 or 403 otherwise); this only picks the antd control. Whether a price
+// input is offered is read from the view: an amount the server hid from the
+// viewer is one they may not type.
 const AMOUNTS = ["unit_price", "amount", "total"];
 const DATES = ["requested_date", "po_date"];
 /** A line's number and the PO's number and revision are confirmed as read. */
@@ -94,15 +96,12 @@ export function ValueCorrections({
   order,
   finding,
   canEdit,
-  canTypeAmounts,
   onCorrected,
 }: {
   order: Order;
   finding: Finding;
   /** The viewer may decide this finding now (the case's state and their role). */
   canEdit: boolean;
-  /** The viewer holds `sales.price.read`: only they read, and type, an amount. */
-  canTypeAmounts: boolean;
   onCorrected: () => void;
 }) {
   const name = usePeople();
@@ -131,7 +130,7 @@ export function ValueCorrections({
     const { field } = row;
     const where = `${label(FIELD, field)}${finding.line_no ? `, dòng ${finding.line_no}` : ""}`;
     if (!canEdit) return null;
-    if (AMOUNTS.includes(field) && !canTypeAmounts)
+    if (isHidden(row.read))
       return <Typography.Text>{PRICE_SENTENCE}</Typography.Text>;
     const busy = pending === `correct/${finding.key}/${field}`;
     if (IDENTITY.includes(field))
