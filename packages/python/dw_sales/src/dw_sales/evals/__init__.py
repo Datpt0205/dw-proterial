@@ -10,18 +10,25 @@ from dw_sales.evals.handoffs import GRADERS as HANDOFF_GRADERS
 from dw_sales.evals.intents import GRADERS as INTENT_GRADERS
 from dw_sales.evals.layouts import GRADERS as LAYOUT_GRADERS
 from dw_sales.evals.legacy import GRADERS as LEGACY_GRADERS
+from dw_sales.evals.recorded import failing_without_live_answers
 from dw_sales.evals.replies import GRADERS as REPLY_GRADERS
 from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
 
+# Every grader, failing a live case whose model gave no usable answer
+# (`recorded.failing_without_live_answers`): one wrap here, so a grader
+# added to any table is covered without remembering to.
 GRADERS = {
-    **ORDER_GRADERS,
-    **DESCRIPTION_GRADERS,
-    **INTENT_GRADERS,
-    **REQUEST_GRADERS,
-    **REPLY_GRADERS,
-    **HANDOFF_GRADERS,
-    **LAYOUT_GRADERS,
-    **LEGACY_GRADERS,
+    name: failing_without_live_answers(grader)
+    for name, grader in {
+        **ORDER_GRADERS,
+        **DESCRIPTION_GRADERS,
+        **INTENT_GRADERS,
+        **REQUEST_GRADERS,
+        **REPLY_GRADERS,
+        **HANDOFF_GRADERS,
+        **LAYOUT_GRADERS,
+        **LEGACY_GRADERS,
+    }.items()
 }
 
 __all__ = ["GRADERS"]

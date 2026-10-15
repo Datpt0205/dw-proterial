@@ -7,10 +7,17 @@ inputs it never saw: a change to what a step sends shows up as a fixture to
 record again, not as a quietly different score. Ticket 28's per-line answers
 keep their own replay (`descriptions.Replayed`); `ByPrompt` puts the two
 behind one `InterpretationPort` for a flow that calls both.
+
+In the live lane, `Observed` wraps the model under test, and
+`failing_without_live_answers` fails a case in which that model was called
+and gave no usable answer: every model step degrades an unavailable answer
+to a person, which the guards grade as safe, so a run of timeouts would
+otherwise pass every case while reading nothing.
 """
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import statistics
@@ -24,6 +31,7 @@ from pydantic import BaseModel, ValidationError
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.prompts import PromptRegistry
+from dw_evals.graders import Grader, GraderContext, GradeResult
 from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 
 
@@ -131,6 +139,8 @@ class Observed:
     # Every other step's: prompt id -> answer key -> answer.
     recorded: dict[str, dict[str, Any]] = field(default_factory=dict)
     calls: list[tuple[PromptRef, RunContext, dict[str, str]]] = field(default_factory=list)
+    # The calls that gave an answer in the schema; the rest were unavailable.
+    answered: int = 0
 
     @property
     def model_profile(self) -> str:
@@ -167,6 +177,7 @@ class Observed:
             raise
         finally:
             self.seconds.setdefault(prompt.prompt_id, []).append(time.perf_counter() - started)
+        self.answered += 1
         if per_line:
             self._lines(inputs, answer)
         else:
@@ -198,3 +209,31 @@ def latency(model: Any, prompt_id: str) -> dict[str, float] | None:
         "p95_s": round(p95, 2),
         "max_s": round(ordered[-1], 2),
     }
+
+
+def failing_without_live_answers(grader: Grader) -> Grader:
+    """``grader``, failing a live case in which the model under test was
+    called and not one call gave a usable answer (ticket 28's live lane
+    reported PASS with every call unavailable). Its own verdict stands
+    otherwise; the smoke (no live model) is graded as before. A live model
+    that does not count its answers fails closed."""
+
+    @functools.wraps(grader)
+    def graded(
+        ctx: GraderContext, input_data: dict[str, Any], expected: dict[str, Any]
+    ) -> GradeResult:
+        model = ctx.live_model
+        if model is None:
+            return grader(ctx, input_data, expected)
+        if not isinstance(model, Observed):
+            return GradeResult.fail("the live model is not observed: its answers are not counted")
+        calls, answered = len(model.calls), model.answered
+        result = grader(ctx, input_data, expected)
+        made = len(model.calls) - calls
+        if result.passed and made and model.answered == answered:
+            return GradeResult.fail(
+                "the live model gave no usable answer", live_calls=made, **result.details
+            )
+        return result
+
+    return graded
