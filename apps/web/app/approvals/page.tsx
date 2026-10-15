@@ -21,7 +21,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import type { Approval } from "@dw/contracts";
-import { PageHeader, RegionState } from "@dw/ui";
+import { OFFLINE_REASON, PageHeader, RegionState, useOnline } from "@dw/ui";
 import { LoadError } from "../../components/load-error";
 import { LoadMore } from "../../components/load-more";
 import {
@@ -44,6 +44,8 @@ export default function ApprovalsPage() {
   const [error, setError] = useState<string | null>(null);
   const canDecide = hasScope("approvals.decide");
   const keys = useIdempotencyKeys();
+  // The shell draws the offline banner; a decision waits for the network.
+  const online = useOnline();
 
   const {
     items: approvals,
@@ -137,14 +139,16 @@ export default function ApprovalsPage() {
           // A context with its own inbox decides there: one door per approval.
           const inbox = approvalInbox(approval);
           const lacking = missingScope(approval);
-          const lockReason =
+          const scopeReason =
             lacking === null
               ? null
               : `Chỉ người có quyền ${lacking} được quyết yêu cầu này`;
           // Withdrawing your own request is not deciding it: the server lets
           // the requester reject without the stamped scope, so the page does too.
-          const approveLocked = lacking !== null;
-          const rejectLocked = lacking !== null && !approval.requested_by_me;
+          const approveLocked = lacking !== null || !online;
+          const rejectLocked =
+            (lacking !== null && !approval.requested_by_me) || !online;
+          const lockReason = online ? scopeReason : OFFLINE_REASON;
           // A disabled button takes no pointer events, so the tooltip hangs on
           // a wrapper; the same sentence also sits beside the buttons as text.
           const withLock = (locked: boolean, button: ReactNode) =>
@@ -248,9 +252,9 @@ export default function ApprovalsPage() {
                           Từ chối
                         </Button>,
                       )}
-                      {lockReason !== null && (
+                      {scopeReason !== null && (
                         <Typography.Text type="secondary">
-                          {lockReason}
+                          {scopeReason}
                           {approval.requested_by_me &&
                             ". Bạn vẫn rút được yêu cầu của mình."}
                         </Typography.Text>

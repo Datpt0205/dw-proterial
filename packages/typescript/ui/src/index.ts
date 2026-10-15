@@ -2,6 +2,7 @@ export { appTheme, STATUS_TONES, type StatusTone } from "./theme";
 export { FONT_VARIABLE, THEME_ROOT_CLASS } from "./theme-class";
 export { UiProvider } from "./provider";
 export { AppShell, type AppShellProps } from "./app-shell";
+export { OFFLINE_REASON, useOnline } from "./network-status";
 export {
   PageHeader,
   type PageHeaderCrumb,
