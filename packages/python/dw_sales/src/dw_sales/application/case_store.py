@@ -436,7 +436,12 @@ class SourceServedPort(Protocol):
 
 
 class ArtifactLogPort(Protocol):
-    async def add(self, artifact: ArtifactRecord) -> None: ...
+    async def add(self, artifact: ArtifactRecord) -> bool:
+        """Record the artifact, unless its case already holds a file of its
+        kind and content type at its version: then record nothing and return
+        False. A render that raced another one at the same version loses here,
+        once the other has committed."""
+        ...
 
     async def get(self, artifact_id: uuid.UUID) -> ArtifactRecord | None: ...
 

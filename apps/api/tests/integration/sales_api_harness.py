@@ -109,6 +109,9 @@ class MemoryArtifacts:
     async def get_object(self, key: str) -> bytes:
         return self.objects[key]
 
+    async def delete_object(self, key: str) -> None:
+        self.objects.pop(key, None)
+
 
 @dataclass
 class Persona:

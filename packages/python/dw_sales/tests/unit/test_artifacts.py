@@ -185,6 +185,11 @@ class World:
     objects: dict[str, bytes] = field(default_factory=dict)
     audit: list[AuditEvent] = field(default_factory=list)
     commits: int = 0
+    # Run once, as the next object is stored: another request in between.
+    meanwhile: Callable[[], Awaitable[None]] | None = None
+    # The next commit fails: before anything is kept, or after (a commit that
+    # went through and failed on the way back).
+    commit_fails: str | None = None
 
     def put(self, case: OrderCase | QuoteCase, scope: SalesScope = SCOPE) -> None:
         if isinstance(case, OrderCase):
@@ -207,8 +212,15 @@ class _Artifacts:
         self.world, self.scope = world, scope
         self.pending: list[ArtifactRecord] = []
 
-    async def add(self, artifact: ArtifactRecord) -> None:
+    async def add(self, artifact: ArtifactRecord) -> bool:
+        """As the store's unique key does: one file of a kind and content
+        type per case version, among what is committed and what is pending."""
+        key = _render_key(artifact)
+        held = [*await self.for_case(artifact.case_kind, artifact.case_id), *self.pending]
+        if any(_render_key(record) == key for record in held):
+            return False
         self.pending.append(artifact)
+        return True
 
     async def get(self, artifact_id: uuid.UUID) -> ArtifactRecord | None:
         return self.world.artifacts.get((self.scope, artifact_id))
@@ -219,6 +231,10 @@ class _Artifacts:
             for (scope, _), r in self.world.artifacts.items()
             if scope == self.scope and (r.case_kind, r.case_id) == (case_kind, case_id)
         ]
+
+
+def _render_key(record: ArtifactRecord) -> tuple[object, ...]:
+    return (record.case_kind, record.case_id, record.case_version, record.kind, record.content_type)
 
 
 class _Audit:
@@ -240,10 +256,15 @@ class Work:
         self.audit = _Audit()
 
     async def commit(self) -> None:
+        fails, self.world.commit_fails = self.world.commit_fails, None
+        if fails == "before":
+            raise InfrastructureError("the database went away")
         for record in self.artifacts.pending:
             self.world.artifacts[(self.scope, record.artifact_id)] = record
         self.world.audit += self.audit.pending
         self.world.commits += 1
+        if fails == "after":
+            raise InfrastructureError("the commit's answer was lost")
 
     async def __aenter__(self) -> Self:
         return self
@@ -263,10 +284,16 @@ class Objects:
 
     async def put_object(self, key: str, data: bytes, content_type: str) -> str:
         self.world.objects[key] = data
+        meanwhile, self.world.meanwhile = self.world.meanwhile, None
+        if meanwhile is not None:
+            await meanwhile()
         return key
 
     async def get_object(self, key: str) -> bytes:
         return self.world.objects[key]
+
+    async def delete_object(self, key: str) -> None:
+        del self.world.objects[key]
 
 
 class Directory:
@@ -741,6 +768,54 @@ async def test_rendering_again_at_the_same_version_returns_what_is_stored() -> N
 
     assert [v.artifact_id for v in again] == [v.artifact_id for v in first]
     assert len(world.objects) == 1
+
+
+async def test_two_renders_at_once_record_one_set_of_files() -> None:
+    """Both find nothing stored and draw their files; the one that records
+    second records nothing, removes the objects it stored, and answers the
+    files of the one that recorded first (ticket 06)."""
+    world = World()
+    case = await m10("pending_approval")
+    other: list[ArtifactView] = []
+
+    async def another_render() -> None:
+        other.extend(await render(world, case, "quotation_preview"))
+
+    world.meanwhile = another_render
+    answered = await render(world, case, "quotation_preview")
+
+    assert {v.content_type for v in other} == {XLSX, PDF}
+    assert answered == other
+    assert {r.artifact_id for r in world.artifacts.values()} == {v.artifact_id for v in other}
+    assert set(world.objects) == {
+        world.artifacts[(SCOPE, v.artifact_id)].object_key(SCOPE) for v in other
+    }
+    assert [e.resource_id for e in world.audit] == [str(v.artifact_id) for v in other]
+
+
+async def test_a_render_whose_commit_fails_leaves_no_object() -> None:
+    world = World()
+    case = await _prepared_m01()
+    world.commit_fails = "before"
+
+    with pytest.raises(InfrastructureError):
+        await render(world, case, "bravo_upload")
+
+    assert (world.artifacts, world.objects, world.audit) == ({}, {}, [])
+
+
+async def test_a_commit_that_went_through_keeps_its_objects() -> None:
+    """A commit can fail on the way back after it was made: the objects of
+    records the store holds stay, or their downloads would answer 503."""
+    world = World()
+    case = await _prepared_m01()
+    world.commit_fails = "after"
+
+    with pytest.raises(InfrastructureError):
+        await render(world, case, "bravo_upload")
+
+    (record,) = world.artifacts.values()
+    assert set(world.objects) == {record.object_key(SCOPE)}
 
 
 async def test_an_unknown_kind_is_refused() -> None:
