@@ -778,9 +778,14 @@ class OrderIntake:
             )
         header = case.effective_header
         lme = await self.catalog.lme_for_month(scope, rules.lme_month(header.po_date))
-        # The reading the candidates came from stays the line's evidence.
+        # The reading the candidates came from, and what it stated, stay the
+        # line's evidence.
         mapped = MappedLine(
-            line.mapping, item, line.basis.convert_prv_code, line.basis.description_reading
+            line.mapping,
+            item,
+            line.basis.convert_prv_code,
+            line.basis.description_reading,
+            line.basis.stated_attributes,
         )
         recheck, _ = await self._check_line(
             scope,
@@ -902,7 +907,11 @@ class OrderIntake:
                 details={"line": line.line_no},
             )
         return MappedLine(
-            line.mapping, item, line.basis.convert_prv_code, line.basis.description_reading
+            line.mapping,
+            item,
+            line.basis.convert_prv_code,
+            line.basis.description_reading,
+            line.basis.stated_attributes,
         )
 
     async def _customer_findings(

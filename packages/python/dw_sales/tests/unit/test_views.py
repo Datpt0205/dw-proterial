@@ -302,3 +302,24 @@ async def test_a_zero_price_is_shown_as_zero_and_hidden_as_hidden() -> None:
 
     assert order_line(case, free, OWN).unit_price == Decimal(0)
     assert order_line(case, free, NONE).unit_price == HIDDEN
+
+
+async def test_a_line_shows_the_attributes_its_candidates_were_computed_from() -> None:
+    """M05 line 2's description is read by DW1's own vocabulary: the picker
+    compares its candidate with what that reading stated. Line 3 is the
+    convert list's, so nothing was read."""
+    case = await _order("M05")
+    read, converted = case.line(2), case.line(3)
+    stated = read.basis.stated_attributes
+    assert stated is not None
+
+    shown = order_line(case, read, NONE).basis.stated_attributes
+    assert shown is not None
+    assert (shown.spec_no, shown.family, shown.cores, shown.gauge) == (
+        stated.spec_no,
+        stated.family,
+        stated.cores,
+        stated.gauge,
+    )
+    assert shown.cores is not None and shown.gauge is not None
+    assert order_line(case, converted, NONE).basis.stated_attributes is None
