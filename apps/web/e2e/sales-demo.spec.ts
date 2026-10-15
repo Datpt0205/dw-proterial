@@ -521,6 +521,13 @@ test("2b. With a model server, M37 is a quote case a model read; Diệu confirms
 
   // Refusal first: the YCBG waits until every value a model read is confirmed.
   const open = await (await dieu.get(`/quotes/${m37.case_id}`)).json();
+  // Nor is a value confirmed by someone the server never served the mail
+  // to: Diệu opened it above, An did not (ticket 29, "chưa mở nguồn").
+  const unopened = await an.post(
+    `/quotes/${m37.case_id}/findings/value_uncertain:1/answer`,
+    { case_version: open.case_version, field: "uom", value: "m" },
+  );
+  expect(unopened.status()).toBe(409);
   const refused = await dieu.post(`/quotes/${m37.case_id}/ycbg`, {
     case_version: open.case_version,
   });

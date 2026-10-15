@@ -22,6 +22,13 @@ vi.mock("../../../../lib/session", () => ({
   apiClient: () => ({ listWorkspaceMembers: vi.fn().mockResolvedValue([]) }),
 }));
 const api = {
+  quoteMessageText: vi.fn(async () => ({
+    case_id: "c-1",
+    case_version: 2,
+    text: TEXT,
+    sha256: "a".repeat(64),
+    served_at: "2026-10-03T02:00:00Z",
+  })),
   answerFinding: vi.fn(async () => ({
     case_kind: "quote",
     case_id: "c-1",
@@ -54,7 +61,6 @@ function m37(): Quote {
     attachment_id: null,
     attachment_sha256: null,
     model_read: ["currency"],
-    message_text: TEXT,
     reading: {
       prompt: "sales.rfq_extraction@1.0.0",
       model_profile: "onprem",
@@ -151,33 +157,53 @@ describe("a value a model read, confirmed one by one (ticket 29)", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalled());
   }, 20_000);
 
-  it("highlights the words of a value in the mail it was read from", () => {
+  it("asks the server for the mail when opened, and highlights the value's words", async () => {
     const start = TEXT.indexOf("1.200 m");
     render(
       <UiProvider>
         <MessageTextDrawer
           quote={m37()}
           target={{ field: "quantity", lineNo: 1, start, end: start + 7 }}
+          mayRead
           onClose={() => {}}
         />
       </UiProvider>,
     );
-    const marked = document.querySelector("mark");
-    expect(marked?.textContent).toBe("1.200 m");
+    // Served by its own route, which records the opening (ticket 29).
+    await waitFor(() =>
+      expect(document.querySelector("mark")?.textContent).toBe("1.200 m"),
+    );
+    expect(api.quoteMessageText).toHaveBeenCalledWith(m37().case_id);
   }, 20_000);
 
-  it("tells who may not read prices why the mail is not shown", () => {
+  it("asks nothing while closed", () => {
     render(
       <UiProvider>
         <MessageTextDrawer
-          quote={{ ...m37(), message_text: { hidden: true } }}
+          quote={m37()}
+          target={null}
+          mayRead
+          onClose={() => {}}
+        />
+      </UiProvider>,
+    );
+    expect(api.quoteMessageText).not.toHaveBeenCalled();
+  });
+
+  it("tells who may not read prices why the mail is not shown, without asking", () => {
+    render(
+      <UiProvider>
+        <MessageTextDrawer
+          quote={m37()}
           target={{ field: "quantity", lineNo: 1, start: 0, end: 4 }}
+          mayRead={false}
           onClose={() => {}}
         />
       </UiProvider>,
     );
     expect(screen.getByText(/quyền xem giá/)).toBeTruthy();
     expect(document.body.textContent).not.toContain("1.200 m");
+    expect(api.quoteMessageText).not.toHaveBeenCalled();
   }, 20_000);
 
   it("names a request that states no number by the mail it came in", () => {

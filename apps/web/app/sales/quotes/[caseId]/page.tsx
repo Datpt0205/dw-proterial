@@ -736,6 +736,7 @@ function QuoteDetail() {
       <MessageTextDrawer
         quote={data}
         target={mailSource}
+        mayRead={viewer.hasScope("sales.price.read")}
         onClose={() => setMailSource(null)}
       />
     </div>

@@ -5064,6 +5064,42 @@
         "title": "MessageDispositionView",
         "type": "object"
       },
+      "MessageTextView": {
+        "description": "The message's newest part a model read a quotation from, as the case\nholds it: what its values' ``chars`` index into. It may state a price.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "served_at": {
+            "format": "date-time",
+            "title": "Served At",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "text",
+          "sha256",
+          "served_at"
+        ],
+        "title": "MessageTextView",
+        "type": "object"
+      },
       "MessagesView": {
         "properties": {
           "oldest_waiting_seconds": {
@@ -7525,16 +7561,6 @@
           "message_id": {
             "title": "Message Id",
             "type": "string"
-          },
-          "message_text": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Words"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "model_read": {
             "default": [],
@@ -16394,6 +16420,49 @@
           }
         },
         "summary": "Master List",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/message-text": {
+      "get": {
+        "operationId": "quote_message_text_api_v1_sales_quotes__case_id__message_text_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageTextView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Message Text",
         "tags": [
           "sales"
         ]

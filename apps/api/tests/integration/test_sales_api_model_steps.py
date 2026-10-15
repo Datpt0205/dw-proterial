@@ -157,14 +157,31 @@ async def test_a_request_in_the_mail_body_opens_a_case_and_sales_confirms_each_v
     assert (case["rfq_no"], case["attachment_id"]) == (None, None)
     assert case["reading"]["prompt"] == "sales.rfq_extraction@1.0.0"
     assert sorted(case["model_read"]) == ["currency", "quote_due"]
-    assert isinstance(case["message_text"], str) and "1.200 m" in case["message_text"]
-    assert "5.000" not in case["message_text"]  # the quoted older offer was cut
+    # The text is served on its own route, never inside the case (ticket 29).
+    assert "message_text" not in case
+    path = f"/quotes/{case['case_id']}/findings/value_uncertain:1/answer"
+    body = {"case_version": case["case_version"], "field": "quantity", "value": "1250"}
+    unopened = await dieu.post(path, body)
+    assert unopened.status_code == 409, unopened.text
+    assert "chưa mở nguồn" in unopened.text
+    served = await dieu.get(f"/quotes/{case['case_id']}/message-text")
+    assert served.status_code == 200, served.text
+    text = served.json()["text"]
+    assert "1.200 m" in text
+    assert "5.000" not in text  # the quoted older offer was cut
     first = case["lines"][0]
     assert sorted(first["model_read"]) == ["description", "needed_by", "quantity", "uom"]
     chars = first["anchors"]["quantity"]["chars"]
-    assert (
-        case["message_text"][chars["start"] : chars["end"]] == first["anchors"]["quantity"]["quote"]
-    )
+    assert text[chars["start"] : chars["end"]] == first["anchors"]["quantity"]["quote"]
+    async with migrator.connect() as conn:
+        recorded = await conn.scalar(
+            sa.text(
+                "SELECT count(*) FROM sales.source_served WHERE quote_case_id = :id"
+                " AND attachment_id IS NULL AND principal_id = :who"
+            ),
+            {"id": case["case_id"], "who": dieu.id},
+        )
+    assert recorded == 1
     uncertain = [f for f in case["findings"] if f["code"] == "value_uncertain"]
     assert {f["line_no"] for f in uncertain} == {None, 1, 2}
 
@@ -174,10 +191,7 @@ async def test_a_request_in_the_mail_body_opens_a_case_and_sales_confirms_each_v
         f"/quotes/{case['case_id']}/ycbg", {"case_version": case["case_version"]}
     )
     assert refused.status_code == 422, refused.text
-    answered = await dieu.post(
-        f"/quotes/{case['case_id']}/findings/value_uncertain:1/answer",
-        {"case_version": case["case_version"], "field": "quantity", "value": "1250"},
-    )
+    answered = await dieu.post(path, body)
     assert answered.status_code == 200, answered.text
     after = await quote(dieu, case["case_id"])
     assert after["lines"][0]["quantity"] == "1250"
@@ -244,9 +258,16 @@ async def test_a_value_is_confirmed_only_by_a_preparer_of_the_tenant(model_api: 
 
     viewer = await model_api.as_(HA).post(path, body)
     other_tenant = await model_api.as_(BAO, tenant=BETA).post(path, body)
+    # Nor is the mail served to someone who may not read prices, or to
+    # another tenant.
+    text = f"/quotes/{case['case_id']}/message-text"
+    viewer_text = await model_api.as_(HA).get(text)
+    other_text = await model_api.as_(BAO, tenant=BETA).get(text)
 
     assert viewer.status_code == 403, viewer.text
     assert other_tenant.status_code == 404, other_tenant.text
+    assert viewer_text.status_code == 403, viewer_text.text
+    assert other_text.status_code == 404, other_text.text
     after = await quote(model_api.as_(DIEU), case["case_id"])
     assert after["case_version"] == case["case_version"]
     assert after["lines"][0]["quantity"] == "1200"

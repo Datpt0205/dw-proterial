@@ -1295,11 +1295,11 @@ class QuoteCaseView(BaseModel):
     anchors: dict[str, SourceAnchor] = {}
     # The request's own fields a model read (ticket 29).
     model_read: list[str] = []
-    # The message's newest part a model read, which body anchors index into,
-    # and how the model was asked: None for the fixed-label form. The text may
-    # state a price, so it is shown as a source is: to a holder of
-    # `sales.price.read`.
-    message_text: Words | None = None
+    # The message's newest part a model read, which body anchors (no
+    # `attachment_id`) index into, is not here: it may state a price, and it
+    # is served as a source is, by its own route, which records it (ticket
+    # 29: confirming a value read from it requires that record).
+    # How the model was asked: None for the fixed-label form.
     reading: RequestReading | None = None
     rules_version: str
     parser_version: str
@@ -1388,7 +1388,6 @@ def quote_case(
             currency=document.currency.source,
         ),
         model_read=sorted(document.model_read),
-        message_text=_words(request.body.text, prices.amounts) if request.body else None,
         reading=request.reading,
         rules_version=case.rules_version,
         parser_version=case.parser_version,

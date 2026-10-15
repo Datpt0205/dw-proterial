@@ -874,8 +874,9 @@ class World:
         context = caller.context()
         for region in sorted(
             required_regions(self.order(case_id)),
-            key=lambda r: (r.attachment_id, r.page or 0, r.sheet or ""),
+            key=lambda r: (r.attachment_id or "", r.page or 0, r.sheet or ""),
         ):
+            assert region.attachment_id is not None  # an order is read from a file
             await self.services.sources.order_source(
                 context, case_id, region.attachment_id, page=region.page, sheet=region.sheet
             )

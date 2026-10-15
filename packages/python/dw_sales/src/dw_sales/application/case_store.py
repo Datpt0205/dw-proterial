@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
-from typing import TYPE_CHECKING, Literal, Protocol, Self
+from typing import TYPE_CHECKING, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
@@ -142,7 +142,9 @@ class Stored[CaseT]:
 
 class ServedSource(BaseModel):
     """One region of a case's source a principal was shown (spec decision 12):
-    a page of a PDF or a sheet of a workbook, for one case version."""
+    a page of a PDF or a sheet of a workbook, for one case version; or, for a
+    quotation a model read from the mail (ticket 29), the message's text the
+    case holds (``attachment_id`` None, its text's sha256)."""
 
     model_config = _FROZEN
 
@@ -150,7 +152,7 @@ class ServedSource(BaseModel):
     case_kind: CaseKind
     case_id: uuid.UUID
     case_version: int = Field(ge=1)
-    attachment_id: str = Field(pattern=r"^[A-Za-z0-9._-]{1,128}$")
+    attachment_id: str | None = Field(pattern=r"^[A-Za-z0-9._-]{1,128}$")
     attachment_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     page: int | None = Field(default=None, ge=1)
     sheet: str | None = Field(default=None, min_length=1, max_length=31)
@@ -158,16 +160,27 @@ class ServedSource(BaseModel):
 
     @model_validator(mode="after")
     def _one_region(self) -> Self:
-        if (self.page is None) == (self.sheet is None):
+        if self.attachment_id is None:
+            if self.page is not None or self.sheet is not None:
+                raise ValueError("the message's text has no page or sheet")
+            if self.case_kind is not CaseKind.QUOTE:
+                raise ValueError("only a quotation is read from the message's text")
+        elif (self.page is None) == (self.sheet is None):
             raise ValueError("a served region is a page or a sheet")
         return self
 
 
 @dataclass(frozen=True, slots=True)
 class SourceRegion:
-    attachment_id: str
+    """A page or a sheet of one attachment; `MESSAGE_TEXT` for the message's
+    own text."""
+
+    attachment_id: str | None
     page: int | None
     sheet: str | None
+
+
+MESSAGE_TEXT: Final = SourceRegion(None, None, None)
 
 
 class ArtifactRecord(BaseModel):
