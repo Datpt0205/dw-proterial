@@ -1,14 +1,24 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { Button, Card, Flex, Input, Table, Tag, Typography } from "antd";
+import { Suspense, useCallback, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import {
+  Button,
+  Card,
+  Flex,
+  Input,
+  Skeleton,
+  Table,
+  Tag,
+  Typography,
+} from "antd";
 import { AuditOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { AuditEvent } from "@dw/contracts";
 import { PageHeader, RegionState } from "@dw/ui";
 import { LoadError } from "../../components/load-error";
 import { LoadMore } from "../../components/load-more";
 import { formatDateTime } from "../../lib/dates";
-import { memberName, useWorkspaceMembers } from "../../lib/directory";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
 
@@ -24,16 +34,48 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
 };
 const OTHER_ACTION = { label: "Hoạt động hệ thống", color: "default" };
 
+/** The key a support grant's events carry their grant under (ADR 0024). */
+const GRANT_DETAIL = "support_grant_id";
+
+function detailText(event: AuditEvent, key: string): string | null {
+  const value = event.details[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** Who did it, as the server names them today; an actor that is no user
+ * (a background lane) has no name and shows its short id. */
+function actorName(event: AuditEvent): string {
+  return event.actor_display_name ?? `${event.actor_id.slice(0, 8)}…`;
+}
+
+function grantHref(grantId: string): string {
+  return `/audit?${GRANT_DETAIL}=${encodeURIComponent(grantId)}`;
+}
+
 export default function AuditPage() {
-  const members = useWorkspaceMembers();
+  // `useSearchParams` needs a Suspense boundary above the component calling it.
+  return (
+    <Suspense fallback={<Skeleton active paragraph={{ rows: 6 }} />}>
+      <AuditTrail />
+    </Suspense>
+  );
+}
+
+function AuditTrail() {
+  // One grant's trail has its own URL, so it can be sent to a colleague.
+  const grantId = useSearchParams().get(GRANT_DETAIL);
   const [filter, setFilter] = useState("");
 
   const { items, loading, loadingMore, error, hasMore, loadMore, reload } =
     useCachedPages(
-      "audit:events",
+      `audit:events:${grantId ?? "all"}`,
       useCallback(
-        (cursor: string | null) => apiClient().listAuditEvents({ cursor }),
-        [],
+        (cursor: string | null) =>
+          apiClient().listAuditEvents({
+            cursor,
+            supportGrantId: grantId ?? undefined,
+          }),
+        [grantId],
       ),
     );
 
@@ -43,10 +85,14 @@ export default function AuditPage() {
       event.action.includes(filter) ||
       event.resource_type.includes(filter) ||
       event.resource_id.includes(filter) ||
-      (memberName(members, event.actor_id) ?? "")
-        .toLowerCase()
-        .includes(filter.toLowerCase()),
+      actorName(event).toLowerCase().includes(filter.toLowerCase()),
   );
+  // The grant's own code, as the customer knows it, once a row has shown it.
+  const grantCode =
+    grantId == null
+      ? null
+      : (items.map((event) => detailText(event, "code")).find(Boolean) ??
+        `${grantId.slice(0, 8)}…`);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -73,10 +119,24 @@ export default function AuditPage() {
         }
       />
       <Flex vertical gap="middle">
+        {grantCode != null && (
+          <Flex wrap gap="small" align="center">
+            <Typography.Text>Đang lọc:</Typography.Text>
+            <Tag>Quyền hỗ trợ {grantCode}</Tag>
+            <Link href="/audit">Xóa bộ lọc</Link>
+          </Flex>
+        )}
         {error != null && <LoadError error={error} onRetry={reload} />}
         {loading && error == null && <RegionState kind="loading" />}
         {!loading && error == null && visible.length === 0 && (
-          <RegionState kind="empty" title="Không có sự kiện nào khớp" />
+          <RegionState
+            kind="empty"
+            title={
+              grantCode != null
+                ? `Quyền hỗ trợ ${grantCode} chưa có sự kiện nào khớp`
+                : "Không có sự kiện nào khớp"
+            }
+          />
         )}
         {visible.length > 0 && (
           <Card>
@@ -96,11 +156,15 @@ export default function AuditPage() {
                 },
                 {
                   title: "Ai",
-                  dataIndex: "actor_id",
-                  // A name, falling back to a dash when the roster has no such
-                  // member — somebody who has since left still shows a row.
-                  render: (value: string | null) =>
-                    memberName(members, value) ?? "—",
+                  key: "actor",
+                  // Support staff are no member of the customer's, so the
+                  // name alone would not say the support team acted.
+                  render: (_, event) => (
+                    <Flex wrap gap="small" align="center">
+                      <span>{actorName(event)}</span>
+                      {event.actor_kind === "support" && <Tag>Đội hỗ trợ</Tag>}
+                    </Flex>
+                  ),
                 },
                 {
                   title: "Thao tác",
@@ -113,16 +177,24 @@ export default function AuditPage() {
                 {
                   title: "Bản ghi",
                   key: "resource",
-                  render: (_, event) => (
-                    <Flex vertical>
-                      <Typography.Text type="secondary" className="text-xs">
-                        {event.resource_type}
-                      </Typography.Text>
-                      <Typography.Text code className="text-xs">
-                        {event.resource_id}
-                      </Typography.Text>
-                    </Flex>
-                  ),
+                  render: (_, event) => {
+                    const grant = detailText(event, GRANT_DETAIL);
+                    return (
+                      <Flex vertical>
+                        <Typography.Text type="secondary" className="text-xs">
+                          {event.resource_type}
+                        </Typography.Text>
+                        <Typography.Text code className="text-xs">
+                          {event.resource_id}
+                        </Typography.Text>
+                        {grantId == null && grant != null && (
+                          <Link href={grantHref(grant)}>
+                            Chỉ xem quyền hỗ trợ này
+                          </Link>
+                        )}
+                      </Flex>
+                    );
+                  },
                 },
                 {
                   title: "Quyết định chính sách",

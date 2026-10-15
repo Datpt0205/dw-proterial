@@ -258,7 +258,7 @@ async def decide(
 
 async def test_strict_type_rejects_self_approval() -> None:
     service = make_service(make_request("sales_chat.email_send"), frozenset({"sales_chat."}))
-    with pytest.raises(ConflictError, match="separation of duties"):
+    with pytest.raises(ConflictError, match="tách nhiệm"):
         await decide(service, REQUESTER, "ok")
 
 
@@ -1135,7 +1135,7 @@ async def test_an_admission_runs_after_decides_own_checks() -> None:
     service = make_service(request, frozenset({"sales_chat."}))
     admission = FakeAdmission()
 
-    with pytest.raises(ConflictError, match="separation of duties"):
+    with pytest.raises(ConflictError, match="tách nhiệm"):
         await service.decide(
             approval_id=request.id,
             approve=True,

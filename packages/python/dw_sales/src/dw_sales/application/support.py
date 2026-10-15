@@ -31,7 +31,13 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
-from dw_sales.application.case_store import CaseEvent, EventActor, SalesUnitOfWork, Stored
+from dw_sales.application.case_store import (
+    STALE_CASE_VERSION,
+    CaseEvent,
+    EventActor,
+    SalesUnitOfWork,
+    Stored,
+)
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
@@ -66,7 +72,7 @@ def same_version(case_id: uuid.UUID, current: int, decided_on: int) -> None:
     """A decision names the version it was made on; a stale one is refused."""
     if current != decided_on:
         raise ConflictError(
-            "hồ sơ đã thay đổi từ khi bạn mở: tải lại để xem phiên bản mới",
+            STALE_CASE_VERSION,
             details={
                 "case_id": str(case_id),
                 "case_version": current,

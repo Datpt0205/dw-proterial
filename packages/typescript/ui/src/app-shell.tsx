@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { MenuOutlined } from "@ant-design/icons";
 import { Button, Divider, Drawer, Layout, Menu, type MenuProps } from "antd";
+import { OfflineBanner } from "./network-status";
 
 type NavItems = NonNullable<MenuProps["items"]>;
 
@@ -62,6 +63,7 @@ function withoutIcons(items: NavItems): NavItems {
  * notifications and the account), which moves the pages into a drawer below
  * the `lg` breakpoint. Tailwind's `lg` is antd's `screenLG` (`globals.css`),
  * so the bar and any `lg:` layout on a page switch at the same width.
+ * Under the bar, the offline banner whenever the browser has no network.
  */
 export function AppShell({
   brand,
@@ -130,6 +132,7 @@ export function AppShell({
           />
         </nav>
       </Drawer>
+      <OfflineBanner />
       {banner}
       <Layout.Content className="px-4 py-5 sm:px-6 lg:px-10 lg:py-6">
         <div className="mx-auto w-full max-w-[100rem]">{children}</div>

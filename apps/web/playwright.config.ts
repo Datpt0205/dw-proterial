@@ -39,11 +39,14 @@ export default defineConfig({
     screenshot: "only-on-failure",
     locale: "vi-VN",
   },
-  // Viewports, owned here. The platform pages are checked on both sides of
-  // antd's lg (992px, where the menu becomes a drawer) and at a 320px phone;
-  // the older specs (the Sales demo among them) run on the desktop project
-  // only. Every project runs in Vietnam's time zone, so a dev machine and CI
-  // agree.
+  // Viewports and time zones, owned here (ui-quality.md section 12). The
+  // platform pages and the support session are checked at a 320px phone
+  // (WCAG reflow), on both sides of antd's lg (992px, where the menu becomes
+  // a drawer), at a 1440px desktop, and once in a time zone that is not
+  // Vietnam's, so a screen that formats a time outside lib/dates.ts shows up
+  // as the wrong hour instead of passing on every machine in Vietnam. The
+  // older specs (the Sales demo among them) run on the desktop project only.
+  // The product is light only (web-ui.md), so there is no dark project.
   projects: [
     {
       name: "chromium",
@@ -51,18 +54,20 @@ export default defineConfig({
     },
     ...(
       [
-        ["phone-320", 320, 640],
-        ["narrow-991", 991, 800],
-        ["wide-992", 992, 800],
+        ["phone-320", 320, 640, "Asia/Ho_Chi_Minh"],
+        ["narrow-991", 991, 800, "Asia/Ho_Chi_Minh"],
+        ["wide-992", 992, 800, "Asia/Ho_Chi_Minh"],
+        ["wide-1440", 1440, 900, "Asia/Ho_Chi_Minh"],
+        ["tz-los-angeles", 1280, 720, "America/Los_Angeles"],
       ] as const
-    ).map(([name, width, height]) => ({
+    ).map(([name, width, height, timezoneId]) => ({
       name,
-      testMatch: /platform-pages\.spec\.ts/,
+      testMatch: /(platform-pages|support-session|screens)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width, height },
         hasTouch: width < 400,
-        timezoneId: "Asia/Ho_Chi_Minh",
+        timezoneId,
       },
     })),
   ],

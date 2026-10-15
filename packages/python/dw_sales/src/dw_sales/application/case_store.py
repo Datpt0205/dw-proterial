@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
-from typing import TYPE_CHECKING, Literal, Protocol, Self
+from typing import TYPE_CHECKING, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
@@ -46,6 +46,11 @@ if TYPE_CHECKING:
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 _PRINCIPAL = r"^[!-~]{1,254}$"
+
+# The refusal of a decision made on a version the case has since left: one
+# sentence, under rule `stale_case_version`, whichever check caught it
+# (`support.same_version` before the case decides, a store's `save` after).
+STALE_CASE_VERSION: Final = "hồ sơ đã thay đổi từ khi bạn mở: tải lại để xem phiên bản mới"
 
 
 class EventActor(BaseModel):

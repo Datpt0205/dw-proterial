@@ -24,6 +24,7 @@ from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.application.case_store import CaseEvent, CaseOrigin
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.orders import (
+    MAKER_CHECKER_REFUSAL,
     Accepted,
     Actor,
     Finding,
@@ -226,6 +227,9 @@ async def test_an_earlier_bravo_recorder_cannot_cross_check_a_revised_order(
                 ),
             )
     assert refused.value.details["rule"] == "maker_checker"
+    # The sentence the domain's own refusal reads, in Vietnamese: the web shows
+    # the server's words for this rule.
+    assert refused.value.message == MAKER_CHECKER_REFUSAL
     # Nothing of the row reaches the error: ids and the constraint only.
     assert set(refused.value.details) == {"case_id", "constraint", "rule"}
     assert "SO26-1001" not in str(refused.value) and refused.value.__cause__ is None

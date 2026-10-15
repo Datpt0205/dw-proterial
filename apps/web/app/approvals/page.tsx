@@ -21,7 +21,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import type { Approval } from "@dw/contracts";
-import { PageHeader, RegionState } from "@dw/ui";
+import { OFFLINE_REASON, PageHeader, RegionState, useOnline } from "@dw/ui";
 import { LoadError } from "../../components/load-error";
 import { LoadMore } from "../../components/load-more";
 import {
@@ -33,6 +33,7 @@ import { APPROVAL_STATUS } from "../../lib/approvals/status";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
 import { errorMessage } from "../../lib/error-message";
+import { useIdempotencyKeys } from "../../lib/idempotency";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
 
@@ -42,6 +43,9 @@ export default function ApprovalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canDecide = hasScope("approvals.decide");
+  const keys = useIdempotencyKeys();
+  // The shell draws the offline banner; a decision waits for the network.
+  const online = useOnline();
 
   const {
     items: approvals,
@@ -82,11 +86,16 @@ export default function ApprovalsPage() {
   // assumed to be the platform API.
   async function decide(approval: Approval, approve: boolean) {
     setBusyId(approval.id);
+    const decision = { approve, comment: comments[approval.id] ?? "" };
     try {
-      await approvalClient(approval.approval_type).decideApproval(approval.id, {
-        approve,
-        comment: comments[approval.id] ?? "",
-      });
+      // A retry of this decision reuses its key, so a decision that reached
+      // the server before the answer was lost is not sent as a second one.
+      await approvalClient(approval.approval_type).decideApproval(
+        approval.id,
+        decision,
+        keys.keyFor(approval.id, decision),
+      );
+      keys.settle(approval.id);
       setComments((current) => ({ ...current, [approval.id]: "" }));
       setError(null);
       reload();
@@ -130,14 +139,16 @@ export default function ApprovalsPage() {
           // A context with its own inbox decides there: one door per approval.
           const inbox = approvalInbox(approval);
           const lacking = missingScope(approval);
-          const lockReason =
+          const scopeReason =
             lacking === null
               ? null
               : `Chỉ người có quyền ${lacking} được quyết yêu cầu này`;
           // Withdrawing your own request is not deciding it: the server lets
           // the requester reject without the stamped scope, so the page does too.
-          const approveLocked = lacking !== null;
-          const rejectLocked = lacking !== null && !approval.requested_by_me;
+          const approveLocked = lacking !== null || !online;
+          const rejectLocked =
+            (lacking !== null && !approval.requested_by_me) || !online;
+          const lockReason = online ? scopeReason : OFFLINE_REASON;
           // A disabled button takes no pointer events, so the tooltip hangs on
           // a wrapper; the same sentence also sits beside the buttons as text.
           const withLock = (locked: boolean, button: ReactNode) =>
@@ -241,9 +252,9 @@ export default function ApprovalsPage() {
                           Từ chối
                         </Button>,
                       )}
-                      {lockReason !== null && (
+                      {scopeReason !== null && (
                         <Typography.Text type="secondary">
-                          {lockReason}
+                          {scopeReason}
                           {approval.requested_by_me &&
                             ". Bạn vẫn rút được yêu cầu của mình."}
                         </Typography.Text>

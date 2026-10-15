@@ -160,8 +160,7 @@ class ApproveAndResumeService:
         # who made what is being decided, not only the one who asked.
         if context.principal_id in request.makers:
             raise ConflictError(
-                "separation of duties (tách nhiệm): the requester or a maker of what is"
-                " decided cannot decide it",
+                "tách nhiệm: người yêu cầu, hay người đã làm việc cần quyết, không tự quyết được",
                 details={
                     "approval_id": str(request.id),
                     "approval_type": request.approval_type,
