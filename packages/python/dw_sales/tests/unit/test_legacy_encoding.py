@@ -571,3 +571,35 @@ async def test_the_po_sent_again_in_unicode_joins_the_case_and_is_read_afresh() 
     assert FindingCode.LEGACY_ENCODING not in {f.code for f in revised.findings}
     # Now Unicode, line 2's description is matched by its attributes.
     assert revised.line(2).mapping.candidates == ("CB-2005",)
+
+
+def _only_line_1s_price_in_vntime(workbook: Workbook) -> None:
+    sheet = workbook.worksheets[0]
+    for cell in ("C10", "C11"):
+        sheet[cell].font = Font(name="Calibri")
+    sheet["F10"].font = Font(name=".VnTime")
+
+
+async def test_a_viewer_without_prices_is_not_pointed_at_a_price_typed_in_a_legacy_font() -> None:
+    """The place the screen opens for `legacy_encoding` is a source anchor,
+    and an anchor can quote the printed words: when the first legacy text is
+    a price, a viewer who may not see amounts gets no anchor for it, as for
+    every other price anchor (spec decision 8)."""
+    inbox = MockInbox.load(SCOPE)
+    original = await inbox.get_message(SCOPE, "M33")
+    assert original is not None
+    content = _content(_edited(M33, _only_line_1s_price_in_vntime), "M33P-A1")
+    message = original.model_copy(
+        update={"message_id": "M33P", "attachments": (content.attachment,)}
+    )
+    case = (await _intake(_Resent(inbox, message, content), _Cases()).process(SCOPE, message)).case
+    assert case is not None
+    assert _where(case.document) == ("PO!F10", LegacyEncoding.TCVN3)
+
+    seen = order_case(case, assigned_to=None, release_manifest_ref=None, prices=PRICES)
+    assert seen.legacy_text_anchor is not None and seen.legacy_text_anchor.cell_ref == "PO!F10"
+    hidden = PriceView(amounts=False, other_customers=False)
+    unseen = order_case(case, assigned_to=None, release_manifest_ref=None, prices=hidden)
+    assert unseen.legacy_text_anchor is None
+    # The finding still says the PO holds legacy text.
+    assert case.finding(KEY).blocking

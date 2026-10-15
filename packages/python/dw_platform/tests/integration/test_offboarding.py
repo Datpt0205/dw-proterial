@@ -208,6 +208,45 @@ async def test_export_rows_returns_only_this_tenants_data(
     assert [str(r["tenant_id"]) for r in item_rows] == [str(mine.tenant_id)]
 
 
+async def test_export_holds_each_row_of_a_partitioned_table_once(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """A partition has its own tenant policy, so the catalog query lists it
+    beside its parent; reading both exported every audit event twice."""
+    mine = _new_tenant()
+    await _seed_tenant(sessions, mine)
+    event_id = uuid.uuid4()
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(mine.tenant_id)}
+        )
+        await session.execute(
+            sa.text(
+                "INSERT INTO platform.audit_events (id, tenant_id, workspace_id, actor_id,"
+                " action, resource_type, resource_id, occurred_at)"
+                " VALUES (:id, :t, :w, gen_random_uuid(), 'test.exported', 'probe', 'p', now())"
+            ),
+            {"id": event_id, "t": mine.tenant_id, "w": mine.workspace_id},
+        )
+        partitions = set(
+            (
+                await session.execute(
+                    sa.text(
+                        "SELECT n.nspname, c.relname FROM pg_class c"
+                        " JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relispartition"
+                    )
+                )
+            ).tuples()
+        )
+    assert partitions, "the schema has partitioned tables: the check below needs one"
+
+    exported = await SqlTenantOffboarding(session_factory=sessions).export_rows(mine.tenant_id)
+
+    assert not {(t.schema, t.table) for t in exported} & partitions
+    copies = [row for t in exported for row in t.rows if row.get("id") == event_id]
+    assert len(copies) == 1
+
+
 async def test_purge_rows_respects_fk_order_and_leaves_the_other_tenant_alone(
     sessions: async_sessionmaker[AsyncSession],
 ) -> None:
