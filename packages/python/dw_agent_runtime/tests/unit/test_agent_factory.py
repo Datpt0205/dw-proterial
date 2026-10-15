@@ -54,9 +54,14 @@ PROMPT_ID = "agent_test.worker"
 PROMPT_VERSION = "1.0.0"
 DATED = "Hôm nay là {today}."
 TODAY = "06/10/2026"
-# Compaction needs the 1.4.0 text; everything else here still runs on 1.3.0.
+# Compaction needs the 1.4.0 frame; everything else here still runs on 1.3.0.
 COMPACTING_COPY = load_runtime_copy(
-    Path(__file__).resolve().parents[5] / "configs" / "copy" / "runtime@1.6.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "copy" / "runtime@1.7.0.yaml"
+)
+SUMMARY_PROMPTS = sorted(
+    (Path(__file__).resolve().parents[5] / "configs" / "prompts" / "platform").glob(
+        "context_summary*.yaml"
+    )
 )
 THREAD: RunnableConfig = {"configurable": {"thread_id": "t-1"}}
 
@@ -548,6 +553,9 @@ async def test_a_worker_that_asks_for_compaction_actually_compacts() -> None:
 
     audit = FakeAuditRepo()
     base = _spec(MockChatModel(responses=[AIMessage(content="xong")], mock_reply="[mock]"))
+    # The summariser's prompts come from the worker's own registry.
+    for path in SUMMARY_PROMPTS:
+        base.prompts.load_file(path)
     spec = replace(
         base,
         copy=COMPACTING_COPY,

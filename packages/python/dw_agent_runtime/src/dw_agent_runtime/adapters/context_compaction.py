@@ -55,6 +55,14 @@ Two things measured and left alone because they were already right: a file the
 model cannot read never reaches the summariser (history is serialised to text
 first), and a pending approval survives compaction (tool call and result are
 kept together).
+
+The summariser's own prompts are registry artifacts (`SUMMARY_PROMPT`,
+`SUMMARY_UPDATE_PROMPT`), not copy formatted here: the history and the previous
+summary are untrusted — tool results carry what a document said, and the
+previous summary is model output written from them — so the registry contains
+both in escaped `<input>` blocks like every other prompt variable
+(docs/adr/0010-prompt-variables-are-untrusted-by-default.md). Formatted here, the
+previous summary went in raw and could close the tag around it.
 """
 
 from __future__ import annotations
@@ -62,6 +70,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import uuid
 from collections.abc import Iterator
 from datetime import UTC
 from typing import Any
@@ -73,8 +82,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
     AIMessage,
     AnyMessage,
+    BaseMessage,
     HumanMessage,
     RemoveMessage,
+    SystemMessage,
     ToolMessage,
 )
 from langchain_core.messages.utils import get_buffer_string
@@ -87,19 +98,30 @@ from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import RunBudgetLedger, route_cost
 from dw_agent_runtime.model.copy import RuntimeCopy
 from dw_agent_runtime.model.profiles import ModelProfileRegistry, ModelRoute
+from dw_agent_runtime.model.prompts import PromptRegistry, RenderedPrompt, contain_untrusted
 from dw_agent_runtime.registry import ConfigError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 from dw_platform.domain.audit import AuditEvent
 
-__all__ = ["COMPACTED_ACTION", "COMPACTION_TASK", "PlatformSummarizationMiddleware"]
+__all__ = [
+    "COMPACTED_ACTION",
+    "COMPACTION_TASK",
+    "SUMMARY_PROMPT",
+    "SUMMARY_UPDATE_PROMPT",
+    "PlatformSummarizationMiddleware",
+]
 
 logger = logging.getLogger("dw_agent_runtime.context_compaction")
 
 COMPACTED_ACTION = "run.context_compacted"
 # What a refused summary is reported under, next to the agent loop's own task.
 COMPACTION_TASK = "context_compaction"
+# The summariser's prompts, pinned: the first summary of a span, and the one that
+# folds new history into the summary so far. Variables `messages` and `summary`.
+SUMMARY_PROMPT = ("platform.context_summary", "1.0.0")
+SUMMARY_UPDATE_PROMPT = ("platform.context_summary_update", "1.0.0")
 
 
 class PlatformSummarizationMiddleware(SummarizationMiddleware):
@@ -110,6 +132,7 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
         model: BaseChatModel,
         *,
         copy: RuntimeCopy,
+        prompts: PromptRegistry,
         uow_factory: PlatformUnitOfWorkFactory,
         clock: UtcClock,
         ids: IdGenerator,
@@ -124,18 +147,26 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
         trigger: ContextSize,
         keep: ContextSize,
     ) -> None:
-        if (
-            copy.context_summary_prompt is None
-            or copy.context_summary_frame is None
-            or copy.context_summary_update_prompt is None
-        ):
-            # Refuse rather than fall back to the library's own prompt: that one is
-            # English, knows nothing of pending approvals, and is exactly what this
-            # class exists not to use. Without the update prompt, a summary could
-            # not carry the previous one forward.
+        if copy.context_summary_frame is None:
+            # Without the frame the summary would go back in unmarked, read as
+            # if the user had written it.
             raise ConfigError(
-                f"runtime copy {copy.version} has no context summary text; "
-                "load runtime@1.6.0 or later"
+                f"runtime copy {copy.version} has no context_summary_frame; "
+                "load runtime@1.4.0 or later"
+            )
+        missing = [
+            f"{prompt_id}@{version}"
+            for prompt_id, version in (SUMMARY_PROMPT, SUMMARY_UPDATE_PROMPT)
+            if not prompts.has(prompt_id, version)
+        ]
+        if missing:
+            # Refuse rather than fall back to the library's own prompt: that one is
+            # English, knows nothing of pending approvals, contains nothing, and
+            # is exactly what this class exists not to use. Without the update
+            # prompt, a summary could not carry the previous one forward.
+            raise ConfigError(
+                "context compaction needs its summary prompts in the registry",
+                details={"missing": missing},
             )
         # At build, on the platform layer: a deployment whose summary route
         # declares no input budget fails here, not on the first long run.
@@ -144,14 +175,16 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
             model,
             trigger=trigger,
             keep=keep,
-            summary_prompt=copy.context_summary_prompt,
+            # Never used either: `_render` renders the registry's prompts. Empty
+            # so nothing reading the attribute finds the library's English one.
+            summary_prompt="",
             # Never used: `_summarise` chunks to the route's budget instead of
             # trimming to the library's 4000. None so nothing reading the
             # attribute believes a limit applies that does not.
             trim_tokens_to_summarize=None,
         )
-        self._update_prompt = copy.context_summary_update_prompt
         self._copy = copy
+        self._prompts = prompts
         self._uow_factory = uow_factory
         self._clock = clock
         self._ids = ids
@@ -195,7 +228,12 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
         units = list(_units(pending))
         # The smallest any call's frame can be: the update prompt with an empty
         # anchor. A message that does not fit beside it fits in no call.
-        room = budget - self._tokens(self._update_prompt.format(summary="", messages=""))
+        tenant_id = run_context.tenant_id
+        room = budget - self._prompt_tokens(
+            self._prompts.render(
+                *SUMMARY_UPDATE_PROMPT, {"summary": "", "messages": ""}, tenant_id=tenant_id
+            )
+        )
         if any(self._unit_tokens(unit) > room for unit in units):
             logger.warning(
                 "context compaction skipped: a message is larger than the summary "
@@ -206,7 +244,7 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
 
         calls = 0
         while units:
-            used = self._tokens(self._render(anchor=anchor, messages=""))
+            used = self._prompt_tokens(self._render(anchor, "", tenant_id=tenant_id))
             chunk: list[AnyMessage] = []
             while units and used + self._unit_tokens(units[0]) <= budget:
                 used += self._unit_tokens(units[0])
@@ -226,7 +264,9 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
             # would stop nothing.
             self._budget.check(run_context.run_id, profile.budgets, task=COMPACTION_TASK)
             try:
-                summary, input_tokens, output_tokens = await self._summarise(anchor, chunk)
+                summary, input_tokens, output_tokens = await self._summarise(
+                    anchor, chunk, tenant_id=tenant_id
+                )
             except Exception:
                 # Deliberately broad: the summariser is a model call and can fail
                 # in every way a provider can. Whatever it was, the answer is the
@@ -282,29 +322,46 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
             "platform context compaction is async-only; invoke the agent with ainvoke/astream"
         )
 
-    def _render(self, *, anchor: str, messages: str) -> str:
+    def _render(self, anchor: str, messages: str, *, tenant_id: uuid.UUID) -> RenderedPrompt:
+        """The update prompt when there is a summary to update, the first one otherwise.
+
+        Through the registry, so both values arrive escaped inside `<input>`
+        blocks, and resolved for the run's tenant like every other prompt.
+        """
         if anchor:
-            return self._update_prompt.format(summary=anchor, messages=messages).rstrip()
-        return self.summary_prompt.format(messages=messages).rstrip()
+            return self._prompts.render(
+                *SUMMARY_UPDATE_PROMPT,
+                {"summary": anchor, "messages": messages},
+                tenant_id=tenant_id,
+            )
+        return self._prompts.render(*SUMMARY_PROMPT, {"messages": messages}, tenant_id=tenant_id)
 
     def _tokens(self, text: str) -> int:
         """Counted the way the middleware counts everything, so the budget and
         the trigger agree on what a token is."""
         return int(self.token_counter([HumanMessage(content=text)]))
 
+    def _prompt_tokens(self, prompt: RenderedPrompt) -> int:
+        return int(self.token_counter(_prompt_messages(prompt)))
+
     def _unit_tokens(self, unit: list[AnyMessage]) -> int:
         # Each unit counted on its own errs high, never low: every count rounds
-        # up and adds a per-message overhead the joined text pays once.
-        return self._tokens(get_buffer_string(unit, format="xml") + "\n")
+        # up, adds a per-message overhead the joined text pays once, and pays
+        # for a block of its own. Counted escaped, as the registry will send it.
+        return self._tokens(contain_untrusted("messages", get_buffer_string(unit, format="xml")))
 
-    async def _summarise(self, anchor: str, chunk: list[AnyMessage]) -> tuple[str, int, int]:
+    async def _summarise(
+        self, anchor: str, chunk: list[AnyMessage], *, tenant_id: uuid.UUID
+    ) -> tuple[str, int, int]:
         """One chunk's summary, updating the anchor, and what it cost.
 
         The library's own summary call discards the response once it has the
         text, and with it the token counts the ceiling needs.
         """
         response = await self._summary_model.ainvoke(
-            self._render(anchor=anchor, messages=get_buffer_string(chunk, format="xml")),
+            _prompt_messages(
+                self._render(anchor, get_buffer_string(chunk, format="xml"), tenant_id=tenant_id)
+            ),
             config={"metadata": {"lc_source": "summarization", **internal_call_metadata()}},
         )
         usage = getattr(response, "usage_metadata", None) or {}
@@ -350,12 +407,21 @@ class PlatformSummarizationMiddleware(SummarizationMiddleware):
                 "summary_chars": len(summary),
                 "summary_calls": calls,
                 "copy_version": self._copy.version,
+                "summary_prompts": [
+                    f"{prompt_id}@{version}"
+                    for prompt_id, version in (SUMMARY_PROMPT, SUMMARY_UPDATE_PROMPT)
+                ],
             },
             occurred_at=self._clock.now().astimezone(UTC),
         )
         async with self._uow_factory(access_context_from_run(run_context)) as uow:
             await uow.audit.append(event)
             await uow.commit()
+
+
+def _prompt_messages(prompt: RenderedPrompt) -> list[BaseMessage]:
+    """The registry's instructions as the system turn, the contained data as the user's."""
+    return [SystemMessage(content=prompt.system), HumanMessage(content=prompt.user)]
 
 
 def _digest(messages: list[AnyMessage]) -> str:
