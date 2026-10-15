@@ -16,6 +16,7 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from dw_agent_runtime.model.profiles import DEFAULT_PROFILE_ID
 from dw_knowledge.contracts import DEFAULT_COLLECTION
 from dw_knowledge.ingest_jobs import (
     DEFAULT_HEARTBEAT_SECONDS,
@@ -124,7 +125,7 @@ class WorkerSettings(BaseSettings):
         default="hash", validation_alias=AliasChoices("DW_WORKER_EMBEDDING_PROVIDER")
     )
     model_profile: str = Field(
-        default="gateway",
+        default=DEFAULT_PROFILE_ID,
         validation_alias=AliasChoices("DW_WORKER_MODEL_PROFILE", "DW_API_MODEL_PROFILE"),
     )
     # Observability → Langfuse (OTLP). Empty = NullTelemetry (no export). Same four
