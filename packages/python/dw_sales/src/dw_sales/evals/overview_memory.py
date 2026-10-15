@@ -119,9 +119,11 @@ class PythonOverviewReader:
                     status=case.status,
                     customer_code=case.customer_code,
                     received_at=case.received_at,
+                    due=case.due,
                     assigned_to=assigned,
                 )
-                entries.append(_entry(NO_DUE, case.received_at, case.case_id, row))
+                group = case.due.isoformat() if case.due else NO_DUE
+                entries.append(_entry(group, case.received_at, case.case_id, row))
         for quoted in self.quotes:
             quote, assigned = quoted.case, quoted.origin.assigned_to
             pricer = quote.pricing.decided_by if quote.pricing else None

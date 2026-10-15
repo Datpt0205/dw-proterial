@@ -10,9 +10,10 @@ and is passed as parameters: this module restates none of it.
 
 The work list is three keyset scans merged: open orders, open quotations and
 messages routed to Sales, each through a partial index that leads with the
-columns RLS supplies and carries the list's order (migration
-`6d0252a87a6c`). The terminal statuses that bound those indexes are the one
-thing restated here, written into each statement as literals so that the
+columns RLS supplies and carries the list's order (migrations
+`6d0252a87a6c`, `2dd12f5b9c88`). The terminal statuses that bound those
+indexes are the one thing restated here, written into each statement as
+literals so that the
 planner can match the index's predicate in a generic plan too; no step of
 the work list is ever on one (`tests/unit/test_overview_reader.py` holds that).
 """
@@ -23,7 +24,7 @@ import uuid
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Final
 
 import sqlalchemy as sa
@@ -73,7 +74,8 @@ def _not_in(column: str, values: Sequence[str]) -> sa.TextClause:
     return sa.text(f"{column} NOT IN ({listed})")
 
 
-# The quotation's due date as the work list sorts it, written as the index is.
+# A case's due date as the work list sorts it, written as each index is.
+_ORDER_GROUP = sa.literal_column(f"coalesce(order_cases.due, '{NO_DUE}')", sa.Text)
 _QUOTE_GROUP = sa.literal_column(f"coalesce(quote_cases.quote_due, '{NO_DUE}')", sa.Text)
 
 
@@ -427,7 +429,7 @@ class SqlOverviewReader:
             sa.select(
                 sa.literal("order").label("kind"),
                 _C.c.id.label("row_id"),
-                sa.literal(NO_DUE, sa.Text).label("grp"),
+                _ORDER_GROUP.label("grp"),
                 _C.c.received_at,
             )
             .where(
@@ -443,9 +445,9 @@ class SqlOverviewReader:
                         _C.c.status == OrderStatus.UPLOADED_TO_BRAVO.value,
                     ),
                 ),
-                *_after_constant_group(NO_DUE, _C.c.received_at, _C.c.id, after),
+                *_after(_ORDER_GROUP, _C.c.received_at, _C.c.id, after),
             )
-            .order_by(_C.c.received_at, _C.c.id)
+            .order_by(_ORDER_GROUP, _C.c.received_at, _C.c.id)
             .limit(limit)
         )
         quotes = (
@@ -469,18 +471,7 @@ class SqlOverviewReader:
                         _Q.c.priced_by.is_distinct_from(me),
                     ),
                 ),
-                *(
-                    []
-                    if after is None
-                    else [
-                        sa.tuple_(_QUOTE_GROUP, _Q.c.received_at, _Q.c.id)
-                        > sa.tuple_(
-                            sa.literal(after.group, sa.Text),
-                            sa.literal(after.sort_value, sa.TIMESTAMP(timezone=True)),
-                            sa.literal(after.tiebreaker, _Q.c.id.type),
-                        )
-                    ]
-                ),
+                *_after(_QUOTE_GROUP, _Q.c.received_at, _Q.c.id, after),
             )
             .order_by(_QUOTE_GROUP, _Q.c.received_at, _Q.c.id)
             .limit(limit)
@@ -535,7 +526,12 @@ class SqlOverviewReader:
         if ids["order"]:
             for row in await self.session.execute(
                 sa.select(
-                    _C.c.id, _C.c.status, _C.c.customer_code, _C.c.received_at, _C.c.assigned_to
+                    _C.c.id,
+                    _C.c.status,
+                    _C.c.customer_code,
+                    _C.c.received_at,
+                    _C.c.due,
+                    _C.c.assigned_to,
                 ).where(_C.c.id.in_(ids["order"]))
             ):
                 found[row.id] = OpenOrder(
@@ -543,6 +539,7 @@ class SqlOverviewReader:
                     status=OrderStatus(row.status),
                     customer_code=row.customer_code,
                     received_at=row.received_at,
+                    due=date.fromisoformat(row.due) if row.due else None,
                     assigned_to=row.assigned_to,
                 )
         if ids["quote"]:
@@ -558,6 +555,25 @@ class SqlOverviewReader:
                     disposition_of(message), message["processed_at"]
                 )
         return found
+
+
+def _after(
+    group: sa.ColumnElement[str],
+    received_at: sa.ColumnElement[datetime],
+    row_id: sa.ColumnElement[uuid.UUID],
+    after: CursorPosition | None,
+) -> list[sa.ColumnElement[bool]]:
+    """The keyset condition for rows sorted by (``group``, received, id)."""
+    if after is None:
+        return []
+    return [
+        sa.tuple_(group, received_at, row_id)
+        > sa.tuple_(
+            sa.literal(after.group, sa.Text),
+            sa.literal(after.sort_value, sa.TIMESTAMP(timezone=True)),
+            sa.literal(after.tiebreaker, row_id.type),
+        )
+    ]
 
 
 def _after_constant_group(

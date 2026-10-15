@@ -118,6 +118,8 @@ class OpenOrder:
     status: OrderStatus
     customer_code: str
     received_at: datetime
+    # `OrderCase.due`, as the case was last saved.
+    due: date | None
     assigned_to: uuid.UUID | None
 
 
