@@ -240,7 +240,7 @@ jobs:
       - name: Sync workspace
         run: uv sync --all-packages
       - name: bandit (Python SAST, medium+)
-        run: uvx --python 3.12 bandit@1.8.6 -r apps/api/src apps/docgen/src apps/worker/src packages/python/*/src -ll
+        run: uvx --python 3.12 bandit@1.8.6 -r apps/api/src apps/docgen/src apps/reader/src apps/worker/src packages/python/*/src -ll
       - name: pip-audit (Python dependencies, optional extras included)
         # --all-extras: without it the export leaves out every optional extra,
         # so the worker's `parsers` (docling, torch) was never audited and only
