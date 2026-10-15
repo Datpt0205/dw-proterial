@@ -104,7 +104,7 @@
       "version": "1.2.0"
     },
     {
-      "checksum": "00e48ebcfefacba2c4c356d14594d9320572ca8da5446b44a1c5d75b15c52666",
+      "checksum": "b7aaf4ccdeca9c9889bd82c53760d22454f00a10c2dd69ca5a2000de6239425a",
       "dataset_id": "sales",
       "files": [
         {
@@ -122,6 +122,10 @@
         {
           "checksum": "d59b3a818800094d36afeb3a3c0f2cedfb23138a7d64c2f5eddb1c918ba69430",
           "path": "evals/expected/sales_findings.json"
+        },
+        {
+          "checksum": "f4f8e0074074363e98840109d9169bb39b28ca102a37ce6fe2cf178051a94b90",
+          "path": "evals/expected/sales_header_correction.json"
         },
         {
           "checksum": "ba49318b6123f2481be6409689a14c54b156807176f00b441750029c04a923d6",
@@ -172,6 +176,10 @@
           "path": "evals/fixtures/cases/sales_findings.json"
         },
         {
+          "checksum": "b167dda304c8a2115e9080b48cd5e0894ebb010fd586a6a20a7102dd0945e50e",
+          "path": "evals/fixtures/cases/sales_header_correction.json"
+        },
+        {
           "checksum": "f9dff85feb0fc2d7387763882bfef378c8f350e76671f8b360e660bee30aaf15",
           "path": "evals/fixtures/cases/sales_injection_m12.json"
         },
@@ -212,7 +220,7 @@
           "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/data/purchase_orders.json"
         }
       ],
-      "version": "1.2.0"
+      "version": "1.3.0"
     },
     {
       "checksum": "ab96c8413892c34e6e2f9b135b5d133d615876bb92211f5c1f740b58f407ba42",
@@ -424,7 +432,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "5452299181f75e3f03a6b2892a200368391d8186",
+  "git_sha": "57d3c20ea1d303d4c0178f73f7645d3bbdaf8e67",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -544,12 +552,12 @@
   ],
   "prompt_bundles": [
     {
-      "checksum": "bb3a3e95a87dd312fb9cfc18a949b7c7b78d936eb81556089e6580c6fab27bfd",
+      "checksum": "05413762c1a8ba84fead561d43a05de60cc6c047579ca55876d1e9f6cd1b655d",
       "prompt_id": "platform.context_summary",
       "version": "1.0.0"
     },
     {
-      "checksum": "be64d7661a586f485d8e95c117f4a36b644727168fd8be5af1c59345448bcd26",
+      "checksum": "ab6c39b54d7f81c4974600a8ef1acaa4b7d0d029a048b986db7113f553cae24f",
       "prompt_id": "platform.context_summary_update",
       "version": "1.0.0"
     },

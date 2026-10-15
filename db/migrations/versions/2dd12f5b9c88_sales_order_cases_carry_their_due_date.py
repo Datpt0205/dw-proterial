@@ -1,7 +1,7 @@
 """sales order cases carry their due date
 
 Revision ID: 2dd12f5b9c88
-Revises: 218118b8f0e5
+Revises: 1a8fd934194f
 Create Date: 2026-10-15 03:03:36.773369+00:00
 
 The work list (G22, ticket 08) sorts by due date, then by when a case came
@@ -32,7 +32,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "2dd12f5b9c88"
-down_revision = "218118b8f0e5"
+down_revision = "1a8fd934194f"
 branch_labels = None
 depends_on = None
 
