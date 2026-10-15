@@ -194,10 +194,14 @@ class SqlArtifactLog:
     session: AsyncSession
     scope: SalesScope
 
-    async def add(self, artifact: ArtifactRecord) -> None:
+    async def add(self, artifact: ArtifactRecord) -> bool:
+        # One file per kind and content type per version, by the case column
+        # this row sets (`uq_artifacts_*_case_version_kind_content_type`).
+        case = "order_case_id" if artifact.case_kind is CaseKind.ORDER else "quote_case_id"
         async with refusals_named(self.session, artifact_id=str(artifact.artifact_id)):
-            await self.session.execute(
-                sa.insert(_A).values(
+            added = await self.session.execute(
+                pg_insert(_A)
+                .values(
                     id=artifact.artifact_id,
                     **scope_values(self.scope),
                     **_case_columns(artifact.case_kind, artifact.case_id),
@@ -211,7 +215,12 @@ class SqlArtifactLog:
                     created_by=artifact.created_by,
                     created_at=artifact.created_at,
                 )
+                .on_conflict_do_nothing(
+                    index_elements=[case, "case_version", "kind", "content_type"]
+                )
+                .returning(_A.c.id)
             )
+        return added.first() is not None
 
     async def get(self, artifact_id: uuid.UUID) -> ArtifactRecord | None:
         row = (

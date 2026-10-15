@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Button,
   DatePicker,
@@ -12,18 +12,20 @@ import {
 } from "antd";
 import { EyeOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
-import { StatusTag } from "@dw/ui";
+import { RegionState, StatusTag } from "@dw/ui";
 import {
   formatDate,
   formatDateTime,
   fromPickerDay,
   toPickerDay,
 } from "../../../../lib/dates";
+import { LoadError } from "../../../../components/load-error";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
 import { FIELD, FINDING_CODE, label, REGION_FLAG } from "../../_lib/labels";
 import type { Viewer } from "../../_lib/order-actions";
 import { useAction } from "../../_lib/use-action";
+import { useResource } from "../../_lib/use-resource";
 import { AmountInput } from "../../_components/amount-input";
 import { GuardedButton } from "../../_components/guarded-button";
 
@@ -250,12 +252,16 @@ function ConfirmValue({
 
 /**
  * The newest part of the mail a model read the request from, with the words
- * of one value highlighted. Its text may state a price, so a caller without
- * `sales.price.read` is told so instead.
+ * of one value highlighted. It is fetched from its own route when opened, and
+ * the server records that this person was served it at this case version:
+ * confirming a value read from it is refused until then (ticket 29). Its text
+ * may state a price, so a caller without `sales.price.read` is told so
+ * instead, without asking.
  */
 export function MessageTextDrawer({
   quote,
   target,
+  mayRead,
   onClose,
 }: {
   quote: Quote;
@@ -265,12 +271,49 @@ export function MessageTextDrawer({
     start: number;
     end: number;
   } | null;
+  mayRead: boolean;
   onClose: () => void;
 }) {
-  const text = quote.message_text;
+  const open = target !== null;
+  const load = useCallback(
+    () => salesApi().quoteMessageText(quote.case_id),
+    [quote.case_id],
+  );
+  const served = useResource(
+    `sales/quote/${quote.case_id}/${quote.case_version}/message-text`,
+    load,
+    { enabled: open && mayRead },
+  );
+  const body = () => {
+    if (!mayRead)
+      return (
+        <Typography.Text>
+          Bạn cần quyền xem giá (sales.price.read) để mở nội dung thư: thư có
+          thể nêu giá.
+        </Typography.Text>
+      );
+    if (served.loading) return <RegionState kind="loading" />;
+    if (served.error)
+      return <LoadError error={served.error} onRetry={served.reload} />;
+    const text = served.data?.text;
+    if (text === undefined || !target) return null;
+    return (
+      <Space direction="vertical" className="w-full">
+        <Typography.Text type="secondary">
+          Đoạn mới nhất của thư, như DW1 đã đọc (phần trích dẫn thư cũ đã được
+          cắt theo cấu trúc thư).
+        </Typography.Text>
+        <Typography.Paragraph className="whitespace-pre-wrap">
+          {text.slice(0, target.start)}
+          <mark>{text.slice(target.start, target.end)}</mark>
+          {text.slice(target.end)}
+        </Typography.Paragraph>
+      </Space>
+    );
+  };
   return (
     <Drawer
-      open={target !== null}
+      open={open}
       onClose={onClose}
       size="large"
       title={
@@ -279,24 +322,7 @@ export function MessageTextDrawer({
           : "Thư của khách"
       }
     >
-      {typeof text === "string" && target ? (
-        <Space direction="vertical" className="w-full">
-          <Typography.Text type="secondary">
-            Đoạn mới nhất của thư, như DW1 đã đọc (phần trích dẫn thư cũ đã được
-            cắt theo cấu trúc thư).
-          </Typography.Text>
-          <Typography.Paragraph className="whitespace-pre-wrap">
-            {text.slice(0, target.start)}
-            <mark>{text.slice(target.start, target.end)}</mark>
-            {text.slice(target.end)}
-          </Typography.Paragraph>
-        </Space>
-      ) : (
-        <Typography.Text>
-          Bạn cần quyền xem giá (sales.price.read) để mở nội dung thư: thư có
-          thể nêu giá.
-        </Typography.Text>
-      )}
+      {body()}
     </Drawer>
   );
 }

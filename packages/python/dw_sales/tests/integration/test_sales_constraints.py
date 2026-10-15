@@ -389,6 +389,36 @@ async def test_an_artifact_key_always_carries_its_tenant_and_workspace(
 
 
 @pytest.mark.parametrize(
+    "region",
+    [
+        # The message's text is a quotation's source only (ticket 29).
+        "NULL, NULL",
+        # A file's region is still a page or a sheet.
+        "1, 'PO'",
+    ],
+)
+async def test_a_served_region_is_a_page_a_sheet_or_a_quotations_message_text(
+    small_run: OrderRun, app_sessions: async_sessionmaker[AsyncSession], region: str
+) -> None:
+    case = _m01(small_run)
+    scope = small_run.scope
+    attachment = "NULL" if region == "NULL, NULL" else "'M01-A1'"
+    refused = await _refused(
+        app_sessions,
+        scope,
+        "INSERT INTO sales.source_served (id, tenant_id, workspace_id, principal_id,"
+        " order_case_id, case_version, attachment_id, attachment_sha256, page, sheet, served_at)"
+        f" VALUES (gen_random_uuid(), :t, :w, :p, :c, 1, {attachment}, repeat('a', 64),"
+        f" {region}, now())",
+        t=scope.tenant_id.value,
+        w=scope.workspace_id.value,
+        p=DIEU.user_id,
+        c=case.case_id,
+    )
+    assert refused == "ck_source_served_region"
+
+
+@pytest.mark.parametrize(
     ("change", "constraint"),
     [
         ("owner = NULL WHERE disposition = 'routed_to_sales'", "ck_messages_routed"),

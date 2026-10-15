@@ -8,6 +8,7 @@ the domain produced, through the domain's own constructor.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -288,7 +289,7 @@ async def test_records_the_flows_keep_besides_cases(
         assert await work.worker.state() == WorkerState(paused=False)
         await work.served.record(served)
         await work.served.record(served.model_copy(update={"served_at": T0 + timedelta(1)}))
-        await work.artifacts.add(artifact)
+        assert await work.artifacts.add(artifact)
         await work.worker.set(paused)
         await work.commit()
     async with uow(order_run.scope) as work:
@@ -297,6 +298,50 @@ async def test_records_the_flows_keep_besides_cases(
         assert not await work.served.served(AN_ID, CaseKind.ORDER, case.case_id, case.case_version)
         assert await work.artifacts.get(artifact.artifact_id) == artifact
         assert await work.worker.state() == paused
+
+
+async def test_a_kind_is_recorded_once_per_version_even_by_two_renders_at_once(
+    order_run: OrderRun, uow: SqlSalesUnitOfWorkFactory
+) -> None:
+    """`uq_artifacts_order_case_id_case_version_kind_content_type` (ticket 06):
+    the render that records second waits for the first, then records nothing;
+    the same kind in another content type, or at another version, is a file
+    of its own."""
+    case = order_run.outcomes["M03"].case
+    assert case is not None
+    first = ArtifactRecord(
+        artifact_id=uuid.uuid4(),
+        case_kind=CaseKind.ORDER,
+        case_id=case.case_id,
+        case_version=case.case_version,
+        kind="cross_check_sheet",
+        template_ref="sales_documents.cross_check_sheet.vi@1.0.0",
+        sha256="b" * 64,
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size_bytes=2048,
+        created_by=AN_ID,
+        created_at=T0,
+    )
+    second = first.model_copy(update={"artifact_id": uuid.uuid4(), "sha256": "c" * 64})
+    async with uow(order_run.scope) as winner, uow(order_run.scope) as loser:
+        assert await winner.artifacts.add(first)
+        racing = asyncio.ensure_future(loser.artifacts.add(second))
+        done, _ = await asyncio.wait({racing}, timeout=0.5)
+        assert not done, "the second insert did not wait for the first transaction"
+        await winner.commit()
+        assert await racing is False
+        await loser.commit()
+    async with uow(order_run.scope) as work:
+        held = await work.artifacts.for_case(CaseKind.ORDER, case.case_id)
+        assert [r.artifact_id for r in held if r.kind == "cross_check_sheet"] == [first.artifact_id]
+        assert await work.artifacts.add(
+            second.model_copy(update={"content_type": "application/pdf"})
+        )
+        assert await work.artifacts.add(
+            second.model_copy(
+                update={"artifact_id": uuid.uuid4(), "case_version": case.case_version + 1}
+            )
+        )
 
 
 async def test_leaving_without_commit_keeps_nothing(

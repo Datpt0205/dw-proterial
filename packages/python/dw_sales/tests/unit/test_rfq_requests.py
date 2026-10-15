@@ -19,7 +19,7 @@ import pytest
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
 from dw_agent_runtime.model.prompts import PromptRegistry
-from dw_kernel.errors import ConflictError, DomainError
+from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.assembly import model_requests
 from dw_sales.adapters.memory_rules import platform_book
@@ -29,6 +29,7 @@ from dw_sales.adapters.order_rules import PlatformOrderRules, load_tenant_order_
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader, ClientTexts
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.case_store import CaseOrigin, Stored
 from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService, RequestNotExtractedError
@@ -42,8 +43,9 @@ from dw_sales.domain.quotes import (
     QuoteFindingCode,
     price_findings,
 )
+from dw_sales.evals.graders import AN, CALLERS, DIEU, READER
 from dw_sales.evals.recorded import Recorded
-from dw_sales.evals.world import MemoryStore
+from dw_sales.evals.world import ALPHA, Caller, MemoryStore, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
 
@@ -469,8 +471,9 @@ def _reply() -> DesignReply:
 
 
 async def test_the_mail_text_and_a_stated_target_are_shown_only_with_prices() -> None:
-    """The mail a model read may state a price; it is shown as a source is,
-    to a holder of `sales.price.read`, and so is the stated target."""
+    """The mail a model read may state a price; it is served as a source is,
+    to a holder of `sales.price.read`, on its own route and never in the case
+    view; the stated target is shown with prices only."""
     from dw_sales.application.access import PriceView
     from dw_sales.application.views import HIDDEN, quote_case
 
@@ -491,6 +494,89 @@ async def test_the_mail_text_and_a_stated_target_are_shown_only_with_prices() ->
     assert hidden.lines[0].stated_target_price == HIDDEN
     assert "stated_target_price" not in hidden.lines[0].anchors
     assert shown.lines[0].stated_target_price == Decimal("0.95")
-    assert view(m37, False).message_text == HIDDEN
-    text = view(m37, True).message_text
-    assert isinstance(text, str) and text.startswith("Yêu cầu báo giá")
+    assert "message_text" not in type(view(m37, True)).model_fields
+    assert m37.request.body is not None
+    assert m37.request.body.text not in view(m37, True).model_dump_json()
+
+    world, case_id = _world_with(m37)
+    with pytest.raises(PermissionDeniedError):
+        await world.services.sources.quote_message_text(READER.context(), case_id)
+    served = await world.services.sources.quote_message_text(AN.context(), case_id)
+    assert served.text == m37.request.body.text and served.text.startswith("Yêu cầu báo giá")
+
+
+# ------------------------------------------- confirming against the source --
+
+
+def _world_with(case: QuoteCase) -> tuple[World, uuid.UUID]:
+    """The eval world's services over a store holding ``case``, unassigned."""
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS)
+    world.store.state(ALPHA).quotes[case.case_id] = Stored(case, CaseOrigin(None, None))
+    return world, case.case_id
+
+
+async def _confirm(
+    world: World, caller: Caller, case_id: uuid.UUID, line_no: int | None, field: str, value: str
+) -> None:
+    await world.services.quote_commands.answer_finding(
+        caller.context(),
+        case_id,
+        f"value_uncertain:{'-' if line_no is None else line_no}",
+        case_version=world.quote(case_id).case_version,
+        field=field,
+        value=value,
+    )
+
+
+async def test_a_value_read_from_the_mail_is_confirmed_once_its_text_was_served() -> None:
+    """As an order's prepare (`require_served`): the server, not the screen,
+    holds that the person opened where the value was read, at this version,
+    themselves (ticket 29)."""
+    world, case_id = _world_with(await _open("M37", M37))
+
+    with pytest.raises(ConflictError) as refused:
+        await _confirm(world, AN, case_id, 1, "quantity", "1250")
+    assert refused.value.details["rule"] == "source_not_served"
+    assert refused.value.details["missing"] == ["message_text"]
+    # Another person's opening does not count for An.
+    await world.services.sources.quote_message_text(DIEU.context(), case_id)
+    with pytest.raises(ConflictError, match="chưa mở nguồn"):
+        await _confirm(world, AN, case_id, 1, "quantity", "1250")
+
+    await world.services.sources.quote_message_text(AN.context(), case_id)
+    await _confirm(world, AN, case_id, 1, "quantity", "1250")
+    # Confirming moved the case on: the text is opened again at the new version.
+    with pytest.raises(ConflictError, match="chưa mở nguồn"):
+        await _confirm(world, AN, case_id, 1, "uom", "m")
+    await world.services.sources.quote_message_text(AN.context(), case_id)
+    await _confirm(world, AN, case_id, 1, "uom", "m")
+    confirmed = next(
+        f for f in world.quote(case_id).findings if f.key == (QuoteFindingCode.VALUE_UNCERTAIN, 1)
+    ).confirmed
+    assert [(c.field, c.value) for c in confirmed] == [("quantity", "1250"), ("uom", "m")]
+
+
+async def test_a_value_read_from_a_file_needs_its_page_served() -> None:
+    """M38's values were read from page 1 of its PDF: serving the mail's text
+    is not serving the page."""
+    m38 = await _open("M38", M38)
+    world, case_id = _world_with(m38)
+    item = m38.request.document.item(1)
+    assert item.quantity.source.attachment_id is not None and item.quantity.source.page == 1
+    await world.services.sources.quote_message_text(AN.context(), case_id)
+    with pytest.raises(ConflictError) as refused:
+        await _confirm(world, AN, case_id, 1, "quantity", "2000")
+    assert refused.value.details["missing"] == [f"{item.quantity.source.attachment_id}:page 1"]
+
+    await world.services.sources.quote_source(
+        AN.context(), case_id, item.quantity.source.attachment_id, page=1, sheet=None
+    )
+    await _confirm(world, AN, case_id, 1, "quantity", "2000")
+
+
+async def test_a_request_not_read_from_the_mail_has_no_message_text_to_serve() -> None:
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS)
+    (_, quote), *_ = (await world.process_each(AN, ["M10"])).values()
+    assert isinstance(quote, QuoteCase) and quote.request.body is None
+    with pytest.raises(NotFoundError):
+        await world.services.sources.quote_message_text(AN.context(), quote.case_id)

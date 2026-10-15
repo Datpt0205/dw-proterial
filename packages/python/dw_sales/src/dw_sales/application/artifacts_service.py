@@ -24,6 +24,7 @@ and never an amount (spec decision 8).
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -95,6 +96,14 @@ from dw_sales.domain.quotes import QuoteCase, QuoteStatus
 
 _O = OrderStatus
 _Q = QuoteStatus
+
+_LOG = logging.getLogger(__name__)
+
+
+class _RacedError(Exception):
+    """A render found its kind recorded at its version by another one that
+    committed while it was drawing."""
+
 
 type Compose[CaseT] = Callable[
     [Drafting[CaseT], DesignRequestSource], Awaitable[tuple[Rendered, ...]]
@@ -388,43 +397,97 @@ class ArtifactService:
             raise DomainError("no such artifact kind", details={"field": "kind"})
         self._price(context, gate.price_bearing, kind=kind)
         scope, now = sales_scope(context), self.clock.now()
-        async with self.uow(scope) as work:
-            case = await cases.load(work, case_id)
-            same_version(case_id, case.case_version, case_version)
-            if not gate.open_in(case, context, self.gate):
-                raise _closed(kind, case.status.value)
-            drawn = [
-                record
-                for record in await work.artifacts.for_case(cases.kind, case_id)
-                if record.case_version == case.case_version
-            ]
-            current = [record for record in drawn if record.kind == kind]
-            if not current:
-                drafting = Drafting(
-                    case=case,
-                    case_version=case.case_version,
-                    customer=await self._customer(scope, case.customer_code),
-                    people=People(
-                        {m.user_id: m for m in await self.directory.list_members(context)}
-                    ),
-                    drafter=context.principal_id,
-                    at=now,
-                    copy=await self.copy.artifact_copy(
-                        scope, [record.template_ref for record in drawn]
-                    ),
-                    writer=self.writer,
-                    scope=scope,
-                )
-                for rendered in await gate.compose(drafting, self.design):
-                    record = self._record(cases.kind, case, kind, rendered, context, now)
-                    await self.storage.put_object(
-                        record.object_key(scope), rendered.data, rendered.content_type
+        # The objects this render stored: removed again unless their records
+        # commit (ticket 06), so a failed commit leaves no object behind.
+        stored: list[ArtifactRecord] = []
+        try:
+            async with self.uow(scope) as work:
+                case = await cases.load(work, case_id)
+                same_version(case_id, case.case_version, case_version)
+                if not gate.open_in(case, context, self.gate):
+                    raise _closed(kind, case.status.value)
+                drawn = [
+                    record
+                    for record in await work.artifacts.for_case(cases.kind, case_id)
+                    if record.case_version == case.case_version
+                ]
+                current = [record for record in drawn if record.kind == kind]
+                if not current:
+                    drafting = Drafting(
+                        case=case,
+                        case_version=case.case_version,
+                        customer=await self._customer(scope, case.customer_code),
+                        people=People(
+                            {m.user_id: m for m in await self.directory.list_members(context)}
+                        ),
+                        drafter=context.principal_id,
+                        at=now,
+                        copy=await self.copy.artifact_copy(
+                            scope, [record.template_ref for record in drawn]
+                        ),
+                        writer=self.writer,
+                        scope=scope,
                     )
-                    await work.artifacts.add(record)
-                    await work.audit.append(_audit(context, self.ids, record, "rendered", now))
-                    current.append(record)
-                await work.commit()
+                    for rendered in await gate.compose(drafting, self.design):
+                        record = self._record(cases.kind, case, kind, rendered, context, now)
+                        await self.storage.put_object(
+                            record.object_key(scope), rendered.data, rendered.content_type
+                        )
+                        stored.append(record)
+                        if not await work.artifacts.add(record):
+                            raise _RacedError
+                        await work.audit.append(_audit(context, self.ids, record, "rendered", now))
+                        current.append(record)
+                    await work.commit()
+        except _RacedError:
+            # Another render of this kind at this version committed first:
+            # this one recorded nothing, and answers what that one stored.
+            await self._discard(scope, stored)
+            return await self._rendered(cases, scope, case_id, kind, case_version)
+        except Exception:
+            await self._discard(scope, stored)
+            raise
         return [_view(record, downloadable=True) for record in current]
+
+    async def _rendered[CaseT: _Case](
+        self, cases: _Cases[CaseT], scope: SalesScope, case_id: uuid.UUID, kind: str, version: int
+    ) -> list[ArtifactView]:
+        async with self.uow(scope) as work:
+            records = await work.artifacts.for_case(cases.kind, case_id)
+        return [
+            _view(record, downloadable=True)
+            for record in records
+            if (record.kind, record.case_version) == (kind, version)
+        ]
+
+    async def _discard(self, scope: SalesScope, stored: list[ArtifactRecord]) -> None:
+        """Remove the objects of ``stored`` whose records are not in the store.
+
+        Asked of the store rather than assumed, since a commit that failed on
+        the way back may have committed. When the store cannot say, or an
+        object cannot be removed, it is left: an object with no record is
+        purged with its tenant's prefix, a record with no object would answer
+        503 for that version until the case moves on."""
+        if not stored:
+            return
+        try:
+            async with self.uow(scope) as work:
+                recorded = {
+                    r.artifact_id for r in stored if await work.artifacts.get(r.artifact_id)
+                }
+        except Exception:
+            _LOG.warning("unrecorded artifact objects kept: the store did not answer")
+            return
+        for record in stored:
+            if record.artifact_id in recorded:
+                continue
+            try:
+                await self.storage.delete_object(record.object_key(scope))
+            except Exception:
+                _LOG.warning(
+                    "an unrecorded artifact object was not removed",
+                    extra={"artifact_id": str(record.artifact_id)},
+                )
 
     async def _download[CaseT: _Case](
         self,

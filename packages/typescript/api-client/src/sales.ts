@@ -329,6 +329,14 @@ export class SalesApi {
     );
   }
 
+  /** The mail a model read the request from; served and recorded like a
+   * page, which confirming a value read from it requires (ticket 29). */
+  quoteMessageText(caseId: string) {
+    return this.get<"/api/v1/sales/quotes/{case_id}/message-text">(
+      `/api/v1/sales/quotes/${enc(caseId)}/message-text`,
+    );
+  }
+
   answerFinding(
     caseId: string,
     findingKey: string,

@@ -762,6 +762,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/{case_id}/message-text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote Message Text */
+        get: operations["quote_message_text_api_v1_sales_quotes__case_id__message_text_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}/price": {
         parameters: {
             query?: never;
@@ -2125,6 +2142,29 @@ export interface components {
             reason?: string | null;
             reply?: components["schemas"]["CaseReply"] | null;
         };
+        /**
+         * MessageTextView
+         * @description The message's newest part a model read a quotation from, as the case
+         *     holds it: what its values' ``chars`` index into. It may state a price.
+         */
+        MessageTextView: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Case Version */
+            case_version: number;
+            /**
+             * Served At
+             * Format: date-time
+             */
+            served_at: string;
+            /** Sha256 */
+            sha256: string;
+            /** Text */
+            text: string;
+        };
         /** MessagesView */
         MessagesView: {
             /** Oldest Waiting Seconds */
@@ -2746,7 +2786,6 @@ export interface components {
             master_list: components["schemas"]["StampView"] | null;
             /** Message Id */
             message_id: string;
-            message_text?: components["schemas"]["Words"] | null;
             /**
              * Model Read
              * @default []
@@ -5071,6 +5110,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_message_text_api_v1_sales_quotes__case_id__message_text_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTextView"];
                 };
             };
             /** @description Validation Error */
