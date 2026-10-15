@@ -12,8 +12,9 @@ import pytest
 
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
-from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalRequest
+from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import (
     RULES_APPROVAL,
     RuleDecisions,
@@ -240,6 +241,39 @@ async def test_the_rules_list_shows_the_reason_the_decider_gave() -> None:
     assert (await _listed(world, rejected.version_id)).comment == "Thiếu ngưỡng giá mới"
     long = (await _listed(world, approved.version_id)).comment
     assert long is not None and len(long) == 500 and long.endswith("…")
+
+
+async def test_another_tenant_reads_no_decision_on_this_tenants_approval() -> None:
+    """The decision read the settlement uses is the tenant's own: from
+    another tenant, or another workspace's audience, it is nothing."""
+    world = _world()
+    version_id = await _approved(world)
+    version = await world.store.rule_versions.for_tenant(ALPHA.tenant_id.value).get(version_id)
+    assert version is not None and version.approval_id is not None
+
+    def audience(scope: SalesScope) -> ApprovalAudience:
+        return ApprovalAudience(context=GIANG.context(scope), holds_decide=True)
+
+    own = world.store.approvals.scoped(ALPHA.tenant_id.value)
+    other = world.store.approvals.scoped(BETA.tenant_id.value)
+    approval_id = version.approval_id
+    alpha_ws, beta_ws = ALPHA.workspace_id.value, BETA.workspace_id.value
+
+    decided = await own.latest_decision(
+        approval_id, workspace_id=alpha_ws, audience=audience(ALPHA)
+    )
+    assert decided is not None and decided.comment == "Đồng ý"
+    for workspace in (alpha_ws, beta_ws):
+        assert (
+            await other.latest_decision(
+                approval_id, workspace_id=workspace, audience=audience(BETA)
+            )
+            is None
+        )
+    assert (
+        await own.latest_decision(approval_id, workspace_id=beta_ws, audience=audience(ALPHA))
+        is None
+    )
 
 
 async def test_the_kpi_policy_resolves_per_tenant_for_the_overview() -> None:
