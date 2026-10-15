@@ -306,7 +306,9 @@ and the code restored; 15 of 15 went red:
   model's recorded answers and fails below the recorded score (0.71 VI/EN),
   so a change to the verification shows. The 80% bar is reported, not
   enforced, until Đạt sets it.
-- Open for Đạt: the bar (71% VI/EN measured; JA swung from 91% to 50%
-  between two prompt versions, so JA is not claimed); whether to try
-  thinking on for this step (about 10× slower, measured 2026-10-12); ADR
-  0005's status.
+- Decided by Đạt, 2026-10-15: the bar is 70% VI/EN (71.1% measured, so
+  the step stays on for the demo tenant); JA is not claimed (it swung from
+  91% to 50% between two prompt versions). Thinking on was measured on
+  2026-10-14 and is not usable on the GTX 1080 (`sales.md`). ADR 0005
+  accepted 2026-10-14. The margin is 1.1 points: a prompt, model or
+  verification change that loses one line in 45 falls below it.

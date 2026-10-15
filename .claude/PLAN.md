@@ -54,7 +54,6 @@ own file and a row here.
     - backfill ADRs with a status (`docs/agents/domain.md`): 46 citations of
       ADR-001..003 point at documents this repo never had.
 - **Sales:**
-    - ticket 28's bar (71.1% thinking off, API 97.8%, thinking on unusable);
     - the interim defaults listed in `sales.md` Open;
     - whether pausing DW1 also stops rendering drafts and files.
     - restart WSL (admin): 25/27's image, trivy and integration runs wait.
