@@ -350,12 +350,15 @@ def test_a_value_typed_in_a_legacy_font_is_refused_at_its_cell(
 
 def test_a_legacy_font_on_a_cell_the_reader_does_not_read_changes_nothing() -> None:
     # The remarks are not read; the buyer is only ever compared with master
-    # data by its exact name, so in a legacy font it names nobody.
+    # data by its exact name, so it is read as it stands, as the PO reader
+    # reads its own: a name in plain ASCII still names the customer it is.
     document = _read(_bytes(_typed_in({"B7": ".VnTime", "A1": "VNI-Times"})))
 
     assert document is not None and document.rfq_no is not None
     assert document.rfq_no.value == "QRL-RFQ-2609-03"
-    assert document.buyer is None
+    assert document.buyer is not None
+    assert document.buyer.value == "QUORILO MEDICAL DEVICES CO., LTD."
+    assert document.buyer.source.cell_ref == "RFQ!A1"
 
 
 def _description_in_runs(*runs: tuple[str, str]) -> bytes:
