@@ -116,10 +116,14 @@ describe("the rules list's logic (ticket 38)", () => {
   });
 
   it("starts a proposal from the company's version in force, else its latest, else nothing", () => {
-    expect(startingDocument(VIEW, "sales_kpi")).toEqual(KPI_DOC);
-    expect(startingDocument(VIEW, "sales_order_rules")).toEqual(
-      WAITING.document,
-    );
+    expect(startingDocument(VIEW, "sales_kpi")).toEqual({
+      document: KPI_DOC,
+      inForce: true,
+    });
+    expect(startingDocument(VIEW, "sales_order_rules")).toEqual({
+      document: WAITING.document,
+      inForce: false,
+    });
     expect(startingDocument(VIEW, "sales_pricing")).toBeNull();
   });
 
@@ -200,6 +204,90 @@ describe("the rules page (ticket 38)", () => {
       expect([key, body]).toEqual(["sales_kpi", { document: next }]);
       expect(idempotency).toMatch(/^[0-9a-f-]{36}$/);
       await waitFor(() => expect(api.rules).toHaveBeenCalledTimes(2));
+    },
+    SLOW,
+  );
+
+  it(
+    "says which company version the editor opens with",
+    async () => {
+      render(
+        <UiProvider>
+          <RulesPage />
+        </UiProvider>,
+      );
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "Đề xuất phiên bản mới: Chỉ tiêu KPI",
+        }),
+      );
+      expect(
+        await screen.findByText(/phiên bản công ty đang áp dụng/),
+      ).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
+      await waitFor(() =>
+        expect(screen.queryByText(/phiên bản công ty đang áp dụng/)).toBeNull(),
+      );
+
+      // The order rules apply as the platform ships them: the editor opens
+      // the company's latest version, the one waiting on its approval.
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Đề xuất phiên bản mới: Quy tắc kiểm tra đơn hàng",
+        }),
+      );
+      expect(
+        await screen.findByText(/phiên bản gần nhất của công ty/),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "asks before closing an edited document, and keeps it on Tiếp tục sửa",
+    async () => {
+      render(
+        <UiProvider>
+          <RulesPage />
+        </UiProvider>,
+      );
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "Đề xuất phiên bản mới: Chỉ tiêu KPI",
+        }),
+      );
+      const editor = (await screen.findByRole("textbox", {
+        name: "Tài liệu (JSON)",
+      })) as HTMLTextAreaElement;
+      const edited = JSON.stringify({ ...KPI_DOC, target: 0.95 });
+      fireEvent.change(editor, { target: { value: edited } });
+
+      fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
+      expect(
+        (await screen.findAllByText("Bỏ tài liệu đang sửa?")).length,
+      ).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "Tiếp tục sửa" }));
+      // The drawer stays open with what was typed. (antd's close animation
+      // never ends in jsdom, so the dismissed dialog is not asserted gone.)
+      expect(
+        (
+          screen.getByRole("textbox", {
+            name: "Tài liệu (JSON)",
+          }) as HTMLTextAreaElement
+        ).value,
+      ).toBe(edited);
+
+      fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
+      const discard = await screen.findAllByRole("button", {
+        name: "Bỏ thay đổi",
+      });
+      fireEvent.click(discard[discard.length - 1]!);
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("textbox", { name: "Tài liệu (JSON)" }),
+        ).toBeNull(),
+      );
+      expect(api.proposeRule).not.toHaveBeenCalled();
     },
     SLOW,
   );
