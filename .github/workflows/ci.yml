@@ -173,6 +173,51 @@ jobs:
         run: pnpm --filter @dw/web build
 
   # 7. security / dependency scan --------------------------------------------
+  # The public-repo guard is its own job: while it fails (no deny-list secret,
+  # or a finding), a step after it in the scan job would be skipped, and for
+  # two days bandit, pip-audit and pnpm audit did not run at all because of it.
+  # A red guard still fails the run; it no longer silences the scans.
+  public-repo-guard:
+    name: Public-repo guard (no customer data)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # commit messages are scanned too
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.31"
+          enable-cache: true
+      - name: Sync workspace
+        run: uv sync --all-packages
+      - name: Public-repo guard (tracked files, pushed commit messages, branch name)
+        # Sales ticket 26. The deny-list is customer data itself, so it is a
+        # secret written outside the checkout, and the script prints where a term
+        # was found, never the term. A missing or empty secret fails this step:
+        # the script refuses a deny-list with no terms, and in CI refuses none.
+        # Push: every message reachable from the head (the whole step, files
+        # included, ran in 21 s over 211 commits). Not `before..sha`: the
+        # `cancel-in-progress` above cancels a run when the next push to main
+        # lands, and the next run's `before` is the cancelled push's tip, so
+        # that push's messages would never be read. Pull request: base..head,
+        # which every sync rescans whole. Event values reach the shell as
+        # environment, never spliced into the script: on a pull request the
+        # branch name is text its author chose.
+        env:
+          PUBLIC_REPO_DENYLIST: ${{ secrets.PUBLIC_REPO_DENYLIST }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf '%s\n' "$PUBLIC_REPO_DENYLIST" > "$RUNNER_TEMP/public-repo-denylist.txt"
+          if [ -n "$PR_HEAD" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          else
+            range="$GITHUB_SHA"
+          fi
+          DW_PUBLIC_REPO_DENYLIST="$RUNNER_TEMP/public-repo-denylist.txt" \
+            uv run python scripts/check_public_repo.py \
+            --commits "$range" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+
   security-scan:
     name: Security · dependency scan
     runs-on: ubuntu-latest
@@ -194,25 +239,14 @@ jobs:
           enable-cache: true
       - name: Sync workspace
         run: uv sync --all-packages
-      - name: Public-repo guard (no customer data in any tracked file)
-        # Sales ticket 26. The deny-list is customer data itself, so it is a
-        # secret written outside the checkout, and the script prints where a term
-        # was found, never the term. A missing or empty secret fails this step:
-        # the script refuses a deny-list with no terms, and in CI refuses none.
-        env:
-          PUBLIC_REPO_DENYLIST: ${{ secrets.PUBLIC_REPO_DENYLIST }}
-        run: |
-          printf '%s\n' "$PUBLIC_REPO_DENYLIST" > "$RUNNER_TEMP/public-repo-denylist.txt"
-          DW_PUBLIC_REPO_DENYLIST="$RUNNER_TEMP/public-repo-denylist.txt" \
-            uv run python scripts/check_public_repo.py
       - name: bandit (Python SAST, medium+)
-        run: uvx --python 3.12 bandit@1.8.6 -r apps/api/src apps/docgen/src apps/worker/src packages/python/*/src -ll
+        run: uvx --python 3.12 bandit@1.8.6 -r apps/api/src apps/docgen/src apps/reader/src apps/worker/src packages/python/*/src -ll
       - name: pip-audit (Python dependencies, optional extras included)
         # --all-extras: without it the export leaves out every optional extra,
-        # so the worker's `parsers` (docling, torch) was never audited and only
-        # trivy's image scan caught docling's CVE (failure-modes #0). torch and
-        # torchvision still come out as `+cpu` local versions, which PyPI does
-        # not know, and pip-audit skips them with a notice.
+        # so the worker's former `parsers` extra (docling, torch) was never
+        # audited and only trivy's image scan caught docling's CVE
+        # (failure-modes #0). That extra is gone, and with it the `+cpu` torch
+        # wheels pip-audit could not look up: nothing is skipped now.
         run: uv export --all-packages --all-extras --no-emit-workspace --format requirements.txt > /tmp/requirements.txt && uvx pip-audit@2.9.0 -r /tmp/requirements.txt --disable-pip
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -339,6 +373,7 @@ jobs:
         env:
           # Pinned: a scanner that changes version on its own turns a red build
           # into a question about the scanner. Bump deliberately.
+          # clamav-bump.yml reads this line, and fails if it finds none.
           TRIVY_VERSION: "0.74.0"
         run: |
           # --fail matters more than it looks. Without it curl pipes GitHub's

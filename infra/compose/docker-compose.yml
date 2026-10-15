@@ -56,7 +56,10 @@ volumes:
 services:
   # ------------------------------------------------------------------ data --
   postgres:
-    image: postgres:16-alpine
+    # An exact version, as every third-party image here: a floating tag moves
+    # under measured behaviour (the ICU Vietnamese collation names sort by,
+    # dw_platform tenant_members.py) without a commit saying so.
+    image: postgres:16.15-alpine
     profiles: ["infra", "full", "observability", "migration"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?}
@@ -105,7 +108,7 @@ services:
     restart: unless-stopped
 
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:8.1.10-alpine
     profiles: ["infra", "full", "observability"]
     command:
       ["valkey-server", "--maxmemory-policy", "noeviction", "--save", "60", "1"]
@@ -361,7 +364,8 @@ services:
   # The signatures are inside the image (main, daily, bytecode; 107.6 MB in
   # 1.5.4, dated 2026-10-11) and are never fetched: no freshclam, no egress, an internal
   # network. Newer signatures are a newer image, pulled, scanned and pinned
-  # like any other.
+  # like any other: `.github/workflows/clamav-bump.yml` does that weekly and
+  # opens a pull request.
   #
   # The image's init script chowns and writes under /etc, /run and /var, so
   # it is skipped: clamd runs in the foreground as the image's clamav user,
@@ -668,7 +672,7 @@ services:
 
   # ------------------------------------------------- optional observability --
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8-alpine
+    image: clickhouse/clickhouse-server:24.8.14.39-alpine
     profiles: ["observability"]
     environment:
       CLICKHOUSE_DB: langfuse
@@ -690,7 +694,7 @@ services:
     restart: unless-stopped
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3
+    image: langfuse/langfuse-worker:3.225.11
     profiles: ["observability"]
     environment: &langfuse-env
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
@@ -721,7 +725,7 @@ services:
     restart: unless-stopped
 
   langfuse-web:
-    image: langfuse/langfuse:3
+    image: langfuse/langfuse:3.225.11
     profiles: ["observability"]
     environment:
       <<: *langfuse-env
@@ -769,7 +773,7 @@ services:
   # is already in every base image, so this needs no package install (and no
   # network call) on every `up`.
   alertmanager-config:
-    image: alpine:3.20
+    image: alpine:3.20.10
     profiles: ["observability"]
     environment:
       ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-}

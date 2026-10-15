@@ -15,12 +15,6 @@ dependencies = [
     "pyyaml>=6,<7",
 ]
 
-[project.optional-dependencies]
-# Heavy multi-format parsing + OCR stack (torch, layout + OCR models). Installed
-# ONLY in the worker image where ingestion runs — never in the API image.
-parsers = [
-]
-
 [build-system]
 requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
