@@ -31,8 +31,8 @@ function regionLabel(region: string): string {
 }
 
 /**
- * The sentences a refusal carries, in Vietnamese. The server's own sentence
- * comes first; where its details name what blocks the step (the findings
+ * The sentences a refusal carries, in Vietnamese. The refusal's own sentence
+ * (`errorMessage()`: its code's Vietnamese, else the server's) comes first; where its details name what blocks the step (the findings
  * still open, the pages not opened, the lines not mapped), those are spelled
  * out by their labels so the person knows what to do next.
  */
@@ -59,10 +59,6 @@ export function refusalSentences(error: unknown): string[] {
   if (typeof details.latest_month === "string")
     sentences.push(
       `Chọn tháng LME làm căn cứ cho giá (tháng mới nhất đã công bố: ${formatMonth(details.latest_month)}).`,
-    );
-  if (details.rule === "maker_checker")
-    sentences.push(
-      "Bạn đã làm một phần hồ sơ này nên không tự kiểm chéo được (tách nhiệm, WIV-03-012 bước 9).",
     );
   if (details.reason === "stale_artifact")
     sentences.push(
