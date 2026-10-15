@@ -563,6 +563,7 @@ async def test_a_value_read_from_a_file_needs_its_page_served() -> None:
     world, case_id = _world_with(m38)
     item = m38.request.document.item(1)
     assert item.quantity.source.attachment_id is not None and item.quantity.source.page == 1
+    await world.services.sources.quote_message_text(AN.context(), case_id)
     with pytest.raises(ConflictError) as refused:
         await _confirm(world, AN, case_id, 1, "quantity", "2000")
     assert refused.value.details["missing"] == [f"{item.quantity.source.attachment_id}:page 1"]
