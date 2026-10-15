@@ -243,10 +243,10 @@ jobs:
         run: uvx --python 3.12 bandit@1.8.6 -r apps/api/src apps/docgen/src apps/reader/src apps/worker/src packages/python/*/src -ll
       - name: pip-audit (Python dependencies, optional extras included)
         # --all-extras: without it the export leaves out every optional extra,
-        # so the worker's `parsers` (docling, torch) was never audited and only
-        # trivy's image scan caught docling's CVE (failure-modes #0). torch and
-        # torchvision still come out as `+cpu` local versions, which PyPI does
-        # not know, and pip-audit skips them with a notice.
+        # so the worker's former `parsers` extra (docling, torch) was never
+        # audited and only trivy's image scan caught docling's CVE
+        # (failure-modes #0). That extra is gone, and with it the `+cpu` torch
+        # wheels pip-audit could not look up: nothing is skipped now.
         run: uv export --all-packages --all-extras --no-emit-workspace --format requirements.txt > /tmp/requirements.txt && uvx pip-audit@2.9.0 -r /tmp/requirements.txt --disable-pip
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
