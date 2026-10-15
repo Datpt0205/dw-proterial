@@ -69,10 +69,13 @@ from dw_sales.domain.orders import MappingStatus, PoLine, PoLineAnchors
 from dw_sales.evals.recorded import latency
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
 
-# The proposed bar (ticket 28, Đạt sets the final one): the gold code among
-# the candidates for at least this share of VI/EN golden lines. Reported, not
+# The bar (ticket 28; set by Đạt on 2026-10-15 at 70%, from a proposed 80%,
+# against 71.1% measured on the local Qwen 9B with thinking off): the gold
+# code among the candidates for at least this share of VI/EN golden lines.
+# A line below it goes to a person, never to a wrong code (0 wrong single
+# candidates), so the bar prices the work saved, not a risk. Reported, not
 # enforced: the spec reports results on a sample set without a verdict.
-PROPOSED_BAR = 0.80
+PROPOSED_BAR = 0.70
 _PARSERS = {
     "cores": parse_cores,
     "gauge": parse_gauge,

@@ -239,8 +239,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       model": typed output that code verifies (spans found once, numbers
       parsed from their span, coverage), labels flagged, never exact, and
       degrading to a person.
-    - **Measured.** VI/EN gold code among the candidates 71.1% (bar 80%,
-      Đạt's to set), JA 50.0%; 0 wrong single candidates, 0 injection
+    - **Measured.** VI/EN gold code among the candidates 71.1% (bar 70%,
+      Đạt 2026-10-15), JA 50.0%; 0 wrong single candidates, 0 injection
       effects; about 77 s per 10-line call.
     - **Against an API model (2026-10-14).** The same set on `luna`
       (gpt-5.6-luna; a throwaway copy of the profile adding
