@@ -1,9 +1,11 @@
 """DW1's eval graders, keyed ``sales.<gate>``, for the eval runner's
 composition root to hand to `dw_evals.runner.run_dataset` (see `graders`,
 and `descriptions`, `intents`, `requests`, `replies`, `handoffs` and
-`layouts` for the model steps of tickets 28, 31, 29, 32, 33 and 30, and
-`legacy` for ticket 27's converted and scanned POs)."""
+`layouts` for the model steps of tickets 28, 31, 29, 32, 33 and 30,
+`legacy` for ticket 27's converted and scanned POs, and `corrections` for
+ticket 15's header path)."""
 
+from dw_sales.evals.corrections import GRADERS as CORRECTION_GRADERS
 from dw_sales.evals.descriptions import GRADERS as DESCRIPTION_GRADERS
 from dw_sales.evals.graders import GRADERS as ORDER_GRADERS
 from dw_sales.evals.handoffs import GRADERS as HANDOFF_GRADERS
@@ -21,6 +23,7 @@ GRADERS = {
     name: failing_without_live_answers(grader)
     for name, grader in {
         **ORDER_GRADERS,
+        **CORRECTION_GRADERS,
         **DESCRIPTION_GRADERS,
         **INTENT_GRADERS,
         **REQUEST_GRADERS,
