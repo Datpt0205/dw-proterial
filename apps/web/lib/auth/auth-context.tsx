@@ -20,7 +20,11 @@ import {
   setActiveWorkspace,
 } from "../session";
 import { useSupportGrant } from "../support/session";
-import { markSessionEnded, tokenExpiry } from "../session-expiry";
+import {
+  markSessionAlive,
+  markSessionEnded,
+  tokenExpiry,
+} from "../session-expiry";
 
 export interface Membership {
   tenantId: string;
@@ -236,8 +240,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         setSessionExpiresAt(keycloakSessionEnd());
-        kc.onAuthRefreshSuccess = () =>
+        kc.onAuthRefreshSuccess = () => {
+          // A refresh that worked shows the SSO session alive: a 401 that
+          // raced an expiring access token does not leave the banner up.
+          markSessionAlive();
           setSessionExpiresAt(keycloakSessionEnd());
+        };
         kc.onTokenExpired = () => {
           // Refresh in place; when the SSO session itself has expired, say so
           // and let the person sign in again when they are ready. A redirect
