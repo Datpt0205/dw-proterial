@@ -32,6 +32,7 @@ import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { FeedbackLauncher } from "./feedback/launcher";
+import { SessionExpiryBanner } from "./session-expiry-banner";
 import { SupportBannerSlot } from "./support-banner";
 import { useSupportGrant } from "../lib/support/session";
 
@@ -254,7 +255,12 @@ export function AppFrame({ children }: { children: ReactNode }) {
         workspace={<WorkspaceSwitcher />}
         navItems={menuItems(nav, current, badges, token)}
         selectedKey={current}
-        banner={<SupportBannerSlot />}
+        banner={
+          <>
+            <SessionExpiryBanner />
+            <SupportBannerSlot />
+          </>
+        }
         actions={
           <>
             <NotificationBell />
