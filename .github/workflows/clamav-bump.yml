@@ -77,10 +77,12 @@ jobs:
       - name: trivy (HIGH+ with a fix available, as for the platform's images)
         if: steps.digest.outputs.changed == 'true'
         env:
-          # The same version ci.yml pins; bump both together.
-          TRIVY_VERSION: "0.74.0"
           IMAGE: ${{ steps.digest.outputs.tag_ref }}
         run: |
+          # ci.yml owns the trivy pin; read it rather than keep a second copy.
+          TRIVY_VERSION=$(sed -n 's/^ *TRIVY_VERSION: "\([0-9.]*\)"$/\1/p' .github/workflows/ci.yml)
+          [ "$(printf '%s\n' "$TRIVY_VERSION" | grep -c .)" = 1 ] \
+            || { echo "::error::expected one TRIVY_VERSION pin in ci.yml, found: '$TRIVY_VERSION'"; exit 1; }
           curl --fail -sSL \
             "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
             | tar -xz trivy

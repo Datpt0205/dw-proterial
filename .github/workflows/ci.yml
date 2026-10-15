@@ -373,6 +373,7 @@ jobs:
         env:
           # Pinned: a scanner that changes version on its own turns a red build
           # into a question about the scanner. Bump deliberately.
+          # clamav-bump.yml reads this line, and fails if it finds none.
           TRIVY_VERSION: "0.74.0"
         run: |
           # --fail matters more than it looks. Without it curl pipes GitHub's
