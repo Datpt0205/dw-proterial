@@ -182,23 +182,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the pushed range's commit messages are scanned too
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.11.31"
           enable-cache: true
       - name: Sync workspace
         run: uv sync --all-packages
-      - name: Public-repo guard (no customer data in any tracked file)
+      - name: Public-repo guard (tracked files, pushed commit messages, branch name)
         # Sales ticket 26. The deny-list is customer data itself, so it is a
         # secret written outside the checkout, and the script prints where a term
         # was found, never the term. A missing or empty secret fails this step:
         # the script refuses a deny-list with no terms, and in CI refuses none.
+        # The range is what this push or pull request published; a push whose
+        # `before` is not in this clone (a new branch, a force-push) scans every
+        # message reachable from the head. Event values reach the shell as
+        # environment, never spliced into the script: on a pull request the
+        # branch name is text its author chose.
         env:
           PUBLIC_REPO_DENYLIST: ${{ secrets.PUBLIC_REPO_DENYLIST }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           printf '%s\n' "$PUBLIC_REPO_DENYLIST" > "$RUNNER_TEMP/public-repo-denylist.txt"
+          if [ -n "$PR_HEAD" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            range="$PUSH_BEFORE..$GITHUB_SHA"
+          else
+            range="$GITHUB_SHA"
+          fi
           DW_PUBLIC_REPO_DENYLIST="$RUNNER_TEMP/public-repo-denylist.txt" \
-            uv run python scripts/check_public_repo.py
+            uv run python scripts/check_public_repo.py \
+            --commits "$range" --branch "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
 
   security-scan:
     name: Security · dependency scan
