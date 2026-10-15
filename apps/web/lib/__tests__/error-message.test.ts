@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@dw/api-client";
 import { SALES_REFUSALS } from "../../app/sales/_meta/refusals";
-import { errorMessage, toRegionError } from "../error-message";
+import { REFUSAL_TABLES, errorMessage, toRegionError } from "../error-message";
 
 function refusal(
   message: string,
@@ -15,11 +15,18 @@ function refusal(
 
 describe("errorMessage: a refusal in Vietnamese", () => {
   it("reads a Sales rule's Vietnamese, not the server's English", () => {
-    const error = refusal("the proposer of a version does not decide it", {
-      rule: "maker_checker",
+    const error = refusal("the platform now ships this version number", {
+      rule: "platform_version_reused",
     });
-    expect(errorMessage(error)).toBe(SALES_REFUSALS.maker_checker);
-    expect(errorMessage(error)).toMatch(/^Tách nhiệm/);
+    expect(errorMessage(error)).toBe(SALES_REFUSALS.platform_version_reused);
+  });
+
+  it("reads the server's own sentence for a separation-of-duties refusal", () => {
+    // `maker_checker` is raised by the platform's strict approvals as well as
+    // by Sales: each words its own refusal, and no context table speaks for it.
+    const said =
+      "tách nhiệm: người đề xuất phiên bản quy tắc không tự quyết được";
+    expect(errorMessage(refusal(said, { rule: "maker_checker" }))).toBe(said);
   });
 
   it("reads a code named as details.reason too", () => {
@@ -78,15 +85,55 @@ function pythonFiles(dir: string): string[] {
   });
 }
 
+/** The Python source under each `dir`, joined. */
+function pythonSource(...dirs: string[]): string {
+  return dirs
+    .flatMap(pythonFiles)
+    .map((file) => readFileSync(file, "utf-8"))
+    .join("\n");
+}
+
+const REPO = join(__dirname, "../../../..");
+
+describe("the refusal tables", () => {
+  it("give each code one owner among the contexts", () => {
+    // Merged into one lookup, a code in two tables reads whichever came last,
+    // with nothing to say so (failure-modes #2).
+    const owners = new Map<string, string[]>();
+    for (const [context, table] of Object.entries(REFUSAL_TABLES))
+      for (const code of Object.keys(table))
+        owners.set(code, [...(owners.get(code) ?? []), context]);
+    const shared = [...owners].filter(([, by]) => by.length > 1);
+    expect(shared).toEqual([]);
+  });
+
+  it("never speak for a code the platform raises", () => {
+    // The platform words its own refusals (approval_flow's `maker_checker`
+    // is read on /approvals, for every context's strict approvals): a
+    // context's sentence for one of its codes would read on every one of them.
+    const contexts = new Set(
+      Object.keys(REFUSAL_TABLES).map((context) => `dw_${context}`),
+    );
+    const platform = pythonSource(
+      ...readdirSync(join(REPO, "packages/python"))
+        .filter((name) => !contexts.has(name))
+        .map((name) => join(REPO, "packages/python", name, "src")),
+      ...["api", "worker"].map((app) => join(REPO, "apps", app, "src")),
+    );
+    const raised = Object.entries(REFUSAL_TABLES).flatMap(([context, table]) =>
+      Object.keys(table)
+        .filter((code) => platform.includes(`"${code}"`))
+        .map((code) => `${context}:${code}`),
+    );
+    expect(raised).toEqual([]);
+  });
+});
+
 describe("the Sales refusal words", () => {
   it("name only codes dw_sales actually refuses with", () => {
     // A code nothing raises is a sentence nobody reads (failure-modes #1),
     // and usually a rule that was renamed on the server.
-    const source = pythonFiles(
-      join(__dirname, "../../../../packages/python/dw_sales/src"),
-    )
-      .map((file) => readFileSync(file, "utf-8"))
-      .join("\n");
+    const source = pythonSource(join(REPO, "packages/python/dw_sales/src"));
     const unknown = Object.keys(SALES_REFUSALS).filter(
       (code) => !source.includes(`"${code}"`),
     );

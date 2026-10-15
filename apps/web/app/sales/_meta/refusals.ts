@@ -6,18 +6,14 @@
  * Only the refusals whose sentence the server still writes in English are
  * here. Where dw_sales already words a refusal in Vietnamese
  * (`decision_stale`, `template_version_gone`, `worker_paused`,
- * `source_not_served`, the `template_*` and drafting reasons, ...), the
- * server's sentence is shown as it is: a second wording here would be a
- * second owner of it. A refusal that names no code falls back to the server's
- * sentence too.
+ * `source_not_served`, `maker_checker`, `approver_not_pricer`, the
+ * `template_*` and drafting reasons, ...), the server's sentence is shown as
+ * it is: a second wording here would be a second owner of it. A refusal that
+ * names no code falls back to the server's sentence too. A code the platform
+ * raises as well (`maker_checker` is the platform's strict-approval rule too)
+ * never belongs here: `error-message.test.ts` refuses it.
  */
 export const SALES_REFUSALS: Readonly<Record<string, string>> = {
-  // Separation of duties: the order's cross-check, a rule version, the
-  // stored constraint (dw_sales `_rows._RULES`); a layout's proposer too.
-  maker_checker:
-    "Tách nhiệm: người đã làm hoặc đề xuất việc này không tự kiểm, tự duyệt được.",
-  approver_not_pricer:
-    "Tách nhiệm: người định giá báo giá này không tự duyệt được.",
   stale_case_version:
     "Hồ sơ đã thay đổi từ khi bạn mở: tải lại để xem phiên bản mới.",
   layout_decided: "Mẫu PO vừa được quyết định: tải lại để xem kết quả.",

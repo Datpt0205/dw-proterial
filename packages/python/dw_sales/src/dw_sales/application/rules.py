@@ -625,7 +625,7 @@ class RuleDecisions:
             version = _waiting(await work.rule_versions.get(asked.version_id), request)
         if version.proposed_by == context.principal_id:
             raise ConflictError(
-                "the proposer of a version does not decide it",
+                "tách nhiệm: người đề xuất phiên bản quy tắc không tự quyết được",
                 details={"version_id": str(version.version_id), "rule": "maker_checker"},
             )
         if decision.approve:

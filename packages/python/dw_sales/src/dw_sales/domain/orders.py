@@ -1342,6 +1342,10 @@ class Coverage(BaseModel):
 _PREPARED_ON: Final = frozenset({_S.PREPARED}) | IN_BRAVO
 _CROSS_CHECKED_ON: Final = frozenset({_S.CROSS_CHECKED, _S.CONFIRMED})
 MAKER_CHECKER_RULE: Final = "tách nhiệm, WIV-03-012 bước 9"
+# The refusal a maker reads, from the domain or from the stored constraint.
+MAKER_CHECKER_REFUSAL: Final = (
+    f"người đã làm một phần hồ sơ này không tự kiểm chéo được ({MAKER_CHECKER_RULE})"
+)
 
 
 class UnappliedDecision(BaseModel):
@@ -2298,7 +2302,7 @@ class OrderCase(BaseModel):
     def _require_not_a_maker(self, actor: Actor) -> None:
         if actor.user_id in self.makers:
             raise ConflictError(
-                f"the cross-checker made part of this case ({MAKER_CHECKER_RULE})",
+                MAKER_CHECKER_REFUSAL,
                 details={"case_id": str(self.case_id), "rule": "maker_checker"},
             )
 
