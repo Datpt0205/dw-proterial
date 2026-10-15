@@ -22,6 +22,7 @@ from dw_kernel.errors import (
     PermissionDeniedError,
 )
 from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
+from dw_knowledge.contracts import CLASSIFICATIONS
 from dw_knowledge.ingest_jobs import EnqueueIngestCommand
 
 # Documents up to this size are accepted for ingestion (raw bytes staged to
@@ -124,6 +125,10 @@ async def upload_document(
         raise DomainError("scope must be 'tenant' or 'global'")
     if scope == "global" and _PLATFORM_ADMIN_ROLE not in context.roles:
         raise PermissionDeniedError("publishing a global document requires platform_admin")
+    # The column holds the clearance ladder (CHECK, migration 0d8f03566652). Refused
+    # here, before anything is staged, rather than by the database after it.
+    if classification not in CLASSIFICATIONS:
+        raise DomainError(f"classification must be one of {list(CLASSIFICATIONS)}")
 
     data = await file.read()
     if not data:
