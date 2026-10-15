@@ -10,7 +10,9 @@ cell; nothing here interprets it.
 A value typed in a TCVN3 or VNI font (`legacy_fonts`, ticket 20) is not read:
 its letters are not what the customer sees. The file is refused at that cell,
 as one holding a value that cannot be read, so the request goes to a person
-and no model reads the garbled text. The font is the cell's, or a run's of
+and no model reads the garbled text. The buyer's name is the exception: it
+is only compared with master data by its exact name, so it is read as it
+stands, as the PO reader reads its own. The font is the cell's, or a run's of
 its text: openpyxl reports a run's font in read-only mode only for text kept
 in the shared-strings table, which is where Excel keeps it; a run in an
 inline string (some generators write those) is read as text.
@@ -381,10 +383,18 @@ class _Sheet:
 
     def buyer(self) -> Sourced[Name] | None:
         """The buyer's name as the form prints it, or None when it prints none
-        that reads as a name. Only ever compared with master data."""
+        that reads as a name. Only ever compared with master data, by its
+        exact name: in a legacy font it is read as it stands, as the PO
+        reader reads its buyer, because garbled letters match no customer
+        and a name in plain ASCII matches the one it is."""
+        raw = self._cells.get(_BUYER_AT)
+        if raw is None:
+            return None
         try:
-            return self.optional(Sourced[Name], "the buyer", _BUYER_AT, _text)
-        except QuoteFileUnreadableError:
+            return Sourced[Name].model_validate(
+                {"value": _text(raw), "source": self.anchor(_BUYER_AT)}
+            )
+        except ValueError:
             return None
 
 
