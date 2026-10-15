@@ -219,6 +219,28 @@ async def test_approvals_and_runs_carry_ids_a_version_and_a_hash_never_an_amount
     assert any(p in json.dumps(pending) for p in prices)
 
 
+async def test_the_processed_audit_row_names_the_run_that_processed_the_message(
+    api: Api, migrator: AsyncEngine
+) -> None:
+    await process(api.as_(AN), "M01")
+
+    async with migrator.connect() as conn:
+        rows = (
+            await conn.execute(
+                sa.text(
+                    "SELECT r.input -> 'task' ->> 'message_id' AS message_id"
+                    " FROM platform.audit_events a"
+                    " JOIN platform.worker_runs r ON r.id = a.run_id"
+                    " WHERE a.tenant_id = :t AND a.action = 'sales.message.processed'"
+                    " AND a.resource_id = 'M01'"
+                ),
+                {"t": ALPHA_TENANT},
+            )
+        ).all()
+
+    assert [row.message_id for row in rows] == ["M01"]
+
+
 async def test_the_plans_run_allowance_is_checked_where_processing_starts(
     sales_api_db: DatabaseUrls, clean_sales: None
 ) -> None:

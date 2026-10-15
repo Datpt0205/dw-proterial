@@ -233,7 +233,7 @@ class InboxProcessing:
             )
         elif kind is MessageKind.DESIGN_REPLY:
             disposition, case = await self._design_reply(
-                context, scope, message_id, ingest, reading
+                context, scope, message_id, ingest, run, reading
             )
         else:
             assert kind not in QUOTATION_KINDS
@@ -271,13 +271,15 @@ class InboxProcessing:
             if case is not None:
                 stored = await work.orders.get(case.case_id)
                 if stored is None:
-                    case = await self._open_order(work, context, case)
+                    case = await self._open_order(work, context, case, run)
                 else:
                     before = stored.case
                     revised = worker_event("order.revised", context, self.clock.now())
-                    await save_order(work, context, self.ids, stored.case, case, revised)
-                    case = await self._start_review(work, context, case)
-            await self._record(work, context, disposition, ingest)
+                    await save_order(
+                        work, context, self.ids, stored.case, case, revised, run_id=run.run_id
+                    )
+                    case = await self._start_review(work, context, case, run)
+            await self._record(work, context, disposition, ingest, run)
             await work.commit()
         if before is not None and case is not None:
             # A revision of an order awaiting its cross-check: that check
@@ -286,7 +288,7 @@ class InboxProcessing:
         return disposition, case
 
     async def _open_order(
-        self, work: SalesUnitOfWork, context: AccessContext, case: OrderCase
+        self, work: SalesUnitOfWork, context: AccessContext, case: OrderCase, run: RunContext
     ) -> OrderCase:
         origin = CaseOrigin(
             assigned_to=await self._assignee(context, case.customer_code),
@@ -304,19 +306,20 @@ class InboxProcessing:
                 from_status=None,
                 to_status=case.status.value,
                 event=event,
+                run_id=run.run_id,
             )
         )
-        return await self._start_review(work, context, case)
+        return await self._start_review(work, context, case, run)
 
     async def _start_review(
-        self, work: SalesUnitOfWork, context: AccessContext, case: OrderCase
+        self, work: SalesUnitOfWork, context: AccessContext, case: OrderCase, run: RunContext
     ) -> OrderCase:
         """DW1 hands a checked case to the PIC's self-check; the case as stored."""
         if case.status is not OrderStatus.CHECKED:
             return case
         event = worker_event("order.review_started", context, self.clock.now())
         reviewed = case.start_review()
-        await save_order(work, context, self.ids, case, reviewed, event)
+        await save_order(work, context, self.ids, case, reviewed, event, run_id=run.run_id)
         return reviewed
 
     async def _quote_request(
@@ -337,7 +340,7 @@ class InboxProcessing:
                 else RoutingReason.ATTACHMENT_UNREADABLE
             )
             routed = await self._routed(
-                context, scope, message_id, reason, refused.reason, ingest, reading
+                context, scope, message_id, reason, refused.reason, ingest, run, reading
             )
             return routed, None
         except QuoteFileUnreadableError as refused:
@@ -349,6 +352,7 @@ class InboxProcessing:
                 RoutingReason.ATTACHMENT_UNREADABLE,
                 detail,
                 ingest,
+                run,
                 reading,
             )
             return routed, None
@@ -378,9 +382,10 @@ class InboxProcessing:
                     from_status=None,
                     to_status=case.status.value,
                     event=event,
+                    run_id=run.run_id,
                 )
             )
-            await self._record(work, context, disposition, ingest)
+            await self._record(work, context, disposition, ingest, run)
             await work.commit()
         return disposition, case
 
@@ -390,6 +395,7 @@ class InboxProcessing:
         scope: SalesScope,
         message_id: str,
         ingest: datetime,
+        run: RunContext,
         reading: IntentReading | None,
     ) -> _Processed:
         try:
@@ -402,6 +408,7 @@ class InboxProcessing:
                 RoutingReason.ATTACHMENT_UNREADABLE,
                 "no single Design reply could be read",
                 ingest,
+                run,
                 reading,
             )
             return routed, None
@@ -421,8 +428,10 @@ class InboxProcessing:
                     )
                 event = worker_event("quote.design_replied", context, self.clock.now())
                 replied = _replied(stored.case, outcome)
-                await save_quote(work, context, self.ids, stored.case, replied, event)
-            await self._record(work, context, disposition, ingest)
+                await save_quote(
+                    work, context, self.ids, stored.case, replied, event, run_id=run.run_id
+                )
+            await self._record(work, context, disposition, ingest, run)
             await work.commit()
         return disposition, replied
 
@@ -434,6 +443,7 @@ class InboxProcessing:
         reason: RoutingReason,
         detail: str,
         ingest: datetime,
+        run: RunContext,
         reading: IntentReading | None,
     ) -> MessageDisposition:
         disposition = MessageDisposition(
@@ -446,7 +456,7 @@ class InboxProcessing:
         )
         async with self.uow(scope) as work:
             await require_running(work)
-            await self._record(work, context, disposition, ingest)
+            await self._record(work, context, disposition, ingest, run)
             await work.commit()
         return disposition
 
@@ -456,7 +466,10 @@ class InboxProcessing:
         context: AccessContext,
         disposition: MessageDisposition,
         ingest: datetime,
+        run: RunContext,
     ) -> None:
+        """The disposition and its audit row, which names the DW1 run that
+        processed the message, as a decision's row names the run it resumed."""
         await work.messages.record(disposition, ingest)
         details: dict[str, object] = {
             "disposition": disposition.kind.value,
@@ -484,6 +497,7 @@ class InboxProcessing:
                 action="sales.message.processed",
                 resource_type="sales_message",
                 resource_id=disposition.message_id,
+                run_id=run.run_id,
                 occurred_at=self.clock.now(),
                 details=details,
             )
