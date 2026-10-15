@@ -425,6 +425,7 @@ class SqlWorkerRunStore:
                 toolset_version=worker.toolset_version,
                 policy_version=worker.policy_version,
                 memory_policy_version=worker.memory_policy_version,
+                model_profile=worker.default_model_profile,
                 autonomy_level=run_context.autonomy_level,
                 approval_policy_version=run_context.approval_policy_version,
                 status=RunStatus.RUNNING.value,
