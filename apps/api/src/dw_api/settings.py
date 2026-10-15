@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import AliasChoices, Field, SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from dw_agent_runtime.model.profiles import DEFAULT_PROFILE_ID
 from dw_knowledge.contracts import DEFAULT_COLLECTION
 
 # Four profiles, two of them deployed.
@@ -216,7 +217,7 @@ class ApiSettings(BaseSettings):
 
     # --- model provider ---
     model_profile: str = Field(
-        default="balanced",
+        default=DEFAULT_PROFILE_ID,
         validation_alias=AliasChoices("DW_API_MODEL_PROFILE", "DW_MODEL_PROFILE_ID"),
     )
     model_provider: str = Field(
