@@ -541,6 +541,81 @@ test("2b. With a model server, M37 is a quote case a model read; Diệu confirms
   ]);
 });
 
+test("2c. The customer's reply in M04's thread is on its case; M43's new form opens on the layouts onboarding page", async ({
+  page,
+  request,
+}) => {
+  const an = await persona(request, AN);
+  const inbox: {
+    message_id: string;
+    disposition: {
+      kind: string;
+      reason: string | null;
+      case_id: string | null;
+    };
+  }[] = await (await an.get("/inbox")).json();
+  const by = Object.fromEntries(
+    inbox.map((m) => [m.message_id, m.disposition]),
+  );
+  // The thread headers attach a reply with no model (ticket 32); a model, where
+  // there is one, only adds what it read and a proposed step.
+  expect(by.M42).toMatchObject({ kind: "attached_to_case", case_id: ids.m04 });
+  // A form no layout reads yet is routed for Sales to map (ticket 30).
+  expect(by.M43).toMatchObject({
+    kind: "routed_to_sales",
+    reason: "attachment_unreadable",
+  });
+
+  await signIn(page, request, AN);
+  await page.goto(`/sales/orders/${ids.m04}`);
+  await expect(page.getByText("Khách trả lời trong luồng thư")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Thư M42", exact: true }),
+  ).toBeVisible();
+
+  // The inbox opens on M43 with its row expanded, and links its attachment to
+  // the onboarding page.
+  await page.goto("/sales/inbox?message=M43");
+  await page
+    .getByRole("link", { name: "Thiết lập mẫu PO", exact: true })
+    .first()
+    .click();
+  await page.waitForURL(/\/sales\/layouts\/new\?message=M43&/);
+  await expect(
+    page.getByRole("heading", { name: "Thiết lập mẫu PO" }),
+  ).toBeVisible();
+  await expect(page.getByText("Các ô chữ trên mẫu")).toBeVisible();
+  // Nothing is sent before a preview reads the form with the mapping.
+  await expect(
+    page.getByRole("button", { name: "Gửi duyệt", exact: true }),
+  ).toBeDisabled();
+});
+
+test("2d. With a model server, a routed mail carries a hand-off draft Sales edits and copies", async ({
+  page,
+  request,
+}) => {
+  const an = await persona(request, AN);
+  const inbox: {
+    message_id: string;
+    handoff_draft: { to: string } | null;
+  }[] = await (await an.get("/inbox")).json();
+  const drafted = inbox.find((m) => m.handoff_draft !== null);
+  // The draft is a model's step (ticket 33): without a model server (CI) no
+  // routed mail has one, and the API's and the evals' tests hold it there.
+  test.skip(!drafted, "no model server: no routed mail has a hand-off draft");
+  await signIn(page, request, AN);
+  await page.goto(
+    `/sales/inbox?message=${encodeURIComponent(drafted!.message_id)}`,
+  );
+  await expect(page.getByText(/^Bản chuyển (PC|QA)/).first()).toBeVisible();
+  const body = page.getByRole("textbox", { name: "Nội dung" }).first();
+  await expect(body).not.toHaveValue("");
+  await expect(
+    page.getByRole("button", { name: "Chép bản chuyển" }).first(),
+  ).toBeEnabled();
+});
+
 test("3. An takes M03 from the source to the Bravo number; Diệu may not acknowledge NOC/ESF; An may not cross-check his own order", async ({
   page,
   request,
@@ -1044,4 +1119,81 @@ test("10. An pauses DW1 and may not resume it; Giang resumes it with a reason", 
   await expect(again).toBeHidden();
   await expect(page.getByText(/^DW1 đang chạy/)).toBeVisible();
   expect((await (await an.get("/overview")).json()).worker.paused).toBe(false);
+});
+
+test("11. An proposes a version of the order rules on the rules page; Giang decides it on /approvals", async ({
+  page,
+  request,
+}) => {
+  // Last on purpose: an approved version changes the rules the demo tenant
+  // checks orders under, and a case checked under the old ones is not checked
+  // again under the new (ticket 19). The next run's reset puts 1.5.1 back.
+  const an = await persona(request, AN);
+  const giang = await persona(request, GIANG);
+  const VERSION = "1.5.99";
+  const REF = `sales_order_rules@${VERSION}`;
+
+  await signIn(page, request, AN);
+  await page.goto("/sales/rules");
+  await expect(
+    page.getByRole("heading", { name: "Quy tắc của công ty" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Đề xuất phiên bản mới: Quy tắc kiểm tra đơn hàng",
+    })
+    .click();
+  const drawer = dialog(page, "Đề xuất phiên bản mới");
+  const editor = drawer.getByRole("textbox", { name: "Tài liệu (JSON)" });
+  // The editor opens on the tenant's version in force; the new one takes a
+  // number of its own, which the platform does not ship.
+  const document = JSON.parse(await editor.inputValue());
+  expect(typeof document.policy_version).toBe("string");
+  document.policy_version = VERSION;
+  await editor.fill(JSON.stringify(document, null, 2));
+  await drawer.getByRole("button", { name: "Gửi duyệt", exact: true }).click();
+  await expect(drawer).toBeHidden();
+  const proposed = page.getByRole("row").filter({ hasText: REF });
+  await expect(proposed.getByText("Chờ duyệt")).toBeVisible();
+
+  const listed = await (await an.get("/rules")).json();
+  const version = listed.versions.find(
+    (v: { ref: string }) => v.ref === REF,
+  ) as { approval_id: string; status: string };
+  expect(version.status).toBe("proposed");
+  // The proposer may not decide it (tách nhiệm), whatever the screen offers.
+  const own = await an.decide(version.approval_id, {
+    approve: true,
+    comment: "Tự duyệt",
+  });
+  expect([403, 404, 409]).toContain(own.status());
+
+  // Giang follows the version's link to its approval, then decides it on the
+  // platform's page with the comment a Sales decision requires.
+  await signIn(page, request, GIANG);
+  await page.goto("/sales/rules");
+  await page
+    .getByRole("row")
+    .filter({ hasText: REF })
+    .getByRole("link", { name: "Mở yêu cầu duyệt" })
+    .click();
+  await page.waitForURL(`**/approvals/${version.approval_id}`);
+  await expect(page.getByText("sales.rules", { exact: true })).toBeVisible();
+  await page.goto("/approvals");
+  const card = page.locator(".ant-card").filter({
+    has: page.locator(`a[href="/approvals/${version.approval_id}"]`),
+  });
+  await card.getByLabel(/^Nhận xét/).fill("Đã đọc tài liệu, đồng ý áp dụng");
+  await card.getByRole("button", { name: "Duyệt", exact: true }).click();
+
+  // The worker carries the decision out on the version (ticket 38).
+  await expect
+    .poll(async () => {
+      const rules = await (await giang.get("/rules")).json();
+      return [
+        rules.versions.find((v: { ref: string }) => v.ref === REF)?.status,
+        rules.in_force.sales_order_rules,
+      ];
+    })
+    .toEqual(["approved", REF]);
 });
