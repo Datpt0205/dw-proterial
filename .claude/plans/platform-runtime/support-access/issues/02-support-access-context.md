@@ -65,26 +65,29 @@ Integration (`dw_platform/tests/integration` và `apps/api/tests`; một route t
       ở tenant A → `context.roles == frozenset()`, `scopes` đúng bản đóng dấu; route test đòi
       scope ngoài bản đóng dấu → 403 (không qua nhánh `admin_role` của
       `authorization.py:47-49`). Không có khóa cache nào cho ngữ cảnh hỗ trợ sau request.
-- [ ] SA5: token không có yếu tố thứ hai → 403 `support_mfa_required`. Gỡ kiểm → test đỏ.
-- [ ] SA6: `expires_at` đã qua (đồng hồ giả) → 403 `support_grant_ended`, `expired`; thu hồi
+- [x] SA5: token không có yếu tố thứ hai → 403 `support_mfa_required`. Gỡ kiểm → test đỏ.
+- [x] SA6: `expires_at` đã qua (đồng hồ giả) → 403 `support_grant_ended`, `expired`; thu hồi
       rồi gọi lại → `revoked`; gỡ vai người cấp → `ineffective`. `recheck_support_grant` sau
       thu hồi → lỗi cùng mã.
-- [ ] SA7: với header hợp lệ, `GET /runs/{id}`, `GET /approvals`, `GET /knowledge/...`,
+- [x] SA7: với header hợp lệ, `GET /runs/{id}`, `GET /approvals`, `GET /knowledge/...`,
       `GET /audit/events`, `GET /admin/members` → 403 `support_context_not_allowed`. Test bảng
       route xanh với hằng rỗng; thêm `RequireAccessContextOrSupport` vào một route mà không
       thêm vào hằng → test đỏ.
-- [ ] SA10: ba request dưới ngữ cảnh hỗ trợ → ba dòng `support.access` có
+- [x] SA10: ba request dưới ngữ cảnh hỗ trợ → ba dòng `support.access` có
       `support_grant_id`; lọc theo `support_grant_id` thấy đúng ba dòng; nhân viên gọi
       `/audit/events` → 403.
-- [ ] SA11: tenant tắt cờ sau khi cấp → ngữ cảnh không dựng được.
+- [x] SA11: tenant tắt cờ sau khi cấp → ngữ cảnh không dựng được.
 - [ ] SA12: `support_grants_for_staff()` với `app.principal_id` là người khác → 0 dòng;
       `support_grant_for_staff` cho quyền của người khác → 0 dòng. Test hỏi catalog: hai hàm
       là `SECURITY DEFINER`, `PUBLIC` không có quyền chạy.
-- [ ] SA13: header hỗ trợ kèm `X-Tenant-Id`, `X-Workspace-Id` của tenant B hay ws2 → ngữ cảnh
-      lấy tenant, workspace từ quyền; route test không trả dòng nào của tenant B hay ws2.
+- [x] SA13: header hỗ trợ kèm `X-Tenant-Id`, `X-Workspace-Id` của tenant B hay ws2 → ngữ cảnh
+      lấy tenant, workspace từ quyền; route test không trả dòng nào của tenant B hay ws2
+      (`test_support_is_no_member_and_the_grant_not_the_headers_names_the_tenant` trong
+      `apps/api/tests/integration/test_sales_api_support.py`, sales ticket 22).
 - [ ] Comments: claim Keycloak đo được, bản token đã che chữ ký.
 - [ ] `reviewing-deployment-security` trên header mới, route mới, cấu hình realm.
-- [ ] `make ci` xanh.
+- [x] `make ci` xanh (lõi: `e19c757`; bước 10 và review: CI run 38527044307,
+      14/10/2026).
 
 ## Nguồn
 

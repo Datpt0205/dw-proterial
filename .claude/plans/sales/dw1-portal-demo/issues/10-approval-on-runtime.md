@@ -1,6 +1,6 @@
 # 10 — Move the Sales decision onto the runtime
 
-Status: done (2026-10-06, not committed)
+Status: done (2026-10-06, committed in 8d098b3)
 Blocked by: 09
 
 ## What
@@ -39,8 +39,9 @@ Negative tests:
 
 ## As built (2026-10-06)
 
-dw_sales ADR 0004 (Proposed) records the decision and supersedes ADR 0001;
-spec decision 5 is amended. Per acceptance line:
+dw_sales ADR 0004 (Proposed; accepted by Đạt 2026-10-14) records the
+decision and supersedes ADR 0001; spec decision 5 is amended. Per acceptance
+line:
 
 1. **Decide scope per type.** `dw_sales.application.runs.DECIDE_SCOPES` is the
    one map (`sales.quote` → `sales.quote.approve`, `sales.order.cross_check`
@@ -68,7 +69,8 @@ spec decision 5 is amended. Per acceptance line:
 4. **RunAllowancePort.** "DW xử lý" (one message or all), submit and the
    Bravo entry are each a DW1 run, so the runner's check where every run
    begins covers them; the steps (`CaseDecisions`) are not on the routes'
-   bundle. There is no mailbox trigger yet; one must start a run the same way.
+   bundle. There is no mailbox trigger yet; one must start a run the same way
+   (ticket 16 added it: each message is its own counted run).
 5. **Pinned.** `configs/workers/sales.yaml` (sales-dw1@1.0.0, graph 1.0.0, A1,
    no toolset) is in the release manifest (`sha256:c0f21a1b…`).
 6. **ADR 0007.** No toolset on the worker, and the graph takes only its
@@ -96,7 +98,9 @@ runner and approval flow).
 
 Open: the generic Approvals page lists Sales approvals to their deciders but
 sends no case version, so a decision there is refused (the page is shadcn;
-moving it to antd comes first); an order whose decision passed the guard and
-failed in the run (a one-request race) has no step that raises its
-cross-check again; DW1 has no service principal (ticket 12); processing's
+moving it to antd comes first; closed by the platform's `approval-inbox-link`,
+2026-10-08, merged here 2026-10-09 in 37e6881); an order whose decision
+passed the guard and failed in the run (a one-request race) has no step that
+raises its cross-check again (closed by ticket 14); DW1 has no service
+principal (ticket 12; closed by ticket 16, role `sales_dw1`); processing's
 audit rows do not carry the run id (the decision rows do).

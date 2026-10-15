@@ -24,22 +24,53 @@ tất cả) chỉ xếp thư vào hàng chờ: API trả lời ngay, worker xử
 đính kèm trong container `reader` (không mạng, mỗi tệp một tiến trình dùng một
 lần). Hộp thư tự đọc lại vài giây một lần khi còn thư đang chờ: cột DW1 hiện
 "Đang chờ DW1", rồi "DW1 đang xử lý", rồi hướng xử lý của thư. Vì vậy **worker
-phải chạy** (`make dev` chạy nó); thiếu worker, thư đứng mãi ở "Đang chờ DW1".
+phải chạy**, với làn `sales_processing` (`make dev` chạy nó); thiếu worker, thư
+đứng mãi ở "Đang chờ DW1".
 `make infra-up` dựng `reader` và cổng `reader-gateway` (127.0.0.1:8120) cho
 API và worker chạy trên máy. Lần đầu build image `reader` mất vài phút
 (LibreOffice, Tesseract). "DW xử lý tất cả" giờ là một lượt chạy cho **mỗi**
 thư, như làn hộp thư vẫn đếm, nên cả hộp thư mất vài phút; một thư lỗi hiện lý
-do và nút để bấm lại.
+do và nút để bấm lại. Mọi thư có tệp cùng hiện "DW1 chưa xử lý được" với lý do
+"Chưa quét hoặc chưa đọc được tệp đính kèm" (sau ba lần thử) nghĩa là worker
+không tới được máy quét hoặc `reader`: xem `.env` có `DW_SALES_MALWARE_SCAN=skip`
+(dưới) và `reader-gateway` có đang chạy không.
+
+**Quét mã độc (ticket 25).** `make dev` chạy API và worker trên máy, không tới
+được `clamav` (container không mở cổng nào), nên `.env` giữ
+`DW_SALES_MALWARE_SCAN=skip`: tệp đính kèm được đọc mà không quét (profile
+triển khai từ chối giá trị này). Thiếu dòng đó thì mặc định là `clamd`, và mọi
+tệp "chưa quét được". Stack quét mọi tệp là profile `full` (`make docker-up`);
+kịch bản này viết cho `make dev`. Profile compose `scan` chỉ dựng riêng
+`clamav`, cho bộ test tích hợp cùng `docker-compose.scan-test.yml`, không cho
+buổi demo. `clamav` giữ khoảng 944 MiB RAM (đo 2026-10-13).
+
+**Các bước có mô hình (tickets 28–33, ADR 0005 của dw_sales).** Bộ quy tắc
+riêng của tenant-alpha (`sales_order_rules@1.5.1`, `make demo-reset` cài) bật
+sáu bước có mô hình: đọc mô tả hàng, phân loại thư không đọc được, đọc yêu cầu
+báo giá, đọc trả lời trong luồng hồ sơ, soạn sẵn thư chuyển, gợi ý mẫu PO. Mô
+hình là máy chủ của chính triển khai (`configs/models/onprem.yaml`), không có
+mô hình dự phòng bên ngoài:
+
+- không đặt `DW_ONPREM_MODEL_BASE_URL` (mặc định): không bước nào gọi mô hình,
+  DW1 làm bằng code như trước. Kịch bản dưới viết cho trường hợp này, và phần
+  tự động (`sales-demo.spec.ts`) chạy trong CI như vậy.
+- `DW_ONPREM_MODEL_BASE_URL=http://localhost:11434/v1` trong `.env`, Ollama
+  phục vụ model `qwen3.5-9b-dw` (qwen3.5:9b, num_ctx 8192): API và worker gọi
+  mô hình; mọi giá trị mô hình đọc bị gắn cờ cho Sales xác nhận, và "DW xử lý
+  tất cả" lâu hơn. Phần 3.2 và 3.10 nói chỗ nào khác.
+- đặt biến mà Ollama không chạy: thư không tệp nào DW1 đọc được (M11, M15, M16,
+  M17, M31, M37–M40, M43) sang "Chuyển Sales xử lý" với lý do "Khác" (DW1 không
+  hiểu thư), không phải lý do ở 3.2. Bỏ biến, hoặc bật Ollama trước buổi demo.
 
 **Vì sao tắt làn hộp thư.** Từ ticket 16, worker có làn `sales_inbox`: mỗi
 phút DW1 tự xử lý mọi thư mới (cũ nhất trước), bằng tài khoản dịch vụ DW1 của
 tenant, như thể có người bấm **DW xử lý**. Mặc định làn này bật. Kịch bản 3.1
 và 3.2 cần An tự bấm, theo đúng thứ tự (M04 trước M07), nên buổi demo theo
 nút bấm chạy worker với làn tắt (`DW_WORKER_SALES_INBOX_LANE=false`). Bật làn
-(chỉ `make dev`) thì sau `make demo-reset` khoảng một phút hộp thư đã được xử
-lý hết; phần 3.9 cho thấy điều đó. Tắt làn không tắt DW1: nút **DW xử lý**
-vẫn chạy, công tắc tạm dừng vẫn là thứ duy nhất quyết định DW1 có làm việc
-trong một workspace hay không.
+(chỉ `make dev`) thì sau `make demo-reset` khoảng một phút làn xếp mọi thư vào
+hàng chờ, và vài phút sau hộp thư đã được xử lý hết; phần 3.9 cho thấy điều
+đó. Tắt làn không tắt DW1: nút **DW xử lý** vẫn chạy, công tắc tạm dừng vẫn là
+thứ duy nhất quyết định DW1 có làm việc trong một workspace hay không.
 
 `make demo-reset` đưa stack về **đúng một trạng thái bắt đầu**, lần nào cũng
 như nhau:
@@ -49,18 +80,22 @@ như nhau:
   demo** (tenant-alpha, tenant-beta) — không đụng tenant khác, không xóa audit
   log (append-only);
 - xóa các lượt chạy (run) của DW1, checkpoint của chúng và các yêu cầu duyệt
-  `sales.*` cùng quyết định, nên hộp duyệt bắt đầu trống và buổi diễn tập
-  trước không ăn vào số lượt chạy trong ngày của gói;
+  `sales.*` cùng quyết định (kéo theo mẫu PO và phiên bản quy tắc gắn với
+  chúng), nên hộp duyệt bắt đầu trống và buổi diễn tập trước không ăn vào số
+  lượt chạy trong ngày của gói;
 - chạy seed nền tảng rồi gán vai Sales cho các persona
   (`dw_sales.testing.seed_personas`), và tạo tài khoản dịch vụ DW1 ở
   tenant-alpha (vai `sales_dw1`: chỉ `sales.inbox.process`; không đăng nhập
   được, không có trong danh sách persona);
+- đề xuất và duyệt bộ quy tắc riêng của tenant-alpha,
+  `sales_order_rules@1.5.1` (`dw_sales.testing.seed_rules`): An đề xuất, Giang
+  duyệt trên yêu cầu duyệt `sales.rules`, như mọi phiên bản của tenant;
 - cho mỗi persona một tài khoản Keycloak, mật khẩu là `DW_DEV_USER_PASSWORD`
   trong `.env` (không commit).
 
-Sau đó: hộp thư 35 thư đều "Chưa xử lý", không có hồ sơ nào, DW1 đang chạy
-(với làn hộp thư tắt; bật thì DW1 xử lý hết trong khoảng một phút). Chỉ chạy
-được ở profile `local`/`test`.
+Sau đó: hộp thư 45 thư (M01–M45) đều "Chưa xử lý", không có hồ sơ nào, không
+có mẫu PO nào, bộ quy tắc 1.5.1 đang dùng, DW1 đang chạy (với làn hộp thư tắt;
+bật thì DW1 xử lý hết trong vài phút). Chỉ chạy được ở profile `local`/`test`.
 
 Đăng nhập ở `http://localhost:3300` bằng email persona và mật khẩu trên. Đổi
 người: đăng xuất rồi đăng nhập lại (hoặc mở cửa sổ ẩn danh cho người thứ hai).
@@ -119,8 +154,15 @@ trước, đúng thứ tự WIV-03-012 bước 8.
       Rev.1", M04 ở mục bản đã thay thế, bảng thay đổi so với bản gốc, cờ
       `revised_po`; mọi kiểm tra chạy lại.
     - M11, M31, M17: chuyển Sales (đổi lịch giao, khiếu nại, hàng mẫu).
-    - M15: chưa xác định được khách hàng. M16: PDF scan, không đọc được — không
-      mở hồ sơ, không có giá trị nào được "đọc".
+    - M15: chưa xác định được khách hàng. M16: PDF scan, không đọc được (container
+      `reader` thử OCR, không đọc ra chữ nào: ticket 27) — không mở hồ sơ, không
+      có giá trị nào được "đọc".
+    - M43 (mẫu PDF mới của Norvanta): "Không đọc được file" cho tới khi có mẫu PO
+      được duyệt (3.10). M36 (mã hàng mới): ba cờ `code_unmapped`. M37–M39 (yêu
+      cầu báo giá trong thân thư, PDF, Excel riêng của khách): "Không đọc được
+      file"; M40: "Khác". Có mô hình (mục 1): M37–M39 thành hồ sơ báo giá, mọi
+      giá trị mô hình đọc bị gắn cờ; mô hình đọc mô tả hàng của M36 để code tìm
+      mã ứng viên; M11, M17, M31, M40 có thư chuyển soạn sẵn.
     - Phản hồi Design (M18, M25, M29, M30, M32) chuyển Sales "Phản hồi Design
       không khớp YCBG" vì chưa ai ghi số YCBG. Sau khi ghi YCBG và gửi Design
       (3.5, 3.6), bấm **DW xử lý lại** trên thư phản hồi để ghép vào hồ sơ.
@@ -190,8 +232,7 @@ trước, đúng thứ tự WIV-03-012 bước 8.
 1. _Bị từ chối:_ trước khi duyệt, soạn thư nháp gửi khách qua API trả **409**
    (tệp chưa tới trạng thái của nó).
 2. **Giang** mở M10 ("Duyệt báo giá Q26-0301"). Trong "Tệp và thư nháp DW1
-   soạn", bấm **Soạn Tài liệu báo giá (bản xem trước)**, rồi **tải lại trang**
-   (lỗi đã biết: khung duyệt không tự làm mới, xem ticket 09 "Open"). Bấm **Xem
+   soạn", bấm **Soạn Tài liệu báo giá (bản xem trước)** (nếu chưa có). Bấm **Xem
    bản xem trước (PDF…)**: trang 1 của tài liệu hiện ra, cùng mã băm và phiên
    bản. (Bản ký giấy vẫn là bản duyệt chính thức; duyệt trên cổng là đề xuất.)
 3. Ghi **Nhận xét khi duyệt**, rồi **Duyệt báo giá**. Thư nháp gửi khách giờ
@@ -242,19 +283,58 @@ trước, đúng thứ tự WIV-03-012 bước 8.
 Chạy riêng, sau phần 3.8 hoặc ở một buổi khác: dừng `make dev`, chạy
 `make demo-reset`, rồi `make dev` (làn hộp thư bật, mặc định).
 
-1. **An** mở _Sales → Hộp thư_: trong khoảng một phút, mọi thư sang "Đã tạo hồ
-   sơ", "Đã gắn vào hồ sơ" hoặc "Chuyển Sales xử lý" mà không ai bấm; tải lại
-   trang để thấy. M07 (Rev.1) đã vào hồ sơ M04 vì DW1 xử lý thư cũ nhất trước.
-2. Sự kiện hồ sơ ghi "DW1"; audit log có một dòng
-   `sales.message.processed_by_lane` cho mỗi thư, người làm là
-   `system:sales_inbox` và ghi tài khoản dịch vụ DW1 đã dùng — không phải tên
-   một người.
+1. **An** mở _Sales → Hộp thư_: trong khoảng một phút các thư sang "Đang chờ
+   DW1", và trong vài phút mọi thư sang "Đã tạo hồ sơ", "Đã gắn vào hồ sơ" hoặc
+   "Chuyển Sales xử lý" mà không ai bấm; tải lại trang để thấy.
+   M07 (Rev.1) đã vào hồ sơ M04 vì DW1 xử lý thư cũ nhất trước.
+2. Sự kiện hồ sơ ghi "DW1"; audit log có, cho mỗi thư, một dòng
+   `sales.message.queued_by_lane` (người làm `system:sales_inbox`, ghi tài
+   khoản dịch vụ DW1 đã dùng) và một dòng `sales.message.processing_done`
+   (người làm `system:sales_processing`, ghi tài khoản đó là người yêu cầu) —
+   không phải tên một người.
 3. **An** bấm **Tạm dừng DW1**: từ phút sau làn bỏ qua workspace này, không
    tốn lượt chạy nào. Thư mới (nếu có) ở lại "Chưa xử lý" cho tới khi **Giang**
    cho DW1 chạy lại.
 4. Mỗi thư là một lượt chạy, đếm vào số lượt trong ngày của gói. Hết lượt thì
-   các thư còn lại ở "Chưa xử lý", ai cũng thấy, và làn thử lại vào ngày hôm
-   sau.
+   các thư còn lại ở "Chưa xử lý" với lý do "Hết lượt chạy DW1 trong ngày của
+   gói", ai cũng thấy, và làn thử lại sau (5 phút, gấp đôi mỗi lần, tới 6 giờ).
+
+### 3.10 Mẫu PO mới: lập một lần, người khác duyệt (ticket 30)
+
+Chưa có trong `sales-demo.spec.ts`; chưa đi thử trên trình duyệt (Docker tắt,
+2026-10-15).
+
+Sau 3.2, cùng buổi với 3.1–3.8.
+
+1. **An** mở dòng M43 trong hộp thư, bấm **Thiết lập mẫu PO** cạnh
+   `NRV-PO-26-0502.pdf`. Có mô hình: các trường mở sẵn, gắn "Mô hình gợi ý";
+   không có: để trống, An gán từng trường với nhãn in trên mẫu.
+2. **Xem thử** → "Mọi kiểm tra đạt: đọc được PO NRV-PO-26-0502 …" → **Gửi
+   duyệt**.
+3. _Bị từ chối:_ ở _Sales → Mẫu PO_, với An nút **Duyệt** bị khóa ("Chỉ Trưởng
+   bộ phận Sales duyệt mẫu PO.").
+4. **Giang** mở _Sales → Mẫu PO_ (hoặc từ _Approvals_, nút **Mở hồ sơ để quyết
+   định**) → **Duyệt**, ghi **Nhận xét** → **Duyệt mẫu**. Trạng thái mẫu đổi
+   khi worker áp dụng quyết định.
+5. **An** bấm **DW xử lý lại** trên M43: thư "Đã tạo hồ sơ"; mọi giá trị bị gắn
+   cờ cho Sales xác nhận, vì mẫu còn mới (3 PO đầu, `layout_onboarding`).
+
+### 3.11 Phiên bản quy tắc của tenant (tickets 19, 38)
+
+Chưa có trong `sales-demo.spec.ts`; chưa đi thử trên trình duyệt (Docker tắt,
+2026-10-15).
+
+Chưa có trang quy tắc trên cổng; `make demo-reset` đã đi đường này cho bản
+1.5.1. Muốn cho khán giả thấy:
+
+1. **An** đề xuất qua API: `POST /api/v1/sales/rules/{key}/versions` (ví dụ
+   `sales_order_rules`) với thân `{"document": …}` là cả tài liệu, trong đó
+   `policy_version` mới không trùng số nền tảng phát hành; bản đang dùng đọc
+   ở `GET /api/v1/sales/rules`. Một yêu cầu duyệt `sales.rules` mở cùng lúc.
+2. **Giang** mở _Approvals_: yêu cầu `sales.rules` được quyết **ngay ở đó**,
+   không dẫn sang trang Sales. Ghi **Nhận xét (bắt buộc)** → **Duyệt**. Worker
+   áp dụng quyết định: bản mới thay bản đang dùng cho hồ sơ kiểm sau đó; hồ sơ
+   cũ giữ dấu phiên bản cũ.
 
 ## 4. Điều demo này cho thấy và không cho thấy
 
@@ -262,7 +342,7 @@ Theo bảng "Promises and what this demo shows" của `spec.md`:
 
 - Đo trên bộ giả lập: thư không có hướng xử lý = 0, thư chuyển Sales không có
   người phụ trách = 0; mọi dòng PO được đọc và kiểm (câu "Đã đọc N/N dòng");
-  bộ eval `sales@1.0.0` chấm trích xuất (mã PRV, số lượng, đơn giá, ngày yêu
+  bộ eval `sales@1.2.0` chấm trích xuất (mã PRV, số lượng, đơn giá, ngày yêu
   cầu) và phát hiện (recall/precision) — `make eval-smoke`.
 - **Không** khẳng định tỷ lệ, số giờ tiết kiệm hay thời gian đầu-cuối: bộ giả
   lập quá nhỏ, và các bước trùng kế hoạch Bravo của Proterial không được tính.
@@ -273,8 +353,15 @@ Theo bảng "Promises and what this demo shows" của `spec.md`:
   dw_sales, thay ADR 0001). Bản ký giấy vẫn là bản duyệt chính thức cho tới
   khi Proterial quyết định.
 - Trang _Approvals_ chung của nền tảng cũng liệt kê yêu cầu duyệt Sales cho
-  người được quyết định, nhưng quyết định ở đó bị từ chối vì không mang phiên
-  bản hồ sơ đã xem; trong demo luôn quyết định từ trang hồ sơ Sales.
+  người được quyết định. Báo giá và kiểm chéo chỉ quyết được trên trang hồ sơ
+  (quyết định phải mang phiên bản hồ sơ đã xem), nên _Approvals_ chỉ có nút
+  **Mở hồ sơ để quyết định**; mẫu PO (`sales.layout`) dẫn sang _Mẫu PO_. Riêng
+  phiên bản quy tắc (`sales.rules`, ticket 38) được quyết ngay trên _Approvals_
+  (3.11).
+- Đọc `.xls`/`.doc` cũ và OCR PDF scan (ticket 27) chạy trong container
+  `reader`, nhưng hộp thư giả lập không có thư nào mang tệp Office cũ hay bản
+  scan đọc được: demo chỉ cho thấy M16 vẫn không đọc được. Phần đọc được nằm
+  trong eval `sales_legacy@1.0.0` và bộ test của image `reader` (CI).
 
 ## 5. Sau buổi demo
 

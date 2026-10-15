@@ -1,9 +1,9 @@
 # 28 — A model reads a free-text item description into typed attributes; code finds the PRV code, Sales confirms
 
-Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
-his pre-authorisation). O2 only; Q1 deferred (Comments). Below the proposed
-bar on VI/EN (71% against 80%): measured, not claimed. dw_sales ADR 0005 is
-Proposed, Đạt to accept.
+Status: done (2026-10-13, committed in 61a5ae5; built by the agent with Đạt
+away, on his pre-authorisation). O2 only; Q1 deferred (Comments). Meets
+Đạt's bar on VI/EN (71.1% against 70%, set 2026-10-15). dw_sales ADR 0005
+accepted by Đạt on 2026-10-14.
 Blocked by: — (the shared model prerequisites were built with it; the
 convert-list seed from Bravo history still waits on Proterial's data)
 Category: enhancement
@@ -152,7 +152,7 @@ share falls as the convert list fills.
 
 **Shared prerequisites** (`../ai-automation.md`, "Before any model step"):
 
-- dw_sales ADR 0005 (Proposed),
+- dw_sales ADR 0005 (accepted by Đạt on 2026-10-14),
   `packages/python/dw_sales/docs/adr/0005-a-local-model-reads-where-code-can-verify.md`:
   which steps may call a model and under which rules. Spec decision 13 and
   the "no model call" non-goal now point at it; `configs/workers/sales.yaml`

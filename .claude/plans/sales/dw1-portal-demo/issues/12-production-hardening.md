@@ -25,9 +25,9 @@ a real document or serves a real tenant.
 | 27     | Legacy Office conversion and image-PDF OCR (G17, part 2)   |
 
 DW1's own service principal (spec, actor table) goes with ticket 16, its
-first caller.
+first caller (done there: role `sales_dw1`).
 
-## Waiting on Proterial (requirements doc v1.2, not sent as of 2026-10-12)
+## Waiting on Proterial (requirements doc v1.2, sent by Đạt, confirmed 2026-10-12)
 
 - **Approval matrix (G6).** When Proterial sends who approves which price
   or discount (requirements doc §4 item 5), it becomes a ladder in

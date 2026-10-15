@@ -1,7 +1,8 @@
 # DW1: where a model takes work off people
 
-Status: proposal, 2026-10-12. Đạt decides. All six candidates are built
-(2026-10-13, uncommitted, Đạt away): 28, 29 and 31, then 30, 32 and 33.
+Status: proposal, 2026-10-12; its rules accepted by Đạt as dw_sales ADR 0005
+on 2026-10-14. All six candidates are built (2026-10-13, Đạt away; committed
+in 61a5ae5, 1009491 and e97042b): 28, 29 and 31, then 30, 32 and 33.
 
 Until 2026-10-13 DW1 called no model. Reading, mapping, checks, files and
 emails are deterministic code, and anything unusual is routed to a person.
@@ -10,7 +11,7 @@ work, in the order to build them, and what stays with people.
 
 **Built (2026-10-13, Đạt away, on his pre-authorisation):** the shared
 prerequisites below ("Before any model step") and ticket 28 (O2 only). The
-rules are now dw_sales ADR 0005 (Proposed). Measured on the local
+rules are now dw_sales ADR 0005 (accepted 2026-10-14). Measured on the local
 Qwen3.5-9B (thinking off, GTX 1080 Max-Q):
 
 - Golden set (67 lines): the gold code is among the candidates for 71.1% of

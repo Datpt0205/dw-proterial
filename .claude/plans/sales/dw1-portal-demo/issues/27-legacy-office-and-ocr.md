@@ -2,9 +2,9 @@
 
 Status: built-pending-measurement (2026-10-14, agent): conversion and OCR
 built in ticket 25's reader container, tested at their seams and in the
-evals (`sales_legacy@1.0.0`); what the real LibreOffice and Tesseract make of
-the fixtures, and their time and memory, are measured on the image after the
-WSL reboot ("Post-reboot checks" below)
+evals (`sales_legacy@1.0.0`); the real LibreOffice and Tesseract read the
+fixtures in the image suite, green in CI on 1621cbc; their time and memory
+are measured on the image after the WSL reboot ("Post-reboot checks" below)
 Blocked by: — (25 built)
 Category: enhancement
 
@@ -119,12 +119,15 @@ PO yields values with page coordinates.
        the `.xls` made from M01 converted and read with both hashes; the scan
        read by Tesseract to the same quantities and prices as M03 (prints
        what it read); M16 (bars) still unreadable; a `.doc` shown as its PDF.
+       Done in CI on 1621cbc, after the diacritics fix (run 38519549220;
+       `DW_TEST_READER` set, so nothing skipped).
     2. `uv run python scripts/measure_reader.py --runs 3`: seconds and peak
        memory per reading process for the `.xls` (LibreOffice) and the 2-page
        scan (Tesseract); record them here (acceptance 3).
     3. If Tesseract misreads the scan: rerun with `DPI = 400` in
        `readers/ocr.py`, then `--psm 4`, and record each; RapidOCR only if
-       both fail (the plan below).
+       both fail (the plan below). Not needed: the image's Tesseract read
+       the scan at 300 dpi `--psm 6` in CI on 1621cbc.
     4. A macro fixture: in the reader container, write a `.xls` with an
        `Auto_Open` that writes a file, convert it through the reader, and
        check no file was written.
@@ -136,7 +139,8 @@ PO yields values with page coordinates.
       in the running image (`reading_tools.xls_made_in_reader`: M01 as
       `VLX-PO-2610-0021`, written by the image's LibreOffice as
       `xls:MS Excel 97`). What LibreOffice's round trip does to M01's cells
-      is unmeasured until CI runs it.
+      is unmeasured until CI runs it. CI ran it green on 1621cbc: the PO
+      number and both hashes read right; the other cells are not compared.
     - **The scan was refused "no line holds the currency"**. Measured
       locally (Docker down): Tesseract 5.3.4 from conda-forge with
       tessdata_fast 4.1.0 `vie`+`eng`, on this repository's own `ocr.py`.

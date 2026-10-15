@@ -1,10 +1,10 @@
 # 31 — A model classifies mail no reader accepted into a typed intent, in place of keyword tables
 
-Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
-his pre-authorisation). Meets the proposed bar: 90.9% kind accuracy on the
-golden residue against 90%, zero misroutes of a readable PO, zero injection
-effects. The keyword tables stay for tenants with the switch off
-(Acceptance 4). dw_sales ADR 0005 is Proposed, Đạt to accept.
+Status: done (2026-10-13, committed in 1009491; built by the agent with Đạt
+away, on his pre-authorisation). Meets the proposed bar: 90.9% kind accuracy
+on the golden residue against 90%, zero misroutes of a readable PO, zero
+injection effects. The keyword tables stay for tenants with the switch off
+(Acceptance 4). dw_sales ADR 0005 accepted by Đạt on 2026-10-14.
 Blocked by: — (built on ticket 28's prerequisites; content-first ordering in
 `_kind` was built with it)
 Category: enhancement

@@ -3,7 +3,7 @@
 Status: done (2026-10-05, amendment)
 Blocked by: 01 (including its 2026-10-03 follow-up), 02 item 1 (`anchors.py`)
 
-## What exists (working tree, not yet reviewed or committed)
+## What exists (committed with the amendment in `ad467dd`)
 
 The existing code:
 

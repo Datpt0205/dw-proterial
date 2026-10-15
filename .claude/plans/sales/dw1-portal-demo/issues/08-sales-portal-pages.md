@@ -1,6 +1,6 @@
 # 08 — Sales portal pages
 
-Status: built (2026-10-05, uncommitted); walked as an.nguyen, dieu.hoang, giang.do, khoa.lam, ha.vu, binh.tran, bao.pham. Owed to the API: role names and permission-set scopes in /auth/bootstrap, the attributes DW1 read per line for the candidate picker, WorkItem.due for orders
+Status: built (2026-10-05, committed in 88fb7b6); walked as an.nguyen, dieu.hoang, giang.do, khoa.lam, ha.vu, binh.tran, bao.pham. Owed to the API: role names and permission-set scopes in /auth/bootstrap (landed 2026-10-05), the attributes DW1 read per line for the candidate picker, WorkItem.due for orders
 Blocked by: 05, 06, 07, 11
 
 ## What

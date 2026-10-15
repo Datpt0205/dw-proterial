@@ -1,6 +1,6 @@
 # 20 — Legacy Vietnamese encodings are detected, never read as text (G37)
 
-Status: done (2026-10-12; not committed; built and reviewed by the agent while Đạt was away)
+Status: done (2026-10-12; committed in dd5ef1d; built and reviewed by the agent while Đạt was away)
 Blocked by: —
 Category: enhancement
 
@@ -140,7 +140,8 @@ a PO as text and match attributes against garbage. Nothing detects it
   plus 1 failure, a pinned `sales_emails…@1.0.0` ref, fixed and its file
   re-run (26 passed). Evals: `sales@1.1.0` 11/11. Vitest 309 passed.
   Typecheck, lint and format were clean. The Playwright walk (now 33
-  messages) was not run.
+  messages) was not run. It has since passed on CI's Web E2E workflow, first
+  on `e97042b` (2026-10-13).
 - Review (same day): two tests added to `test_legacy_encoding.py`, the PDF
   page fallback and a typed value over legacy text (see Comments). Each
   turned red when its guard was removed. The other guards were broken again
@@ -156,3 +157,8 @@ a PO as text and match attributes against garbage. Nothing detects it
   value as its own value state; the PO-level finding blocks instead. The
   RFQ reader (`adapters/rfq_excel.py`) does not check fonts, because the
   ticket names the PO readers only.
+- 2026-10-15: `legacy_text_anchor` was the first legacy value whatever its
+  field, so a PO whose first legacy text was a price handed that price's
+  anchor (a PDF anchor quotes the printed words) to a viewer without
+  `sales.price.read`. It is now the first legacy text the viewer may see
+  (`PoDocument.legacy_texts`; `953086f`, with a test that was red before).

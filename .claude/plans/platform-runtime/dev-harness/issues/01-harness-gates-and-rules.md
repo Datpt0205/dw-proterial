@@ -126,8 +126,9 @@ soát".
   `test-hooks` 68/68, eval-smoke `platform_smoke@1.1.0` 4/4, release-manifest-check OK.
   Không gói Python nào bị đổi nên không chạy integration và không bật infra.
 - **Còn mở:** bước CI mới (`ci.yml`, "Coding-agent harness hooks") chưa được xem chạy
-  thật trên GitHub. Alias (`git ci`) và `Start-Process git` không bị cổng thấy; đây là
-  lời nhắc lúc commit, không phải sandbox.
+  thật trên GitHub lúc ghi (sau đó: đã xanh trên GitHub từ run 37491351041, 6/10/2026).
+  Alias (`git ci`) và `Start-Process git` không bị cổng thấy; đây là lời nhắc lúc
+  commit, không phải sandbox.
 
 **6/10/2026, kiểm độc lập.** Hai dạng vẫn lọt cổng, đo trên máy này (Git Bash và
 PowerShell đều chạy cả hai): `Git commit` / `GIT.EXE commit` (Windows không phân biệt hoa

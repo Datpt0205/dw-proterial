@@ -1,6 +1,6 @@
 # 05 — API routes and scopes
 
-Status: done (2026-10-05, uncommitted)
+Status: done (2026-10-05, committed in 3557de8)
 Blocked by: 04, 11
 
 ## What

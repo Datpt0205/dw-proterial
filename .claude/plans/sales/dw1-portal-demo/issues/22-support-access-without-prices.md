@@ -1,7 +1,7 @@
 # 22 — FPT support reads Sales cases without prices (G20)
 
-Status: done (2026-10-12; adversarially reviewed; not committed)
-Blocked by: platform-runtime/support-access 02 (core done; step 10 left, not blocking the API part)
+Status: done (2026-10-12; adversarially reviewed; committed in dd5ef1d)
+Blocked by: platform-runtime/support-access 02 (core done; step 10 left, not blocking the API part; resolved, step 10 done 2026-10-12)
 Category: enhancement
 
 Split from ticket 12 on 2026-10-12.

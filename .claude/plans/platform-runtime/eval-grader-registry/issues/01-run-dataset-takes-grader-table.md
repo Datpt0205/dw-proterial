@@ -1,6 +1,6 @@
 # 01 — `run_dataset` nhận bảng grader; seam đăng ký ở `run_evals.py`
 
-Status: done (2026-10-12; code from commit `5643634`, 7/10/2026; adversarial review 2026-10-12, one test tightened, not committed)
+Status: done (2026-10-12; code from commit `5643634`, 7/10/2026; adversarial review 2026-10-12, one test tightened, committed in `dd5ef1d`)
 Blocked by: —
 Area: platform-runtime
 

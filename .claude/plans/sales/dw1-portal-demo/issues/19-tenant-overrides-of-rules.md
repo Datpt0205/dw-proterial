@@ -1,6 +1,6 @@
 # 19 — Tenant overrides of Sales rules and templates, proposed and approved (G15)
 
-Status: done (2026-10-13; the mechanism, the routes, sales_order_rules and sales_kpi; the other five keys are ticket 36. Built and adversarially reviewed by the agent, Đạt away; not committed)
+Status: done (2026-10-13; the mechanism, the routes, sales_order_rules and sales_kpi; the other five keys are ticket 36. Built and adversarially reviewed by the agent, Đạt away; committed in 399920d)
 Blocked by: —
 Category: enhancement
 
@@ -78,7 +78,8 @@ exist; Sales does not use them yet (verified 2026-10-12).
   per key and from which layer, the platform's refs, every version with who
   proposed and decided it). dw_sales ADR 0004 (checker decisions as platform
   approvals) is still Proposed; if Đạt accepts it, the decision route moves
-  to `sales.rules` approvals like `sales.layout`.
+  to `sales.rules` approvals like `sales.layout`. (Đạt accepted it on
+  2026-10-14; ticket 38 moved the route.)
 - Decided by the agent (Đạt away), 2026-10-13: **only keys whose readers
   resolve per tenant are overridable: `sales_order_rules` and `sales_kpi`.**
   `RuleKey` and `OVERRIDABLE` in `dw_sales.application.rules` are the one
@@ -167,4 +168,7 @@ and reads no database; `release_manifest.py --check` unchanged.
   database, not the sample set), and `test_sales_personas.py`, whose
   expected scopes were brought up to the two new ones after the crashed run
   showed it red. Run `uv run pytest -m integration packages/python/dw_sales
-apps/api/tests/integration -k sales` when Docker is back.
+apps/api/tests/integration -k sales` when Docker is back. Run since on CI:
+  the Integration job (`uv run pytest -m integration`, which collects both,
+  `test_sales_personas.py` included) passed on 1621cbc and on 99cb905 after
+  ticket 38 (844 passed).

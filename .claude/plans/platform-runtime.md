@@ -53,9 +53,11 @@ Mốc 6 (running many customers) is half done:
       capped override when 3.0.4 ships.
     - `KeycloakTokenVerifier` (RS256/JWKS) has no test; pyjwt 2.15.1 was
       checked by hand only.
-    - CI does not run the web vitest suite or the Sales browser walk.
-      Built 2026-10-12 (sales ticket 18, not yet seen on a runner):
-      vitest in `frontend-quality`, the walk in `web-e2e.yml`.
+    - CI did not run the web vitest suite or the Sales browser walk.
+      Built 2026-10-12 (sales ticket 18): vitest in `frontend-quality`,
+      the walk in `web-e2e.yml`. Both green on a runner 2026-10-14 (the
+      vitest step of CI run 38527044307; Web E2E run 38527044304, 11
+      passed, 1 skipped).
 
 - **docling CVE-2026-105744 (HIGH, arbitrary file read/write)** failed
   trivy on CI run 37893880540 (2026-10-09) in `dw-worker:local`, not the
@@ -116,8 +118,9 @@ Mốc 6 (running many customers) is half done:
   `audit.events`, cursors carry the workspace, keyset indexes carry
   `workspace_id` (`6d4aed20ccf2`). Open: whether the UoW should own the
   workspace instead of a required read argument.
-- **Tickets written for the first product, platform side** (2026-10-03, all
-  `ready-for-agent`, product-neutral), each under `platform-runtime/<folder>/`:
+- **Tickets written for the first product, platform side** (2026-10-03,
+  product-neutral; all resolved since, except `support-access/03`,
+  `ready-for-human`, below), each under `platform-runtime/<folder>/`:
   `scope-holder-check` (ask whether a user holds a scope without an
   `AccessContext`, for apply-time checks and worker lanes), `eval-grader-registry`
   (a context registers its own graders; ticket 01 **done**, code from
@@ -126,8 +129,8 @@ Mốc 6 (running many customers) is half done:
   menu item shown for any of several scopes), `support-access` (support access
   the customer grants, ADR 0008), `tenant-members-and-invitations` (tenant-wide
   users, per-workspace roles, invitations).
-- **Harness hardening, from the 2026-10-06 harness audit** (all
-  `ready-for-agent`, product-neutral, in this order), each under
+- **Harness hardening, from the 2026-10-06 harness audit**
+  (product-neutral, in this order; all resolved since), each under
   `platform-runtime/<folder>/`: `memory-vectors` (Qdrant memory points deleted
   by retention, supersession and offboarding; the ranker reorders only the ids
   SQL recalled; **resolved 2026-10-06** in `55bd789`),
@@ -136,7 +139,7 @@ Mốc 6 (running many customers) is half done:
   classes nothing can assign removed; **resolved 2026-10-06**), `memory-review-queue` (REVIEW becomes a
   `memory.review` approval; **resolved 2026-10-06**; the decision audit and
   the workspace narrowing of `decide` stay with `approval-audit-and-workspace`
-  01 (open) and 02 (resolved 2026-10-06)),
+  01 (resolved 2026-10-08) and 02 (resolved 2026-10-06)),
   `compaction` (long tool loops and multi-turn threads really compact, budget
   from the profile, checkpoint retention; **resolved 2026-10-06**),
   `retrieval-correctness`
@@ -147,8 +150,9 @@ Mốc 6 (running many customers) is half done:
   CI python job, green on Git Bash without jq and on Alpine with jq; a real
   PowerShell-tool commit was blocked in a nested session. Not done: no
   `permissions.deny` on the gate switches, because a shell `touch` gets past it,
-  so it is gitignore plus a human-only note; the new CI step has not been
-  watched on GitHub; the Stop hook cannot tell which session made a commit).
+  so it is gitignore plus a human-only note; the new CI step has run green
+  on GitHub since run 37491351041 (2026-10-06); the Stop hook cannot tell
+  which session made a commit).
   Dropped as already true here: the rerank outage fallback (`4cb45dc`), and
   offboarding purging run checkpoints (catalog discovery already does; the
   `compaction` ticket only pins it with a test).
@@ -190,7 +194,9 @@ Mốc 6 (running many customers) is half done:
       2026-10-07).
     - `get_form_idempotent_operation` / `claim_fields`, and
       `PayloadTooLargeError` / `UnsupportedMediaTypeError`: no platform
-      route takes a form or raises them (a unit test mounts a probe route).
+      route takes a form or raises `UnsupportedMediaTypeError` (a unit test
+      mounts a probe route). `PayloadTooLargeError`: **taken by** the Zalo
+      webhook (`routes/v1/zalo.py`, 2026-10-07, `0231c1a`).
       A context that adopts one of these wires it there and names it
       here as taken.
 - **Nothing emits `memory.candidate_proposed`.** A bounded context has to
@@ -198,8 +204,10 @@ Mốc 6 (running many customers) is half done:
 - **The GIN index on `subject_refs` is untuned.** The planner prefers
   `ix_items_page` on an empty table, and tuning it before real data exists
   would be a guess.
-- **Vector-ranked recall is not wired**, although Qdrant and `EmbeddingPort`
-  already serve knowledge.
+- **Vector-ranked recall is wired** (`37c52a4`): the API ranks recall with
+  `QdrantMemoryRanker` when Qdrant is configured, and the worker writes and
+  purges its points; since `memory-vectors` 01 (`55bd789`) it reorders only
+  the ids SQL recalled, falling back to their order when it fails.
 - **The chat path reads the platform profile, not the tenant's.**
   `OpenAICompatibleChatModelFactory.resolve` calls `chat_route` with no
   tenant while the agent budget prices the tenant's route: the shape the
@@ -255,8 +263,9 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   `SupportScopeCatalog` (empty on `main`), `SupportGrantService`,
   `/support/*` and `/platform/support-*`. Refusals carry
   `details.reason_code`. `SqlScopeHolders` now has its first caller
-  (`scopes_of`, the granter's current scopes). Open: the `/platform` console
-  tables (web), conflict of interest at assignment.
+  (`scopes_of`, the granter's current scopes). Open: conflict of interest
+  at assignment. The `/platform` console tables (web) shipped 2026-10-08
+  (`0829d1e`).
 
 - **`support-access/02`** (resolved 2026-10-12): the support context (MFA from
   `amr`, deny-by-default routes, `support.access` audit) and, step 10,
@@ -268,13 +277,14 @@ user, scope)` and `holding(tenant, ws, scopes)`, neither needing an
   `force_generic_plan` test. Open: the web `/audit` page does not show the
   two fields yet; the realm change is applied by hand to a running Keycloak.
 
-- **`support-access/03`** (built 2026-10-13, uncommitted): the web support
-  session (`lib/support/`: the grant in `sessionStorage`, the header and the
-  grant's tenant on every request, closed on `support_grant_ended`), the
-  shell's banner slot, the landing registry (Sales lands on its orders), the
-  `/support` page, `supportStaffOnly`; `/support/my-grants` returns the
-  grant's stamped scopes and the web holds exactly those under a grant.
-  Owed: the Playwright run (spec written; Docker was down).
+- **`support-access/03`** (built 2026-10-13, committed in `399920d`): the
+  web support session (`lib/support/`: the grant in `sessionStorage`, the
+  header and the grant's tenant on every request, closed on
+  `support_grant_ended`), the shell's banner slot, the landing registry
+  (Sales lands on its orders), the `/support` page, `supportStaffOnly`;
+  `/support/my-grants` returns the grant's stamped scopes and the web holds
+  exactly those under a grant. Owed: the Playwright run (spec written;
+  Docker was down).
 
 - **Spans record no exception text** (2026-10-13, from Sales ticket 23's
   review): `OtelTelemetry` records an exception's type and a `DWError`'s

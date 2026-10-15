@@ -51,6 +51,7 @@ own file and a row here.
     - a retention term for offboarding export bundles;
     - how many superseded document versions to keep.
 - **Platform:**
+    - take `953086f`'s offboarding fix upstream to `Datpt0205/codebase`;
     - backfill ADRs with a status (`docs/agents/domain.md`): 46 citations of
       ADR-001..003 point at documents this repo never had.
 - **Sales:**

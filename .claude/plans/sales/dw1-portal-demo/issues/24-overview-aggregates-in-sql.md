@@ -1,6 +1,6 @@
 # 24 — The overview aggregates in SQL
 
-Status: done (2026-10-13; built and adversarially reviewed by the agent, Đạt away; not committed)
+Status: done (2026-10-13; built and adversarially reviewed by the agent, Đạt away; committed in 399920d)
 Blocked by: —
 Category: enhancement
 

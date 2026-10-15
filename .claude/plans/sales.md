@@ -8,6 +8,16 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-15 (Đạt: "làm luôn mục 1–3, 5, 6"): `legacy_text_anchor` no
+  longer hands a price's anchor to a viewer who may not see amounts (tickets
+  20/22, `953086f`); the API integration price scan looks for VND prices
+  and every printed grouping (ticket 34); offboarding exports and purges
+  each row of a partitioned table once (platform, owed upstream); the plan
+  statuses and `demo.md` brought up to date; and a race found on the way:
+  the demo seed and the worker both carried out the seed's `sales.rules`
+  decision, and the loser failed `make demo-reset` in CI run 38545009082
+  (`9704778`: a settlement that loses the race finds the decision applied).
+
 - 2026-10-14, Đạt's decisions (afternoon): dw_sales ADRs 0004 (with both
   amendments) and 0005 (with its addenda) **Accepted**; the bars of tickets
   29–33 kept as proposed; every released rules version kept readable
@@ -68,13 +78,18 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       passed, 3 skipped; eval smoke all PASS (`sales_legacy@1.0.0` 6/6); web
       typecheck, lint, 350 vitest, prettier. 36 mutations, all red (the
       reader's body cap first survived and got two tests).
-    - **Owed after the reboot**: the image build, trivy, the image suite,
-      `scripts/measure_reader.py`, migration `0a78ca5e96d3` and the
-      integration suites, the full stack and the walk (ticket 25 "Post-reboot
-      checks", ticket 27's after them).
+    - **Owed after the reboot**: `scripts/measure_reader.py`, the image's
+      size and socket, the full stack's "DW xử lý" (ticket 25 "Post-reboot
+      checks" 1, 3 and 7) and ticket 27's macro fixture (ticket 27's checks
+      after them). The image build, trivy (`dw-reader` included), the
+      image suite, migration `0a78ca5e96d3`, the integration suites and the
+      full profile's compose smoke ran green on CI (run 38545008947 on
+      `99cb905`), and the walk with a worker on the Web E2E workflow (run
+      38548179383 on `a89ca01`).
 
 - 2026-10-14, tickets 35 and 36 triaged and done (agent, Đạt away, on his
-  ask of 2026-10-14; uncommitted; Triage, "As built", "Owed" in each ticket):
+  ask of 2026-10-14; committed in `8adbe08`; Triage, "As built", "Owed" in
+  each ticket):
     - **35.** A split line is confirmed per schedule (decided by the agent:
       one date per schedule, the recommended default): `OrderLine` holds a
       date per delivery, the route takes `schedule_dates`, the draft
@@ -94,8 +109,9 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       contracts current; unit 3,074 passed, 3 skipped (one collection error
       in ticket 25's worker test, in progress in parallel); eval smoke all
       PASS; web typecheck, lint, 346 vitest. 19 mutations, all red.
-    - **Owed after the reboot.** The integration runs and the two migration
-      round trips listed under "Owed" in tickets 35 and 36.
+    - **Owed after the reboot.** The two migration round trips and their
+      scratch-database mutations listed under "Owed" in tickets 35 and 36;
+      their integration runs are green on CI (run 38545008947 on `99cb905`).
 
 - 2026-10-13, CI on 399920d: 6 of 7 jobs green (unit, evals, frontend with
   vitest, integration, container build, scaffold-smoke). The public-repo
@@ -126,7 +142,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       Docker. `WslService` is stuck in StopPending; restarting it needs an
       administrator. Ollama was not touched.
 - 2026-10-13, tickets 23 (review), 24 and 19 done (agent, Đạt away;
-  uncommitted; Comments and "As built" in each ticket):
+  committed in `399920d`; Comments and "As built" in each ticket):
     - **23.** The review found the end-to-end test asserting that no model
       was called, since 28-33 made DW1 call one; a new test runs M36's
       description reading on the real gateway and finds no prompt, answer or
@@ -151,7 +167,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       The quote rules, pricing, copy and upload template: ticket 36.
     - **Owed.** Docker Desktop (WSL) stopped answering at 22:00 mid-run: the
       full Sales integration suite was not re-run after 19's last changes
-      (ticket 19, "Owed").
+      (ticket 19, "Owed"). Run since on CI, green on `99cb905` (run
+      38545008947).
 - 2026-10-13, ticket 34 done (agent, Đạt away; "As built" and Comments in
   the ticket): a PO line printed with no requested date (blank, or a dash)
   reads with none and raises `requested_date_missing` (ask the customer, or
@@ -325,7 +342,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
     - 13: the quote page reads the artifact list once (`useCaseArtifacts`)
       and hands it to the files panel and the approval panel, so a rendered
       preview shows without a reload; the walk's `page.reload()` is gone
-      (the walk itself was not run);
+      (the walk itself was not run then; it has passed on CI since `e97042b`);
     - 14: a cross-check decision the run cannot apply is recorded on the
       order (`unapplied_decision`, migration `58184771c541`) and in the
       audit (run, approval, reason code), and "Gửi kiểm chéo lại"
@@ -372,12 +389,13 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       which demo.md now says. Reviewed 2026-10-12: the lane re-reads each
       message and the pause just before its run, so it never re-processes
       one a person routed mid-tick nor spends a run a pause would refuse;
-      worker image not yet scanned);
+      the worker image is scanned by CI's trivy since);
     - 17 the head reassigns a case (G22, moved out of 12; ready-for-agent);
     - 18 CI runs vitest and the DW1 walk (ready-for-agent 2026-10-12: vitest on
       every push; the walk on `main` and nightly, blocking after three green
-      runs in a row). Built and adversarially reviewed 2026-10-12, not
-      committed; not yet seen on a runner (the ticket's "Still to prove").
+      runs in a row). Built and adversarially reviewed 2026-10-12, committed
+      in `395dbf3`; the walk first passed on a runner on `e97042b`, and is
+      still non-blocking (`continue-on-error`).
 - Tickets 01 and 07 committed 2026-10-03; 01 follow-up (fixtures M13–M32,
   mock Bravo history, open YCBG list, snapshot as_of, one SourceAnchor) and
   02/03 reworked to the amended spec, adversarially reviewed and committed
@@ -483,12 +501,15 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   `test_sales_api_access.py` still expecting 403 for a missing bearer); both
   are fixed and NOT re-run. Playwright (sales spec, platform specs) and
   `make check-rerank` were NOT run. `make db-migrate` did run on the dev DB
-  (head `a64b918fc1f2`) before the stop.
-- Next: 12 (needs-triage). Owed by the API to the pages:
-  the PO-read attributes for the candidate picker, order due dates in
-  my-work, Vietnamese refusal messages, server time. (Role names and
-  permission-set scopes landed in `/auth/bootstrap` on 2026-10-05; the web
-  stopgap roster is gone.)
+  (head `a64b918fc1f2`) before the stop. Since then the integration suites
+  and the sales spec run green on CI (integration on `99cb905`; the walk
+  green on 13 of 16 finished runs from `e97042b` to 2026-10-14); the
+  platform specs and `make check-rerank` are still not run.
+- Next: 12 (needs-info since its triage on 2026-10-12).
+  Owed by the API to the pages: the PO-read attributes for the candidate
+  picker, order due dates in my-work, Vietnamese refusal messages, server
+  time. (Role names and permission-set scopes landed in `/auth/bootstrap`
+  on 2026-10-05; the web stopgap roster is gone.)
 - Offboarding export reads a partitioned parent and its partitions, so audit
   and event rows come out twice (pre-existing; platform).
 - Open from the 02/03 pass: routing reasons (complaint, sample request,
@@ -552,12 +573,15 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 | 18     | `395dbf3` | Web vitest on every push, the DW1 browser walk on main and nightly                                       |
 | 20, 22 | `dd5ef1d` | Legacy Vietnamese encodings refused; FPT support reads cases without prices                              |
 | 26     | `dd5ef1d` | Public-repo guard over `git ls-files`, deny-list outside git                                             |
-| 21, 23 | `dd5ef1d` | Built there; 21 finished and 23 reviewed 2026-10-13 (uncommitted)                                        |
+| 21, 23 | `399920d` | Built in `dd5ef1d`; 21 finished and 23 reviewed 2026-10-13                                               |
 | 28     | `61a5ae5` | A local model reads free-text item descriptions; code verifies (ADR 0005)                                |
 | 29, 31 | `1009491` | A local model reads RFQs in any shape and classifies unread mail                                         |
 | 30-33  | `e97042b` | Model steps for case replies, hand-offs and new PO layouts                                               |
-| 34     | (pending) | Blank requested dates, an `.xlsx` and its PDF print as one PO                                            |
-| 24, 19 | (pending) | Overview figures and a paged work list in SQL; a tenant's own rules proposed and approved (2026-10-13)   |
+| 34     | `399920d` | Blank requested dates, an `.xlsx` and its PDF print as one PO                                            |
+| 24, 19 | `399920d` | Overview figures and a paged work list in SQL; a tenant's own rules proposed and approved (2026-10-13)   |
+| 25, 27 | `8adbe08` | "DW xử lý" queued, every file read in the `reader` container; legacy Office and OCR (scanning `399920d`) |
+| 35, 36 | `8adbe08` | A split line confirmed per schedule; a tenant's own quote rules, pricing, copy and upload template       |
+| 37, 38 | `8894874` | Released rules versions stay readable; rule versions decided on platform approvals                       |
 
 ## Open
 
@@ -623,13 +647,16 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   Design-reply dispositions assume Sales recorded the YCBG first (the eval
   states those steps); CI does not run `make test-web-sales` (ticket 18); the walk passed
   11/11 once, then a re-run timed out on Hà's overview ("Loading…", 60 s)
-  under heavy machine load: unexplained until a green run on an idle machine.
+  under heavy machine load: unexplained, and not seen again: stage 9 passed
+  on every green CI walk since `e97042b` (13 runs to 2026-10-14), and no CI
+  failure was on that stage.
 
 - From ticket 06 (2026-10-05): a `value_uncertain` correction is one value
   for a whole region, so the upload file carries the values as read
   (closed by ticket 15, 2026-10-12); an object written before its record commits can be orphaned
   (purged by offboarding); rendering is not stopped by the pause (Đạt to
-  decide); the web client types need `pnpm run generate:api-types`.
+  decide); the web client types need `pnpm run generate:api-types` (current:
+  CI's "Generated API client is current" check was green on `99cb905`).
 
 - From ticket 05 (2026-10-05):
     - The overview loaded every case of the workspace: SQL aggregates and a
@@ -639,7 +666,10 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
     - Ticket 08 must render a served PDF page with pdf.js scripting off and
       a sheet grid's cell text as text; a download's file name needs
       `Content-Disposition` in the CORS `expose_headers` if the browser is
-      to read it.
+      to read it. Closed by ticket 08 (`88fb7b6`): pdf.js runs with no
+      scripting, XFA or annotations (`pdf-page.tsx`), cell text renders as
+      text, and a download is saved under the name the file list gives, so
+      the header need not be exposed.
     - A pause commits before its notification: a delivery failure answers
       500 while DW1 is paused (a retry answers 409 "đã tạm dừng").
     - The committed OpenAPI snapshot was stale on `main` before 05 (the

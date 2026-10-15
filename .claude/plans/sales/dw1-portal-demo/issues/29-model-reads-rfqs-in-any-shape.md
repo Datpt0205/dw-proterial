@@ -1,10 +1,11 @@
 # 29 — A model reads an RFQ from a mail body, a PDF or a customer's own Excel; every value it read is flagged
 
-Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
-his pre-authorisation). Meets the proposed bar: 94.6% of the stated VI/EN
-values read into the right field against 85% (JA 96.0%, reported apart),
-zero unflagged model-read values, zero target prices in price evidence, zero
-injection effects. dw_sales ADR 0005 is Proposed, Đạt to accept.
+Status: done (2026-10-13, committed in 1009491; built by the agent with Đạt
+away, on his pre-authorisation). Meets the proposed bar: 94.6% of the stated
+VI/EN values read into the right field against 85% (JA 96.0%, reported
+apart), zero unflagged model-read values, zero target prices in price
+evidence, zero injection effects. dw_sales ADR 0005 accepted by Đạt on
+2026-10-14.
 Blocked by: — (built on ticket 28; the body anchor, quoted-history cutting
 and the `.xlsx` filename gate were built with it)
 Category: enhancement

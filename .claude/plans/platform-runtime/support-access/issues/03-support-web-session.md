@@ -39,17 +39,18 @@ nền tảng; chữ của băng, menu và trang chặn trong ngữ cảnh hỗ t
 
 ## Tiêu chí chấp nhận
 
-- [ ] Vitest: client gửi `X-DW-Support-Grant` và tenant, workspace của quyền khi có quyền
+- [x] Vitest: client gửi `X-DW-Support-Grant` và tenant, workspace của quyền khi có quyền
       đang dùng, không gửi khi không có; nhận `support_grant_ended` thì phiên bị xóa;
       `sessionStorage` ném lỗi thì trang vẫn chạy, không có quyền đang dùng.
-- [ ] Vitest: registry trang đích trả `href` của mục khớp, `/` khi không khớp.
+- [x] Vitest: registry trang đích trả `href` của mục khớp, `/` khi không khớp.
 - [ ] Playwright (stack local, một context test đăng ký trang đích trong fixture): nhân viên
       có token dev hai lớp thấy quyền ở `/support`, bấm "Mở" tới trang đích, request kế tiếp
       có header; token không có yếu tố thứ hai → trang chặn; 320px, 992px, 1440px, sáng và
       tối; project `tz-los-angeles` của antd-shell ticket 05 vẫn ghi giờ Việt Nam.
-- [ ] Mục menu có `supportStaffOnly` chỉ hiện với nhân viên hỗ trợ; gỡ nhánh lọc → test đỏ.
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm build` xanh; `reviewing-deployment-security` trên
-      header mới ở client và trang `/support`.
+- [x] Mục menu có `supportStaffOnly` chỉ hiện với nhân viên hỗ trợ; gỡ nhánh lọc → test đỏ.
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm build` xanh; `reviewing-deployment-security` trên
+      header mới ở client và trang `/support` (build: bước "Build web" của CI run
+      38527044307, `6fc050a`, 14/10/2026).
 
 ## Nguồn
 

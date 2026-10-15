@@ -1,6 +1,6 @@
 # 06 — Artifacts: Bravo upload file, documents and email drafts
 
-Status: done (2026-10-05, uncommitted)
+Status: done (2026-10-05, committed in 2f737ca)
 Blocked by: 04, 05
 
 ## What

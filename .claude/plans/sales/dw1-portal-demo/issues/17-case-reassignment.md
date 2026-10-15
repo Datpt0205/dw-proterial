@@ -1,6 +1,6 @@
 # 17 — The head reassigns a case (G22)
 
-Status: done (2026-10-12; not committed)
+Status: done (2026-10-12; committed in 4db04fc)
 Blocked by: —
 Category: enhancement
 

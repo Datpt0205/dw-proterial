@@ -1,7 +1,7 @@
 # 01 — Mock data and the ports it sits behind
 
-Status: ready-for-agent (the 2026-10-03 follow-up below; the original scope
-is done in `b5f990b`)
+Status: done (the 2026-10-03 follow-up below landed with tickets 02 and 03
+in `ad467dd`; the original scope is done in `b5f990b`)
 Blocked by: —
 
 ## What

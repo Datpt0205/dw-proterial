@@ -1,6 +1,6 @@
 # 35 — A line split over several delivery dates is confirmed per schedule
 
-Status: done (2026-10-14; built, mutation-checked and reviewed by the agent, Đạt away; not committed; integration tests written and owed while Docker is down, see Owed)
+Status: done (2026-10-14; built, mutation-checked and reviewed by the agent, Đạt away; committed in 8adbe08; integration tests green in CI on 1621cbc; the downgrade and one mutation owed on local Docker, see Owed)
 Blocked by: —
 Category: enhancement
 
@@ -78,9 +78,9 @@ print each schedule's quantity and date; the confirm drawer asks a date per
 schedule, pre-filled with DW1's suggestion for each. Tests: M34 confirmed per
 schedule through the domain, the draft and the checklist; M35 with its short
 lead time agreed by PC; a split line given one date is refused; the API
-round trip of the array column (integration, owed while Docker is down).
+round trip of the array column (integration, green in CI on 1621cbc).
 
-## As built (2026-10-14, agent, Đạt away; not committed)
+## As built (2026-10-14, agent, Đạt away; committed in 8adbe08)
 
 - `domain/orders.py`: `OrderLine.confirmed_delivery_dates` (one per delivery,
   in the schedules' order) replaces `confirmed_delivery_date`, which is now a
@@ -137,6 +137,10 @@ audit (`order.confirmed` as before, in the write's transaction); defaults
 refused, never padded).
 
 ## Owed when Docker is back (WSL hung since 2026-10-13 22:01)
+
+The heads check and the two integration runs below ran green in CI on
+1621cbc (run 38519549220) and again on 99cb905 (run 38545008947); the head
+is now 218118b8f0e5. Still owed: the downgrade and the mutation after them.
 
 ```sh
 set -a; . ./.env; set +a

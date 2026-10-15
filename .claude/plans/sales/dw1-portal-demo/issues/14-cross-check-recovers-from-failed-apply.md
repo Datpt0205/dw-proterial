@@ -1,6 +1,6 @@
 # 14 — An order whose cross-check decision failed to apply can be cross-checked again
 
-Status: done (2026-10-12; not committed)
+Status: done (2026-10-12; committed in 4027c0d)
 Blocked by: —
 Category: bug
 
