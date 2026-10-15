@@ -14,13 +14,24 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import pytest
-from sales_api_harness import AN, BINH, DIEU, GIANG, HA, TAM, Api, Persona, known_price_strings
+from sales_api_harness import (
+    AN,
+    BINH,
+    DIEU,
+    GIANG,
+    HA,
+    TAM,
+    Api,
+    Persona,
+    known_price_strings,
+    known_price_values,
+)
 from sales_flow import approve, decide, open_sources, order_of, replied, submitted
 
 pytestmark = pytest.mark.integration
 
 PRICES = known_price_strings()
-_PRICE_VALUES = {Decimal(p) for p in PRICES}
+_PRICE_VALUES = known_price_values()
 _PATTERNS = [re.compile(rf"(?<![\d.]){re.escape(p)}(?![\d])") for p in sorted(PRICES)]
 
 
