@@ -480,17 +480,23 @@ class PoDocument(BaseModel):
             raise ValueError("a PO's print is another attachment than the PO")
         return self
 
-    def first_legacy_text(self) -> tuple[SourceAnchor, LegacyEncoding] | None:
-        """Where the first value read from text typed in a TCVN3 or VNI font
-        is (header, then the lines, then the total), and its encoding; None
-        when every value was read from Unicode text (`legacy_encoding`)."""
+    def legacy_texts(self) -> list[tuple[str, SourceAnchor, LegacyEncoding]]:
+        """Each value read from text typed in a TCVN3 or VNI font, in reading
+        order (header, then the lines, then the total): its field, where it
+        is, and its encoding. The total's field is `TOTAL_FIELD`."""
         header = self.header
-        found = [(getattr(header.anchors, t.field), t.encoding) for t in header.legacy]
+        found = [(t.field, getattr(header.anchors, t.field), t.encoding) for t in header.legacy]
         for line in self.lines:
-            found += [(getattr(line.anchors, t.field), t.encoding) for t in line.legacy]
+            found += [(t.field, getattr(line.anchors, t.field), t.encoding) for t in line.legacy]
         if self.total is not None:
-            found += [(self.total.anchor, t.encoding) for t in self.total.legacy]
-        return found[0] if found else None
+            found += [(TOTAL_FIELD, self.total.anchor, t.encoding) for t in self.total.legacy]
+        return found
+
+    def first_legacy_text(self) -> tuple[SourceAnchor, LegacyEncoding] | None:
+        """Where the first value read from legacy text is, and its encoding;
+        None when every value was read from Unicode text (`legacy_encoding`)."""
+        found = self.legacy_texts()
+        return (found[0][1], found[0][2]) if found else None
 
     def anchors(self) -> Iterable[SourceAnchor]:
         """Every anchor the document holds."""

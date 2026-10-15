@@ -71,6 +71,7 @@ from dw_sales.domain.orders import (
     LineChange,
     OrderCase,
     OrderLine,
+    PoDocument,
     PoLineAnchors,
     PrintCopy,
     ValueCorrection,
@@ -817,6 +818,20 @@ def _seen_anchors(
     return {field: a for field, a in anchors if prices.amounts or field not in AMOUNT_FIELDS}
 
 
+def _legacy_anchor(document: PoDocument, prices: PriceView) -> SourceAnchor | None:
+    """Where the first legacy text the viewer may see is: an anchor can quote
+    the printed words, so a price typed in a legacy font is passed over for a
+    viewer who may not see amounts, as `_seen_anchors` does for every price."""
+    return next(
+        (
+            anchor
+            for field, anchor, _ in document.legacy_texts()
+            if prices.amounts or field not in AMOUNT_FIELDS
+        ),
+        None,
+    )
+
+
 def _print_copy(copy: PrintCopy | None, prices: PriceView) -> PrintCopyView | None:
     if copy is None:
         return None
@@ -865,7 +880,7 @@ def order_case(
         buyer_anchor=document.buyer_anchor,
         total=_amount(total.amount, prices.amounts) if total else None,
         total_anchor=total.anchor if total and prices.amounts else None,
-        legacy_text_anchor=legacy[0] if (legacy := document.first_legacy_text()) else None,
+        legacy_text_anchor=_legacy_anchor(document, prices),
         print_copy=_print_copy(document.print_copy, prices),
         coverage=CoverageView(
             lines_printed=coverage.lines_printed,

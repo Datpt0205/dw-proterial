@@ -342,29 +342,56 @@ async def build_app(
 
 
 def known_price_strings() -> frozenset[str]:
-    """Every price the mock data holds, as the text an API would print it:
-    quotation prices, PO unit prices and line amounts, LME figures, and the
-    price the quote tests decide. Short or decimal-free figures are left out,
-    so a quantity or a lead time never reads as a leak."""
-    found: set[str] = set()
+    """Every price the mock data holds, as the text an API or a file would
+    print it: quotation prices, PO unit prices, line amounts (quantity times
+    price, as the forms print them) and PO totals, LME figures, and the price
+    the quote tests decide.
 
-    def add(value: object) -> None:
-        text = str(value)
-        if "." in text and len(text) >= 5:
-            found.add(text)
-            found.add(str(Decimal(text).normalize()))
-
+    Each in every form a mock form prints it: as stored, normalised, and
+    grouped (``1.150``, ``1,150``, ``7.015.000``, ``0,0420``), since a PDF
+    anchor quotes the printed words and a VND price has no decimal point at
+    all. A string that is also a printed quantity is left out, and so is
+    anything shorter than five characters, so a quantity or a lead time never
+    reads as a leak."""
+    prices: set[Decimal] = set()
+    quantities: set[Decimal] = set()
     for row in json.loads((MOCK_DATA / "quotations.json").read_text(encoding="utf-8")):
-        add(row["unit_price"])
+        prices.add(Decimal(row["unit_price"]))
     for row in json.loads((MOCK_DATA / "purchase_orders.json").read_text(encoding="utf-8")):
+        total = Decimal(0)
         for line in row.get("lines", []):
-            for name in ("unit_price", "amount"):
-                if name in line:
-                    add(line[name])
+            price = Decimal(line["unit_price"]) if "unit_price" in line else None
+            quantity = Decimal(line["quantity"]) if "quantity" in line else None
+            if price is not None:
+                prices.add(price)
+            if quantity is not None:
+                quantities.add(quantity)
+            amount = Decimal(line["amount"]) if "amount" in line else None
+            if amount is None and price is not None and quantity is not None:
+                amount = price * quantity
+            if amount is not None:
+                prices.add(amount)
+                total += amount
+        if total:
+            prices.add(total)
+    found = {text for value in prices for text in _printed(value)}
     for row in json.loads((MOCK_DATA / "lme.json").read_text(encoding="utf-8")):
         found.add(str(row["usd_per_tonne"]))
     found.add(DECIDED_PRICE)
+    found -= {text for value in quantities for text in _printed(value)}
     return frozenset(s for s in found if len(s) >= 5)
+
+
+def _printed(value: Decimal) -> set[str]:
+    """``value`` as stored, normalised, and grouped every way a mock form
+    groups thousands and decimals."""
+    forms = {str(value), f"{value.normalize():f}"}
+    for plain in tuple(forms):
+        whole, _, fraction = plain.partition(".")
+        for thousands, decimal in ((",", "."), (".", ","), (" ", ","), (" ", "."), ("", ",")):
+            grouped = f"{int(whole):,}".replace(",", thousands)
+            forms.add(f"{grouped}{decimal}{fraction}" if fraction else grouped)
+    return forms
 
 
 DECIDED_PRICE = "0.6890"

@@ -71,6 +71,11 @@ _CATALOG_COLUMNS = (
     " JOIN pg_class c ON c.oid = pol.polrelid"
     " JOIN pg_namespace n ON n.oid = c.relnamespace"
     " WHERE pol.polname LIKE 'tenant_isolation_%'"
+    # A partition carries the tenant policy too (`ensure_time_partitions`
+    # gives each its own), and its rows are already the parent's: read or
+    # deleted through both, every row of a partitioned table was exported
+    # twice. The parent reaches every partition, DEFAULT included.
+    "   AND NOT c.relispartition"
     "   AND has_table_privilege('dw_app', c.oid, 'SELECT')"
     # platform.tenants carries a tenant_isolation_% policy (it IS the tenant,
     # keyed on `id`) but no `tenant_id` column of its own — the generic
