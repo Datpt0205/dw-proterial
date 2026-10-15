@@ -22,13 +22,15 @@ from dw_evals.graders import GraderContext, merge_graders
 from dw_evals.runner import load_dataset, run_dataset
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, MOCK_ROOT
+from dw_sales.adapters.readers import excel
 from dw_sales.application import access, order_artifacts
+from dw_sales.domain.orders import OrderCase
 from dw_sales.evals import GRADERS
 
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-DATASET = REPO / "evals" / "datasets" / "sales@1.2.0.json"
+DATASET = REPO / "evals" / "datasets" / "sales@1.3.0.json"
 MODEL_STEPS = sorted((REPO / "evals" / "datasets").glob("sales_*@*.json"))
 CTX = GraderContext(repo_root=REPO)
 
@@ -236,6 +238,50 @@ def test_price_confidentiality_fails_when_every_caller_sees_amounts(
 
     assert not result.passed
     assert result.details["reason"] == "a price reached a reader without the price scope"
+
+
+def test_header_corrected_fails_when_the_hidden_header_value_is_not_flagged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """White on white read as plain text: no finding to decide."""
+    monkeypatch.setattr(excel, "font_matches_fill", lambda cell: False)
+    case, expected = _case("sales_header_correction")
+
+    result = GRADERS["sales.header_corrected"](CTX, case, expected)
+
+    assert not result.passed
+    assert result.details["reason"] == "value_uncertain:- is not a blocking finding"
+
+
+def test_header_corrected_fails_when_the_typed_value_is_not_entered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(OrderCase, "effective_header", property(lambda self: self.header))
+    case, expected = _case("sales_header_correction")
+
+    result = GRADERS["sales.header_corrected"](CTX, case, expected)
+
+    assert not result.passed
+    assert result.details["problems"] == [
+        "po_date is not entered as typed beside the value as read"
+    ]
+
+
+def test_header_corrected_fails_when_the_value_it_expects_refused_is_taken() -> None:
+    """The domain refuses a field the finding did not flag twice over (the
+    command, and the case's own invariant), so the grader is shown a call
+    that is taken instead: the flagged field, named as the unflagged one."""
+    case, expected = _case("sales_header_correction")
+
+    result = GRADERS["sales.header_corrected"](
+        CTX, case | {"unflagged": ["po_date", "2026-09-20"]}, expected
+    )
+
+    assert not result.passed
+    assert (
+        "po_date, which value_uncertain:- did not flag, took a value"
+        in (result.details["problems"])
+    )
 
 
 def test_a_sample_set_outside_the_package_is_read_from_its_own_directory(
