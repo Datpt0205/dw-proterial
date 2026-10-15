@@ -216,7 +216,14 @@ class SqlArtifactLog:
                     created_at=artifact.created_at,
                 )
                 .on_conflict_do_nothing(
-                    index_elements=[case, "case_version", "kind", "content_type"]
+                    index_elements=[
+                        "tenant_id",
+                        "workspace_id",
+                        case,
+                        "case_version",
+                        "kind",
+                        "content_type",
+                    ]
                 )
                 .returning(_A.c.id)
             )

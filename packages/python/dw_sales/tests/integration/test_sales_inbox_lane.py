@@ -125,19 +125,41 @@ async def seeded(sales_db: DatabaseUrls) -> None:
 
 
 async def test_dw1s_account_holds_the_inbox_scope_through_its_role_and_nothing_else(
-    seeded: None, app_sessions: async_sessionmaker[AsyncSession]
+    seeded: None, app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine
 ) -> None:
-    """Read the way sign-in reads a membership, with no ceiling: what the
-    account holds, not what the lane cuts it to."""
+    """What the account holds, read from its membership and its roles: not
+    what the lane cuts it to, and not through sign-in, which refuses a
+    service subject (ticket 16, `cf9744c`)."""
     tenant, workspace = sid("tenant", ALPHA), sid("workspace", f"{ALPHA}:main")
-    access = await SqlMembershipLookup(app_sessions).find_access(
-        dw1_subject(tenant), ISSUER, tenant, workspace
+    subject = dw1_subject(tenant)
+
+    # Sign-in's read never resolves DW1's account, whatever it holds.
+    assert (
+        await SqlMembershipLookup(app_sessions).find_access(subject, ISSUER, tenant, workspace)
+        is None
     )
 
-    assert access is not None
-    assert access.roles == frozenset({"sales_dw1"})
-    assert "platform_admin" not in access.roles
-    assert access.scopes == frozenset({"sales.inbox.process"})
+    m, u, r = tables.memberships, tables.users, tables.roles
+    async with migrator.connect() as conn:
+        (role_keys, permission_sets), *others = (
+            await conn.execute(
+                sa.select(m.c.role_keys, m.c.permission_set_keys)
+                .join(u, u.c.id == m.c.user_id)
+                .where(
+                    u.c.subject == subject,
+                    m.c.tenant_id == tenant,
+                    m.c.workspace_id == workspace,
+                )
+            )
+        ).all()
+        scopes = (
+            (await conn.execute(sa.select(r.c.scopes).where(r.c.key.in_(role_keys))))
+            .scalars()
+            .all()
+        )
+    assert others == []
+    assert set(role_keys) == {"sales_dw1"} and permission_sets == []
+    assert {scope for granted in scopes for scope in granted} == {"sales.inbox.process"}
 
 
 async def test_the_lane_resolves_it_in_its_own_tenant_only(

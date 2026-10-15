@@ -14,8 +14,11 @@ type per version (a quotation is an xlsx and a PDF of one kind):
   case column (the other is NULL, and NULLs never conflict). The repository
   inserts with ON CONFLICT DO NOTHING on these, so the render that commits
   second records nothing, removes the objects it stored, and answers the
-  first one's files. Each also indexes its case column first, as the
-  existing per-case indexes do.
+  first one's files. Each leads with tenant and workspace, as every Sales
+  unique key does (`test_every_unique_key_leads_with_tenant_and_workspace`;
+  the first build led with the case column and CI run 38692586762 refused
+  it — corrected here, the revision having been applied nowhere but CI's
+  throwaway databases).
 
 Fails if a case already holds two files of one kind, content type and
 version: nothing is deleted here, since an artifact is a record of what was
@@ -40,7 +43,7 @@ def upgrade() -> None:
         op.execute(
             "ALTER TABLE sales.artifacts"
             f" ADD CONSTRAINT uq_artifacts_{case}_case_version_kind_content_type"
-            f" UNIQUE ({case}, {_COLUMNS})"
+            f" UNIQUE (tenant_id, workspace_id, {case}, {_COLUMNS})"
         )
 
 
