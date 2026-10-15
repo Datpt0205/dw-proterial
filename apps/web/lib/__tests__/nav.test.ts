@@ -36,6 +36,7 @@ const SALES_PAGES = [
   "/sales/quotes",
   "/sales/review",
   "/sales/layouts",
+  "/sales/rules",
   "/sales/master-data",
   "/sales/overview",
 ];
@@ -63,6 +64,7 @@ const PIC = [
   "sales.order.cross_check",
   "sales.quote.prepare",
   "sales.worker.pause",
+  "sales.rules.propose",
 ];
 const PERSONAS: Record<string, { roles: string[]; scopes: string[] }> = {
   "an.nguyen (sales_pic)": {
@@ -150,8 +152,21 @@ describe("visibleNav", () => {
     const scopes =
       sales && isNavGroup(sales) ? sales.items.map((item) => item.scope) : [];
     expect(new Set(scopes)).toEqual(
-      new Set(["sales.case.read", "sales.overview.read"]),
+      new Set([
+        "sales.case.read",
+        "sales.overview.read",
+        "sales.rules.propose",
+      ]),
     );
+  });
+
+  it("shows the rules page only to who may propose a version, as GET /sales/rules does", () => {
+    const pages = (scopes: string[]) =>
+      navPages(visibleNav(NAV, viewer(scopes))).map((item) => item.href);
+    expect(pages(PIC)).toContain("/sales/rules");
+    expect(
+      pages(PIC.filter((scope) => scope !== "sales.rules.propose")),
+    ).not.toContain("/sales/rules");
   });
 
   it("keeps only the items a group's viewer may see, and drops an empty group", () => {
