@@ -55,6 +55,20 @@ async def test_an_order_is_due_on_its_short_lines_requested_date() -> None:
     assert world.order(ids["M01"]).due is None
 
 
+async def test_an_order_with_several_short_lines_is_due_on_the_earliest() -> None:
+    """M06 with line 1 (requested 2026-11-13) short as well as line 3
+    (2026-09-30): the order is due on line 3's date, whichever finding comes
+    first."""
+    world = _world()
+    ids = await _orders(world, "M06")
+    m06 = world.order(ids["M06"])
+    (line_3,) = (f for f in m06.findings if f.code is FindingCode.REQUESTED_DATE_SHORT_LT)
+    line_1 = line_3.model_copy(update={"line_no": 1, "actual": "2026-11-13"})
+    two_short = m06.model_copy(update={"findings": (line_1, *m06.findings)})
+    assert m06.line(1).effective.requested_date == date(2026, 11, 13)
+    assert two_short.due == date(2026, 9, 30)
+
+
 async def test_my_work_carries_an_orders_due_date_and_sorts_by_it() -> None:
     world = _world()
     ids = await _orders(world, "M01", "M35")
