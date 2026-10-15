@@ -17,7 +17,7 @@ import pytest
 
 from dw_evals import runner
 from dw_evals.dataset import EvalDataset
-from dw_evals.runner import CaseResult, EvalReport, load_dataset, run_dataset
+from dw_evals.runner import EvalReport, load_dataset, run_dataset
 from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.evals.recorded import Observed, Recorded
 
@@ -77,24 +77,6 @@ def test_a_grader_name_the_table_lacks_fails_its_case() -> None:
 # ------------------------------------------------------------- live lane --
 
 
-def _report(*details: dict[str, object]) -> EvalReport:
-    return EvalReport(
-        dataset_id="sales_intent",
-        dataset_version="1.0.0",
-        worker_id="sales-dw1",
-        total=len(details),
-        passed=len(details),
-        failed=0,
-        security_coverage_ok=True,
-        results=tuple(
-            CaseResult(
-                case_id=f"case-{n}", category="normal", grader="sales.x", passed=True, details=d
-            )
-            for n, d in enumerate(details)
-        ),
-    )
-
-
 def _answered(answers: int, calls: int) -> Observed:
     model = Observed(inner=Recorded())
     model.answered = answers
@@ -102,34 +84,21 @@ def _answered(answers: int, calls: int) -> Observed:
     return model
 
 
-def test_a_live_run_that_read_nothing_falls_short_whatever_its_cases_say() -> None:
-    shortfalls = _load_script().live_shortfalls(_report({"live": True}), _answered(0, 9))
+def test_a_live_run_that_read_nothing_falls_short() -> None:
+    shortfalls = _load_script().live_shortfalls(_answered(0, 9))
 
     assert shortfalls == ["nothing was read: 9 model calls, none gave a usable answer"]
 
 
 def test_a_live_run_that_never_called_the_model_falls_short() -> None:
-    shortfalls = _load_script().live_shortfalls(_report({}), _answered(0, 0))
+    shortfalls = _load_script().live_shortfalls(_answered(0, 0))
 
     assert shortfalls == ["nothing was read: 0 model calls, none gave a usable answer"]
 
 
-def test_a_live_run_below_a_cases_bar_falls_short() -> None:
-    report = _report(
-        {"proposed_bar": 0.9, "meets_proposed_bar": False},
-        {"proposed_bar_vi_en": 0.7, "meets_proposed_bar_vi_en": False},
-        {"proposed_bar": 0.85, "meets_proposed_bar": True},
-    )
-
-    shortfalls = _load_script().live_shortfalls(report, _answered(5, 9))
-
-    assert shortfalls == ["case-0: below proposed_bar 0.9", "case-1: below proposed_bar_vi_en 0.7"]
-
-
-def test_a_live_run_that_read_and_met_its_bar_has_no_shortfall() -> None:
-    report = _report({"proposed_bar_vi_en": 0.7, "meets_proposed_bar_vi_en": True}, {})
-
-    assert _load_script().live_shortfalls(report, _answered(1, 9)) == []
+def test_a_live_run_that_read_has_no_shortfall() -> None:
+    """A golden case's bar is reported, not enforced (Đạt sets the bars)."""
+    assert _load_script().live_shortfalls(_answered(1, 9)) == []
 
 
 def test_the_live_lane_exits_non_zero_when_every_call_is_unavailable(
