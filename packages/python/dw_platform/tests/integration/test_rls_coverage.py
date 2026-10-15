@@ -321,9 +321,13 @@ async def test_a_connection_that_never_scopes_itself_reads_nothing(
 #                                      OR <app.workspace_scope> = 'tenant')
 #
 # Read anywhere else, it opens a tenant's rows to any transaction that sets it.
-# The rules below apply to every schema `tenant_schemas` discovers.
+# A table narrowed by recipient (`app.user_id`, the in-app inbox) reads it the
+# same way, as the alternative to its recipient clause, on SELECT only
+# (migration 2e0354b50d10). The rules below apply to every schema
+# `tenant_schemas` discovers.
 _TENANT_SETTING = "current_setting('app.tenant_id'"
 _WORKSPACE_SETTING = "current_setting('app.workspace_id'"
+_RECIPIENT_SETTING = "current_setting('app.user_id'"
 _SCOPE_SETTING = "current_setting('app.workspace_scope'"
 
 
@@ -411,15 +415,20 @@ def scope_outside_a_tenant_clause(policies: Sequence[sa.Row[Any]]) -> list[str]:
     return bad
 
 
-def workspace_tables_blind_to_scope(policies: Sequence[sa.Row[Any]]) -> list[str]:
-    """Tables narrowed by workspace with no policy reading the scope: the
-    offboarding lane would export none of their rows, delete none, and the purge
-    of the tenant's workspaces would then CASCADE them away unexported."""
+def narrowed_tables_blind_to_scope(policies: Sequence[sa.Row[Any]]) -> list[str]:
+    """Tables narrowed by workspace or by recipient with no policy reading the
+    scope: the offboarding lane would export none of their rows, delete none,
+    and the purge of the tenant's workspaces would then CASCADE them away
+    unexported. Measured on `platform.notifications` before 2e0354b50d10."""
 
     def reads(r: sa.Row[Any], setting: str) -> bool:
         return any(e is not None and setting in e for e in (r.qual, r.with_check))
 
-    narrowed = {f"{r.schemaname}.{r.tablename}" for r in policies if reads(r, _WORKSPACE_SETTING)}
+    narrowed = {
+        f"{r.schemaname}.{r.tablename}"
+        for r in policies
+        if reads(r, _WORKSPACE_SETTING) or reads(r, _RECIPIENT_SETTING)
+    }
     scoped = {f"{r.schemaname}.{r.tablename}" for r in policies if reads(r, _SCOPE_SETTING)}
     return sorted(narrowed - scoped)
 
@@ -433,17 +442,19 @@ async def test_the_workspace_scope_only_ever_sits_beside_a_tenant_clause(
     )
 
 
-async def test_a_workspace_narrowed_table_lets_offboarding_read_every_workspace(
+async def test_a_narrowed_table_lets_offboarding_read_every_row_of_the_tenant(
     session: AsyncSession,
 ) -> None:
     rows = (await session.execute(_POLICIES, {"schemas": await tenant_schemas(session)})).all()
-    assert workspace_tables_blind_to_scope(rows) == [], (
-        "tables narrowed by app.workspace_id with no policy reading app.workspace_scope"
+    assert narrowed_tables_blind_to_scope(rows) == [], (
+        "tables narrowed by app.workspace_id or app.user_id with no policy reading"
+        " app.workspace_scope"
     )
 
 
 _TENANT = "tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid"
 _WORKSPACE = "workspace_id = NULLIF(current_setting('app.workspace_id', true), '')::uuid"
+_RECIPIENT = "recipient_user_id = NULLIF(current_setting('app.user_id', true), '')::uuid"
 _SCOPE = "current_setting('app.workspace_scope', true) = 'tenant'"
 
 
@@ -454,6 +465,7 @@ async def test_the_scope_rules_catch_the_wrong_shapes(session: AsyncSession) -> 
     transaction."""
     shapes = {
         "spec": f"{_TENANT} AND ({_WORKSPACE} OR {_SCOPE})",
+        "recipient_spec": f"{_TENANT} AND ({_RECIPIENT} OR {_SCOPE})",
         "tenant_or_scope": f"{_TENANT} OR {_SCOPE}",
         "unparenthesised": f"{_TENANT} AND {_WORKSPACE} OR {_SCOPE}",
         "weak_tenant": f"({_TENANT} OR {_SCOPE}) AND ({_WORKSPACE} OR {_SCOPE})",
@@ -462,10 +474,14 @@ async def test_the_scope_rules_catch_the_wrong_shapes(session: AsyncSession) -> 
         "loose_tenant": f"({_TENANT} OR workspace_id IS NULL) AND ({_WORKSPACE} OR {_SCOPE})",
     }
     probe, blind = "public.scope_rules_probe", "public.scope_rules_blind"
+    blind_inbox = "public.scope_rules_blind_inbox"
     try:
-        for table in (probe, blind):
+        for table in (probe, blind, blind_inbox):
             await session.execute(
-                sa.text(f"CREATE TABLE {table} (tenant_id uuid, workspace_id uuid)")
+                sa.text(
+                    f"CREATE TABLE {table} (tenant_id uuid, workspace_id uuid,"
+                    " recipient_user_id uuid)"
+                )
             )
         for name, using in shapes.items():
             await session.execute(sa.text(f"CREATE POLICY {name} ON {probe} USING ({using})"))
@@ -476,6 +492,9 @@ async def test_the_scope_rules_catch_the_wrong_shapes(session: AsyncSession) -> 
         )
         await session.execute(
             sa.text(f"CREATE POLICY ws_only ON {blind} USING ({_TENANT} AND {_WORKSPACE})")
+        )
+        await session.execute(
+            sa.text(f"CREATE POLICY inbox_only ON {blind_inbox} USING ({_TENANT} AND {_RECIPIENT})")
         )
         rows = [
             r
@@ -491,7 +510,10 @@ async def test_the_scope_rules_catch_the_wrong_shapes(session: AsyncSession) -> 
             "public.scope_rules_probe.weak_tenant",
             "public.scope_rules_probe.write_side",
         ]
-        assert workspace_tables_blind_to_scope(rows) == ["public.scope_rules_blind"]
+        assert narrowed_tables_blind_to_scope(rows) == [
+            "public.scope_rules_blind",
+            "public.scope_rules_blind_inbox",
+        ]
     finally:
         await session.rollback()
 
