@@ -30,10 +30,11 @@ def decided_event_type(approval_type: str) -> str:
     not any worker registers a handler for its type. The dispatcher claims only
     the types it has a handler for (`dw_worker.consumers.outbox`), so an event
     with none stays in `platform.outbox_events` undelivered, outside the backlog
-    gauges too, and no retention rule reads the outbox: it stays for good. That
-    is by design — a handler added later finds the history intact — and it
-    means a context that opens run-less approvals owes a handler for this type
-    in the worker, or its decisions announce to nobody.
+    gauges too, and no retention rule reads the outbox: it stays until the
+    tenant is offboarded (`purge_rows`). That is by design — a handler added
+    later finds the history intact — and it means a context that opens
+    run-less approvals owes a handler for this type in the worker, or its
+    decisions announce to nobody.
     """
     return f"{approval_type}.decided"
 
