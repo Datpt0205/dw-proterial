@@ -230,6 +230,14 @@ class MemoryApprovals:
     async def add_decision(self, decision: ApprovalDecision) -> None:
         self.decisions.append(decision)
 
+    async def latest_decision(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalDecision | None:
+        if await self.get(request_id, workspace_id=workspace_id, audience=audience) is None:
+            return None
+        made = [d for d in self.decisions if d.request_id == request_id]
+        return made[-1] if made else None
+
     async def list_pending(
         self, request: PageRequest, *, workspace_id: uuid.UUID, audience: ApprovalAudience
     ) -> Page[ApprovalRequest]:

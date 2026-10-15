@@ -34,6 +34,7 @@ from dw_platform.domain.approval import (
     ApprovalDecision,
     ApprovalRequest,
     ApprovalStatus,
+    DecisionOutcome,
 )
 from dw_platform.domain.audit import (
     SUPPORT_GRANT_DETAIL,
@@ -194,6 +195,38 @@ class SqlApprovalRepository:
             [_approval_from_row(row) for row in result],
             request=request,
             position_of=_approval_position,
+        )
+
+    async def latest_decision(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalDecision | None:
+        """The last decision on a request ``audience`` may see (`get`'s rule)."""
+        decisions, requests = tables.approval_decisions, tables.approval_requests
+        row = (
+            await self.session.execute(
+                sa.select(decisions)
+                .join(requests, requests.c.id == decisions.c.request_id)
+                .where(
+                    decisions.c.request_id == request_id,
+                    requests.c.workspace_id == workspace_id,
+                    visible_to(audience),
+                )
+                .order_by(decisions.c.decided_at.desc(), decisions.c.id.desc())
+                .limit(1)
+            )
+        ).first()
+        if row is None:
+            return None
+        return ApprovalDecision(
+            id=row.id,
+            request_id=row.request_id,
+            tenant_id=TenantId(row.tenant_id),
+            workspace_id=WorkspaceId(row.workspace_id),
+            decided_by=UserId(row.decided_by),
+            outcome=DecisionOutcome(row.outcome),
+            comment=row.comment,
+            decided_at=row.decided_at,
+            channel=row.channel,
         )
 
     async def add_decision(self, decision: ApprovalDecision) -> None:

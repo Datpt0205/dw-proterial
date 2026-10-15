@@ -32,7 +32,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.ports import AuditRepositoryPort
-from dw_platform.domain.approval import ApprovalRequest
+from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
@@ -373,6 +373,13 @@ class RunLessApprovalsPort(Protocol):
     async def get(
         self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
     ) -> ApprovalRequest | None: ...
+
+    async def latest_decision(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalDecision | None:
+        """The last decision recorded on a request ``audience`` may see, with
+        the decider's comment; None when it has none or is not theirs to see."""
+        ...
 
 
 class MessageLogPort(Protocol):

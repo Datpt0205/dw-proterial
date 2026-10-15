@@ -221,6 +221,27 @@ async def test_a_decided_version_is_not_decided_again_and_a_rejection_says_why()
     assert (await _listed(world, proposed.version_id)).status == "proposed"
 
 
+async def test_the_rules_list_shows_the_reason_the_decider_gave() -> None:
+    """The reason is given on the platform approval (ticket 38); the list
+    reads it from the version, where the settlement stamps it, cut to what
+    a version holds."""
+    world = _world()
+    rejected = await world.services.rules.propose(
+        AN.context(), RuleKey.ORDER_RULES, _version(world, "9.5.0")
+    )
+    await world.decide_rules(
+        GIANG, rejected.version_id, approve=False, comment="  Thiếu ngưỡng giá mới  "
+    )
+    approved = await world.services.rules.propose(
+        AN.context(), RuleKey.ORDER_RULES, _version(world, "9.5.1")
+    )
+    await world.decide_rules(GIANG, approved.version_id, approve=True, comment="x" * 800)
+
+    assert (await _listed(world, rejected.version_id)).comment == "Thiếu ngưỡng giá mới"
+    long = (await _listed(world, approved.version_id)).comment
+    assert long is not None and len(long) == 500 and long.endswith("…")
+
+
 async def test_the_kpi_policy_resolves_per_tenant_for_the_overview() -> None:
     world = _world()
     document = world.policies.kpi.model_dump(mode="json", by_alias=True)
