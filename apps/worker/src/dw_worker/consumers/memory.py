@@ -13,14 +13,16 @@ identical memory; with two retries, a third. The event's own id is passed as the
 idempotency key, which makes the candidate row's primary key deterministic — the
 second delivery finds the first decision and returns it.
 
-**A malformed payload is not retried.** It cannot become valid by being tried
-again, so it raises `UndeliverableEventError` and the reason is recorded rather
-than burning the attempt budget in a loop. That distinction is the one thing a
-handler must get right here: a database that is down IS worth retrying, and
-raising the wrong kind of error for it would throw the memory away. The same
-holds for evidence the service refuses (`DomainError`): a citation that failed
-verification, or a fact claiming a lower classification than its sources, does
-not become true on the next attempt.
+**A malformed payload is reported as the event's fault.** It cannot become
+valid by being tried again, so it raises `UndeliverableEventError` and the
+reason is recorded as the event's, without a traceback. The dispatcher still
+claims it again until `max_attempts` is spent, as it does any failure (see
+`UndeliverableEventError`): the attempt budget bounds the retries, the error
+type only says whose fault they were. The same holds for evidence the service
+refuses (`DomainError`): a citation that failed verification, or a fact
+claiming a lower classification than its sources, does not become true on the
+next attempt. A database that is down raises anything else and is retried
+the same way.
 
 **A reviewed candidate is settled here too.** A person decides a
 `memory.review` approval in the platform inbox; the approval flow announces the
