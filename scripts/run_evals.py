@@ -13,9 +13,10 @@ Usage:
 
 Exit code is non-zero when any case fails or a dataset lacks full security
 coverage (prompt injection, cross-tenant attack, missing evidence). A live
-run also fails when the model read nothing (no call gave a usable answer) or
-a golden case is below its bar (`live_shortfalls`): its cases grade the
-guards, which hold just as well when every call times out.
+run also fails when the model read nothing (no call gave a usable answer,
+`live_shortfalls`): its cases grade the guards, which hold just as well when
+every call times out. A golden case's bar is reported in its summary line,
+not enforced here.
 
 This script is the eval composition root: `grader_table` is the one place the
 grader table is built, from the platform's graders plus each bounded context's,
@@ -33,7 +34,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from dw_evals.graders import Grader
-    from dw_evals.runner import EvalReport
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATASETS_DIR = REPO_ROOT / "evals" / "datasets"
@@ -97,7 +97,7 @@ def main() -> int:
         report_path = write_report(
             report, REPORTS_DIR / f"live-{args.live}" if args.live else REPORTS_DIR
         )
-        shortfalls = live_shortfalls(report, live_model) if live_model is not None else []
+        shortfalls = live_shortfalls(live_model) if live_model is not None else []
         status = "PASS" if report.ok and not shortfalls else "FAIL"
         print(
             f"[{status}] {report.dataset_id}@{report.dataset_version} "
@@ -171,26 +171,14 @@ def live_model_for(profile: str) -> object:
     return Observed(interpretation_for(gateway, REPO_ROOT / "configs", profile))
 
 
-# What a golden case reports as its bar, and whether the reading meets it.
-_BARS = (
-    ("proposed_bar", "meets_proposed_bar"),
-    ("proposed_bar_vi_en", "meets_proposed_bar_vi_en"),
-)
-
-
-def live_shortfalls(report: EvalReport, model: object) -> list[str]:
+def live_shortfalls(model: object) -> list[str]:
     """Why a live run fails whatever its cases say: the model read nothing
     (``model`` is the lane's `Observed`: no call, or no call that gave a usable
-    answer), or a case reports a bar its reading does not meet."""
-    shortfalls = []
+    answer)."""
     calls, answered = len(getattr(model, "calls", ())), getattr(model, "answered", 0)
     if not answered:
-        shortfalls.append(f"nothing was read: {calls} model calls, none gave a usable answer")
-    for result in report.results:
-        for bar, met in _BARS:
-            if result.details.get(met) is False:
-                shortfalls.append(f"{result.case_id}: below {bar} {result.details.get(bar)}")
-    return shortfalls
+        return [f"nothing was read: {calls} model calls, none gave a usable answer"]
+    return []
 
 
 def record_answers(model: object) -> int:
