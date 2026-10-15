@@ -24,6 +24,7 @@ from dw_agent_runtime.approval_flow import ApprovalDecisionGuard, ProposedDecisi
 from dw_kernel.errors import ConflictError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus
+from dw_sales.application.rules import RuleKey
 from dw_sales.application.runs import APPROVAL_PREFIX, subject_of
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import Actor
@@ -277,3 +278,21 @@ async def test_my_work_offers_the_maker_to_raise_it_again_once_stalled() -> None
 
     assert await _actions(world, DIEU, case_id) == set()
     assert await _actions(world, AN, case_id) == {"resend_cross_check"}
+
+
+async def test_my_work_offers_no_cross_check_when_the_rules_need_none() -> None:
+    """The tenant's rules need no cross-check: the order waits on its
+    confirmation, which is its PIC's, and no cross-checker is handed it."""
+    world = _world()
+    rules = world.policies.order_rules.model_dump(mode="json", by_alias=True)
+    proposed = await world.services.rules.propose(
+        AN.context(),
+        RuleKey.ORDER_RULES,
+        {**rules, "policy_version": "9.0.1", "cross_check_required": False},
+    )
+    await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
+    case_id = await _uploaded(world)
+    assert world.order(case_id).cross_check_required is False
+
+    assert await _actions(world, DIEU, case_id) == set()
+    assert await _actions(world, AN, case_id) == {"confirm"}

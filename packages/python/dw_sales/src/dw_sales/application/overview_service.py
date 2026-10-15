@@ -56,7 +56,7 @@ from dw_sales.application.overview_ports import (
     WorkFilter,
 )
 from dw_sales.application.ports import InboxPort, MemberDirectoryPort, SalesScope
-from dw_sales.application.runs import PendingDecisionsPort, awaited
+from dw_sales.application.runs import PendingDecisionsPort, awaited, awaiting
 from dw_sales.application.views import WorkerStateView, worker_state
 from dw_sales.domain.dispositions import SALES_PIC_POOL, CaseKind, DispositionKind
 from dw_sales.domain.kpi import SalesKpi
@@ -430,7 +430,14 @@ class OverviewService:
                 return None
             case = stored.case
             wait = await awaited(self.decisions, context, case)
-            if wait is not None and wait.stalled:
+            if awaiting(case) is None:
+                # Its rules need no cross-check: the next step is the
+                # confirmation, its PIC's like any other (the order page
+                # offers the same).
+                action = "confirm"
+                if not self._eligible(context, SalesScopes.ORDER_PREPARE, row.assigned_to):
+                    return None
+            elif wait is not None and wait.stalled:
                 # Nothing is on the way to the cross-check: its Bravo recorder
                 # raises it again (the head may too, from the order's page).
                 if context.principal_id != case.bravo_recorded_by or not self.gate.allows(
