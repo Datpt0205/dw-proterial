@@ -326,7 +326,6 @@ class LangGraphWorkflowRunner:
                         context=run_context,
                     )
             except Exception as exc:
-                self._count_failed_node(run_context, exc)
                 await self._fail(run_context, run_context.run_id, exc)
                 raise
         await self._handle_outcome(run_context, run_context.run_id, state)
@@ -485,7 +484,6 @@ class LangGraphWorkflowRunner:
             # awaiting a queue nothing would ever be put into again. The run
             # was over; the browser was never told, and never would be.
             try:
-                self._count_failed_node(run_context, exc)
                 await self._fail(run_context, run_context.run_id, exc)
             except Exception:
                 # Recording the failure failed too. The row may be stranded at
@@ -569,7 +567,6 @@ class LangGraphWorkflowRunner:
                         context=run_context,
                     )
             except Exception as exc:
-                self._count_failed_node(run_context, exc)
                 await self._fail(run_context, run_id, exc)
                 raise
         await self._handle_outcome(run_context, run_id, state)
@@ -601,7 +598,7 @@ class LangGraphWorkflowRunner:
             state["__interrupt__"] = list(snapshot.interrupts)
         await self._handle_outcome(run_context, run_context.run_id, state)
 
-    def _count_failed_node(self, run_context: RunContext, exc: Exception) -> None:
+    def _count_failed_node(self, run_context: RunContext, exc: BaseException) -> None:
         """`dw_node_failure_total` for the worker-graph node a failure came out of.
 
         Nothing for a failure outside any node (settling, metering): no node to
@@ -636,6 +633,11 @@ class LangGraphWorkflowRunner:
             DW_RUN_TOTAL, 1, {"worker": run_context.worker_id, "status": status.value}
         )
         self.budget.forget(run_id)
+        # Last, once the run is settled: a telemetry sink that raises must not
+        # leave the row at `running`. One site for start, stream and resume; a
+        # cancellation is not a node failing.
+        if status is RunStatus.FAILED:
+            self._count_failed_node(run_context, exc)
 
     async def _handle_outcome(
         self, run_context: RunContext, run_id: uuid.UUID, state: dict[str, Any]

@@ -18,6 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from dw_agent_runtime.adapters.langgraph_runner import failed_node
+from dw_agent_runtime.adapters.run_store import RunStatus
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML
 from dw_agent_runtime.testing.memory_runtime import MemoryRuntime
@@ -172,3 +173,31 @@ async def test_a_resumed_run_that_fails_in_a_node_counts_it_too(tmp_path: Path) 
         )
 
     assert [a["node"] for a in _node_failures(telemetry)] == ["dispatch"]
+
+
+class _SinkDown(RecordingTelemetry):
+    def add_metric(self, name: str, value: int | float, attributes: Any) -> None:
+        if name == DW_NODE_FAILURE_TOTAL:
+            raise RuntimeError("metrics exporter unreachable")
+        super().add_metric(name, value, attributes)
+
+
+async def test_a_sink_that_raises_does_not_leave_the_run_running(tmp_path: Path) -> None:
+    """Counted before the run was settled, a raising sink skipped `_fail` and the
+    row sat at `running` until the reaper."""
+    telemetry = _SinkDown()
+    runtime = MemoryRuntime.build(
+        clock=FixedClock(NOW), ids=SequentialIdGenerator(), telemetry=telemetry
+    )
+    runtime.graphs.register(WORKER, "1.0.0", _failing_graph)
+    config = tmp_path / f"{WORKER}.yaml"
+    config.write_text(DEMO_WORKER_YAML, encoding="utf-8")
+    runtime.workers.load_file(config)
+    context = _run_context()
+
+    with pytest.raises(Exception):  # noqa: B017 - which one depends on the sink
+        await runtime.runner.start(run_context=context, input_payload={"steps": 0})
+
+    record = await runtime.runs.get(context, context.run_id)
+    assert record.status is RunStatus.FAILED
+    assert record.error is not None and record.error["type"] == "ValueError"
