@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from dw_api.dependencies.auth import RequireAccessContext
 from dw_api.dependencies.services import RequireContainer
@@ -22,7 +22,6 @@ from dw_kernel.errors import (
     PermissionDeniedError,
 )
 from dw_kernel.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageQuery, page_request
-from dw_knowledge.contracts import CLASSIFICATIONS
 from dw_knowledge.ingest_jobs import EnqueueIngestCommand
 
 # Documents up to this size are accepted for ingestion (raw bytes staged to
@@ -125,10 +124,27 @@ async def upload_document(
         raise DomainError("scope must be 'tenant' or 'global'")
     if scope == "global" and _PLATFORM_ADMIN_ROLE not in context.roles:
         raise PermissionDeniedError("publishing a global document requires platform_admin")
-    # The column holds the clearance ladder (CHECK, migration 0d8f03566652). Refused
-    # here, before anything is staged, rather than by the database after it.
-    if classification not in CLASSIFICATIONS:
-        raise DomainError(f"classification must be one of {list(CLASSIFICATIONS)}")
+    filename = file.filename or "document"
+    content_type = file.content_type or "application/octet-stream"
+    # Built before anything is staged: the command refuses what the columns would
+    # (a classification off the clearance ladder, CHECK 0d8f03566652), and a
+    # refusal after put_object would leave the bytes behind and answer 500.
+    try:
+        command = EnqueueIngestCommand(
+            title=title,
+            filename=filename,
+            content_type=content_type,
+            domain=domain,
+            classification=classification,
+            source_version=source_version,
+            scope=scope,
+        )
+    except ValidationError as exc:
+        # Where and why, without the refused value (`input`), as the 422 handler does.
+        reasons = "; ".join(
+            f"{'.'.join(map(str, error['loc']))}: {error['msg']}" for error in exc.errors()
+        )
+        raise DomainError(reasons) from None
 
     data = await file.read()
     if not data:
@@ -136,22 +152,11 @@ async def upload_document(
     if len(data) > _MAX_UPLOAD_BYTES:
         raise DomainError(f"file exceeds {_MAX_UPLOAD_BYTES} bytes")
 
-    filename = file.filename or "document"
-    content_type = file.content_type or "application/octet-stream"
     job_id = container.ingest_job_store.id_generator.new_uuid()
     # Stage the raw bytes; the worker reads them back by storage_key to parse.
     storage_key = f"{context.tenant_id}/{context.workspace_id}/uploads/{job_id}/{filename}"
     await container.object_storage.put_object(storage_key, data, content_type)
 
-    command = EnqueueIngestCommand(
-        title=title,
-        filename=filename,
-        content_type=content_type,
-        domain=domain,
-        classification=classification,
-        source_version=source_version,
-        scope=scope,
-    )
     # Reuse the pre-generated id so the staged object and the job line up.
     created = await container.ingest_job_store.enqueue(
         command, context, storage_key=storage_key, job_id=job_id

@@ -1,9 +1,10 @@
 """The knowledge upload refuses a classification off the clearance ladder.
 
 `knowledge.ingest_jobs.classification` holds the ladder (CHECK, migration
-0d8f03566652). Without the route's own check an off-ladder value is staged in
-object storage and then refused by the database as a 500; with it, the caller
-gets a validation error and nothing is staged.
+0d8f03566652). Without the check (EnqueueIngestCommand's, which the route
+builds before staging) an off-ladder value is staged in object storage and
+then refused by the database as a 500; with it, the caller gets a validation
+error and nothing is staged.
 
 The job store is real but bound to no database: a value the route lets through
 reaches staging and then fails at the first query, which is enough to tell
