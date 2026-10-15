@@ -598,9 +598,11 @@ test("2d. With a model server, a routed mail carries a hand-off draft Sales edit
   const an = await persona(request, AN);
   const inbox: {
     message_id: string;
-    handoff_draft: { to: string } | null;
+    handoff_draft?: { to: string } | null;
   }[] = await (await an.get("/inbox")).json();
-  const drafted = inbox.find((m) => m.handoff_draft !== null);
+  // Optional in the generated type: a message without the field has no
+  // draft either, so it is skipped, not picked.
+  const drafted = inbox.find((m) => m.handoff_draft);
   // The draft is a model's step (ticket 33): without a model server (CI) no
   // routed mail has one, and the API's and the evals' tests hold it there.
   test.skip(!drafted, "no model server: no routed mail has a hand-off draft");
@@ -1180,6 +1182,8 @@ test("11. An proposes a version of the order rules on the rules page; Giang deci
   await page.waitForURL(`**/approvals/${version.approval_id}`);
   await expect(page.getByText("sales.rules", { exact: true })).toBeVisible();
   await page.goto("/approvals");
+  // An antd Card has no role, so the card is found by its class and narrowed
+  // by the link to this approval in its title.
   const card = page.locator(".ant-card").filter({
     has: page.locator(`a[href="/approvals/${version.approval_id}"]`),
   });
