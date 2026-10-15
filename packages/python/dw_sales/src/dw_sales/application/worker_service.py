@@ -8,11 +8,15 @@ lý" is refused (`InboxService`).
 
 The notification goes after the commit, through the platform's inbox, which
 delivers once per source key: a pause that committed is a pause, whether or
-not the message reached anyone yet.
+not the message reached anyone yet. So a notification that fails is logged
+and the pause still answers as made: an error there would tell the caller
+DW1 was not paused while it is, and their retry would be refused as a second
+pause.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -32,6 +36,8 @@ from dw_sales.application.ports import (
 from dw_sales.application.views import WorkerStateView, worker_state
 
 _LOCAL = ZoneInfo("Asia/Ho_Chi_Minh")
+
+logger = logging.getLogger("dw_sales.worker_service")
 
 
 @dataclass(frozen=True)
@@ -61,7 +67,10 @@ class WorkerService:
             await work.worker.set(paused)
             await work.audit.append(self._audit(context, "sales.worker.paused", now, {}))
             await work.commit()
-        await self._notify_resumers(context, paused)
+        try:
+            await self._notify_resumers(context, paused)
+        except Exception:
+            logger.exception("sales_worker: the pause committed and its notification failed")
         return worker_state(paused)
 
     async def resume(self, context: AccessContext, reason: str) -> WorkerStateView:
