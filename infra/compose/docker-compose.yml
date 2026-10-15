@@ -56,7 +56,10 @@ volumes:
 services:
   # ------------------------------------------------------------------ data --
   postgres:
-    image: postgres:16-alpine
+    # An exact version, as every third-party image here: a floating tag moves
+    # under measured behaviour (the ICU Vietnamese collation names sort by,
+    # dw_platform tenant_members.py) without a commit saying so.
+    image: postgres:16.15-alpine
     profiles: ["infra", "full", "observability", "migration"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?}
@@ -105,7 +108,7 @@ services:
     restart: unless-stopped
 
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:8.1.10-alpine
     profiles: ["infra", "full", "observability"]
     command:
       ["valkey-server", "--maxmemory-policy", "noeviction", "--save", "60", "1"]
@@ -668,7 +671,7 @@ services:
 
   # ------------------------------------------------- optional observability --
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8-alpine
+    image: clickhouse/clickhouse-server:24.8.14.39-alpine
     profiles: ["observability"]
     environment:
       CLICKHOUSE_DB: langfuse
@@ -690,7 +693,7 @@ services:
     restart: unless-stopped
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3
+    image: langfuse/langfuse-worker:3.225.11
     profiles: ["observability"]
     environment: &langfuse-env
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/langfuse
@@ -721,7 +724,7 @@ services:
     restart: unless-stopped
 
   langfuse-web:
-    image: langfuse/langfuse:3
+    image: langfuse/langfuse:3.225.11
     profiles: ["observability"]
     environment:
       <<: *langfuse-env
@@ -769,7 +772,7 @@ services:
   # is already in every base image, so this needs no package install (and no
   # network call) on every `up`.
   alertmanager-config:
-    image: alpine:3.20
+    image: alpine:3.20.10
     profiles: ["observability"]
     environment:
       ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-}
