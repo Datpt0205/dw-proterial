@@ -233,6 +233,25 @@ async def test_history_too_large_to_summarise_is_not_traded_for_a_placeholder() 
     assert summariser.calls == []
 
 
+async def test_a_message_is_measured_as_the_summariser_is_sent_it_escaped() -> None:
+    """Escaping makes `<` and `&` four to five times longer. A message dense in
+    them that fits the budget as written but not as sent must not go out: the
+    provider would refuse the call and compaction would fail open, every step.
+    Measured unescaped, it went out over the route's `max_input_tokens`."""
+    summariser = _summariser()
+    middleware, audit = _compactor(summariser, summary_input_tokens=2000)
+    history = _history(8)
+    # ~1.1k tokens as the transcript writes it, ~2.1k once contained.
+    history[1] = AIMessage(content="<&" * 500, id="a0")
+
+    messages = await _run_history(middleware, history)
+
+    assert all(middleware.token_counter(call) <= 2000 for call in summariser.calls)
+    assert summariser.calls == []
+    assert audit.events == []
+    assert "h0" in [m.id for m in messages]
+
+
 # --------------------------------------------------- 5. counted and bounded --
 
 
