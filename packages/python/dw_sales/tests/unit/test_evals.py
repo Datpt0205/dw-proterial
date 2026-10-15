@@ -20,6 +20,7 @@ import pytest
 from dw_evals.graders import GRADERS as PLATFORM_GRADERS
 from dw_evals.graders import GraderContext, merge_graders
 from dw_evals.runner import load_dataset, run_dataset
+from dw_kernel.errors import ConflictError
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, MOCK_ROOT
 from dw_sales.adapters.readers import excel
@@ -265,6 +266,81 @@ def test_header_corrected_fails_when_the_typed_value_is_not_entered(
     assert result.details["problems"] == [
         "po_date is not entered as typed beside the value as read"
     ]
+
+
+def test_header_corrected_fails_when_prepare_ignores_the_open_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare = OrderCase.prepare
+
+    def ignores_findings(self: OrderCase, actor: Any, at: Any) -> OrderCase:
+        prepared = prepare(self.model_copy(update={"findings": ()}), actor, at)
+        return prepared.model_copy(update={"findings": self.findings})
+
+    monkeypatch.setattr(OrderCase, "prepare", ignores_findings)
+    case, expected = _case("sales_header_correction")
+
+    result = GRADERS["sales.header_corrected"](CTX, case, expected)
+
+    assert not result.passed
+    assert "prepared with value_uncertain:- open" in result.details["problems"]
+
+
+def test_header_corrected_fails_when_prepare_refuses_without_naming_the_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuses_unnamed(self: OrderCase, actor: Any, at: Any) -> OrderCase:
+        raise ConflictError("the self-check is not complete", details={"open_findings": []})
+
+    monkeypatch.setattr(OrderCase, "prepare", refuses_unnamed)
+    case, expected = _case("sales_header_correction")
+
+    result = GRADERS["sales.header_corrected"](CTX, case, expected)
+
+    assert not result.passed
+    assert result.details["problems"] == [
+        "prepare refused without naming value_uncertain:-",
+        "the corrected PO could not be prepared",
+    ]
+
+
+def test_header_corrected_fails_when_the_corrected_po_cannot_be_prepared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first refusal is the real one; the PO it then prepares is refused."""
+    prepare = OrderCase.prepare
+
+    def never_prepares(self: OrderCase, actor: Any, at: Any) -> OrderCase:
+        prepare(self, actor, at)
+        raise ConflictError("the self-check is not complete", details={"open_findings": []})
+
+    monkeypatch.setattr(OrderCase, "prepare", never_prepares)
+    case, expected = _case("sales_header_correction")
+
+    result = GRADERS["sales.header_corrected"](CTX, case, expected)
+
+    assert not result.passed
+    assert result.details["problems"] == ["the corrected PO could not be prepared"]
+
+
+def test_header_corrected_fails_when_typing_the_value_leaves_the_finding_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    correct_value = OrderCase.correct_value
+
+    def keeps_it_open(self: OrderCase, key: str, *args: Any) -> OrderCase:
+        corrected = correct_value(self, key, *args)
+        was = self.finding(key)
+        findings = tuple(was if f.key == key else f for f in corrected.findings)
+        return corrected.model_copy(update={"findings": findings})
+
+    monkeypatch.setattr(OrderCase, "correct_value", keeps_it_open)
+    case, expected = _case("sales_header_correction")
+
+    result = GRADERS["sales.header_corrected"](CTX, case, expected)
+
+    assert not result.passed
+    assert "value_uncertain:- stayed open once po_date was typed" in result.details["problems"]
 
 
 def test_header_corrected_fails_when_the_value_it_expects_refused_is_taken() -> None:
