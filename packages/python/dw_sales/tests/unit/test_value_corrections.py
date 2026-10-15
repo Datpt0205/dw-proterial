@@ -702,6 +702,35 @@ async def test_a_revised_case_keeps_its_history_when_a_value_is_corrected() -> N
     assert (corrected.duplicate_of_so, corrected.base_so_no) == (None, "SO26-0999")
 
 
+class _RevisedSince(_KeyedByHand):
+    """`_KeyedByHand`, with a later revision of the PO keyed in Bravo since."""
+
+    async def orders_for_po(
+        self, scope: SalesScope, customer_code: str, po_no: str
+    ) -> Snapshot[Sequence[BravoOrder]]:
+        held = await super().orders_for_po(scope, customer_code, po_no)
+        keyed = next((o for o in held.data if o.so_no == "SO26-0999"), None)
+        if keyed is None:
+            return held
+        later = keyed.model_copy(update={"so_no": "SO26-1010", "po_revision": 1})
+        return Snapshot((*held.data, later), held.as_of)
+
+
+async def test_the_history_is_not_checked_again_once_bravo_holds_a_later_revision() -> None:
+    """A comparison with a revision Bravo has moved past says nothing about
+    this one (intake routes it, no finding names it): the case keeps the
+    history it was checked with."""
+    case = await _m27(_intake(_KeyedByHand.load(SCOPE)))
+    intake = _intake(_RevisedSince.load(SCOPE))
+
+    corrected = await intake.correct_value(SCOPE, case, KEY, "unit_price", "0.0465", AN, T0)
+
+    history = [f for f in corrected.findings if f.code in HISTORY_CHECK_CODES]
+    assert history == [f for f in case.findings if f.code in HISTORY_CHECK_CODES]
+    assert {f.code for f in history} == {FindingCode.REVISED_PO}
+    assert (corrected.duplicate_of_so, corrected.base_so_no) == (None, "SO26-0999")
+
+
 # ---------------------------------------- delivery schedules (ticket 21) --
 
 
