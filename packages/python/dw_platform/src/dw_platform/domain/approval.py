@@ -25,6 +25,15 @@ def decided_event_type(approval_type: str) -> str:
     One function because two packages name it: the approval flow that writes the
     event and the context that registers a handler for it. Spelt twice, a rename
     on one side leaves the handler waiting for an event nobody sends.
+
+    The event is written for every decision on a run-less approval, whether or
+    not any worker registers a handler for its type. The dispatcher claims only
+    the types it has a handler for (`dw_worker.consumers.outbox`), so an event
+    with none stays in `platform.outbox_events` undelivered, outside the backlog
+    gauges too, and no retention rule reads the outbox: it stays for good. That
+    is by design — a handler added later finds the history intact — and it
+    means a context that opens run-less approvals owes a handler for this type
+    in the worker, or its decisions announce to nobody.
     """
     return f"{approval_type}.decided"
 
