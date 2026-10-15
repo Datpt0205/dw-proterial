@@ -94,7 +94,7 @@ async function renderWith(scopes: string[], item: Approval, admin = false) {
   };
 }
 
-describe("/approvals and the stamped scope (ADR 0004)", () => {
+describe("/approvals and the stamped scope (ADR 0011-approval-decider-stamped-as-required-scope)", () => {
   it("locks both decisions, with the reason in words, for a viewer without the scope", async () => {
     const { approve, reject } = await renderWith(
       ["approvals.read", "approvals.decide"],

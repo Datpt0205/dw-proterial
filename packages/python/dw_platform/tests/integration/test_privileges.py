@@ -445,8 +445,9 @@ async def test_the_application_may_only_record_a_decision_on_an_approval(
 ) -> None:
     """`platform.approval_requests` (migration 36dabf47619c): a decision writes
     `status`, `decided_at` and `version`, and nothing else may move. Above all
-    `required_scope`, the stamp of who may decide (ADR 0004). Asked of the
-    catalog, so a later blanket GRANT that restored table-wide UPDATE goes red."""
+    `required_scope`, the stamp of who may decide
+    (ADR 0011-approval-decider-stamped-as-required-scope). Asked of the catalog, so a later blanket
+    GRANT that restored table-wide UPDATE goes red."""
     migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
     try:
         async with migrator.connect() as conn:

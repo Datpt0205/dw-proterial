@@ -181,8 +181,8 @@ async def test_an_idle_tick_does_nothing() -> None:
 
 
 def test_the_lane_never_builds_an_access_context_from_zalo_data() -> None:
-    """ADR 0005 condition 2: inbound Zalo data never reaches the access-context
-    factory. Commands get their context from the platform's linked-user path,
+    """ADR 0005-zalo-bot-is-the-first-chat-channel condition 2: inbound Zalo data never reaches the
+    access-context factory. Commands get their context from the platform's linked-user path,
     keyed by the user the link row names (``LinkedUserAccess``), through the
     router. The API route has the same check in ``test_zalo_endpoint.py``."""
     from pathlib import Path

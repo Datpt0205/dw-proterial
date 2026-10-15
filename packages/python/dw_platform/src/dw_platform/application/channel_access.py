@@ -1,4 +1,5 @@
-"""Access for a person who writes through a linked chat (ADR 0005 condition 2).
+"""Access for a person who writes through a linked chat (ADR 0005-zalo-bot-is-the-first-chat-channel
+condition 2).
 
 A chat command never builds its context from anything the chat sent. The chain
 is: chat id -> the link row's user (``SqlZaloLink.user_id_for``) -> that user's

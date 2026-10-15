@@ -7,7 +7,7 @@ has no UPDATE/DELETE grant on the audit table.
 no person behind it, so it is a fixed id derived from the lane's registry name
 (`system_actor`), and `details.actor` reads `system:<lane>`. Never a human's id:
 the log would say a person did what a sweep did. `lane_audit_event` is the one
-way a lane builds its event (ADR 0011).
+way a lane builds its event (ADR 0011-a-background-lane-audits-as-itself).
 """
 
 from __future__ import annotations

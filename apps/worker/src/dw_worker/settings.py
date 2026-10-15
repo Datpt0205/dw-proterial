@@ -261,8 +261,8 @@ class WorkerSettings(BaseSettings):
         validation_alias=AliasChoices("DW_WORKER_ZALO_LINK_SECRET", "ZALO_LINK_SECRET"),
     )
     # The key decision codes are hashed under; must equal the API's, which
-    # issued them (ADR 0007, channels Z5). Empty = a decision sent from Zalo is
-    # answered "not enabled" and nothing is decided.
+    # issued them (ADR 0007-chat-decisions-after-a-portal-view, channels Z5). Empty = a decision
+    # sent from Zalo is answered "not enabled" and nothing is decided.
     approval_code_secret: SecretStr = Field(
         default=SecretStr(""),
         validation_alias=AliasChoices("DW_WORKER_APPROVAL_CODE_SECRET", "DW_APPROVAL_CODE_SECRET"),

@@ -9,7 +9,7 @@ translation DW1 needs: every way of getting no usable answer becomes
 quota refusal is not translated: it stops the run.
 
 No tool is offered: `generate_structured` takes none, so a turn that reads a
-document cannot call one (ADR 0007).
+document cannot call one (ADR 0007-document-content-turns-cannot-call-outbound-tools).
 """
 
 from __future__ import annotations

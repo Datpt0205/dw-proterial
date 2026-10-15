@@ -850,7 +850,7 @@ export class ApiClient {
 
   /**
    * Record that the viewer opened this approval and, with `issue_code`, get a
-   * single-use code to decide it on Zalo (ADR 0007). The comment is the one
+   * single-use code to decide it on Zalo (ADR 0007-chat-decisions-after-a-portal-view). The comment is the one
    * the decision will carry; a strict type requires it.
    */
   viewApproval(

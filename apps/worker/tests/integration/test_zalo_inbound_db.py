@@ -6,8 +6,8 @@ be. What it shows that no unit test can:
 
 * a link made from another chat is visible to its owner — the "Zalo vừa được
   kết nối" notice in every tenant they belong to, and ``linked`` on the status
-  the settings page reads — before that chat's first command runs (ADR 0005
-  condition 3);
+  the settings page reads — before that chat's first command runs
+  (ADR 0005-zalo-bot-is-the-first-chat-channel condition 3);
 * an unlinked chat reaches no command; unlinking between two messages refuses
   the second; a removed membership or a locked tenant refuses;
 * the context never carries a scope outside the command's ceiling, even when

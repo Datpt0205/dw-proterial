@@ -22,8 +22,8 @@ linked person's message reaches the commands registered at the composition
 root, each acting with a context built from that person's own membership and
 cut to the command's ceiling — never from the chat. So free text can act through
 a registered command a product context plugs in, but no free-text word unlinks
-anyone, and an approval is decided only under ADR 0007's rule (Z5). This module
-builds no context at all.
+anyone, and an approval is decided only under ADR 0007-chat-decisions-after-a-portal-view's rule
+(Z5). This module builds no context at all.
 """
 
 from __future__ import annotations

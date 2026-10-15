@@ -1,4 +1,4 @@
-"""The worker's chat-command seam (channels Z5, ADR 0007).
+"""The worker's chat-command seam (channels Z5, ADR 0007-chat-decisions-after-a-portal-view).
 
 The platform worker hosts no graph, so it has no runner to resume a decided run
 on and registers no decide command itself; a context that hosts its graph here

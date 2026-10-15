@@ -389,8 +389,8 @@ async def test_a_reply_that_fails_to_send_keeps_the_link() -> None:
 
 
 def test_handle_update_cannot_reach_an_approval_decision() -> None:
-    """No free text decides anything (ADR 0007): the bot module imports nothing
-    that could. Z5 adds a separate, code-gated path and keeps this test."""
+    """No free text decides anything (ADR 0007-chat-decisions-after-a-portal-view): the bot module
+    imports nothing that could. Z5 adds a separate, code-gated path and keeps this test."""
     from pathlib import Path
 
     import dw_connectors.adapters.zalo_link as module

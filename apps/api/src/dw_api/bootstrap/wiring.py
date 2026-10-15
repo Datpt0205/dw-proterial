@@ -333,8 +333,8 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     container.runtime = wiring.seam
     container.runner = wiring.runner
     container.approval_flow = wiring.approval_flow
-    # The portal half of a decision on Zalo (ADR 0007, channels Z5): the view
-    # receipt and the single-use code. A context registers who answers for its
+    # The portal half of a decision on Zalo (ADR 0007-chat-decisions-after-a-portal-view, channels
+    # Z5): the view receipt and the single-use code. A context registers who answers for its
     # approval types' subject version on `approval_subjects` at the seam below
     # (`approval_subjects.register(prefix, port)`); a type nobody answers for
     # is decided on the web only.

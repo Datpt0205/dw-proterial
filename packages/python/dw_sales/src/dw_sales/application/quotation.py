@@ -157,7 +157,7 @@ class RequestNotExtractedError(DomainError):
     """The message holds no request for quotation this code can open a case for.
 
     A person reads it instead. Nothing is guessed from the subject or the
-    body: where the tenant turns it on, a model reads them under ADR 0005
+    body: where the tenant turns it on, a model reads them under dw_sales ADR 0005
     (`rfq_reading`), and what it read is flagged; otherwise none does.
     ``customer_unknown``: neither the sender's domain nor the buyer the file
     names is exactly one customer, so the message is routed to Sales with that

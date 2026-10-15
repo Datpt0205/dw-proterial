@@ -13,8 +13,8 @@ on `approval_requests` narrows by tenant only, so the caller's workspace is
 narrowed here, as `SqlApprovalRepository.list_pending` narrows the inbox: a
 context's count must not show what the inbox itself would refuse
 (platform-runtime/approval-audit-and-workspace/02). For the same reason it
-filters by the caller's `ApprovalAudience` (ADR 0004, amendment 2026-10-07),
-through the repository's own `visible_to`: a stamped request the caller may
+filters by the caller's `ApprovalAudience` (ADR 0011-approval-decider-stamped-as-required-scope,
+amendment 2026-10-07), through the repository's own `visible_to`: a stamped request the caller may
 neither decide nor asked for is neither counted nor shown.
 """
 

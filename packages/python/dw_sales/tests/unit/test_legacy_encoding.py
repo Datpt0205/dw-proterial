@@ -154,7 +154,8 @@ def test_the_mock_po_typed_in_vntime_marks_the_cells_in_that_font_and_nothing_el
     assert not po.header.legacy and po.total is not None and not po.total.legacy
     # The first affected cell: line 1's description.
     assert _where(po) == ("PO!C10", LegacyEncoding.TCVN3)
-    # Read as the cell holds it: the reader converts nothing (ADR 0010 decision 3).
+    # Read as the cell holds it: the reader converts nothing
+    # (ADR 0010-document-intake-at-real-size-and-format decision 3).
     assert po.lines[0].description == "D©y ®iÖn 24AWG mµu ®en"
 
 

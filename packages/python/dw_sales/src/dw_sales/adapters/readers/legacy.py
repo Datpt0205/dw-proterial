@@ -1,5 +1,6 @@
-"""A legacy Office file converted to one the readers read (ticket 27, ADR 0010
-decision 2): `.xls` to `.xlsx`, `.doc` to PDF, by LibreOffice headless.
+"""A legacy Office file converted to one the readers read (ticket 27,
+ADR 0010-document-intake-at-real-size-and-format decision 2): `.xls` to `.xlsx`, `.doc` to PDF, by
+LibreOffice headless.
 
 It runs where every reader runs, in the reader sandbox's one-use reading
 process (`apps/reader`), so LibreOffice is that process's child: the same

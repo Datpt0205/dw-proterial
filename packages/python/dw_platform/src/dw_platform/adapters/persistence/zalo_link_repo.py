@@ -119,9 +119,9 @@ class SqlZaloLink:
     async def user_id_for(self, zalo_id: str) -> UUID | None:
         """The user this chat is linked to, or None — read afresh for every message.
 
-        The chat-to-person step every inbound command starts from (ADR 0005
-        condition 2). Not cached: an unlink between two messages must refuse
-        the second.
+        The chat-to-person step every inbound command starts from
+        (ADR 0005-zalo-bot-is-the-first-chat-channel condition 2). Not cached: an unlink between two
+        messages must refuse the second.
         """
         async with self.session_factory() as session:
             row = (

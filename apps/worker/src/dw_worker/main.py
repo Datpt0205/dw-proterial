@@ -194,7 +194,8 @@ def build_channel_decision_command(
     ids: IdGenerator,
     clock: UtcClock,
 ) -> ChannelDecisionCommand:
-    """`DUYỆT <mã>` / `KHÔNG <mã> <lý do>` from a linked chat (ADR 0007, channels Z5).
+    """`DUYỆT <mã>` / `KHÔNG <mã> <lý do>` from a linked chat
+    (ADR 0007-chat-decisions-after-a-portal-view, channels Z5).
 
     The decision goes through this process's own `ApproveAndResumeService`,
     over `runner`: the one that hosts the graph the approval belongs to, so a
@@ -416,8 +417,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     zalo_poll_consumer: Callable[[], Awaitable[None]] | None = None
     # The Zalo webhook drain: the same, in webhook mode, never beside the poll.
     zalo_webhook_consumer: Callable[[], Awaitable[None]] | None = None
-    # Notifications out through linked Zalo chats (ADR 0006): a database and a
-    # bot token, polled or webhooked alike.
+    # Notifications out through linked Zalo chats
+    # (ADR 0006-provider-neutral-channel-delivery-outbox): a database and a bot token, polled or
+    # webhooked alike.
     channel_delivery_consumer: Callable[[], Awaitable[None]] | None = None
     # Channel deliveries: 90 days, never a pending one, the database's constant.
     channel_deliveries_retention: RetentionPrunePort | None = None

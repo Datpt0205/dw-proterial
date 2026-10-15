@@ -18,8 +18,8 @@ the webhook will call: ``/start`` and ``/stop`` link and unlink a chat, and any
 other text goes to the inbound router, which resolves the chat to its linked
 person, claims the message id once, and runs the commands registered at the
 composition root, each with a context built from that person's own membership
-(ADR 0005 condition 2). Nothing here reads a context, a scope or a tenant out
-of an update. Because ``getUpdates`` acknowledges on read, an update that fails
+(ADR 0005-zalo-bot-is-the-first-chat-channel condition 2). Nothing here reads a context, a scope or
+a tenant out of an update. Because ``getUpdates`` acknowledges on read, an update that fails
 is not fetched again: the router records it as failed and tells the person.
 """
 
