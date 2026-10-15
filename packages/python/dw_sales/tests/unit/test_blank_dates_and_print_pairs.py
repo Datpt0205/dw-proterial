@@ -253,7 +253,7 @@ async def test_m45s_workbook_and_print_are_one_case_with_the_differing_date_unce
     document = case.document
     assert (document.attachment_id, document.parser_version) == (
         "M45-A1",
-        "excel_po_reader@1.5.0",
+        "excel_po_reader@1.6.0",
     )
     copy = document.print_copy
     assert copy is not None

@@ -671,7 +671,7 @@ def test_a_case_stamps_the_rules_parser_file_and_snapshot_it_was_checked_with(
     data = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
 
     assert case.rules_version == "sales_order_rules@1.5.0"
-    assert case.document.parser_version == "excel_po_reader@1.5.0"
+    assert case.document.parser_version == "excel_po_reader@1.6.0"
     assert case.document.attachment_sha256 == hashlib.sha256(data).hexdigest()
     assert case.catalog_as_of == asyncio.run(CATALOG.items(SCOPE)).as_of
     assert (case.cross_check_required, case.export_control_mode) == (True, "warn")
