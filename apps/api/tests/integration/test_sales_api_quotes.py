@@ -19,7 +19,7 @@ async def test_dieu_prices_m10_and_giang_approves_it(api: Api) -> None:
     assert case["assigned_to"] == str(user_id(DIEU))
     assert (case["rules_version"], case["parser_version"]) == (
         "sales_quote_rules@1.1.0",
-        "excel_rfq_reader@1.0.0",
+        "excel_rfq_reader@1.1.0",
     )
     # Diệu holds sales_price_evidence: other customers' prices reach her.
     (evidence,) = case["evidence"]

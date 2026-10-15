@@ -15,8 +15,11 @@ from types import ModuleType
 
 import pytest
 
+from dw_evals import runner
 from dw_evals.dataset import EvalDataset
-from dw_evals.runner import load_dataset, run_dataset
+from dw_evals.runner import EvalReport, load_dataset, run_dataset
+from dw_sales.application.model_reading import ModelUnavailableError
+from dw_sales.evals.recorded import Observed, Recorded
 
 pytestmark = pytest.mark.unit
 
@@ -69,3 +72,59 @@ def test_a_grader_name_the_table_lacks_fails_its_case() -> None:
     assert not report.results[0].passed
     assert not report.ok
     assert report.results[0].details["reason"] == "unknown grader"
+
+
+# ------------------------------------------------------------- live lane --
+
+
+def _answered(answers: int, calls: int) -> Observed:
+    model = Observed(inner=Recorded())
+    model.answered = answers
+    model.calls.extend([None] * calls)  # type: ignore[list-item]
+    return model
+
+
+def test_a_live_run_that_read_nothing_falls_short() -> None:
+    shortfalls = _load_script().live_shortfalls(_answered(0, 9))
+
+    assert shortfalls == ["nothing was read: 9 model calls, none gave a usable answer"]
+
+
+def test_a_live_run_that_never_called_the_model_falls_short() -> None:
+    shortfalls = _load_script().live_shortfalls(_answered(0, 0))
+
+    assert shortfalls == ["nothing was read: 0 model calls, none gave a usable answer"]
+
+
+def test_a_live_run_that_read_has_no_shortfall() -> None:
+    """A golden case's bar is reported, not enforced (Đạt sets the bars)."""
+    assert _load_script().live_shortfalls(_answered(1, 9)) == []
+
+
+def test_the_live_lane_exits_non_zero_when_every_call_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """End to end through `main`: the model times out on every call."""
+    script = _load_script()
+    model = Observed(inner=Recorded(failure=ModelUnavailableError("ReadTimeout")))
+    monkeypatch.setattr(script, "live_model_for", lambda profile: model)
+    written: list[EvalReport] = []
+
+    def write_report(report: EvalReport, reports_dir: Path) -> Path:
+        written.append(report)  # kept out of the checkout's evals/reports
+        return reports_dir / f"{report.dataset_id}@{report.dataset_version}.json"
+
+    monkeypatch.setattr(runner, "write_report", write_report)
+    dataset = REPO_ROOT / "evals" / "datasets" / "sales_intent@1.0.0.json"
+    monkeypatch.setattr(
+        sys, "argv", ["run_evals.py", "--live", "onprem", "--dataset", str(dataset)]
+    )
+
+    assert script.main() == 1
+    out = capsys.readouterr().out
+    assert out.startswith("[FAIL] sales_intent@1.0.0")
+    assert "the live model gave no usable answer" in out
+    assert "✗ live: nothing was read" in out
+    (report,) = written
+    golden = next(r for r in report.results if r.grader == "sales.intent_golden")
+    assert not golden.passed

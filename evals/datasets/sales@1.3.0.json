@@ -1,6 +1,6 @@
 {
   "dataset_id": "sales",
-  "dataset_version": "1.2.0",
+  "dataset_version": "1.3.0",
   "worker_id": "sales-dw1",
   "cases": [
     {
@@ -143,6 +143,18 @@
       "tags": [
         "security",
         "prices"
+      ]
+    },
+    {
+      "case_id": "sales-exc-header-correction",
+      "category": "exception",
+      "description": "Ngày PO của một PO (thư M92 chỉ dùng cho eval, ngoài hộp thư 45 thư) gõ chữ trắng trên nền trắng: value_uncertain cấp PO chặn, chỉ cho ngày PO; prepare bị từ chối nêu tên; trường không bị gắn cờ bị từ chối; Sales gõ ngày, phát hiện được sửa, giá trị đọc được giữ bên cạnh, PO prepare được",
+      "input_ref": "evals/fixtures/cases/sales_header_correction.json",
+      "expected_ref": "evals/expected/sales_header_correction.json",
+      "grader": "sales.header_corrected",
+      "tags": [
+        "evidence",
+        "corrections"
       ]
     }
   ]
