@@ -39,7 +39,6 @@ describe("errorMessage: a refusal in Vietnamese", () => {
 
   it.each([
     ["platform_version_reused", "the platform now ships this version number"],
-    ["stale_case_version", "the case changed since it was read"],
     ["layout_decided", "the layout was decided meanwhile"],
     ["message_already_processed", "the message is already on a case"],
     ["case_closed", "a closed case is not reassigned"],

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_sales.adapters.persistence import tables
-from dw_sales.application.case_store import CaseEvent
+from dw_sales.application.case_store import STALE_CASE_VERSION, CaseEvent
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import MAKER_CHECKER_REFUSAL
@@ -92,12 +92,9 @@ async def claim_version(
     if stored is None:
         raise NotFoundError("no such case", details={"case_id": str(case_id)})
     if stored.case_version != expected_version:
-        # The rule `same_version` names for the same refusal, so a caller (the
-        # web's Vietnamese for it) reads one code whichever check caught it.
-        raise ConflictError(
-            "the case changed since it was read",
-            details={**details, "rule": "stale_case_version"},
-        )
+        # The sentence and rule `same_version` names for the same refusal, so a
+        # caller reads one refusal whichever check caught it.
+        raise ConflictError(STALE_CASE_VERSION, details={**details, "rule": "stale_case_version"})
     if new_version <= expected_version:
         raise DomainError("a saved case carries a new version", details=details)
     return str(stored.status)
