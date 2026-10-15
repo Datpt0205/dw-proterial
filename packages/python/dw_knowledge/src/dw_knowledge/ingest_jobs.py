@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_knowledge import tables
-from dw_knowledge.contracts import SEARCH_FILTER_KEYS
+from dw_knowledge.contracts import CLASSIFICATIONS, SEARCH_FILTER_KEYS
 from dw_platform.application.access_context import AccessContext
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
@@ -94,6 +94,16 @@ class EnqueueIngestCommand(BaseModel):
             raise ValueError(
                 f"unknown ingest metadata key(s): {unknown}. Allowed: {sorted(SEARCH_FILTER_KEYS)}"
             )
+        return value
+
+    @field_validator("classification")
+    @classmethod
+    def _classification_is_on_the_ladder(cls, value: str) -> str:
+        # The column holds the clearance ladder (CHECK, migration 0d8f03566652).
+        # Refused here, where every enqueue passes, rather than by the database
+        # after the bytes are staged.
+        if value not in CLASSIFICATIONS:
+            raise ValueError(f"classification must be one of {list(CLASSIFICATIONS)}")
         return value
 
 

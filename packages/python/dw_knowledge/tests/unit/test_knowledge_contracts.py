@@ -68,3 +68,15 @@ def test_an_unknown_classification_has_no_rank() -> None:
 
     with pytest.raises(ValueError, match="public"):
         classification_rank("public")
+
+
+def test_an_ingest_job_cannot_be_enqueued_off_the_ladder() -> None:
+    """Every enqueue caller passes through the command, so it refuses what the
+    column's CHECK would, before a caller has staged the bytes."""
+    from dw_knowledge.contracts import CLASSIFICATIONS
+    from dw_knowledge.ingest_jobs import EnqueueIngestCommand
+
+    with pytest.raises(ValidationError, match="classification"):
+        EnqueueIngestCommand(title="t", filename="f.pdf", classification="public")
+    for classification in CLASSIFICATIONS:
+        EnqueueIngestCommand(title="t", filename="f.pdf", classification=classification)
