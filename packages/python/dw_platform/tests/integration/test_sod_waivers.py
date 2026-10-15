@@ -7,6 +7,8 @@ tests hold the database and the service to:
   second admin has confirmed it (f381f1694395) - never the one who proposed it;
 - a role or permission set cannot gain a scope that would make a membership
   holding it break a rule its tenant has not waived;
+- nor can a rule be added, widened or made a floor under a membership that
+  would then break it (d82a60870baf);
 - a rule its author did not mark waivable is a floor, for every writer;
 - every waiver decision needs a reason, a scope, and leaves an audit row
   written in the same transaction;
@@ -73,6 +75,7 @@ class _Catalogue:
     floor: str
     orderer: str
     payer: str
+    clerk: str  # a scope no rule of the fixture pairs
 
 
 @dataclass(frozen=True)
@@ -110,10 +113,15 @@ async def catalogue(migrator_engine: AsyncEngine) -> AsyncIterator[_Catalogue]:
         floor=f"sod_test_floor_{suffix}",
         orderer=f"test_orderer_{suffix}",
         payer=f"test_payer_{suffix}",
+        clerk=f"test_clerk_{suffix}",
     )
     order, pay = f"test.{suffix}.order", f"test.{suffix}.pay"
     async with migrator_engine.begin() as conn:
-        for key, scopes in ((made.orderer, [order]), (made.payer, [pay])):
+        for key, scopes in (
+            (made.orderer, [order]),
+            (made.payer, [pay]),
+            (made.clerk, [f"test.{suffix}.clerk"]),
+        ):
             await conn.execute(sa.insert(tables.roles).values(key=key, name=key, scopes=scopes))
         await conn.execute(
             sa.insert(tables.sod_rules).values(
@@ -132,7 +140,9 @@ async def catalogue(migrator_engine: AsyncEngine) -> AsyncIterator[_Catalogue]:
         )
         await conn.execute(sa.delete(tables.sod_rules).where(tables.sod_rules.c.key.in_(rule_keys)))
         await conn.execute(
-            sa.delete(tables.roles).where(tables.roles.c.key.in_([made.orderer, made.payer]))
+            sa.delete(tables.roles).where(
+                tables.roles.c.key.in_([made.orderer, made.payer, made.clerk])
+            )
         )
 
 
@@ -723,3 +733,125 @@ async def test_widening_a_permission_set_past_a_rule_is_refused(
             await conn.execute(
                 sa.delete(tables.permission_sets).where(tables.permission_sets.c.key == extra)
             )
+
+
+# ---- a rule changed under memberships (d82a60870baf) ---------------------------
+
+
+async def _rule_sides(engine: AsyncEngine, key: str) -> tuple[list[str], list[str], bool]:
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                sa.select(
+                    tables.sod_rules.c.left_scopes,
+                    tables.sod_rules.c.right_scopes,
+                    tables.sod_rules.c.waivable,
+                ).where(tables.sod_rules.c.key == key)
+            )
+        ).one()
+    return list(row.left_scopes), list(row.right_scopes), row.waivable
+
+
+async def _set_rule(engine: AsyncEngine, key: str, **values: object) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            sa.update(tables.sod_rules).where(tables.sod_rules.c.key == key).values(**values)
+        )
+
+
+async def _orderer_and_clerk(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine, catalogue: _Catalogue
+) -> tuple[uuid.UUID, str]:
+    """A membership holding the rule's left side and the clerk's scope, which
+    no rule pairs yet; and that scope."""
+    user_id = await _user(app_engine)
+    await _grant(app_engine, user_id, catalogue.orderer, catalogue.clerk)
+    clerk_scope = (await _scopes_of(migrator_engine, tables.roles, catalogue.clerk))[0]
+    return await _membership_id(migrator_engine, user_id), clerk_scope
+
+
+async def test_widening_a_rule_past_a_membership_is_refused_naming_it(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine, catalogue: _Catalogue
+) -> None:
+    membership, clerk_scope = await _orderer_and_clerk(app_engine, migrator_engine, catalogue)
+    before = await _rule_sides(migrator_engine, catalogue.rule)
+
+    with pytest.raises(IntegrityError, match="would be broken") as refused:
+        await _set_rule(migrator_engine, catalogue.rule, right_scopes=[*before[1], clerk_scope])
+    assert str(membership) in str(refused.value)
+    assert catalogue.rule in str(refused.value)
+    assert await _rule_sides(migrator_engine, catalogue.rule) == before
+
+    # A scope nobody holds, or the description alone, is not a conflict.
+    await _set_rule(migrator_engine, catalogue.rule, right_scopes=[*before[1], "test.unpaired"])
+    await _set_rule(migrator_engine, catalogue.rule, right_scopes=before[1])
+    await _set_rule(migrator_engine, catalogue.rule, description="reworded")
+
+
+async def test_adding_a_rule_a_membership_already_breaks_is_refused(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine, catalogue: _Catalogue
+) -> None:
+    membership, clerk_scope = await _orderer_and_clerk(app_engine, migrator_engine, catalogue)
+    order = (await _rule_sides(migrator_engine, catalogue.rule))[0]
+
+    with pytest.raises(IntegrityError, match="would be broken") as refused:
+        async with migrator_engine.begin() as conn:
+            await conn.execute(
+                sa.insert(tables.sod_rules).values(
+                    key=catalogue.floor,
+                    description="orders are not filed by who placed them",
+                    left_scopes=order,
+                    right_scopes=[clerk_scope],
+                )
+            )
+    assert str(membership) in str(refused.value)
+    async with migrator_engine.connect() as conn:
+        assert (
+            await conn.scalar(
+                sa.select(sa.func.count())
+                .select_from(tables.sod_rules)
+                .where(tables.sod_rules.c.key == catalogue.floor)
+            )
+            == 0
+        )
+
+
+async def test_only_the_memberships_own_confirmed_waiver_lets_a_rule_widen(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine, catalogue: _Catalogue
+) -> None:
+    membership, clerk_scope = await _orderer_and_clerk(app_engine, migrator_engine, catalogue)
+    left, right, _ = await _rule_sides(migrator_engine, catalogue.rule)
+    widened = [*right, clerk_scope]
+
+    # Another tenant's confirmed waiver lifts nothing for Alpha's membership.
+    beta = _service(app_engine)
+    await beta.waive(_admin(BETA, BETA_WS), WaiveRule(catalogue.rule, REASON))
+    await beta.confirm(_admin(BETA, BETA_WS), ConfirmWaiver(catalogue.rule, "beta only"))
+    with pytest.raises(IntegrityError, match="would be broken"):
+        await _set_rule(migrator_engine, catalogue.rule, right_scopes=widened)
+    # Alpha's own, proposed only: still refused.
+    await _service(app_engine).waive(_admin(), WaiveRule(catalogue.rule, REASON))
+    with pytest.raises(IntegrityError, match="would be broken"):
+        await _set_rule(migrator_engine, catalogue.rule, right_scopes=widened)
+
+    await _service(app_engine).confirm(_admin(), ConfirmWaiver(catalogue.rule, "ok"))
+    await _set_rule(migrator_engine, catalogue.rule, right_scopes=widened)
+
+    # The membership now relies on the waiver: making the rule a floor is refused.
+    with pytest.raises(IntegrityError, match="would be broken") as refused:
+        await _set_rule(migrator_engine, catalogue.rule, waivable=False)
+    assert str(membership) in str(refused.value)
+    assert await _rule_sides(migrator_engine, catalogue.rule) == (left, widened, True)
+
+    # With Alpha's waiver gone the membership breaks the widened rule, and a
+    # write that changes no side of it is still not checked: the description
+    # alone, or the sides set to what they already are.
+    async with migrator_engine.begin() as conn:
+        await conn.execute(
+            sa.delete(tables.sod_waivers).where(
+                tables.sod_waivers.c.tenant_id == ALPHA,
+                tables.sod_waivers.c.rule_key == catalogue.rule,
+            )
+        )
+    await _set_rule(migrator_engine, catalogue.rule, description="reworded")
+    await _set_rule(migrator_engine, catalogue.rule, right_scopes=widened)
