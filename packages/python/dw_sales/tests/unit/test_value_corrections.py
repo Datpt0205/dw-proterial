@@ -32,7 +32,11 @@ from dw_sales.application.ports import SalesScope, Snapshot
 from dw_sales.application.views import order_case, order_finding
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import BravoOrder, BravoOrderLine
-from dw_sales.domain.order_checks import DOCUMENT_CHECK_CODES, check_document
+from dw_sales.domain.order_checks import (
+    DOCUMENT_CHECK_CODES,
+    HISTORY_CHECK_CODES,
+    check_document,
+)
 from dw_sales.domain.orders import (
     Accepted,
     Actor,
@@ -671,6 +675,30 @@ async def test_the_history_is_not_checked_again_while_another_case_holds_the_po(
 
     codes = {f.code for f in corrected.findings}
     assert FindingCode.REVISED_PO in codes and FindingCode.DUPLICATE_PO not in codes
+    assert (corrected.duplicate_of_so, corrected.base_so_no) == (None, "SO26-0999")
+
+
+async def test_a_revised_case_keeps_its_history_when_a_value_is_corrected() -> None:
+    """A case holding earlier revisions had its history decided when each
+    revision joined it, not by Bravo alone: a correction on it goes through
+    and leaves the history as it was. No other case holds the PO, so only
+    the case's own revisions keep the recheck away."""
+    catalog = _KeyedByHand.load(SCOPE)
+    intake = _intake(catalog)
+    first = await _m27(intake)
+    message = await MockInbox.load(SCOPE).get_message(SCOPE, "M27")
+    assert message is not None
+    revision = (await intake.process(SCOPE, message)).case
+    assert revision is not None
+    revised = first.revise(revision).start_review()
+    assert revised.superseded and revised.duplicate_of_case is None
+    intake = _intake(catalog, _HeldBy(revised))
+
+    corrected = await intake.correct_value(SCOPE, revised, KEY, "unit_price", "0.0475", AN, T0)
+
+    assert corrected.line(2).corrections
+    history = [f for f in corrected.findings if f.code in HISTORY_CHECK_CODES]
+    assert history == [f for f in revised.findings if f.code in HISTORY_CHECK_CODES]
     assert (corrected.duplicate_of_so, corrected.base_so_no) == (None, "SO26-0999")
 
 
