@@ -37,6 +37,9 @@ order_cases = sa.Table(
     sa.Column("case_version", sa.Integer, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
     sa.Column("received_at", _TS, nullable=False),
+    # The order's due date (`OrderCase.due`), ISO text like `quote_due`, for
+    # the work list's order; NULL when no line's lead time is short.
+    sa.Column("due", sa.Text),
     sa.Column("rules_version", sa.Text),
     sa.Column("catalog_as_of", _TS),
     sa.Column("cross_check_required", sa.Boolean),
@@ -207,7 +210,8 @@ source_served = sa.Table(
     sa.Column("order_case_id", UUID(as_uuid=True)),
     sa.Column("quote_case_id", UUID(as_uuid=True)),
     sa.Column("case_version", sa.Integer, nullable=False),
-    sa.Column("attachment_id", sa.Text, nullable=False),
+    # NULL is the message's own text, served to a quote (ticket 29).
+    sa.Column("attachment_id", sa.Text),
     sa.Column("attachment_sha256", sa.Text, nullable=False),
     sa.Column("page", sa.Integer),
     sa.Column("sheet", sa.Text),

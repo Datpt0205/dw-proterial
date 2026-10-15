@@ -460,7 +460,7 @@ class OverviewService:
             action=action,
             customer_code=row.customer_code,
             received_at=row.received_at,
-            due=None,
+            due=row.due,
             assigned_to=row.assigned_to,
         )
 

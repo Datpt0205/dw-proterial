@@ -54,6 +54,7 @@ from reportlab.pdfgen.canvas import Canvas
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
 from dw_evals.graders import GraderContext, GradeResult
+from dw_kernel.errors import ConflictError
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH
@@ -843,14 +844,27 @@ async def _flow(ctx: GraderContext, expected: dict[str, Any]) -> GradeResult:
     finding = next(
         f for f in m37.findings if f.code is QuoteFindingCode.VALUE_UNCERTAIN and f.line_no == 1
     )
-    await world.services.quote_commands.answer_finding(
-        AN.context(),
-        m37.case_id,
-        f"value_uncertain:{finding.line_no}",
-        case_version=m37.case_version,
-        field="quantity",
-        value="1200",
-    )
+
+    async def confirm() -> None:
+        await world.services.quote_commands.answer_finding(
+            AN.context(),
+            m37.case_id,
+            f"value_uncertain:{finding.line_no}",
+            case_version=m37.case_version,
+            field="quantity",
+            value="1200",
+        )
+
+    # Not before An was served the mail the value was read from (ticket 29).
+    try:
+        await confirm()
+    except ConflictError as refused:
+        if refused.details.get("rule") != "source_not_served":
+            raise
+    else:
+        return GradeResult.fail("a value was confirmed without its source opened", got=got)
+    await world.services.sources.quote_message_text(AN.context(), m37.case_id)
+    await confirm()
     after = world.quote(m37.case_id)
     confirmed = next(f for f in after.findings if f.key == finding.key).confirmed
     if [c.field for c in confirmed] != ["quantity"]:

@@ -23,7 +23,7 @@ import math
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import asdict, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -53,7 +53,13 @@ from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_te
 from dw_platform.testing.seed_env import sid
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.application.case_store import LoggedEvent
-from dw_sales.application.overview_ports import NO_DUE, OverviewFigures, WorkEntry, WorkFilter
+from dw_sales.application.overview_ports import (
+    NO_DUE,
+    OpenOrder,
+    OverviewFigures,
+    WorkEntry,
+    WorkFilter,
+)
 from dw_sales.application.overview_service import figure_basis
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import SALES_PIC_POOL, CaseKind
@@ -261,6 +267,22 @@ async def test_the_sql_work_list_pages_through_what_python_lists(demo: Api) -> N
         assert len({_identity(e) for e in walked}) == len(walked), "a row came back twice"
     every = await _walk_sql(demo, _filters()[0], limit=2)
     assert {type(e.row).__name__ for e in every} >= {"OpenOrder", "LoggedMessage"}
+    # An order with a short line is paged in its due date's group, read from
+    # the column the repository wrote (M06: line 3, 2026-09-30); an order with
+    # none is in the NO_DUE group with no date.
+    inbox = (await demo.as_(AN).get("/inbox")).json()
+    m06 = uuid.UUID(next(m["disposition"]["case_id"] for m in inbox if m["message_id"] == "M06"))
+    orders = [
+        (e.row.case_id, e.position.group, e.row.due)
+        for wanted in _filters()
+        for e in await _walk_sql(demo, wanted, limit=2)
+        if isinstance(e.row, OpenOrder)
+    ]
+    assert {(group, due) for case_id, group, due in orders if case_id == m06} == {
+        ("2026-09-30", date(2026, 9, 30))
+    }, orders
+    undated = [due for _, group, due in orders if group == NO_DUE]
+    assert undated and all(due is None for due in undated), orders
 
 
 async def test_my_work_walked_page_by_page_is_my_work_at_once(demo: Api) -> None:
@@ -322,8 +344,9 @@ async def test_another_tenant_or_workspace_reads_no_figure_and_no_work(
 @pytest.fixture
 async def history(api: Api, migrator: AsyncEngine) -> Api:
     """A workspace with history: 3,000 closed orders and 3,000 processed
-    messages beside 100 open orders and 100 messages routed to Sales, and one
-    quotation, analysed. On a near-empty table a plan says nothing."""
+    messages beside 100 open orders (a third of them due) and 100 messages
+    routed to Sales, and one quotation, analysed. On a near-empty table a
+    plan says nothing."""
     an = api.as_(AN)
     await process(an, "M10")
     at = datetime(2026, 10, 1, tzinfo=UTC)
@@ -333,14 +356,15 @@ async def history(api: Api, migrator: AsyncEngine) -> Api:
                 "INSERT INTO sales.order_cases (id, tenant_id, workspace_id, customer_code,"
                 " po_no, case_version, status, received_at, rules_version, catalog_as_of,"
                 " cross_check_required, export_control_mode, changes, bravo_entry_compared,"
-                " close_reason, closed_by, closed_at, release_manifest_ref)"
+                " close_reason, closed_by, closed_at, release_manifest_ref, due)"
                 " SELECT gen_random_uuid(), :t, :w, 'VLX', 'PO-H' || n, 2,"
                 " CASE WHEN n <= 3000 THEN 'closed' ELSE 'in_review' END,"
                 " CAST(:at AS timestamptz) - make_interval(mins => n),"
                 " 'sales_order_rules@1.0.0', CAST(:at AS timestamptz), true, 'warn', '[]', false,"
                 " CASE WHEN n <= 3000 THEN 'not_an_order' END,"
                 " CASE WHEN n <= 3000 THEN CAST(:me AS uuid) END,"
-                " CASE WHEN n <= 3000 THEN CAST(:at AS timestamptz) END, 'sha256:history'"
+                " CASE WHEN n <= 3000 THEN CAST(:at AS timestamptz) END, 'sha256:history',"
+                " CASE WHEN n % 3 = 0 THEN to_char(DATE '2026-10-01' + n % 40, 'YYYY-MM-DD') END"
                 " FROM generate_series(1, 3100) AS n"
             ),
             {

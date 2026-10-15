@@ -23,8 +23,12 @@ export function findingKeyLabel(key: string): string {
   return line && line !== "-" ? `${words} (dòng ${line})` : words;
 }
 
-/** "M03-A1:page 2" → "trang 2", "M05-A1:注文書" → "sheet 注文書". */
+/**
+ * "M03-A1:page 2" → "trang 2", "M05-A1:注文書" → "sheet 注文書", and
+ * "message_text" (the mail's own text, which names no file) → "nội dung thư".
+ */
 function regionLabel(region: string): string {
+  if (region === "message_text") return "nội dung thư";
   const where = region.slice(region.indexOf(":") + 1);
   const page = /^page (\d+)$/.exec(where);
   return page ? `trang ${page[1]}` : `sheet ${where}`;

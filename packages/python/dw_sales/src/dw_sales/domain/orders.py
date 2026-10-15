@@ -1624,6 +1624,22 @@ class OrderCase(BaseModel):
         return tuple(f for f in self.findings if f.blocking)
 
     @property
+    def due(self) -> date | None:
+        """The order's deadline on the work list (G22): the requested date of
+        a line whose lead time is short (`requested_date_short_lt`), as
+        entered; the earliest when several are. None when no line's is.
+
+        A line's requested date is its first schedule's, so a split line is
+        due on its earliest, which is the one the finding names first."""
+        short = {f.line_no for f in self.findings if f.code is FindingCode.REQUESTED_DATE_SHORT_LT}
+        days = [
+            line.effective.requested_date
+            for line in self.lines
+            if line.line_no in short and line.effective.requested_date is not None
+        ]
+        return min(days, default=None)
+
+    @property
     def makers(self) -> frozenset[ActorId]:
         """Everyone the cross-checker must not be (spec decision 7).
 
