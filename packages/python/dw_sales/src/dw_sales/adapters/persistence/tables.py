@@ -210,7 +210,8 @@ source_served = sa.Table(
     sa.Column("order_case_id", UUID(as_uuid=True)),
     sa.Column("quote_case_id", UUID(as_uuid=True)),
     sa.Column("case_version", sa.Integer, nullable=False),
-    sa.Column("attachment_id", sa.Text, nullable=False),
+    # NULL is the message's own text, served to a quote (ticket 29).
+    sa.Column("attachment_id", sa.Text),
     sa.Column("attachment_sha256", sa.Text, nullable=False),
     sa.Column("page", sa.Integer),
     sa.Column("sheet", sa.Text),
