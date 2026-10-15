@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { App } from "antd";
+import { useIdempotencyKeys } from "../../../lib/idempotency";
 
 export type ActionResult<T> =
   { ok: true; value: T } | { ok: false; error: unknown };
@@ -9,10 +10,9 @@ export type ActionResult<T> =
 /**
  * One way every Sales mutation is sent.
  *
- * - **Idempotency** (ui-quality §3): a key is minted once per press of one
- *   action with one payload, reused when the same payload is retried after a
- *   failure, and replaced once the payload changes or the call succeeds. The
- *   API refuses a reused key with a different body.
+ * - **Idempotency** (ui-quality §3): the key comes from
+ *   `lib/idempotency.ts`, minted once per press of one action with one
+ *   payload, reused on a retry of it, replaced after an edit or a success.
  * - **Success** is said after the server's 2xx, never before, through
  *   `App.useApp()` (no sonner on Sales pages).
  * - **Failure** is handed back to the caller, which draws it beside the
@@ -20,7 +20,7 @@ export type ActionResult<T> =
  */
 export function useAction() {
   const { message } = App.useApp();
-  const keys = useRef(new Map<string, { payload: string; key: string }>());
+  const keys = useIdempotencyKeys();
   const [pending, setPending] = useState<string | null>(null);
 
   const run = useCallback(
@@ -30,16 +30,11 @@ export function useAction() {
       call: (idempotencyKey: string) => Promise<T>,
       success: string,
     ): Promise<ActionResult<T>> => {
-      const body = JSON.stringify(payload ?? null);
-      let entry = keys.current.get(id);
-      if (!entry || entry.payload !== body) {
-        entry = { payload: body, key: crypto.randomUUID() };
-        keys.current.set(id, entry);
-      }
+      const key = keys.keyFor(id, payload);
       setPending(id);
       try {
-        const value = await call(entry.key);
-        keys.current.delete(id);
+        const value = await call(key);
+        keys.settle(id);
         void message.success(success);
         return { ok: true, value };
       } catch (error) {
@@ -48,7 +43,7 @@ export function useAction() {
         setPending(null);
       }
     },
-    [message],
+    [keys, message],
   );
 
   return { run, pending };

@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -171,5 +172,57 @@ describe("/approvals and the stamped scope (ADR 0004)", () => {
     expect(screen.getByText(REASON)).toBeTruthy();
     fireEvent.click(approve);
     expect(decideApproval).not.toHaveBeenCalled();
+  });
+});
+
+describe("/approvals sends one Idempotency-Key per press (ui-quality §3)", () => {
+  async function pressApprove() {
+    const approve = await screen.findByRole("button", { name: /^Duyệt$/ });
+    fireEvent.click(approve);
+  }
+
+  function keyOfCall(n: number): string {
+    return decideApproval.mock.calls[n]![2] as string;
+  }
+
+  it("reuses the key on a retry of the same decision, and mints a new one after it lands", async () => {
+    const item = approval({ required_scope: null, can_decide: true });
+    decideApproval
+      .mockRejectedValueOnce(new Error("mất mạng"))
+      .mockResolvedValueOnce({ ...item, status: "approved" })
+      .mockResolvedValueOnce({ ...item, status: "approved" });
+    await renderWith(["approvals.read", "approvals.decide"], item);
+
+    await pressApprove();
+    await screen.findByText("mất mạng");
+    await pressApprove();
+    await waitFor(() => expect(decideApproval).toHaveBeenCalledTimes(2));
+    expect(keyOfCall(0)).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keyOfCall(1)).toBe(keyOfCall(0));
+
+    await pressApprove();
+    await waitFor(() => expect(decideApproval).toHaveBeenCalledTimes(3));
+    expect(keyOfCall(2)).not.toBe(keyOfCall(0));
+  });
+
+  it("mints a new key once the comment is edited after a failure", async () => {
+    const item = approval({ required_scope: null, can_decide: true });
+    decideApproval
+      .mockRejectedValueOnce(new Error("mất mạng"))
+      .mockResolvedValueOnce({ ...item, status: "approved" });
+    await renderWith(["approvals.read", "approvals.decide"], item);
+
+    await pressApprove();
+    await screen.findByText("mất mạng");
+    fireEvent.change(screen.getByLabelText("Nhận xét (không bắt buộc)"), {
+      target: { value: "đã xem lại" },
+    });
+    await pressApprove();
+    await waitFor(() => expect(decideApproval).toHaveBeenCalledTimes(2));
+    expect(decideApproval.mock.calls[1]![1]).toEqual({
+      approve: true,
+      comment: "đã xem lại",
+    });
+    expect(keyOfCall(1)).not.toBe(keyOfCall(0));
   });
 });
