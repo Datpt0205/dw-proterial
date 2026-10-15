@@ -1,7 +1,7 @@
 """platform notifications readable by the offboarding lane
 
 Revision ID: 2e0354b50d10
-Revises: 218118b8f0e5
+Revises: 546a6a81e58c
 Create Date: 2026-10-15 03:28:08.029814+00:00
 
 `platform.notifications` is read only by its recipient (855ae928c3fa): the
@@ -29,7 +29,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "2e0354b50d10"
-down_revision = "218118b8f0e5"
+down_revision = "546a6a81e58c"
 branch_labels = None
 depends_on = None
 
