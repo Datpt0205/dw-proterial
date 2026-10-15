@@ -196,7 +196,6 @@ async def seed_dw1_accounts(
                     user_id=user_id,
                     role_keys=[DW1_ROLE],
                     permission_set_keys=[],
-                    department="kinh-doanh",
                 )
                 await conn.execute(
                     membership.on_conflict_do_update(
