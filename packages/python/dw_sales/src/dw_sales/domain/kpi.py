@@ -18,7 +18,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dw_sales.domain.process import WIV_STEPS
+from dw_sales.domain.process import StepId
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -31,7 +31,10 @@ class SalesKpi(BaseModel):
     quotation sent (1, Đạt 2026-10-05). ``manual_baseline_minutes``: what one
     pass of each surveyed step (O1 … Q12) takes by hand today, the column the
     per-step export carries beside its counts. Every surveyed step is listed:
-    a step without a baseline would export as if it took no time.
+    a step without a baseline would export as if it took no time. Keyed by
+    `StepId`, a closed set, so a version written before a step was surveyed
+    is read with the platform's baseline for it, and a key the survey does
+    not have is refused.
     """
 
     model_config = _FROZEN
@@ -41,15 +44,12 @@ class SalesKpi(BaseModel):
     policy_version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     order_confirmation_target_hours: int = Field(gt=0, le=24 * 30)
     quotation_target_days: int = Field(gt=0, le=90)
-    manual_baseline_minutes: Mapping[str, int]
+    manual_baseline_minutes: Mapping[StepId, int]
 
     @model_validator(mode="after")
     def _every_surveyed_step_has_a_baseline(self) -> Self:
-        steps = {step.step_id for step in WIV_STEPS}
-        if missing := sorted(steps - self.manual_baseline_minutes.keys()):
-            raise ValueError(f"no manual baseline for {missing}")
-        if unknown := sorted(self.manual_baseline_minutes.keys() - steps):
-            raise ValueError(f"baselines for steps the survey does not have: {unknown}")
+        if missing := sorted(set(StepId) - self.manual_baseline_minutes.keys()):
+            raise ValueError(f"no manual baseline for {[str(step) for step in missing]}")
         if any(minutes < 0 for minutes in self.manual_baseline_minutes.values()):
             raise ValueError("a manual baseline is a number of minutes, not below zero")
         return self

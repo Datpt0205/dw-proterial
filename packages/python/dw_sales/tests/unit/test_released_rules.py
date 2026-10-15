@@ -31,8 +31,10 @@ from dw_sales.application.rules import (
     TenantRuleBook,
     read_over,
 )
+from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.orders import FindingCode
+from dw_sales.domain.process import StepId
 from dw_sales.evals.graders import AN, CALLERS, OUTSIDER
 from dw_sales.evals.world import BETA, SampleSet, World, open_world
 
@@ -146,6 +148,27 @@ def test_a_field_a_version_predates_reads_as_the_platform_has_it_now() -> None:
     # What the version says, it keeps.
     assert read.cross_check_required is not platform.cross_check_required
     assert read.policy_version == "1.0.9"
+
+
+def test_a_kpi_version_written_before_a_step_was_surveyed_reads_its_baseline() -> None:
+    """The manual baseline is kept per surveyed step, a closed set: a step
+    added after a version was written reads as the platform has it, and the
+    version keeps every baseline it states."""
+    platform = load_sales_policies(POLICIES, COPY).kpi
+    document = platform.model_dump(mode="json", by_alias=True)
+    document["policy_version"] = "1.0.9"
+    document["manual_baseline_minutes"] = {
+        step: minutes + 1
+        for step, minutes in document["manual_baseline_minutes"].items()
+        if step != StepId.Q12
+    }
+
+    read = read_over(SalesKpi, document, platform)
+
+    assert isinstance(read, SalesKpi)
+    baseline, platforms = read.manual_baseline_minutes, platform.manual_baseline_minutes
+    assert baseline[StepId.Q12] == platforms[StepId.Q12]
+    assert baseline[StepId.O1] == platforms[StepId.O1] + 1
 
 
 def test_a_mapping_of_data_is_never_topped_up_and_an_unknown_field_is_refused() -> None:

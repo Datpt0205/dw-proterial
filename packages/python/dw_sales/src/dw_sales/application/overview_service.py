@@ -61,7 +61,7 @@ from dw_sales.application.views import WorkerStateView, worker_state
 from dw_sales.domain.dispositions import SALES_PIC_POOL, CaseKind, DispositionKind
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.orders import OrderCase, OrderStatus
-from dw_sales.domain.process import WIV_STEPS, Procedure
+from dw_sales.domain.process import WIV_STEPS, Procedure, StepId
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus
 
 _VIEW = ConfigDict(frozen=True)
@@ -329,7 +329,7 @@ class OverviewService:
                     step_id=step.step_id,
                     month=month,
                     times=figures.export.get((step.step_id, month), 0),
-                    manual_baseline_minutes=kpi.manual_baseline_minutes[step.step_id],
+                    manual_baseline_minutes=kpi.manual_baseline_minutes[StepId(step.step_id)],
                 )
                 for month in figures.months
                 for step in WIV_STEPS
