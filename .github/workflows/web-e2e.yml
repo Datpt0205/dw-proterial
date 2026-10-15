@@ -6,9 +6,9 @@ name: Web E2E (DW1 walk)
 # then blocking on main. Its own workflow rather than a job in ci.yml because a
 # `schedule` trigger there would run every CI job nightly, not just this one.
 #
-# Making it blocking is one line: delete `continue-on-error: true` below, in a
-# commit that names the three green run ids. The ticket records who flips it
-# (.claude/plans/sales/dw1-portal-demo/issues/18-web-tests-in-ci.md).
+# Blocking since 2026-10-15: the sales-walk job was green on six consecutive
+# runs after the red 38545009082, the last three 38664301595, 38667353972 and
+# 38669232021 (.claude/plans/sales/dw1-portal-demo/issues/18-web-tests-in-ci.md).
 
 on:
   push:
@@ -31,9 +31,6 @@ jobs:
     name: DW1 walk in a browser (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Non-blocking until three consecutive green runs (see the header). A red
-    # run still shows red on the job; only the workflow's conclusion ignores it.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
