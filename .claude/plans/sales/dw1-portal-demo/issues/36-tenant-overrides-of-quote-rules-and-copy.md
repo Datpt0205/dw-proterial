@@ -1,6 +1,6 @@
 # 36 — A tenant's own quote rules, pricing, copy and upload template
 
-Status: done (2026-10-14; the six keys, their readers and stamps; built, mutation-checked and reviewed by the agent, Đạt away; not committed; integration tests written and owed while Docker is down, see Owed)
+Status: done (2026-10-14; the six keys, their readers and stamps; built, mutation-checked and reviewed by the agent, Đạt away; committed in 8adbe08; integration tests green in CI on 1621cbc and 99cb905; the mutation and the downgrade owed on local Docker, see Owed)
 Blocked by: —
 Category: enhancement
 
@@ -116,7 +116,7 @@ compared by its `ref`; `QuotationService`, `ArtifactService` and
 `InboxQueries` each take a narrow port the book satisfies, and the
 composition roots hand the book. Tests as ticket 19's, per reader.
 
-## As built (2026-10-14, agent, Đạt away; not committed)
+## As built (2026-10-14, agent, Đạt away; committed in 8adbe08)
 
 - `application/rules.py`: `RuleKey` and `OVERRIDABLE` gain
   `sales_quote_rules`, `sales_pricing`, `sales_emails`, `sales_documents`,
@@ -206,6 +206,14 @@ platform's; a stamp not held: refused, never the version in force).
 
 ## Owed when Docker is back (WSL hung since 2026-10-13 22:01)
 
+The heads check and the two integration runs below ran green in CI on
+1621cbc (run 38519549220). 8894874 turned 12 API integration tests red,
+three in `test_sales_api_rules.py` with this ticket's
+`ck_rule_versions_document` test among them (the fixture's truncate
+cascading to `sales.rule_versions`, ticket 38); all were green again on
+99cb905 (run 38545008947). The head is now 218118b8f0e5. Still owed: the
+mutation and the downgrade after them.
+
 ```sh
 set -a; . ./.env; set +a
 uv run alembic -c db/alembic.ini heads          # one head (0a78ca5e96d3 on 2026-10-14, ticket 25 on top of 26a5276840ba)
@@ -224,11 +232,13 @@ version is stored.
 ## Open for Đạt
 
 - dw_sales ADR 0004 for rules: if accepted, the decision route moves to a
-  `sales.rules` platform approval for all eight keys at once.
+  `sales.rules` platform approval for all eight keys at once. (Accepted on
+  2026-10-14 and built: ticket 38.)
 - A deploy that ships a new platform version of a key strands the cases
   stamped with the old one (409), as order rules already do (ticket 19).
   Holding every shipped version in the platform layer would keep them
-  workable; not done without a decision.
+  workable; not done without a decision. (Đạt chose that on 2026-10-14:
+  ticket 37.)
 - Whether a viewer of the rules list should see a pricing document without
   `sales.price.read`: moot while only PIC and head can list.
 
@@ -238,5 +248,5 @@ version is stored.
   `test_a_tenants_email_copy_writes_its_drafts_and_the_file_names_it`
   unpacked the render's response as a list, but it is `{"artifacts": [...]}`
   (`RenderedView`), so the one key came back as `view` and indexing it
-  raised `TypeError`. A test bug; it now reads `["artifacts"]`. Re-run on CI
-  owed.
+  raised `TypeError`. A test bug; it now reads `["artifacts"]`. Re-run on CI:
+  green on 1621cbc (run 38519549220).

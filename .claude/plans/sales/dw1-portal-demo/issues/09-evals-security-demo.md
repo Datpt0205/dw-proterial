@@ -1,6 +1,6 @@
 # 09 — Evals, security review, demo run
 
-Status: built (2026-10-06, uncommitted); eval sales@1.0.0 10/10 in the eval smoke; both security reviews run; demo runbook, make demo-reset, make test-web-sales (11 passed once, 7.2 min; two later runs did not finish green, see Demo)
+Status: built (2026-10-06, committed in 2284d3c); eval sales@1.0.0 10/10 in the eval smoke; both security reviews run; demo runbook, make demo-reset, make test-web-sales (11 passed once, 7.2 min; two later runs did not finish green, see Demo)
 Blocked by: 08
 
 ## What
@@ -110,7 +110,9 @@ API never served a broken guard):
       Hà's overview page stayed on the shell's "Loading…" for 60 s; the API
       checks just before it (overview 200, no price, 403 elsewhere) passed.
       Not reproduced or explained; treat as open until a green run on an idle
-      machine;
+      machine (not seen again: stage 9 has passed in every green
+      `sales-walk` job of CI's Web E2E workflow since `e97042b`,
+      2026-10-13);
     - a second re-run stopped at stage 3 because the `dw_proterial` infra
       stack (Postgres included) was shut down from outside this session at
       10:51 mid-run. The Playwright
@@ -195,8 +197,8 @@ Sales suites, 153 passed.
   document preview from "Tệp và thư nháp DW1 soạn" (`approval.tsx`
   `useLatestPdf` reads the file list on its own): it says "Chưa có bản xem
   trước" until the page is reloaded. The walk and the runbook reload; a fix
-  belongs with the page.
+  belongs with the page. Closed by ticket 13.
 - The preview PDF is not rendered at submit: the approver renders it. Whether
   submit should render it is a product question for Đạt.
 - CI does not run the browser walk (as for `make test-web`); Đạt owes that
-  decision with the web vitest one.
+  decision with the web vitest one. Closed by ticket 18.

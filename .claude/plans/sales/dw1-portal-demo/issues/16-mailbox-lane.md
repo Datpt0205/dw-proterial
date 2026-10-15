@@ -1,6 +1,6 @@
 # 16 — DW1 processes new mail on its own: a worker lane over `InboxPort`
 
-Status: done (2026-10-12, reviewed, uncommitted)
+Status: done (2026-10-12, reviewed, committed in 8ac3d33)
 Blocked by: —
 Category: enhancement
 
@@ -168,7 +168,9 @@ acceptance 4).
   `test_a_message_a_person_routes_during_the_tick_is_not_processed_again`
   and a run count on the mid-tick pause test go red without it.
   Still open: the worker image (now with dw-sales) is not built or scanned
-  here, so CI's trivy run is the first look; the lane's own audit row is a
+  here, so CI's trivy run is the first look (since seen: CI's container job
+  builds it and trivy finds no HIGH or CRITICAL vulnerability with a fix,
+  e.g. run 38545008947 on `99cb905`); the lane's own audit row is a
   transaction after the run's (the run's rows, as the account, are in the
   run's transaction); runs record `channel="web"`; sign-in's
   `users.subject` match would resolve DW1's account if an identity provider

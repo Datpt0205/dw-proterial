@@ -1,12 +1,12 @@
 # 30 — A model pre-fills the field mapping for a PO layout DW1 has not seen; a person approves it once
 
-Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
-his pre-authorisation). Meets the proposed bar: 0 accepted swaps or
+Status: done (2026-10-13, committed in e97042b; built by the agent with Đạt
+away, on his pre-authorisation). Meets the proposed bar: 0 accepted swaps or
 injections, 98.2% of golden fields right (bar 90%). The onboarding screen
 and stored layouts came first; the layout decision is a run-less platform
-approval (dw_sales ADR 0004 amendment, Proposed). N = 3 is an interim
-default, Proterial's call. Two of Acceptance 6's reader fixes moved to
-ticket 34.
+approval (dw_sales ADR 0004 amendment, accepted 2026-10-14). N = 3 is an
+interim default, Proterial's call. Two of Acceptance 6's reader fixes moved
+to ticket 34.
 Blocked by: — (the onboarding screen and stored layouts built here).
 Category: enhancement
 

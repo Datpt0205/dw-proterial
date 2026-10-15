@@ -1,8 +1,9 @@
 # Web UI shell
 
 `apps/web` and the shared `@dw/ui` package. CLAUDE.md's "Required stack"
-names **Next.js, TypeScript strict, Tailwind, shadcn/ui** and "one shared UI
-shell". Changing either is an architecture decision that has to be recorded
+names **Next.js, TypeScript strict, Ant Design v6, Tailwind for layout only**
+(its "Web UI" section since 2026-09-28) and "one shared UI shell". Changing
+either is an architecture decision that has to be recorded
 there, not a refactor.
 
 ## What the shell is (measured 2026-09-28)
@@ -107,7 +108,8 @@ the theme, the shell and the shared composites, not primitive wrappers.
   key it lacks. CSP middleware with a per-request nonce (layout awaits
   `connection()`). `/approvals` links a `sales.` approval to its case page
   (`app/sales/_meta/approvals.ts`).
-- The web vitest suite is not run by CI (one step in `frontend-quality`).
+- The web vitest suite runs in CI since `395dbf3` (sales ticket 18): the
+  "Unit tests (vitest)" step in `frontend-quality`, green in run 38545008947.
 - `next build` fails on this Windows account at the standalone symlink copy
   (EPERM), as it does at HEAD; the Linux builder stage passes.
 - Still open from the 2026-09-30 ui-quality gaps:
@@ -119,7 +121,7 @@ the theme, the shell and the shared composites, not primitive wrappers.
     - no offline banner or session-expiry warning (the header's workspace
       switcher, bell and account menu are antd since 2026-10-05).
 
-## Theme from the E-HSDT v3 prototype (2026-10-05, uncommitted)
+## Theme from the E-HSDT v3 prototype (2026-10-05, committed in `92b155a`)
 
 Đạt: "chỉnh giao diện cho giống bản design". The prototype's light palette
 and its `#catalog` token table are the source; `@dw/ui/src/theme.ts` is the

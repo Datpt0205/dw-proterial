@@ -35,7 +35,7 @@ Area: platform-runtime
   DETAIL. Hôm nay không có đường HTTP nào ghi hai bảng đó; đường nào thêm sau thì dịch
   `ck_roles_sod_memberships` thành 409 kèm danh sách như đường thu hồi.
 - Trang web vẫn dùng shadcn: chuyển sang antd thuộc ticket `web-ui/antd-shell`, không làm
-  ở đây.
+  ở đây. (Đã chuyển 8/10/2026, `3d1f9a5`.)
 - Chưa phủ: đổi scope của chính một quy tắc (`platform.sod_rules`).
 
 ## Tiêu chí chấp nhận

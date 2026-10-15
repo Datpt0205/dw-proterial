@@ -94,9 +94,9 @@ A split line's dates are not typed by Sales (`correctable_fields`, 409
   `confirmed_delivery_date`), and the confirmation draft prints the line's
   whole quantity on that one date. A split line is therefore confirmed to the
   customer as one delivery. Decided by the agent (Đạt away): not widened
-  here; ticket 35 (needs-triage) holds it, because a confirmed date per
-  schedule touches the decision, a column, the API and the page, and PC's
-  side of it is Proterial's process.
+  here; ticket 35 (needs-triage then, done 2026-10-14) holds it, because a
+  confirmed date per schedule touches the decision, a column, the API and
+  the page, and PC's side of it is Proterial's process.
 - Left as is: an Excel `date: quantity` list reads its quantities as plain
   numbers (`3.050` is 3.05); the PDF list uses the layout's separators. A
   misread there cannot pass silently, the schedules no longer add up to the

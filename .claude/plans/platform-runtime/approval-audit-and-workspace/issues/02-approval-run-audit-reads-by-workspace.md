@@ -97,4 +97,5 @@ occurred_at DESC, id DESC)` trên bảng cha phân vùng. Docstring ghi khóa SH
   chặn trước đó (`test_a_run_in_another_workspace_than_its_approval_is_not_resumed`).
 - Còn mở: liệu UoW nên giữ workspace (một chủ) thay vì tham số đọc (review vòng 1 ở repo
   sản phẩm, phát hiện 4); trang `/audit` thiếu scope vẫn hiện lỗi API của trang shadcn,
-  chưa phải `Result 403`.
+  chưa phải `Result 403` (đã xong 8/10/2026, `3d1f9a5`: trang dùng antd, 403 qua
+  `LoadError` thành `RegionState` "forbidden").

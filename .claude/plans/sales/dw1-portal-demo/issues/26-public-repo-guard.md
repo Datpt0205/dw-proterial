@@ -1,8 +1,9 @@
 # 26 — No customer data reaches a tracked file (G34)
 
-Status: done (2026-10-12; not committed; adversarially reviewed and fixed the
-same day, see "Review"). Owed by a person: the `PUBLIC_REPO_DENYLIST`
-repository secret; until it exists the CI step fails, as acceptance 1 asks
+Status: done (2026-10-12; committed in dd5ef1d; adversarially reviewed and
+fixed the same day, see "Review"). Owed by a person: the
+`PUBLIC_REPO_DENYLIST` repository secret; until it exists the CI step fails,
+as acceptance 1 asks
 Blocked by: —
 Category: enhancement
 

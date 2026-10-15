@@ -134,4 +134,11 @@ quantity` list), so a short row is never read shifted and a printed date is
   count) and has its test now.
 - The migration `a459e2244a9c` is parented on `6d0252a87a6c`, the other
   agent's uncommitted ticket 24 migration: commit them in that order, or
-  re-parent this one.
+  re-parent this one. Moot: both were committed together in 399920d, and
+  alembic has one head.
+- 2026-10-15: `known_price_strings` (the API integration price scan) kept
+  only strings with a decimal point, so VND prices and every grouped form a
+  PDF prints were never looked for. It now covers unit prices, line amounts
+  and totals in each grouping a mock form uses, less printed quantities
+  (`953086f`); on M03's text layer the old set found nothing, the new one
+  1.150, 21.800, 7.015.000.

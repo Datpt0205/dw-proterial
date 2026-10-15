@@ -80,10 +80,11 @@ Out (this slice):
   order history and the open-YCBG list are a mock export.
 - Any model call on real Proterial documents, until Proterial agrees and the
   step's live eval meets its bar. Parsing is deterministic; a model step runs
-  only under dw_sales ADR 0005 (amended 2026-10-13, Proposed): typed output
-  that code verifies, flagged for a person, degrading to a person, on the
-  deployment's own model, switched on per tenant. Today one step does
-  (ticket 28), on the fictional mock data and the local demo tenant only.
+  only under dw_sales ADR 0005 (amended 2026-10-13, accepted 2026-10-14):
+  typed output that code verifies, flagged for a person, degrading to a
+  person, on the deployment's own model, switched on per tenant. Today six
+  steps do (tickets 28–33), on the fictional mock data and the local demo
+  tenant only.
 - Scanned or image PDFs, `.xls`/`.doc`, archives, and password-protected or
   macro-enabled files. They are routed to Sales with the reason and nothing
   is extracted (ticket 12 reads them).
@@ -288,12 +289,14 @@ on an overlapping step is counted in the "Promises" figures.
     its values once the coverage statement shows every check ran ("Đã đọc
     N/N dòng …"). Each flagged line needs its disposition.
 13. **Demo exception to ADR 0010 and ADR 0007.** Attachments are parsed in
-    the API process, and only the repo-generated fixtures. Readers sniff the
-    type from the bytes, refuse encrypted and macro-enabled files, and
-    enforce byte/sheet/page/cell caps from `sales_order_rules`. Production
-    parses in the worker sandbox after a malware scan (ticket 12). A model
-    turn reads document content only under dw_sales ADR 0005 (amended
-    2026-10-13; was: no model turn at all): DW1's worker declares no toolset
+    the `reader` sandbox, never in the API (ticket 25; the API process
+    parsed them until 2026-10-14), and only the repo-generated fixtures.
+    Readers sniff the type from the bytes, refuse encrypted and
+    macro-enabled files, and enforce byte/sheet/page/cell caps from
+    `sales_order_rules`. Production parses in the `reader` sandbox after a
+    malware scan (ticket 12; built as ticket 25). A model turn reads
+    document content only under dw_sales ADR 0005 (amended 2026-10-13; was:
+    no model turn at all): DW1's worker declares no toolset
     and its graph holds no model, so ADR 0007's rule holds by construction; a
     step reads through the port its application declares, with the run's
     context, and code verifies the typed answer before anything is mapped.
@@ -445,7 +448,7 @@ question. An answer changes a policy key or a role assignment, never code.
 See `issues/`. Order: the 01 follow-up (fixtures), then the 02 and 03
 amendments, then 04, 11 (personas), 05, 06, then 08 (after 05–07), then 09.
 Ticket 10 comes after the demo. 07 is done. 12 (production hardening) is
-needs-triage, after 09.
+needs-info, after 09 (triaged 2026-10-12 into tickets 17 and 19–27).
 
 The state names and their labels are listed once, in
 `packages/python/dw_sales/CONTEXT.md`; tickets 02 and 03 own the

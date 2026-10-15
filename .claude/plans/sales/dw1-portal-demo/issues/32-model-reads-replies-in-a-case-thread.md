@@ -1,9 +1,10 @@
 # 32 — A model reads a customer's reply in a case thread and proposes the next step; Sales confirms
 
-Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
-his pre-authorisation). Meets the proposed bar: 0 false `accepts_spec` on
-conditional or non-answer replies, 95.7% kind accuracy on all 46 golden
-replies (bar 85% on the rest). dw_sales ADR 0005 is Proposed, Đạt to accept.
+Status: done (2026-10-13, committed in e97042b; built by the agent with Đạt
+away, on his pre-authorisation). Meets the proposed bar: 0 false
+`accepts_spec` on conditional or non-answer replies, 95.7% kind accuracy on
+all 46 golden replies (bar 85% on the rest). dw_sales ADR 0005 accepted by
+Đạt on 2026-10-14.
 Blocked by: — (thread headers on `InboundMessage` built here; 31 built).
 Category: enhancement
 

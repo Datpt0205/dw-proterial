@@ -3,7 +3,7 @@
 Status: done (2026-10-05, amendment)
 Blocked by: 01 (including its 2026-10-03 follow-up)
 
-## What exists (working tree, not yet reviewed or committed)
+## What exists (committed with the amendment in `ad467dd`)
 
 Domain and application, with no framework imports:
 
@@ -166,7 +166,7 @@ block_confirmation` is read by the `confirmed` transition.
     overview reads.
 
 14. **Policy (G15).** Amend `configs/policies/sales_order_rules@1.0.0.yaml`
-    in place (it is not committed yet):
+    in place (first committed in `ad467dd`; released since up to 1.5.0):
     - severities for every new code;
     - `short_lead_time` (`from: received_date`, `lead_time: item_standard`,
       `day_basis: calendar`);

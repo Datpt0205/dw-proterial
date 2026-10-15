@@ -1,6 +1,6 @@
 # 15 — A `value_uncertain` correction is per field and reaches the upload file
 
-Status: done (2026-10-12; not committed; adversarial review 2026-10-12, two defects fixed)
+Status: done (2026-10-12; committed in 8ac3d33; adversarial review 2026-10-12, two defects fixed)
 Blocked by: —
 Category: bug
 

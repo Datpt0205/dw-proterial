@@ -16,11 +16,14 @@ context. All five are done and on `main`. The full narrative is at
 
 ## What holds, and where it lives
 
-- **One retention file.** `configs/policies/retention@1.4.0.yaml` feeds the
-  memory, knowledge and audit sweeps on the worker's hourly lanes.
+- **One retention file.** `configs/policies/retention@1.7.0.yaml` feeds the
+  memory, knowledge, audit, checkpoint (since 1.6.0) and channel-delivery
+  (since 1.7.0) sweeps on the worker's hourly lanes.
     - Audit keeps 1095 days: Commercial Law Art. 319's two-year limitation plus a
       review margin. Decree 13/2023 requires deletion once the purpose ends.
-    - `legal_hold` is never swept, and a class this build does not know is kept.
+    - Since 1.5.0 the only memory class is `default`; `legal_hold` left the
+      file. A row still carrying it, like any class this build does not know,
+      is kept and never swept.
 - **Partition creation is one function**, `platform.ensure_time_partitions`
   (CLAUDE.md, Data model rules). A partition created later inherits neither
   RLS nor the audit revoke.
@@ -52,6 +55,12 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **Offboarding exported each row of a partitioned table twice** (fixed
+  2026-10-15, `953086f`). Every partition carries its own tenant policy, so
+  the catalog query listed it beside its parent, and the export (and purge)
+  read the audit log and the ledger through both. Partitions are left out;
+  `test_export_holds_each_row_of_a_partitioned_table_once`. Platform code:
+  owed upstream to `Datpt0205/codebase`.
 - **Offboarding loses in-app notifications unexported** (measured 2026-10-03,
   `workspace-scope-offboarding/01` step 4). `platform.notifications` is read
   only by its recipient (`app.user_id`), so the lane's export lists the table
@@ -71,8 +80,12 @@ context. All five are done and on `main`. The full narrative is at
   host, roles provisioned from zero) has not been done.
 - **Alert thresholds are starting points, not measurements:** outbox backlog
   500, reaper 20/hour, run failure rate 0.2/s, DB connections 80%.
-- **The reaper alert cannot fire.** No bounded context registers a
-  `ReapTarget`; this checkout ships none (checked 2026-09-29).
+- **The reaper alert can fire only where DW1 is mounted.** None was registered
+  on 2026-09-29. Since `8adbe08` Sales registers a `ReapTarget` for its
+  processing lane (`dw_worker/main.py`), but only when `s3_endpoint_url` is
+  set and `SALES_DEMO_*` mounts DW1; a deployed profile without it still
+  registers none. The header of `infra/prometheus/alerts.yml` still says no
+  context registers one (checked 2026-10-15).
 - **`dw_node_failure_total` is declared and emitted by nothing**
   (`dw_observability/metrics.py`), so no rule uses it.
 - **No Grafana dashboards.**

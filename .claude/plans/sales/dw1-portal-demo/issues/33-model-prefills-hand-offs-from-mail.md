@@ -1,10 +1,10 @@
 # 33 — A model turns a delivery-change, complaint or sample mail into a pre-filled hand-off with quotes; Sales sends it
 
-Status: done (2026-10-13, uncommitted; built by the agent with Đạt away, on
-his pre-authorisation). Meets the proposed bar: 0 injected text, 0 resolved
-POs of another customer, 94.5% of golden fields right (bar 85%). Đạt's
-question below (delivery changes in DW1 or DW2) is still open; all three
-kinds are built and one table entry turns delivery changes off.
+Status: done (2026-10-13, committed in e97042b; built by the agent with Đạt
+away, on his pre-authorisation). Meets the proposed bar: 0 injected text, 0
+resolved POs of another customer, 94.5% of golden fields right (bar 85%).
+Đạt's question below (delivery changes in DW1 or DW2) is still open; all
+three kinds are built and one table entry turns delivery changes off.
 Blocked by: — (built on 31 and the mock catalogue's `orders_for_po`).
 Category: enhancement
 

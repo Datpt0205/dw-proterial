@@ -1,7 +1,9 @@
 # 18 — CI runs the web tests
 
-Status: built and reviewed (2026-10-12; not committed); acceptance 1-3
-wait on real CI runs, listed under "Still to prove"
+Status: built and reviewed (2026-10-12; committed in 395dbf3); acceptance 1
+waits on a real CI run ("Still to prove" item 1) and acceptance 3 on the
+investigation of the walk's red runs (see "Switching the walk to blocking");
+"Still to prove" items 2 and 3 were seen on CI from 2026-10-13
 Blocked by: —
 Category: enhancement
 
@@ -146,9 +148,13 @@ owed.
    2-core runner may approach the walk's 60 s expectation timeout (the two
    timeouts of ticket 09 were under local load); `playwright install
 --with-deps chromium` and the 45-minute job limit are unmeasured there.
+   Seen since: the walk passes on a runner, first on `e97042b` (2026-10-13),
+   its green jobs taking 8-14 minutes.
 3. What `gh run view --json jobs` reports as the `sales-walk` conclusion
    when the walk fails under `continue-on-error` (the count above depends
-   on it), and that the trace artifact is uploaded on that failure.
+   on it), and that the trace artifact is uploaded on that failure. Seen
+   since: the job reads `failure`, and run 38545009082 (`99cb905`, a test
+   failed) uploaded `playwright-sales-walk`.
 4. The `security-scan` job with `--all-extras` on Linux (the local run was
    on Windows; the export is universal, the marker evaluation is not).
 5. Scheduled workflows in a public repository stop after 60 days without a

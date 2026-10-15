@@ -1,6 +1,6 @@
 # 13 — The quote approval panel sees a preview rendered on the same page
 
-Status: done (2026-10-12; not committed)
+Status: done (2026-10-12; committed in a995031)
 Blocked by: —
 Category: bug
 
@@ -69,7 +69,8 @@ change on a render.
   a render.
 - `e2e/sales-demo.spec.ts` test 7 no longer reloads the page after rendering
   the preview, and the comment explaining the workaround is gone. The walk
-  itself was NOT run in this pass (needs the full stack).
+  itself was NOT run in this pass (needs the full stack). It has since passed
+  on CI's Web E2E workflow, first on `e97042b` (2026-10-13).
 
 ## Comments
 
