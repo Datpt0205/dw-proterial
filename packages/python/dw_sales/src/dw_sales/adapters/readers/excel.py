@@ -57,7 +57,7 @@ from pydantic import ValidationError
 from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules, no_date
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LabelCell
-from dw_sales.domain.legacy_fonts import legacy_encoding
+from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import (
@@ -440,17 +440,11 @@ class _Sheet:
 
     def legacy(self, field: str, cell: Cell) -> tuple[LegacyText, ...]:
         """``field``'s value, when ``cell`` or a run of its text is typed in a
-        TCVN3 or VNI font: the cell's font first, then each run's own."""
-        fonts = [cell.font.name if cell.font is not None else None]
+        TCVN3 or VNI font."""
         written = self._formulas[cell.coordinate]
-        if isinstance(written, Cell) and isinstance(written.value, CellRichText):
-            fonts.extend(
-                run.font.rFont
-                for run in written.value
-                if isinstance(run, TextBlock) and run.font is not None
-            )
-        encoding = next(
-            (found for name in fonts if (found := legacy_encoding(name)) is not None), None
+        encoding = legacy_text_encoding(
+            cell.font.name if cell.font is not None else None,
+            written.value if isinstance(written, Cell) else None,
         )
         return () if encoding is None else (LegacyText(field=field, encoding=encoding),)
 
@@ -463,6 +457,18 @@ class _Sheet:
             ):
                 return merged
         return None
+
+
+def legacy_text_encoding(cell_font: str | None, written: object) -> LegacyEncoding | None:
+    """The legacy encoding a cell's text is typed in: its own font's, or else
+    that of a run of its text that sets its own (``written`` is the value as
+    loaded with ``rich_text``; plain text has no runs). One run is enough."""
+    fonts = [cell_font]
+    if isinstance(written, CellRichText):
+        fonts.extend(
+            run.font.rFont for run in written if isinstance(run, TextBlock) and run.font is not None
+        )
+    return next((found for name in fonts if (found := legacy_encoding(name)) is not None), None)
 
 
 def font_matches_fill(cell: Cell) -> bool:

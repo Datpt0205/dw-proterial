@@ -7,6 +7,14 @@ Each value is taken from the cell its label or column names, and from nowhere
 else. A remark or a description that reads like an instruction is text in a
 cell; nothing here interprets it.
 
+A value typed in a TCVN3 or VNI font (`legacy_fonts`, ticket 20) is not read:
+its letters are not what the customer sees. The file is refused at that cell,
+as one holding a value that cannot be read, so the request goes to a person
+and no model reads the garbled text. The font is the cell's, or a run's of
+its text: openpyxl reports a run's font in read-only mode only for text kept
+in the shared-strings table, which is where Excel keeps it; a run in an
+inline string (some generators write those) is read as text.
+
 The file is attacker-controlled and is parsed inside the API process, so the
 work is bounded before openpyxl sees it: by what the archive declares it holds,
 and by the rows and columns read, whatever dimensions a sheet claims. A
@@ -24,15 +32,17 @@ from decimal import Decimal
 from typing import Final
 
 from openpyxl import load_workbook
+from openpyxl.cell.rich_text import CellRichText
 from openpyxl.utils import get_column_letter
 from pydantic import ValidationError
 
 from dw_sales.adapters.readers.documents import sniff
-from dw_sales.adapters.readers.excel import MACROS_PART
+from dw_sales.adapters.readers.excel import MACROS_PART, legacy_text_encoding
 from dw_sales.application.order_ports import QuoteForm
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Currency, CustomerItemCode, DocumentNo, Name, PrvCode, Uom
+from dw_sales.domain.legacy_fonts import LegacyEncoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.quotes import (
     BpCode,
@@ -48,7 +58,7 @@ from dw_sales.domain.quotes import (
 )
 
 # Stamped on every request it reads (`RfqDocument.parser_version`).
-PARSER_VERSION: Final = "excel_rfq_reader@1.0.0"
+PARSER_VERSION: Final = "excel_rfq_reader@1.1.0"
 # A request for quotation is a few kilobytes. The bound is on what the archive
 # declares it holds uncompressed, which zipfile holds an entry to as it inflates.
 _MAX_UNCOMPRESSED_BYTES: Final = 16 * 1024 * 1024
@@ -85,6 +95,8 @@ _REPLY_COLUMNS: Final = frozenset({_NO, _BP_CODE, _SPEC_NO, _PRV_CODE, _COPPER})
 
 type _Position = tuple[int, int]
 type _Cells = Mapping[_Position, object]
+# The cells typed in a legacy font, and which.
+type _Legacy = Mapping[_Position, LegacyEncoding]
 
 
 class ExcelRfqReader:
@@ -139,10 +151,10 @@ def _the_marked_sheet(content: AttachmentContent, marker: str) -> _Sheet | None:
     if sheets is None:
         return None
     marked = []
-    for title, cells in sheets:
+    for title, cells, legacy in sheets:
         if not any(_is_text(value, marker) for value in cells.values()):
             continue
-        sheet = _Sheet(attachment, title, cells, marker)
+        sheet = _Sheet(attachment, title, cells, marker, legacy)
         try:
             sheet.anchor((1, 1))
         except ValidationError:
@@ -161,9 +173,9 @@ def _the_marked_sheet(content: AttachmentContent, marker: str) -> _Sheet | None:
     return marked[0]
 
 
-def _read_cells(data: bytes) -> list[tuple[str, _Cells]] | None:
-    """Every worksheet's non-empty cells, or None when the bytes are not a
-    workbook this reader reads.
+def _read_cells(data: bytes) -> list[tuple[str, _Cells, _Legacy]] | None:
+    """Every worksheet's non-empty cells, with those typed in a legacy font,
+    or None when the bytes are not a workbook this reader reads.
 
     Whatever zipfile, openpyxl or the XML parser raise on a malformed file, the
     answer is the same, so one handler takes all of it.
@@ -177,17 +189,25 @@ def _read_cells(data: bytes) -> list[tuple[str, _Cells]] | None:
             return None
         if sum(entry.file_size for entry in entries) > _MAX_UNCOMPRESSED_BYTES:
             return None
-        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=True, rich_text=True)
         try:
-            sheets: list[tuple[str, _Cells]] = []
+            sheets: list[tuple[str, _Cells, _Legacy]] = []
             for sheet in workbook.worksheets:
                 cells: dict[_Position, object] = {}
-                rows = sheet.iter_rows(max_row=_MAX_ROWS, max_col=_MAX_COLUMNS, values_only=True)
-                for row, values in enumerate(rows, start=1):
-                    for column, value in enumerate(values, start=1):
-                        if value is not None and not (isinstance(value, str) and not value.strip()):
-                            cells[(row, column)] = value
-                sheets.append((sheet.title, cells))
+                legacy: dict[_Position, LegacyEncoding] = {}
+                rows = sheet.iter_rows(max_row=_MAX_ROWS, max_col=_MAX_COLUMNS)
+                for row, read in enumerate(rows, start=1):
+                    for column, cell in enumerate(read, start=1):
+                        # Rich text is its runs joined, as without ``rich_text``.
+                        value = cell.value
+                        text = str(value) if isinstance(value, CellRichText) else value
+                        if text is None or (isinstance(text, str) and not text.strip()):
+                            continue
+                        cells[(row, column)] = text
+                        font = cell.font.name if cell.font is not None else None
+                        if (found := legacy_text_encoding(font, value)) is not None:
+                            legacy[(row, column)] = found
+                sheets.append((sheet.title, cells, legacy))
             return sheets
         finally:
             workbook.close()
@@ -236,11 +256,14 @@ def _line_no(raw: object) -> int:
 class _Sheet:
     """One worksheet's cells, read as the document ``marker`` labels."""
 
-    def __init__(self, attachment: Attachment, title: str, cells: _Cells, marker: str) -> None:
+    def __init__(
+        self, attachment: Attachment, title: str, cells: _Cells, marker: str, legacy: _Legacy
+    ) -> None:
         self._attachment = attachment
         self._title = title
         self._cells = cells
         self._marker = marker
+        self._legacy = legacy
 
     def anchor(self, at: _Position) -> SourceAnchor:
         row, column = at
@@ -300,6 +323,8 @@ class _Sheet:
         the customer may leave blank and the case then asks for."""
         anchor = self.anchor(at)
         raw = self._cells.get(at)
+        if (encoding := self._legacy.get(at)) is not None:
+            raise QuoteFileUnreadableError(f"{what} is typed in a {encoding.name} font", at=anchor)
         try:
             # ValidationError is a ValueError: a value of the wrong kind and one
             # the domain refuses (a zero quantity, an unknown unit) read alike.

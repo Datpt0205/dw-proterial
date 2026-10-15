@@ -9,7 +9,7 @@ value is detected by the font it was typed in and never read as text
 (`docs/adr/0010-document-intake-at-real-size-and-format.md`), later.
 
 The font's name says which encoding its bytes are in. This is the one list
-of them; both PO readers ask it (`legacy_encoding`).
+of them; both PO readers and the RFQ reader ask it (`legacy_encoding`).
 """
 
 from __future__ import annotations
