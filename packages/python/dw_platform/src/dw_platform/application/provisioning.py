@@ -11,7 +11,7 @@ platform provisioning tables, so nothing here can touch a tenant's business data
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -19,6 +19,7 @@ from uuid import UUID
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.identity import service_subject
 from dw_platform.application.support_access import SupportGrant, support_grant_audit
 from dw_platform.domain.audit import AuditEvent
 
@@ -123,6 +124,30 @@ class NewTenant:
     name: str
 
 
+@dataclass(frozen=True, slots=True)
+class ServiceAccount:
+    """A context's digital worker acting on its own, as a member of each tenant
+    (Sales' DW1 in its mailbox lane): registered by the context at the
+    composition root, and created with every tenant, in its main workspace,
+    holding exactly ``role_keys``. Its subject is `service_subject`, which no
+    sign-in resolves; it has no email."""
+
+    worker_id: str
+    display_name: str
+    role_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class NewServiceAccount:
+    """One `ServiceAccount` as a new tenant's rows: its user and membership."""
+
+    user_id: UUID
+    membership_id: UUID
+    subject: str
+    display_name: str
+    role_keys: tuple[str, ...]
+
+
 class ProvisioningRepositoryPort(Protocol):
     """Cross-tenant writes on the platform provisioning tables. Implemented over
     the ``dw_provisioner`` role, which cannot read any business schema."""
@@ -146,7 +171,11 @@ class ProvisioningRepositoryPort(Protocol):
         slug: str,
         name: str,
         plan_id: str,
-    ) -> None: ...
+        service_accounts: Sequence[NewServiceAccount] = (),
+    ) -> None:
+        """The tenant, its main workspace, its plan and its service accounts,
+        in one transaction: a tenant never exists without them."""
+        ...
 
     async def set_tenant_status(self, tenant_id: UUID, status: str) -> bool:
         """Returns False if no tenant had that id."""
@@ -245,6 +274,10 @@ class ProvisioningService:
     repo: ProvisioningRepositoryPort
     clock: UtcClock
     ids: IdGenerator
+    # The contexts' service accounts every new tenant gets. Registered at the
+    # composition root after this is built (a context is wired below the
+    # platform), so it is read when a tenant is created, never copied.
+    service_accounts: Sequence[ServiceAccount] = ()
 
     async def list_tenants(self, context: ProvisioningContext) -> list[TenantSummary]:
         return await self.repo.list_tenants()
@@ -275,6 +308,16 @@ class ProvisioningService:
             slug=slug,
             name=name,
         )
+        accounts = tuple(
+            NewServiceAccount(
+                user_id=self.ids.new_uuid(),
+                membership_id=self.ids.new_uuid(),
+                subject=service_subject(account.worker_id, tenant.tenant_id),
+                display_name=account.display_name,
+                role_keys=account.role_keys,
+            )
+            for account in self.service_accounts
+        )
         await self.repo.create_tenant(
             tenant_id=tenant.tenant_id,
             workspace_id=tenant.workspace_id,
@@ -282,13 +325,19 @@ class ProvisioningService:
             slug=slug,
             name=name,
             plan_id=plan_id,
+            service_accounts=accounts,
         )
         await self._audit(
             context,
             "platform.tenant.create",
             "tenant",
             str(tenant.tenant_id),
-            {"slug": slug, "name": name, "plan_id": plan_id},
+            {
+                "slug": slug,
+                "name": name,
+                "plan_id": plan_id,
+                "service_accounts": [str(account.user_id) for account in accounts],
+            },
         )
         return tenant
 
