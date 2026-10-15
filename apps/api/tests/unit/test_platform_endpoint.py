@@ -6,6 +6,7 @@ gate run for real. The gate is the point: a non-operator can never reach these.
 
 import re
 import uuid
+from dataclasses import replace
 
 import httpx
 import pytest
@@ -28,6 +29,7 @@ from dw_platform.application.provisioning import (
     TenantSummary,
     UserRef,
 )
+from dw_sales.application.inbox_lane import DW1_SERVICE_ACCOUNT, dw1_subject
 
 pytestmark = pytest.mark.unit
 
@@ -200,6 +202,33 @@ async def test_operator_creates_a_tenant() -> None:
     assert repo.created[0]["plan_id"] == "professional"
     # The write left a provisioning-audit row.
     assert any(a["action"] == "platform.tenant.create" for a in repo.audits)
+
+
+async def test_a_new_tenant_is_created_with_every_registered_service_account() -> None:
+    """DW1's account (sales ticket 16) is created with the tenant, in the same
+    write, so a production tenant's mailbox lane has an account to act under."""
+    repo = FakeRepo()
+    container = make_container(repo, True)
+    assert container.provisioning is not None
+    container.provisioning = replace(container.provisioning, service_accounts=[DW1_SERVICE_ACCOUNT])
+
+    response = await _request(
+        container,
+        "POST",
+        "/api/v1/platform/tenants",
+        json={"slug": "proterial", "name": "Proterial", "plan_id": "professional"},
+    )
+
+    assert response.status_code == 201
+    tenant_id = uuid.UUID(response.json()["tenant_id"])
+    ((created,),) = [kw["service_accounts"] for kw in repo.created]
+    assert created.subject == dw1_subject(tenant_id)
+    assert (created.display_name, created.role_keys) == (
+        DW1_SERVICE_ACCOUNT.display_name,
+        ("sales_dw1",),
+    )
+    (audit,) = [a for a in repo.audits if a["action"] == "platform.tenant.create"]
+    assert audit["details"]["service_accounts"] == [str(created.user_id)]  # type: ignore[index]
 
 
 async def test_create_rejects_an_unknown_plan() -> None:

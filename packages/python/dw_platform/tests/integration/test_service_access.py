@@ -174,3 +174,24 @@ async def test_it_is_found_by_its_own_subject_never_through_an_external_identity
 
     assert await lookup.find_service_access(issued, *where, _CEILING) is None
     assert await lookup.find_service_access(subject, *where, _CEILING) is not None
+
+
+async def test_no_sign_in_resolves_the_account_by_its_subject_or_a_mapped_identity(
+    migrator: AsyncEngine, lookup: SqlMembershipLookup
+) -> None:
+    """`find_access` is sign-in: the account is nobody there, by its own
+    subject, or through an identity someone mapped to it by hand."""
+    where = await _tenant(migrator)
+    user_id, subject = await _account(migrator, where, roles=["member"])
+    issuer, issued = "https://issuer.test/realms/dw", f"kc-{uuid.uuid4()}"
+    async with migrator.begin() as conn:
+        await conn.execute(
+            sa.insert(tables.external_identities).values(
+                id=uuid.uuid4(), user_id=user_id, issuer=issuer, subject=issued, provider="keycloak"
+            )
+        )
+
+    assert await lookup.find_access(subject, issuer, *where) is None
+    assert await lookup.find_access(issued, issuer, *where) is None
+    # The lane's own door still finds it.
+    assert await lookup.find_service_access(subject, *where, _CEILING) is not None

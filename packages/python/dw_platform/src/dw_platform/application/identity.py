@@ -8,13 +8,46 @@ trusted directly.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Final, Protocol
 from uuid import UUID
 
 from dw_kernel.autonomy import FAIL_CLOSED_LEVEL, AutonomyLevel
 from dw_kernel.errors import PermissionDeniedError, TenantContextMissingError
 from dw_platform.application.access_context import AccessContext
-from dw_platform.application.ports import VerifiedIdentity
+from dw_platform.application.ports import TokenVerifierPort, VerifiedIdentity
+
+# The subject of a service account: a context's digital worker acting on its
+# own (`SqlMembershipLookup.find_service_access`), such as Sales' DW1 in its
+# mailbox lane. It signs in nowhere, so no sign-in resolves one.
+SERVICE_SUBJECT_PREFIX: Final = "service|"
+
+
+def service_subject(worker_id: str, tenant_id: UUID) -> str:
+    """The subject of ``worker_id``'s service account in one tenant. The tenant
+    is part of it: a subject is unique across the platform."""
+    return f"{SERVICE_SUBJECT_PREFIX}{worker_id}|{tenant_id}"
+
+
+@dataclass(frozen=True)
+class ServiceSubjectsRefused:
+    """`TokenVerifierPort` around the deployment's verifier: a token naming a
+    service account's subject is refused, whoever issued it.
+
+    Every sign-in path (a request's context, the bootstrap, support,
+    provisioning) starts from this verifier, so one refusal here covers them
+    all; `SqlMembershipLookup.find_access` also never resolves a service
+    account, for a subject mapped to one by hand.
+    """
+
+    inner: TokenVerifierPort
+
+    async def verify(self, token: str) -> VerifiedIdentity:
+        identity = await self.inner.verify(token)
+        if identity.subject.startswith(SERVICE_SUBJECT_PREFIX):
+            raise PermissionDeniedError(
+                "a service account does not sign in", details={"rule": "service_subject"}
+            )
+        return identity
 
 
 @dataclass(frozen=True, slots=True)

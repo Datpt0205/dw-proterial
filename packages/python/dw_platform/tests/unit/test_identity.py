@@ -5,8 +5,10 @@ import pytest
 from dw_kernel.errors import PermissionDeniedError, TenantContextMissingError, UnauthenticatedError
 from dw_platform.adapters.identity.dev_token import DevTokenVerifier
 from dw_platform.application.identity import (
+    SERVICE_SUBJECT_PREFIX,
     DbAccessContextFactory,
     MembershipAccess,
+    ServiceSubjectsRefused,
     VerifiedClaims,
 )
 
@@ -104,3 +106,14 @@ async def test_dev_token_expired_rejected() -> None:
 def test_dev_verifier_requires_strong_enough_secret() -> None:
     with pytest.raises(ValueError, match="32"):
         DevTokenVerifier("short")
+
+
+async def test_a_token_naming_a_service_accounts_subject_is_refused() -> None:
+    """A service account signs in nowhere, whoever issued the token."""
+    issuer = DevTokenVerifier("x" * 32)
+    verifier = ServiceSubjectsRefused(issuer)
+
+    with pytest.raises(PermissionDeniedError) as refused:
+        await verifier.verify(issuer.issue(f"{SERVICE_SUBJECT_PREFIX}sales-dw1|{TENANT}"))
+    assert refused.value.details["rule"] == "service_subject"
+    assert (await verifier.verify(issuer.issue("dev|an.nguyen"))).subject == "dev|an.nguyen"

@@ -250,6 +250,50 @@ async def test_approvals_runs_and_audit_carry_no_amount() -> None:
     assert PRICE in world.quote(case_id).model_dump_json()
 
 
+async def test_every_audit_row_processing_writes_names_the_run_that_processed_it() -> None:
+    world = _world()
+    seen = await world.process_each(DIEU)
+
+    message_of = {
+        run_id: run.input["task"]["message_id"] for run_id, run in world.runtime.runs.rows.items()
+    }
+    rows = world.audit()
+    processed = [row for row in rows if row.action == "sales.message.processed"]
+    assert {row.resource_id for row in processed} == set(seen)
+    for row in processed:
+        assert row.run_id is not None and message_of[row.run_id] == row.resource_id
+    # The case rows written in the same step (opened, handed to review,
+    # Design's reply attached) name the run too.
+    case_rows = [row for row in rows if row.resource_type != "sales_message"]
+    assert case_rows
+    assert all(row.run_id in message_of for row in case_rows)
+
+
+async def test_design_s_reply_is_audited_under_the_run_that_processed_it() -> None:
+    """A whole-mailbox pass reads M25 before its quote awaits Design, so the
+    reply is taken here on its own: the quote row it writes names its run."""
+    world = _world()
+    seen = await world.process_each(DIEU, ["M10"])
+    case_id = seen["M10"][0].case_id
+    assert case_id is not None
+    commands = world.services.quote_commands
+    for ycbg_no in (None, "YCBG-2609-030"):
+        version = world.quote(case_id).case_version
+        await commands.ycbg(DIEU.context(), case_id, case_version=version, ycbg_no=ycbg_no)
+    await commands.design_sent(
+        DIEU.context(), case_id, case_version=world.quote(case_id).case_version
+    )
+    await world.process_each(DIEU, ["M25"])
+
+    (run_id,) = [
+        run_id
+        for run_id, run in world.runtime.runs.rows.items()
+        if run.input["task"]["message_id"] == "M25"
+    ]
+    (replied,) = [row for row in world.audit() if row.action == "sales.quote.design_replied"]
+    assert (replied.resource_id, replied.run_id) == (str(case_id), run_id)
+
+
 # --------------------------------------- 4. the plan's run allowance --
 
 

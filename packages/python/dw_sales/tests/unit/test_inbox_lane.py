@@ -13,17 +13,19 @@ nobody outside the account's own workspace).
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
+from dw_kernel.pagination import Page, PageRequest
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import MembershipAccess
-from dw_platform.domain.audit import system_actor
+from dw_platform.domain.audit import AuditEntry, AuditEvent, system_actor
+from dw_sales.application.case_store import SalesUnitOfWork
 from dw_sales.application.inbox_lane import (
     LANE_CEILING,
     RETRY_FIRST,
@@ -34,10 +36,23 @@ from dw_sales.application.inbox_lane import (
     retry_delay,
 )
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.processing import SALES_PROCESSING_LANE, ProcessingDrain
+from dw_sales.application.processing import (
+    SALES_PROCESSING_LANE,
+    ProcessingDrain,
+    ProcessingService,
+)
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.evals.graders import AN, CALLERS, GIANG
-from dw_sales.evals.world import ALPHA, BETA, NOW, Directory, SampleSet, World, open_world
+from dw_sales.evals.world import (
+    ALPHA,
+    BETA,
+    NOW,
+    Directory,
+    MemoryStore,
+    SampleSet,
+    World,
+    open_world,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -125,6 +140,7 @@ class Setup:
     world: World
     accounts: Accounts = field(default_factory=Accounts)
     runs: object | None = None
+    processing: ProcessingService | None = None
 
     @property
     def clock(self) -> FixedClock:
@@ -137,10 +153,9 @@ class Setup:
         return InboxLane(
             world.store,
             world.inbox,
-            world.services.processing,
+            self.processing or world.services.processing,
             self.accounts,
             self.clock,
-            Uuid4Generator(),
         )
 
     @property
@@ -153,6 +168,7 @@ class Setup:
             self.accounts,
             world.store.clock,
             Uuid4Generator(),
+            channels=self.lane,
         )
 
     async def tick(self, scope: SalesScope = ALPHA) -> LaneTick:
@@ -201,6 +217,21 @@ async def test_each_new_message_is_queued_oldest_first_and_run_once_as_the_accou
     assert set(_jobs(world).values()) == {("done", None)}
     # One run per message, in the mailbox's order, each as DW1's account.
     assert _runs(world) == [(DW1_ACCOUNT, message_id) for message_id in mailbox]
+
+
+async def test_the_lanes_runs_are_recorded_on_its_own_channel_and_a_persons_on_the_web() -> None:
+    """A trace tells a run the lane queued from one a person pressed for."""
+    world = _world()
+    await world.services.processing.enqueue(AN.context(), "M01")
+
+    await Setup(world).tick()
+
+    channels = {
+        run.input["task"]["message_id"]: run.context.channel
+        for run in world.runtime.runs.rows.values()
+    }
+    assert channels.pop("M01") == "web"
+    assert channels and set(channels.values()) == {SALES_INBOX_LANE}
 
 
 async def test_a_second_tick_queues_nothing_and_spends_no_run() -> None:
@@ -257,6 +288,19 @@ async def test_a_person_and_the_lane_queueing_one_message_queue_it_once() -> Non
     assert [actor for actor, m in _runs(world) if m == "M01"] == [AN.user_id]
 
 
+async def test_the_lane_meeting_a_job_a_person_queued_writes_no_lane_row() -> None:
+    """The lane's row explains a job the lane queued. Handed a person's job,
+    the lane queued nothing, and a row would claim the person's job as its own."""
+    world = _world()
+    processing = world.services.processing
+    queued = await processing.enqueue(AN.context(), "M01")
+
+    met = await processing.enqueue(AN.context(), "M01", lane=SALES_INBOX_LANE)
+
+    assert met.job_id == queued.job_id
+    assert not [e for e in world.audit() if e.action == QUEUED_BY_LANE]
+
+
 @dataclass
 class PersonFirst:
     """`Dw1Runs.process` with a person pressing on one message (in a run of
@@ -265,10 +309,12 @@ class PersonFirst:
     world: World
     message_id: str
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView:
         if message_id == self.message_id:
             await self.world.services.dw1.process(AN.context(), message_id)
-        return await self.world.services.dw1.process(context, message_id)
+        return await self.world.services.dw1.process(context, message_id, channel=channel)
 
 
 async def test_a_run_that_meets_a_message_processed_meanwhile_fails_and_keeps_one_case() -> None:
@@ -286,6 +332,58 @@ async def test_a_run_that_meets_a_message_processed_meanwhile_fails_and_keeps_on
 
 
 # ------------------------------------------- 3. it audits as itself --
+
+
+class _LaneRowRefused:
+    """The world's units of work, with an audit store that refuses the lane's
+    own row: as a write failing between the job and that row would."""
+
+    def __init__(self, store: MemoryStore) -> None:
+        self.store = store
+
+    def __call__(self, scope: SalesScope) -> SalesUnitOfWork:
+        work = self.store(scope)
+        held = work.audit
+
+        class Refusing:
+            async def append(self, event: AuditEvent) -> None:
+                if event.action == QUEUED_BY_LANE:
+                    raise RuntimeError("the audit store refused the lane's row")
+                await held.append(event)
+
+            async def list_page(
+                self,
+                request: PageRequest,
+                *,
+                workspace_id: uuid.UUID,
+                support_grant_id: uuid.UUID | None = None,
+            ) -> Page[AuditEntry]:
+                return await held.list_page(
+                    request, workspace_id=workspace_id, support_grant_id=support_grant_id
+                )
+
+            async def list_for_run(
+                self, run_id: uuid.UUID, *, workspace_id: uuid.UUID, limit: int = 100
+            ) -> list[AuditEvent]:
+                return await held.list_for_run(run_id, workspace_id=workspace_id, limit=limit)
+
+        work.audit = Refusing()  # type: ignore[misc]
+        return work
+
+
+async def test_a_job_the_lane_queued_is_never_left_without_the_lanes_audit_row() -> None:
+    """The row is written in the job's transaction: when it cannot be, nothing
+    is queued, rather than a job naming DW1's account that no lane row explains."""
+    world = _world()
+    refusing = _LaneRowRefused(world.store)
+    processing = replace(world.services.processing, uow=refusing)
+    setup = Setup(world, processing=processing)
+    lane = replace(setup.lane, uow=refusing)
+
+    with pytest.raises(RuntimeError, match="lane's row"):
+        await lane.tick(ALPHA)
+
+    assert world.store.state(ALPHA).jobs == {}
 
 
 async def test_both_lanes_audit_as_themselves_naming_the_account_it_acted_under() -> None:
@@ -413,8 +511,10 @@ class PausedAfter:
     world: World
     after: str
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
-        view = await self.world.services.dw1.process(context, message_id)
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView:
+        view = await self.world.services.dw1.process(context, message_id, channel=channel)
         if message_id == self.after:
             await self.world.services.worker.pause(AN.context(), None)
         return view
@@ -520,11 +620,13 @@ class FailsOn:
     failing: bool = True
     calls: list[str] = field(default_factory=list)
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView:
         self.calls.append(message_id)
         if message_id == self.message_id and self.failing:
             raise RuntimeError("the attachment reader crashed")
-        return await self.world.services.dw1.process(context, message_id)
+        return await self.world.services.dw1.process(context, message_id, channel=channel)
 
 
 async def test_a_failing_message_does_not_hold_up_the_rest_nor_spend_a_run_every_tick() -> None:

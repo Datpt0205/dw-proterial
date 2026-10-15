@@ -183,6 +183,9 @@ async def test_proposed_by_a_pic_approved_by_the_head_and_stamped_on_the_next_ca
     assert body["in_force"]["sales_order_rules"] == "sales_order_rules@9.0.1"
     statuses = {v["version"]: v["status"] for v in body["versions"]}
     assert statuses[DEMO.policy_version] == "superseded"
+    # The reason the head gave on the approval is the version's, in the list.
+    comments = {v["version"]: v["comment"] for v in body["versions"]}
+    assert comments["9.0.1"] == "Đồng ý"
     assert (await order_of(an, "M01"))["rules_version"] == "sales_order_rules@9.0.1"
 
     # The database refuses a decision by the proposer whatever writes it, and

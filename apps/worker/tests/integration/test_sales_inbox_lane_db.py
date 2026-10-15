@@ -215,6 +215,11 @@ async def test_dw1s_account_processes_the_whole_mailbox_once_and_the_lane_audits
     # Every other row the queueing and processing wrote is the account's,
     # never a person's.
     assert {row.actor_id for row in audit if row not in queued + ran} <= {account}
+    # The drain records the account's runs on the lane's channel, not "web".
+    assert mount.lane is not None and mount.drain is not None
+    assert mount.drain.channels is mount.lane
+    assert await mount.lane.channel_of(scope, account) == SALES_INBOX_LANE
+    assert await mount.lane.channel_of(scope, uuid.uuid4()) == "web"
 
     again = await _tick(mount, scope)
 

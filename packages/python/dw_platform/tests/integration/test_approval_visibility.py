@@ -10,13 +10,16 @@ request stays visible to every member, as before.
 Real Postgres, because the filter is SQL (`repositories.visible_to`) while the
 decision and the page ask the Python rule (`ApprovalAudience.may_see`): two
 copies of one rule have to agree, so every reader is checked against a table
-written out here AND against the Python rule (failure-modes #2).
+written out here AND against the Python rule (failure-modes #2). The last
+decision on a request (`latest_decision`, which carries the decider's comment)
+is read under the same rule.
 """
 
 from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
 import pytest
 from pg_harness import DatabaseUrls
@@ -26,10 +29,12 @@ from sqlalchemy.pool import NullPool
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.pagination import PageQuery, PageRequest
 from dw_platform.adapters.persistence.approval_queries import SqlPendingApprovalQuery
+from dw_platform.adapters.persistence.repositories import SqlApprovalRepository
+from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
-from dw_platform.domain.approval import ApprovalRequest
+from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest, DecisionOutcome
 
 pytestmark = pytest.mark.integration
 
@@ -146,3 +151,56 @@ async def test_the_audience_does_not_widen_across_workspaces(
     inbox, by_id, queried, total = await _reads(sessions, elsewhere, [stamped])
 
     assert (inbox, by_id, queried, total) == (set(), set(), set(), 0)
+
+
+async def test_a_decision_is_read_by_the_requests_audience_in_its_workspace_only(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """`latest_decision` returns the decider's comment, so it is `get`'s rule
+    or nothing: another tenant (even under this workspace's id, which UUIDs do
+    not tie to a tenant), another workspace of this tenant, and someone in the
+    workspace the stamp keeps out all read no decision."""
+    tenant, workspace = uuid.uuid4(), uuid.uuid4()
+    requester = _caller(tenant, workspace)
+    stamped = await _raise(sessions, requester, BOARD)
+    board = _caller(tenant, workspace, "approvals.decide", BOARD)
+    decision = ApprovalDecision(
+        id=uuid.uuid4(),
+        request_id=stamped.id,
+        tenant_id=TenantId(tenant),
+        workspace_id=WorkspaceId(workspace),
+        decided_by=UserId(board.principal_id),
+        outcome=DecisionOutcome.REJECTED,
+        comment="the head's reason, for this workspace only",
+        decided_at=datetime.now(UTC),
+    )
+    async with SqlPlatformUnitOfWorkFactory(sessions)(board) as uow:
+        await uow.approvals.add_decision(decision)
+        await uow.commit()
+
+    async def read(caller: AccessContext) -> ApprovalDecision | None:
+        # The repository itself: the unit of work's port does not carry this
+        # read, which contexts reach through their own narrow port.
+        async with tenant_session(sessions, TenantScope.from_access_context(caller)) as session:
+            return await SqlApprovalRepository(session).latest_decision(
+                stamped.id,
+                workspace_id=caller.workspace_id,
+                audience=ApprovalAudience.of(caller, _AUTHZ),
+            )
+
+    other_tenant = uuid.uuid4()
+    nothing = {
+        "other tenant, this workspace id": _caller(
+            other_tenant, workspace, "approvals.decide", BOARD
+        ),
+        "other tenant, its own workspace": _caller(
+            other_tenant, uuid.uuid4(), "approvals.decide", BOARD
+        ),
+        "this tenant, another workspace": _caller(tenant, uuid.uuid4(), "approvals.decide", BOARD),
+        "this workspace, outside the stamp": _caller(tenant, workspace, "approvals.decide"),
+    }
+    for name, caller in nothing.items():
+        assert await read(caller) is None, name
+
+    assert await read(board) == decision
+    assert await read(requester) == decision

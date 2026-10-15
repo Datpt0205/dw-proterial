@@ -226,7 +226,9 @@ async def test_a_job_the_model_could_not_read_yet_fails_to_be_tried_later() -> N
     world = _world()
 
     class _NotYet:
-        async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView:
+        async def process(
+            self, context: AccessContext, message_id: str, *, channel: str
+        ) -> MessageDispositionView:
             return MessageDispositionView(kind="not_yet_processed")
 
     await world.services.processing.enqueue(AN.context(), "M01")
