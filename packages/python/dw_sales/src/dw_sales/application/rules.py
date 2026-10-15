@@ -648,8 +648,9 @@ class RuleSettlement:
         read from the approval row, which the decision wrote, not from the
         event; the reason given stays on the approval's decision. Idempotent:
         a redelivery finds the version decided on this approval and writes
-        nothing. Raises the refusals the version makes (409, 404); none
-        changes on a retry."""
+        nothing, and so does one that lost a race with another delivery (the
+        worker and the demo seed both carry the same decision out). Raises the
+        refusals the version makes (409, 404); none changes on a retry."""
         # Read as the decider holding the stamp the platform required of them
         # when they decided: nobody reaches here but through that decision.
         audience = ApprovalAudience(
@@ -658,6 +659,27 @@ class RuleSettlement:
             ),
             holds_decide=True,
         )
+        try:
+            return await self._settle(approval_id, decider, audience)
+        except ConflictError:
+            # Another delivery may have decided the version between this one's
+            # read and its write (CI run 38545009082: the seed and the worker).
+            async with self.uow(sales_scope(decider)) as work:
+                request = await work.approvals.get(
+                    approval_id, workspace_id=decider.workspace_id, audience=audience
+                )
+                stored = (
+                    None
+                    if request is None
+                    else await work.rule_versions.get(_asked(request).version_id)
+                )
+            if stored is None or stored.approval_id != approval_id or stored.status == "proposed":
+                raise
+            return _view(stored)
+
+    async def _settle(
+        self, approval_id: uuid.UUID, decider: AccessContext, audience: ApprovalAudience
+    ) -> RuleVersionView:
         async with self.uow(sales_scope(decider)) as work:
             request = await work.approvals.get(
                 approval_id, workspace_id=decider.workspace_id, audience=audience

@@ -18,6 +18,7 @@ from dw_sales.application.rules import (
     RULES_APPROVAL,
     RuleDecisions,
     RuleKey,
+    RuleSettlement,
     RuleVersionView,
     TenantRuleBook,
 )
@@ -377,3 +378,50 @@ async def test_another_tenant_neither_decides_nor_carries_out_a_rules_approval()
     with pytest.raises(NotFoundError):
         await world.rule_settlement.settle(request.id, GIANG.context(BETA))
     assert (await _listed(world, proposed.version_id)).status == "proposed"
+
+
+class _LosesTheRace:
+    """The memory store, except that the first unit of work reads the
+    version as it stood before another delivery decided it: what the seed
+    met in CI run 38545009082 while the worker carried out the same event."""
+
+    def __init__(self, store: Any, stale: RuleVersionView) -> None:
+        self.store, self.stale, self.first = store, stale, True
+
+    def __call__(self, scope: Any) -> Any:
+        work = self.store(scope)
+        if self.first:
+            self.first = False
+            versions, stale = work.rule_versions, self.stale
+
+            class _Stale:
+                async def get(self, version_id: uuid.UUID) -> Any:
+                    found = await versions.get(version_id)
+                    return found.model_copy(
+                        update={"status": stale.status, "decided_by": None, "decided_at": None}
+                    )
+
+                def __getattr__(self, name: str) -> Any:
+                    return getattr(versions, name)
+
+            work.rule_versions = _Stale()
+        return work
+
+
+async def test_a_delivery_that_loses_the_race_to_another_finds_the_decision_applied() -> None:
+    world = _world()
+    proposed, request = await _opened(world, "9.9.2")
+    await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
+    applied = await _listed(world, proposed.version_id)
+    audited = len(world.store.state(ALPHA).audit)
+
+    racing = RuleSettlement(
+        _LosesTheRace(world.store, proposed),
+        world.services.rules.book,
+        world.rule_settlement.clock,
+        world.rule_settlement.ids,
+    )
+    settled = await racing.settle(request.id, GIANG.context())
+
+    assert settled == applied
+    assert len(world.store.state(ALPHA).audit) == audited
