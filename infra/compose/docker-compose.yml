@@ -364,7 +364,8 @@ services:
   # The signatures are inside the image (main, daily, bytecode; 107.6 MB in
   # 1.5.4, dated 2026-10-11) and are never fetched: no freshclam, no egress, an internal
   # network. Newer signatures are a newer image, pulled, scanned and pinned
-  # like any other.
+  # like any other: `.github/workflows/clamav-bump.yml` does that weekly and
+  # opens a pull request.
   #
   # The image's init script chowns and writes under /etc, /run and /var, so
   # it is skipped: clamd runs in the foreground as the image's clamav user,
