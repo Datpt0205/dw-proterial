@@ -150,6 +150,33 @@ def test_a_named_file_that_does_not_exist_stops_the_manifest(
         script._eval_datasets()
 
 
+def test_a_mime_type_or_a_mailbox_relative_name_is_not_taken_for_a_repo_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A mock mailbox holds both: shaped like a/b.ext, neither under a top-level
+    directory. Followed, they stopped the manifest as missing files."""
+    script = _load_script()
+    monkeypatch.setattr(
+        script,
+        "REPO_ROOT",
+        _fake_repo(
+            tmp_path,
+            '{"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",'
+            ' "file": "attachments/po-1042.xlsx"}',
+        ),
+    )
+
+    [dataset] = script._eval_datasets()
+
+    assert [f["path"] for f in dataset["files"]] == ["data/truth.json", "evals/expected/case.json"]
+
+    # A path that does start at a top-level directory and resolves to nothing
+    # still stops it.
+    (tmp_path / "data" / "truth.json").write_text('{"next": "evals/missing.json"}', "utf-8")
+    with pytest.raises(SystemExit, match=r"names evals/missing.json"):
+        script._eval_datasets()
+
+
 def test_every_model_profile_is_pinned_by_content() -> None:
     """The profile decides which provider reads a customer's text and what a
     run costs; editing one has to move the ref like editing a prompt does."""
