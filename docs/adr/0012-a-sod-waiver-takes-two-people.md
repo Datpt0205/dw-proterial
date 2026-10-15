@@ -50,6 +50,9 @@ record) and the membership trigger of `b9862fa13a80`.
 - A tenant with a single admin cannot waive a rule at all; that is the point.
 - Adding a scope to a role in a product migration can now fail on that
   product's data. The failure names the memberships to fix first.
-- Not covered: changing a RULE's scopes (`platform.sod_rules`) under existing
-  memberships; rules are added with their own check in the migration that adds
-  them.
+- Not covered at first: changing a RULE's scopes (`platform.sod_rules`) under
+  existing memberships; rules were added with their own check in the migration
+  that added them. Covered since 2026-10-15 (`d82a60870baf`): adding a rule,
+  or changing its key, sides or `waivable`, is refused the same way
+  (`ck_sod_rules_memberships`) while a membership would break it without a
+  confirmed waiver of its own tenant.
