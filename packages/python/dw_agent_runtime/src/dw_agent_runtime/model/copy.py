@@ -31,16 +31,15 @@ class RuntimeCopy(BaseModel):
     # available tells the model not to call the tool again.
     approval_deferred_template: str | None = None
     # 1.4.0. Optional for the same reason as the one above: a host that wires
-    # context compaction must load a copy that has both, and the middleware
-    # refuses to start otherwise — the library's fallback is an English prompt
-    # that knows nothing of pending approvals and re-inserts its summary as if
-    # the user had written it.
-    context_summary_prompt: str | None = None
+    # context compaction must load a copy that has the frame, and the middleware
+    # refuses to start otherwise — the library re-inserts its summary as if the
+    # user had written it.
     context_summary_frame: str | None = None
-    # 1.6.0: the prompt that updates an existing summary instead of starting
-    # over. Compaction refuses a copy without it — summarising only what came
-    # after the last summary, with no sight of that summary, drops what the last
-    # compaction kept.
+    # Read by nothing since 1.7.0, kept so 1.4.0-1.6.0 still load: the prompts
+    # sent to the summariser are registry artifacts now
+    # (`configs/prompts/platform/context_summary*@1.0.0.yaml`), so the history
+    # and the previous summary are contained like every prompt variable.
+    context_summary_prompt: str | None = None
     context_summary_update_prompt: str | None = None
     # 1.5.0, same rule again: recalled memory is material the agent wrote from
     # documents a customer supplied, so it reaches the model framed as data. A
