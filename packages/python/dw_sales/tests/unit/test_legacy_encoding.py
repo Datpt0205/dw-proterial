@@ -20,6 +20,8 @@ from typing import cast
 
 import pytest
 from openpyxl import Workbook, load_workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Font
 from pydantic import ValidationError
 from reportlab.lib.pagesizes import A4, landscape
@@ -58,6 +60,7 @@ from dw_sales.domain.orders import (
     Severity,
     Unreadable,
 )
+from dw_sales.testing.excel_strings import as_excel_writes_it
 
 pytestmark = pytest.mark.unit
 
@@ -191,6 +194,74 @@ def test_the_first_affected_cell_is_the_first_one_read_header_before_lines() -> 
         _font("E5", "VNI-Times")(workbook)
 
     assert _where(_excel(_edited(M01, both))) == ("PO!E5", LegacyEncoding.VNI)
+
+
+def _runs(cell: str, *runs: tuple[str | None, str]) -> Callable[[Workbook], None]:
+    """``cell`` holds rich text: each run its text, in its own font when one is named."""
+
+    def edit(workbook: Workbook) -> None:
+        target = workbook.worksheets[0][cell]
+        target.value = CellRichText(
+            [
+                text if font is None else TextBlock(InlineFont(rFont=font), text)
+                for font, text in runs
+            ]
+        )
+        target.font = Font(name="Calibri")
+
+    return edit
+
+
+def _description(po: PoDocument) -> str:
+    return po.lines[0].description
+
+
+def _po_no(po: PoDocument) -> str:
+    return po.header.po_no
+
+
+@pytest.mark.parametrize(
+    "written", [lambda data: data, as_excel_writes_it], ids=["inline", "shared"]
+)
+@pytest.mark.parametrize(
+    ("edit", "where", "value", "text"),
+    [
+        # Line 1's description: one run in .VnTime, the cell itself in Calibri.
+        (
+            _runs("C10", (None, "Cable "), (".VnTime", "D©y ®iÖn")),
+            ("PO!C10", LegacyEncoding.TCVN3),
+            _description,
+            "Cable D©y ®iÖn",
+        ),
+        # The PO number: the run in VNI comes after one in a Unicode font.
+        (
+            _runs("B4", ("Arial", "VLX-PO-"), ("VNI-Times", "2609-0118")),
+            ("PO!B4", LegacyEncoding.VNI),
+            _po_no,
+            "VLX-PO-2609-0118",
+        ),
+        # Every run in a Unicode font: nothing is legacy.
+        (
+            _runs("C10", ("Arial", "Dây "), ("Times New Roman", "điện")),
+            None,
+            _description,
+            "Dây điện",
+        ),
+    ],
+    ids=["description-run-tcvn3", "po-no-run-vni", "unicode-runs"],
+)
+def test_a_legacy_font_on_one_run_of_a_cells_text_is_detected_there(
+    written: Callable[[bytes], bytes],
+    edit: Callable[[Workbook], None],
+    where: tuple[str, LegacyEncoding] | None,
+    value: Callable[[PoDocument], str],
+    text: str,
+) -> None:
+    po = _excel(written(_edited(M01, edit)))
+
+    assert _where(po) == where
+    # The value is still read as the cell's whole text, runs joined, unconverted.
+    assert value(po) == text
 
 
 def test_no_mock_po_but_m33_holds_text_typed_in_a_legacy_font() -> None:

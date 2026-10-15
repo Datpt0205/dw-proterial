@@ -1,0 +1,10 @@
+{
+  "po_no": "VLX-PO-2610-0031",
+  "cell": "B5",
+  "field": "po_date",
+  "typed": "2026-09-20",
+  "unflagged": [
+    "currency",
+    "VND"
+  ]
+}

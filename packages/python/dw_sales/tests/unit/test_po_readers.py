@@ -161,7 +161,7 @@ def test_every_anchor_names_the_file_by_its_sha256_and_the_reader_by_its_version
     digest = hashlib.sha256(data).hexdigest()
     assert po.attachment_sha256 == digest
     assert {(a.attachment_id, a.attachment_sha256) for a in po.anchors()} == {("A1", digest)}
-    assert po.parser_version == "excel_po_reader@1.5.0"
+    assert po.parser_version == "excel_po_reader@1.6.0"
 
 
 def test_the_coverage_facts_are_read_with_the_lines() -> None:

@@ -12,6 +12,9 @@ from typing import Any
 
 import pytest
 from openpyxl import Workbook
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
+from openpyxl.styles import Font
 
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.mock import MockInbox
@@ -26,6 +29,7 @@ from dw_sales.application.quote_ports import (
 )
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument
+from dw_sales.testing.excel_strings import as_excel_writes_it
 
 pytestmark = pytest.mark.unit
 
@@ -306,6 +310,108 @@ def test_instructions_in_the_file_are_text_and_change_no_value() -> None:
     assert item.target_price.value == Decimal("0.4125")
     assert item.quantity.value == Decimal(6000)
     assert document.currency.value == "USD"
+
+
+# ------------------------------------------- text typed in a legacy font --
+
+
+def _typed_in(fonts: dict[str, str]) -> Workbook:
+    """The request with each of ``fonts``' cells in that font."""
+    workbook = _workbook()
+    worksheet = workbook.active
+    assert worksheet is not None
+    for cell, name in fonts.items():
+        worksheet[cell].font = Font(name=name)
+    return workbook
+
+
+@pytest.mark.parametrize(
+    ("cell", "font", "problem"),
+    [
+        ("C10", ".VnTime", "the description is typed in a TCVN3 font"),
+        ("B4", "VNI-Times", "the RFQ number is typed in a VNI font"),
+        # Digits read the same; the cell is still typed in the font.
+        ("D10", ".VnArial", "the quantity is typed in a TCVN3 font"),
+        ("E5", "VNI-Helve", "the currency is typed in a VNI font"),
+    ],
+)
+def test_a_value_typed_in_a_legacy_font_is_refused_at_its_cell(
+    cell: str, font: str, problem: str
+) -> None:
+    """Ticket 20 on the request side: its letters are not what the customer
+    sees, so the file is one with a value that cannot be read, and the request
+    goes to a person rather than to a case or a model."""
+    with pytest.raises(QuoteFileUnreadableError) as refused:
+        _read(_bytes(_typed_in({cell: font})))
+
+    assert refused.value.details["problem"] == problem
+    assert refused.value.details["cell_ref"] == f"RFQ!{cell}"
+
+
+def test_a_legacy_font_on_a_cell_the_reader_does_not_read_changes_nothing() -> None:
+    # The remarks are not read; the buyer is only ever compared with master
+    # data by its exact name, so it is read as it stands, as the PO reader
+    # reads its own: a name in plain ASCII still names the customer it is.
+    document = _read(_bytes(_typed_in({"B7": ".VnTime", "A1": "VNI-Times"})))
+
+    assert document is not None and document.rfq_no is not None
+    assert document.rfq_no.value == "QRL-RFQ-2609-03"
+    assert document.buyer is not None
+    assert document.buyer.value == "QUORILO MEDICAL DEVICES CO., LTD."
+    assert document.buyer.source.cell_ref == "RFQ!A1"
+
+
+def _description_in_runs(*runs: tuple[str, str]) -> bytes:
+    workbook = _workbook()
+    worksheet = workbook.active
+    assert worksheet is not None
+    worksheet["C10"] = CellRichText(
+        [TextBlock(InlineFont(rFont=font), text) for font, text in runs]
+    )
+    return _bytes(workbook)
+
+
+def test_a_run_typed_in_a_legacy_font_is_refused_as_excel_stores_it() -> None:
+    """Excel keeps a cell's rich text in the shared-strings table, where
+    openpyxl's read-only mode reports each run's font."""
+    data = _description_in_runs(("Arial", "Cable "), (".VnTime", "D©y ®iÖn"))
+
+    with pytest.raises(QuoteFileUnreadableError) as refused:
+        _read(as_excel_writes_it(data))
+
+    assert refused.value.details["problem"] == "the description is typed in a TCVN3 font"
+    assert refused.value.details["cell_ref"] == "RFQ!C10"
+
+
+def test_a_run_kept_inline_is_read_as_text_the_measured_limit() -> None:
+    """openpyxl 3.1.5 in read-only mode reads an inline string's runs as plain
+    text, without their fonts (the module docstring). Should an upgrade start
+    reporting them, this goes red and the docstring is out of date."""
+    data = _description_in_runs(("Arial", "Cable "), (".VnTime", "D©y ®iÖn"))
+
+    document = _read(data)
+
+    assert document is not None
+    assert document.items[0].description.value == "Cable D©y ®iÖn"
+
+
+def test_runs_in_unicode_fonts_read_as_their_text_joined() -> None:
+    data = _description_in_runs(("Arial", "Dây "), ("Times New Roman", "điện"))
+
+    document = _read(as_excel_writes_it(data))
+
+    assert document is not None
+    assert document.items[0].description.value == "Dây điện"
+
+
+async def test_the_refusal_crosses_the_reader_sandbox_with_its_place() -> None:
+    reader = ClientRfqReader(InProcessReaderTransport())
+
+    with pytest.raises(QuoteFileUnreadableError) as refused:
+        await reader.read(_content(_bytes(_typed_in({"C10": ".VnTime"}))))
+
+    assert refused.value.details["problem"] == "the description is typed in a TCVN3 font"
+    assert refused.value.at.cell == "C10"
 
 
 def _zip(entries: dict[str, bytes], compression: int = zipfile.ZIP_STORED) -> bytes:

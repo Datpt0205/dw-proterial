@@ -12,7 +12,12 @@ Usage:
         --dataset evals/datasets/sales_descriptions@1.0.0.json
 
 Exit code is non-zero when any case fails or a dataset lacks full security
-coverage (prompt injection, cross-tenant attack, missing evidence).
+coverage (prompt injection, cross-tenant attack, missing evidence). A live
+run also fails when the model read nothing (no call gave a usable answer,
+`live_shortfalls`): its cases grade the guards, which hold just as well when
+every call times out. So `--live` is for a dataset with a model step: one
+without reads nothing and fails as such. A golden case's bar is reported in
+its summary line, not enforced here.
 
 This script is the eval composition root: `grader_table` is the one place the
 grader table is built, from the platform's graders plus each bounded context's,
@@ -59,7 +64,10 @@ def main() -> int:
     parser.add_argument(
         "--live",
         metavar="PROFILE",
-        help="run the dataset's model steps on PROFILE's live model (never in CI)",
+        help=(
+            "run the dataset's model steps on PROFILE's live model (never in CI); "
+            "a dataset with no model step reads nothing and fails"
+        ),
     )
     parser.add_argument(
         "--record",
@@ -93,7 +101,8 @@ def main() -> int:
         report_path = write_report(
             report, REPORTS_DIR / f"live-{args.live}" if args.live else REPORTS_DIR
         )
-        status = "PASS" if report.ok else "FAIL"
+        shortfalls = live_shortfalls(live_model) if live_model is not None else []
+        status = "PASS" if report.ok and not shortfalls else "FAIL"
         print(
             f"[{status}] {report.dataset_id}@{report.dataset_version} "
             f"({report.worker_id}): {report.passed}/{report.total} cases, "
@@ -103,7 +112,9 @@ def main() -> int:
         for result in report.results:
             if not result.passed:
                 print(f"    ✗ {result.case_id} [{result.category}] {result.details}")
-        if not report.ok:
+        for shortfall in shortfalls:
+            print(f"    ✗ live: {shortfall}")
+        if not report.ok or shortfalls:
             exit_code = 1
         if live_model is not None:
             for result in report.results:
@@ -162,6 +173,16 @@ def live_model_for(profile: str) -> object:
         default_profile=profiles.resolve(profile).profile_id,
     )
     return Observed(interpretation_for(gateway, REPO_ROOT / "configs", profile))
+
+
+def live_shortfalls(model: object) -> list[str]:
+    """Why a live run fails whatever its cases say: the model read nothing
+    (``model`` is the lane's `Observed`: no call, or no call that gave a usable
+    answer)."""
+    calls, answered = len(getattr(model, "calls", ())), getattr(model, "answered", 0)
+    if not answered:
+        return [f"nothing was read: {calls} model calls, none gave a usable answer"]
+    return []
 
 
 def record_answers(model: object) -> int:

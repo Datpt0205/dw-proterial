@@ -13,9 +13,9 @@ lines the file holds, and refusing the file would hide the rest of the PO.
 
 **A value typed in a TCVN3 or VNI font is read and marked**, by the font of
 its cell (`legacy_fonts`): its letters are not what the customer sees, so the
-checks raise `legacy_encoding` and nothing is matched on it (ticket 20). The
-cell's font is the one openpyxl reports; a font set on part of a cell's text
-(rich text) is not read.
+checks raise `legacy_encoding` and nothing is matched on it (ticket 20). A
+font set on part of a cell's text (a rich-text run) counts as the cell's own:
+one run typed in such a font marks the value.
 
 **A line with a blank date cell**, or one holding only a dash, reads with no
 requested date ("date to follow"), anchored at that cell; the checks raise
@@ -48,6 +48,7 @@ from typing import get_args
 
 from openpyxl import load_workbook
 from openpyxl.cell.cell import Cell
+from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.cell_range import CellRange
 from openpyxl.worksheet.worksheet import Worksheet
@@ -56,7 +57,7 @@ from pydantic import ValidationError
 from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules, no_date
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LabelCell
-from dw_sales.domain.legacy_fonts import legacy_encoding
+from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import (
@@ -77,7 +78,7 @@ from dw_sales.domain.orders import (
 )
 from dw_sales.domain.rfq_reading import parse_currency
 
-PARSER_VERSION = "excel_po_reader@1.5.0"
+PARSER_VERSION = "excel_po_reader@1.6.0"
 # A form need not print its revision: its POs then read as revision 0, the
 # value anchored where the PO number is (ticket 30).
 REQUIRED_HEADER = frozenset({"po_no", "po_date", "currency"})
@@ -245,7 +246,14 @@ class _RefusedError(Exception):
 
 
 def _open(data: bytes, caps: IntakeCaps) -> tuple[Workbook, Workbook]:
-    """The workbook twice: last computed values (what was printed), and formulas."""
+    """The workbook twice: last computed values (what was printed), and as
+    written: formulas, and a rich-text cell's runs with the font each sets.
+
+    Measured on openpyxl 3.1.5, inline and shared strings alike: without
+    ``rich_text`` a cell's value is its runs joined, and only the cell's own
+    font is reported, so a run's font is read from the written book. The
+    printed book stays plain text, which is what every value is read from.
+    """
     if len(data) > caps.max_attachment_bytes:
         raise _RefusedError(f"the file is over the {caps.max_attachment_bytes} bytes read here")
     try:
@@ -262,7 +270,9 @@ def _open(data: bytes, caps: IntakeCaps) -> tuple[Workbook, Workbook]:
         )
     try:
         values = load_workbook(io.BytesIO(data), data_only=True, keep_links=False)
-        formulas = load_workbook(io.BytesIO(data), data_only=False, keep_links=False)
+        formulas = load_workbook(
+            io.BytesIO(data), data_only=False, keep_links=False, rich_text=True
+        )
     except Exception as exc:  # any parser failure on a sender's file is "unreadable"
         raise _RefusedError("not an .xlsx workbook openpyxl can open") from exc
     if len(values.worksheets) > caps.max_sheets:
@@ -429,8 +439,13 @@ class _Sheet:
         return tuple(found)
 
     def legacy(self, field: str, cell: Cell) -> tuple[LegacyText, ...]:
-        """``field``'s value, when ``cell`` is typed in a TCVN3 or VNI font."""
-        encoding = legacy_encoding(cell.font.name if cell.font is not None else None)
+        """``field``'s value, when ``cell`` or a run of its text is typed in a
+        TCVN3 or VNI font."""
+        written = self._formulas[cell.coordinate]
+        encoding = legacy_text_encoding(
+            cell.font.name if cell.font is not None else None,
+            written.value if isinstance(written, Cell) else None,
+        )
         return () if encoding is None else (LegacyText(field=field, encoding=encoding),)
 
     def _merged(self, row: int, column: int) -> CellRange | None:
@@ -442,6 +457,18 @@ class _Sheet:
             ):
                 return merged
         return None
+
+
+def legacy_text_encoding(cell_font: str | None, written: object) -> LegacyEncoding | None:
+    """The legacy encoding a cell's text is typed in: its own font's, or else
+    that of a run of its text that sets its own (``written`` is the value as
+    loaded with ``rich_text``; plain text has no runs). One run is enough."""
+    fonts = [cell_font]
+    if isinstance(written, CellRichText):
+        fonts.extend(
+            run.font.rFont for run in written if isinstance(run, TextBlock) and run.font is not None
+        )
+    return next((found for name in fonts if (found := legacy_encoding(name)) is not None), None)
 
 
 def font_matches_fill(cell: Cell) -> bool:
