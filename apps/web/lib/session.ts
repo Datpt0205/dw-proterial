@@ -3,6 +3,7 @@
 import { ApiClient, type ApiClientOptions } from "@dw/api-client";
 import { API_BASE_URL, AUTH_MODE } from "./auth/config";
 import { getKeycloak } from "./auth/keycloak";
+import { noteServerDate } from "./server-clock";
 import { markSessionEnded } from "./session-expiry";
 import {
   endSupportGrant,
@@ -161,6 +162,8 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
         }
       }
       const res = await fetch(input, { ...init, headers });
+      // Every answer carries the server's clock; relative labels count by it.
+      noteServerDate(res.headers.get("Date"));
       // The grant expired, was revoked or lost its granter, or the sign-in
       // has no second factor: close it here, so the next request is made as
       // the person again, not refused again; /support says why.

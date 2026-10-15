@@ -59,3 +59,27 @@ async def test_preflight_allows_every_method_the_routes_use(method: str) -> None
 async def test_preflight_still_rejects_a_method_no_route_uses() -> None:
     response = await preflight("TRACE")
     assert response.status_code == 400
+
+
+async def simple_get(origin: str) -> httpx.Response:
+    app = create_app(make_container())
+    async with LifespanManager(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/api/v1/health", headers={"Origin": origin})
+
+
+async def test_the_web_may_read_the_servers_clock() -> None:
+    # The web computes "còn X giờ" against the response's Date (ui-quality §8);
+    # a cross-origin page cannot read a header the API does not expose.
+    response = await simple_get(WEB_ORIGIN)
+    assert response.headers["access-control-allow-origin"] == WEB_ORIGIN
+    exposed = {
+        h.strip().lower() for h in response.headers["access-control-expose-headers"].split(",")
+    }
+    assert {"date", "x-request-id", "retry-after"} <= exposed
+
+
+async def test_another_origin_is_still_not_allowed() -> None:
+    response = await simple_get("https://elsewhere.example")
+    assert "access-control-allow-origin" not in response.headers
