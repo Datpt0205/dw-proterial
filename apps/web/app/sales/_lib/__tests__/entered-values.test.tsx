@@ -80,6 +80,33 @@ describe("the lines table shows each line as it is entered (ticket 15)", () => {
     expect(cells.getByText("6.100 m")).toBeTruthy();
   }, 20_000);
 
+  it("prints a split line's delivery quantities in the unit as entered", () => {
+    const base = corrected({ uom: "roll" });
+    const [line] = base.lines;
+    if (line === undefined) throw new Error("the fixture order has no line");
+    const [first] = line.schedules;
+    if (first === undefined) throw new Error("the fixture line has no date");
+    const cells = row(
+      order({
+        lines: [
+          {
+            ...line,
+            printed_schedules: true,
+            schedules: [
+              { ...first, quantity: "4000" },
+              { ...first, quantity: "2100", requested_date: "2026-12-01" },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(cells.getByText("2 đợt giao")).toBeTruthy();
+    expect(cells.getByText("4.000 roll")).toBeTruthy();
+    expect(cells.getByText("2.100 roll")).toBeTruthy();
+    expect(cells.queryByText("4.000 m")).toBeNull();
+  }, 20_000);
+
   it("shows a line nobody corrected as read, with nothing under it", () => {
     const cells = row(order());
 
