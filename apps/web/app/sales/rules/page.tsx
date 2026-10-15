@@ -2,7 +2,16 @@
 
 import { Suspense, useCallback, useState } from "react";
 import Link from "next/link";
-import { Button, Drawer, Form, Input, Space, Table, Typography } from "antd";
+import {
+  App,
+  Button,
+  Drawer,
+  Form,
+  Input,
+  Space,
+  Table,
+  Typography,
+} from "antd";
 import { PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import { formatDateTime, TIME_ZONE_LABEL } from "../../../lib/dates";
@@ -248,10 +257,11 @@ function ProposeDrawer({
   onProposed,
 }: {
   ruleKey: RuleKey;
-  start: Record<string, unknown> | null;
+  start: ReturnType<typeof startingDocument>;
   onClose: () => void;
   onProposed: () => void;
 }) {
+  const { modal } = App.useApp();
   const { run, pending } = useAction();
   const [error, setError] = useState<unknown>(null);
   const [form] = Form.useForm<{ text: string }>();
@@ -271,10 +281,24 @@ function ProposeDrawer({
     else setError(result.error);
   };
 
+  // Closing with an edited document asks first (ui-quality §9).
+  const close = () => {
+    if (!form.isFieldsTouched()) return onClose();
+    modal.confirm({
+      title: "Bỏ tài liệu đang sửa?",
+      content: "Những thay đổi chưa gửi duyệt sẽ mất.",
+      okText: "Bỏ thay đổi",
+      okButtonProps: { danger: true },
+      cancelText: "Tiếp tục sửa",
+      autoFocusButton: "cancel",
+      onOk: onClose,
+    });
+  };
+
   return (
     <Drawer
       open
-      onClose={onClose}
+      onClose={close}
       size="min(720px, 100vw)"
       title={`Đề xuất phiên bản mới: ${RULE_KEY[ruleKey]}`}
       destroyOnHidden
@@ -287,7 +311,7 @@ function ProposeDrawer({
           >
             Gửi duyệt
           </Button>
-          <Button onClick={onClose}>Hủy</Button>
+          <Button onClick={close}>Hủy</Button>
         </Space>
       }
     >
@@ -295,14 +319,18 @@ function ProposeDrawer({
         Gửi toàn bộ tài liệu của quy tắc, kèm số phiên bản mới: máy chủ kiểm tài
         liệu theo lược đồ của quy tắc, và từ chối số phiên bản nền tảng đã dùng.{" "}
         {start
-          ? "Ô dưới mở sẵn phiên bản gần nhất của công ty."
+          ? start.inForce
+            ? "Ô dưới mở sẵn phiên bản công ty đang áp dụng."
+            : "Ô dưới mở sẵn phiên bản gần nhất của công ty."
           : "Công ty chưa có phiên bản riêng của quy tắc này, và tài liệu của nền tảng không gửi tới trang này: hãy dán toàn bộ tài liệu."}
       </Typography.Paragraph>
       <Form
         form={form}
         layout="vertical"
         validateTrigger="onBlur"
-        initialValues={{ text: start ? JSON.stringify(start, null, 2) : "" }}
+        initialValues={{
+          text: start ? JSON.stringify(start.document, null, 2) : "",
+        }}
         onFinish={({ text }) => propose(text)}
       >
         <Form.Item

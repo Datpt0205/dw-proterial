@@ -60,17 +60,19 @@ export function keyRows(view: RulesView): KeyRow[] {
  * Where a proposal's editor starts: the tenant's version in force, else its
  * latest version of the key, else nothing. The platform's own document is
  * not served to the browser, so a first version is written whole.
+ * `inForce` says which of the two it is, for the words above the editor.
  */
 export function startingDocument(
   view: RulesView,
   key: RuleKey,
-): Record<string, unknown> | null {
+): { document: Record<string, unknown>; inForce: boolean } | null {
   const own = view.versions.filter((v) => v.key === key);
   const inForce = own.find((v) => v.ref === view.in_force[key]);
+  if (inForce) return { document: inForce.document, inForce: true };
   const latest = [...own].sort((a, b) =>
     b.proposed_at.localeCompare(a.proposed_at),
   )[0];
-  return (inForce ?? latest)?.document ?? null;
+  return latest ? { document: latest.document, inForce: false } : null;
 }
 
 export type Parsed =
