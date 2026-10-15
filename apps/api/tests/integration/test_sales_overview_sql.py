@@ -268,15 +268,21 @@ async def test_the_sql_work_list_pages_through_what_python_lists(demo: Api) -> N
     every = await _walk_sql(demo, _filters()[0], limit=2)
     assert {type(e.row).__name__ for e in every} >= {"OpenOrder", "LoggedMessage"}
     # An order with a short line is paged in its due date's group, read from
-    # the column the repository wrote (M06: line 3, 2026-09-30).
-    dues = {
-        e.position.group: e.row.due
+    # the column the repository wrote (M06: line 3, 2026-09-30); an order with
+    # none is in the NO_DUE group with no date.
+    inbox = (await demo.as_(AN).get("/inbox")).json()
+    m06 = uuid.UUID(next(m["disposition"]["case_id"] for m in inbox if m["message_id"] == "M06"))
+    orders = [
+        (e.row.case_id, e.position.group, e.row.due)
         for wanted in _filters()
         for e in await _walk_sql(demo, wanted, limit=2)
         if isinstance(e.row, OpenOrder)
-    }
-    assert dues.get("2026-09-30") == date(2026, 9, 30), dues
-    assert dues.get(NO_DUE, "absent") is None, dues
+    ]
+    assert {(group, due) for case_id, group, due in orders if case_id == m06} == {
+        ("2026-09-30", date(2026, 9, 30))
+    }, orders
+    undated = [due for _, group, due in orders if group == NO_DUE]
+    assert undated and all(due is None for due in undated), orders
 
 
 async def test_my_work_walked_page_by_page_is_my_work_at_once(demo: Api) -> None:
