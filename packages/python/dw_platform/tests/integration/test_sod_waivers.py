@@ -842,3 +842,16 @@ async def test_only_the_memberships_own_confirmed_waiver_lets_a_rule_widen(
         await _set_rule(migrator_engine, catalogue.rule, waivable=False)
     assert str(membership) in str(refused.value)
     assert await _rule_sides(migrator_engine, catalogue.rule) == (left, widened, True)
+
+    # With Alpha's waiver gone the membership breaks the widened rule, and a
+    # write that changes no side of it is still not checked: the description
+    # alone, or the sides set to what they already are.
+    async with migrator_engine.begin() as conn:
+        await conn.execute(
+            sa.delete(tables.sod_waivers).where(
+                tables.sod_waivers.c.tenant_id == ALPHA,
+                tables.sod_waivers.c.rule_key == catalogue.rule,
+            )
+        )
+    await _set_rule(migrator_engine, catalogue.rule, description="reworded")
+    await _set_rule(migrator_engine, catalogue.rule, right_scopes=widened)
