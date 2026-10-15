@@ -354,6 +354,29 @@ def test_a_term_in_a_pushed_commit_message_fails_and_the_output_never_names_it(
     assert "0 deny-list hit(s) in 1 commit message(s)." in later.stdout
 
 
+def test_a_push_scan_reads_a_message_an_earlier_cancelled_run_never_read(
+    repo: Path, tmp_path: Path
+) -> None:
+    """CI scans a push as `--commits <head>`, not `before..head`.
+
+    Push 1 lands a message with a term; push 2 lands before push 1's run gets
+    to the guard, and `cancel-in-progress` cancels it. Push 2's `before` is
+    push 1's tip, so the range form never reads push 1's message.
+    """
+    _git(repo, "commit", "-q", "--allow-empty", "-m", f"push 1\n\nAsked by {NAME}.")
+    push_1_tip = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "push 2, clean")
+
+    range_form = run(repo, deny(tmp_path, NAME), "--commits", f"{push_1_tip}..HEAD")
+    head_form = run(repo, deny(tmp_path, NAME), "--commits", "HEAD")
+
+    assert range_form.returncode == 0, range_form.stdout
+    assert head_form.returncode == 1, head_form.stdout
+    assert "(its message):3: deny-list line 2" in head_form.stdout
+
+
 def test_a_commit_range_git_cannot_read_fails(repo: Path, tmp_path: Path) -> None:
     result = run(repo, deny(tmp_path, NAME), "--commits", "no-such-rev..HEAD")
 

@@ -9,12 +9,14 @@ the checkout, named by `DW_PUBLIC_REPO_DENYLIST`, and in CI it is the
 
     uv run python scripts/check_public_repo.py            every file git ls-files lists
     uv run python scripts/check_public_repo.py --staged   what the next commit holds
-    ... --commits BEFORE..AFTER --branch NAME             also what a push publishes besides files
+    ... --commits REVISIONS --branch NAME                 also what a push publishes besides files
 
 A commit message and a branch name are published as surely as a file. CI
-passes the pushed range (or a pull request's) to `--commits`, which takes
-anything `git log` does, and the branch to `--branch`, where `-`, `/` and `.`
-also count as the spaces between a term's words (`po-nguyen-van-a`). Neither
+passes `--commits` every commit reachable from a pushed head (not the pushed
+range: a cancelled run would leave a push's range unread) or a pull request's
+base..head, and `--commits` takes anything `git log` does; it passes the
+branch to `--branch`, where `-`, `/` and `.` also count as the spaces
+between a term's words (`po-nguyen-van-a`). Neither
 can be scanned before a commit (the pre-commit hook runs before the message
 exists), and a hit in a pushed message is only fixed by rewriting history.
 Pull request titles and bodies are not seen.

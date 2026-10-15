@@ -183,7 +183,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # the pushed range's commit messages are scanned too
+          fetch-depth: 0 # commit messages are scanned too
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.11.31"
@@ -195,22 +195,22 @@ jobs:
         # secret written outside the checkout, and the script prints where a term
         # was found, never the term. A missing or empty secret fails this step:
         # the script refuses a deny-list with no terms, and in CI refuses none.
-        # The range is what this push or pull request published; a push whose
-        # `before` is not in this clone (a new branch, a force-push) scans every
-        # message reachable from the head. Event values reach the shell as
+        # Push: every message reachable from the head (the whole step, files
+        # included, ran in 21 s over 211 commits). Not `before..sha`: the
+        # `cancel-in-progress` above cancels a run when the next push to main
+        # lands, and the next run's `before` is the cancelled push's tip, so
+        # that push's messages would never be read. Pull request: base..head,
+        # which every sync rescans whole. Event values reach the shell as
         # environment, never spliced into the script: on a pull request the
         # branch name is text its author chose.
         env:
           PUBLIC_REPO_DENYLIST: ${{ secrets.PUBLIC_REPO_DENYLIST }}
-          PUSH_BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           printf '%s\n' "$PUBLIC_REPO_DENYLIST" > "$RUNNER_TEMP/public-repo-denylist.txt"
           if [ -n "$PR_HEAD" ]; then
             range="$PR_BASE..$PR_HEAD"
-          elif git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
-            range="$PUSH_BEFORE..$GITHUB_SHA"
           else
             range="$GITHUB_SHA"
           fi
