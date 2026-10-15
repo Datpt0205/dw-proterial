@@ -40,15 +40,18 @@ describe("the candidate picker's PO column (G13, ticket 28)", () => {
       ITEMS,
     );
 
-    expect(row(rows, "cores").po).toBe("4");
+    // Each is marked as DW1's reading, never drawn as a printed PO field.
+    expect(row(rows, "cores").po).toBe("4 (DW1 đọc từ mô tả)");
     expect(row(rows, "cores").values["CB-2005"]!.fits).toBe(true);
     expect(row(rows, "cores").values["CB-2006"]!.fits).toBe(false);
-    expect(row(rows, "gauge").po).toBe("AWG22");
+    expect(row(rows, "gauge").po).toBe("AWG22 (DW1 đọc từ mô tả)");
     expect(row(rows, "gauge").values["CB-2005"]!.fits).toBe(true);
     // Not stated on the PO: nothing to compare, and it says so.
-    expect(row(rows, "spec").po).toBe("Không ghi");
+    expect(row(rows, "spec").po).toBe("Không ghi (DW1 đọc từ mô tả)");
     expect(row(rows, "spec").values["CB-2005"]!.fits).toBeNull();
     expect(row(rows, "family").values["CB-2005"]!.fits).toBeNull();
+    // The PO's own fields are printed values, not a reading.
+    expect(row(rows, "uom").po).toBe("m");
   });
 
   it("keeps the attributes in the description for a line DW1 did not read", () => {
