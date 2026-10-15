@@ -560,7 +560,7 @@ def _document(*, requested: date, po_date: date) -> PoDocument:
         {
             "attachment_id": "X-A1",
             "attachment_sha256": "0" * 64,
-            "parser_version": "excel_po_reader@1.5.0",
+            "parser_version": "excel_po_reader@1.6.0",
             "header": {
                 "po_no": "X-1",
                 "revision": 0,
