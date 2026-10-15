@@ -27,14 +27,13 @@ COPY packages/python/dw_observability/pyproject.toml packages/python/dw_observab
 COPY packages/python/dw_evals/pyproject.toml packages/python/dw_evals/pyproject.toml
 COPY packages/python/dw_sales/pyproject.toml packages/python/dw_sales/pyproject.toml
 
-# --extra parsers pulls the heavy Docling+OCR stack (multi-format ingestion).
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-workspace --no-dev --package dw-worker --extra parsers
+    uv sync --frozen --no-install-workspace --no-dev --package dw-worker
 
 COPY packages/python packages/python
 COPY apps/worker apps/worker
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable --package dw-worker --extra parsers
+    uv sync --frozen --no-dev --no-editable --package dw-worker
 
 # ---------------------------------------------------------------------------
 # Stage 2 â€” runtime
@@ -52,11 +51,6 @@ FROM python:3.12-slim-bookworm AS runtime
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
-
-# Shared libs Docling/OCR (opencv, image codecs) load at runtime.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 1001 dw && useradd --uid 1001 --gid dw --create-home dw
 
@@ -77,9 +71,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     DW_REPO_ROOT=/app \
-    DW_WORKER_HEARTBEAT_FILE=/home/dw/heartbeat \
-    HF_HOME=/home/dw/.cache/huggingface \
-    EASYOCR_MODULE_PATH=/home/dw/.EasyOCR
+    DW_WORKER_HEARTBEAT_FILE=/home/dw/heartbeat
 
 USER dw
 
