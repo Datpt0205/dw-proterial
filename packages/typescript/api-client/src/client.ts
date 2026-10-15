@@ -266,6 +266,14 @@ const _supportOperatorsMirrorTheRoutes: [
 ] = [true, true, true, true, true, true, true];
 void _supportOperatorsMirrorTheRoutes;
 
+// zod strips a field it does not name, which is how `actor_kind` reached the
+// API and never the /audit page: the mirror fails to compile instead.
+const _auditEventMirrorsTheRoute: [
+  SameType<AuditEvent, Generated["AuditEventView"]>,
+  SameType<keyof AuditEvent, keyof Generated["AuditEventView"]>,
+] = [true, true];
+void _auditEventMirrorsTheRoute;
+
 export class ApiClient {
   constructor(private readonly options: ApiClientOptions) {}
 
@@ -1017,10 +1025,19 @@ export class ApiClient {
 
   // ---- audit --------------------------------------------------------------
 
-  listAuditEvents(params: PageParams = {}): Promise<Page<AuditEvent>> {
+  /** The workspace's trail; `supportGrantId` narrows it to one support
+   * grant's events, which is how a customer reads what a grant did. */
+  listAuditEvents(
+    params: PageParams & { supportGrantId?: string } = {},
+  ): Promise<Page<AuditEvent>> {
+    const { supportGrantId, ...page } = params;
+    const query = pageQueryString(page);
+    const suffix = supportGrantId
+      ? `${query ? `${query}&` : "?"}support_grant_id=${encodeURIComponent(supportGrantId)}`
+      : query;
     return this.request(
       "GET",
-      `/api/v1/audit/events${pageQueryString(params)}`,
+      `/api/v1/audit/events${suffix}`,
       pageSchema(auditEventSchema),
     );
   }
