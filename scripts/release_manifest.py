@@ -240,6 +240,9 @@ def _eval_datasets() -> list[dict[str, Any]]:
 # word characters, dots, @ and dashes, joined by "/", ending in an extension.
 # Prose that mentions a path ("... (adapters/mock/data/items.json) ...") is not
 # one; a URL is not one either (the scheme's ":" is not a segment character).
+# The shape alone also fits a MIME type ("application/vnd.ms-excel") and a name
+# relative to some other directory, so `_named_files` follows a value only when
+# its first segment is a top-level directory of the repository.
 _REPO_PATH = re.compile(r"^[\w.@-]+(?:/[\w.@-]+)+\.[A-Za-z0-9]+$")
 
 
@@ -259,14 +262,16 @@ def _named_files(document: Any, *, named_by: Path) -> list[dict[str, str]]:
 
     A named file that does not exist stops the manifest: a reference nothing
     resolves is a grade nobody can reproduce, and pinning around it would hide
-    exactly that.
+    exactly that. A value that does not start at a top-level directory is not
+    a repo path (a MIME type, an attachment's name in a mock mailbox) and is
+    not followed; one that does and resolves to nothing still stops it.
     """
     pinned: dict[str, str] = {}
     root = REPO_ROOT.resolve()
     pending = [(rel, named_by.name) for rel in _path_values(document)]
     while pending:
         rel, parent = pending.pop()
-        if rel in pinned:
+        if rel in pinned or not (root / rel.split("/", 1)[0]).is_dir():
             continue
         path = (root / rel).resolve()
         if not path.is_relative_to(root) or not path.is_file():
