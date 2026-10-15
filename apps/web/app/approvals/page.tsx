@@ -33,6 +33,7 @@ import { APPROVAL_STATUS } from "../../lib/approvals/status";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
 import { errorMessage } from "../../lib/error-message";
+import { useIdempotencyKeys } from "../../lib/idempotency";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
 
@@ -42,6 +43,7 @@ export default function ApprovalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canDecide = hasScope("approvals.decide");
+  const keys = useIdempotencyKeys();
 
   const {
     items: approvals,
@@ -82,11 +84,16 @@ export default function ApprovalsPage() {
   // assumed to be the platform API.
   async function decide(approval: Approval, approve: boolean) {
     setBusyId(approval.id);
+    const decision = { approve, comment: comments[approval.id] ?? "" };
     try {
-      await approvalClient(approval.approval_type).decideApproval(approval.id, {
-        approve,
-        comment: comments[approval.id] ?? "",
-      });
+      // A retry of this decision reuses its key, so a decision that reached
+      // the server before the answer was lost is not sent as a second one.
+      await approvalClient(approval.approval_type).decideApproval(
+        approval.id,
+        decision,
+        keys.keyFor(approval.id, decision),
+      );
+      keys.settle(approval.id);
       setComments((current) => ({ ...current, [approval.id]: "" }));
       setError(null);
       reload();

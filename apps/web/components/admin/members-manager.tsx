@@ -25,6 +25,7 @@ import { RegionState } from "@dw/ui";
 import { apiClient } from "../../lib/session";
 import { useAuth } from "../../lib/auth/auth-context";
 import { errorMessage } from "../../lib/error-message";
+import { useIdempotencyKeys } from "../../lib/idempotency";
 import { roleLabel } from "../../lib/nav/roles";
 import { EmailPicker } from "../email-picker";
 
@@ -41,6 +42,7 @@ const ADMIN_GRANTABLE_ROLES = ["org_admin", "platform_admin"];
 export function MembersManager() {
   const { active, roles } = useAuth();
   const { message, modal } = App.useApp();
+  const keys = useIdempotencyKeys();
   const { token } = theme.useToken();
   const workspaceId = active?.workspaceId ?? null;
   // Only the platform_admin ROLE may mint an admin role — the grant handler's
@@ -119,12 +121,10 @@ export function MembersManager() {
     if (!workspaceId || !email.trim()) return;
     setBusy(true);
     setError(null);
+    const input = { email: email.trim(), workspaceId, roleKeys: [role] };
     try {
-      await apiClient().grantMember({
-        email: email.trim(),
-        workspaceId,
-        roleKeys: [role],
-      });
+      await apiClient().grantMember(input, keys.keyFor("grant", input));
+      keys.settle("grant");
       message.success(`Đã cấp quyền cho ${email.trim()}.`);
       setEmail("");
       await refresh();
@@ -150,13 +150,16 @@ export function MembersManager() {
     if (!workspaceId || !m.email) return;
     setSavingId(m.user_id);
     setError(null);
+    const input = {
+      email: m.email,
+      workspaceId,
+      roleKeys: [currentRole(m)],
+      department: m.department,
+    };
+    const action = `role/${m.user_id}`;
     try {
-      await apiClient().grantMember({
-        email: m.email,
-        workspaceId,
-        roleKeys: [currentRole(m)],
-        department: m.department,
-      });
+      await apiClient().grantMember(input, keys.keyFor(action, input));
+      keys.settle(action);
       await refresh();
     } catch (e) {
       setError(errorMessage(e));
@@ -193,8 +196,14 @@ export function MembersManager() {
       autoFocusButton: "cancel",
       onOk: async () => {
         setError(null);
+        const action = `revoke/${m.user_id}`;
         try {
-          await apiClient().revokeMember(m.user_id, workspaceId);
+          await apiClient().revokeMember(
+            m.user_id,
+            workspaceId,
+            keys.keyFor(action, { workspaceId }),
+          );
+          keys.settle(action);
           await refresh();
         } catch (e) {
           setError(errorMessage(e));

@@ -356,13 +356,14 @@ export class ApiClient {
   async requestNoContent(
     method: "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
-    init?: { body?: unknown; signal?: AbortSignal },
+    init?: { body?: unknown; idempotencyKey?: string; signal?: AbortSignal },
   ): Promise<void> {
     const fetchImpl = this.options.fetchImpl ?? fetch;
     const headers: Record<string, string> = { Accept: "application/json" };
     const token = await this.options.getAccessToken?.();
     if (token) headers.Authorization = `Bearer ${token}`;
     if (init?.body !== undefined) headers["Content-Type"] = "application/json";
+    if (init?.idempotencyKey) headers["Idempotency-Key"] = init.idempotencyKey;
     const response = await fetchImpl(`${this.options.baseUrl}${path}`, {
       method,
       headers,
@@ -401,13 +402,17 @@ export class ApiClient {
 
   // ---- admin: membership management --------------------------------------
 
-  /** Grant an existing (signed-in) identity access to a workspace with roles. */
-  async grantMember(input: {
-    email: string;
-    workspaceId: string;
-    roleKeys: string[];
-    department?: string;
-  }): Promise<{ userId: string; email: string | null; displayName: string }> {
+  /** Grant an existing (signed-in) identity access to a workspace with roles.
+   * The key makes a retry grant once. */
+  async grantMember(
+    input: {
+      email: string;
+      workspaceId: string;
+      roleKeys: string[];
+      department?: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<{ userId: string; email: string | null; displayName: string }> {
     const r = await this.request(
       "POST",
       "/api/v1/admin/members",
@@ -423,6 +428,7 @@ export class ApiClient {
           role_keys: input.roleKeys,
           department: input.department ?? "general",
         },
+        idempotencyKey,
       },
     );
     return { userId: r.user_id, email: r.email, displayName: r.display_name };
@@ -438,10 +444,15 @@ export class ApiClient {
   }
 
   /** Remove an identity's access to a workspace of the caller's tenant. */
-  revokeMember(userId: string, workspaceId: string): Promise<void> {
+  revokeMember(
+    userId: string,
+    workspaceId: string,
+    idempotencyKey?: string,
+  ): Promise<void> {
     return this.requestNoContent(
       "DELETE",
       `/api/v1/admin/members/${userId}?workspace_id=${workspaceId}`,
+      { idempotencyKey },
     );
   }
 
