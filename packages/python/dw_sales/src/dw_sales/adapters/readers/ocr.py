@@ -1,5 +1,7 @@
-"""A scanned page read as words with boxes (ticket 27, ADR 0009 and 0010): CPU
-OCR by Tesseract, Vietnamese first.
+"""A scanned page read as words with boxes (ticket 27,
+ADRs 0009-parser-page-output-with-coordinates and
+0010-document-intake-at-real-size-and-format): CPU OCR by Tesseract, Vietnamese
+first.
 
 Like the converter (`readers.legacy`), it runs in the reader sandbox's
 one-use reading process: `pdftoppm` rasterises the one page, `tesseract`

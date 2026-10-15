@@ -68,8 +68,9 @@ from dw_sales.application.views import ProcessingJobView
 
 logger = logging.getLogger("dw_sales.inbox_lane")
 
-# The lane's worker registry name, and so its audit actor (ADR 0011): the
-# worker registers it under this constant, never a copy of the string.
+# The lane's worker registry name, and so its audit actor
+# (ADR 0011-a-background-lane-audits-as-itself): the worker registers it under this constant, never
+# a copy of the string.
 SALES_INBOX_LANE: Final = "sales_inbox"
 # What the lane does with DW1's account, and so all its context carries: what
 # processing needs, the drain's own ceiling.

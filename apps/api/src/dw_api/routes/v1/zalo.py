@@ -7,8 +7,8 @@ worker's poll lane (the API webhook once a public host exists) redeems it.
 Every route acts on ``context.principal_id`` — the user resolved server-side
 from the verified bearer token — and takes no body, query or path value that
 could name somebody else. The link belongs to the person, not to one of their
-workspaces (ADR 0005): the same user reads "linked" from every tenant they are
-a member of, by design.
+workspaces (ADR 0005-zalo-bot-is-the-first-chat-channel): the same user reads "linked" from every
+tenant they are a member of, by design.
 
 Mounted only when the bot token and the link secret are both configured; an
 unconfigured deployment answers 404 and the settings page shows "chưa cấu hình".

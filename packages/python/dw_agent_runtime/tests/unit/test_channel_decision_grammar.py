@@ -1,5 +1,5 @@
 """Unit: the decision grammar, the code's keyed hash, the subject-version
-registry and the chat command's routing (channels Z5, ADR 0007).
+registry and the chat command's routing (channels Z5, ADR 0007-chat-decisions-after-a-portal-view).
 
 The grammar is fixed and read by code: `DUYỆT <mã>` and `KHÔNG <mã> <lý do>`,
 six ASCII digits, case and accents ignored. Anything that starts with the verb
@@ -230,7 +230,7 @@ def _decide_callers() -> set[str]:
 
 def test_only_the_web_route_and_the_chat_decision_service_reach_decide() -> None:
     """No chat command of Z4 or Z6, no workflow, no tool reaches the decision:
-    the model has no path to it (ADR 0007 point 6)."""
+    the model has no path to it (ADR 0007-chat-decisions-after-a-portal-view point 6)."""
     assert _decide_callers() == {
         "apps/api/src/dw_api/routes/v1/approvals.py",
         "packages/python/dw_agent_runtime/src/dw_agent_runtime/channel_decisions.py",

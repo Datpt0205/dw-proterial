@@ -1,5 +1,5 @@
-"""The source route (ADR 0009, spec decision 12): the original, a page or a
-sheet at a time, with the anchors drawn on it, recorded as served."""
+"""The source route (ADR 0009-parser-page-output-with-coordinates, spec decision 12): the
+original, a page or a sheet at a time, with the anchors drawn on it, recorded as served."""
 
 from __future__ import annotations
 

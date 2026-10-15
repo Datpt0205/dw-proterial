@@ -1,5 +1,5 @@
 """DW1's readers as the application uses them: every file is read in the
-reader sandbox (ticket 25, ADR 0010 decisions 2 and 6).
+reader sandbox (ticket 25, ADR 0010-document-intake-at-real-size-and-format decisions 2 and 6).
 
 The application's reader ports (`PoDocumentReaderPort`, `LayoutReaderPort`,
 `QuoteFormPort`, `RfqReaderPort`, `DesignReplyReaderPort`,

@@ -75,7 +75,8 @@ from dw_sales.domain.dispositions import DispositionKind
 
 logger = logging.getLogger("dw_sales.processing")
 
-# The drain's worker registry name, and so its audit actor (ADR 0011).
+# The drain's worker registry name, and so its audit actor
+# (ADR 0011-a-background-lane-audits-as-itself).
 SALES_PROCESSING_LANE: Final = "sales_processing"
 # What processing needs, and so all a context the drain builds carries.
 PROCESSING_CEILING: Final = frozenset({SalesScopes.INBOX_PROCESS.value})

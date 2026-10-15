@@ -100,7 +100,8 @@ CHANNEL_LINK_PROVIDERS: tuple[str, ...] = ("zalo",)
 
 # One-time nonces behind a channel link token (migration 02930a73bbdf). Identity
 # plane like `external_identities`: keyed by user, no tenant, no RLS — a link
-# belongs to the person, not to one of their workspaces (ADR 0005).
+# belongs to the person, not to one of their workspaces
+# (ADR 0005-zalo-bot-is-the-first-chat-channel).
 channel_link_nonces = sa.Table(
     "channel_link_nonces",
     metadata,
@@ -252,8 +253,9 @@ approval_decisions = sa.Table(
     sa.Column("channel", sa.Text, nullable=False, server_default="web"),
 )
 
-# A person opened an approval on the portal (channels Z5, ADR 0007):
-# the approval's version and its subject's version at that moment.
+# A person opened an approval on the portal (channels Z5,
+# ADR 0007-chat-decisions-after-a-portal-view): the approval's version and its subject's version at
+# that moment.
 approval_view_receipts = sa.Table(
     "approval_view_receipts",
     metadata,
@@ -524,8 +526,9 @@ notifications = sa.Table(
 )
 
 # A notification on its way out through a linked chat (migration 5a25154e0296,
-# ADR 0006). Rows are created only by `platform.deliver_notification`; the
-# application updates the delivery's own state and nothing else.
+# ADR 0006-provider-neutral-channel-delivery-outbox). Rows are created only by
+# `platform.deliver_notification`; the application updates the delivery's own state and nothing
+# else.
 channel_deliveries = sa.Table(
     "channel_deliveries",
     metadata,

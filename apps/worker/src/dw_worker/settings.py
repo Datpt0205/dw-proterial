@@ -16,6 +16,7 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from dw_agent_runtime.model.profiles import DEFAULT_PROFILE_ID
 from dw_knowledge.contracts import DEFAULT_COLLECTION
 from dw_knowledge.ingest_jobs import (
     DEFAULT_HEARTBEAT_SECONDS,
@@ -124,7 +125,7 @@ class WorkerSettings(BaseSettings):
         default="hash", validation_alias=AliasChoices("DW_WORKER_EMBEDDING_PROVIDER")
     )
     model_profile: str = Field(
-        default="gateway",
+        default=DEFAULT_PROFILE_ID,
         validation_alias=AliasChoices("DW_WORKER_MODEL_PROFILE", "DW_API_MODEL_PROFILE"),
     )
     # Observability → Langfuse (OTLP). Empty = NullTelemetry (no export). Same four
@@ -260,8 +261,8 @@ class WorkerSettings(BaseSettings):
         validation_alias=AliasChoices("DW_WORKER_ZALO_LINK_SECRET", "ZALO_LINK_SECRET"),
     )
     # The key decision codes are hashed under; must equal the API's, which
-    # issued them (ADR 0007, channels Z5). Empty = a decision sent from Zalo is
-    # answered "not enabled" and nothing is decided.
+    # issued them (ADR 0007-chat-decisions-after-a-portal-view, channels Z5). Empty = a decision
+    # sent from Zalo is answered "not enabled" and nothing is decided.
     approval_code_secret: SecretStr = Field(
         default=SecretStr(""),
         validation_alias=AliasChoices("DW_WORKER_APPROVAL_CODE_SECRET", "DW_APPROVAL_CODE_SECRET"),

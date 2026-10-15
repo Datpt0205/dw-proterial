@@ -751,8 +751,8 @@ def test_a_text_pdf_is_read_with_every_value_at_its_page_and_box() -> None:
 
 
 def test_a_pdf_value_is_boxed_where_it_is_printed_never_by_a_text_line() -> None:
-    """ADR 0009: the box is on the rendered page; each row's boxes sit lower
-    than the row above, each cell right of the one before."""
+    """ADR 0009-parser-page-output-with-coordinates: the box is on the rendered page; each row's
+    boxes sit lower than the row above, each cell right of the one before."""
     po = _po(_read_pdf(_fixture(M03)))
 
     rows = [line.anchors for line in po.lines]

@@ -1,7 +1,7 @@
 """Integration: a decision sent from a chat after a view on the portal.
 
-ADR 0007 with its 2026-10-06 amendment, channels Z5. Real Postgres
-as `dw_app`: the view service the API route calls, the decision service the
+ADR 0007-chat-decisions-after-a-portal-view with its 2026-10-06 amendment, channels Z5. Real
+Postgres as `dw_app`: the view service the API route calls, the decision service the
 worker's chat command calls, `ApproveAndResumeService.decide` between them, and
 the real membership lookup the chat context is built from. Every refusal leaves
 the approval pending, writes no decision, leaves the code as it was (unless it
@@ -742,7 +742,7 @@ async def test_the_portal_says_why_it_offers_no_code(world: World) -> None:
     assert await reason(bod, web_only) is CodeUnavailable.WEB_ONLY
     assert await reason(unlinked, approval_id) is CodeUnavailable.NOT_LINKED
     # Holds `approvals.decide` without the stamp: the approval is not even
-    # served to them (ADR 0004 amendment), as on the web.
+    # served to them (ADR 0011-approval-decider-stamped-as-required-scope amendment), as on the web.
     with pytest.raises(Exception, match="not found"):
         await reason(plain, approval_id, "approvals.read", "approvals.decide")
     # Every open is a receipt, whatever was offered.

@@ -117,7 +117,7 @@ to a state lives in the shared state component, not per screen:
 
 - **Loading** is `Skeleton`, shaped like the content; a `Table` uses its
   `loading` prop. A long job shows progress by page, rejected files with the
-  reason, and poor-page warnings (platform ADR 0010).
+  reason, and poor-page warnings (platform ADR 0010-document-intake-at-real-size-and-format).
 - **Empty has three meanings.** _Nothing yet_ teaches and offers the first
   action (antd `Empty` with the action as its child). _Nothing matches_ names
   the filter and offers "Xóa bộ lọc". _Nothing so far_ on a partly loaded list
@@ -176,7 +176,7 @@ reference price reaches only the roles the product allows to see prices; public
 amounts are **not** locked, because locking them teaches people the lock means
 nothing (in E-HSDT, for example, the package budget, the published winning
 price and the bid security). Restricted fields (CCCD, salary, account numbers)
-are masked in the support context (platform ADR 0008).
+are masked in the support context (platform ADR 0024-customer-granted-support-access).
 
 - **The API leaves the value out.** A number in the JSON is a leak even when
   nothing renders it; CSS that hides a value hides nothing.
@@ -187,7 +187,7 @@ are masked in the support context (platform ADR 0008).
 - **Side doors, checked by name:** a finding's `expected`/`actual` wherever the
   rule compares amounts; an approval's payload (`GET /approvals` returns it
   whole); the activity log; page images and cell grids of files that carry
-  prices (platform ADR 0009); previews and exports of generated documents;
+  prices (platform ADR 0009-parser-page-output-with-coordinates); previews and exports of generated documents;
   search and the command palette; toasts, notifications, email and Zalo cards;
   page title, URL and query string, export file name, `aria-label`; analytics,
   logs, traces, errors.
@@ -223,7 +223,7 @@ so a person can tell the difference.
 - **Model confidence** (display-only) is secondary text at most: never a
   colour, a check or a sort key that makes a value look verified.
 - **Every number from a document opens its source** (the page crop or the cell,
-  platform ADR 0009), and "Xác nhận" stays disabled until that source has loaded
+  platform ADR 0009-parser-page-output-with-coordinates), and "Xác nhận" stays disabled until that source has loaded
   for this person, because the server refuses otherwise (the same ADR).
 - **Verification, correction and approval are never bulk actions:** no
   select-all, no "xác minh tất cả". A queue goes one item at a time, says how
@@ -337,7 +337,7 @@ will be lost?
   amounts `align: 'right'`; row actions in a `fixed: 'right'` column; active
   filters as removable chips with "Xóa tất cả".
 - **Real size:** test at the size the product's real documents and lists reach
-  (platform ADR 0010; in E-HSDT, for example, a 300-page E-HSMT and a BOQ of a
+  (platform ADR 0010-document-intake-at-real-size-and-format; in E-HSDT, for example, a 300-page E-HSMT and a BOQ of a
   few thousand rows). A list that can pass about 200 rows is virtualised, and
   typing in a cell responds within 100 ms.
 - **Links:** every view a person would send to a colleague has its own URL (the

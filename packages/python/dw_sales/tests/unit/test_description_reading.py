@@ -1,4 +1,4 @@
-"""What code accepts of a model's reading of a description (ticket 28, ADR 0005).
+"""What code accepts of a model's reading of a description (ticket 28, dw_sales ADR 0005).
 
 One test per guard in `domain.description_reading`: each span found exactly
 once, every number parsed by code from its span, every word covered, no

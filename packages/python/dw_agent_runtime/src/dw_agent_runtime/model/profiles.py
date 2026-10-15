@@ -97,6 +97,15 @@ class ModelProfile(BaseModel):
         return self
 
 
+# The profile a process runs on when its environment names none. One constant,
+# read by the API's and the worker's settings, because the two must agree: the
+# worker embeds documents with its profile's embedding route and the API embeds
+# the query with its own, so two defaults would search one vector space with
+# vectors from another. It used to be "balanced" in one and "gateway" in the
+# other; compose and .env.example name "balanced", so that is the default.
+DEFAULT_PROFILE_ID = "balanced"
+
+
 @dataclass
 class ModelProfileRegistry:
     # Platform profiles plus per-tenant overrides. A customer on their own

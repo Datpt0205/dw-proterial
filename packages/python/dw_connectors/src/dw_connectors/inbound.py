@@ -24,9 +24,9 @@ link flow in ``adapters.zalo_link``) arrives here as an ``InboundMessage``, and
    được tin này".
 
 Nothing in the message text names the user, the tenant, the workspace or a
-scope: each comes from a database read keyed by the step before it (ADR 0005
-condition 2). The context type is a parameter so this package needs no
-platform import; the composition root binds it to the platform's
+scope: each comes from a database read keyed by the step before it
+(ADR 0005-zalo-bot-is-the-first-chat-channel condition 2). The context type is a parameter so this
+package needs no platform import; the composition root binds it to the platform's
 ``AccessContext`` (``dw_platform.application.channel_access``).
 """
 

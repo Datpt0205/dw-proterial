@@ -1,4 +1,5 @@
-"""SQL side of the channel outbox (migration 5a25154e0296, ADR 0006).
+"""SQL side of the channel outbox (migration 5a25154e0296,
+ADR 0006-provider-neutral-channel-delivery-outbox).
 
 Rows are created by ``platform.deliver_notification`` alone, in the statement
 that addresses the in-app notification; nothing here inserts. What this module
@@ -13,7 +14,7 @@ does is let the worker's ``channel_delivery`` lane find, hold and settle them:
   'pending'`` in the claim is re-checked by READ COMMITTED once a lock it
   waited on is released, so a row sent by one worker is never claimed by
   another. One delivery per transaction: a crash re-sends at most the one
-  message in flight, not a batch (ADR 0006: at least once).
+  message in flight, not a batch (ADR 0006-provider-neutral-channel-delivery-outbox: at least once).
 - Every settlement but a retry writes one ``platform.audit_events`` row in the
   same transaction.
 
@@ -51,7 +52,8 @@ _SCOPES_DUE = sa.text(
 # name), on the recipient's behalf. The recipient is in `details`, never the
 # actor: they did not send anything.
 LANE = "channel_delivery"
-# The retention lane's registry name (ADR 0011), and why it fails a row.
+# The retention lane's registry name (ADR 0011-a-background-lane-audits-as-itself), and why it fails
+# a row.
 RETENTION_LANE = "channel_deliveries_retention"
 UNCONFIGURED = "channel_unconfigured"
 # last_error is CHECKed at 500 characters.

@@ -213,7 +213,8 @@ async def test_status_is_the_callers_own() -> None:
 
 
 async def test_a_link_belongs_to_the_person_so_a_second_tenant_reads_linked_too() -> None:
-    """By design (ADR 0005): the link is keyed by user, not by tenant."""
+    """By design (ADR 0005-zalo-bot-is-the-first-chat-channel): the link is keyed by user, not by
+    tenant."""
     store = FakeAccountStore()
     store.links = {ALICE: "alice-chat"}
 
@@ -363,8 +364,8 @@ def test_the_bot_token_and_link_secret_never_print_in_the_settings_repr() -> Non
 
 
 def test_the_route_never_builds_an_access_context_from_zalo_data() -> None:
-    """ADR 0005 condition 2: the routes resolve the caller from the bearer token
-    through the ordinary dependency; nothing Zalo sent reaches the factory.
+    """ADR 0005-zalo-bot-is-the-first-chat-channel condition 2: the routes resolve the caller from
+    the bearer token through the ordinary dependency; nothing Zalo sent reaches the factory.
 
     The import side is import-linter's ("The Zalo settings routes take neither
     approvals nor the access-context factory"). What an import check cannot see

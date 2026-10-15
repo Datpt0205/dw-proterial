@@ -1,10 +1,10 @@
 """Where a value was read: the one anchor type orders and quotes share.
 
 Every value DW1 reads from a customer's file is shown to the person checking
-it beside the original it came from (`.claude/rules/ui-quality.md`, ADR 0009).
-A `SourceAnchor` says where that is, in terms the review screen draws on the
-original itself: a cell on the sheet grid, boxes on the rendered page, or the
-words quoted from it. Never a line of extracted text, which is the parser's
+it beside the original it came from (`.claude/rules/ui-quality.md`,
+ADR 0009-parser-page-output-with-coordinates). A `SourceAnchor` says where that is, in terms the
+review screen draws on the original itself: a cell on the sheet grid, boxes on the rendered page, or
+the words quoted from it. Never a line of extracted text, which is the parser's
 reading and not the customer's file.
 
 One exception, and it is the customer's own text: a request for quotation a
@@ -21,9 +21,9 @@ matches, so an anchor can never point into a file other than the one its
 value was read from. dw_sales ADR 0002 records why
 the type lives here until a second context needs it.
 
-A value read from a converted copy of a legacy file (ticket 27, ADR 0009: a
-legacy .xls read as the .xlsx LibreOffice made of it) carries both hashes:
-the customer's file's, and the copy's (``derived_sha256``), so the place is
+A value read from a converted copy of a legacy file (ticket 27,
+ADR 0009-parser-page-output-with-coordinates: a legacy .xls read as the .xlsx LibreOffice made of
+it) carries both hashes: the customer's file's, and the copy's (``derived_sha256``), so the place is
 named in the file the customer sent and the reading in the bytes it was made
 from.
 """
