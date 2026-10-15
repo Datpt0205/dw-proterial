@@ -412,6 +412,11 @@ class _Served:
         )
 
 
+def _render_key(r: ArtifactRecord) -> tuple[object, ...]:
+    """One file of a kind and content type per case version (ticket 06)."""
+    return (r.case_kind, r.case_id, r.case_version, r.kind, r.content_type)
+
+
 def _region_key(s: ServedSource) -> tuple[object, ...]:
     return (
         s.principal_id,
@@ -428,10 +433,13 @@ class _Artifacts:
     def __init__(self, held: dict[uuid.UUID, ArtifactRecord]) -> None:
         self._held = held
 
-    async def add(self, artifact: ArtifactRecord) -> None:
+    async def add(self, artifact: ArtifactRecord) -> bool:
         if artifact.artifact_id in self._held:
             raise ConflictError("the artifact is already recorded")
+        if any(_render_key(r) == _render_key(artifact) for r in self._held.values()):
+            return False
         self._held[artifact.artifact_id] = artifact
+        return True
 
     async def get(self, artifact_id: uuid.UUID) -> ArtifactRecord | None:
         return self._held.get(artifact_id)
@@ -706,6 +714,9 @@ class Objects:
 
     async def get_object(self, key: str) -> bytes:
         return self.held[key]
+
+    async def delete_object(self, key: str) -> None:
+        self.held.pop(key, None)
 
 
 # ----------------------------------------------------------------- world --
