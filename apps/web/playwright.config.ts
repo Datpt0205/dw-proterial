@@ -62,7 +62,7 @@ export default defineConfig({
       ] as const
     ).map(([name, width, height, timezoneId]) => ({
       name,
-      testMatch: /(platform-pages|support-session)\.spec\.ts/,
+      testMatch: /(platform-pages|support-session|screens)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width, height },
