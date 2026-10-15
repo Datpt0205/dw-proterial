@@ -42,15 +42,26 @@ _ERROR_LIMIT = 500
 
 
 class UndeliverableEventError(Exception):
-    """The event cannot be delivered as written, and retrying will not help."""
+    """The handler refused the event itself: a payload that does not parse, or a
+    refusal of what it asks for — not a failure of the handler or a dependency.
+
+    It changes how the failure is reported (one error line with the reason, no
+    traceback), not how it is retried: the event stays undelivered and is
+    claimed again until ``max_attempts`` is spent, like any other failure. A
+    refusal believed final has turned out not to be — a settlement losing a
+    race to another delivery was refused once and found the decision applied
+    on the next look (9704778) — so a bounded retry is the safe answer, and a
+    handler should still raise this only when a retry is not expected to help.
+    """
 
 
 async def _deliver(event: OutboxEvent, handler: EventHandler, drain: OutboxDrainPort) -> None:
     try:
         outcome = await handler(event)
     except UndeliverableEventError as exc:
-        # A retry cannot fix the event itself, so the reason is recorded and the
-        # attempt budget is left to run out rather than being burned in a loop.
+        # The reason is the event's, so it is recorded without a traceback. The
+        # attempt was counted at claim, so the retries are bounded by
+        # `max_attempts` either way; nothing here shortens them.
         logger.error("outbox event %s (%s) is undeliverable: %s", event.id, event.event_type, exc)
         await drain.record_failure(event.id, error=str(exc)[:_ERROR_LIMIT])
         return

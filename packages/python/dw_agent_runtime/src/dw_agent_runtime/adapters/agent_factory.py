@@ -222,6 +222,9 @@ def platform_middleware(spec: AgentSpec) -> list[AgentMiddleware[Any, Any]]:
             PlatformSummarizationMiddleware(
                 spec.compaction.model,
                 copy=spec.copy,
+                # The worker's registry: the summary prompts resolve through the
+                # same tenant overlay as the worker prompt.
+                prompts=spec.prompts,
                 uow_factory=spec.compaction.uow_factory,
                 clock=spec.compaction.clock,
                 ids=spec.compaction.ids,

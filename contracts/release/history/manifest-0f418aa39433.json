@@ -1,0 +1,609 @@
+{
+  "api_version": "0.1.0",
+  "approval_policy_version": "1.0.0",
+  "copy_bundles": [
+    {
+      "checksum": "2866325cda2ce8ea08d86d4869fdd677572499e0d17f36344a255e6516979410",
+      "copy_id": "platform.runtime",
+      "version": "1.3.0"
+    },
+    {
+      "checksum": "d15eb453fc6e6c8a12f13bce4776ad5ea54c92d45725cb4bf08c2c8b8c05f5f5",
+      "copy_id": "platform.runtime",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "dcfeed6e919c29bac34362aea015040597fcec5657dbc8fe82a86866fc9ec1db",
+      "copy_id": "platform.runtime",
+      "version": "1.5.0"
+    },
+    {
+      "checksum": "f7cd2b502af52c5a650162e7392e1ee3b3b841387f44e6726afaf7bad67fe5f7",
+      "copy_id": "platform.runtime",
+      "version": "1.6.0"
+    },
+    {
+      "checksum": "b039c601f22287e8392074230783b2e64ba9d30f5077c1f3f6bbf81bbadc6fc8",
+      "copy_id": "platform.runtime",
+      "version": "1.7.0"
+    },
+    {
+      "checksum": "a4d226832c9a75737bd25da430a2ee0465eb1891626d9fdc2e26a8f4b7ad7af1",
+      "copy_id": "sales_documents",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "597bf7df393c3f258460311369d4b78b61ff531d566ef375c8facc3f929fd13a",
+      "copy_id": "sales_documents",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "a61185efa41caa79ba3ccb5bec201038008c23661fd20b689de99ef359f50eed",
+      "copy_id": "sales_documents",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "b95c6c69ad61aa72716e6ba750f203733839ce5476384724b4cedb2f6af1677e",
+      "copy_id": "sales_emails",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "ea318214f4439ce3bb6847b1c821cab54d9e41e6b4c4860676501f02091cd5b5",
+      "copy_id": "sales_emails",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "a325d36f0503673b5acb5b6aa48b926bac25780724ae3cc3a0014dcb6b02b0a7",
+      "copy_id": "sales_emails",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "b2de9c2a52c5860c7b10dc8740a9b0797af39f153f6602a791e704b87cca8aa2",
+      "copy_id": "sales_handoffs",
+      "version": "1.0.0"
+    }
+  ],
+  "eval_datasets": [
+    {
+      "checksum": "2c3569c4af18d9543cbb0223b5dd1c59bf2e4932260ec193975baa1ac38d9d9d",
+      "dataset_id": "platform_smoke",
+      "files": [
+        {
+          "checksum": "49e4582226509bce7787b5e3f70b99872651f79d8daa27a5c4d4513880b6a808",
+          "path": "evals/expected/pf_cross_tenant.json"
+        },
+        {
+          "checksum": "db3ffcd9bc2fafabfb6dedff1847d9640b8344bd35ce49b9c4fe7316127ef5f8",
+          "path": "evals/expected/pf_memory_policy.json"
+        },
+        {
+          "checksum": "bfac67f934e229b65b45e6649b6c6a757ff89720825bb9c88eb5da4cd7ef5385",
+          "path": "evals/expected/pf_prompt_injection.json"
+        },
+        {
+          "checksum": "a3c106478e77e15664bf1c7ec214cf9c4938f7a6d41b9a7e2f4c4e4a984fd70c",
+          "path": "evals/expected/pf_side_effect.json"
+        },
+        {
+          "checksum": "6fd4108202a417410dde066b9606d2221b20ce591c10ff941e6d8e4f43d6091f",
+          "path": "evals/fixtures/cases/pf_cross_tenant.json"
+        },
+        {
+          "checksum": "926818453f365e9f50009146d3e3a82a411c2b2f34c86fe39e6260cf0ba5d85f",
+          "path": "evals/fixtures/cases/pf_memory_policy.json"
+        },
+        {
+          "checksum": "716fca40eb771f867712a6ecf224c4aab842ad1a7aeed02fce4ed533124f4bfe",
+          "path": "evals/fixtures/cases/pf_prompt_injection.json"
+        },
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/fixtures/cases/pf_side_effect.json"
+        }
+      ],
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "00e48ebcfefacba2c4c356d14594d9320572ca8da5446b44a1c5d75b15c52666",
+      "dataset_id": "sales",
+      "files": [
+        {
+          "checksum": "5813dfa2e8b4315e62bda4d893dcc0f80825399bfd6cec482d941b7e4595ed35",
+          "path": "evals/expected/sales_cross_tenant.json"
+        },
+        {
+          "checksum": "7c4592500c977e4b33ac8337f49332ca8bcd5d6f2c33e4e1ebd4ef40a8b0415e",
+          "path": "evals/expected/sales_delivery_schedules.json"
+        },
+        {
+          "checksum": "a85a6ecab33ab0f2af28c416b40e1e25ec61bc64e90de81bc84d02bacf343272",
+          "path": "evals/expected/sales_extraction.json"
+        },
+        {
+          "checksum": "d59b3a818800094d36afeb3a3c0f2cedfb23138a7d64c2f5eddb1c918ba69430",
+          "path": "evals/expected/sales_findings.json"
+        },
+        {
+          "checksum": "ba49318b6123f2481be6409689a14c54b156807176f00b441750029c04a923d6",
+          "path": "evals/expected/sales_injection_m12.json"
+        },
+        {
+          "checksum": "2358c0fe5acbc8565dbdb45067017c42483bfd686f6ed77387293cd5f9810e38",
+          "path": "evals/expected/sales_legacy_encoding.json"
+        },
+        {
+          "checksum": "ff1a806a4c641499154dc12aaf2b838909e72b5325d0df4d17f2fe96886e28f8",
+          "path": "evals/expected/sales_maker_checker_order.json"
+        },
+        {
+          "checksum": "faa680a33360aa4b1fbfc6e9ef167d5ecba65af33be003c084e869bca72749c1",
+          "path": "evals/expected/sales_missing_evidence_gate.json"
+        },
+        {
+          "checksum": "d59b3a818800094d36afeb3a3c0f2cedfb23138a7d64c2f5eddb1c918ba69430",
+          "path": "evals/expected/sales_missing_evidence_recall.json"
+        },
+        {
+          "checksum": "5dedd42e5390a6f393ed1b061fa074ce707239da98985ca261d13a87268f77bc",
+          "path": "evals/expected/sales_price_confidentiality.json"
+        },
+        {
+          "checksum": "afe354659a4df63ad900b17726d3b97fb26732f7bf142e60e268c574842b8149",
+          "path": "evals/expected/sales_pricer_approver_head.json"
+        },
+        {
+          "checksum": "cbdbd04dfc6146eb93b6b1a74b0ba45311126bf946e62f4ba91f1e2b8362dc14",
+          "path": "evals/expected/sales_pricer_approver_pic.json"
+        },
+        {
+          "checksum": "d67418519fd4291cbfa973cdb61f37258b43abd62dfe8c03512a7358ded500c0",
+          "path": "evals/fixtures/cases/sales_cross_tenant.json"
+        },
+        {
+          "checksum": "bec59e34a5b784f0eab926768d38aed8dd1970221a03d7909cfe6ebdb1ab7a93",
+          "path": "evals/fixtures/cases/sales_delivery_schedules.json"
+        },
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/fixtures/cases/sales_extraction.json"
+        },
+        {
+          "checksum": "1fbcab541aa771cf47b9583a34a8318e4f79e9e62f462ec914a9bf448c5144e4",
+          "path": "evals/fixtures/cases/sales_findings.json"
+        },
+        {
+          "checksum": "f9dff85feb0fc2d7387763882bfef378c8f350e76671f8b360e660bee30aaf15",
+          "path": "evals/fixtures/cases/sales_injection_m12.json"
+        },
+        {
+          "checksum": "a6949284ab0f495d479bf5d13646ef1fe5664ad905858cc4cceae768e86f477e",
+          "path": "evals/fixtures/cases/sales_legacy_encoding.json"
+        },
+        {
+          "checksum": "90c5641e345e6cf4c0935351410c236105da30e09137b62b4118362433a1905e",
+          "path": "evals/fixtures/cases/sales_maker_checker_order.json"
+        },
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/fixtures/cases/sales_missing_evidence_gate.json"
+        },
+        {
+          "checksum": "5fb01638ce035e640bcec2fb3f6fa54be8b3df21011d8518056d18f105ee82ba",
+          "path": "evals/fixtures/cases/sales_missing_evidence_recall.json"
+        },
+        {
+          "checksum": "128e8b767831289f688b10261f1deb71f7352af099e94c0447061a14b4b07941",
+          "path": "evals/fixtures/cases/sales_price_confidentiality.json"
+        },
+        {
+          "checksum": "1fdf077c71f603f2f6df384cd6982eeacd9ba84b6f2a884494432b4bbbb8ec1b",
+          "path": "evals/fixtures/cases/sales_pricer_approver_head.json"
+        },
+        {
+          "checksum": "d9a31e804a75c487b27d611ae7ea78ce36688f2db73109ea5f1d049bcaa21095",
+          "path": "evals/fixtures/cases/sales_pricer_approver_pic.json"
+        },
+        {
+          "checksum": "8fb22e2a9a22c9e1ccab28f79357b39e6f2574311352ae2ab43f2f821662bf76",
+          "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/README.md"
+        },
+        {
+          "checksum": "ccf08a2e54e0a12e464ea701d4bdb65b5c7e2b0c3cce4cc0399d7a531e24ae89",
+          "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/data/purchase_orders.json"
+        }
+      ],
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "ab96c8413892c34e6e2f9b135b5d133d615876bb92211f5c1f740b58f407ba42",
+      "dataset_id": "sales_descriptions",
+      "files": [
+        {
+          "checksum": "9017a93ab52a0c32522b8fbf35c7831c879d68259dfe53bf3923b4e946e385dc",
+          "path": "evals/expected/sales_desc_flow.json"
+        },
+        {
+          "checksum": "2ded21b93849b3b02149362faaa26be267522c9bfe7370b4499a784e9289f737",
+          "path": "evals/expected/sales_desc_golden.json"
+        },
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/expected/sales_desc_guards.json"
+        },
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/expected/sales_desc_security.json"
+        },
+        {
+          "checksum": "e5887ea2f03d857765a6a4c5f11b89be664f18ae19dc7e961472969d1c97179c",
+          "path": "evals/fixtures/cases/sales_desc_flow.json"
+        },
+        {
+          "checksum": "6f2f7f2c8523bd0faf673d4b5d9705eca0784d336682cc2b736df4850ca5dd89",
+          "path": "evals/fixtures/cases/sales_desc_golden.json"
+        },
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/fixtures/cases/sales_desc_guards.json"
+        },
+        {
+          "checksum": "36c69df1bdb87f44e72d3ad729e5898e054d2083f38907552d8017adce8aa8e1",
+          "path": "evals/fixtures/cases/sales_desc_security.json"
+        },
+        {
+          "checksum": "3ced5ef24c8d70bdf1615c658caab5516ed5b3f00cdf0de94cd77e879997eba8",
+          "path": "evals/fixtures/cases/sales_descriptions_golden.json"
+        },
+        {
+          "checksum": "e44b20b0a505b5829f0643f32b2f3c882490643e8552d84e3c4d745c150c5720",
+          "path": "evals/fixtures/cases/sales_descriptions_recorded.json"
+        },
+        {
+          "checksum": "c180e0f1efc216e25b7ef9bd06cbc3495c0a889e58bee71ffa3626791f7d222f",
+          "path": "evals/fixtures/cases/sales_descriptions_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "b63f78744909befe486740e4357f840bd6fb23b105f42c1796540816b0a06732",
+      "dataset_id": "sales_handoff",
+      "files": [
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/expected/sales_handoff.json"
+        },
+        {
+          "checksum": "477bcb68937491b37912a17830b5fc52410df2ad32333ef81d0de0ae52dea12f",
+          "path": "evals/expected/sales_handoff_flow.json"
+        },
+        {
+          "checksum": "58c1f8343c4d14582832ff04821bcbaf858b1bf4f2881bac3c216b4ab330d14e",
+          "path": "evals/expected/sales_handoff_golden.json"
+        },
+        {
+          "checksum": "d2b75f8d19b642a2a12cfdb9b6188c82fc36edba448152e0cbb57994980fdb51",
+          "path": "evals/fixtures/cases/sales_handoff.json"
+        },
+        {
+          "checksum": "896c54cd27665f6b392df5e4737ad7f24b35b05d775198724d131e34f6131837",
+          "path": "evals/fixtures/cases/sales_handoff_golden.json"
+        },
+        {
+          "checksum": "eaacda578fd66839628ce387714a3ca4e629c77ec0ef499efef503f20d4fbcad",
+          "path": "evals/fixtures/cases/sales_handoff_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "8bf3d30de9221cb371c03de43c267f47d6429352a86e4cce219090cf5f09e45c",
+      "dataset_id": "sales_intent",
+      "files": [
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/expected/sales_intent.json"
+        },
+        {
+          "checksum": "e67967ced32f6fd9444c23ecd423837a26afe83b48f12552c7004b7255d99906",
+          "path": "evals/expected/sales_intent_golden.json"
+        },
+        {
+          "checksum": "c49e71cfffac4e44df7d38a135a217de69c3506d39f416dee5705fe92a975673",
+          "path": "evals/fixtures/cases/sales_intent.json"
+        },
+        {
+          "checksum": "80846269b4707d2e651dbbb8cd9bedd8c03e58c310630f43e2dfc2ceb2d5de33",
+          "path": "evals/fixtures/cases/sales_intent_golden.json"
+        },
+        {
+          "checksum": "025fddee9239bde4ee6218180a3c3f0ac159343124a4cf5d8dc8ba92bb68c026",
+          "path": "evals/fixtures/cases/sales_intent_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "13eae6ce8f5dc17a882224d169f584f0b46879808e0c475ea32cc797c59e7b86",
+      "dataset_id": "sales_layout",
+      "files": [
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/expected/sales_layout.json"
+        },
+        {
+          "checksum": "32f4255105eebf5fabe17b9b87b37e393547e434127d2f0067708ed50957b1e0",
+          "path": "evals/expected/sales_layout_golden.json"
+        },
+        {
+          "checksum": "95d6f96405f05f0b2ceb50a02ff470ca4ad90a3ebd85ac53d318e416ec38dcac",
+          "path": "evals/fixtures/cases/sales_layout.json"
+        },
+        {
+          "checksum": "5389e4aab9de65dff3128a8071f425b8f59c299af2bb5c190eb785f1fcef39f8",
+          "path": "evals/fixtures/cases/sales_layout_golden.json"
+        },
+        {
+          "checksum": "29443db63381c094d0e8ff0bd9f0ccc4b0fd821cc35767b44097106081c03f2b",
+          "path": "evals/fixtures/cases/sales_layout_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "1fd0f4ef4a0f90c2752a9391888a929fe898162a8963c995c4438b4b94c4de6a",
+      "dataset_id": "sales_legacy",
+      "files": [
+        {
+          "checksum": "3cc38592e97c77f647edf1355694e504f1a013c14f6d1dc5ecf3624449689172",
+          "path": "evals/expected/sales_legacy.json"
+        },
+        {
+          "checksum": "3cbfd4409f4f27c345d4cfe39cf9552c53380039a526a4f7ab8707e53a3820d4",
+          "path": "evals/fixtures/cases/sales_legacy.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "571d54f37357dec46615e7de4d2c18c210978ea7ad877abe4e182b8d37880a30",
+      "dataset_id": "sales_reply",
+      "files": [
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/expected/sales_reply.json"
+        },
+        {
+          "checksum": "3ec1389573adf750b7fe78d900ef940012c9a219ba8e63422636baf53a56351b",
+          "path": "evals/expected/sales_reply_golden.json"
+        },
+        {
+          "checksum": "91dc6e0ddbf9471a55a3a73655571edaa7e4b832c18112dc992cf6ad862b79c6",
+          "path": "evals/fixtures/cases/sales_reply.json"
+        },
+        {
+          "checksum": "7d081da7b31fa52580d02eac84e8ccc4432a98c0fff9a7c7c5871afeecbc8b6c",
+          "path": "evals/fixtures/cases/sales_reply_golden.json"
+        },
+        {
+          "checksum": "f79bc2317e6d98c2a7969799b2e8ac8d2510c08ee9f719c5cf6ac2fe24403aae",
+          "path": "evals/fixtures/cases/sales_reply_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "11d9045b7f626ef62ab1cd626e40f94c06d9bc0c42fdd2df78ce557cc6a9ac2a",
+      "dataset_id": "sales_rfq",
+      "files": [
+        {
+          "checksum": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+          "path": "evals/expected/sales_rfq.json"
+        },
+        {
+          "checksum": "a2ecffad9f64d7173c31fbd7bf6c01abaf28a56145673b94dbf095a77f89651e",
+          "path": "evals/expected/sales_rfq_flow.json"
+        },
+        {
+          "checksum": "460fc0112c0709da3a0c7e668800077d53aaef41e56b813b5c058b0da5db3921",
+          "path": "evals/expected/sales_rfq_golden.json"
+        },
+        {
+          "checksum": "b0b010a0c20f59b4adbb9eb336c030b9921d14af86e5e119693e93e276bf63cd",
+          "path": "evals/fixtures/cases/sales_rfq.json"
+        },
+        {
+          "checksum": "69154e7e9a9444a715559f1cf975a728a62f32c61d7e6a8830a9a52d48b6108f",
+          "path": "evals/fixtures/cases/sales_rfq_golden.json"
+        },
+        {
+          "checksum": "266eb0b5a174391bb9c804560d0a30792352a9c963b49d8026d5ea5e2760ede4",
+          "path": "evals/fixtures/cases/sales_rfq_security.json"
+        }
+      ],
+      "version": "1.0.0"
+    }
+  ],
+  "knowledge_index_version": "2026-07-25.structure-1",
+  "memory_policy_version": "2.0.0",
+  "model_profiles": [
+    {
+      "checksum": "e1fcdefc185f28c5529e45f4afe63662f78f5a005a707a91b097c24eb3a59a1f",
+      "profile_id": "balanced",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "64b7e0793671de3f5e53965e756672a41cc62963978f821950483ad07c8fab6b",
+      "profile_id": "deepseek",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "a13657f7fd491b49904ceb96d78aabd0f621a3df5611015ff61fb4980dc898e0",
+      "profile_id": "gateway",
+      "routing_policy_version": "2.0.0"
+    },
+    {
+      "checksum": "04a7e1c0625d64a4dee6583ba439c08b88649d3ccd8d61b486eb49bd9360d119",
+      "profile_id": "low_cost",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "30b34c01e90f7e69716b24d85630c7bb454c099180280cd422ed0e8abec3631a",
+      "profile_id": "luna",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "41dfd1172845ae72833801980a40844f237e79a6739753ec57a95c0e250028d3",
+      "profile_id": "onprem",
+      "routing_policy_version": "1.0.0"
+    },
+    {
+      "checksum": "a47c4db56d769ec1cff1ae08cea3ece76d8ff99c64af8233bb9ebb0043fb34a0",
+      "profile_id": "openai",
+      "routing_policy_version": "1.0.0"
+    }
+  ],
+  "platform_version": "0.1.0",
+  "policies": [
+    {
+      "checksum": "bbebba26b5708933b6f8ab5c43a08f57d4c6ef595e09afb1a9422df0b7d6b49c",
+      "policy_id": "attachment_ingest",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "c0ec53bf9f752948ddcb910c88cfb61f04020ee4c1e437aae74f77623fcaf075",
+      "policy_id": "retention",
+      "version": "1.7.0"
+    },
+    {
+      "checksum": "c5035251d916d76a355d7d647388dd2844f933a9ae5b3d0846a48788c5dc14ef",
+      "policy_id": "sales_bravo_upload",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "ac58b074437b025af24f2be7ee5b93d789004f53d42a07883c6844793f2bd689",
+      "policy_id": "sales_bravo_upload",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
+      "policy_id": "sales_kpi",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "f314c9825e2330fd097a7d3181b19fed33e4f2b6370ca5eaa73c95e7727de3e6",
+      "policy_id": "sales_order_rules",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "21647449c62ab1c35dd24ba5b954c3cffab439dd584d616584fe3e7220fe4cf7",
+      "policy_id": "sales_order_rules",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "24444d00e5f67716d9ba336b39fd6f6293db1ee19f8446715317b74f59ba2b00",
+      "policy_id": "sales_order_rules",
+      "version": "1.2.0"
+    },
+    {
+      "checksum": "e7492a6191affc885e581adad4c427a50dcffa22c9b04bd419f2e8fb808c9ba5",
+      "policy_id": "sales_order_rules",
+      "version": "1.3.0"
+    },
+    {
+      "checksum": "6e84ce584ebd76202516a8bb7a5ef4766c5e8744958869fabb4b3095f12c8d5a",
+      "policy_id": "sales_order_rules",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "4b9ab643aae271bf1f74e9d8b87eaaf0ca5ffee5dfd4e6f56ca4befdddb9cf9c",
+      "policy_id": "sales_order_rules",
+      "version": "1.5.0"
+    },
+    {
+      "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",
+      "policy_id": "sales_pricing",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "bc0133244d3da8da0501a2b1d94a284257be921877c43d8e6e2a3abfe785d96e",
+      "policy_id": "sales_quote_rules",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "2cfb95e54ff95e5f4e2ab3fa726f56a7e857d72a6c43f5ed7291bd6b377af4c5",
+      "policy_id": "sales_quote_rules",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "6cd61b8265d8ce82fdd5047dbec29a09cf5ce6b705226bb97fc24b7e19bf3be5",
+      "policy_id": "worker_runs",
+      "version": "1.0.0"
+    }
+  ],
+  "prompt_bundles": [
+    {
+      "checksum": "bb3a3e95a87dd312fb9cfc18a949b7c7b78d936eb81556089e6580c6fab27bfd",
+      "prompt_id": "platform.context_summary",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "be64d7661a586f485d8e95c117f4a36b644727168fd8be5af1c59345448bcd26",
+      "prompt_id": "platform.context_summary_update",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
+      "prompt_id": "platform.untrusted_demo",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "40b7dcacc569ed4fc4050054058fc39e2d4148144d3f85362bde04e25243ff75",
+      "prompt_id": "sales.description_attributes",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "8d09212cc494ecdd4d1cbb1f7f7ebf3de9f91260d77eb3beb9cc6bfab5015c0f",
+      "prompt_id": "sales.message_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "e6d0b5c04acea026f0708dbe42135b0b3e9f6b487609e6684d55b0c311cbcd2b",
+      "prompt_id": "sales.po_layout_proposal",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "bf2bae5ec7698fa474e690214153b0e75f7040f3e748103577652f5ae7e7b8e9",
+      "prompt_id": "sales.reply_intent",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "5f033a5e6738e6892fda8ea499a90475ce2858f03063432808f804a1d9533138",
+      "prompt_id": "sales.request_handoff",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "a810fe957f277681649f1b0a143f6a971f5f1632c4267de91b871c76b376de6a",
+      "prompt_id": "sales.rfq_extraction",
+      "version": "1.0.0"
+    }
+  ],
+  "rubrics": [],
+  "schema_version": "1.0",
+  "tool_specs": [],
+  "toolsets": [],
+  "workers": [
+    {
+      "agent_prompt_id": null,
+      "agent_prompt_version": null,
+      "autonomy_level": "A1",
+      "graph_version": "1.0.0",
+      "memory_policy_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "prompt_bundle_version": "1.1.0",
+      "toolset_version": null,
+      "worker_id": "sales-dw1",
+      "worker_version": "1.0.0"
+    }
+  ]
+}

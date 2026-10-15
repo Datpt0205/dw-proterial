@@ -1,4 +1,5 @@
-"""View receipts and single-use decision codes (channels Z5, ADR 0007).
+"""View receipts and single-use decision codes (channels Z5,
+ADR 0007-chat-decisions-after-a-portal-view).
 
 Migration e399be8c0a2d. Two ways in, one per kind of question:
 

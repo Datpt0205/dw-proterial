@@ -2,16 +2,17 @@
 
 What the page reads (`required_scope`, `can_decide`, `requested_by_me`) and that the server
 refuses a decision the page would have locked, called directly over HTTP with
-no page in front of it (ADR 0004). Tenant isolation of the read is the
-database's job, covered against a real one by `dw_agent_runtime`'s
+no page in front of it (ADR 0011-approval-decider-stamped-as-required-scope). Tenant isolation of
+the read is the database's job, covered against a real one by `dw_agent_runtime`'s
 `test_approval_decider_scope.py`; workspace isolation is the repository's,
 covered against a real one by `test_approval_workspace.py` there. Here: the
 routes hand the repository the caller's own workspace, and answer 404 for
 another workspace's request (approval-audit-and-workspace/02); and they hand
 it the caller's `ApprovalAudience`, so a stamped request the caller may
 neither decide nor asked for is a 404 by id, absent from the list, and a 404
-to a decision (ADR 0004, amendment 2026-10-07). The SQL filter itself is held
-to `ApprovalAudience.may_see` by `dw_platform`'s `test_approval_visibility.py`.
+to a decision (ADR 0011-approval-decider-stamped-as-required-scope, amendment 2026-10-07). The SQL
+filter itself is held to `ApprovalAudience.may_see` by `dw_platform`'s
+`test_approval_visibility.py`.
 """
 
 import uuid
@@ -290,8 +291,9 @@ PLATFORM_ADMIN = frozenset({"platform_admin"})
 async def test_can_decide_is_the_servers_answer_in_the_list_and_the_detail(
     roles: frozenset[str], scopes: set[str], required_scope: str | None, can_decide: bool
 ) -> None:
-    """ADR 0004: the session's `hasScope` passes `platform_admin` on every scope, so
-    the page locks on this instead, built from the checks `decide` runs."""
+    """ADR 0011-approval-decider-stamped-as-required-scope: the session's `hasScope` passes
+    `platform_admin` on every scope, so the page locks on this instead, built from the checks
+    `decide` runs."""
     request = make_request(requested_by=SOMEONE_ELSE, required_scope=required_scope)
     container = make_container(
         FakeApprovalRepo(request), frozenset({"approvals.read", *scopes}), roles=roles
@@ -318,8 +320,8 @@ async def test_can_decide_is_the_servers_answer_in_the_list_and_the_detail(
 async def test_a_stamped_request_is_absent_to_whoever_may_not_decide_it(
     roles: frozenset[str], scopes: set[str]
 ) -> None:
-    """ADR 0004, amendment 2026-10-07: someone else's stamped request is served
-    only to who may decide it. Everyone else gets "never existed" on every
+    """ADR 0011-approval-decider-stamped-as-required-scope, amendment 2026-10-07: someone else's
+    stamped request is served only to who may decide it. Everyone else gets "never existed" on every
     route, the decision included: a 403 would confirm it exists and name the
     scope it needs. Nothing is recorded."""
     request = make_request(requested_by=SOMEONE_ELSE, required_scope=BOARD_SCOPE)

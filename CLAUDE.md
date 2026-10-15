@@ -203,7 +203,8 @@ kind of change nobody makes and everybody works around.
 
 - Every value a prompt interpolates is untrusted: `PromptRegistry` wraps it in
   an escaped `<input name="...">` block. A template opts a variable out with
-  `raw_variables` and a reason, only for a value code builds (ADR 0010).
+  `raw_variables` and a reason, only for a value code builds
+  (`docs/adr/0010-prompt-variables-are-untrusted-by-default.md`).
 - Graph state is typed and versioned; LLM output is always validated into a
   Pydantic schema.
 - Workflow nodes contain no provider SDK and no SQL, and never import a concrete
@@ -216,7 +217,8 @@ kind of change nobody makes and everybody works around.
   `dw_platform.domain.audit.lane_audit_event`, whose actor is
   `system_actor(<lane>)`, a fixed id from the lane's worker registry name, and
   whose `details.actor` reads `system:<lane>`. From a cross-tenant drain, write
-  with `lane_audit.append_across_tenants` (ADR 0011).
+  with `lane_audit.append_across_tenants`
+  (`docs/adr/0011-a-background-lane-audits-as-itself.md`).
 - A tenant's plan quota is enforced where a run begins — in the runner, not in
   an API dependency. The API is not the only door: a worker reacting to an
   inbound event starts runs no request ever touched. The limit comes from the
@@ -360,6 +362,11 @@ The five default roles (`needs-triage`, `needs-info`, `ready-for-agent`,
 Multi-context: `CONTEXT-MAP.md` at the root, a `CONTEXT.md` and `docs/adr/`
 per context. ADRs carry a status, and not every decision recorded in this
 repo is settled. See `docs/agents/domain.md`.
+
+A number two files in `docs/adr` share (0005, 0006, 0007, 0009, 0010, 0011)
+is cited by file name; what the platform repository calls ADR 0004 is
+`docs/adr/0011-approval-decider-stamped-as-required-scope.md` here.
+Renumbering is Đạt's call.
 
 ### Where the skills meet this repo's own gates
 

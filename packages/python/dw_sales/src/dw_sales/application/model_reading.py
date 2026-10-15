@@ -9,10 +9,11 @@ holds both halves of DW1's side of that rule:
   (`dw_sales.adapters.model_interpretation`). It is the narrowest thing DW1
   asks of a model: "interpret these inputs into this schema", under a
   versioned prompt, attributed to the run that asked (`RunContext`: tenant,
-  worker, release), with no tool offered (ADR 0007). A model that is down, too
-  slow or answers outside the schema is `ModelUnavailableError`, which a step
-  turns into "DW1 did not understand" for a person. A budget or quota refusal
-  is not that error: it stops the run, and is reported as a stop.
+  worker, release), with no tool offered
+  (ADR 0007-document-content-turns-cannot-call-outbound-tools). A model that is down, too slow or
+  answers outside the schema is `ModelUnavailableError`, which a step turns into "DW1 did not
+  understand" for a person. A budget or quota refusal is not that error: it stops the run, and is
+  reported as a stop.
 - `DescriptionReader`: the description lines DW1's own vocabulary could not
   read, sent to the model ten at a time and verified by
   `domain.description_reading` before any candidate is computed.

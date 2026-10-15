@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------------------------------------------------------------------------
-# The reader sandbox (Sales ticket 25, ADR 0010 decisions 2 and 6). Every
+# The reader sandbox (Sales ticket 25, ADR 0010-document-intake-at-real-size-and-format decisions 2 and 6). Every
 # customer attachment the API or the worker needs read is read here, by a
 # one-use process under `ulimit`, a wall clock and a capped answer, in a
 # container with no network at all (`infra/compose/docker-compose.yml`).

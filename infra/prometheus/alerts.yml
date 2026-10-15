@@ -2,18 +2,18 @@
 # metric this codebase actually emits today; a rule against a metric nobody
 # writes yet would be decoration; see .claude/rules/failure-modes.md #1.
 #
-# Two known gaps, named rather than papered over with a rule that could never
+# One known gap, named rather than papered over with a rule that could never
 # fire:
 #   - DwReaperRepeatedlyReaping (below) cannot fire in THIS deployment: the
 #     reaper lane only registers once a bounded context appends a
 #     `ReapTarget` (apps/worker/src/dw_worker/main.py), and this repo ships
 #     none yet. The metric and the rule are both real; there is just nothing
 #     to trip them until the first context lands.
-#   - `dw_node_failure_total` (per-node failure, finer than a run's overall
-#     status) is declared in dw_observability/metrics.py and emitted by
-#     nothing — a pre-existing gap found while writing this file, not
-#     introduced by it. DwRunFailureRateSpike below alerts on `dw_run_total`
-#     instead, which IS live, until that gap is closed separately.
+#
+# `dw_node_failure_total` was the second: declared and emitted by nothing. The
+# runner emits it since 2026-10-15 (LangGraphWorkflowRunner._count_failed_node,
+# once per run that fails inside a node of its worker graph), and
+# DwNodeRepeatedlyFailing below reads it.
 groups:
   - name: dw-platform
     rules:
@@ -85,3 +85,16 @@ groups:
         annotations:
           summary: "Run failure rate above 0.2/s over 5 minutes"
           description: "dw_run_total{status=\"failed\"} is climbing faster than usual."
+
+      - alert: DwNodeRepeatedlyFailing
+        # Finer than DwRunFailureRateSpike: which node of which worker keeps
+        # failing, and with what. 5 in 15 minutes is provisional for the same
+        # reason the backlog threshold is: no real traffic has set it yet.
+        expr: sum by (worker, node, error_type) (increase(dw_node_failure_total[15m])) > 5
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.worker }} keeps failing in node {{ $labels.node }}"
+          description: >
+            {{ $value }} run(s) of {{ $labels.worker }} failed in node
+            {{ $labels.node }} with {{ $labels.error_type }} in the last 15 minutes.

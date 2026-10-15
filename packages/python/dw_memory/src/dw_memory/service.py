@@ -401,8 +401,9 @@ class MemoryService:
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
             # Read as the decider with no scopes (the worker's context), so the
-            # visibility rule of ADR 0004 applies to this read as to any other:
-            # a `memory.review` is never stamped (`_open_review`), so it is seen.
+            # visibility rule of ADR 0011-approval-decider-stamped-as-required-scope applies to this
+            # read as to any other: a `memory.review` is never stamped (`_open_review`), so it is
+            # seen.
             request = await SqlApprovalRepository(session).get(
                 approval_id,
                 workspace_id=context.workspace_id,

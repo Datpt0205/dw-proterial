@@ -25,6 +25,16 @@ def decided_event_type(approval_type: str) -> str:
     One function because two packages name it: the approval flow that writes the
     event and the context that registers a handler for it. Spelt twice, a rename
     on one side leaves the handler waiting for an event nobody sends.
+
+    The event is written for every decision on a run-less approval, whether or
+    not any worker registers a handler for its type. The dispatcher claims only
+    the types it has a handler for (`dw_worker.consumers.outbox`), so an event
+    with none stays in `platform.outbox_events` undelivered, outside the backlog
+    gauges too, and no retention rule reads the outbox: it stays until the
+    tenant is offboarded (`purge_rows`). That is by design — a handler added
+    later finds the history intact — and it means a context that opens
+    run-less approvals owes a handler for this type in the worker, or its
+    decisions announce to nobody.
     """
     return f"{approval_type}.decided"
 
@@ -65,7 +75,8 @@ class ApprovalDecision:
     outcome: DecisionOutcome
     comment: str
     decided_at: datetime
-    # Where the decision was made: `web`, or `zalo` after a portal view (ADR 0007).
+    # Where the decision was made: `web`, or `zalo` after a portal view
+    # (ADR 0007-chat-decisions-after-a-portal-view).
     channel: str = "web"
 
 
@@ -81,10 +92,10 @@ class ApprovalRequest:
     reason: str
     payload: dict[str, object] = field(default_factory=dict)
     run_id: uuid.UUID | None = None
-    # The scope a decider must hold besides `approvals.decide` (ADR 0004).
-    # Stamped once, when the request is raised, from what the node read in
-    # policy then; never re-derived, so a policy changed while the request
-    # waits does not change who may decide it. None: `approvals.decide` alone.
+    # The scope a decider must hold besides `approvals.decide`
+    # (ADR 0011-approval-decider-stamped-as-required-scope). Stamped once, when the request is
+    # raised, from what the node read in policy then; never re-derived, so a policy changed while
+    # the request waits does not change who may decide it. None: `approvals.decide` alone.
     required_scope: str | None = None
     status: ApprovalStatus = ApprovalStatus.PENDING
     created_at: datetime | None = None

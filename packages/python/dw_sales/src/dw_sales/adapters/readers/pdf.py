@@ -5,8 +5,8 @@ more spaces apart, so a row is split on runs of spaces and its cells are taken
 in the order the customer's `PdfLayout` lists the columns. A header value is the
 text after its label and a colon.
 
-**Anchors point at the page, not at extracted text** (ADR 0009). Each value's
-anchor is its page plus a box on the rendered page, found from the position
+**Anchors point at the page, not at extracted text** (ADR 0009-parser-page-output-with-coordinates).
+Each value's anchor is its page plus a box on the rendered page, found from the position
 pypdf reports for the text run that printed it, and the words it printed as
 the quote. pypdf gives a run's start and font size but no glyph widths, so a
 box's width is estimated from the run's length; it marks where to look on the

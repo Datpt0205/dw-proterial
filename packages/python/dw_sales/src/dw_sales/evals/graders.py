@@ -606,7 +606,8 @@ async def _rule(call: Awaitable[object]) -> str:
     """What the call ended in: "ok", "403", "404", "422", or the 409's rule.
 
     "404" is a request the caller may neither decide nor asked for: the
-    platform does not show it to them at all (ADR 0004 amendment)."""
+    platform does not show it to them at all (ADR 0011-approval-decider-stamped-as-required-scope
+    amendment)."""
     try:
         await call
     except NotFoundError:

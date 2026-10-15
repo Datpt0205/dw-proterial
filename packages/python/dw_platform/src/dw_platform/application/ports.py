@@ -159,8 +159,8 @@ class ApprovalRepositoryPort(Protocol):
     Reads are narrowed to the caller's workspace by the repository, since RLS
     on this table narrows by tenant only: another workspace's request is
     absent, exactly like another tenant's. And to what the caller's
-    `ApprovalAudience` may see (ADR 0004): a stamped request the caller may
-    neither decide nor asked for is absent the same way."""
+    `ApprovalAudience` may see (ADR 0011-approval-decider-stamped-as-required-scope): a stamped
+    request the caller may neither decide nor asked for is absent the same way."""
 
     async def add(self, request: ApprovalRequest) -> None: ...
 
@@ -338,7 +338,7 @@ class PlatformUnitOfWork(Protocol):
     feedback: FeedbackRepositoryPort
     outbox: OutboxRepositoryPort
     # Consuming a single-use decision code in the decision's own transaction
-    # (ADR 0007); only a decision admitted by a code touches it.
+    # (ADR 0007-chat-decisions-after-a-portal-view); only a decision admitted by a code touches it.
     decision_codes: DecisionCodeLedgerPort
 
     async def __aenter__(self) -> PlatformUnitOfWork: ...

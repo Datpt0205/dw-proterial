@@ -188,7 +188,8 @@ async def test_one_row_failing_to_settle_does_not_stop_the_lane() -> None:
 
 def test_the_message_never_carries_the_body_a_code_or_anything_but_its_four_parts() -> None:
     """`compose` takes no body: whatever a notification's body holds (a
-    decision code, a price) has no way into the chat (ADR 0006)."""
+    decision code, a price) has no way into the chat
+    (ADR 0006-provider-neutral-channel-delivery-outbox)."""
     text = compose(
         tenant_name="Acme",
         workspace_name="Vận hành",

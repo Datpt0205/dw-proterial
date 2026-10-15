@@ -71,7 +71,7 @@ API and the plan use the English terms. The spec is
   stored as other characters ("Cña hµng" for "Cửa hàng"). DW1 detects it by
   the font of a cell or a PDF text run, raises `legacy_encoding` and matches
   nothing on that text; the customer is asked to send the PO again in
-  Unicode. Converting it is ADR 0010 decision 3, later.
+  Unicode. Converting it is ADR 0010-document-intake-at-real-size-and-format decision 3, later.
 - **Source anchor** (Neo nguồn): where a value was read: `sheet!cell`, or a
   page plus boxes on the rendered page, or a quote. It always carries the
   attachment's sha256. A value a model read from a PDF's text layer names its

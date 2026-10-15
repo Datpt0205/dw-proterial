@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -13,7 +14,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
-def _load_script():  # scripts/ is not a package; load by path
+def _load_script() -> Any:  # scripts/ is not a package; load by path
     spec = importlib.util.spec_from_file_location(
         "release_manifest", REPO_ROOT / "scripts" / "release_manifest.py"
     )
@@ -36,6 +37,7 @@ def test_manifest_contains_every_required_section() -> None:
         "tool_specs",
         "toolsets",
         "policies",
+        "model_profiles",
         "knowledge_index_version",
         "memory_policy_version",
         # A run stamps this on its own row and the policy refuses to decide for a
@@ -85,3 +87,107 @@ def test_manifest_ref_is_stable_and_ignores_git_sha() -> None:
     assert ref == script.manifest_ref({**manifest, "git_sha": "different"})
     changed = {**manifest, "knowledge_index_version": "changed"}
     assert ref != script.manifest_ref(changed)
+
+
+def test_an_eval_dataset_pins_the_files_its_cases_name() -> None:
+    """The dataset file alone left its fixtures and expectations unpinned:
+    editing an expectation changed a grade and moved no ref."""
+    script = _load_script()
+    manifest = script.build_manifest()
+    [smoke] = [d for d in manifest["eval_datasets"] if d["dataset_id"] == "platform_smoke"]
+    dataset = next(
+        script.json.loads(path.read_text(encoding="utf-8"))
+        for path in (REPO_ROOT / "evals" / "datasets").glob("*.json")
+        if script.json.loads(path.read_text(encoding="utf-8"))["dataset_id"] == "platform_smoke"
+    )
+    named = {ref for case in dataset["cases"] for ref in (case["input_ref"], case["expected_ref"])}
+
+    assert named <= {f["path"] for f in smoke["files"]}
+    assert all(len(f["checksum"]) == 64 for f in smoke["files"])
+
+
+def _fake_repo(tmp_path: Path, truth: str) -> Path:
+    (tmp_path / "evals" / "datasets").mkdir(parents=True)
+    (tmp_path / "evals" / "expected").mkdir()
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "truth.json").write_text(truth, encoding="utf-8")
+    (tmp_path / "evals" / "expected" / "case.json").write_text(
+        '{"truth": "data/truth.json", "note": "graded against data/truth.json"}',
+        encoding="utf-8",
+    )
+    (tmp_path / "evals" / "datasets" / "demo@1.0.0.json").write_text(
+        '{"dataset_id": "demo", "dataset_version": "1.0.0",'
+        ' "cases": [{"expected_ref": "evals/expected/case.json"}]}',
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_a_truth_file_named_by_an_expectation_is_pinned_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = _load_script()
+    monkeypatch.setattr(script, "REPO_ROOT", _fake_repo(tmp_path, '{"price": 1}'))
+
+    [before] = script._eval_datasets()
+    (tmp_path / "data" / "truth.json").write_text('{"price": 2}', encoding="utf-8")
+    [after] = script._eval_datasets()
+
+    assert [f["path"] for f in before["files"]] == ["data/truth.json", "evals/expected/case.json"]
+    # The dataset file did not change; only the truth two hops away did.
+    assert before["checksum"] == after["checksum"]
+    assert before["files"] != after["files"]
+
+
+def test_a_named_file_that_does_not_exist_stops_the_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = _load_script()
+    monkeypatch.setattr(script, "REPO_ROOT", _fake_repo(tmp_path, "{}"))
+    (tmp_path / "data" / "truth.json").unlink()
+
+    with pytest.raises(SystemExit, match=r"names data/truth.json"):
+        script._eval_datasets()
+
+
+def test_a_mime_type_or_a_mailbox_relative_name_is_not_taken_for_a_repo_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A mock mailbox holds both: shaped like a/b.ext, neither under a top-level
+    directory. Followed, they stopped the manifest as missing files."""
+    script = _load_script()
+    monkeypatch.setattr(
+        script,
+        "REPO_ROOT",
+        _fake_repo(
+            tmp_path,
+            '{"content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",'
+            ' "file": "attachments/po-1042.xlsx"}',
+        ),
+    )
+
+    [dataset] = script._eval_datasets()
+
+    assert [f["path"] for f in dataset["files"]] == ["data/truth.json", "evals/expected/case.json"]
+
+    # A path that does start at a top-level directory and resolves to nothing
+    # still stops it.
+    (tmp_path / "data" / "truth.json").write_text('{"next": "evals/missing.json"}', "utf-8")
+    with pytest.raises(SystemExit, match=r"names evals/missing.json"):
+        script._eval_datasets()
+
+
+def test_every_model_profile_is_pinned_by_content() -> None:
+    """The profile decides which provider reads a customer's text and what a
+    run costs; editing one has to move the ref like editing a prompt does."""
+    script = _load_script()
+    manifest = script.build_manifest()
+    shipped = {
+        script.yaml.safe_load(path.read_text(encoding="utf-8"))["profile_id"]: path
+        for path in (REPO_ROOT / "configs" / "models").glob("*.yaml")
+    }
+
+    pins = {p["profile_id"]: p for p in manifest["model_profiles"]}
+    assert set(pins) == set(shipped)
+    for profile_id, path in shipped.items():
+        assert pins[profile_id]["checksum"] == script._checksum(path)

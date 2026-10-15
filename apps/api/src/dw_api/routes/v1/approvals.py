@@ -1,8 +1,9 @@
 """Approvals API: inbox + decisions (decision resumes the paused run).
 
 The inbox and a single request are filtered by the caller's `ApprovalAudience`
-in the repository (ADR 0004, amendment 2026-10-07): a stamped request is served
-only to who may decide it and to its requester, and is not found by anyone else.
+in the repository (ADR 0011-approval-decider-stamped-as-required-scope, amendment 2026-10-07): a
+stamped request is served only to who may decide it and to its requester, and is not found by anyone
+else.
 """
 
 from __future__ import annotations
@@ -45,8 +46,8 @@ class ApprovalView(BaseModel):
     # form would have to keep its own copy of the prefix list.
     requires_comment: bool
     # The scope a decider must hold besides `approvals.decide`, stamped when the
-    # request was raised (ADR 0004). Shown as the reason when `can_decide` is
-    # false; the page never compares it with the session's scopes itself.
+    # request was raised (ADR 0011-approval-decider-stamped-as-required-scope). Shown as the reason
+    # when `can_decide` is false; the page never compares it with the session's scopes itself.
     required_scope: str | None
     # Whether the caller's scopes let them decide this request, by the same
     # checks `ApproveAndResumeService.decide` runs (`may_decide`). Computed here
@@ -102,9 +103,9 @@ class DecisionRequest(BaseModel):
 class ViewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # The comment a decision taken with the code will carry (ADR 0007,
-    # amendment 2026-10-06): required for a strict type, written here because
-    # the chat carries only the code.
+    # The comment a decision taken with the code will carry
+    # (ADR 0007-chat-decisions-after-a-portal-view, amendment 2026-10-06): required for a strict
+    # type, written here because the chat carries only the code.
     comment: str = Field(default="", max_length=MAX_COMMENT_LENGTH)
     # False: only record that the approval was opened and say whether a code
     # could be issued. True: also issue one, replacing the viewer's last.
@@ -212,8 +213,8 @@ async def decide(
     )
 
 
-# Opening an approval on the portal (ADR 0007, channels Z5). Every
-# call records a view receipt — the approval's version and its subject's, as
+# Opening an approval on the portal (ADR 0007-chat-decisions-after-a-portal-view, channels Z5).
+# Every call records a view receipt — the approval's version and its subject's, as
 # the viewer saw them — so no `Idempotency-Key`: a second view is a second
 # receipt. With `issue_code`, a single-use code bound to that receipt and to
 # the comment is issued when allowed; it is in this response and nowhere else,

@@ -1,4 +1,5 @@
-"""Channel delivery: in-app notifications out through a linked chat (ADR 0006).
+"""Channel delivery: in-app notifications out through a linked chat
+(ADR 0006-provider-neutral-channel-delivery-outbox).
 
 ``platform.deliver_notification`` queues a row in ``platform.channel_deliveries``
 for every recipient with a chat link, in the transaction that addresses the
@@ -22,7 +23,7 @@ process that dies between the send and the commit sends that one message again.
 
 What the message says is ``compose``'s alone: the tenant and workspace names,
 the notification's title and an absolute link to the portal. Never its body,
-and so never a decision code or a secret (ADR 0006).
+and so never a decision code or a secret (ADR 0006-provider-neutral-channel-delivery-outbox).
 """
 
 from __future__ import annotations

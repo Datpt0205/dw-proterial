@@ -135,7 +135,8 @@ async def test_a_submitted_quote_waits_on_an_approval_stamped_with_its_scope() -
 
 async def test_the_purchasing_manager_cannot_decide_a_sales_quote() -> None:
     """`approvals.decide` without the stamp: the quote is not found at all (the
-    platform's visibility rule, ADR 0004 amendment), so nothing names its scope."""
+    platform's visibility rule, ADR 0011-approval-decider-stamped-as-required-scope amendment), so
+    nothing names its scope."""
     world = _world()
     case_id = await _pending_quote(world)
 
@@ -282,7 +283,7 @@ def test_the_worker_config_pins_dw1s_graph_and_names_dw1() -> None:
     assert definition.graph_version == graph.GRAPH_VERSION
 
 
-# --------------------------------------- 6. no outbound tool (ADR 0007) --
+# ---------------------------------------------- 6. no outbound tool --
 
 
 def test_dw1_offers_a_model_no_outbound_tool() -> None:
@@ -305,7 +306,7 @@ def test_a_dw1_turn_that_reads_a_document_gets_no_tool_and_a_typed_flagged_answe
 
     - No tool: the worker declares no toolset, and the one door to a model
       (`InterpretationPort`) offers none: a turn that reads customer text
-      cannot reach anything (ADR 0007).
+      cannot reach anything (ADR 0007-document-content-turns-cannot-call-outbound-tools).
     - The graph holds no model: a node gets its steps by injection, and the
       step that reads a description gets the run's context handed down, so
       the call is attributed to this run.

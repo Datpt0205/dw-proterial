@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -46,13 +47,36 @@ from dw_kernel.errors import (
 )
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
-from dw_observability.metrics import DW_RUN_TOTAL
+from dw_observability.metrics import DW_NODE_FAILURE_TOTAL, DW_RUN_TOTAL
 from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 from dw_platform.domain.approval import ApprovalRequest
 from dw_platform.domain.audit import AuditEvent
 
 logger = logging.getLogger(__name__)
+
+# The note LangGraph (1.2.11, pregel/_retry.py) adds to an exception for each
+# task it propagates through, innermost first: the only place the library says
+# which node failed without a checkpoint read, which in a failure path may be
+# the very thing that failed. Pinned by test_node_failure_metric.py against the
+# real library, so a release that rewords it fails there, not silently here.
+_TASK_NOTE = re.compile(r"^During task with name '(?P<name>[^']+)' and id '")
+
+
+def failed_node(exc: BaseException) -> str | None:
+    """The worker graph's node a failure came out of, or None outside any node.
+
+    The outermost task, so a failure inside a subgraph (the agent's own model or
+    tools step) counts under the node that runs it: the label set stays the
+    worker graph's node list, which is small and fixed by code.
+    """
+    names = [
+        match["name"]
+        for note in getattr(exc, "__notes__", ())
+        if isinstance(note, str) and (match := _TASK_NOTE.match(note))
+    ]
+    return names[-1] if names else None
+
 
 # How long Stop waits for a cancelled run to record itself. Settling is one row
 # write and one audit row; past this the request answers and the reaper covers
@@ -574,6 +598,20 @@ class LangGraphWorkflowRunner:
             state["__interrupt__"] = list(snapshot.interrupts)
         await self._handle_outcome(run_context, run_context.run_id, state)
 
+    def _count_failed_node(self, run_context: RunContext, exc: BaseException) -> None:
+        """`dw_node_failure_total` for the worker-graph node a failure came out of.
+
+        Nothing for a failure outside any node (settling, metering): no node to
+        name, and `dw_run_total` counts the run either way.
+        """
+        node = failed_node(exc)
+        if node is not None:
+            self.telemetry.add_metric(
+                DW_NODE_FAILURE_TOTAL,
+                1,
+                {"worker": run_context.worker_id, "node": node, "error_type": type(exc).__name__},
+            )
+
     async def _fail(
         self,
         run_context: RunContext,
@@ -595,6 +633,11 @@ class LangGraphWorkflowRunner:
             DW_RUN_TOTAL, 1, {"worker": run_context.worker_id, "status": status.value}
         )
         self.budget.forget(run_id)
+        # Last, once the run is settled: a telemetry sink that raises must not
+        # leave the row at `running`. One site for start, stream and resume; a
+        # cancellation is not a node failing.
+        if status is RunStatus.FAILED:
+            self._count_failed_node(run_context, exc)
 
     async def _handle_outcome(
         self, run_context: RunContext, run_id: uuid.UUID, state: dict[str, Any]
@@ -627,9 +670,9 @@ class LangGraphWorkflowRunner:
                 approval_id = await self._create_approval(run_context, run_id, payload)
             except Exception:
                 # The pause could not be recorded (a malformed `required_scope`
-                # refused by its CHECK, ADR 0004). `start` and `resume` call this
-                # outside their own failure handling, so without this the row
-                # stayed `running` over a checkpoint no request points at. Ended
+                # refused by its CHECK, ADR 0011-approval-decider-stamped-as-required-scope).
+                # `start` and `resume` call this outside their own failure handling, so without this
+                # the row stayed `running` over a checkpoint no request points at. Ended
                 # as failed, visibly, like the double pause above. The driver's
                 # text (SQL, constraint name) stays in the server log: the run's
                 # `error` is returned as is by `GET /runs/{id}`.
@@ -685,9 +728,9 @@ class LangGraphWorkflowRunner:
         travel nested under `payload["payload"]` (`_ask_human`), so no model can
         set a top-level key such as `required_scope`.
 
-        `required_scope` (ADR 0004) is passed through exactly as the node wrote
-        it, neither coerced nor dropped: its shape has one owner, the CHECK on
-        the column, and a malformed or non-string value fails this INSERT so the
+        `required_scope` (ADR 0011-approval-decider-stamped-as-required-scope) is passed through
+        exactly as the node wrote it, neither coerced nor dropped: its shape has one owner, the
+        CHECK on the column, and a malformed or non-string value fails this INSERT so the
         run ends failed instead of raising a request nobody could rightly decide.
         """
         approval = ApprovalRequest(

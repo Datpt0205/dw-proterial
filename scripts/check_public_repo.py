@@ -49,7 +49,7 @@ layer at all (a scan; the mock M16 is one on purpose, drawn from data in
 `generate_attachments.py`, which is scanned) is reported as NOT CHECKED without
 failing. Not seen at all: text inside an image, and Vietnamese typed in a
 legacy 8-bit font (TCVN3, VNI), which reads as other letters until it is
-converted (sales ticket 20, ADR 0010).
+converted (sales ticket 20, ADR 0010-document-intake-at-real-size-and-format).
 
 A deny-list term that `scripts/public_repo_allowlist.txt` matches whole is a
 deliberate public name and is not searched for.
