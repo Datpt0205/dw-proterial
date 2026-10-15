@@ -73,7 +73,7 @@ async def claim_version(
 ) -> str:
     """Lock the stored case and return its status, once it is at the version
     the decision was made on and the new state is a later one."""
-    details = {"case_id": str(case_id), "expected_version": expected_version}
+    details: dict[str, object] = {"case_id": str(case_id), "expected_version": expected_version}
     stored = (
         await session.execute(
             sa.select(table.c.case_version, table.c.status)
@@ -84,7 +84,12 @@ async def claim_version(
     if stored is None:
         raise NotFoundError("no such case", details={"case_id": str(case_id)})
     if stored.case_version != expected_version:
-        raise ConflictError("the case changed since it was read", details=details)
+        # The rule `same_version` names for the same refusal, so a caller (the
+        # web's Vietnamese for it) reads one code whichever check caught it.
+        raise ConflictError(
+            "the case changed since it was read",
+            details={**details, "rule": "stale_case_version"},
+        )
     if new_version <= expected_version:
         raise DomainError("a saved case carries a new version", details=details)
     return str(stored.status)

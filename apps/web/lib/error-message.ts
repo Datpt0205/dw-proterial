@@ -1,4 +1,24 @@
 import { ApiError } from "@dw/api-client";
+import { SALES_REFUSALS } from "../app/sales/_meta/refusals";
+
+/**
+ * Vietnamese for a refusal the API names by a code in its details, where the
+ * server's own sentence is still English. A context owns its codes' words.
+ */
+const REFUSALS: Readonly<Record<string, string>> = {
+  // PLUG-IN POINT: a bounded context adds its refusals here, as Sales does.
+  ...SALES_REFUSALS,
+};
+
+/** The Vietnamese for a refusal's `details.rule`, else `details.reason`. */
+function refusalSentence(details: Record<string, unknown> | undefined) {
+  for (const key of ["rule", "reason"] as const) {
+    const code = details?.[key];
+    if (typeof code === "string" && Object.hasOwn(REFUSALS, code))
+      return REFUSALS[code];
+  }
+  return null;
+}
 
 /**
  * The sentence to show a person when a call fails.
@@ -6,11 +26,12 @@ import { ApiError } from "@dw/api-client";
  * `ApiError.message` is `"<code>: <sentence>"` because the code is what a
  * developer reading a stack trace needs. A seller reading a toast does not:
  * "validation_failed: hai đầu quan hệ chưa có trên bản đồ" leaks a machine
- * word into the product. The server already writes the sentence in Vietnamese
- * — take that, and keep the code for the console.
+ * word into the product. A refusal whose code has Vietnamese here reads that;
+ * any other reads the server's sentence, and the code stays in the console.
  */
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.body.message;
+  if (error instanceof ApiError)
+    return refusalSentence(error.body.details) ?? error.body.message;
   if (error instanceof Error) return error.message;
   return String(error);
 }
@@ -34,7 +55,7 @@ export function toRegionError(
   if (error instanceof ApiError) {
     return {
       code: error.body.code,
-      message: error.body.message,
+      message: errorMessage(error),
       requestId: error.body.request_id ?? null,
     };
   }
