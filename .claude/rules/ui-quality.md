@@ -176,7 +176,7 @@ reference price reaches only the roles the product allows to see prices; public
 amounts are **not** locked, because locking them teaches people the lock means
 nothing (in E-HSDT, for example, the package budget, the published winning
 price and the bid security). Restricted fields (CCCD, salary, account numbers)
-are masked in the support context (platform ADR 0008).
+are masked in the support context (platform ADR 0024-customer-granted-support-access).
 
 - **The API leaves the value out.** A number in the JSON is a leak even when
   nothing renders it; CSS that hides a value hides nothing.

@@ -363,11 +363,10 @@ Multi-context: `CONTEXT-MAP.md` at the root, a `CONTEXT.md` and `docs/adr/`
 per context. ADRs carry a status, and not every decision recorded in this
 repo is settled. See `docs/agents/domain.md`.
 
-Cite an ADR by its file name, never by number alone: `docs/adr` holds two
-files under each of 0005, 0006, 0007, 0009, 0010 and 0011, and what the
-platform repository calls ADR 0004 is
-`docs/adr/0011-approval-decider-stamped-as-required-scope.md` here. A context's
-ADR is cited with its package, as `dw_sales ADR 0005`. Renumbering is Đạt's call.
+A number two files in `docs/adr` share (0005, 0006, 0007, 0009, 0010, 0011)
+is cited by file name; what the platform repository calls ADR 0004 is
+`docs/adr/0011-approval-decider-stamped-as-required-scope.md` here.
+Renumbering is Đạt's call.
 
 ### Where the skills meet this repo's own gates
 
