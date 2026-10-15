@@ -1943,6 +1943,7 @@ export interface components {
             lead_time_source: string | null;
             lme: components["schemas"]["LmeView"] | null;
             quotation: components["schemas"]["QuotationBasisView"] | null;
+            stated_attributes: components["schemas"]["StatedAttributesView"] | null;
         };
         /** LineChangeView */
         LineChangeView: {
@@ -3320,6 +3321,22 @@ export interface components {
              * Format: uuid
              */
             by: string;
+        };
+        /**
+         * StatedAttributesView
+         * @description What the description stated of the attributes the candidate picker
+         *     compares with each item (`ItemView`), as stamped when the line was
+         *     mapped (`LineBasis.stated_attributes`). None: not stated.
+         */
+        StatedAttributesView: {
+            /** Cores */
+            cores: number | null;
+            /** Family */
+            family: string | null;
+            /** Gauge */
+            gauge: string | null;
+            /** Spec No */
+            spec_no: string | null;
         };
         /** StepCount */
         StepCount: {
