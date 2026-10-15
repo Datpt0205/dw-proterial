@@ -174,7 +174,10 @@ adapter. Constructor injection — no service locator, no mutable global client.
   Only the offboarding lane sets `app.workspace_scope`, per transaction, to
   export and purge every workspace of one tenant; `test_rls_coverage.py` fails
   a policy that reads it outside that shape and a workspace-narrowed table that
-  does not read it.
+  does not read it. A table narrowed by recipient (`app.user_id`, the in-app
+  inbox) reads the scope the same way on its SELECT policy only,
+  `tenant AND (recipient OR scope)`, so the lane exports it while writes stay
+  the recipient's; the same test fails one that does not.
 
 ## Per-tenant artifacts
 

@@ -15,7 +15,9 @@ already uses — plus `app.workspace_scope = 'tenant'`. A context may narrow its
 tables by workspace as well (`tenant AND (workspace OR app.workspace_scope =
 'tenant')`); under `app.tenant_id` alone such a table reads zero rows, so the
 export would miss them silently, the purge would delete none, and the purge of
-`platform.workspaces` would then CASCADE them away unexported. This class is the
+`platform.workspaces` would then CASCADE them away unexported. The in-app inbox,
+narrowed by recipient, reads the scope the same way on SELECT
+(`tenant AND (recipient OR scope)`, migration 2e0354b50d10). This class is the
 only place that sets the scope, per transaction; `test_rls_coverage.py` keeps
 every policy that reads it inside a tenant clause.
 

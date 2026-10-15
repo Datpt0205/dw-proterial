@@ -672,3 +672,116 @@ async def test_the_workspace_scope_ends_with_the_transaction(
 
     assert after == before, "a second connection was used, so this proves nothing"
     assert scope in (None, ""), f"the next transaction inherited app.workspace_scope={scope!r}"
+
+
+# --- A table narrowed by recipient: the in-app inbox --------------------------
+#
+# `platform.notifications` is read by its recipient (`app.user_id`). Before
+# migration 2e0354b50d10 the lane, which binds no user, exported it with 0 rows
+# and the purge of `platform.workspaces` CASCADEd every notification away.
+
+
+async def _seed_notifications(db_urls: DatabaseUrls, t: _Tenant) -> tuple[uuid.UUID, uuid.UUID]:
+    """Two people of the tenant, one notification each. As the migrator:
+    `deliver_notification` would need memberships this file does not seed, and
+    what is under test is who may read the rows, not how they arrive."""
+    an, binh = uuid.uuid4(), uuid.uuid4()
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.begin() as conn:
+            for user in (an, binh):
+                await conn.execute(
+                    sa.text(
+                        "INSERT INTO platform.users (id, subject, display_name)"
+                        " VALUES (:u, :s, 'x')"
+                    ),
+                    {"u": user, "s": f"sub-{user}"},
+                )
+                await conn.execute(
+                    sa.text(
+                        "INSERT INTO platform.notifications"
+                        " (id, tenant_id, workspace_id, recipient_user_id, source_key, title)"
+                        " VALUES (gen_random_uuid(), :t, :w, :u, 'test:offboarding', 'Nhắc')"
+                    ),
+                    {"t": t.tenant_id, "w": t.workspace_id, "u": user},
+                )
+    finally:
+        await migrator.dispose()
+    return an, binh
+
+
+async def test_export_holds_every_persons_notifications_of_the_tenant(
+    db_urls: DatabaseUrls, sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    mine, theirs = _new_tenant(), _new_tenant()
+    for t in (mine, theirs):
+        await _seed_tenant(sessions, t)
+    an, binh = await _seed_notifications(db_urls, mine)
+    await _seed_notifications(db_urls, theirs)
+
+    exported = await SqlTenantOffboarding(sessions).export_rows(mine.tenant_id)
+
+    (inbox,) = [t.rows for t in exported if (t.schema, t.table) == ("platform", "notifications")]
+    assert {r["recipient_user_id"] for r in inbox} == {an, binh}
+    assert {r["tenant_id"] for r in inbox} == {mine.tenant_id}
+
+
+async def test_the_lane_scope_reads_no_other_tenants_notifications(
+    db_urls: DatabaseUrls, sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    """Tenant B with the scope set reads its own inbox rows and none of A's,
+    including when it names A's tenant in the query."""
+    mine, theirs = _new_tenant(), _new_tenant()
+    for t in (mine, theirs):
+        await _seed_tenant(sessions, t)
+    await _seed_notifications(db_urls, mine)
+    await _seed_notifications(db_urls, theirs)
+
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text(
+                "SELECT set_config('app.tenant_id', :t, true),"
+                "       set_config('app.workspace_scope', 'tenant', true)"
+            ),
+            {"t": str(theirs.tenant_id)},
+        )
+        tenants = set(
+            (await session.execute(sa.text("SELECT tenant_id FROM platform.notifications")))
+            .scalars()
+            .all()
+        )
+        named = await session.scalar(
+            sa.text("SELECT count(*) FROM platform.notifications WHERE tenant_id = :t"),
+            {"t": str(mine.tenant_id)},
+        )
+    assert tenants == {theirs.tenant_id}
+    assert named == 0
+
+
+async def test_the_lane_scope_reads_a_notification_but_never_marks_it_read(
+    db_urls: DatabaseUrls, sessions: async_sessionmaker[AsyncSession]
+) -> None:
+    """Only SELECT widens: the UPDATE policy stays the recipient's own."""
+    mine = _new_tenant()
+    await _seed_tenant(sessions, mine)
+    await _seed_notifications(db_urls, mine)
+
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text(
+                "SELECT set_config('app.tenant_id', :t, true),"
+                "       set_config('app.workspace_scope', 'tenant', true)"
+            ),
+            {"t": str(mine.tenant_id)},
+        )
+        seen = await session.scalar(sa.text("SELECT count(*) FROM platform.notifications"))
+        marked = (
+            await session.execute(
+                sa.text(
+                    "UPDATE platform.notifications SET read_at = now()"
+                    " WHERE read_at IS NULL RETURNING id"
+                )
+            )
+        ).all()
+    assert seen == 2
+    assert marked == []
