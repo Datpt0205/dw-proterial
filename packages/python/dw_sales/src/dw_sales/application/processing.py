@@ -23,7 +23,9 @@ processes nothing, and a role cannot widen what the lane does. It then runs
 the same door the button used before (`Dw1Runs.process`, a DW1 run counted
 against the plan by `RunAllowancePort` where it begins), so the pause, the
 quota, the message's own idempotency key and every check of the processing
-apply exactly as they did. The job settles as:
+apply exactly as they did. The run is recorded under the channel its asker
+came by (`RunChannelPort`): the mailbox lane's own for a job the lane queued,
+"web" for a person's. The job settles as:
 
 - ``done``: the message has its disposition (the inbox shows it);
 - back to ``queued`` after an outage (`InfrastructureError`: the scanner or
@@ -70,6 +72,7 @@ from dw_sales.application.case_store import (
 )
 from dw_sales.application.inbox_service import ON_A_CASE, require_running
 from dw_sales.application.ports import InboxPort, SalesScope
+from dw_sales.application.runs import WEB_CHANNEL
 from dw_sales.application.views import MessageDispositionView, ProcessingJobView, processing_job
 from dw_sales.domain.dispositions import DispositionKind
 
@@ -102,7 +105,16 @@ class RequesterAccessPort(Protocol):
 class ProcessRunPort(Protocol):
     """Processing one message in a DW1 run of its own: `Dw1Runs.process`."""
 
-    async def process(self, context: AccessContext, message_id: str) -> MessageDispositionView: ...
+    async def process(
+        self, context: AccessContext, message_id: str, *, channel: str
+    ) -> MessageDispositionView: ...
+
+
+class RunChannelPort(Protocol):
+    """The channel a job's run is recorded under, by who asked for it:
+    `InboxLane.channel_of`, the lane being the one that knows its account."""
+
+    async def channel_of(self, scope: SalesScope, requested_by: uuid.UUID) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +221,8 @@ class ProcessingDrain:
     access: RequesterAccessPort
     clock: UtcClock
     ids: IdGenerator
+    # None where no mailbox lane runs: every job is then a person's.
+    channels: RunChannelPort | None = None
 
     async def drain_one(self) -> bool:
         """One due job processed and settled; False when none was due."""
@@ -231,8 +245,13 @@ class ProcessingDrain:
             # Never one workspace's mail under another's context.
             logger.error("sales_processing: a context for another workspace was refused")
             return Settlement.failed("not_permitted"), None
+        channel = (
+            WEB_CHANNEL
+            if self.channels is None
+            else await self.channels.channel_of(scope, job.requested_by)
+        )
         try:
-            view = await self.runs.process(context, job.message_id)
+            view = await self.runs.process(context, job.message_id, channel=channel)
         except QuotaExceededError:
             return Settlement.failed("quota"), None
         except (PermissionDeniedError, EntitlementDeniedError):

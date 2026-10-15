@@ -21,7 +21,7 @@ from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.ports import WorkflowRunnerPort
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.runs import Dw1Task
+from dw_sales.application.runs import WEB_CHANNEL, Dw1Task
 from dw_sales.workflows.graph import STATE_SCHEMA_VERSION
 
 
@@ -55,7 +55,14 @@ class RuntimeDw1Runs:
     worker_id: str
     worker_version: str
 
-    async def run(self, context: AccessContext, task: Dw1Task, *, subject_ref: str | None) -> None:
+    async def run(
+        self,
+        context: AccessContext,
+        task: Dw1Task,
+        *,
+        subject_ref: str | None,
+        channel: str = WEB_CHANNEL,
+    ) -> None:
         run_id = self.ids.new_uuid()
         await self.runner.start(
             run_context=RunContext(
@@ -65,7 +72,7 @@ class RuntimeDw1Runs:
                 actor_id=context.principal_id,
                 worker_id=self.worker_id,
                 worker_version=self.worker_version,
-                channel="web",
+                channel=channel,
                 plan_id=context.plan_id,
                 roles=context.roles,
                 scopes=context.scopes,
