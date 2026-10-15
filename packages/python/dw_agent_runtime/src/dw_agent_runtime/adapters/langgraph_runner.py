@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -46,13 +47,36 @@ from dw_kernel.errors import (
 )
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
-from dw_observability.metrics import DW_RUN_TOTAL
+from dw_observability.metrics import DW_NODE_FAILURE_TOTAL, DW_RUN_TOTAL
 from dw_observability.telemetry import NullTelemetry, TelemetryPort
 from dw_platform.application.ports import PlatformUnitOfWorkFactory
 from dw_platform.domain.approval import ApprovalRequest
 from dw_platform.domain.audit import AuditEvent
 
 logger = logging.getLogger(__name__)
+
+# The note LangGraph (1.2.11, pregel/_retry.py) adds to an exception for each
+# task it propagates through, innermost first: the only place the library says
+# which node failed without a checkpoint read, which in a failure path may be
+# the very thing that failed. Pinned by test_node_failure_metric.py against the
+# real library, so a release that rewords it fails there, not silently here.
+_TASK_NOTE = re.compile(r"^During task with name '(?P<name>[^']+)' and id '")
+
+
+def failed_node(exc: BaseException) -> str | None:
+    """The worker graph's node a failure came out of, or None outside any node.
+
+    The outermost task, so a failure inside a subgraph (the agent's own model or
+    tools step) counts under the node that runs it: the label set stays the
+    worker graph's node list, which is small and fixed by code.
+    """
+    names = [
+        match["name"]
+        for note in getattr(exc, "__notes__", ())
+        if isinstance(note, str) and (match := _TASK_NOTE.match(note))
+    ]
+    return names[-1] if names else None
+
 
 # How long Stop waits for a cancelled run to record itself. Settling is one row
 # write and one audit row; past this the request answers and the reaper covers
@@ -302,6 +326,7 @@ class LangGraphWorkflowRunner:
                         context=run_context,
                     )
             except Exception as exc:
+                self._count_failed_node(run_context, exc)
                 await self._fail(run_context, run_context.run_id, exc)
                 raise
         await self._handle_outcome(run_context, run_context.run_id, state)
@@ -460,6 +485,7 @@ class LangGraphWorkflowRunner:
             # awaiting a queue nothing would ever be put into again. The run
             # was over; the browser was never told, and never would be.
             try:
+                self._count_failed_node(run_context, exc)
                 await self._fail(run_context, run_context.run_id, exc)
             except Exception:
                 # Recording the failure failed too. The row may be stranded at
@@ -543,6 +569,7 @@ class LangGraphWorkflowRunner:
                         context=run_context,
                     )
             except Exception as exc:
+                self._count_failed_node(run_context, exc)
                 await self._fail(run_context, run_id, exc)
                 raise
         await self._handle_outcome(run_context, run_id, state)
@@ -573,6 +600,20 @@ class LangGraphWorkflowRunner:
         if snapshot.interrupts:
             state["__interrupt__"] = list(snapshot.interrupts)
         await self._handle_outcome(run_context, run_context.run_id, state)
+
+    def _count_failed_node(self, run_context: RunContext, exc: Exception) -> None:
+        """`dw_node_failure_total` for the worker-graph node a failure came out of.
+
+        Nothing for a failure outside any node (settling, metering): no node to
+        name, and `dw_run_total` counts the run either way.
+        """
+        node = failed_node(exc)
+        if node is not None:
+            self.telemetry.add_metric(
+                DW_NODE_FAILURE_TOTAL,
+                1,
+                {"worker": run_context.worker_id, "node": node, "error_type": type(exc).__name__},
+            )
 
     async def _fail(
         self,
