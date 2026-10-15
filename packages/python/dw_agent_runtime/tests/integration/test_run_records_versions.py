@@ -19,7 +19,6 @@ from collections.abc import AsyncIterator
 
 import pytest
 from runtime_harness import RuntimeUrls, make_run_context
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -80,23 +79,16 @@ async def test_the_row_cannot_disagree_with_the_worker(store: SqlWorkerRunStore)
         recorded.toolset_version,
         recorded.policy_version,
         recorded.memory_policy_version,
+        recorded.model_profile,
     )
 
 
 async def test_a_run_records_the_model_profile_its_worker_pins(store: SqlWorkerRunStore) -> None:
-    """Migration 271bdb87af91. Read back with SQL: no reader in code carries the
-    column yet, and the row is the record a person asks."""
+    """Migration 271bdb87af91. A profile other than the demo worker's own, so a
+    write or a read stuck on the default cannot pass."""
     worker = DEMO_WORKER.model_copy(update={"default_model_profile": "low_cost"})
     context = make_run_context(thread_id=uuid.uuid4())
 
     await store.create(context, worker=worker, input_payload={})
 
-    async with store.session_factory() as session, session.begin():
-        await session.execute(
-            text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(context.tenant_id)}
-        )
-        recorded = await session.scalar(
-            text("SELECT model_profile FROM platform.worker_runs WHERE id = :id"),
-            {"id": context.run_id},
-        )
-    assert recorded == "low_cost"
+    assert (await store.get(context, context.run_id)).model_profile == "low_cost"

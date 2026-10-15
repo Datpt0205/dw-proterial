@@ -90,6 +90,9 @@ class RunRecord:
     toolset_version: str | None
     policy_version: str | None
     memory_policy_version: str | None
+    # The profile the worker pins for the run. None for a run started before
+    # migration 271bdb87af91, as for the versions above before 0005.
+    model_profile: str | None
     # None for a run started before migration 0006; the policy asks about
     # everything for such a run rather than guess what it was allowed.
     autonomy_level: AutonomyLevel | None
@@ -503,6 +506,7 @@ class SqlWorkerRunStore:
             toolset_version=row.toolset_version,
             policy_version=row.policy_version,
             memory_policy_version=row.memory_policy_version,
+            model_profile=row.model_profile,
             autonomy_level=row.autonomy_level,
             approval_policy_version=row.approval_policy_version,
             input=dict(row.input),
