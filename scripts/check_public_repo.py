@@ -19,7 +19,9 @@ branch to `--branch`, where `-`, `/` and `.` also count as the spaces
 between a term's words (`po-nguyen-van-a`). Neither
 can be scanned before a commit (the pre-commit hook runs before the message
 exists), and a hit in a pushed message is only fixed by rewriting history.
-Pull request titles and bodies are not seen.
+Not seen: pull request titles and bodies, and a branch pushed without a pull
+request, whose name and messages GitHub publishes while CI runs only on main
+and on pull requests.
 
 The deny-list is UTF-8, one term per line; blank lines and `#` lines are
 skipped. A term matches as a SUBSTRING of a file's text after both are
