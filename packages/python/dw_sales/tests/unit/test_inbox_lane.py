@@ -13,17 +13,19 @@ nobody outside the account's own workspace).
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
+from dw_kernel.pagination import Page, PageRequest
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import MembershipAccess
-from dw_platform.domain.audit import system_actor
+from dw_platform.domain.audit import AuditEntry, AuditEvent, system_actor
+from dw_sales.application.case_store import SalesUnitOfWork
 from dw_sales.application.inbox_lane import (
     LANE_CEILING,
     RETRY_FIRST,
@@ -34,10 +36,23 @@ from dw_sales.application.inbox_lane import (
     retry_delay,
 )
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.processing import SALES_PROCESSING_LANE, ProcessingDrain
+from dw_sales.application.processing import (
+    SALES_PROCESSING_LANE,
+    ProcessingDrain,
+    ProcessingService,
+)
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.evals.graders import AN, CALLERS, GIANG
-from dw_sales.evals.world import ALPHA, BETA, NOW, Directory, SampleSet, World, open_world
+from dw_sales.evals.world import (
+    ALPHA,
+    BETA,
+    NOW,
+    Directory,
+    MemoryStore,
+    SampleSet,
+    World,
+    open_world,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -125,6 +140,7 @@ class Setup:
     world: World
     accounts: Accounts = field(default_factory=Accounts)
     runs: object | None = None
+    processing: ProcessingService | None = None
 
     @property
     def clock(self) -> FixedClock:
@@ -137,10 +153,9 @@ class Setup:
         return InboxLane(
             world.store,
             world.inbox,
-            world.services.processing,
+            self.processing or world.services.processing,
             self.accounts,
             self.clock,
-            Uuid4Generator(),
         )
 
     @property
@@ -304,6 +319,58 @@ async def test_a_run_that_meets_a_message_processed_meanwhile_fails_and_keeps_on
 
 
 # ------------------------------------------- 3. it audits as itself --
+
+
+class _LaneRowRefused:
+    """The world's units of work, with an audit store that refuses the lane's
+    own row: as a write failing between the job and that row would."""
+
+    def __init__(self, store: MemoryStore) -> None:
+        self.store = store
+
+    def __call__(self, scope: SalesScope) -> SalesUnitOfWork:
+        work = self.store(scope)
+        held = work.audit
+
+        class Refusing:
+            async def append(self, event: AuditEvent) -> None:
+                if event.action == QUEUED_BY_LANE:
+                    raise RuntimeError("the audit store refused the lane's row")
+                await held.append(event)
+
+            async def list_page(
+                self,
+                request: PageRequest,
+                *,
+                workspace_id: uuid.UUID,
+                support_grant_id: uuid.UUID | None = None,
+            ) -> Page[AuditEntry]:
+                return await held.list_page(
+                    request, workspace_id=workspace_id, support_grant_id=support_grant_id
+                )
+
+            async def list_for_run(
+                self, run_id: uuid.UUID, *, workspace_id: uuid.UUID, limit: int = 100
+            ) -> list[AuditEvent]:
+                return await held.list_for_run(run_id, workspace_id=workspace_id, limit=limit)
+
+        work.audit = Refusing()  # type: ignore[misc]
+        return work
+
+
+async def test_a_job_the_lane_queued_is_never_left_without_the_lanes_audit_row() -> None:
+    """The row is written in the job's transaction: when it cannot be, nothing
+    is queued, rather than a job naming DW1's account that no lane row explains."""
+    world = _world()
+    refusing = _LaneRowRefused(world.store)
+    processing = replace(world.services.processing, uow=refusing)
+    setup = Setup(world, processing=processing)
+    lane = replace(setup.lane, uow=refusing)
+
+    with pytest.raises(RuntimeError, match="lane's row"):
+        await lane.tick(ALPHA)
+
+    assert world.store.state(ALPHA).jobs == {}
 
 
 async def test_both_lanes_audit_as_themselves_naming_the_account_it_acted_under() -> None:

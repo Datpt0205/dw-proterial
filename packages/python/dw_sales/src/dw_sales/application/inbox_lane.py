@@ -38,8 +38,10 @@ which only this lane queues as (no sign-in resolves a `service|` subject),
 so a trace tells a lane's run from a click.
 
 **It audits as itself.** For each message it queued, one `lane_audit_event`
-from `system_actor("sales_inbox")`, naming the account it acted under; the
-queueing's own audit row names the account, never a person.
+from `system_actor("sales_inbox")`, naming the account it acted under,
+written by the queueing in the job's own transaction (`ProcessingService.
+enqueue` with ``lane``); the queueing's own audit row names the account,
+never a person.
 
 The lane owns no job queue of its own: the jobs are the processing queue's,
 which the worker's reaper settles (`sales_processing`).
@@ -59,8 +61,7 @@ from dw_kernel.errors import (
     NotFoundError,
     PermissionDeniedError,
 )
-from dw_kernel.ids import TenantId, WorkspaceId
-from dw_kernel.ports import IdGenerator, UtcClock
+from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import (
     MembershipAccess,
@@ -68,7 +69,6 @@ from dw_platform.application.identity import (
     service_subject,
 )
 from dw_platform.application.provisioning import ServiceAccount
-from dw_platform.domain.audit import lane_audit_event
 from dw_sales.application.access import sales_scope
 from dw_sales.application.case_store import ProcessingJob, SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesScope
@@ -135,9 +135,12 @@ class ServiceAccessPort(Protocol):
 
 class EnqueuePort(Protocol):
     """Queueing one message, through the door "DW xử lý" uses:
-    `ProcessingService.enqueue`."""
+    `ProcessingService.enqueue`, naming the lane, whose audit row it writes
+    with the job."""
 
-    async def enqueue(self, context: AccessContext, message_id: str) -> ProcessingJobView: ...
+    async def enqueue(
+        self, context: AccessContext, message_id: str, *, lane: str | None = None
+    ) -> ProcessingJobView: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,7 +160,6 @@ class InboxLane:
     processing: EnqueuePort
     access: ServiceAccessPort
     clock: UtcClock
-    ids: IdGenerator
 
     async def tick(self, scope: SalesScope) -> LaneTick:
         context = await self._context(scope)
@@ -180,7 +182,7 @@ class InboxLane:
             if message_id in done or not _due(jobs.get(message_id), now):
                 continue
             try:
-                job = await self.processing.enqueue(context, message_id)
+                await self.processing.enqueue(context, message_id, lane=SALES_INBOX_LANE)
             except (PermissionDeniedError, EntitlementDeniedError):
                 logger.warning("sales_inbox: DW1's account may not process the mailbox")
                 return LaneTick(tuple(queued), stopped="not_permitted")
@@ -192,7 +194,6 @@ class InboxLane:
                 continue
             except NotFoundError:
                 continue
-            await self._audit(context, message_id, job)
             queued.append(message_id)
         return LaneTick(tuple(queued))
 
@@ -215,28 +216,6 @@ class InboxLane:
             dw1_subject(tenant_id), tenant_id, workspace_id, LANE_CEILING
         )
         return None if access is None else context_from(access)
-
-    async def _audit(self, context: AccessContext, message_id: str, job: ProcessingJobView) -> None:
-        scope = sales_scope(context)
-        async with self.uow(scope) as work:
-            await work.audit.append(
-                lane_audit_event(
-                    lane=SALES_INBOX_LANE,
-                    event_id=self.ids.new_uuid(),
-                    tenant_id=TenantId(scope.tenant_id.value),
-                    workspace_id=WorkspaceId(scope.workspace_id.value),
-                    action="sales.message.queued_by_lane",
-                    resource_type="sales_message",
-                    resource_id=message_id,
-                    occurred_at=self.clock.now(),
-                    details={
-                        "job_id": str(job.job_id),
-                        # The account the lane acted under: who asked, on the job.
-                        "account_id": str(context.principal_id),
-                    },
-                )
-            )
-            await work.commit()
 
 
 def _due(job: ProcessingJob | None, now: datetime) -> bool:

@@ -10,7 +10,10 @@ tất cả" and DW1's mailbox lane (ticket 16) all **enqueue**, and the worker's
 otherwise), the message in the mailbox (404) and not already on a case (409),
 then one row per message (`ProcessingJobsPort.enqueue`, idempotent per
 (workspace, message_id): a second press, or the lane and a person at once,
-queue it once), and an audit row naming who asked. "All" enqueues every
+queue it once), and an audit row naming who asked. A background lane that
+queues under its account (DW1's mailbox lane) names itself, and its own
+audit row (`lane_audit_event`) is written in the same transaction as the
+job: a queued job never lacks the row saying which lane queued it. "All" enqueues every
 message still without a disposition, oldest first: one job, and one DW1 run,
 per message, as the mailbox lane always counted it.
 
@@ -149,7 +152,9 @@ class ProcessingService:
     ids: IdGenerator
     inbox: InboxPort
 
-    async def enqueue(self, context: AccessContext, message_id: str) -> ProcessingJobView:
+    async def enqueue(
+        self, context: AccessContext, message_id: str, *, lane: str | None = None
+    ) -> ProcessingJobView:
         await self.gate.require(
             context,
             SalesScopes.INBOX_PROCESS,
@@ -167,7 +172,7 @@ class ProcessingService:
                     "the message is already on a case",
                     details={"message_id": message_id, "disposition": existing.kind.value},
                 )
-            job = await self._enqueue(work, context, message_id)
+            job = await self._enqueue(work, context, message_id, lane)
             await work.commit()
         return processing_job(job)
 
@@ -188,12 +193,34 @@ class ProcessingService:
         return [processing_job(job) for job in jobs]
 
     async def _enqueue(
-        self, work: SalesUnitOfWork, context: AccessContext, message_id: str
+        self,
+        work: SalesUnitOfWork,
+        context: AccessContext,
+        message_id: str,
+        lane: str | None = None,
     ) -> ProcessingJob:
         now = self.clock.now()
         job, queued = await work.jobs.enqueue(
             message_id, context.principal_id, now, self.ids.new_uuid()
         )
+        if queued and lane is not None:
+            await work.audit.append(
+                lane_audit_event(
+                    lane=lane,
+                    event_id=self.ids.new_uuid(),
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    action="sales.message.queued_by_lane",
+                    resource_type="sales_message",
+                    resource_id=message_id,
+                    occurred_at=now,
+                    details={
+                        "job_id": str(job.job_id),
+                        # The account the lane acted under: who asked, on the job.
+                        "account_id": str(context.principal_id),
+                    },
+                )
+            )
         if queued:
             await work.audit.append(
                 AuditEvent(
