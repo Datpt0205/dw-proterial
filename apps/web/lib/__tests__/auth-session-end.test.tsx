@@ -89,6 +89,27 @@ describe("the Keycloak session end", () => {
     expect(kc.login).not.toHaveBeenCalled();
   });
 
+  it("clears a 401's end when a refresh then works", async () => {
+    // An access token that expired while its refresh was on the way: the API
+    // answers 401, then the refresh succeeds and every later call works.
+    const seen = await mount();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    const { clientOptions } = await import("../session");
+    await act(async () => {
+      await clientOptions("http://api.test").fetchImpl!("http://api.test/a", {
+        headers: { Authorization: "Bearer access" },
+      });
+    });
+    await waitFor(() => expect(seen.ended).toBe(true));
+
+    act(() => kc.onAuthRefreshSuccess!());
+
+    await waitFor(() => expect(seen.ended).toBe(false));
+  });
+
   it("reports whether asking for more time moved the end", async () => {
     const seen = await mount();
     kc.updateToken.mockImplementation(async () => {

@@ -41,14 +41,24 @@ export function tokenExpiry(token: string | null | undefined): number | null {
 
 // The one record that the session has ended, whoever found out first: the
 // token refresh that failed, or a request that carried a token and was
-// answered 401.
+// answered 401. A refresh that works clears it: a 401 can come from an access
+// token that expired while the refresh was still on its way.
 let ended = false;
 const listeners = new Set<() => void>();
 
-export function markSessionEnded(): void {
-  if (ended) return;
-  ended = true;
+function setEnded(value: boolean): void {
+  if (ended === value) return;
+  ended = value;
   for (const listener of listeners) listener();
+}
+
+export function markSessionEnded(): void {
+  setEnded(true);
+}
+
+/** A token refresh worked, so the sign-in is alive whatever ended it before. */
+export function markSessionAlive(): void {
+  setEnded(false);
 }
 
 function subscribe(listener: () => void): () => void {
