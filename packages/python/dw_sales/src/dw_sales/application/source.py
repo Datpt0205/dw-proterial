@@ -1,7 +1,7 @@
 """The original a value was read from, served to the person checking it.
 
-ADR 0009 and spec decision 12: the verifier sees the customer's file, never
-the parser's reading of it. A PDF page goes out as the bytes of that one page
+ADR 0009-parser-page-output-with-coordinates and spec decision 12: the verifier sees the customer's
+file, never the parser's reading of it. A PDF page goes out as the bytes of that one page
 (the browser renders it, pdf.js), with the anchor boxes beside it; a sheet
 goes out as its grid of cells with every hidden and colour flag. Nothing is
 rasterised in the API process, nothing is served through a presigned link,

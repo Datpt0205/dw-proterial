@@ -1,6 +1,6 @@
-# Edge for a hosted deployment (ADR 0009): three hostnames from env, TLS, and
+# Edge for a hosted deployment (ADR 0009-hosting-on-three-hostnames-behind-caddy): three hostnames from env, TLS, and
 # nothing reachable that the host does not need. Mounted read-only by
-# infra/compose/docker-compose.host.yml; the steps are in ADR 0009.
+# infra/compose/docker-compose.host.yml; the steps are in ADR 0009-hosting-on-three-hostnames-behind-caddy.
 #
 # Every {$VAR} is substituted when Caddy reads this file, so a hostname lives
 # in .env only. The overlay requires all three (`:?`), so an empty one fails at
@@ -33,7 +33,7 @@
 # no incoming value without `trusted_proxies`), so the upstreams, which trust
 # only this container's address, get the real client IP. A CDN in front needs
 # `trusted_proxies` here first, or every caller shares the CDN's IP and the
-# API's per-IP rate limit (ADR 0009).
+# API's per-IP rate limit (ADR 0009-hosting-on-three-hostnames-behind-caddy).
 
 {$DW_WEB_HOST} {
 	import edge_headers

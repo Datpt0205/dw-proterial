@@ -298,8 +298,8 @@ class ApiSettings(BaseSettings):
         default=SecretStr(""),
         validation_alias=AliasChoices("DW_API_ZALO_LINK_SECRET", "ZALO_LINK_SECRET"),
     )
-    # The server key a decision code is hashed under (ADR 0007, channels Z5):
-    # HMAC-SHA256, so whoever reads the codes table cannot recover a code. The
+    # The server key a decision code is hashed under (ADR 0007-chat-decisions-after-a-portal-view,
+    # channels Z5): HMAC-SHA256, so whoever reads the codes table cannot recover a code. The
     # worker holds the same value to check a code sent from Zalo. Empty = no
     # code is ever issued and approvals are decided on the web only.
     approval_code_secret: SecretStr = Field(
@@ -448,8 +448,8 @@ class ApiSettings(BaseSettings):
                 raise RuntimeError(
                     f"CORS origins must be listed explicitly in the {self.profile} profile"
                 )
-            # Real people sign in here (ADR 0009): a token, a cookie or a
-            # cross-origin response over plain http is readable on the path.
+            # Real people sign in here (ADR 0009-hosting-on-three-hostnames-behind-caddy): a token,
+            # a cookie or a cross-origin response over plain http is readable on the path.
             # The issuer is the URL the browser logs in through, so it must be
             # the TLS host too; the JWKS fetch stays internal and is not checked.
             plain = [

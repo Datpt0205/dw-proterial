@@ -11,7 +11,8 @@ defaulted: a reader that forgets it does not type-check.
 
 Approval reads also take the caller's `ApprovalAudience` and filter by it in
 the query (`visible_to`): a stamped request is absent to whoever may neither
-decide it nor asked for it (ADR 0004, amendment 2026-10-07).
+decide it nor asked for it (ADR 0011-approval-decider-stamped-as-required-scope, amendment
+2026-10-07).
 """
 
 from __future__ import annotations
@@ -126,7 +127,8 @@ class SqlApprovalRepository:
                 payload=request.payload,
                 run_id=request.run_id,
                 # Written here and nowhere else: `save` records a decision and
-                # must never move who was allowed to make it (ADR 0004).
+                # must never move who was allowed to make it
+                # (ADR 0011-approval-decider-stamped-as-required-scope).
                 required_scope=request.required_scope,
                 status=request.status.value,
                 version=request.version,

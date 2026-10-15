@@ -46,7 +46,8 @@ pytestmark = pytest.mark.integration
 
 
 def _sees(context: AccessContext) -> ApprovalAudience:
-    """What `context` may see of the approvals (ADR 0004), as the API asks it."""
+    """What `context` may see of the approvals
+    (ADR 0011-approval-decider-stamped-as-required-scope), as the API asks it."""
     return ApprovalAudience.of(context, ScopeAuthorizationService())
 
 

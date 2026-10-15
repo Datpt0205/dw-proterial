@@ -1,4 +1,5 @@
-"""Integration: an approval's `required_scope`, from the pause to the decision (ADR 0004).
+"""Integration: an approval's `required_scope`, from the pause to the decision
+(ADR 0011-approval-decider-stamped-as-required-scope).
 
 Real Postgres end to end: the node's interrupt payload stamps the row, the CHECK
 refuses a malformed stamp and the run ends failed instead of parking, and
@@ -50,7 +51,8 @@ pytestmark = pytest.mark.integration
 
 
 def _sees(context: AccessContext) -> ApprovalAudience:
-    """What `context` may see of the approvals (ADR 0004), as the API asks it."""
+    """What `context` may see of the approvals
+    (ADR 0011-approval-decider-stamped-as-required-scope), as the API asks it."""
     return ApprovalAudience.of(context, ScopeAuthorizationService())
 
 
@@ -291,7 +293,8 @@ async def test_the_stamp_decides_who_may_decide(urls: RuntimeUrls, worker_config
     await still_pending()
 
     # The right tenant, `approvals.decide` without the stamp: not found, the
-    # answer the inbox gives them too (ADR 0004, amendment 2026-10-07).
+    # answer the inbox gives them too (ADR 0011-approval-decider-stamped-as-required-scope,
+    # amendment 2026-10-07).
     with pytest.raises(NotFoundError) as hidden:
         await stack.approvals.decide(
             approval_id=approval_id,
@@ -351,8 +354,8 @@ def _platform_admin(*scopes: str, tenant: uuid.UUID, workspace: uuid.UUID) -> Ac
 async def test_platform_admin_does_not_pass_the_stamp(
     urls: RuntimeUrls, worker_config: Path
 ) -> None:
-    """ADR 0004 (2026-10-06): a platform operator is not the business's board. Same
-    tenant and workspace, approve and reject: not found (the amendment of
+    """ADR 0011-approval-decider-stamped-as-required-scope (2026-10-06): a platform operator is not
+    the business's board. Same tenant and workspace, approve and reject: not found (the amendment of
     2026-10-07: they may not decide it, so they do not see it), nothing written,
     the run still parked. A holder of the scope then decides it as before."""
     run = make_run_context()

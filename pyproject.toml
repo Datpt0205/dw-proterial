@@ -308,7 +308,7 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-# Sales ticket 25 (ADR 0010 decisions 2 and 6): the API parses no customer
+# Sales ticket 25 (ADR 0010-document-intake-at-real-size-and-format decisions 2 and 6): the API parses no customer
 # file. A source view, a PO layout's cells and its preview are read by the
 # reader sandbox (`dw_sales.adapters.reader_client`, over the `reader`
 # container's socket), and "DW xử lý" only queues: the worker runs it, reading
@@ -452,13 +452,13 @@ forbidden_modules = ["qdrant_client", "minio", "boto3"]
 ignore_imports = ["dw_memory.adapters.qdrant_ranker -> qdrant_client"]
 
 [[tool.importlinter.contracts]]
-# ADR 0007 / channels Z1: what the bot hears decides nothing on its
+# ADR 0007-chat-decisions-after-a-portal-view / channels Z1: what the bot hears decides nothing on its
 # own. The self-link flow links and unlinks a chat and replies; it cannot reach
 # the approval service or build an access context. Since Z4 the update entry
 # (`zalo_inbound`) and the inbound router (`dw_connectors.inbound`) are in it
 # too: they hand a linked person's message to commands registered at the
 # composition root, which receive a context the PLATFORM built from that
-# person's own membership, cut to the command's ceiling (ADR 0005 condition 2).
+# person's own membership, cut to the command's ceiling (ADR 0005-zalo-bot-is-the-first-chat-channel condition 2).
 # None of these modules can build one, read a scope or reach approvals — the
 # router's context type is a parameter the composition root binds. Z5's decide
 # command is registered the same way. The worker's poll lane is in it too,

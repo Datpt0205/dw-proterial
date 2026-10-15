@@ -36,7 +36,7 @@ WORKSPACE = uuid.UUID(int=101)
 @dataclass
 class FakeApprovalRepo:
     """Honours the port: another workspace's request is not found, nor one the
-    audience may not see (ADR 0004)."""
+    audience may not see (ADR 0011-approval-decider-stamped-as-required-scope)."""
 
     request: ApprovalRequest
     decisions: list[ApprovalDecision] = field(default_factory=list)
@@ -532,9 +532,9 @@ async def _decide_as(
 
 @pytest.mark.parametrize("approve", [True, False], ids=["approve", "reject"])
 async def test_the_decide_right_alone_does_not_find_a_stamped_request(approve: bool) -> None:
-    """ADR 0004: `approvals.decide` is necessary, and for a stamped request not
-    sufficient; since the amendment of 2026-10-07 who may not decide it and did
-    not ask for it does not find it either. Not found before anything is
+    """ADR 0011-approval-decider-stamped-as-required-scope: `approvals.decide` is necessary, and for
+    a stamped request not sufficient; since the amendment of 2026-10-07 who may not decide it and
+    did not ask for it does not find it either. Not found before anything is
     written and before the run is looked at."""
     request = make_stamped_request(BOARD_SCOPE)
     repo = FakeApprovalRepo(request=request)
@@ -633,9 +633,9 @@ def platform_admin(principal: uuid.UUID, *extra_scopes: str) -> AccessContext:
 
 @pytest.mark.parametrize("approve", [True, False], ids=["approve", "reject"])
 async def test_platform_admin_does_not_find_a_stamped_request(approve: bool) -> None:
-    """ADR 0004 (2026-10-06): a platform operator is not the business's board. The
-    admin rule still grants `approvals.decide`; the stamp needs the scope itself,
-    and since the amendment of 2026-10-07 who may not decide a stamped request
+    """ADR 0011-approval-decider-stamped-as-required-scope (2026-10-06): a platform operator is not
+    the business's board. The admin rule still grants `approvals.decide`; the stamp needs the scope
+    itself, and since the amendment of 2026-10-07 who may not decide a stamped request
     does not find it. Nothing written, the run not looked at."""
     request = make_stamped_request(BOARD_SCOPE)
     repo = FakeApprovalRepo(request=request)
@@ -731,7 +731,8 @@ def test_may_decide_answers_as_decide_does(
 
 
 async def test_the_requester_withdraws_a_stamped_request_without_the_scope() -> None:
-    """Taking back your own request is not deciding it (ADR 0004), stamped or not."""
+    """Taking back your own request is not deciding it
+    (ADR 0011-approval-decider-stamped-as-required-scope), stamped or not."""
     request = make_stamped_request(BOARD_SCOPE)
     runner = FakeRunner(hosted=True)
     service = make_service(request, frozenset(), runner=runner)

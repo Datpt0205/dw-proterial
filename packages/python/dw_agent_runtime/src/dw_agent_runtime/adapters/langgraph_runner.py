@@ -668,9 +668,9 @@ class LangGraphWorkflowRunner:
                 approval_id = await self._create_approval(run_context, run_id, payload)
             except Exception:
                 # The pause could not be recorded (a malformed `required_scope`
-                # refused by its CHECK, ADR 0004). `start` and `resume` call this
-                # outside their own failure handling, so without this the row
-                # stayed `running` over a checkpoint no request points at. Ended
+                # refused by its CHECK, ADR 0011-approval-decider-stamped-as-required-scope).
+                # `start` and `resume` call this outside their own failure handling, so without this
+                # the row stayed `running` over a checkpoint no request points at. Ended
                 # as failed, visibly, like the double pause above. The driver's
                 # text (SQL, constraint name) stays in the server log: the run's
                 # `error` is returned as is by `GET /runs/{id}`.
@@ -726,9 +726,9 @@ class LangGraphWorkflowRunner:
         travel nested under `payload["payload"]` (`_ask_human`), so no model can
         set a top-level key such as `required_scope`.
 
-        `required_scope` (ADR 0004) is passed through exactly as the node wrote
-        it, neither coerced nor dropped: its shape has one owner, the CHECK on
-        the column, and a malformed or non-string value fails this INSERT so the
+        `required_scope` (ADR 0011-approval-decider-stamped-as-required-scope) is passed through
+        exactly as the node wrote it, neither coerced nor dropped: its shape has one owner, the
+        CHECK on the column, and a malformed or non-string value fails this INSERT so the
         run ends failed instead of raising a request nobody could rightly decide.
         """
         approval = ApprovalRequest(

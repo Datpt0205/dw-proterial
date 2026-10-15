@@ -15,7 +15,7 @@ export const approvalSchema = z.object({
   requires_comment: z.boolean(),
   /**
    * The scope a decider must hold besides `approvals.decide`, stamped when the
-   * request was raised (ADR 0004). The server enforces it; a page reads it to
+   * request was raised (ADR 0011-approval-decider-stamped-as-required-scope). The server enforces it; a page reads it to
    * say why a decision is locked, never to infer one from `approval_type`.
    */
   required_scope: z.string().nullable(),
@@ -32,7 +32,7 @@ export const approvalSchema = z.object({
 export type Approval = z.infer<typeof approvalSchema>;
 
 /**
- * Opening an approval on the portal (`POST /approvals/{id}/view`, ADR 0007):
+ * Opening an approval on the portal (`POST /approvals/{id}/view`, ADR 0007-chat-decisions-after-a-portal-view):
  * the view is recorded, and with `issue_code` a single-use code is issued for
  * a decision on Zalo. The code is in this response only; `unavailable_reason`
  * says why none is offered, and the page says it in words.

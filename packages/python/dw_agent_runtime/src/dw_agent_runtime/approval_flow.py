@@ -4,12 +4,12 @@ Bridges platform approvals and the workflow runner: the human decision is
 persisted first (aggregate invariant: decided exactly once), then the durable
 run resumes with the decision payload.
 
-Who may decide is the platform's rule (ADR 0004; in this repo's docs/adr, 0011):
-`approvals.decide` and, when the raiser stamped one, the request's own
-`required_scope`; `platform_admin` does not pass a stamp. A context checks a
-decision on its own approvals before it is recorded, through an
-`ApprovalDecisionGuard` it registers here, so a decision the run could not
-apply is refused while it can still be refused.
+Who may decide is the platform's rule (the platform's ADR 0004, here
+ADR 0011-approval-decider-stamped-as-required-scope): `approvals.decide` and,
+when the raiser stamped one, the request's own `required_scope`; `platform_admin`
+does not pass a stamp. A context checks a decision on its own approvals before
+it is recorded, through an `ApprovalDecisionGuard` it registers here, so a
+decision the run could not apply is refused while it can still be refused.
 
 An approval with no run has nothing to resume, so its decision is announced
 instead: one outbox event, `decided_event_type(approval_type)`, written in the
@@ -61,8 +61,8 @@ DECIDED_EVENT_SCHEMA = "1.0"
 
 # Every decision writes exactly one audit row, in its own transaction, naming
 # the decider (approval-audit-and-workspace/01). One admitted by something
-# outside the approval (a single-use code, ADR 0007) keeps its own action, which
-# also records what admitted it; every other decision writes `approval.decided`.
+# outside the approval (a single-use code, ADR 0007-chat-decisions-after-a-portal-view) keeps its
+# own action, which also records what admitted it; every other decision writes `approval.decided`.
 DECIDED_ACTION = "approval.decided"
 CHANNEL_DECIDED_ACTION = "approval.channel_decided"
 
@@ -231,8 +231,9 @@ class ApproveAndResumeService:
             # approval_requests narrows by tenant only. Another workspace's
             # request is not found, before any scope check, write or resume.
             # So is a stamped request the caller may neither decide nor asked
-            # for (ADR 0004, amendment 2026-10-07): the inbox does not list it,
-            # and a refusal here would tell them it exists and what it needs.
+            # for (ADR 0011-approval-decider-stamped-as-required-scope, amendment 2026-10-07): the
+            # inbox does not list it, and a refusal here would tell them it exists and what it
+            # needs.
             request = await uow.approvals.get(
                 approval_id,
                 workspace_id=context.workspace_id,
@@ -260,8 +261,8 @@ class ApproveAndResumeService:
                     resource_id=str(approval_id),
                 )
                 # Who may decide THIS request, stamped when it was raised
-                # (ADR 0004) and read from the row, never from today's policy.
-                # NOT through `require`: its admin rule would let a platform
+                # (ADR 0011-approval-decider-stamped-as-required-scope) and read from the row, never
+                # from today's policy. NOT through `require`: its admin rule would let a platform
                 # operator decide a business approval (2026-10-06). The inbox
                 # reads the same `holds_stamped_scope`; and this sits before any
                 # write or resume, so a refusal leaves the request pending and
@@ -394,9 +395,9 @@ class ApproveAndResumeService:
         for waiting in await self.waiting(context, worker_id=worker_id, subject_ref=subject_ref):
             async with self.uow_factory(context) as uow:
                 # Read as the run's requester, who raised the approval and always
-                # sees it (ADR 0004 amendment): the caller moving the subject may
-                # not be among those a stamped request is shown to, and an
-                # approval left pending here would park its run for good.
+                # sees it (ADR 0011-approval-decider-stamped-as-required-scope amendment): the
+                # caller moving the subject may not be among those a stamped request is shown to,
+                # and an approval left pending here would park its run for good.
                 request = await uow.approvals.get(
                     waiting.approval_request_id,
                     workspace_id=context.workspace_id,

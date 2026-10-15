@@ -74,7 +74,8 @@ class ApprovalDecision:
     outcome: DecisionOutcome
     comment: str
     decided_at: datetime
-    # Where the decision was made: `web`, or `zalo` after a portal view (ADR 0007).
+    # Where the decision was made: `web`, or `zalo` after a portal view
+    # (ADR 0007-chat-decisions-after-a-portal-view).
     channel: str = "web"
 
 
@@ -90,10 +91,10 @@ class ApprovalRequest:
     reason: str
     payload: dict[str, object] = field(default_factory=dict)
     run_id: uuid.UUID | None = None
-    # The scope a decider must hold besides `approvals.decide` (ADR 0004).
-    # Stamped once, when the request is raised, from what the node read in
-    # policy then; never re-derived, so a policy changed while the request
-    # waits does not change who may decide it. None: `approvals.decide` alone.
+    # The scope a decider must hold besides `approvals.decide`
+    # (ADR 0011-approval-decider-stamped-as-required-scope). Stamped once, when the request is
+    # raised, from what the node read in policy then; never re-derived, so a policy changed while
+    # the request waits does not change who may decide it. None: `approvals.decide` alone.
     required_scope: str | None = None
     status: ApprovalStatus = ApprovalStatus.PENDING
     created_at: datetime | None = None

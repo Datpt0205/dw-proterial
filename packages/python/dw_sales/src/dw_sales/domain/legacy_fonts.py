@@ -5,7 +5,7 @@ code points of other characters. A cell typed "Cửa hàng" in `.VnTime` holds
 "Cña hµng": the file is right on screen, in that font, and wrong as text. A
 reader that took the text would match attributes against garbage, so such a
 value is detected by the font it was typed in and never read as text
-(ticket 20). Converting it to Unicode is ADR 0010 decision 3
+(ticket 20). Converting it to Unicode is ADR 0010-document-intake-at-real-size-and-format decision 3
 (`docs/adr/0010-document-intake-at-real-size-and-format.md`), later.
 
 The font's name says which encoding its bytes are in. This is the one list

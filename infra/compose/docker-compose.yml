@@ -353,7 +353,7 @@ services:
     restart: unless-stopped
 
   # -------------------------------------------------------- malware scan --
-  # ClamAV's clamd (sales ticket 25, ADR 0010 decision 6): every attachment
+  # ClamAV's clamd (sales ticket 25, ADR 0010-document-intake-at-real-size-and-format decision 6): every attachment
   # is scanned before the API or the worker reads it.
   #
   # Pinned by tag AND digest: a tag can be re-pointed or withdrawn from a
@@ -399,7 +399,7 @@ services:
     restart: unless-stopped
 
   # -------------------------------------------------------------- reader --
-  # Reads every customer attachment (Sales ticket 25, ADR 0010 decisions 2
+  # Reads every customer attachment (Sales ticket 25, ADR 0010-document-intake-at-real-size-and-format decisions 2
   # and 6; decided 2026-10-14: a reader container of its own, with docgen's
   # containment). Each file is read by a one-use process under `ulimit`, a
   # wall clock that kills its process group and a capped answer

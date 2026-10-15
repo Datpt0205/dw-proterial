@@ -1,4 +1,5 @@
-"""Integration: `approval_requests.required_scope` (ADR 0004, migration 36dabf47619c).
+"""Integration: `approval_requests.required_scope`
+(ADR 0011-approval-decider-stamped-as-required-scope, migration 36dabf47619c).
 
 What only the database can show: the stamp survives a round trip, its shape is
 refused by the CHECK (the one place the pattern is written), and a decision
@@ -30,7 +31,8 @@ pytestmark = pytest.mark.integration
 
 
 def _sees(context: AccessContext) -> ApprovalAudience:
-    """What `context` may see of the approvals (ADR 0004), as the API asks it."""
+    """What `context` may see of the approvals
+    (ADR 0011-approval-decider-stamped-as-required-scope), as the API asks it."""
     return ApprovalAudience.of(context, ScopeAuthorizationService())
 
 

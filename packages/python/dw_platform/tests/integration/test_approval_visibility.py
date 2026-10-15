@@ -1,4 +1,5 @@
-"""Integration: who sees a stamped approval (ADR 0004, amendment 2026-10-07).
+"""Integration: who sees a stamped approval (ADR 0011-approval-decider-stamped-as-required-scope,
+amendment 2026-10-07).
 
 A request stamped with `required_scope` is listed and served only to someone who
 may decide it (`approvals.decide` and the stamp, `platform_admin` passing the
