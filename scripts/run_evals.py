@@ -15,8 +15,9 @@ Exit code is non-zero when any case fails or a dataset lacks full security
 coverage (prompt injection, cross-tenant attack, missing evidence). A live
 run also fails when the model read nothing (no call gave a usable answer,
 `live_shortfalls`): its cases grade the guards, which hold just as well when
-every call times out. A golden case's bar is reported in its summary line,
-not enforced here.
+every call times out. So `--live` is for a dataset with a model step: one
+without reads nothing and fails as such. A golden case's bar is reported in
+its summary line, not enforced here.
 
 This script is the eval composition root: `grader_table` is the one place the
 grader table is built, from the platform's graders plus each bounded context's,
@@ -63,7 +64,10 @@ def main() -> int:
     parser.add_argument(
         "--live",
         metavar="PROFILE",
-        help="run the dataset's model steps on PROFILE's live model (never in CI)",
+        help=(
+            "run the dataset's model steps on PROFILE's live model (never in CI); "
+            "a dataset with no model step reads nothing and fails"
+        ),
     )
     parser.add_argument(
         "--record",
