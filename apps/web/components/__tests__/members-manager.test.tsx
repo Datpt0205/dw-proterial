@@ -69,9 +69,13 @@ describe("the members manager sends one Idempotency-Key per press", () => {
 
     fireEvent.click(save);
     await screen.findByText("mất mạng");
+    await waitFor(() => expect(save.className).not.toContain("loading"));
     fireEvent.click(save);
     await waitFor(() => expect(grantMember).toHaveBeenCalledTimes(2));
-    fireEvent.click(await screen.findByRole("button", { name: /Lưu$/ }));
+    // A loading button drops clicks: press again once the save has settled.
+    const again = await screen.findByRole("button", { name: /Lưu$/ });
+    await waitFor(() => expect(again.className).not.toContain("loading"));
+    fireEvent.click(again);
     await waitFor(() => expect(grantMember).toHaveBeenCalledTimes(3));
 
     const [first, retry, next] = grantMember.mock.calls.map(

@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Approval } from "@dw/contracts";
+import { OFFLINE_REASON } from "@dw/ui";
 
 const BOARD_SCOPE = "demo.approve.board";
 const REASON = `Chỉ người có quyền ${BOARD_SCOPE} được quyết yêu cầu này`;
@@ -178,6 +179,8 @@ describe("/approvals and the stamped scope (ADR 0004)", () => {
 describe("/approvals sends one Idempotency-Key per press (ui-quality §3)", () => {
   async function pressApprove() {
     const approve = await screen.findByRole("button", { name: /^Duyệt$/ });
+    // A loading button drops clicks: press once the last decision settled.
+    await waitFor(() => expect(approve.className).not.toContain("loading"));
     fireEvent.click(approve);
   }
 
@@ -224,5 +227,35 @@ describe("/approvals sends one Idempotency-Key per press (ui-quality §3)", () =
       comment: "đã xem lại",
     });
     expect(keyOfCall(1)).not.toBe(keyOfCall(0));
+  });
+});
+
+describe("/approvals while the browser is offline (ui-quality §4)", () => {
+  it("disables both decisions with the offline reason and sends nothing", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "onLine",
+    );
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      get: () => false,
+    });
+    try {
+      const { approve, reject } = await renderWith(
+        ["approvals.read", "approvals.decide"],
+        approval({ required_scope: null, can_decide: true }),
+      );
+      expect(approve.disabled).toBe(true);
+      expect(reject.disabled).toBe(true);
+      fireEvent.mouseEnter(approve.parentElement as HTMLElement);
+      const tooltip = await screen.findByRole("tooltip");
+      expect(within(tooltip).getByText(OFFLINE_REASON)).toBeTruthy();
+      fireEvent.click(approve);
+      expect(decideApproval).not.toHaveBeenCalled();
+    } finally {
+      if (descriptor)
+        Object.defineProperty(window.navigator, "onLine", descriptor);
+      else delete (window.navigator as { onLine?: boolean }).onLine;
+    }
   });
 });
