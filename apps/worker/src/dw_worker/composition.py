@@ -36,6 +36,7 @@ from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
+from dw_kernel.net_guard import ensure_allowed_outbound_url
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.adapters.api_parsers import (
     DeepgramTranscriptParser,
@@ -129,6 +130,17 @@ def build_embeddings(settings: WorkerSettings) -> EmbeddingPort:
         base_url=settings.openai_base_url,
         api_key=settings.openai_api_key,
         profile_id=settings.model_profile,
+        # Guarded as the chat routes on the same server are (`model_stack`).
+        onprem_base_url=(
+            ensure_allowed_outbound_url(
+                settings.onprem_model_base_url,
+                allow_private=not settings.is_deployed,
+                allowed_hosts=tuple(settings.outbound_allowed_hosts),
+            )
+            if settings.onprem_model_base_url
+            else None
+        ),
+        onprem_api_key=settings.onprem_model_api_key or None,
     )
 
 

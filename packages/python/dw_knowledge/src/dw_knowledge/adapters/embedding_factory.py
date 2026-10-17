@@ -29,6 +29,9 @@ class EmbeddingRoute(Protocol):
     """
 
     @property
+    def provider(self) -> str: ...
+
+    @property
     def model(self) -> str: ...
 
     @property
@@ -45,6 +48,8 @@ def build_embeddings(
     base_url: str | None,
     api_key: str | None,
     profile_id: str,
+    onprem_base_url: str | None = None,
+    onprem_api_key: str | None = None,
 ) -> EmbeddingPort:
     if provider == "openai_compatible":
         from dw_knowledge.adapters.openai_embedding import OpenAICompatibleEmbeddingAdapter
@@ -56,7 +61,17 @@ def build_embeddings(
                 "model profile declares no embedding route with dimensions",
                 details={"profile_id": profile_id},
             )
-        if not base_url or not api_key:
+        # A route on the deployment's own server (provider `onprem`) embeds
+        # there and nowhere else: text that may not leave stays on the host
+        # the chat routes use. Any other route embeds through the gateway.
+        if route.provider == "onprem":
+            if not onprem_base_url:
+                raise ConfigError(
+                    "the profile embeds on the on-premises server; set DW_ONPREM_MODEL_BASE_URL",
+                    details={"profile_id": profile_id},
+                )
+            base_url, api_key = onprem_base_url, onprem_api_key or "onprem"
+        elif not base_url or not api_key:
             raise ConfigError(
                 "openai_compatible embeddings need OPENAI_BASE_URL and OPENAI_API_KEY"
             )

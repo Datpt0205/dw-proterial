@@ -1,0 +1,12 @@
+# The model server on the host's NVIDIA GPU (needs the NVIDIA Container
+# Toolkit). Without this overlay `model` runs on CPU: correct, about ten times
+# slower, fine for a trial. Applied after docker-compose.onprem.yml.
+services:
+  model:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

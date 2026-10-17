@@ -1,6 +1,6 @@
 schema_version: "1.0"
 profile_id: onprem
-routing_policy_version: "1.0.0"
+routing_policy_version: "1.1.0"
 # A model server the deployment runs itself, for a step whose input must not
 # leave it: DW1 reading a customer's item description (dw_sales ADR 0005).
 # Reached as provider `onprem`, at DW_ONPREM_MODEL_BASE_URL (Ollama, vLLM or
@@ -39,6 +39,18 @@ reasoning:
   model: qwen3.5-9b-dw
   timeout_seconds: 180
   reasoning_effort: none
+# 1.1.0: the deployment's own server embeds too, so an on-premises deployment
+# (infra/onprem) runs knowledge and memory with no call out of the plant. The
+# builder (`dw_knowledge.adapters.embedding_factory`) sends a route with
+# provider `onprem` to DW_ONPREM_MODEL_BASE_URL, never to the gateway.
+# bge-m3 (Ollama `bge-m3:567m`, 1024 dimensions, multilingual including
+# Vietnamese). A collection is built at this width: switching a deployment
+# onto this profile means a new QDRANT_COLLECTION and a reindex.
+embedding:
+  provider: onprem
+  model: bge-m3:567m
+  dimensions: 1024
+  timeout_seconds: 120
 budgets:
   max_input_tokens_per_run: 60000
   max_cost_usd_per_run: 0.01

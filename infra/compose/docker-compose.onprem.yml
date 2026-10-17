@@ -1,0 +1,135 @@
+# On-premises overlay: every model call stays on this host (Đạt, 2026-10-18).
+# Applied on top of the profile overlay (uat or prod), before the host overlay:
+#
+#   docker compose --env-file .env -f infra/compose/docker-compose.yml \
+#     -f infra/compose/docker-compose.uat.yml \
+#     -f infra/compose/docker-compose.onprem.yml \
+#     [-f infra/compose/docker-compose.onprem-gpu.yml] \
+#     -f infra/compose/docker-compose.host.yml --profile full up -d --build
+#
+# Models are fetched once, before the first `up`, on a host that can reach the
+# internet: `make onprem-models` (infra/onprem/README.md, also for a plant
+# with no internet at all).
+#
+# What it changes, and nothing else:
+#   - `model`: Ollama serving qwen3.5-9b-dw (chat, every DW1 step) and bge-m3
+#     (embeddings), on dw-internal only: no route off the machine, no port.
+#   - `rerank`: llama.cpp's server with bge-reranker-v2-m3 on CPU, its
+#     Cohere-shaped /rerank (the one `CohereCompatibleRerankAdapter` speaks),
+#     on dw-internal only.
+#   - api and worker run on the `onprem` profile, embed and rerank there, and
+#     name those two hosts as the only private ones they may call. No gateway,
+#     no key, no Zalo (the bot is reached through Zalo's servers).
+
+volumes:
+  # Ollama's models: about 6.6 GB for qwen3.5:9b and 1.2 GB for bge-m3.
+  model-data:
+
+services:
+  model:
+    # Pinned by tag and digest. 0.34.4 (2026-09-24); qwen3.5 and bge-m3 are in
+    # its library. Not yet scanned with trivy: owed with the first pull.
+    image: ollama/ollama:0.34.4@sha256:8262851b2846b87c649eddf3e76beb270c52f4d1bc94559f47efde16b0841551
+    profiles: ["full"]
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      # Both DW1's lanes and the API read at once; four requests share the
+      # loaded model instead of queueing behind one.
+      OLLAMA_NUM_PARALLEL: "4"
+      # The chat model and the embedder both stay loaded.
+      OLLAMA_MAX_LOADED_MODELS: "2"
+      OLLAMA_KEEP_ALIVE: "-1"
+    volumes:
+      - model-data:/root/.ollama
+    networks: [dw-internal]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot, `--profile onprem-init` only: the only container here with a way
+  # out (dw-edge), and it runs its own server against the same volume, so
+  # stop `model` first. `make onprem-models` runs it.
+  model-init:
+    image: ollama/ollama:0.34.4@sha256:8262851b2846b87c649eddf3e76beb270c52f4d1bc94559f47efde16b0841551
+    profiles: ["onprem-init"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done;
+        ollama pull qwen3.5:9b && ollama create qwen3.5-9b-dw -f /onprem/Modelfile
+        && ollama pull bge-m3:567m && ollama list
+    volumes:
+      - model-data:/root/.ollama
+      - ../onprem/Modelfile.qwen3.5-9b-dw:/onprem/Modelfile:ro
+    networks: [dw-edge]
+
+  rerank:
+    # llama.cpp b11146 (2026-09-23), CPU build, pinned by tag and digest. Its
+    # /rerank takes {query, documents, top_n} and answers results[{index,
+    # relevance_score}] (tools/server/tests/unit/test_rerank.py); not yet
+    # measured against this deployment.
+    image: ghcr.io/ggml-org/llama.cpp:server-b11146@sha256:a94b642b3e2620749bf2ff5672df922c23a6202710e54a8f7667e58df70aba5a
+    profiles: ["full"]
+    command:
+      - -m
+      - /models/bge-reranker-v2-m3-Q8_0.gguf
+      - --rerank
+      - --embedding
+      - --pooling
+      - rank
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    volumes:
+      # Fetched and checksummed by `make onprem-models` (gitignored).
+      - ../onprem/models:/models:ro
+    networks: [dw-internal]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    environment:
+      DW_MODEL_PROVIDER: onprem
+      DW_API_MODEL_PROFILE: onprem
+      DW_ONPREM_MODEL_BASE_URL: http://model:11434/v1
+      OPENAI_API_KEY: ""
+      OPENAI_BASE_URL: ""
+      DW_API_EMBEDDING_PROVIDER: openai_compatible
+      DW_API_RERANK_PROVIDER: cohere_compatible
+      DW_API_RERANK_BASE_URL: http://rerank:8080
+      DW_API_RERANK_API_KEY: ""
+      DW_API_RERANK_MODEL: bge-reranker-v2-m3
+      DW_API_OUTBOUND_ALLOWED_HOSTS: '["model", "rerank"]'
+      # bge-m3 is 1024 wide; a collection built at another width is never
+      # reused (configs/models/onprem.yaml).
+      QDRANT_COLLECTION: dw_knowledge_bge_m3
+      ZALO_BOT_TOKEN: ""
+      TELEGRAM_BOT_TOKEN: ""
+    depends_on:
+      model:
+        condition: service_healthy
+      rerank:
+        condition: service_healthy
+
+  worker:
+    environment:
+      DW_MODEL_PROVIDER: onprem
+      DW_WORKER_MODEL_PROFILE: onprem
+      DW_ONPREM_MODEL_BASE_URL: http://model:11434/v1
+      OPENAI_API_KEY: ""
+      OPENAI_BASE_URL: ""
+      DW_WORKER_EMBEDDING_PROVIDER: openai_compatible
+      DW_WORKER_OUTBOUND_ALLOWED_HOSTS: '["model"]'
+      QDRANT_COLLECTION: dw_knowledge_bge_m3
+      ZALO_BOT_TOKEN: ""
+    depends_on:
+      model:
+        condition: service_healthy

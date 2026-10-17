@@ -28,6 +28,7 @@ EMBEDDING_ADAPTERS = {"OpenAICompatibleEmbeddingAdapter", "HashEmbeddingAdapter"
 
 @dataclass(frozen=True)
 class _Route:
+    provider: str = "openai_compatible"
     model: str = "text-embedding-3-large"
     dimensions: int | None = 3072
     timeout_seconds: int = 120
@@ -108,3 +109,52 @@ def test_only_the_factory_constructs_an_embedding_adapter() -> None:
                 constructing.append(path.resolve())
     assert constructing, "the scan found nothing - it is not looking where the code is"
     assert set(constructing) == {FACTORY.resolve()}
+
+
+# An embedding route on the deployment's own server embeds there and nowhere
+# else (infra/onprem): the route's provider, not the gateway settings, decides.
+
+
+def test_an_onprem_route_embeds_on_the_onprem_server_not_the_gateway() -> None:
+    adapter = build_embeddings(
+        "openai_compatible",
+        _Route(provider="onprem", model="bge-m3:567m", dimensions=1024),
+        base_url="https://gateway.example/v1",
+        api_key="sk-gateway",
+        profile_id="onprem",
+        onprem_base_url="http://model:11434/v1",
+        onprem_api_key=None,
+    )
+    assert isinstance(adapter, OpenAICompatibleEmbeddingAdapter)
+    assert (adapter.base_url, adapter.model, adapter.dimension) == (
+        "http://model:11434/v1",
+        "bge-m3:567m",
+        1024,
+    )
+    # The gateway's key never travels to the local server.
+    assert adapter.api_key != "sk-gateway"
+
+
+def test_an_onprem_route_without_the_server_is_refused_not_sent_to_the_gateway() -> None:
+    with pytest.raises(ConfigError) as raised:
+        build_embeddings(
+            "openai_compatible",
+            _Route(provider="onprem", model="bge-m3:567m", dimensions=1024),
+            base_url="https://gateway.example/v1",
+            api_key="sk-gateway",
+            profile_id="onprem",
+        )
+    assert raised.value.details == {"profile_id": "onprem"}
+
+
+def test_a_gateway_route_still_embeds_through_the_gateway() -> None:
+    adapter = build_embeddings(
+        "openai_compatible",
+        _Route(provider="openai_compatible", model="text-embedding-3-small", dimensions=1536),
+        base_url="https://gateway.example/v1",
+        api_key="sk-gateway",
+        profile_id="gateway",
+        onprem_base_url="http://model:11434/v1",
+    )
+    assert isinstance(adapter, OpenAICompatibleEmbeddingAdapter)
+    assert adapter.base_url == "https://gateway.example/v1"
