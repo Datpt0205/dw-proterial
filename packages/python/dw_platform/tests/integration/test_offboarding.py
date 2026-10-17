@@ -24,7 +24,14 @@ from pg_harness import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from dw_platform.adapters.persistence.offboarding import SqlTenantOffboarding
+from dw_platform.adapters.persistence.offboarding import (
+    EXPORT_DELETED_ACTION,
+    PURGED_ACTION,
+    SqlOffboardingExportAudit,
+    SqlTenantOffboarding,
+)
+from dw_platform.application.identity import service_subject
+from dw_platform.domain.audit import system_actor
 
 pytestmark = pytest.mark.integration
 
@@ -785,3 +792,188 @@ async def test_the_lane_scope_reads_a_notification_but_never_marks_it_read(
         ).all()
     assert seen == 2
     assert marked == []
+
+
+# ---- service accounts (sales ticket 16, decided 2026-10-18) -------------
+
+
+async def _user(sessions: async_sessionmaker[AsyncSession], subject: str) -> uuid.UUID:
+    """`platform.users` has no tenant and no policy: dw_app writes it as is."""
+    user_id = uuid.uuid4()
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("INSERT INTO platform.users (id, subject, display_name) VALUES (:u, :s, 'x')"),
+            {"u": user_id, "s": subject},
+        )
+    return user_id
+
+
+async def _member(
+    sessions: async_sessionmaker[AsyncSession], t: _Tenant, user_id: uuid.UUID
+) -> None:
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(t.tenant_id)}
+        )
+        await session.execute(
+            sa.text(
+                "INSERT INTO platform.memberships (id, tenant_id, workspace_id, user_id)"
+                " VALUES (gen_random_uuid(), :t, :w, :u)"
+            ),
+            {"t": t.tenant_id, "w": t.workspace_id, "u": user_id},
+        )
+
+
+async def _user_exists(sessions: async_sessionmaker[AsyncSession], user_id: uuid.UUID) -> bool:
+    async with sessions() as session, session.begin():
+        found = await session.scalar(
+            sa.text("SELECT count(*) FROM platform.users WHERE id = :u"), {"u": user_id}
+        )
+    return bool(found == 1)
+
+
+async def test_purge_deletes_the_tenants_service_accounts_and_nobody_elses(
+    sessions: async_sessionmaker[AsyncSession], db_urls: DatabaseUrls
+) -> None:
+    """The purged tenant's DW1 row goes. The other tenant's DW1 row stays, and
+    so does a person who belonged to both: a person is never one tenant's to
+    delete, and their membership elsewhere is untouched."""
+    mine, theirs = _new_tenant(), _new_tenant()
+    await _seed_tenant(sessions, mine)
+    await _seed_tenant(sessions, theirs)
+    my_dw1 = await _user(sessions, service_subject("sales-dw1", mine.tenant_id))
+    their_dw1 = await _user(sessions, service_subject("sales-dw1", theirs.tenant_id))
+    person = await _user(sessions, f"dev|person-{uuid.uuid4().hex}")
+    await _member(sessions, mine, my_dw1)
+    await _member(sessions, theirs, their_dw1)
+    await _member(sessions, mine, person)
+    await _member(sessions, theirs, person)
+    await _file_request(db_urls, mine.tenant_id)
+
+    await SqlTenantOffboarding(session_factory=sessions).purge_rows(mine.tenant_id)
+
+    assert not await _user_exists(sessions, my_dw1)
+    assert await _user_exists(sessions, their_dw1)
+    assert await _user_exists(sessions, person)
+    assert await _count(sessions, theirs.tenant_id, "platform", "memberships") == 2
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(mine.tenant_id)}
+        )
+        details = await session.scalar(
+            sa.text(
+                "SELECT details FROM platform.audit_events WHERE action = :a AND tenant_id = :t"
+            ),
+            {"a": PURGED_ACTION, "t": str(mine.tenant_id)},
+        )
+    assert details == {"service_user_ids": [str(my_dw1)]}
+
+
+async def test_a_resumed_purge_still_finds_the_service_accounts(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """By subject, not by membership: a pass that died after the tenant's
+    tables were emptied has no membership left to find the account by."""
+    mine = _new_tenant()
+    await _seed_tenant(sessions, mine)
+    my_dw1 = await _user(sessions, service_subject("sales-dw1", mine.tenant_id))
+
+    await SqlTenantOffboarding(session_factory=sessions).purge_rows(mine.tenant_id)
+
+    assert not await _user_exists(sessions, my_dw1)
+
+
+# ---- export bundle deletion (retention 1.8.0) ---------------------------
+
+_EXPORTS_LANE = "offboarding_exports_retention"
+
+
+async def test_an_export_deletion_is_on_its_tenants_log_as_the_lane_beside_the_purge(
+    sessions: async_sessionmaker[AsyncSession], db_urls: DatabaseUrls
+) -> None:
+    mine, theirs = _new_tenant(), _new_tenant()
+    await _seed_tenant(sessions, mine)
+    await _seed_tenant(sessions, theirs)
+    await _file_request(db_urls, mine.tenant_id)
+    await SqlTenantOffboarding(session_factory=sessions).purge_rows(mine.tenant_id)
+    deleted: list[str] = []
+
+    async def delete() -> None:
+        deleted.append("bundle")
+
+    recorded = await SqlOffboardingExportAudit(
+        session_factory=sessions, lane=_EXPORTS_LANE
+    ).delete_audited(
+        mine.tenant_id,
+        f"{mine.tenant_id}/offboarding-20260801T000000Z.zip",
+        occurred_at=NOW,
+        details={"policy_version": "1.8.0"},
+        delete=delete,
+    )
+
+    assert recorded
+    assert deleted == ["bundle"]
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(mine.tenant_id)}
+        )
+        row = (
+            await session.execute(
+                sa.text(
+                    "SELECT actor_id, workspace_id, details FROM platform.audit_events"
+                    " WHERE action = :a AND tenant_id = :t"
+                ),
+                {"a": EXPORT_DELETED_ACTION, "t": str(mine.tenant_id)},
+            )
+        ).one()
+    assert row.actor_id == system_actor(_EXPORTS_LANE).value
+    # The purge removed every workspace; the record sits beside the purge's.
+    assert row.workspace_id == mine.workspace_id
+    assert row.details["actor"] == f"system:{_EXPORTS_LANE}"
+    # The other tenant's log holds only its own seed row.
+    assert await _count(sessions, theirs.tenant_id, "platform", "audit_events") == 1
+
+
+async def test_a_deletion_that_fails_leaves_no_audit_row(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    mine = _new_tenant()
+    await _seed_tenant(sessions, mine)
+
+    async def delete() -> None:
+        raise RuntimeError("object storage unreachable")
+
+    with pytest.raises(RuntimeError):
+        await SqlOffboardingExportAudit(
+            session_factory=sessions, lane=_EXPORTS_LANE
+        ).delete_audited(mine.tenant_id, "k", occurred_at=NOW, details={}, delete=delete)
+
+    # Only the seed's own row.
+    assert await _count(sessions, mine.tenant_id, "platform", "audit_events") == 1
+
+
+async def test_a_tenant_with_nothing_to_record_against_keeps_its_bundle(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """No purge record and no workspace: no audit row can be written, so the
+    bundle is not deleted."""
+    bare = _new_tenant()
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(bare.tenant_id)}
+        )
+        await session.execute(
+            sa.text("INSERT INTO platform.tenants (id, slug, name) VALUES (:t, :slug, :slug)"),
+            {"t": bare.tenant_id, "slug": f"bare-{bare.tenant_id.hex[-10:]}"},
+        )
+    deleted: list[str] = []
+
+    async def delete() -> None:
+        deleted.append("bundle")
+
+    recorded = await SqlOffboardingExportAudit(
+        session_factory=sessions, lane=_EXPORTS_LANE
+    ).delete_audited(bare.tenant_id, "k", occurred_at=NOW, details={}, delete=delete)
+
+    assert recorded is False
+    assert deleted == []

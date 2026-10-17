@@ -41,6 +41,7 @@ __all__ = [
     "ChannelDeliveryRetention",
     "CheckpointRetention",
     "KnowledgeRetention",
+    "OffboardingExportRetention",
     "RetentionClass",
     "RetentionPolicy",
     "load_retention_policy",
@@ -69,12 +70,20 @@ class KnowledgeRetention(BaseModel):
     keep. Today evidence and its `item_evidence` link are written in one
     transaction, so an unlinked row is genuinely unlinked; the window is what
     keeps that from being load-bearing for a writer that later splits them.
+
+    `superseded_versions_kept` (since 1.8.0) is a count, not a window: how many
+    superseded versions of one document (per tenant, workspace and `doc_key`)
+    survive beside the current one. Older ones are hard deleted by
+    `dw_knowledge.retention.SqlSupersededVersionRetention`. No default and at
+    least one: zero would erase every document's history on the next pass, and
+    a value missing from the file must stop the load rather than guess.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     deleted_grace_days: int = Field(ge=1)
     orphan_evidence_grace_days: int = Field(ge=1)
+    superseded_versions_kept: int = Field(ge=1, le=100)
 
 
 class AuditRetention(BaseModel):
@@ -160,6 +169,25 @@ class ChannelDeliveryRetention(BaseModel):
     pending_expiry_days: int = Field(ge=1)
 
 
+class OffboardingExportRetention(BaseModel):
+    """How long an offboarding export bundle stays in object storage (since 1.8.0).
+
+    The bundle is the departed tenant's whole data set, personal data included,
+    written so it can be handed over before the purge. It is deleted
+    `retain_days` after it was written, by the worker's
+    `offboarding_exports_retention` lane, on the tenant's audit log.
+
+    Required and bounded both ways: a missing key stops the policy from
+    loading, so "never deleted" cannot come back by omission, and a year is the
+    ceiling because a handover that has not happened in a year is not what this
+    copy is kept for.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    retain_days: int = Field(ge=1, le=365)
+
+
 class RetentionPolicy(BaseModel):
     """The versioned answer to "how long do you keep our data"."""
 
@@ -173,6 +201,7 @@ class RetentionPolicy(BaseModel):
     audit: AuditRetention
     checkpoints: CheckpointRetention
     channel_deliveries: ChannelDeliveryRetention
+    offboarding_exports: OffboardingExportRetention
     batch_limit: int = Field(gt=0, le=10_000)
 
     def cutoff_for(self, name: str, *, now: datetime) -> datetime | None:
