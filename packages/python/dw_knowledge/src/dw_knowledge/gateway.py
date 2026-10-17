@@ -31,7 +31,12 @@ from dw_knowledge.contracts import (
     SearchQuery,
     classifications_for_clearance,
 )
-from dw_knowledge.identity import chunk_id_for, doc_key_for, document_id_for
+from dw_knowledge.identity import (
+    chunk_id_for,
+    doc_key_for,
+    document_id_for,
+    document_storage_key,
+)
 from dw_knowledge.ports import (
     EmbeddingPort,
     IndexableChunk,
@@ -238,7 +243,11 @@ class KnowledgeGateway:
             scope=command.scope,
             identity_key=command.identity_key,
         )
-        storage_key = f"{context.tenant_id}/{context.workspace_id}/documents/{document_id}"
+        storage_key = document_storage_key(
+            tenant_id=context.tenant_id,
+            workspace_id=context.workspace_id,
+            document_id=document_id,
+        )
         source_uri = await self.object_storage.put_object(
             storage_key, command.content.encode("utf-8"), command.content_type
         )

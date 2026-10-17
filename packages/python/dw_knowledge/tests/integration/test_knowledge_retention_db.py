@@ -27,14 +27,23 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from dw_knowledge import tables
+from dw_knowledge.identity import document_storage_key
 from dw_knowledge.ports import IndexableChunk, TrustedSearchFilter, VectorHit
-from dw_knowledge.retention import LANE, PURGED_ACTION, SqlKnowledgeRetention
+from dw_knowledge.retention import (
+    LANE,
+    PURGED_ACTION,
+    VERSION_PURGED_ACTION,
+    VERSIONS_LANE,
+    SqlKnowledgeRetention,
+    SqlSupersededVersionRetention,
+)
 from dw_platform.domain.audit import system_actor
 from dw_platform.retention_policy import (
     AuditRetention,
     ChannelDeliveryRetention,
     CheckpointRetention,
     KnowledgeRetention,
+    OffboardingExportRetention,
     RetentionClass,
     RetentionPolicy,
 )
@@ -60,10 +69,13 @@ def _policy() -> RetentionPolicy:
         policy_id="retention",
         policy_version="1.1.0",
         classes={"default": RetentionClass(days=730, description="thường")},
-        knowledge=KnowledgeRetention(deleted_grace_days=GRACE_DAYS, orphan_evidence_grace_days=7),
+        knowledge=KnowledgeRetention(
+            deleted_grace_days=GRACE_DAYS, orphan_evidence_grace_days=7, superseded_versions_kept=5
+        ),
         audit=AuditRetention(months_ahead=1, enforced=False, tables={}),
         checkpoints=CheckpointRetention(superseded_days=7, idle_thread_days=730),
         channel_deliveries=ChannelDeliveryRetention(pending_expiry_days=7),
+        offboarding_exports=OffboardingExportRetention(retain_days=30),
         batch_limit=1000,
     )
 
@@ -412,4 +424,194 @@ async def test_a_purged_document_is_on_its_tenants_audit_log_as_the_lane(
         ).all()
     assert [tuple(row) for row in rows] == [
         (str(doomed), PURGED_ACTION, system_actor(LANE).value, WORKSPACE)
+    ]
+
+
+# ---- superseded versions (retention 1.8.0: keep the newest five) ----------
+
+KEPT = 5
+
+
+class _RecordingStorage:
+    """Records which stored files the version sweep removed. Only
+    `delete_object` is part of what the sweep may call."""
+
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    async def put_object(self, key: str, data: bytes, content_type: str) -> str:
+        raise NotImplementedError("not exercised by the version sweep")
+
+    async def get_object(self, key: str) -> bytes:
+        raise NotImplementedError("not exercised by the version sweep")
+
+    async def list_objects(self, prefix: str) -> list[str]:
+        raise NotImplementedError("not exercised by the version sweep")
+
+    async def delete_object(self, key: str) -> None:
+        self.deleted.append(key)
+
+
+@dataclass(frozen=True)
+class _VersionSweep:
+    pruner: SqlSupersededVersionRetention
+    sessions: async_sessionmaker[AsyncSession]
+    index: _RecordingIndex
+    storage: _RecordingStorage
+
+
+@pytest.fixture
+async def versions(urls: RuntimeUrls) -> AsyncIterator[_VersionSweep]:
+    engine = create_async_engine(urls.app, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    index, storage = _RecordingIndex(), _RecordingStorage()
+    try:
+        yield _VersionSweep(
+            SqlSupersededVersionRetention(sessions, _policy(), _Clock(), index, storage),
+            sessions,
+            index,
+            storage,
+        )
+    finally:
+        await engine.dispose()
+
+
+async def _version(
+    sessions: async_sessionmaker[AsyncSession],
+    doc_key: uuid.UUID,
+    *,
+    superseded_days_ago: int | None,
+    tenant: uuid.UUID = TENANT,
+    cited: bool = False,
+) -> uuid.UUID:
+    """One version of `doc_key` with a chunk: superseded that many days ago,
+    or the current one when `superseded_days_ago` is None."""
+    document_id = await _document(
+        sessions, status="active", deleted_days_ago=None, tenant=tenant, cited=cited
+    )
+    current = superseded_days_ago is None
+    async with sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenant)}
+        )
+        await session.execute(
+            sa.update(tables.documents)
+            .where(tables.documents.c.id == document_id)
+            .values(
+                doc_key=doc_key,
+                status="active" if current else "superseded",
+                is_current=current,
+                effective_to=None if current else NOW - timedelta(days=superseded_days_ago or 0),
+            )
+        )
+    return document_id
+
+
+async def _exists(sessions: async_sessionmaker[AsyncSession], document_id: uuid.UUID) -> bool:
+    return await _count(sessions, tables.documents, tables.documents.c.id, document_id) == 1
+
+
+async def test_a_document_keeps_its_newest_five_superseded_versions(
+    versions: _VersionSweep,
+) -> None:
+    doc_key = uuid.uuid4()
+    current = await _version(versions.sessions, doc_key, superseded_days_ago=None)
+    # Superseded 1..7 days ago: the two oldest are beyond the newest five.
+    history = [
+        await _version(versions.sessions, doc_key, superseded_days_ago=days) for days in range(1, 8)
+    ]
+
+    await versions.pruner.prune()
+
+    assert await _exists(versions.sessions, current)
+    assert [await _exists(versions.sessions, v) for v in history] == [True] * KEPT + [False] * 2
+    for gone in history[KEPT:]:
+        assert (
+            await _count(versions.sessions, tables.chunks, tables.chunks.c.document_id, gone) == 0
+        )
+
+
+async def test_another_tenants_versions_are_ranked_apart_and_untouched(
+    versions: _VersionSweep,
+) -> None:
+    """Same doc_key and workspace in two tenants (a global document's doc_key
+    names no tenant). Ranked together, the other tenant's three older versions
+    would be the 6th to 8th and deleted; ranked per tenant, neither has more
+    than five."""
+    doc_key = uuid.uuid4()
+    mine = [
+        await _version(versions.sessions, doc_key, superseded_days_ago=days) for days in range(1, 6)
+    ]
+    theirs = [
+        await _version(versions.sessions, doc_key, superseded_days_ago=days, tenant=OTHER_TENANT)
+        for days in range(10, 13)
+    ]
+
+    await versions.pruner.prune()
+
+    for version in [*mine, *theirs]:
+        assert await _exists(versions.sessions, version)
+    assert not set(versions.index.deleted) & {*mine, *theirs}
+
+
+async def test_a_cited_old_version_is_held_back_and_its_neighbours_go(
+    versions: _VersionSweep,
+) -> None:
+    doc_key = uuid.uuid4()
+    history = [
+        await _version(versions.sessions, doc_key, superseded_days_ago=days, cited=(days == 6))
+        for days in range(1, 8)
+    ]
+
+    await versions.pruner.prune()
+
+    assert await _exists(versions.sessions, history[5])  # cited: evidence RESTRICTs it
+    assert not await _exists(versions.sessions, history[6])
+    assert history[5] not in versions.index.deleted
+
+
+async def test_a_removed_versions_points_and_stored_text_go_too(versions: _VersionSweep) -> None:
+    doc_key = uuid.uuid4()
+    history = [
+        await _version(versions.sessions, doc_key, superseded_days_ago=days) for days in range(1, 7)
+    ]
+    oldest = history[-1]
+
+    await versions.pruner.prune()
+
+    assert oldest in versions.index.deleted
+    assert (
+        document_storage_key(tenant_id=TENANT, workspace_id=WORKSPACE, document_id=oldest)
+        in versions.storage.deleted
+    )
+    assert not set(history[:KEPT]) & set(versions.index.deleted)
+
+
+async def test_a_removed_version_is_on_its_tenants_audit_log_as_the_version_lane(
+    versions: _VersionSweep,
+) -> None:
+    doc_key = uuid.uuid4()
+    history = [
+        await _version(versions.sessions, doc_key, superseded_days_ago=days) for days in range(1, 7)
+    ]
+    oldest = history[-1]
+
+    await versions.pruner.prune()
+
+    async with versions.sessions() as session, session.begin():
+        await session.execute(
+            sa.text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(TENANT)}
+        )
+        rows = (
+            await session.execute(
+                sa.text(
+                    "SELECT resource_id, action, actor_id, workspace_id"
+                    " FROM platform.audit_events WHERE resource_type = 'knowledge_document'"
+                    " AND action = :a AND resource_id = ANY(:ids)"
+                ),
+                {"a": VERSION_PURGED_ACTION, "ids": [str(v) for v in history]},
+            )
+        ).all()
+    assert [tuple(row) for row in rows] == [
+        (str(oldest), VERSION_PURGED_ACTION, system_actor(VERSIONS_LANE).value, WORKSPACE)
     ]

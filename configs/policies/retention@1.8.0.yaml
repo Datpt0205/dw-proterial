@@ -1,6 +1,6 @@
 schema_version: "1.0"
 policy_id: retention
-policy_version: "1.7.0"
+policy_version: "1.8.0"
 
 # Dữ liệu sống bao lâu trước khi bị xoá hẳn.
 #
@@ -66,6 +66,19 @@ classes:
 knowledge:
   deleted_grace_days: 30
   orphan_evidence_grace_days: 7
+  # Từ 1.8.0 (Đạt quyết 2026-10-18). Nạp lại một tài liệu cùng danh tính tạo
+  # phiên bản mới; bản trước thành `superseded` (vẫn còn dòng, chunk, vector đã
+  # tombstone và file gốc trong object storage) và trước bản này thì không gì xoá
+  # chúng: một tài liệu nạp lại mỗi tuần giữ mọi phiên bản của nó, mãi mãi.
+  #
+  # Giữ 5 bản superseded MỚI NHẤT cho mỗi tài liệu (theo tenant, workspace và
+  # doc_key — không bao giờ xếp hạng chung giữa hai tenant), cộng bản hiện hành.
+  # Bản cũ hơn bị xoá hẳn: vector, file gốc, dòng (chunk đi theo CASCADE), mỗi
+  # dòng một bản ghi audit của lane `retention_knowledge_versions`. Bản còn bị
+  # evidence trích dẫn thì được giữ và đếm, như lượt quét tài liệu đã xoá.
+  # Đây là số bản chứ không phải số ngày: câu hỏi là "nhìn lại được bao nhiêu
+  # lần sửa", khác với "bao lâu thì một lệnh xoá thành vĩnh viễn".
+  superseded_versions_kept: 5
 
 # Bảng chuỗi thời gian: audit_events.
 #
@@ -153,6 +166,18 @@ checkpoints:
 # `channel_unconfigured` và ghi một dòng audit trong tenant của nó.
 channel_deliveries:
   pending_expiry_days: 7
+
+# Gói export khi offboarding một tenant (bucket `dw-exports`,
+# `{tenant_id}/offboarding-<thời điểm ghi>.zip`). Từ 1.8.0 (Đạt quyết 2026-10-18).
+#
+# Gói chứa TOÀN BỘ dữ liệu của tenant, có dữ liệu cá nhân, và tồn tại để bàn
+# giao cho khách trước khi xoá. Trước bản này không gì xoá nó: offboarding xoá
+# sạch database rồi để lại một bản sao đầy đủ trong object storage, vô hạn.
+# 30 ngày kể từ lúc ghi là thời gian để bàn giao; hết hạn thì lane
+# `offboarding_exports_retention` xoá gói, mỗi gói một bản ghi audit trong
+# tenant của nó. Không có giá trị mặc định: thiếu khoá này thì file không nạp.
+offboarding_exports:
+  retain_days: 30
 
 # Trần mỗi lượt quét. Retention là kiểm soát dung lượng chứ không phải kiểm soát
 # tính đúng: một dòng sống quá hạn thêm một giờ không hại ai, còn một lệnh DELETE

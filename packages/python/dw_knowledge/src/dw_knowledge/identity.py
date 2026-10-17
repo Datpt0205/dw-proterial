@@ -70,5 +70,13 @@ def doc_key_for(
     return uuid.uuid5(NAMESPACE, f"dockey:{tenant_id}:{workspace_id}:{domain}:{name}")
 
 
+def document_storage_key(
+    *, tenant_id: uuid.UUID, workspace_id: uuid.UUID, document_id: uuid.UUID
+) -> str:
+    """Where a document version's text is stored. Ingest writes it here and the
+    version sweep deletes it from here, so the two cannot name different keys."""
+    return f"{tenant_id}/{workspace_id}/documents/{document_id}"
+
+
 def chunk_id_for(*, document_id: uuid.UUID, index_version: str, seq: int) -> uuid.UUID:
     return uuid.uuid5(NAMESPACE, f"chunk:{document_id}:{index_version}:{seq}")

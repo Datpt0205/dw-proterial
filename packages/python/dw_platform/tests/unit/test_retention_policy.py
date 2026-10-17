@@ -9,6 +9,7 @@ the next caller, so it is tested where it can actually fail.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -17,8 +18,10 @@ from dw_platform.retention_policy import (
     ChannelDeliveryRetention,
     CheckpointRetention,
     KnowledgeRetention,
+    OffboardingExportRetention,
     RetentionClass,
     RetentionPolicy,
+    load_retention_policy,
 )
 
 pytestmark = pytest.mark.unit
@@ -39,7 +42,9 @@ def _policy() -> RetentionPolicy:
             "ephemeral": RetentionClass(days=30, description="ngắn"),
             "legal_hold": RetentionClass(days=None, description="giữ vô hạn"),
         },
-        knowledge=KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
+        knowledge=KnowledgeRetention(
+            deleted_grace_days=30, orphan_evidence_grace_days=7, superseded_versions_kept=5
+        ),
         audit=AuditRetention(
             months_ahead=3,
             enforced=True,
@@ -47,6 +52,7 @@ def _policy() -> RetentionPolicy:
         ),
         checkpoints=CheckpointRetention(superseded_days=7, idle_thread_days=730),
         channel_deliveries=ChannelDeliveryRetention(pending_expiry_days=7),
+        offboarding_exports=OffboardingExportRetention(retain_days=30),
         batch_limit=100,
     )
 
@@ -111,3 +117,45 @@ def test_a_pending_delivery_term_is_at_least_a_day(days: int) -> None:
     could try it."""
     with pytest.raises(ValueError, match="pending_expiry_days"):
         ChannelDeliveryRetention(pending_expiry_days=days)
+
+
+POLICIES = Path(__file__).resolve().parents[5] / "configs" / "policies"
+
+
+def test_the_pinned_policy_carries_the_terms_dat_decided_on_2026_10_18() -> None:
+    """Offboarding export bundles go 30 days after they are written, and a
+    document keeps its newest five superseded versions (retention 1.8.0)."""
+    policy = load_retention_policy(POLICIES / "retention@1.8.0.yaml")
+    assert policy.policy_version == "1.8.0"
+    assert policy.offboarding_exports.retain_days == 30
+    assert policy.knowledge.superseded_versions_kept == 5
+
+
+@pytest.mark.parametrize("days", [0, -1, 366])
+def test_an_export_bundle_term_is_a_day_to_a_year(days: int) -> None:
+    """Zero would delete a bundle before anybody could hand it over; past a
+    year it is no longer a handover copy, just the tenant's data kept."""
+    with pytest.raises(ValueError, match="retain_days"):
+        OffboardingExportRetention(retain_days=days)
+
+
+@pytest.mark.parametrize("kept", [0, -1])
+def test_at_least_one_superseded_version_is_kept(kept: int) -> None:
+    """Zero would erase every document's history on the next pass."""
+    with pytest.raises(ValueError, match="superseded_versions_kept"):
+        KnowledgeRetention(
+            deleted_grace_days=30, orphan_evidence_grace_days=7, superseded_versions_kept=kept
+        )
+
+
+def test_neither_new_term_has_a_default() -> None:
+    """A file without them must not load: a default here would be a term
+    nobody wrote, and its absence would read as "never deleted" again."""
+    fields = _policy().model_dump()
+    del fields["offboarding_exports"]
+    with pytest.raises(ValueError, match="offboarding_exports"):
+        RetentionPolicy.model_validate(fields)
+    fields = _policy().model_dump()
+    del fields["knowledge"]["superseded_versions_kept"]
+    with pytest.raises(ValueError, match="superseded_versions_kept"):
+        RetentionPolicy.model_validate(fields)

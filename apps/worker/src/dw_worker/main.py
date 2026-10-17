@@ -45,7 +45,8 @@ from dw_connectors.ports import ChatSenderPort
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
 from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
-from dw_knowledge.retention import SqlKnowledgeRetention
+from dw_knowledge.retention import VERSIONS_LANE as KNOWLEDGE_VERSIONS_LANE
+from dw_knowledge.retention import SqlKnowledgeRetention, SqlSupersededVersionRetention
 from dw_memory.policy import MemoryWritePolicy
 from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
@@ -71,7 +72,10 @@ from dw_platform.adapters.persistence.notifications import (
     SqlNotificationRepository,
     SqlNotificationRetention,
 )
-from dw_platform.adapters.persistence.offboarding import SqlTenantOffboarding
+from dw_platform.adapters.persistence.offboarding import (
+    SqlOffboardingExportAudit,
+    SqlTenantOffboarding,
+)
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionMaintenance
 from dw_platform.adapters.persistence.repositories import (
@@ -120,6 +124,8 @@ from dw_worker.consumers.ingest import build_ingest_consumer
 from dw_worker.consumers.memory import memory_handlers
 from dw_worker.consumers.offboarding import INTERVAL_SECONDS as OFFBOARDING_INTERVAL_SECONDS
 from dw_worker.consumers.offboarding import TenantOffboardingLane, build_offboarding_consumer
+from dw_worker.consumers.offboarding_exports import LANE as OFFBOARDING_EXPORTS_LANE
+from dw_worker.consumers.offboarding_exports import OffboardingExportRetention
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
@@ -145,7 +151,7 @@ logger = logging.getLogger("dw_worker")
 
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
-RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.7.0.yaml"
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.8.0.yaml"
 # How long a processing job may run before the reaper takes it for a dead
 # worker's (Sales ticket 25). A job is one message: its scan, a few files read
 # in the reader sandbox (each killed at its own wall clock) and a model call or
@@ -426,6 +432,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # Ops hardening Phase 4. Needs object storage too, not just a database -
     # export/purge touch three buckets and the vector index alongside Postgres.
     offboarding_consumer: Callable[[], Awaitable[None]] | None = None
+    # The bundles that lane writes, deleted past `offboarding_exports.retain_days`
+    # (retention 1.8.0). With the lane, so only with object storage.
+    offboarding_exports_retention: RetentionPrunePort | None = None
+    # Superseded document versions beyond `knowledge.superseded_versions_kept`
+    # (retention 1.8.0). Only with object storage: a version is its vectors,
+    # its rows AND its stored file, and a host that cannot reach the file would
+    # leave that half behind.
+    knowledge_versions_retention: RetentionPrunePort | None = None
     # DW1's mailbox lane (Sales ticket 16): a database, object storage (DW1's
     # services are built whole, files included), a bound mailbox, and the
     # host's switch on.
@@ -552,6 +566,23 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     SqlChannelUpdateQueue(sessions), inbound
                 )
         if settings.s3_endpoint_url:
+            offboarding_exports_retention = OffboardingExportRetention(
+                exports=build_export_bucket(settings),
+                audit=SqlOffboardingExportAudit(
+                    session_factory=sessions, lane=OFFBOARDING_EXPORTS_LANE
+                ),
+                retain=timedelta(days=retention_policy.offboarding_exports.retain_days),
+                policy_version=retention_policy.policy_version,
+                batch_limit=retention_policy.batch_limit,
+                clock=clock,
+            )
+            knowledge_versions_retention = SqlSupersededVersionRetention(
+                session_factory=sessions,
+                policy=retention_policy,
+                clock=clock,
+                vector_index=build_vector_index(settings),
+                object_storage=build_object_storage(settings),
+            )
             offboarding_consumer = build_offboarding_consumer(
                 TenantOffboardingLane(
                     store=SqlTenantOffboarding(session_factory=sessions),
@@ -713,6 +744,18 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     if offboarding_consumer is not None:
         registry.register(
             "offboarding", offboarding_consumer, interval_seconds=OFFBOARDING_INTERVAL_SECONDS
+        )
+    if offboarding_exports_retention is not None:
+        registry.register(
+            OFFBOARDING_EXPORTS_LANE,
+            build_retention_consumer(offboarding_exports_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if knowledge_versions_retention is not None:
+        registry.register(
+            KNOWLEDGE_VERSIONS_LANE,
+            build_retention_consumer(knowledge_versions_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     return registry
 
