@@ -51,6 +51,25 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
+- **2026-10-18, the platform stamps its own approval types** (Đạt; closes
+  `sales.md` "Sales roles decide unstamped approvals"; `89e33d6`).
+  `memory.review` carries `required_scope = 'memory.review'`
+  (`dw_memory.review.review_request`); the scope is granted to `approver`,
+  `manager`, `director` and permission set `approver_boost` by migration
+  `445f93c2ea2a` (after `271bdb87af91`), which also stamps existing rows and
+  adds `ck_approval_requests_memory_review_stamped`. `settle_review` reads as
+  the decider holding the stamp (`decide` proved it). Consequence:
+  `platform_admin` without the scope no longer decides or sees a memory
+  review (ADR 0011's rule for every stamped type). Unit tests in
+  `apps/api/tests/unit/test_memory_review_wiring.py` (mutation-checked);
+  integration tests owed a Docker run: `apps/worker/tests/integration/`
+  `test_memory_review_db.py` (Sales role refused, catalogue, CHECK) and
+  `test_memory_review_stamp_migration.py`, plus the updated case in
+  `dw_sales/tests/integration/test_sales_constraints.py`. Still unstamped:
+  the runtime's tool approvals (`<approval_type_prefix><tool>`,
+  `workflow.review`), owned by the context whose agent raises them; none is
+  configured in production today.
+
 - **2026-10-15, batch merge** (agent, Đạt: "làm luôn"; `sales.md` State has
   the merge). Platform items closed, each with its ticket updated:
     - `KeycloakTokenVerifier` tested against a local RS256 key and JWKS
