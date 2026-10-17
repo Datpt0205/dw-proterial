@@ -510,7 +510,7 @@ async def test_a_sales_approval_without_a_sales_stamp_is_refused(
 
 @pytest.mark.parametrize(
     ("approval_type", "scope"),
-    [("sales.quote", "sales.quote.approve"), ("memory.review", None)],
+    [("sales.quote", "sales.quote.approve"), ("memory.review", "memory.review"), ("demo.x", None)],
 )
 async def test_a_stamped_sales_approval_and_any_other_type_are_written(
     small_run: OrderRun,

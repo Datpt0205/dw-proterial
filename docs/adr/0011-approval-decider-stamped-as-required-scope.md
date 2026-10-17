@@ -114,3 +114,28 @@ reading.
 Considered and rejected: filtering in the route after the read (a page of
 the inbox would come back short, and the decision would still answer 403);
 hiding stamped requests in the page only (hiding is not authorization).
+
+## Amendment 2026-10-18: the platform stamps its own approval types
+
+Decided by Đạt. NULL still means "`approvals.decide` alone", and that is the
+widening: a context that gives its own roles `approvals.decide` for its
+stamped types (Sales did, `ac31ff0f2087`) gives them every unstamped request
+in the workspace too. So the platform does not leave its own types unstamped.
+
+- **`memory.review` is stamped `memory.review`** (`dw_memory.review.review_request`),
+  a platform scope held by `approver`, `manager`, `director` and the
+  permission set `approver_boost`, and by no context's role (migration
+  `445f93c2ea2a`). The database refuses the type with any other stamp or
+  none (`ck_approval_requests_memory_review_stamped`), the shape of
+  `ck_approval_requests_sales_stamped`.
+- **The worker reads as the decider who held the stamp.** This replaces "a
+  `memory.review` is never stamped, so it is found" above:
+  `MemoryService.settle_review` acts on the event `decide` wrote after checking
+  `approvals.decide` and the stamp, so it reads with that authority stated, not
+  re-derived, through the same `ApprovalAudience`; it sees what it saw before,
+  the workspace's memory reviews, and refuses any other type.
+- A new type a platform package opens is stamped when it is added. Not yet
+  stamped: the agent runtime's tool approvals (`<approval_type_prefix><tool>`,
+  and `workflow.review` when an interrupt names no type), whose prefix belongs
+  to the context whose agent raises them; no production agent spec configures
+  one today.
