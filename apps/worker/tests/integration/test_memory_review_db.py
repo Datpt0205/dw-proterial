@@ -19,6 +19,7 @@ from typing import Any, cast
 import pytest
 from pg_test_db import DatabaseUrls
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -29,7 +30,12 @@ from dw_knowledge.adapters.evidence_store import SqlEvidenceStore
 from dw_knowledge.contracts import EvidenceRef
 from dw_memory.contracts import MemoryType, WriteDecision
 from dw_memory.policy import MemoryCandidate, MemoryWritePolicy
-from dw_memory.review import MEMORY_REVIEW, MEMORY_REVIEW_DECIDED, MemoryReviewGuard
+from dw_memory.review import (
+    MEMORY_REVIEW,
+    MEMORY_REVIEW_DECIDED,
+    MEMORY_REVIEW_SCOPE,
+    MemoryReviewGuard,
+)
 from dw_memory.service import MemoryService
 from dw_platform.adapters.persistence.outbox_drain import SqlOutboxDrain
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
@@ -169,7 +175,7 @@ def access(
     *,
     principal: uuid.UUID | None = None,
     clearance: str = "restricted",
-    scopes: frozenset[str] = frozenset({"approvals.decide", "memory.read"}),
+    scopes: frozenset[str] = frozenset({"approvals.decide", "memory.read", MEMORY_REVIEW_SCOPE}),
     tenant: uuid.UUID | None = None,
     workspace: uuid.UUID | None = None,
 ) -> AccessContext:
@@ -283,6 +289,8 @@ async def test_a_held_candidate_opens_one_pending_review_without_its_content(
     assert row.approval_type == MEMORY_REVIEW
     assert row.status == "pending"
     assert row.run_id is None
+    # Stamped: `approvals.decide` alone, which the Sales roles hold, does not decide it.
+    assert row.required_scope == MEMORY_REVIEW_SCOPE
     assert row.requested_by == tenancy.proposer
     # Identifiers and the label: the inbox shows this to every holder of
     # `approvals.read`, whatever their clearance.
@@ -413,6 +421,71 @@ async def test_the_person_whose_run_proposed_it_cannot_approve_it(
         await decide(lane, approval_id, access(tenancy, principal=tenancy.proposer), approve=True)
 
     await _still_pending(lane, tenancy, approval_id)
+
+
+# What a Sales decider holds besides `member` (`ac31ff0f2087` gave each of them
+# `approvals.decide`): a role of a context, not one of the platform's deciders.
+SALES_PIC = frozenset({"approvals.decide", "sales.case.read", "sales.order.cross_check"})
+
+
+async def test_a_sales_role_with_approvals_decide_cannot_decide_it(
+    lane: Lane, tenancy: Tenancy
+) -> None:
+    """Not found, not refused: a stamped request its viewer may not decide is
+    absent to them (ADR 0011 amendment), so nothing confirms it exists."""
+    approval_id = await hold(lane, tenancy)
+
+    for approve in (True, False):
+        with pytest.raises(NotFoundError):
+            await decide(lane, approval_id, access(tenancy, scopes=SALES_PIC), approve=approve)
+
+    await _still_pending(lane, tenancy, approval_id)
+    assert await items(lane, tenancy) == []
+
+
+async def test_the_catalogue_gives_the_review_scope_to_the_platforms_deciders_only(
+    lane: Lane,
+) -> None:
+    async with lane.migrator() as session:
+        holders = {
+            row.key
+            for row in await session.execute(
+                text(
+                    "SELECT key FROM platform.roles WHERE scopes ? :s"
+                    " UNION ALL SELECT key FROM platform.permission_sets WHERE scopes ? :s"
+                ),
+                {"s": MEMORY_REVIEW_SCOPE},
+            )
+        }
+    assert holders == {"approver", "manager", "director", "approver_boost"}
+
+
+@pytest.mark.parametrize("stamp", [None, "approvals.decide", "sales.quote.approve"])
+async def test_the_database_refuses_a_memory_review_not_stamped_for_memory(
+    lane: Lane, tenancy: Tenancy, stamp: str | None
+) -> None:
+    """As the application role, whatever code writes it: the stamp is the
+    database's rule, not only `review_request`'s."""
+    with pytest.raises(IntegrityError, match="ck_approval_requests_memory_review_stamped"):
+        async with lane.app() as session, session.begin():
+            await session.execute(
+                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tenancy.tenant)}
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO platform.approval_requests"
+                    " (id, tenant_id, workspace_id, approval_type, requested_by, payload,"
+                    "  status, required_scope)"
+                    " VALUES (gen_random_uuid(), :t, :w, :type, :u, '{}'::jsonb, 'pending', :s)"
+                ),
+                {
+                    "t": tenancy.tenant,
+                    "w": tenancy.workspace,
+                    "type": MEMORY_REVIEW,
+                    "u": tenancy.proposer,
+                    "s": stamp,
+                },
+            )
 
 
 # ------------------------------------------------- reading the content --

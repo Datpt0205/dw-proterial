@@ -45,7 +45,7 @@ from dw_memory.contracts import MEMORY_SCHEMA_VERSION, MemoryItem, WriteDecision
 from dw_memory.policy import MemoryCandidate, MemoryWritePolicy, PolicyOutcome
 from dw_memory.ports import EvidenceStorePort
 from dw_memory.ranking import MemoryRankerPort, MemoryVectorPurgePort, rank_by
-from dw_memory.review import MEMORY_REVIEW
+from dw_memory.review import MEMORY_REVIEW, MEMORY_REVIEW_SCOPE, review_request
 from dw_platform.adapters.persistence.keyset import after_position, newest_first
 from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
@@ -354,25 +354,18 @@ class MemoryService:
         No run: the run that produced the fact has finished, and an approval
         bound to it would make `decide` look for a run waiting on it. The payload
         is identifiers and the label: the inbox shows it to every holder of
-        `approvals.read`, and the content is served apart, to a clearance that
-        covers it (`get_candidate`). The label is also what
-        `require_clearance_for_review` checks the decider against.
+        `approvals.read` who may see it, and the content is served apart, to a
+        clearance that covers it (`get_candidate`). Stamped with
+        `MEMORY_REVIEW_SCOPE` (`review_request`), so only a holder of it decides.
         """
         approval_id = self.id_generator.new_uuid()
         await SqlApprovalRepository(session).add(
-            ApprovalRequest(
-                id=approval_id,
-                tenant_id=TenantId(context.tenant_id),
-                workspace_id=WorkspaceId(context.workspace_id),
-                approval_type=MEMORY_REVIEW,
-                requested_by=UserId(context.principal_id),
+            review_request(
+                approval_id=approval_id,
+                context=context,
+                candidate_id=candidate_id,
+                candidate=candidate,
                 reason=outcome.reason,
-                payload={
-                    "candidate_id": str(candidate_id),
-                    "worker_id": candidate.worker_id,
-                    "memory_type": candidate.memory_type.value,
-                    "classification": candidate.classification,
-                },
             )
         )
         return approval_id
@@ -400,14 +393,23 @@ class MemoryService:
         item: MemoryItem | None = None
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT, {"tenant_id": str(context.tenant_id)})
-            # Read as the decider with no scopes (the worker's context), so the
-            # visibility rule of ADR 0011-approval-decider-stamped-as-required-scope applies to this
-            # read as to any other: a `memory.review` is never stamped (`_open_review`), so it is
-            # seen.
+            # Read as the decider as they were when deciding: `decide` checked
+            # `approvals.decide` and the `memory.review` stamp before it wrote the
+            # event this acts on, in the same transaction. The worker's context
+            # carries no scopes (it re-derives no authority), so the audience
+            # states the one the decision proved, through the same visibility
+            # rule as any other read (ADR 0011-approval-decider-stamped-as-required-scope). It
+            # sees what this read saw before the type was stamped: memory reviews
+            # of the workspace, and the type check below refuses anything else.
             request = await SqlApprovalRepository(session).get(
                 approval_id,
                 workspace_id=context.workspace_id,
-                audience=ApprovalAudience(context=context, holds_decide=False),
+                audience=ApprovalAudience(
+                    context=context.model_copy(
+                        update={"scopes": context.scopes | {MEMORY_REVIEW_SCOPE}}
+                    ),
+                    holds_decide=True,
+                ),
             )
             if (
                 request is None
