@@ -114,3 +114,38 @@ test("the shell is reached by its Vietnamese names", async ({ page }) => {
     page.getByRole("button", { name: "Gửi phản hồi" }),
   ).toBeVisible();
 });
+
+test("the Sales bar fits one row, its pages folded into submenus", async ({
+  page,
+}) => {
+  // Sales ticket 39: nine pages overflowed into "…" from 992 to past 1600 px.
+  // The Sales head sees every Sales page, the longest bar any role gets.
+  await signIn(page, "dev|giang.do");
+  await page.goto("/sales");
+  const width = page.viewportSize()!.width;
+
+  if (width < 992) {
+    // The drawer lists every page, every section open.
+    await page.getByRole("button", { name: "Mở menu" }).click();
+    const drawer = page
+      .getByRole("dialog")
+      .getByRole("navigation", { name: "Điều hướng chính" });
+    for (const label of ["Đơn hàng", "Kiểm chéo & duyệt", "Mẫu PO", "Quy tắc"])
+      await expect(
+        drawer.getByRole("link", { name: label, exact: true }),
+      ).toBeVisible();
+    return;
+  }
+
+  const nav = page.getByRole("navigation", { name: "Điều hướng chính" });
+  // An entry antd moved into "…" is aria-hidden, so it has no role here.
+  for (const name of [/^Việc cần làm/, /^Hộp thư/, /^Hồ sơ$/, /^Quản lý$/])
+    await expect(nav.getByRole("menuitem", { name })).toBeVisible();
+  await expect(nav.locator(".ant-menu-overflow-item-rest")).toBeHidden();
+
+  // A submenu opens from the keyboard, and its pages are links.
+  await nav.getByRole("menuitem", { name: /^Hồ sơ$/ }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("link", { name: "Đơn hàng", exact: true }).click();
+  await page.waitForURL("**/sales/orders");
+});

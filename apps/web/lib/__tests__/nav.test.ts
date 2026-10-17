@@ -18,12 +18,13 @@ function viewer(scopes: string[], roles: string[] = ["member"]): NavViewer {
   };
 }
 
-function labels(entries: NavEntry[]): string[] {
+/** Every label in order, an entry inside a group as "Group › Entry". */
+function labels(entries: readonly NavEntry[]): string[] {
   return entries.flatMap((entry) =>
     isNavGroup(entry)
       ? [
           entry.label,
-          ...entry.items.map((item) => `${entry.label} › ${item.label}`),
+          ...labels(entry.items).map((label) => `${entry.label} › ${label}`),
         ]
       : [entry.label],
   );
@@ -97,17 +98,37 @@ function salesPages(persona: string): string[] {
   const sales = visibleNav(NAV, viewer(scopes, roles)).find(
     (entry) => isNavGroup(entry) && entry.key === "sales",
   );
-  return sales && isNavGroup(sales) ? sales.items.map((item) => item.href) : [];
+  return sales ? navPages([sales]).map((item) => item.href) : [];
 }
+
+const SALES = NAV.find((entry) => isNavGroup(entry) && entry.key === "sales")!;
 
 describe("the nav registry", () => {
   it("carries the Sales pages as one group", () => {
-    const sales = NAV.find(
-      (entry) => isNavGroup(entry) && entry.key === "sales",
-    );
-    expect(
-      sales && isNavGroup(sales) && sales.items.map((item) => item.href),
-    ).toEqual(SALES_PAGES);
+    expect(navPages([SALES]).map((item) => item.href)).toEqual(SALES_PAGES);
+  });
+
+  it("folds the Sales pages into submenus by the work, counts kept on the bar", () => {
+    // Sales ticket 39: nine pages overflowed the bar at every desktop width.
+    expect(labels([SALES])).toEqual([
+      "Sales",
+      "Sales › Việc cần làm",
+      "Sales › Hộp thư",
+      "Sales › Hồ sơ",
+      "Sales › Hồ sơ › Đơn hàng",
+      "Sales › Hồ sơ › Báo giá",
+      "Sales › Hồ sơ › Kiểm chéo & duyệt",
+      "Sales › Quản lý",
+      "Sales › Quản lý › Mẫu PO",
+      "Sales › Quản lý › Quy tắc",
+      "Sales › Quản lý › Dữ liệu giả lập",
+      "Sales › Quản lý › Tổng quan quy trình",
+    ]);
+    // A count inside a closed submenu is a count nobody sees.
+    const top = isNavGroup(SALES) ? SALES.items : [];
+    const counted = navPages([SALES]).filter((page) => page.badgeKey);
+    expect(counted.length).toBeGreaterThan(0);
+    for (const page of counted) expect(top).toContain(page);
   });
 
   it("lists every page once, groups opened up, for what lists pages", () => {
@@ -125,8 +146,8 @@ describe("visibleNav", () => {
       expect.arrayContaining([
         "Sales",
         "Sales › Việc cần làm",
-        "Sales › Đơn hàng",
-        "Sales › Báo giá",
+        "Sales › Hồ sơ › Đơn hàng",
+        "Sales › Hồ sơ › Báo giá",
       ]),
     );
     expect(labels(visibleNav(NAV, viewer(["approvals.read"])))).not.toContain(
@@ -146,11 +167,7 @@ describe("visibleNav", () => {
   });
 
   it("keys every Sales page to a scope the API checks on its reads", () => {
-    const sales = NAV.find(
-      (entry) => isNavGroup(entry) && entry.key === "sales",
-    );
-    const scopes =
-      sales && isNavGroup(sales) ? sales.items.map((item) => item.scope) : [];
+    const scopes = navPages([SALES]).map((item) => item.scope);
     expect(new Set(scopes)).toEqual(
       new Set([
         "sales.case.read",
@@ -175,10 +192,63 @@ describe("visibleNav", () => {
         (entry) => isNavGroup(entry) && entry.key === "admin",
       );
     const shown = admin(["platform.members.read"]);
-    expect(
-      shown && isNavGroup(shown) && shown.items.map((item) => item.href),
-    ).toEqual(["/admin", "/admin/feedback"]);
+    expect(shown && navPages([shown]).map((item) => item.href)).toEqual([
+      "/admin",
+      "/admin/feedback",
+    ]);
     expect(admin([])).toBeUndefined();
+  });
+
+  /** The bar for these scopes: labels, a submenu's pages as "Group › Page". */
+  function salesBar(scopes: string[]): string[] {
+    return labels(barNav(visibleNav(NAV, viewer(scopes))).entries);
+  }
+
+  it("hides a submenu whose pages are all hidden", () => {
+    // Overview and rules but no case page: "Quản lý" with two, no "Hồ sơ".
+    const bar = barNav(
+      visibleNav(NAV, viewer(["sales.overview.read", "sales.rules.propose"])),
+    );
+    expect(bar.context?.key).toBe("sales");
+    expect(labels(bar.entries)).toEqual([
+      "Quản lý",
+      "Quản lý › Quy tắc",
+      "Quản lý › Tổng quan quy trình",
+    ]);
+  });
+
+  it("shows a submenu while one of its pages is visible", () => {
+    // Without sales.case.read the case pages go and "Hồ sơ" with them;
+    // without sales.overview.read "Quản lý" keeps its other pages.
+    const shown = salesBar(PIC.filter((s) => s !== "sales.overview.read"));
+    expect(shown).toEqual(
+      expect.arrayContaining([
+        "Hồ sơ",
+        "Hồ sơ › Đơn hàng",
+        "Quản lý",
+        "Quản lý › Mẫu PO",
+      ]),
+    );
+    expect(shown).not.toContain("Quản lý › Tổng quan quy trình");
+    const noRules = salesBar(PIC.filter((s) => s !== "sales.rules.propose"));
+    expect(noRules).toContain("Quản lý");
+    expect(noRules).not.toContain("Quản lý › Quy tắc");
+  });
+
+  it("draws a submenu left with one page as that page, never a submenu of one", () => {
+    // ha.vu sees the overview alone: on the bar, not behind "Quản lý".
+    expect(salesBar(PERSONAS["ha.vu (sales_viewer)"]!.scopes)).toEqual([
+      "Tổng quan quy trình",
+    ]);
+  });
+
+  it("keeps a top-level group a group, even with one page left", () => {
+    // barNav reads `context` and `administration` from it.
+    const shown = visibleNav(NAV, viewer(["platform.workspaces.write"]));
+    const admin = shown.find((e) => isNavGroup(e) && e.key === "admin");
+    expect(admin && navPages([admin]).map((p) => p.href)).toEqual([
+      "/admin/workspaces",
+    ]);
   });
 
   it("shows the provisioning area to a Platform Operator only", () => {
@@ -224,9 +294,7 @@ describe("barNav", () => {
   ])("is the Sales pages alone for %s", (persona, pages) => {
     const { entries, context } = bar(persona);
     expect(context?.key).toBe("sales");
-    expect(entries.map((entry) => (entry as { href: string }).href)).toEqual(
-      pages,
-    );
+    expect(navPages(entries).map((page) => page.href)).toEqual(pages);
   });
 
   it("keeps the platform's nav for someone without a context", () => {

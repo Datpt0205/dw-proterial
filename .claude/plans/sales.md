@@ -48,7 +48,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
       the worker image rebuild, the Đ-after-D collation on Postgres 16.15, a
       real Keycloak expiry, `make web-screens`. The walk is blocking since
       2026-10-15 (ticket 18: six consecutive green `sales-walk` jobs).
-    - **Owed to Đạt.** The bar layout (ticket 39); the ClamAV bump's
+    - **Owed to Đạt.** The ClamAV bump's
       Actions setting (ticket 25); the `PUBLIC_REPO_DENYLIST` secret (ticket
       26); the Open items below dated 2026-10-15.
 
@@ -598,9 +598,10 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   returns `role_names` and the effective scopes (roles + permission sets,
   via `effective_scopes`); OpenAPI and TS types regenerated.
   Left different from the prototype: lists on white tables; no command
-  palette; the bar overflows "…" between 992 and ~1250px (re-measured
-  2026-10-15: from 992 to beyond 1600 px with nine pages; the bar needs
-  about 1580 px; Đạt's choice of layout, ticket 39); customer names come
+  palette; the bar overflowed "…" from 992 to beyond 1600 px with nine
+  pages (2026-10-15). It now folds them into the "Hồ sơ" and "Quản lý"
+  submenus (ticket 39, `f84643e`); the visual check at 992-1600 px is still
+  owed. Customer names come
   from the mock master data (a code it lacks shows the code).
 - Dev: realm redirect URIs allow port 3300 only; `.env` sets
   `DW_WEB_PORT=3300`, but `scripts/dev.sh` defaults to 3000, so a run
