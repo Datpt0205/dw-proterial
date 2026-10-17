@@ -123,7 +123,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
     `spend_guard_retention` is the fifth, and reads no policy file at all —
     unlike audit/memory/knowledge, its window answers no compliance question,
     so it is a technical constant in code, not a term in
-    `retention@1.7.0.yaml` (see `SqlSpendGuardRetention`'s docstring).
+    `retention@1.8.0.yaml` (see `SqlSpendGuardRetention`'s docstring).
     `notifications_retention` is the sixth, on the same footing: the in-app
     inbox's 90 days live in `platform.prune_notifications()` itself.
     `checkpoint_retention` is the seventh, and reads the policy file again:
@@ -174,6 +174,28 @@ def test_the_offboarding_lane_needs_object_storage_too_not_just_a_database() -> 
         s3_endpoint_url="http://localhost:9000",
     )
     assert "offboarding" in build_registry(db_and_s3).all()
+
+
+def test_the_retention_lanes_that_delete_stored_files_need_object_storage() -> None:
+    """Retention 1.8.0: offboarding export bundles past their term, and
+    superseded document versions beyond the kept count. Both delete a file in
+    object storage as well as rows, so neither runs half-wired on a host
+    without it; with it, both run hourly like every retention lane."""
+    from dw_worker.consumers.retention import INTERVAL_SECONDS
+
+    lanes = {"offboarding_exports_retention", "retention_knowledge_versions"}
+    db_only = bare_settings(database_url="postgresql+asyncpg://dw:dw@localhost/dw")
+    assert lanes.isdisjoint(build_registry(db_only).all())
+
+    registry = build_registry(
+        bare_settings(
+            database_url="postgresql+asyncpg://dw:dw@localhost/dw",
+            s3_endpoint_url="http://localhost:9000",
+        )
+    )
+    assert lanes <= set(registry.all())
+    for lane in lanes:
+        assert registry.interval_for(lane, 1.0) == INTERVAL_SECONDS
 
 
 def test_dw1s_mailbox_lane_needs_a_database_object_storage_and_a_mailbox() -> None:

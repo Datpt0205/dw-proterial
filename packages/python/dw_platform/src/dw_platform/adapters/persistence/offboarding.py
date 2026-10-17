@@ -27,6 +27,12 @@ itself the cross-tenant read `app.tenant_id` scoping exists to prevent — so
 it runs under `app.worker_drain`, like the retention sweep, but only for that
 one query. Migration `dd1db8ca43a2`.
 
+`platform.users` has no tenant and no policy, so the catalog never lists it.
+The purge deletes from it only the tenant's own service accounts, matched by
+the subject `service_subject` gave them (sales ticket 16, decided by Đạt
+2026-10-18); a person's row is never touched, since a person may belong to
+other tenants.
+
 What this does NOT do: touch Qdrant (either collection: knowledge chunks or
 memory vectors) or object storage. Both live behind ports
 this package may not import (import-linter's "Vector/object-storage SDKs only
@@ -37,15 +43,34 @@ separately, calling `export_rows`/`purge_rows` here for the Postgres half.
 
 from __future__ import annotations
 
+import json
 import re
+import uuid
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-__all__ = ["ExportedTable", "SqlTenantOffboarding"]
+from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.application.identity import service_subject_bounds
+from dw_platform.domain.audit import lane_audit_event
+
+__all__ = [
+    "EXPORT_DELETED_ACTION",
+    "PURGED_ACTION",
+    "ExportedTable",
+    "SqlOffboardingExportAudit",
+    "SqlTenantOffboarding",
+]
+
+# The purge's own record, and the bundle deletion that follows it 30 days on.
+PURGED_ACTION = "tenant.offboarding.purged"
+EXPORT_DELETED_ACTION = "tenant.offboarding.export_deleted"
 
 _SET_TENANT = text("SELECT set_config('app.tenant_id', :tenant_id, true)")
 # Every workspace of the one tenant, for this transaction only (`true`): a pooled
@@ -98,7 +123,7 @@ _CATALOG_EXPORTABLE = text(_CATALOG_COLUMNS + " ORDER BY schemaname, tablename")
 # Only the ones `dw_app` may also DELETE from. `platform.audit_events` is
 # exportable but not this: `0001_platform_grants.sql` revokes UPDATE/DELETE
 # from `dw_app` there on purpose (append-only; the audit term is
-# `retention@1.7.0.yaml`'s own decision, not offboarding's to shorten). Found
+# `retention@1.8.0.yaml`'s own decision, not offboarding's to shorten). Found
 # by running this against a real database rather than assumed — the same
 # revoke could apply to a table added later, and asking `has_table_privilege`
 # instead of hand-naming `audit_events` catches that one too.
@@ -190,7 +215,8 @@ class SqlTenantOffboarding:
     async def purge_rows(self, tenant_id: UUID) -> None:
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_TENANT_ALL_WORKSPACES, {"tenant_id": str(tenant_id)})
-            await self._record_purge_audit(session, tenant_id)
+            service_users = await self._service_users(session, tenant_id)
+            await self._record_purge_audit(session, tenant_id, service_users)
             tables = await self._purgeable_tables(session)
             ordered_first = [t for t in _ORDERED_FIRST if t in tables]
             rest = [t for t in tables if t not in _ORDERED_FIRST]
@@ -199,15 +225,50 @@ class SqlTenantOffboarding:
                     text(f"DELETE FROM {_quoted(schema, table)} WHERE tenant_id = :t"),  # nosec B608
                     {"t": str(tenant_id)},
                 )
+            if service_users:
+                # Last: their memberships went with the tenant's tables above,
+                # and what still points at a user row cascades or nulls
+                # (external identities, link nonces, notifications).
+                await session.execute(
+                    text("DELETE FROM platform.users WHERE id = ANY(:ids)"),
+                    {"ids": service_users},
+                )
 
-    async def _record_purge_audit(self, session: AsyncSession, tenant_id: UUID) -> None:
+    async def _service_users(self, session: AsyncSession, tenant_id: UUID) -> list[UUID]:
+        """The tenant's own service accounts in `platform.users` (sales ticket 16).
+
+        `platform.users` is the identity plane: no tenant column, no row
+        security, and a person's row is shared by every tenant they belong to,
+        so the catalog-driven purge above never reaches it. Provisioning creates
+        one row per context service account per tenant
+        (`ProvisioningService.create_tenant`), and that row's subject names its
+        tenant (`service_subject`), which is the whole test here. Not "users
+        with a membership in this tenant": a person is one, and a resumed pass
+        finds the memberships already gone. A sign-in never resolves a
+        `service|` subject (`ServiceSubjectsRefused`), so no person holds one.
+        """
+        prefix, suffix = service_subject_bounds(tenant_id)
+        rows = await session.execute(
+            text(
+                "SELECT id FROM platform.users"
+                " WHERE starts_with(subject, :prefix)"
+                "   AND right(subject, :suffix_length) = :suffix"
+                " ORDER BY id"
+            ),
+            {"prefix": prefix, "suffix": suffix, "suffix_length": len(suffix)},
+        )
+        return [row.id for row in rows]
+
+    async def _record_purge_audit(
+        self, session: AsyncSession, tenant_id: UUID, service_users: list[UUID]
+    ) -> None:
         """A row in `platform.audit_events` for the one action here that
         cannot be undone — written first, in the same transaction as the
         first delete, so the record survives even if this pass crashes right
         after. Safe to be the first delete-adjacent write: `audit_events`
         is exportable but never purgeable (`dw_app` has no DELETE there — see
         `_CATALOG_PURGEABLE`), so this row outlives every other table this
-        pass empties, for as long as `retention@1.7.0.yaml`'s own term says.
+        pass empties, for as long as `retention@1.8.0.yaml`'s own term says.
 
         `workspace_id`/`actor_id` are NOT NULL on `audit_events` and this
         pass has neither on hand directly, so both are looked up: any one of
@@ -220,6 +281,9 @@ class SqlTenantOffboarding:
         method exists to fulfil, and a missing "who asked" is a worse outcome
         to trade it against than a missing audit row for an edge case that
         should not occur.
+
+        `details.service_user_ids` names the tenant's service accounts this
+        pass deletes from `platform.users`, which no export holds.
         """
         workspace_id = await session.scalar(
             text("SELECT id FROM platform.workspaces WHERE tenant_id = :t LIMIT 1"),
@@ -239,13 +303,15 @@ class SqlTenantOffboarding:
                 "INSERT INTO platform.audit_events"
                 " (id, tenant_id, workspace_id, actor_id, action, resource_type,"
                 "  resource_id, details, occurred_at)"
-                " VALUES (gen_random_uuid(), :t, :w, :actor, 'tenant.offboarding.purged',"
-                "  'tenant', :resource_id, '{}', now())"
+                " VALUES (gen_random_uuid(), :t, :w, :actor, :action,"
+                "  'tenant', :resource_id, CAST(:details AS jsonb), now())"
             ),
             {
                 "t": str(tenant_id),
                 "w": workspace_id,
                 "actor": requested_by,
+                "action": PURGED_ACTION,
+                "details": json.dumps({"service_user_ids": [str(u) for u in service_users]}),
                 # Same value as :t, textually — a separate bind name because
                 # asyncpg infers one type per parameter name and tenant_id
                 # (uuid) and resource_id (text) disagree on it.
@@ -317,3 +383,72 @@ class SqlTenantOffboarding:
                     "tenant_id": str(tenant_id),
                 },
             )
+
+
+@dataclass(frozen=True)
+class SqlOffboardingExportAudit:
+    """The audit half of deleting an offboarding export bundle past its term.
+
+    The bundle lives in object storage, which this package may not reach; the
+    worker's `offboarding_exports_retention` lane holds the bucket and hands the
+    deletion in as `delete`. It runs INSIDE the transaction that writes its
+    audit row (ADR 0011-a-background-lane-audits-as-itself): if the row cannot
+    be written the bundle is not deleted, and if the deletion fails the row
+    rolls back with it.
+
+    `audit_events.workspace_id` is NOT NULL, and by now the purge has removed
+    every workspace of the tenant. The row goes in the workspace the purge's own
+    record (`PURGED_ACTION`) names, so the two read side by side; a tenant
+    whose purge never ran (a failed request) still has its workspaces, and one
+    of those is used. With neither there is nothing honest to record against,
+    so the bundle is kept and `False` returned for the caller to count.
+    """
+
+    session_factory: async_sessionmaker[AsyncSession]
+    # The worker registry name of the lane deleting: its actor on the log.
+    lane: str
+
+    async def delete_audited(
+        self,
+        tenant_id: UUID,
+        export_key: str,
+        *,
+        occurred_at: datetime,
+        details: Mapping[str, object],
+        delete: Callable[[], Awaitable[None]],
+    ) -> bool:
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_SET_TENANT, {"tenant_id": str(tenant_id)})
+            workspace_id = await session.scalar(
+                text(
+                    "SELECT workspace_id FROM platform.audit_events"
+                    " WHERE tenant_id = :t AND action = :action"
+                    " ORDER BY occurred_at DESC LIMIT 1"
+                ),
+                {"t": str(tenant_id), "action": PURGED_ACTION},
+            )
+            if workspace_id is None:
+                workspace_id = await session.scalar(
+                    text(
+                        "SELECT id FROM platform.workspaces WHERE tenant_id = :t"
+                        " ORDER BY created_at, id LIMIT 1"
+                    ),
+                    {"t": str(tenant_id)},
+                )
+            if workspace_id is None:
+                return False
+            await SqlAuditRepository(session).append(
+                lane_audit_event(
+                    lane=self.lane,
+                    event_id=uuid.uuid4(),
+                    tenant_id=TenantId(tenant_id),
+                    workspace_id=WorkspaceId(workspace_id),
+                    action=EXPORT_DELETED_ACTION,
+                    resource_type="offboarding_export",
+                    resource_id=export_key,
+                    occurred_at=occurred_at,
+                    details=dict(details),
+                )
+            )
+            await delete()
+        return True
