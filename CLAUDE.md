@@ -360,7 +360,9 @@ Use it where a tool's output would be large: a test or CI log, a long
 document, a sweep over many files, summarised in its sandbox so only the
 answer enters the context. It saves context, not judgement: it does not pick
 what a task needs to read. `ctx_insight` and `ctx_upgrade` reach the internet;
-neither belongs on a customer's on-premises host.
+neither belongs on a customer's on-premises host. Its first start through `npx` measured
+25 s on 2026-10-18, against Claude Code's default 30 s connect timeout, so
+`.claude/settings.json` sets `MCP_TIMEOUT` to 90 s.
 
 ### Issue tracker
 

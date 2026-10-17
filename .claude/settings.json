@@ -36,6 +36,9 @@
       }
     ]
   },
+  "env": {
+    "MCP_TIMEOUT": "90000"
+  },
   "enabledMcpjsonServers": ["context-mode"],
   "enabledPlugins": {
     "mattpocock-skills@claude-plugins-official": true
