@@ -27,3 +27,12 @@ export const FONT_VARIABLE = {
   /** JetBrains Mono: codes and identifiers. */
   mono: "--font-dw-mono",
 } as const;
+
+/**
+ * The two seeds a server route needs without the theme: the installed app's
+ * manifest (`apps/web/app/manifest.ts`) colours its title bar and splash with
+ * them. `theme.ts` seeds antd from these same constants, so each value has one
+ * owner; it is a client module, and a server route cannot read its values.
+ */
+export const PRIMARY_COLOR = "#006edc";
+export const PAGE_BACKGROUND = "#f5f5f7";

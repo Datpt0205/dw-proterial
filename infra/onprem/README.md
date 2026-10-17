@@ -94,7 +94,7 @@ and for that it gives nothing a Sales or Purchasing user needs.
 **What this requires:**
 - **HTTPS on the LAN.** Caddy with `DW_CADDY_LOCAL_CERTS=1` issues certificates from its own CA. Proterial's IT pushes that root certificate to the PCs once, through Group Policy. Without that, browsers warn and refuse to install the app.
 - **Hostnames in the plant's DNS** for `DW_WEB_HOST`, `DW_API_HOST` and `DW_AUTH_HOST`.
-- **A web manifest** in `apps/web`. It is not there yet.
+- **A web manifest.** It is in place (`apps/web/app/manifest.ts` and the icons in `public/icons`), and its colours come from the theme. Nobody has installed the app on a real PC yet.
 
 ## What still wants the outside world
 
