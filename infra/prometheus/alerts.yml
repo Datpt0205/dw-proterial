@@ -2,13 +2,12 @@
 # metric this codebase actually emits today; a rule against a metric nobody
 # writes yet would be decoration; see .claude/rules/failure-modes.md #1.
 #
-# One known gap, named rather than papered over with a rule that could never
-# fire:
-#   - DwReaperRepeatedlyReaping (below) cannot fire in THIS deployment: the
-#     reaper lane only registers once a bounded context appends a
-#     `ReapTarget` (apps/worker/src/dw_worker/main.py), and this repo ships
-#     none yet. The metric and the rule are both real; there is just nothing
-#     to trip them until the first context lands.
+# One condition, named rather than papered over:
+#   - DwReaperRepeatedlyReaping (below) fires only where a bounded context
+#     registered a `ReapTarget` (apps/worker/src/dw_worker/main.py). Sales
+#     registers one for its processing lane when DW1 is mounted
+#     (`SALES_DEMO_*`) and object storage is configured (`s3_endpoint_url`);
+#     a deployment without DW1 has nothing to trip it.
 #
 # `dw_node_failure_total` was the second: declared and emitted by nothing. The
 # runner emits it since 2026-10-15 (LangGraphWorkflowRunner._count_failed_node,
@@ -65,7 +64,7 @@ groups:
             dw_outbox_oldest_pending_age_seconds says how stale the oldest one is.
 
       - alert: DwReaperRepeatedlyReaping
-        # See the file header: cannot fire until a context registers a
+        # See the file header: fires only where a context registered a
         # ReapTarget. 20/hour is provisional for the same reason the backlog
         # threshold above is.
         expr: increase(dw_reaper_reaped_total[1h]) > 20
