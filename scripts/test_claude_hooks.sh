@@ -135,10 +135,20 @@ check "an unreadable payload naming a commit is gated" 2 "$unreadable"
 # reaches a hook registered for Bash alone.
 matcher=$(awk '/"matcher"/ { m = $0 } /pre-commit-gate\.sh/ { print m; exit }' "$repo/.claude/settings.json" \
   | sed -E 's/.*"matcher"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/')
-for tool in Bash PowerShell; do
+for tool in Bash PowerShell mcp__context-mode__ctx_execute mcp__context-mode__ctx_execute_file   mcp__context-mode__ctx_batch_execute; do
   printf '%s' "$tool" | grep -qxE "$matcher"
   check "settings.json registers the gate for $tool (matcher '$matcher')" 0 $?
 done
+
+# context-mode (.mcp.json) runs shell code in its own sandbox tools: their input
+# has no `command`, so the gate reads the whole payload, and a commit there is
+# gated like one typed into Bash.
+mcp_commit=$(printf '{"tool_name":"mcp__context-mode__ctx_execute","tool_input":{"language":"shell","code":"git add -A && git commit -m x"}}'   | CLAUDE_PROJECT_DIR="$work/gate" PATH="$work/bin:$PATH" bash "$hooks/pre-commit-gate.sh" >/dev/null 2>&1
+  echo $?)
+check "a commit inside context-mode's ctx_execute is gated" 2 "$mcp_commit"
+mcp_other=$(printf '{"tool_name":"mcp__context-mode__ctx_execute","tool_input":{"language":"shell","code":"git status"}}'   | CLAUDE_PROJECT_DIR="$work/gate" PATH="$work/bin:$PATH" bash "$hooks/pre-commit-gate.sh" >/dev/null 2>&1
+  echo $?)
+check "...and anything else there passes" 0 "$mcp_other"
 
 # A gate switch committed by accident would switch the gate off in every clone.
 for path in .claude/no-commit-gate .claude/no-stop-gate .claude/.session-head.abc123; do

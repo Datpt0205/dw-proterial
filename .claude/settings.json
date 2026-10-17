@@ -25,7 +25,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Bash|PowerShell|mcp__context-mode__ctx_execute|mcp__context-mode__ctx_execute_file|mcp__context-mode__ctx_batch_execute",
         "hooks": [
           {
             "type": "command",
@@ -36,6 +36,7 @@
       }
     ]
   },
+  "enabledMcpjsonServers": ["context-mode"],
   "enabledPlugins": {
     "mattpocock-skills@claude-plugins-official": true
   }
