@@ -1,6 +1,7 @@
 ---
-status: Accepted (provisional, decided under delegation 2026-10-08)
+status: Accepted
 date: 2026-10-08
+accepted: 2026-10-18 (Đạt, on review)
 source:
     - ../../packages/python/dw_agent_runtime/src/dw_agent_runtime/model/prompts.py # contain_untrusted, raw_variables
     - ../../packages/python/dw_agent_runtime/tests/unit/test_prompt_containment.py

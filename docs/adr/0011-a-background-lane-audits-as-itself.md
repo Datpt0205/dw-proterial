@@ -1,6 +1,7 @@
 ---
-status: Accepted (provisional, decided under delegation 2026-10-08)
+status: Accepted
 date: 2026-10-08
+accepted: 2026-10-18 (Đạt, on review)
 source:
     - ../../packages/python/dw_platform/src/dw_platform/domain/audit.py # system_actor, lane_audit_event
     - ../../packages/python/dw_platform/src/dw_platform/adapters/persistence/lane_audit.py # append_across_tenants

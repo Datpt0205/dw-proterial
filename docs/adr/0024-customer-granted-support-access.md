@@ -1,6 +1,7 @@
 ---
-status: Proposed (provisional, decided by the agent on Đạt's delegation 2026-10-08)
+status: Accepted
 date: 2026-10-08
+accepted: 2026-10-18 (Đạt, on review)
 source:
     - ../../db/migrations/versions/af8ee878b4ab_platform_support_staff_and_support_.py
     - ../../packages/python/dw_platform/src/dw_platform/application/support_access.py
@@ -78,6 +79,14 @@ tenant-less and cannot read business data, so it is not a third way.
    its grantable scope sets and a `SupportResourcePort` that names its resources
    at the composition root; narrowing reads to one resource is that context's
    business. The platform names `workspace` itself.
+
+10. **Restricted fields stay masked under support.** A field a context marks
+    restricted (a person's CCCD or salary in an HR context, a price in Sales)
+    is masked in a support context whatever scope set the grant carries: the
+    context that owns the field masks it where it builds the view, as Sales
+    hides every amount from a support context (sales ticket 22). Restated
+    2026-10-18 from the platform's original decision 5, which this record
+    had dropped.
 
 ### Provisional calls (Đạt delegated the open calls on 2026-10-08)
 

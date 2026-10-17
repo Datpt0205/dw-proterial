@@ -1,6 +1,7 @@
 ---
-status: Accepted (provisional, decided under delegation 2026-10-08)
+status: Accepted
 date: 2026-10-08
+accepted: 2026-10-18 (Đạt, on review)
 source:
     - ../../db/migrations/versions/f381f1694395_platform_sod_waiver_second_person_and_.py
     - ../../packages/python/dw_platform/src/dw_platform/application/separation_of_duties.py
