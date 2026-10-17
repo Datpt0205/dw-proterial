@@ -721,8 +721,13 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
     - `supported_channels: [web]` in `configs/workers/sales.yaml` is read
       by nothing, while the lane's runs carry `sales_inbox` (ticket 16).
     - Offboarding never deletes `platform.users`, so a purged tenant leaves
-      DW1's per-tenant user row (ticket 16); Đạt to decide whether the
-      purge deletes service subjects of that tenant.
+      DW1's per-tenant user row (ticket 16). Closed 2026-10-18 (`981f3a1`;
+      decided by Đạt: the purge deletes that tenant's service subjects,
+      never a person's row). `purge_rows` deletes the users inside
+      `service_subject_bounds(tenant)` (by subject, so a resumed purge still
+      finds them) and lists their ids on the purge audit row. Owed on
+      Docker/CI: `test_purge_deletes_the_tenants_service_accounts_and_nobody_elses`,
+      `test_a_resumed_purge_still_finds_the_service_accounts`.
     - The candidate picker compares the unit and quantity as read, DW1's
       checks the entered ones (ticket 15).
     - A legacy-font run in an inline string, and legacy text reaching the

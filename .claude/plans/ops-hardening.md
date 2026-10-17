@@ -16,9 +16,10 @@ context. All five are done and on `main`. The full narrative is at
 
 ## What holds, and where it lives
 
-- **One retention file.** `configs/policies/retention@1.7.0.yaml` feeds the
-  memory, knowledge, audit, checkpoint (since 1.6.0) and channel-delivery
-  (since 1.7.0) sweeps on the worker's hourly lanes.
+- **One retention file.** `configs/policies/retention@1.8.0.yaml` feeds the
+  memory, knowledge, audit, checkpoint (since 1.6.0), channel-delivery
+  (since 1.7.0), offboarding-export and superseded-version (since 1.8.0)
+  sweeps on the worker's hourly lanes.
     - Audit keeps 1095 days: Commercial Law Art. 319's two-year limitation plus a
       review margin. Decree 13/2023 requires deletion once the purpose ends.
     - Since 1.5.0 the only memory class is `default`; `legal_hold` left the
@@ -83,10 +84,35 @@ context. All five are done and on `main`. The full narrative is at
   one, under the same tenant-clause rule) before a real offboarding.
 - **Spend guard quotas are unset.** Every plan's `spend_usd_per_day` is `None`,
   so nothing is metered until Đạt gives dollar thresholds.
-- **Offboarding export bundles in `dw-exports` are never deleted.** They hold a
-  tenant's full data, PII included, and need a retention term from Đạt.
-- **Superseded documents:** how many versions to keep is undecided. That is a
-  different question from how long a deletion takes to become final.
+- **Offboarding export bundles in `dw-exports` are never deleted.** Closed
+  2026-10-18 (`981f3a1`; decided by Đạt: 30 days after they are written).
+  `offboarding_exports.retain_days: 30` in retention 1.8.0 (required,
+  1..365). Lane `offboarding_exports_retention` (hourly, only with object
+  storage) lists the bucket through the port, reads tenant and write time
+  from the key (`export_key_for`/`export_written`), keeps keys of any other
+  shape, and deletes inside the transaction that writes its lane audit row
+  (`SqlOffboardingExportAudit`, in the workspace the purge record names; no
+  row, no deletion). Owed on Docker/CI: 3 tests in `test_offboarding.py`
+  (`test_an_export_deletion_is_on_its_tenants_log_as_the_lane_beside_the_purge`,
+  `test_a_deletion_that_fails_leaves_no_audit_row`,
+  `test_a_tenant_with_nothing_to_record_against_keeps_its_bundle`). Still open:
+  the request row keeps `export_key` after the bundle is gone, so the operator's
+  status read names a deleted object; the audit row is the record.
+- **Superseded documents: keep the newest five.** Closed 2026-10-18
+  (`981f3a1`; decided by Đạt). `knowledge.superseded_versions_kept: 5`
+  (required, 1..100). `SqlSupersededVersionRetention`, lane
+  `retention_knowledge_versions` (only with object storage): ranks superseded
+  versions per (tenant, workspace, `doc_key`) by `effective_to`, deletes points,
+  the stored text (`document_storage_key`, shared with ingest), then rows
+  (chunks cascade), re-checked in the deleting transaction; cited versions held
+  and counted; one lane audit row each. Owed on Docker/CI: 5 tests in
+  `test_knowledge_retention_db.py`, and a SQL-level mutation (drop `tenant_id`
+  from the window partition, see
+  `test_another_tenants_versions_are_ranked_apart_and_untouched` go red); the
+  window scans every superseded row each hour (no index carries it; fine at
+  today's sizes, measure before a large library). Still open: the
+  deleted-document sweep removes rows and points but not the stored text, and
+  no sweep removes staged uploads (`{tenant}/{workspace}/uploads/{job}/...`).
 - **The restore drill is same-cluster only.** A from-scratch DR drill (new
   host, roles provisioned from zero) has not been done.
 - **Alert thresholds are starting points, not measurements:** outbox backlog
