@@ -34,22 +34,40 @@ export function isNavItemVisible(item: NavItem, viewer: NavViewer): boolean {
   return true;
 }
 
-/** The entries the person is shown; a group keeps only the items they see. */
+/** The entries the person is shown, groups narrowed to what they see. */
 export function visibleNav(
   entries: readonly NavEntry[],
   viewer: NavViewer,
 ): NavEntry[] {
+  return visibleEntries(entries, viewer, false);
+}
+
+/**
+ * A group keeps the entries the viewer sees and is dropped when none is left.
+ * A nested group left with one page becomes that page; a top-level group stays
+ * a group whatever its size, because `barNav` reads its `context` and
+ * `administration`.
+ */
+function visibleEntries(
+  entries: readonly NavEntry[],
+  viewer: NavViewer,
+  nested: boolean,
+): NavEntry[] {
   return entries.flatMap((entry): NavEntry[] => {
     if (!isNavGroup(entry))
       return isNavItemVisible(entry, viewer) ? [entry] : [];
-    const items = entry.items.filter((item) => isNavItemVisible(item, viewer));
-    return items.length > 0 ? [{ ...entry, items }] : [];
+    const items = visibleEntries(entry.items, viewer, true);
+    if (items.length === 0) return [];
+    if (nested && items.length === 1 && !isNavGroup(items[0]!)) return items;
+    return [{ ...entry, items }];
   });
 }
 
-/** Every page in `entries`, groups opened up, in order. */
+/** Every page in `entries`, groups (and groups inside them) opened up, in order. */
 export function navPages(entries: readonly NavEntry[]): NavItem[] {
-  return entries.flatMap((entry) => (isNavGroup(entry) ? entry.items : entry));
+  return entries.flatMap((entry) =>
+    isNavGroup(entry) ? navPages(entry.items) : [entry],
+  );
 }
 
 /**

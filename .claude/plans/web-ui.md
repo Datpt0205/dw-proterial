@@ -153,9 +153,13 @@ the theme, the shell and the shared composites, not primitive wrappers.
   message has one owner per context (`REFUSAL_TABLES` in
   `lib/error-message.ts`; a vitest fails on a code in two tables or one
   the platform raises).
-- The Sales bar overflows "…" from 992 to beyond 1600 px with nine pages
-  (measured 2026-10-15; about 1580 px needed): a layout choice for Đạt,
-  sales ticket 39; option (c) would change `CLAUDE.md` "Web UI".
+- The Sales bar overflowed "…" from 992 to beyond 1600 px with nine pages
+  (measured 2026-10-15). Done 2026-10-18 in `f84643e` (sales ticket 39,
+  Đạt chose a submenu). The bar is Việc cần làm, Hộp thư, then the **Hồ sơ**
+  and **Quản lý** submenus. A nav group may hold groups, and `visibleNav`
+  hides an empty one. The shell's drawer opens every section, so it lists
+  every page. Owed: the Playwright check of the Sales bar (written, not
+  run) and a visual check at 992/1280/1440/1600 px.
 - `pnpm audit` (2026-10-15): 2 moderate next.js advisories, fixed in next
   15.5.27, below the high gate; bumping next is a separate item.
 

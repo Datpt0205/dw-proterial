@@ -47,12 +47,17 @@ export interface NavItem {
  * Pages that sit under one name in the navbar: a submenu on the bar, a section
  * in the drawer. A group has no page of its own and shows only while one of
  * its items does.
+ *
+ * A group may hold groups: a context's group nests the submenus of its own
+ * bar (sales ticket 39: nine pages do not fit one row at `lg`). A nested group
+ * left with one page the viewer sees is drawn as that page (`visibleNav`), so
+ * nobody opens a submenu to reach their only item in it.
  */
 export interface NavGroup {
   key: string;
   label: string;
   icon: NavIcon;
-  items: NavItem[];
+  items: NavEntry[];
   /** Administers the tenant or the platform (see `barNav`). */
   administration?: boolean;
   /**
