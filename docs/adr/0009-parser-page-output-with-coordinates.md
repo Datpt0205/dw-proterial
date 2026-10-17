@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-30
+accepted: 2026-10-18 (Đạt, on review)
 source:
     - https://github.com/Datpt0205/platform-bidding/blob/bidding/docs/products/ehsdt/rule-spec.md#21-dữ-kiện-có-neo-nguồn # SourceAnchor
     - https://github.com/Datpt0205/platform-bidding/blob/bidding/docs/products/ehsdt/rule-spec.md#74-sec--an-ninh # SEC14

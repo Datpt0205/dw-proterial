@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-29
+accepted: 2026-10-18 (Đạt, on review)
 source:
     - https://github.com/Datpt0205/platform-bidding/blob/bidding/docs/products/ehsdt/process.md#hướng-đi-sau-phản-biện # hàng Kiến trúc lớp, Hybrid
     - https://github.com/Datpt0205/platform-bidding/blob/bidding/docs/products/ehsdt/process.md#23-profile-triển-khai

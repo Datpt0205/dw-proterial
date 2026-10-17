@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-03
+accepted: 2026-10-18 (Đạt, on review)
 ---
 
 # One `SourceAnchor`, inside dw_sales, until a second consumer exists

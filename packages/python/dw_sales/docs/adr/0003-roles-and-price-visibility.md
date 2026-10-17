@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-10-03
+accepted: 2026-10-18 (Đạt, on review)
 ---
 
 # Sales roles are the context's own, and prices fail closed

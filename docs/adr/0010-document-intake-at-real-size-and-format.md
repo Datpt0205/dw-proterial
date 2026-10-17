@@ -1,6 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 date: 2026-09-30
+accepted: 2026-10-18 (Đạt, on review)
 source:
     - https://github.com/Datpt0205/platform-bidding/blob/bidding/docs/products/ehsdt/process.md#24-khách-cần-chuẩn-bị-gì
     - https://github.com/Datpt0205/platform-bidding/blob/bidding/docs/products/ehsdt/process.md#104-bảo-mật-và-niềm-tin # hàng Tài liệu đầu vào
