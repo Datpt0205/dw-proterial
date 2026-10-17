@@ -6,7 +6,12 @@
 // the server, and `next build` fails that page ("getDesignToken is not a
 // function").
 import { theme, type ThemeConfig } from "antd";
-import { FONT_VARIABLE, THEME_ROOT_CLASS } from "./theme-class";
+import {
+  FONT_VARIABLE,
+  PAGE_BACKGROUND,
+  PRIMARY_COLOR,
+  THEME_ROOT_CLASS,
+} from "./theme-class";
 
 /**
  * The seeds: the E-HSDT v3 prototype's light palette (its `[data-ap="light"]`
@@ -19,7 +24,7 @@ import { FONT_VARIABLE, THEME_ROOT_CLASS } from "./theme-class";
 const seed: ThemeConfig["token"] = {
   // #0071e3 is 4.31:1 as text on the page background (#f5f5f7), so the
   // nearest blue that reaches 4.5:1 there. White on it is 4.9:1.
-  colorPrimary: "#006edc",
+  colorPrimary: PRIMARY_COLOR,
   // Hover and press go darker, never lighter: white text stays above 4.5:1.
   colorPrimaryHover: "#0064c8",
   colorPrimaryActive: "#0058b0",
@@ -59,7 +64,7 @@ const seed: ThemeConfig["token"] = {
   colorTextSecondary: "#515154",
   colorTextTertiary: "#6e6e73",
   colorTextQuaternary: "#86868b",
-  colorBgLayout: "#f5f5f7",
+  colorBgLayout: PAGE_BACKGROUND,
   colorBgContainer: "#ffffff",
   // A field's border is what shows where to type: the prototype's #8e8e93 is
   // 2.99:1 on the page background, so the nearest grey that reaches 3:1.
