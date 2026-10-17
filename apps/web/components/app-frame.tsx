@@ -113,9 +113,8 @@ function menuItems(
       key: `group:${entry.key}`,
       icon: <Icon className="size-4" aria-hidden />,
       label: entry.label,
-      children: entry.items.map((page) =>
-        pageItem(page, current, badges, token),
-      ),
+      // A group may hold groups (sales ticket 39): a submenu inside it.
+      children: menuItems(entry.items, current, badges, token),
     };
   });
 }

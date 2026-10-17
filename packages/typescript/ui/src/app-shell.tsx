@@ -29,20 +29,17 @@ export interface AppShellProps {
   children: ReactNode;
 }
 
-/** The groups holding `key`, so the drawer opens on the current page's section. */
-function groupsHolding(items: NavItems, key: string | undefined): string[] {
-  if (!key) return [];
-  const keys: string[] = [];
-  for (const item of items) {
-    if (
-      item &&
-      "children" in item &&
-      item.children?.some((child) => child?.key === key)
-    ) {
-      keys.push(String(item.key));
-    }
-  }
-  return keys;
+/**
+ * Every group's key, nested ones included, so the drawer opens with every
+ * section open and lists every page: the bar may fold pages into submenus to
+ * fit one row (sales ticket 39), the drawer has the height not to.
+ */
+function groupKeys(items: NavItems): string[] {
+  return items.flatMap((item) =>
+    item && "children" in item && Array.isArray(item.children)
+      ? [String(item.key), ...groupKeys(item.children as NavItems)]
+      : [],
+  );
 }
 
 /** The items without their icons: the bar is words, the drawer keeps both. */
@@ -76,10 +73,7 @@ export function AppShell({
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const selectedKeys = selectedKey ? [selectedKey] : [];
-  const openKeys = useMemo(
-    () => groupsHolding(navItems, selectedKey),
-    [navItems, selectedKey],
-  );
+  const openKeys = useMemo(() => groupKeys(navItems), [navItems]);
   const barItems = useMemo(() => withoutIcons(navItems), [navItems]);
 
   return (
