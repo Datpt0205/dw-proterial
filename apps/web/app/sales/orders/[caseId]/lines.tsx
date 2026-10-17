@@ -19,6 +19,7 @@ import {
   type Viewer,
 } from "../../_lib/order-actions";
 import { usePeople } from "../../_lib/people";
+import { enteredUom } from "../../_lib/entered";
 import { basisStatement } from "../../_lib/statements";
 import { useAction } from "../../_lib/use-action";
 import { GuardedButton } from "../../_components/guarded-button";
@@ -39,12 +40,6 @@ const STATE_ORDER = [
 function weakest(states: Record<string, string>): string {
   const values = Object.values(states);
   return STATE_ORDER.find((s) => values.includes(s)) ?? "dw";
-}
-
-/** The line's unit as it is entered: what Sales typed, else as read. */
-function enteredUom(line: Line): string {
-  const typed = line.corrections.find((c) => c.field === "uom")?.value;
-  return typeof typed === "string" ? typed : line.uom;
 }
 
 /**

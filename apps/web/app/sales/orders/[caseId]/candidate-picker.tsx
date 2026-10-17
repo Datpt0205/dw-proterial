@@ -22,6 +22,7 @@ import type { SalesSchemas } from "@dw/api-client";
 import { LoadError } from "../../../../components/load-error";
 import { formatQuantity } from "../../../../lib/money";
 import { salesApi } from "../../_lib/api";
+import { enteredQuantity, enteredUom } from "../../_lib/entered";
 import { ActionError } from "../../_lib/errors";
 import { label, MAPPING_STATUS } from "../../_lib/labels";
 import { useAction } from "../../_lib/use-action";
@@ -58,7 +59,7 @@ function fit(fits: boolean | null) {
 /**
  * The candidate picker (G13): the PO line beside each candidate item, one
  * attribute per row, PO value | item value | khớp/lệch. The PO's own fields
- * are compared as printed (unit, quantity against MOQ and pack); the cable
+ * are compared as entered (unit, quantity against MOQ and pack); the cable
  * attributes are what DW1 read from the description when it mapped the line
  * (`basis.stated_attributes`), never a second reading in the browser. A line
  * DW1 did not read keeps them in the description, shown above. Where a local
@@ -235,7 +236,10 @@ export function comparisonRows(
   codes: string[],
   byCode: Map<string, Item>,
 ): Row[] {
-  const qty = Number(line.quantity);
+  // As entered: DW1 checks the entered line, so the picker compares it too.
+  const uom = enteredUom(line);
+  const quantity = enteredQuantity(line);
+  const qty = Number(quantity);
   const stated = line.basis.stated_attributes;
   // What the description stated, as DW1 read it when it mapped the line,
   // marked as a reading so it never looks like a value printed in a PO field
@@ -300,16 +304,16 @@ export function comparisonRows(
     {
       key: "uom",
       attribute: "Đơn vị tính",
-      po: line.uom,
+      po: uom,
       values: each((i) => ({
         text: i.uom ?? "Không rõ",
-        fits: i.uom === null ? null : i.uom === line.uom,
+        fits: i.uom === null ? null : i.uom === uom,
       })),
     },
     {
       key: "moq",
       attribute: "Số lượng ≥ MOQ",
-      po: formatQuantity(line.quantity),
+      po: formatQuantity(quantity),
       values: each((i) => ({
         text: formatQuantity(i.moq),
         fits: qty >= Number(i.moq),
@@ -318,7 +322,7 @@ export function comparisonRows(
     {
       key: "pack",
       attribute: "Chẵn quy cách đóng gói",
-      po: formatQuantity(line.quantity),
+      po: formatQuantity(quantity),
       values: each((i) => ({
         text: formatQuantity(i.pack_multiple),
         fits:

@@ -63,3 +63,28 @@ describe("the candidate picker's PO column (G13, ticket 28)", () => {
     }
   });
 });
+
+describe("the candidate picker compares the line as entered (ticket 15)", () => {
+  it("reads a unit and quantity Sales corrected, as DW1's checks do", () => {
+    const base = line(null);
+    const at = "2026-10-15T08:00:00Z";
+    const by = "00000000-0000-0000-0000-0000000000a1";
+    const corrected: Line = {
+      ...base,
+      uom: "cuộn",
+      quantity: "7",
+      corrections: [
+        { field: "uom", value: "m", at, by },
+        { field: "quantity", value: "600", at, by },
+      ],
+    };
+
+    const rows = comparisonRows(corrected, ["CB-2005"], ITEMS);
+
+    expect(row(rows, "uom").po).toBe("m");
+    expect(row(rows, "uom").values["CB-2005"]!.fits).toBe(true);
+    // 600 m is above the MOQ and a whole number of 300 m packs; 7 is neither.
+    expect(row(rows, "moq").values["CB-2005"]!.fits).toBe(true);
+    expect(row(rows, "pack").values["CB-2005"]!.fits).toBe(true);
+  });
+});
