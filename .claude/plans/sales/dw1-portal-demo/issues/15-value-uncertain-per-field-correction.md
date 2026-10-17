@@ -225,7 +225,7 @@ Still open (not fixed here):
 - ~~The lines table shows a corrected item code, description or unit as
   read.~~ Closed 2026-10-15 (`7b80e8d`, `e65f218`): it shows them as
   entered, a split line's delivery quantities in the entered unit included.
-  Still open (follow-up): the candidate picker's "Đơn vị tính", MOQ and pack
+  Closed 2026-10-17 (`2b23a1b`, `_lib/entered.ts`) — was open: the candidate picker's "Đơn vị tính", MOQ and pack
   rows compare `line.uom` and `line.quantity` as read, while DW1's checks run
   on the entered line (`OrderLine.effective`), so after a unit or quantity
   correction the picker can say lệch where the check passed; compare the

@@ -21,18 +21,18 @@ After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-10-15)
+## Now (2026-10-17)
 
 - **Proterial product repo** (`origin` `Datpt0205/dw-proterial`; platform
   seed in `Datpt0205/codebase`). DW1 (Đơn hàng & Báo giá) on mock data:
   `sales.md`, spec and tickets under `sales/dw1-portal-demo/`; demo runbook
   `demo.md`, `make demo-reset`, `make test-web-sales`, eval `sales@1.3.0`.
-- 2026-10-15: eight batches merged (`b2ea975`..`57d3c20`) closed the open
-  items needing no decision but two partial ones (`web-ui.md`); integration
-  tests, eight migration round trips and the walk's new steps: owed to CI.
-- **Next:** push, watch CI (the DW1 walk is blocking since 2026-10-15,
-  ticket 18); Đạt: the PUBLIC_REPO_DENYLIST secret;
-  after a reboot, 25/27's checks and the support-access 03 walk.
+- 2026-10-17: Đạt (proposal of 2026-10-13): DW1 and DW2 (Mua hàng: Yêu cầu
+  mua & PO) both on premises, UAT first on mock values; DW2's process
+  documents to come. Closed: `supported_channels` enforced, one
+  `awaits_cross_check`, the picker as entered (`b65956a`, `2b23a1b`).
+- **Next:** Đạt runs the Docker/CI suites and pushes; then DW2 as a new
+  context (`make new-context NAME=purchasing`) once its documents arrive.
 
 ## Decisions Đạt owes
 
@@ -41,9 +41,9 @@ own file and a row here.
       (`sales.md` Open: a stamp standing in for it, or stamped platform types);
     - a plan quota on direct model calls (`runs_per_day`/`spend_usd_per_day`
       are enforced only in the runner);
-    - the model profile and key for uat/production (local runs on `luna`,
-      gpt-5.6-luna, `make check-model`; the key is only in local `.env`);
-    - the rerank key for uat/production (FPT Cloud locally, `make check-rerank`);
+    - on premises: `DW_API_MODEL_PROFILE=onprem` and no external key or
+      reranker for uat/production (recommended 2026-10-17; `luna` and FPT
+      Cloud rerank stay local-only);
 - **Ops:** spend guard dollar thresholds per plan; a retention term for
   offboarding export bundles; how many superseded document versions to keep.
 - **Platform:**

@@ -712,19 +712,19 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
       Đạt's call.
 
 - From the batch merge (2026-10-15, agent, Đạt: làm luôn):
-    - The review page (`app/sales/review/page.tsx`) lists every
-      `uploaded_to_bravo` order as a cross-check, while My work (`867d330`)
-      offers `confirm` when `cross_check_required` is false: two screens
-      disagree about one order (ticket 14). `OrderCase.confirm()` accepts
-      `cross_check_required=None` at `uploaded_to_bravo`, `awaiting()`
-      treats None as needing one.
-    - `supported_channels: [web]` in `configs/workers/sales.yaml` is read
-      by nothing, while the lane's runs carry `sales_inbox` (ticket 16).
+    - ~~The review page listed every `uploaded_to_bravo` order while My
+      work offered `confirm`; `confirm()` let None skip the check
+      `awaiting()` waited on (ticket 14).~~ Closed 2026-10-17 (`b65956a`):
+      `OrderCase.awaits_cross_check` is the one answer; confirm,
+      `awaiting()` and `OrderSummaryView` read it.
+    - ~~`supported_channels: [web]` was read by nothing (ticket 16).~~
+      Closed 2026-10-17 (`b65956a`): the runner refuses a run from an
+      undeclared channel; sales.yaml declares `[web, sales_inbox]`.
     - Offboarding never deletes `platform.users`, so a purged tenant leaves
       DW1's per-tenant user row (ticket 16); Đạt to decide whether the
       purge deletes service subjects of that tenant.
-    - The candidate picker compares the unit and quantity as read, DW1's
-      checks the entered ones (ticket 15).
+    - ~~The candidate picker compared the unit and quantity as read
+      (ticket 15).~~ Closed 2026-10-17 (`2b23a1b`): `_lib/entered.ts`.
     - A legacy-font run in an inline string, and legacy text reaching the
       model through a non-form `.xlsx` RFQ, are not detected; refusal
       versus a quote-side finding is Đạt's to revisit (ticket 20).
