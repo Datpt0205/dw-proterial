@@ -103,10 +103,13 @@ Mốc 6 (running many customers) is half done:
       `test_memory_service_db.py`, `test_provisioning.py`,
       `test_service_access.py`, `test_approval_visibility.py`, the round
       trips of `2e0354b50d10`, `d82a60870baf`, `0d8f03566652`,
-      `271bdb87af91`, and each ticket's mutation run. Seen, not touched: in
-      `test_the_row_cannot_disagree_with_the_worker` the `pinned` dict is
-      keyed by values, so equal `worker_version` and `graph_version` collapse
-      one comparison (failure-modes #3).
+      `271bdb87af91`, and each ticket's mutation run. The `pinned` dict in
+      `test_the_row_cannot_disagree_with_the_worker` compares pairs since
+      `b65956a` (it collapsed equal versions; failure-modes #3).
+    - 2026-10-17 (`b65956a`): `WorkerDefinition.supported_channels` is
+      enforced in the runner's `start` and `stream` (it was read by
+      nothing); pre-commit runs the project's own ruff, not a pinned
+      v0.9.10 that refused what 0.16.8 accepts.
 
 - **CI is green** on run 37427518778 (2026-10-06, commit 46b7e2c), all seven
   jobs, for the first time since 2026-10-02. What it took (detail in the

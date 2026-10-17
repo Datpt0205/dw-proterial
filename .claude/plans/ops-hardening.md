@@ -95,8 +95,8 @@ context. All five are done and on `main`. The full narrative is at
   on 2026-09-29. Since `8adbe08` Sales registers a `ReapTarget` for its
   processing lane (`dw_worker/main.py`), but only when `s3_endpoint_url` is
   set and `SALES_DEMO_*` mounts DW1; a deployed profile without it still
-  registers none. The header of `infra/prometheus/alerts.yml` still says no
-  context registers one (checked 2026-10-15).
+  registers none. The header of `infra/prometheus/alerts.yml` says so since
+  `5f59855` (2026-10-17).
 - **`dw_node_failure_total` is declared and emitted by nothing**
   (`dw_observability/metrics.py`), so no rule uses it. Closed 2026-10-15
   (`fbe99ac`, `c732366`): the runner counts it once per failed run (not a
