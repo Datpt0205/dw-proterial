@@ -61,9 +61,9 @@ function Review() {
     [work.data],
   );
 
-  const checks = (orders.data ?? []).filter(
-    (o) => o.status === "uploaded_to_bravo",
-  );
+  // The server's `awaits_cross_check`, not the status alone: an order whose
+  // rules waive the check is confirmed from My work, not listed here.
+  const checks = (orders.data ?? []).filter((o) => o.awaits_cross_check);
   const approvals = (quotes.data ?? []).filter(
     (q) => q.status === "pending_approval",
   );

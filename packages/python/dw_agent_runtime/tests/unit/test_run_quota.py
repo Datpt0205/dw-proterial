@@ -27,7 +27,7 @@ from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import RunBudgetLedger
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_agent_runtime.testing.demo_graph import DEMO_WORKER_YAML, build_demo_graph
-from dw_kernel.errors import QuotaExceededError
+from dw_kernel.errors import PermissionDeniedError, QuotaExceededError
 
 pytestmark = pytest.mark.unit
 
@@ -153,3 +153,24 @@ async def test_the_window_starts_at_midnight_utc_not_an_hour_ago(tmp_path: Path)
     assert cast(_FakeRunStore, runner.run_store).counted_since == [
         datetime(2026, 9, 17, tzinfo=UTC)
     ]
+
+
+async def test_a_run_from_a_channel_its_worker_does_not_declare_is_refused(
+    tmp_path: Path,
+) -> None:
+    """`supported_channels` is read where runs begin, before the quota counts it."""
+    runner = _runner(tmp_path, limit=None, started_today=0)
+    context = _run_context().model_copy(update={"channel": "zalo"})
+
+    with pytest.raises(PermissionDeniedError) as raised:
+        await runner.start(run_context=context, input_payload={})
+
+    assert raised.value.details == {"worker_id": WORKER, "channel": "zalo"}
+
+
+async def test_a_streamed_run_from_an_undeclared_channel_is_refused(tmp_path: Path) -> None:
+    runner = _runner(tmp_path, limit=None, started_today=0)
+    context = _run_context().model_copy(update={"channel": "zalo"})
+
+    with pytest.raises(PermissionDeniedError):
+        await runner.stream(run_context=context, input_payload={})

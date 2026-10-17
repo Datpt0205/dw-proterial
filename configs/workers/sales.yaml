@@ -24,7 +24,9 @@ memory_policy_version: "1.0.0"
 # (configs/models/onprem.yaml). The composition root reads it from here; a
 # process with no such server (no DW_ONPREM_MODEL_BASE_URL) calls no model.
 default_model_profile: onprem
-supported_channels: [web]
+# Where a run may start: `web` for a person on the portal, `sales_inbox` for
+# the mailbox lane (`InboxLane.channel_of`). The runner refuses any other.
+supported_channels: [web, sales_inbox]
 # A person makes every decision: the quotation approval and the cross-check
 # pause the run whatever the level (the graph interrupts unconditionally), and
 # auto-confirmation (A3) is out of this slice.

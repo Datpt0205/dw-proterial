@@ -6351,6 +6351,10 @@
             ],
             "title": "Assigned To"
           },
+          "awaits_cross_check": {
+            "title": "Awaits Cross Check",
+            "type": "boolean"
+          },
           "case_id": {
             "format": "uuid",
             "title": "Case Id",
@@ -6405,7 +6409,8 @@
           "assigned_to",
           "lines",
           "open_findings",
-          "open_blocking_findings"
+          "open_blocking_findings",
+          "awaits_cross_check"
         ],
         "title": "OrderSummaryView",
         "type": "object"

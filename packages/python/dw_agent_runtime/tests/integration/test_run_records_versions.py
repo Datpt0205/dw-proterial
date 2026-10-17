@@ -68,11 +68,13 @@ async def test_the_row_cannot_disagree_with_the_worker(store: SqlWorkerRunStore)
 
     recorded = await store.get(context, context.run_id)
 
-    pinned = {
-        recorded.worker_version: DEMO_WORKER.worker_version,
-        recorded.graph_version: DEMO_WORKER.graph_version,
-    }
-    assert all(actual == expected for actual, expected in pinned.items())
+    # Pairs, not a dict keyed by the recorded value: equal worker and graph
+    # versions would collapse into one key and drop a comparison.
+    pinned = [
+        (recorded.worker_version, DEMO_WORKER.worker_version),
+        (recorded.graph_version, DEMO_WORKER.graph_version),
+    ]
+    assert all(actual == expected for actual, expected in pinned)
     # Nothing is left unset: a NULL here means a run that cannot be reproduced.
     assert None not in (
         recorded.prompt_bundle_version,

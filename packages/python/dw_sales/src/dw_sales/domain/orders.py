@@ -1549,6 +1549,14 @@ class OrderCase(BaseModel):
     # ------------------------------------------------------------ reading --
 
     @property
+    def awaits_cross_check(self) -> bool:
+        """In Bravo and waiting on its cross-check. Only rules that say
+        `false` waive it: a case stamped before the rule existed (None) waits,
+        the narrow reading (failure-modes #7). `confirm`, `awaiting()` and the
+        order list read this, so no two screens disagree about one order."""
+        return self.status is _S.UPLOADED_TO_BRAVO and self.cross_check_required is not False
+
+    @property
     def header(self) -> PoHeader:
         return self.document.header
 
@@ -2191,7 +2199,7 @@ class OrderCase(BaseModel):
         """
         status = transition(self.status, _S.CONFIRMED)
         details: dict[str, object] = {"case_id": str(self.case_id)}
-        if self.status is _S.UPLOADED_TO_BRAVO and self.cross_check_required:
+        if self.awaits_cross_check:
             raise ConflictError(
                 "the order is cross-checked before it is confirmed", details=details
             )

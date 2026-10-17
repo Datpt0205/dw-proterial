@@ -664,6 +664,9 @@ class OrderSummaryView(BaseModel):
     lines: int
     open_findings: int
     open_blocking_findings: int
+    # `OrderCase.awaits_cross_check`: the review page lists these, not every
+    # order in Bravo (an order whose rules waive it is confirmed instead).
+    awaits_cross_check: bool
 
 
 class OrderCaseView(BaseModel):
@@ -815,6 +818,7 @@ def order_summary(case: OrderCase, assigned_to: uuid.UUID | None) -> OrderSummar
         lines=len(case.lines),
         open_findings=len(open_findings),
         open_blocking_findings=sum(1 for f in open_findings if f.blocking),
+        awaits_cross_check=case.awaits_cross_check,
     )
 
 

@@ -2392,6 +2392,8 @@ export interface components {
         OrderSummaryView: {
             /** Assigned To */
             assigned_to: string | null;
+            /** Awaits Cross Check */
+            awaits_cross_check: boolean;
             /**
              * Case Id
              * Format: uuid

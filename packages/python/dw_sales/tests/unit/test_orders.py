@@ -261,6 +261,18 @@ def test_cross_check_required_decides_whether_an_upload_goes_straight_to_confirm
         assert (confirmed.status, confirmed.cross_checked_by) == (S.CONFIRMED, None)
 
 
+def test_a_case_stamped_before_the_rule_existed_waits_on_its_cross_check() -> None:
+    """None is not a waiver: confirm, `awaiting()` and the order list all read
+    `awaits_cross_check`, and only rules that said `false` skip the check."""
+    legacy = _uploaded().model_copy(update={"cross_check_required": None})
+
+    assert legacy.awaits_cross_check is True
+    with pytest.raises(ConflictError, match="cross-checked before it is confirmed"):
+        legacy.confirm(AN, T0, _dates(legacy))
+    assert _uploaded(_review(cross_check_required=False)).awaits_cross_check is False
+    assert _prepared().awaits_cross_check is False
+
+
 def test_a_move_the_state_machine_does_not_have_is_refused_naming_both_states() -> None:
     with pytest.raises(ConflictError) as refused:
         transition(S.CHECKED, S.CONFIRMED)
