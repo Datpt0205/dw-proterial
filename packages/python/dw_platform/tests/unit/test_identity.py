@@ -10,6 +10,8 @@ from dw_platform.application.identity import (
     MembershipAccess,
     ServiceSubjectsRefused,
     VerifiedClaims,
+    service_subject,
+    service_subject_bounds,
 )
 
 pytestmark = pytest.mark.unit
@@ -117,3 +119,25 @@ async def test_a_token_naming_a_service_accounts_subject_is_refused() -> None:
         await verifier.verify(issuer.issue(f"{SERVICE_SUBJECT_PREFIX}sales-dw1|{TENANT}"))
     assert refused.value.details["rule"] == "service_subject"
     assert (await verifier.verify(issuer.issue("dev|an.nguyen"))).subject == "dev|an.nguyen"
+
+
+def _within(subject: str, bounds: tuple[str, str]) -> bool:
+    """How the offboarding purge reads the bounds in SQL: `starts_with` and
+    `right(subject, length(suffix)) = suffix`."""
+    prefix, suffix = bounds
+    return subject.startswith(prefix) and subject.endswith(suffix)
+
+
+def test_a_tenants_service_subject_bounds_hold_its_own_accounts_and_nobody_elses() -> None:
+    """Offboarding deletes the `platform.users` rows inside these bounds
+    (sales ticket 16): every service account of the purged tenant, never
+    another tenant's, never a person's (a person may belong to other tenants)."""
+    other_tenant = uuid.uuid4()
+    bounds = service_subject_bounds(TENANT)
+
+    assert _within(service_subject("sales-dw1", TENANT), bounds)
+    assert _within(service_subject("another-worker", TENANT), bounds)
+    assert not _within(service_subject("sales-dw1", other_tenant), bounds)
+    assert not _within("dev|an.nguyen", bounds)
+    # A person whose identity-provider subject happens to end in the tenant id.
+    assert not _within(f"oidc|{TENANT}", bounds)

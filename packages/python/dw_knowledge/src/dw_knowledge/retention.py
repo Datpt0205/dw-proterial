@@ -29,11 +29,13 @@ cites it, so a document blocked this hour becomes deletable a few hours after th
 last memory quoting it expires. Deliberately two passes and not one transaction —
 the two are different retention questions with different terms.
 
-**Not covered here, and deliberately:** a `superseded` document, which is the
-previous version of one that is still live. How many versions back to keep is a
-different question from how long a deletion takes to become final, and expiring
-version history under a key named `deleted_grace_days` would be answering a
-question nobody asked.
+**Superseded versions are a second sweep, on a second key.** A `superseded`
+document is the previous version of one that is still live. How many versions
+back to keep is a different question from how long a deletion takes to become
+final, so `SqlKnowledgeRetention` never touches one, and
+`SqlSupersededVersionRetention` below keeps the newest
+`knowledge.superseded_versions_kept` of them per document (since retention
+1.8.0, decided by Đạt 2026-10-18) on its own lane.
 
 `knowledge.chunks` is not deleted explicitly: `chunks.document_id` is ON DELETE
 CASCADE, and referential-integrity triggers run with row security off.
@@ -53,14 +55,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import UtcClock
 from dw_knowledge import tables
-from dw_knowledge.ports import VectorIndexPort
+from dw_knowledge.identity import document_storage_key
+from dw_knowledge.ports import ObjectStoragePort, VectorIndexPort
 from dw_platform.adapters.persistence.lane_audit import append_across_tenants
 from dw_platform.domain.audit import lane_audit_event
 from dw_platform.retention_policy import RetentionPolicy
 
 logger = logging.getLogger("dw_knowledge.retention")
 
-__all__ = ["SqlKnowledgeRetention"]
+__all__ = ["SqlKnowledgeRetention", "SqlSupersededVersionRetention"]
 
 # Set per transaction by this sweep and by nothing reachable from a request —
 # same escape hatch the outbox, ingest and memory drains use, opened for these
@@ -72,6 +75,21 @@ _DELETED = "deleted"
 # The worker registry name this sweep runs under: its actor on the audit log.
 LANE = "retention_knowledge"
 PURGED_ACTION = "knowledge.document.purged"
+# The version sweep's lane and action: a different decision, so a different
+# actor and a different line on the log.
+VERSIONS_LANE = "retention_knowledge_versions"
+VERSION_PURGED_ACTION = "knowledge.document.version_purged"
+_SUPERSEDED = "superseded"
+
+
+def _cites() -> sa.Exists:
+    """Some evidence row still quotes this document (`evidence -> documents` is
+    RESTRICT): such a document is held back by both sweeps, never crashed on."""
+    return (
+        sa.select(tables.evidence.c.evidence_id)
+        .where(tables.evidence.c.source_document_id == tables.documents.c.id)
+        .exists()
+    )
 
 
 @dataclass(frozen=True)
@@ -112,13 +130,6 @@ class SqlKnowledgeRetention:
             tables.documents.c.deleted_at < cutoff,
         )
 
-    def _cites(self) -> sa.Exists:
-        return (
-            sa.select(tables.evidence.c.evidence_id)
-            .where(tables.evidence.c.source_document_id == tables.documents.c.id)
-            .exists()
-        )
-
     async def _candidates(self, cutoff: object) -> tuple[list[uuid.UUID], int]:
         """What this pass may delete, and what it must not, in one transaction.
 
@@ -126,7 +137,7 @@ class SqlKnowledgeRetention:
         between them, and a transaction held open across a network call is a lock
         held open across a network call.
         """
-        expired, cites = self._expired(cutoff), self._cites()
+        expired, cites = self._expired(cutoff), _cites()
         async with self.session_factory() as session, session.begin():
             await session.execute(_SET_DRAIN)
             held = await session.scalar(
@@ -152,7 +163,7 @@ class SqlKnowledgeRetention:
             removed = (
                 await session.execute(
                     sa.delete(tables.documents)
-                    .where(tables.documents.c.id.in_(doomed), ~self._cites())
+                    .where(tables.documents.c.id.in_(doomed), ~_cites())
                     .returning(
                         tables.documents.c.id,
                         tables.documents.c.tenant_id,
@@ -176,6 +187,161 @@ class SqlKnowledgeRetention:
                         resource_id=str(row.id),
                         occurred_at=now,
                         details={"policy_version": self.policy.policy_version},
+                    )
+                    for row in removed
+                ),
+            )
+            return len(removed)
+
+
+@dataclass(frozen=True)
+class _Version:
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    workspace_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class SqlSupersededVersionRetention:
+    """Implements `RetentionPrunePort` for document version history.
+
+    Re-ingesting a document under the same identity supersedes the current
+    version (`KnowledgeGateway.ingest_document`): the old row stays with status
+    `superseded`, its chunks stay, its points are tombstoned, and its text stays
+    in object storage. Nothing removed them, so a document re-ingested weekly
+    kept every version for ever. This keeps the newest
+    `knowledge.superseded_versions_kept` superseded versions of each document,
+    newest by when they were superseded (`effective_to`), and hard deletes the
+    rest.
+
+    **A document is one tenant's.** Versions are ranked within (`tenant_id`,
+    `workspace_id`, `doc_key`), never across: a global document's `doc_key`
+    does not name its tenant, and ranking two tenants' versions together would
+    let one tenant's re-ingest expire the other's history.
+
+    **The stores in order: points, the stored text, then the rows.** The same
+    reasoning as the deleted-document sweep above: a crash between leaves rows
+    the next pass finds and finishes, never a point or a file with no row left
+    to discover it by. The rows are re-checked in the deleting transaction
+    (still superseded, still beyond the kept count, still uncited), so a
+    version re-ingested or cited in the gap keeps its row; it has then lost
+    its tombstoned points and its stored copy, which a re-ingest writes again
+    and a citation does not read (evidence quotes chunks, which stay).
+
+    **A cited version is held back and counted**, like a cited deleted
+    document: `evidence -> documents` is RESTRICT.
+    """
+
+    session_factory: async_sessionmaker[AsyncSession]
+    policy: RetentionPolicy
+    clock: UtcClock
+    vector_index: VectorIndexPort
+    object_storage: ObjectStoragePort
+
+    async def prune(self) -> None:
+        kept = self.policy.knowledge.superseded_versions_kept
+        doomed, held = await self._candidates(kept)
+        for version in doomed:
+            await self.vector_index.delete_document(version.id)
+            await self.object_storage.delete_object(
+                document_storage_key(
+                    tenant_id=version.tenant_id,
+                    workspace_id=version.workspace_id,
+                    document_id=version.id,
+                )
+            )
+        deleted = await self._delete([v.id for v in doomed], kept) if doomed else 0
+        if deleted or held:
+            logger.info(
+                "knowledge version retention pass",
+                extra={
+                    "deleted": deleted,
+                    "held_by_citations": held,
+                    "superseded_versions_kept": kept,
+                    "policy_version": self.policy.policy_version,
+                },
+            )
+
+    @staticmethod
+    def _beyond_kept(kept: int) -> sa.Select[tuple[uuid.UUID]]:
+        """Ids of superseded versions older than the newest `kept` of their
+        document, ranked within one tenant and workspace."""
+        documents = tables.documents
+        rank = (
+            sa.func.row_number()
+            .over(
+                partition_by=(documents.c.tenant_id, documents.c.workspace_id, documents.c.doc_key),
+                order_by=(
+                    documents.c.effective_to.desc().nulls_last(),
+                    documents.c.created_at.desc(),
+                    documents.c.id.desc(),
+                ),
+            )
+            .label("rank")
+        )
+        ranked = (
+            sa.select(documents.c.id, rank)
+            .where(documents.c.status == _SUPERSEDED, documents.c.doc_key.is_not(None))
+            .subquery("ranked_versions")
+        )
+        return sa.select(ranked.c.id).where(ranked.c.rank > kept)
+
+    async def _candidates(self, kept: int) -> tuple[list[_Version], int]:
+        beyond = tables.documents.c.id.in_(self._beyond_kept(kept))
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_SET_DRAIN)
+            held = await session.scalar(
+                sa.select(sa.func.count()).select_from(tables.documents).where(beyond, _cites())
+            )
+            rows = await session.execute(
+                sa.select(
+                    tables.documents.c.id,
+                    tables.documents.c.tenant_id,
+                    tables.documents.c.workspace_id,
+                )
+                .where(beyond, ~_cites())
+                .order_by(tables.documents.c.id)
+                .limit(self.policy.batch_limit)
+            )
+            return [_Version(row.id, row.tenant_id, row.workspace_id) for row in rows], held or 0
+
+    async def _delete(self, doomed: list[uuid.UUID], kept: int) -> int:
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_SET_DRAIN)
+            removed = (
+                await session.execute(
+                    sa.delete(tables.documents)
+                    .where(
+                        tables.documents.c.id.in_(doomed),
+                        tables.documents.c.id.in_(self._beyond_kept(kept)),
+                        ~_cites(),
+                    )
+                    .returning(
+                        tables.documents.c.id,
+                        tables.documents.c.tenant_id,
+                        tables.documents.c.workspace_id,
+                        tables.documents.c.doc_key,
+                    )
+                )
+            ).all()
+            now = self.clock.now()
+            await append_across_tenants(
+                session,
+                (
+                    lane_audit_event(
+                        lane=VERSIONS_LANE,
+                        event_id=uuid.uuid4(),
+                        tenant_id=TenantId(row.tenant_id),
+                        workspace_id=WorkspaceId(row.workspace_id),
+                        action=VERSION_PURGED_ACTION,
+                        resource_type="knowledge_document",
+                        resource_id=str(row.id),
+                        occurred_at=now,
+                        details={
+                            "doc_key": str(row.doc_key),
+                            "superseded_versions_kept": kept,
+                            "policy_version": self.policy.policy_version,
+                        },
                     )
                     for row in removed
                 ),

@@ -22,10 +22,22 @@ from dw_platform.application.ports import TokenVerifierPort, VerifiedIdentity
 SERVICE_SUBJECT_PREFIX: Final = "service|"
 
 
+def service_subject_bounds(tenant_id: UUID) -> tuple[str, str]:
+    """What every service subject of one tenant starts and ends with.
+
+    Offboarding deletes a purged tenant's service accounts by these
+    (`SqlTenantOffboarding.purge_rows`), so they and `service_subject` are one
+    definition: a subject built for another tenant, or a person's, never falls
+    inside them.
+    """
+    return SERVICE_SUBJECT_PREFIX, f"|{tenant_id}"
+
+
 def service_subject(worker_id: str, tenant_id: UUID) -> str:
     """The subject of ``worker_id``'s service account in one tenant. The tenant
     is part of it: a subject is unique across the platform."""
-    return f"{SERVICE_SUBJECT_PREFIX}{worker_id}|{tenant_id}"
+    prefix, suffix = service_subject_bounds(tenant_id)
+    return f"{prefix}{worker_id}{suffix}"
 
 
 @dataclass(frozen=True)

@@ -21,10 +21,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import zipfile
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import BytesIO
 from typing import Any, Protocol
@@ -105,6 +106,36 @@ class VectorPurgePort(Protocol):
     async def delete_by_tenant(self, tenant_id: UUID) -> None: ...
 
 
+_EXPORT_STAMP = "%Y%m%dT%H%M%SZ"
+_EXPORT_KEY = re.compile(
+    r"(?P<tenant>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+    r"/offboarding-(?P<stamp>\d{8}T\d{6}Z)\.zip"
+)
+
+
+def export_key_for(tenant_id: UUID, written_at: datetime) -> str:
+    """Where a tenant's export bundle is written: its tenant, then when.
+
+    The one owner of the key's shape. `export_written` reads it back for the
+    bundle's retention (`offboarding_exports` in the retention policy), so the
+    term runs from the instant the bundle was written, whichever pass wrote it:
+    a resumed request writes a second bundle under a new stamp, and that first
+    one is no less a copy of the tenant's data.
+    """
+    return f"{tenant_id}/offboarding-{written_at.astimezone(UTC).strftime(_EXPORT_STAMP)}.zip"
+
+
+def export_written(key: str) -> tuple[UUID, datetime] | None:
+    """The tenant and write time `export_key_for` put in a key, or `None` for
+    any other object in the bucket, which is kept: deleting on a guessed shape
+    cannot be undone."""
+    match = _EXPORT_KEY.fullmatch(key)
+    if match is None:
+        return None
+    written_at = datetime.strptime(match["stamp"], _EXPORT_STAMP).replace(tzinfo=UTC)
+    return UUID(match["tenant"]), written_at
+
+
 def _json_default(value: object) -> object:
     if isinstance(value, UUID):
         return str(value)
@@ -154,8 +185,7 @@ class TenantOffboardingLane:
         attachment_blobs = {key: await self.attachments.get_object(key) for key in attachment_keys}
 
         bundle = _build_bundle(rows, artifact_blobs, attachment_blobs)
-        stamp = self.clock.now().strftime("%Y%m%dT%H%M%SZ")
-        export_key = f"{tenant_id}/offboarding-{stamp}.zip"
+        export_key = export_key_for(tenant_id, self.clock.now())
         await self.exports.put_object(export_key, bundle, "application/zip")
         await self.store.mark_status(tenant_id, "exporting", export_key=export_key)
 

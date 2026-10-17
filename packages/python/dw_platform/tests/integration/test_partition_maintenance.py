@@ -44,6 +44,7 @@ from dw_platform.retention_policy import (
     ChannelDeliveryRetention,
     CheckpointRetention,
     KnowledgeRetention,
+    OffboardingExportRetention,
     RetentionClass,
     RetentionPolicy,
 )
@@ -74,10 +75,13 @@ def _policy(**audit: object) -> RetentionPolicy:
         policy_id="retention",
         policy_version="1.2.0",
         classes={"default": RetentionClass(days=730, description="thường")},
-        knowledge=KnowledgeRetention(deleted_grace_days=30, orphan_evidence_grace_days=7),
+        knowledge=KnowledgeRetention(
+            deleted_grace_days=30, orphan_evidence_grace_days=7, superseded_versions_kept=5
+        ),
         audit=AuditRetention.model_validate(fields),
         checkpoints=CheckpointRetention(superseded_days=7, idle_thread_days=730),
         channel_deliveries=ChannelDeliveryRetention(pending_expiry_days=7),
+        offboarding_exports=OffboardingExportRetention(retain_days=30),
         batch_limit=1000,
     )
 
