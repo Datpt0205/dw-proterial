@@ -54,7 +54,11 @@ import {
   RowTitle,
   type PriorityItem,
 } from "../_components/list-parts";
-import { SCOPE, useSalesFrame } from "../_components/sales-frame";
+import {
+  PAUSED_REASON,
+  SCOPE,
+  useSalesFrame,
+} from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 import { MessageDispositionTag, ProcessingTag } from "../_components/tags";
 import { HandoffDraft } from "./handoff-draft";
@@ -177,7 +181,7 @@ function Inbox() {
   const processReason = !hasScope(SCOPE.inbox)
     ? "Bạn không có quyền cho DW1 xử lý thư (cần quyền xử lý hộp thư của Sales)."
     : paused
-      ? "DW1 đang tạm dừng: chỉ Trưởng bộ phận Sales cho DW1 chạy lại."
+      ? PAUSED_REASON
       : null;
 
   const after = (result: { ok: boolean; error?: unknown }) => {

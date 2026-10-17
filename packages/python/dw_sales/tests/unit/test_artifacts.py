@@ -74,7 +74,7 @@ from dw_sales.application.artifacts_service import (
     ArtifactService,
     ArtifactView,
 )
-from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored
+from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored, WorkerState
 from dw_sales.application.drafting import ArtifactCopy, ArtifactCopyPort, Drafting, People
 from dw_sales.application.order_artifacts import portal_checklist
 from dw_sales.application.order_intake import OrderIntake
@@ -191,6 +191,8 @@ class World:
     # The next commit fails: before anything is kept, or after (a commit that
     # went through and failed on the way back).
     commit_fails: str | None = None
+    # DW1's stop control in the workspace: running unless a test pauses it.
+    worker: WorkerState = field(default_factory=lambda: WorkerState(paused=False))
 
     def put(self, case: OrderCase | QuoteCase, scope: SalesScope = SCOPE) -> None:
         if isinstance(case, OrderCase):
@@ -238,6 +240,14 @@ def _render_key(record: ArtifactRecord) -> tuple[object, ...]:
     return (record.case_kind, record.case_id, record.case_version, record.kind, record.content_type)
 
 
+class _Worker:
+    def __init__(self, world: World) -> None:
+        self.world = world
+
+    async def state(self) -> WorkerState:
+        return self.world.worker
+
+
 class _Audit:
     def __init__(self) -> None:
         self.pending: list[AuditEvent] = []
@@ -254,6 +264,7 @@ class Work:
         self.orders = _Store(world.orders, scope)
         self.quotes = _Store(world.quotes, scope)
         self.artifacts = _Artifacts(world, scope)
+        self.worker = _Worker(world)
         self.audit = _Audit()
 
     async def commit(self) -> None:
@@ -747,6 +758,50 @@ async def test_each_kind_is_refused_after_an_edit_bumped_the_case_version(kind: 
     (fresh, *_) = await render(world, _bumped(case), kind)
     assert fresh.case_version == case.case_version + 1
     assert await download(world, case, fresh.artifact_id, as_=_who(kind))
+
+
+PAUSED = WorkerState(paused=True, changed_by=GIANG, changed_at=T0, reason=None)
+
+
+@pytest.mark.parametrize("kind", sorted(KINDS))
+async def test_each_kind_is_refused_while_dw1_is_paused_and_renders_once_resumed(
+    kind: str,
+) -> None:
+    """Rendering is DW1's work: a pause stops it (Đạt, 2026-10-18), with the
+    stop control's own refusal, and draws, stores and audits nothing."""
+    world = World(worker=PAUSED)
+    case = await KINDS[kind][0]()
+
+    with pytest.raises(ConflictError) as refused:
+        await render(world, case, kind)
+
+    assert refused.value.details["rule"] == "worker_paused"
+    assert refused.value.details["paused_by"] == str(GIANG)
+    assert "tạm dừng" in refused.value.message
+    assert (world.artifacts, world.objects, world.audit) == ({}, {}, [])
+
+    world.worker = WorkerState(paused=False, changed_by=GIANG, changed_at=NOW, reason="mở lại")
+    assert await render(world, case, kind)
+
+
+async def test_what_is_already_rendered_stays_readable_while_dw1_is_paused() -> None:
+    """A pause stops DW1 working, not people reading what it produced: the
+    list, the download, and asking again for a kind already recorded at this
+    version (which only answers what is stored) all still answer."""
+    world = World()
+    case = await _prepared_m01()
+    (view,) = await render(world, case, "bravo_upload")
+    world.worker = PAUSED
+    svc = service(world)
+
+    listed = await svc.order_artifacts(context(), case.case_id)
+    served = await download(world, case, view.artifact_id, as_=context())
+    again = await render(world, case, "bravo_upload")
+
+    assert [a.artifact_id for a in listed.artifacts] == [view.artifact_id]
+    assert served == world.objects[world.artifacts[(SCOPE, view.artifact_id)].object_key(SCOPE)]
+    assert [v.artifact_id for v in again] == [view.artifact_id]
+    assert len(world.objects) == 1
 
 
 async def test_a_render_names_the_version_the_caller_saw() -> None:

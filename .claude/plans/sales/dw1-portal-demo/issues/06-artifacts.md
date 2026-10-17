@@ -164,7 +164,11 @@ Open:
   eval world's artifact log refuses the same duplicate. Owed on Docker: the
   round trip of `358bfa9b231f` and
   `test_sales_store.py::test_a_kind_is_recorded_once_per_version_even_by_two_renders_at_once`.
-- Rendering is not refused while DW1 is paused (the pause stops processing).
-  Đạt to decide whether drafting is DW1's work for the stop control.
+- Rendering was not refused while DW1 is paused (the pause stopped
+  processing only). Closed 2026-10-18 (`f4705f9`), decided by Đạt: drafting
+  is DW1's work, so `ArtifactService` refuses to draw a file or a draft while
+  paused (the stop control's 409, `worker_paused`), whoever asks; the list,
+  the download and a kind already recorded at the version stay readable. The
+  files panel disables "Soạn …" with the inbox's pause sentence.
 - A person named on a case who has left the workspace refuses the render
   (fail closed), which also blocks re-rendering an old case's drafts.

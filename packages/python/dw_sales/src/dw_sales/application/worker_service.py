@@ -3,8 +3,12 @@
 Pausing needs `sales.worker.pause`, resuming `sales.worker.resume` and a
 reason; each is audited, the resume with its reason. A pause notifies every
 holder of `sales.worker.resume` in the workspace, saying who paused and when,
-and nothing else: no case, no amount (spec decision 8). While paused, "DW xử
-lý" is refused (`InboxService`).
+and nothing else: no case, no amount (spec decision 8). While paused,
+`require_running` refuses DW1's own work with one 409 (`worker_paused`, naming
+who paused it and when): "DW xử lý" (`InboxProcessing`, `ProcessingService`)
+and, since 2026-10-18 (Đạt), rendering a file or a draft (`ArtifactService`).
+Reading what DW1 already produced stays open: a pause stops DW1 working, not
+people reading what exists.
 
 The notification goes after the commit, through the platform's inbox, which
 delivers once per source key: a pause that committed is a pause, whether or
@@ -27,7 +31,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.case_store import SalesUnitOfWorkFactory, WorkerState
+from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory, WorkerState
 from dw_sales.application.ports import (
     MemberDirectoryPort,
     NotificationSenderPort,
@@ -38,6 +42,23 @@ from dw_sales.application.views import WorkerStateView, worker_state
 _LOCAL = ZoneInfo("Asia/Ho_Chi_Minh")
 
 logger = logging.getLogger("dw_sales.worker_service")
+
+
+async def require_running(work: SalesUnitOfWork) -> None:
+    """409 while DW1 is paused in the workspace, naming who paused it and when.
+
+    Asked inside the transaction that does the work, so a pause that committed
+    before it is seen."""
+    state = await work.worker.state()
+    if state.paused:
+        raise ConflictError(
+            "DW1 đang tạm dừng: Trưởng bộ phận Sales mở lại trước khi xử lý tiếp",
+            details={
+                "rule": "worker_paused",
+                "paused_by": str(state.changed_by),
+                "paused_at": state.changed_at.isoformat() if state.changed_at else "",
+            },
+        )
 
 
 @dataclass(frozen=True)

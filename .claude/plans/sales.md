@@ -774,8 +774,10 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   for a whole region, so the upload file carries the values as read
   (closed by ticket 15, 2026-10-12); an object written before its record commits can be orphaned
   (purged by offboarding; removed when its record does not commit since
-  2026-10-15, `76c3792`, ticket 06); rendering is not stopped by the pause (Đạt to
-  decide); the web client types need `pnpm run generate:api-types` (current:
+  2026-10-15, `76c3792`, ticket 06); rendering was not stopped by the pause:
+  closed 2026-10-18 (`f4705f9`, decided by Đạt: pausing DW1 also stops
+  rendering drafts and files; drawing one is refused with `worker_paused`,
+  reading what exists is not); the web client types need `pnpm run generate:api-types` (current:
   CI's "Generated API client is current" check was green on `99cb905`).
 
 - From ticket 05 (2026-10-05):
