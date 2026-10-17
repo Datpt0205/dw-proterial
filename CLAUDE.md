@@ -348,6 +348,20 @@ load" is enabled but not installed, and then `/ask-matt`, `/implement` and the
 plugin's `code-review` do not exist while the repository's own hooks and skills
 still run.
 
+### context-mode (MCP)
+
+`.mcp.json` registers context-mode, pinned (`context-mode@1.0.169`, Node 22.5+),
+and `.claude/settings.json` enables it for every clone. MCP only: its plugin's
+hooks are not installed, because they route shell commands into its own
+sandbox and around `pre-commit-gate.sh`. Its tools that run code
+(`ctx_execute`, `ctx_execute_file`, `ctx_batch_execute`) are in the gate's
+matcher, so a commit made there is gated too (`scripts/test_claude_hooks.sh`).
+Use it where a tool's output would be large: a test or CI log, a long
+document, a sweep over many files, summarised in its sandbox so only the
+answer enters the context. It saves context, not judgement: it does not pick
+what a task needs to read. `ctx_insight` and `ctx_upgrade` reach the internet;
+neither belongs on a customer's on-premises host.
+
 ### Issue tracker
 
 Local markdown in `.claude/plans/`, the plan the session hooks already enforce:
