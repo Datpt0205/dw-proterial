@@ -731,7 +731,14 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
     - The final eval bars are Đạt's; until then a live run fails only when
       the model read nothing (ticket 28).
 
-- **Sales roles decide unstamped approvals** (owed, Đạt; from
+- **Sales roles decide unstamped approvals** (CLOSED 2026-10-18, `89e33d6`:
+  Đạt chose "the platform stamps its own types". `memory.review` is stamped
+  with the new platform scope `memory.review`, held by `approver`, `manager`,
+  `director` and `approver_boost` and by no Sales role; migration
+  `445f93c2ea2a` grants it, stamps existing rows and adds
+  `ck_approval_requests_memory_review_stamped`; `docs/adr/0011` amendment
+  2026-10-18. A Sales decider now gets 404 on a memory review.
+  `platform-runtime.md` has the details. Kept below for the history; from
   `ac31ff0f2087`). Every Sales approval type is stamped, and since the
   platform merge of 2026-10-08 the database says so
   (`ck_approval_requests_sales_stamped`, migration `a64b918fc1f2`, NULL
