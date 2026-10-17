@@ -19,6 +19,15 @@ exports and purges by the tenant's prefix, and records each with its template
 ``id@version``, case version and sha256. Rendering a kind again at the same
 version returns what is stored. Both steps are audited, with ids and hashes
 and never an amount (spec decision 8).
+
+Rendering is DW1's work, so a pause stops it (Đạt, 2026-10-18): drawing a
+file or a draft while DW1 is paused in the workspace is refused with the
+stop control's own 409 (`worker_service.require_running`, `worker_paused`),
+asked in the transaction that would record the files, whoever asks, the API
+or a lane. What is already rendered stays readable: listing, downloading,
+and a render of a kind already recorded at this version (which only answers
+what is stored) are not refused. A pause stops DW1 working, not people
+reading what exists.
 """
 
 from __future__ import annotations
@@ -83,6 +92,7 @@ from dw_sales.application.quote_artifacts import (
     ycbg_draft,
 )
 from dw_sales.application.support import same_version, stored_order, stored_quote
+from dw_sales.application.worker_service import require_running
 from dw_sales.domain.catalog import ConfirmationChannel, Customer
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
@@ -413,6 +423,7 @@ class ArtifactService:
                 ]
                 current = [record for record in drawn if record.kind == kind]
                 if not current:
+                    await require_running(work)
                     drafting = Drafting(
                         case=case,
                         case_version=case.case_version,
@@ -496,6 +507,7 @@ class ArtifactService:
         case_id: uuid.UUID,
         artifact_id: uuid.UUID,
     ) -> Download:
+        """Reading a file already rendered: allowed while DW1 is paused."""
         await self.gate.require(
             context,
             SalesScopes.CASE_READ,

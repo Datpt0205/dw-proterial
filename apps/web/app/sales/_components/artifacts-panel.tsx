@@ -15,6 +15,7 @@ import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
 import { useResource, type Resource } from "../_lib/use-resource";
 import { GuardedButton } from "./guarded-button";
+import { PAUSED_REASON, useSalesFrame } from "./sales-frame";
 
 /** Save a file the browser holds, under the name the server listed. */
 export function saveBlob(blob: Blob, fileName: string) {
@@ -65,6 +66,8 @@ export function useCaseArtifacts(
  * checked. A kind is offered for rendering only while the API lists it as
  * available; a download is refused by the API before its state, after an
  * edit made it stale, and for a price-bearing file without the price scope.
+ * While DW1 is paused, rendering is DW1's work and is refused (the server's
+ * `worker_paused`); a file already rendered still downloads.
  */
 export function ArtifactsPanel({
   kind,
@@ -87,9 +90,11 @@ export function ArtifactsPanel({
   list: CaseArtifacts;
 }) {
   const name = usePeople();
+  const { paused } = useSalesFrame();
   const { run, pending } = useAction();
   const [error, setError] = useState<unknown>(null);
   const reload = list.reload;
+  const refused = !canRender ? renderReason : paused ? PAUSED_REASON : null;
 
   const artifacts = list.data?.artifacts ?? [];
   const current = new Set(
@@ -143,7 +148,7 @@ export function ArtifactsPanel({
                 <GuardedButton
                   key={k}
                   icon={<FileAddOutlined aria-hidden />}
-                  reason={canRender ? null : renderReason}
+                  reason={refused}
                   inlineReason={false}
                   loading={pending === `render/${k}`}
                   onClick={() => render(k)}

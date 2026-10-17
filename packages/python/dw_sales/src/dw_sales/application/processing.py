@@ -73,10 +73,11 @@ from dw_sales.application.case_store import (
     SalesUnitOfWorkFactory,
     Settlement,
 )
-from dw_sales.application.inbox_service import ON_A_CASE, require_running
+from dw_sales.application.inbox_service import ON_A_CASE
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.runs import WEB_CHANNEL
 from dw_sales.application.views import MessageDispositionView, ProcessingJobView, processing_job
+from dw_sales.application.worker_service import require_running
 from dw_sales.domain.dispositions import DispositionKind
 
 logger = logging.getLogger("dw_sales.processing")
