@@ -136,7 +136,10 @@ def build_model_adapters(
             structured_mode="json_schema",
             breaker=CircuitBreaker(clock=SystemClock(), name="model.onprem"),
         )
-    if config.is_deployed and Provider.OPENAI_COMPATIBLE not in adapters:
+    # A deployed process needs a real model: a gateway, or the deployment's own
+    # server. An on-premises deployment has only the second, and no key for the
+    # first (dw_sales ADR 0005; infra/onprem).
+    if config.is_deployed and not {Provider.OPENAI_COMPATIBLE, Provider.ONPREM} & adapters.keys():
         raise RuntimeError(f"the {config.profile} profile requires a real model provider")
     return adapters
 

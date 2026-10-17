@@ -432,7 +432,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "57d3c20ea1d303d4c0178f73f7645d3bbdaf8e67",
+  "git_sha": "0412e6e85cb32099db18fda29961e2c6f1d317f6",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -462,9 +462,9 @@
       "routing_policy_version": "1.0.0"
     },
     {
-      "checksum": "41dfd1172845ae72833801980a40844f237e79a6739753ec57a95c0e250028d3",
+      "checksum": "d4c034056f9fc0554d559e1e1643cf8be54b688375e5200f1c4e7c4552cf3bef",
       "profile_id": "onprem",
-      "routing_policy_version": "1.0.0"
+      "routing_policy_version": "1.1.0"
     },
     {
       "checksum": "a47c4db56d769ec1cff1ae08cea3ece76d8ff99c64af8233bb9ebb0043fb34a0",

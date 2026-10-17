@@ -30,6 +30,13 @@ def build_embeddings(settings: ApiSettings, profiles: ModelProfileRegistry) -> E
         base_url=settings.openai_base_url,
         api_key=settings.openai_api_key,
         profile_id=settings.model_profile,
+        # Guarded as the chat routes on the same server are (`model_stack`).
+        onprem_base_url=(
+            checked_base_url(settings, settings.onprem_model_base_url)
+            if settings.onprem_model_base_url
+            else None
+        ),
+        onprem_api_key=settings.onprem_model_api_key,
     )
 
 
@@ -38,14 +45,19 @@ def build_reranker(settings: ApiSettings) -> RerankPort | None:
     if settings.rerank_provider == "none":
         return None
     if settings.rerank_provider == "cohere_compatible":
-        if not settings.rerank_base_url or not settings.rerank_api_key:
-            raise ConfigError(
-                "cohere_compatible reranking needs DW_API_RERANK_BASE_URL and DW_API_RERANK_API_KEY"
-            )
+        if not settings.rerank_base_url:
+            raise ConfigError("cohere_compatible reranking needs DW_API_RERANK_BASE_URL")
+        # A hosted reranker takes a key; one the deployment serves itself on its
+        # own network (infra/onprem, llama.cpp's /rerank) takes none, and is
+        # admitted only as a host the deployment names (`checked_base_url`).
         # Checked here, not on the first search: a URL the client cannot use
         # fails every call, and the gateway would turn each failure into a
         # quietly unranked search with only a log line to show for it.
-        if settings.is_deployed and urlsplit(settings.rerank_base_url).scheme != "https":
+        if (
+            settings.is_deployed
+            and settings.rerank_api_key
+            and urlsplit(settings.rerank_base_url).scheme != "https"
+        ):
             raise ConfigError(
                 "a deployed reranker is reached over https; the key travels in a header",
                 details={"scheme": urlsplit(settings.rerank_base_url).scheme or "<none>"},
@@ -55,7 +67,7 @@ def build_reranker(settings: ApiSettings) -> RerankPort | None:
 
         return CohereCompatibleRerankAdapter(
             base_url=base_url,
-            api_key=settings.rerank_api_key,
+            api_key=settings.rerank_api_key or "",
             model=settings.rerank_model,
             timeout=settings.rerank_timeout_seconds,
         )

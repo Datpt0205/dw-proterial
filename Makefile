@@ -20,7 +20,8 @@ COMPOSE := docker compose --env-file .env -f infra/compose/docker-compose.yml
         db-migrate migrate lint format typecheck \
         test-unit coverage test-integration test-architecture test-contract test-hooks \
         test-e2e test-web test-web-sales web-screens demo-reset test-all eval-smoke test-eval-smoke \
-        generate-contracts new-context release-manifest release-manifest-check ci
+        generate-contracts new-context release-manifest release-manifest-check ci \
+        onprem-models onprem-up
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -134,6 +135,14 @@ web-screens: ## Screenshots of every page for review, per persona and viewport (
 demo-reset: ## DW1 demo start state: clear Sales cases, seed personas, Keycloak logins (local only)
 	uv run python -m dw_sales.testing.demo_reset
 	uv run python scripts/keycloak_dev_users.py
+
+onprem-models: ## Fetch the on-prem models once, on a host with internet (infra/onprem/README.md)
+	bash infra/onprem/fetch-models.sh
+
+onprem-up: ## Full stack on premises, uat profile, GPU (infra/onprem/README.md)
+	$(COMPOSE) -f infra/compose/docker-compose.uat.yml \
+	  -f infra/compose/docker-compose.onprem.yml -f infra/compose/docker-compose.onprem-gpu.yml \
+	  -f infra/compose/docker-compose.host.yml --profile full up -d --build
 
 check-model: ## Probe the configured LLM gateway (live call, needs OPENAI_* in .env)
 	uv run python scripts/check_model_gateway.py

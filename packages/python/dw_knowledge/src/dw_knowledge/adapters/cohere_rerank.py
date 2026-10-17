@@ -1,9 +1,12 @@
 """Cross-encoder reranking through a Cohere-style ``POST {base_url}/rerank`` API.
 
 Implements ``RerankPort``. The dialect is the one hosted rerank APIs share
-(Cohere, Jina, the FPT Cloud AI Marketplace): ``{"model", "query", "documents",
+(Cohere, Jina, the FPT Cloud AI Marketplace, and llama.cpp's server with
+``--rerank``, which infra/onprem runs): ``{"model", "query", "documents",
 "top_n"}`` in, ``{"results": [{"index", "relevance_score"}, ...]}`` out. The
-model runs at the provider; nothing is hosted here.
+llama.cpp shape is the one its own server tests assert (tools/server/tests/
+unit/test_rerank.py, read 2026-10-18); measured on a running server it is not
+yet.
 
 Measured against ``https://mkp-api.fptcloud.com/v1`` on 2026-10-06 with
 ``bge-reranker-v2-m3``: results come back sorted by score, ``document`` is null,
@@ -56,7 +59,9 @@ class CohereCompatibleRerankAdapter:
                 asyncio.timeout(self.timeout),
                 httpx.AsyncClient(
                     base_url=self.base_url.rstrip("/"),
-                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    # No key, no header: a reranker on the deployment's own
+                    # network takes none (infra/onprem).
+                    headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {},
                     timeout=self.timeout,
                     transport=self.transport,
                 ) as client,

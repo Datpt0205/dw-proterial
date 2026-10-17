@@ -95,4 +95,37 @@ def test_the_onprem_profile_stays_on_the_server_with_thinking_off() -> None:
     assert {route.reasoning_effort for route in declared} == {"none"}
     # Down means a person, never someone else's model.
     assert profile.fallback is None
-    assert profile.embedding is None
+    # Embeddings stay on the same server (infra/onprem): nothing leaves.
+    assert profile.embedding is not None
+    assert (profile.embedding.provider, profile.embedding.dimensions) == (Provider.ONPREM, 1024)
+
+
+def test_a_deployed_process_with_only_the_onprem_server_builds() -> None:
+    """An on-premises deployment has no gateway and no key for one: its own
+    server is the real provider a deployed profile requires."""
+    config = ModelProviderConfig(
+        provider="onprem",
+        model_profile="onprem",
+        profile="production",
+        is_deployed=True,
+        openai_api_key=None,
+        openai_base_url=None,
+        outbound_allowed_hosts=("model",),
+        onprem_base_url="http://model:11434/v1",
+    )
+    adapters = build_model_adapters(config, mock_fixtures_dir=FIXTURES)
+    assert set(adapters) == {Provider.ONPREM}
+
+
+def test_a_deployed_process_with_no_real_provider_is_refused() -> None:
+    config = ModelProviderConfig(
+        provider="onprem",
+        model_profile="onprem",
+        profile="production",
+        is_deployed=True,
+        openai_api_key=None,
+        openai_base_url=None,
+        onprem_base_url=None,
+    )
+    with pytest.raises(RuntimeError, match="requires a real model provider"):
+        build_model_adapters(config, mock_fixtures_dir=FIXTURES)

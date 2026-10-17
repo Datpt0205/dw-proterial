@@ -1,0 +1,7 @@
+# The model every DW1 step names (configs/models/onprem.yaml: qwen3.5-9b-dw):
+# Qwen3.5-9B (Ollama's default 4-bit quantisation) with an 8192-token context,
+# the size every DW1 step cuts its input to (`max_input_tokens: 6000` plus
+# room for the answer). Measured on this exact shape on 2026-10-13 (sales
+# tickets 28-33). Created by `make onprem-models`.
+FROM qwen3.5:9b
+PARAMETER num_ctx 8192

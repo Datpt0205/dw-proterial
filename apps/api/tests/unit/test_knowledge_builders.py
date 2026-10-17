@@ -59,17 +59,35 @@ def test_cohere_compatible_builds_the_hosted_adapter() -> None:
     assert reranker.timeout == 5
 
 
-@pytest.mark.parametrize(
-    "missing", [{"rerank_base_url": None}, {"rerank_api_key": None}, {"rerank_api_key": ""}]
-)
-def test_cohere_compatible_without_url_or_key_is_refused(missing: dict[str, object]) -> None:
-    complete: dict[str, object] = {
-        "rerank_provider": "cohere_compatible",
-        "rerank_base_url": "https://rerank.invalid/v1",
-        "rerank_api_key": "unit-test-key",
-    }
-    settings = _settings(**(complete | missing))
+def test_cohere_compatible_without_a_url_is_refused() -> None:
+    settings = _settings(rerank_provider="cohere_compatible", rerank_api_key="unit-test-key")
     with pytest.raises(ConfigError):
+        build_reranker(settings)
+
+
+@pytest.mark.parametrize("key", [None, ""])
+def test_a_reranker_on_the_deployments_own_network_takes_no_key(key: str | None) -> None:
+    """infra/onprem: llama.cpp on the internal network, plain http, no key,
+    admitted because the deployment names its host."""
+    settings = _settings(
+        rerank_provider="cohere_compatible",
+        profile="production",
+        rerank_base_url="http://rerank:8080",
+        rerank_api_key=key,
+        outbound_allowed_hosts=["rerank"],
+    )
+    reranker = build_reranker(settings)
+    assert isinstance(reranker, CohereCompatibleRerankAdapter)
+    assert reranker.api_key == ""
+
+
+def test_a_keyless_deployed_reranker_on_a_host_nobody_named_is_refused() -> None:
+    settings = _settings(
+        rerank_provider="cohere_compatible",
+        profile="production",
+        rerank_base_url="http://10.0.0.7:8080",
+    )
+    with pytest.raises(OutboundUrlError):
         build_reranker(settings)
 
 
