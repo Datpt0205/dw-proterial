@@ -51,6 +51,14 @@ interface SalesFrame {
   paused: boolean;
 }
 
+/**
+ * Why a step that is DW1's own work (processing a message, rendering a file
+ * or a draft) is refused while DW1 is paused: one sentence for every button.
+ * The server refuses the same step (`worker_paused`) whatever a button shows.
+ */
+export const PAUSED_REASON =
+  "DW1 đang tạm dừng: chỉ Trưởng bộ phận Sales cho DW1 chạy lại.";
+
 const SalesFrameContext = createContext<SalesFrame | null>(null);
 
 export function useSalesFrame(): SalesFrame {
@@ -134,7 +142,8 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
               {who ? `${who} tạm dừng` : "Đã tạm dừng"}
               {when ? ` lúc ${when}` : ""}.
               {worker.reason ? ` Lý do: ${worker.reason}.` : ""} DW1 không xử lý
-              thư mới cho tới khi chạy lại; các bước của Sales vẫn làm được.
+              thư mới và không soạn tệp hay thư nháp cho tới khi chạy lại; các
+              bước của Sales vẫn làm được, tệp đã soạn vẫn tải được.
             </>
           }
           action={

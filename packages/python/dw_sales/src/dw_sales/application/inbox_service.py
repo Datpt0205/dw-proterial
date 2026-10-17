@@ -72,6 +72,7 @@ from dw_sales.application.views import (
     inbox_message,
     message_disposition,
 )
+from dw_sales.application.worker_service import require_running
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
     CaseKind,
@@ -525,17 +526,3 @@ def _replied(stored: QuoteCase, outcome: ReplyAttached) -> QuoteCase:
             details={"case_id": str(stored.case_id)},
         )
     return outcome.case
-
-
-async def require_running(work: SalesUnitOfWork) -> None:
-    """409 while DW1 is paused in the workspace, naming who paused it and when."""
-    state = await work.worker.state()
-    if state.paused:
-        raise ConflictError(
-            "DW1 đang tạm dừng: Trưởng bộ phận Sales mở lại trước khi xử lý tiếp",
-            details={
-                "rule": "worker_paused",
-                "paused_by": str(state.changed_by),
-                "paused_at": state.changed_at.isoformat() if state.changed_at else "",
-            },
-        )
