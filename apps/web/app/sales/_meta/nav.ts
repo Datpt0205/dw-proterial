@@ -5,8 +5,10 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   FileTextOutlined,
+  FolderOpenOutlined,
   InboxOutlined,
   ScheduleOutlined,
+  SettingOutlined,
   ShoppingCartOutlined,
   SolutionOutlined,
 } from "@ant-design/icons";
@@ -28,6 +30,12 @@ import { SALES_BADGE } from "./badge-keys";
  * alone (`barNav`), and names the role prefix the Sales migration gives its
  * keys, so the shell names their Sales role from the role catalogue. The two
  * counts come from `badges.ts` beside this file.
+ *
+ * Nine pages do not fit one 56px row at `lg` (sales ticket 39, Đạt chose a
+ * submenu): the daily pages, which carry the counts, stay on the bar, and
+ * the rest sit under two submenus by the work they serve — the cases
+ * ("Hồ sơ") and running the process ("Quản lý"). A count never goes inside a
+ * submenu, where a closed bar would hide it. The drawer lists every page.
  */
 export const salesNav: NavEntry[] = [
   {
@@ -54,53 +62,67 @@ export const salesNav: NavEntry[] = [
         badgeKey: SALES_BADGE.inbox,
       },
       {
-        href: "/sales/orders",
-        label: "Đơn hàng",
-        hint: "Đơn hàng DW1 đã đọc, kết quả kiểm tra và quyết định của Sales",
-        icon: ShoppingCartOutlined,
-        scope: "sales.case.read",
+        key: "sales-cases",
+        label: "Hồ sơ",
+        icon: FolderOpenOutlined,
+        items: [
+          {
+            href: "/sales/orders",
+            label: "Đơn hàng",
+            hint: "Đơn hàng DW1 đã đọc, kết quả kiểm tra và quyết định của Sales",
+            icon: ShoppingCartOutlined,
+            scope: "sales.case.read",
+          },
+          {
+            href: "/sales/quotes",
+            label: "Báo giá",
+            hint: "Yêu cầu báo giá, phản hồi của Design, căn cứ giá và phê duyệt",
+            icon: FileTextOutlined,
+            scope: "sales.case.read",
+          },
+          {
+            href: "/sales/review",
+            label: "Kiểm chéo & duyệt",
+            hint: "Đơn chờ kiểm chéo và báo giá chờ duyệt: người làm không tự kiểm",
+            icon: AuditOutlined,
+            scope: "sales.case.read",
+          },
+        ],
       },
       {
-        href: "/sales/quotes",
-        label: "Báo giá",
-        hint: "Yêu cầu báo giá, phản hồi của Design, căn cứ giá và phê duyệt",
-        icon: FileTextOutlined,
-        scope: "sales.case.read",
-      },
-      {
-        href: "/sales/review",
-        label: "Kiểm chéo & duyệt",
-        hint: "Đơn chờ kiểm chéo và báo giá chờ duyệt: người làm không tự kiểm",
-        icon: AuditOutlined,
-        scope: "sales.case.read",
-      },
-      {
-        href: "/sales/layouts",
-        label: "Mẫu PO",
-        hint: "Mẫu PO của từng khách: Sales lập một lần, Trưởng bộ phận duyệt, DW1 đọc các PO sau theo mẫu",
-        icon: BuildOutlined,
-        scope: "sales.case.read",
-      },
-      {
-        href: "/sales/rules",
-        label: "Quy tắc",
-        hint: "Quy tắc và nội dung của công ty: đang áp dụng bản nào, đề xuất phiên bản mới, người khác duyệt",
-        icon: ControlOutlined,
-        scope: "sales.rules.propose",
-      },
-      {
-        href: "/sales/master-data",
-        label: "Dữ liệu giả lập",
-        hint: "Khách hàng, mã hàng, bảng quy đổi mã, báo giá và LME của bản demo (chỉ đọc)",
-        icon: DatabaseOutlined,
-        scope: "sales.case.read",
-      },
-      {
-        href: "/sales/overview",
-        label: "Tổng quan quy trình",
-        hint: "Số hồ sơ ở mỗi bước WIV-03-012 và WIV-03-023, trên bộ mẫu giả lập",
-        icon: DashboardOutlined,
-        scope: "sales.overview.read",
+        key: "sales-manage",
+        label: "Quản lý",
+        icon: SettingOutlined,
+        items: [
+          {
+            href: "/sales/layouts",
+            label: "Mẫu PO",
+            hint: "Mẫu PO của từng khách: Sales lập một lần, Trưởng bộ phận duyệt, DW1 đọc các PO sau theo mẫu",
+            icon: BuildOutlined,
+            scope: "sales.case.read",
+          },
+          {
+            href: "/sales/rules",
+            label: "Quy tắc",
+            hint: "Quy tắc và nội dung của công ty: đang áp dụng bản nào, đề xuất phiên bản mới, người khác duyệt",
+            icon: ControlOutlined,
+            scope: "sales.rules.propose",
+          },
+          {
+            href: "/sales/master-data",
+            label: "Dữ liệu giả lập",
+            hint: "Khách hàng, mã hàng, bảng quy đổi mã, báo giá và LME của bản demo (chỉ đọc)",
+            icon: DatabaseOutlined,
+            scope: "sales.case.read",
+          },
+          {
+            href: "/sales/overview",
+            label: "Tổng quan quy trình",
+            hint: "Số hồ sơ ở mỗi bước WIV-03-012 và WIV-03-023, trên bộ mẫu giả lập",
+            icon: DashboardOutlined,
+            scope: "sales.overview.read",
+          },
+        ],
       },
     ],
   },
