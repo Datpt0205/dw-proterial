@@ -44,6 +44,7 @@ from dw_kernel.errors import (
     ConflictError,
     InfrastructureError,
     NotFoundError,
+    PermissionDeniedError,
 )
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -267,6 +268,23 @@ class LangGraphWorkflowRunner:
             }
         )
 
+    @staticmethod
+    def _require_channel(run_context: RunContext, worker: WorkerDefinition) -> None:
+        """Refuse a run from a channel its worker does not declare.
+
+        `supported_channels` is the worker's own statement of where it may be
+        started from; read here, where every run begins, so a declaration that
+        omits a channel is a refusal rather than decoration (failure-modes #1).
+        """
+        if run_context.channel not in worker.supported_channels:
+            raise PermissionDeniedError(
+                "this worker does not take runs from this channel",
+                details={
+                    "worker_id": worker.worker_id,
+                    "channel": run_context.channel,
+                },
+            )
+
     async def _require_allowance(self, run_context: RunContext) -> None:
         """Refuse a run the tenant's plan has no runs or spend left for today.
 
@@ -294,6 +312,7 @@ class LangGraphWorkflowRunner:
         input_payload: dict[str, Any],
     ) -> uuid.UUID:
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
+        self._require_channel(run_context, worker.definition)
         run_context = self._with_autonomy(run_context, worker.definition)
         await self._require_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)
@@ -349,6 +368,7 @@ class LangGraphWorkflowRunner:
         Use ``drain`` to wait for runs whose reader left before shutting down.
         """
         worker = self.worker_registry.resolve(run_context.worker_id, run_context.worker_version)
+        self._require_channel(run_context, worker.definition)
         run_context = self._with_autonomy(run_context, worker.definition)
         await self._require_allowance(run_context)
         graph = self._graph(worker.definition.worker_id, worker.definition.graph_version)

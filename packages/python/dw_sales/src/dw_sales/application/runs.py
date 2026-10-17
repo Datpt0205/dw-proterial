@@ -95,7 +95,7 @@ def awaiting(case: OrderCase | QuoteCase) -> DecisionType | None:
     """The decision this case waits on in its state, if any."""
     if isinstance(case, QuoteCase):
         return DecisionType.QUOTE_APPROVAL if case.status is QuoteStatus.PENDING_APPROVAL else None
-    if case.status is OrderStatus.UPLOADED_TO_BRAVO and case.cross_check_required is not False:
+    if case.awaits_cross_check:
         return DecisionType.ORDER_CROSS_CHECK
     return None
 
