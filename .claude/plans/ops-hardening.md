@@ -57,6 +57,18 @@ context. All five are done and on `main`. The full narrative is at
 
 ## Open
 
+- **On premises (2026-10-18, `7eabeb4`, `2338aec`).** `infra/onprem/README.md`
+  and `docker-compose.onprem.yml`: Ollama 0.34.4 (qwen3.5-9b-dw, bge-m3) and
+  llama.cpp b11146 (bge-reranker-v2-m3) on dw-internal, pinned by digest;
+  the deployed check takes `onprem` as a real provider; embeddings follow the
+  route's provider; a keyless reranker over http only as an allow-listed
+  host; realm: 5-minute access tokens, lockout, password floor (the host
+  overlay had counted on a brute-force detection nobody enabled); the web
+  manifest. Owed, all on a machine with Docker: the first `onprem-models` and
+  `onprem-up`, Ollama's `/v1/embeddings` with bge-m3 and llama.cpp's
+  `/rerank` against the adapters (read from docs and tests, not measured),
+  trivy on both images, the realm applied to an existing Keycloak by hand.
+
 - **Offboarding exported each row of a partitioned table twice** (fixed
   2026-10-15, `953086f`). Every partition carries its own tenant policy, so
   the catalog query listed it beside its parent, and the export (and purge)
