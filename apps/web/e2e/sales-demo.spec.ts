@@ -1153,13 +1153,14 @@ test("11. An proposes a version of the order rules on the rules page; Giang deci
     })
     .click();
   const drawer = dialog(page, "Đề xuất phiên bản mới");
-  const editor = drawer.getByRole("textbox", { name: "Tài liệu (JSON)" });
-  // The editor opens on the tenant's version in force; the new one takes a
-  // number of its own, which the platform does not ship.
-  const document = JSON.parse(await editor.inputValue());
-  expect(typeof document.policy_version).toBe("string");
-  document.policy_version = VERSION;
-  await editor.fill(JSON.stringify(document, null, 2));
+  // The form (ticket 40) opens on the tenant's version in force; the new one
+  // takes a number of its own, which the platform does not ship.
+  const number = drawer.getByRole("textbox", { name: "Số phiên bản mới" });
+  await expect(number).not.toHaveValue("");
+  await number.fill(VERSION);
+  await drawer.getByRole("button", { name: "Xem thay đổi", exact: true }).click();
+  // The proposer reads what changes before sending it.
+  await expect(drawer.getByText(/thay đổi so với sales_order_rules@/)).toBeVisible();
   await drawer.getByRole("button", { name: "Gửi duyệt", exact: true }).click();
   await expect(drawer).toBeHidden();
   const proposed = page.getByRole("row").filter({ hasText: REF });
