@@ -99,7 +99,7 @@ move on.
 
 A new guard ships with a demonstration that removing the guard turns a test red.
 
-## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 5×)
+## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 6×)
 
 MinIO withdrew both its images from Docker Hub; the error read as a credentials
 problem. The move to quay.io held until MinIO withdrew them there too: twelve
@@ -108,7 +108,10 @@ because its cache still held the image. The store is SeaweedFS now, behind a
 contract test any replacement must pass first. deepagents changed which builtin tools it installs. Three of five
 documented assumptions about `SummarizationMiddleware` were wrong when run. mypy
 narrowed `sys.platform` differently per machine, so a typecheck passed locally and
-failed in CI.
+failed in CI. The on-premises compose said four requests share Ollama's loaded
+model; run, Ollama refused parallel slots for qwen35. On its first start, its
+GPU discovery timed out and it served on CPU behind a passing healthcheck
+(2026-10-19, `infra/onprem/README.md`).
 
 No amount of care catches these. The habit that does:
 
@@ -137,13 +140,16 @@ because PID 1 was the app and reaped nothing — and a zombie still counts again
 **Ask:** what removes this, and when? A cache with a TTL, a row with a retention
 rule, a dict keyed by something unbounded — each needs an answer.
 
-## 7. Defaults that fail open (found 3×)
+## 7. Defaults that fail open (found 4×)
 
 `provenance_refs jsonb DEFAULT '[]' NOT NULL` — an empty array satisfies NOT NULL,
 so "provenance required" was enforced by nothing. A cache read as
 `data.get("record_visibility", "open")`, so an entry written before the field
 existed reads as the permissive value for as long as its TTL. Text columns holding
-a fixed set of values with no CHECK constraint.
+a fixed set of values with no CHECK constraint. Three append-only Sales tables
+granted `SELECT, INSERT, DELETE` and still held UPDATE: the schema's
+`ALTER DEFAULT PRIVILEGES` had given it, and a GRANT never takes anything away
+(`89bcd0d49ea6`, tickets 41/42). A table that withholds a verb REVOKEs it.
 
 **Ask:** if this value is missing or unreadable, what happens? Refusing a
 legitimate action is recoverable; allowing an illegitimate one is not. Narrow

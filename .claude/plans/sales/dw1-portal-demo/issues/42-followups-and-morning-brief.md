@@ -103,3 +103,8 @@ numbers may be a constant: each customer's process differs.
   catalog tests that now cover the table (`test_sales_schema.py`,
   `test_privileges.py`, `test_rls_coverage.py`). The migration has not been
   applied anywhere.
+
+**Ran on local Docker on 2026-10-19.**
+
+- `test_sales_followups_db.py`: 11 of 12 passed at first. `test_the_application_may_not_edit_a_record` failed: `GRANT SELECT, INSERT, DELETE` does not remove the UPDATE that the sales schema's `ALTER DEFAULT PRIVILEGES` had already given `dw_app`. `89bcd0d49ea6` revokes it, together with the same hole on ticket 41's two tables.
+- After the fix, 12/12 passed, as did `test_privileges.py`, `test_rls_coverage.py` and the migration to head.

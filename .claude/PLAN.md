@@ -11,7 +11,7 @@ git: every slice's commit message, and the pre-split narrative at
 
 | Area                               | File                                | State                         |
 | ---------------------------------- | ----------------------------------- | ----------------------------- |
-| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | Done; on-prem stack unrun     |
+| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | Done; on-prem ran locally     |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                   |
@@ -34,13 +34,13 @@ own file and a row here.
   master data imported from Excel, previewed, approved, mock until then
   (41); follow-ups and the 07:30 brief, every timing in `sales_followups`
   (42). Migrations `d2b1394c67b1` -> `511ef1b71dee`.
-- **CI on main:** Prettier fixed (`63fe6b3`); the public-repo guard fails
-  until the `PUBLIC_REPO_DENYLIST` secret exists; integration tests red
-  since 2026-10-14, cause unread (logs need sign-in, no Docker here).
-- **Next:** on a machine with Docker and a GPU: the integration suites
-  (why red since 10-14 first), the migration round trips, `onprem-up`,
-  `check-rerank`, the live eval, `make web-screens` (pages of 39-42 never
-  looked at). Then DW2 when its documents arrive.
+- **2026-10-19, local Docker** (`sales.md` State): all suites pass per
+  package; two defects fixed (`89bcd0d49ea6`, route walks); six live evals
+  PASS on Qwen3.5-9B; on-prem compose ran (README); scope vs Proterial's
+  process in `sales/dw1-scope.md`; deny-list secret set.
+- **Next:** `make web-screens` (pages of 39–42 never looked at); `onprem-up`
+  in `uat` behind Caddy, with a warm-up call and a GPU check after the model
+  starts; then DW2 when its documents arrive.
 
 ## Decisions Đạt owes
 
@@ -48,11 +48,14 @@ own file and a row here.
   `Datpt0205/codebase`; 46 citations of ADR-001..003 point at documents this
   repo never had; renumbering duplicate ADRs (left as they are).
 - **Runtime:** a plan quota on direct model calls (the runner's only).
-- **Ops:** the `PUBLIC_REPO_DENYLIST` secret; the ClamAV bump is disabled
-  on GitHub and nothing is pushed until Đạt says so (ticket 25); restart WSL
-  for 25/27's checks.
+- **Ops:** the ClamAV bump is disabled on GitHub and nothing is pushed
+  until Đạt says so (ticket 25); the deny-list grows once real data arrives.
 - **On premises:** Proterial's AD details for LDAP federation, and whether
-  the plant keeps internet (M365, Exchange Online) or none.
+  the plant keeps internet (M365, Exchange Online) or none; whether the
+  on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
+  not only by configuration).
+- **DW1 scope** (`sales/dw1-scope.md`): what DW2 is (decks say CDO and
+  Mua hàng); the agent-proposed bars of t29–t33 (t31 at 89.8% of 90%).
 - **Sales:** Proterial's real data replaces the mock (`sales.md` Inputs
   owed); the interim defaults in `sales.md` Open.
 

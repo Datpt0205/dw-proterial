@@ -34,7 +34,10 @@ services:
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
       # Both DW1's lanes and the API read at once; four requests share the
-      # loaded model instead of queueing behind one.
+      # loaded model instead of queueing behind one. Measured 2026-10-19:
+      # Ollama 0.34.4 refuses parallel slots for the qwen35 architecture
+      # ("does not currently support parallel requests"), so qwen3.5-9b-dw
+      # still takes one request at a time; bge-m3 gets the four.
       OLLAMA_NUM_PARALLEL: "4"
       # The chat model and the embedder both stay loaded.
       OLLAMA_MAX_LOADED_MODELS: "2"

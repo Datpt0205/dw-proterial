@@ -46,14 +46,25 @@ make onprem-up              # uat profile, GPU, Caddy (DW_WEB_HOST/DW_API_HOST/D
     - DW1's readings, for example 94.6% of RFQ values read into the right field against an 85% bar.
     - Hardware: a GTX 1080 8 GB.
     - Data: fictional mock data, not Proterial's documents.
-- **Not yet run anywhere:**
-    - these compose files;
-    - Ollama 0.34.4's `/v1/embeddings` with bge-m3;
-    - llama.cpp's `/rerank` against `CohereCompatibleRerankAdapter`.
+- **Run on 2026-10-19** (a Windows 10 laptop, Docker Desktop on WSL2 with 10 GB, GTX 1080 Max-Q 8 GB; `local` profile, so without Caddy and the uat checks):
+    - these compose files (base, `onprem`, `onprem-gpu`), with `make onprem-models` filling the volume;
+    - **reranking**: `scripts/check_rerank.py` run inside the api container, through `build_reranker` → llama.cpp `/rerank`. The answer was ranked first (3.49 against -5.95 and -11.02), in 1.5 s on CPU;
+    - **embeddings**: bge-m3 through the api's own `build_embeddings`, at 1024 dimensions, with 25/25 layers on the GPU. Six texts took 2.6 s warm. A Vietnamese query ranked its Vietnamese, English and Japanese answers first, ahead of a related and an unrelated sentence;
+    - **chat**: `qwen3.5-9b-dw` in the container, with 32/33 layers on the GPU and both models resident (6.9 of 8 GB). Ollama 0.34.4 matched the 0.40.4 host build on the live evals: intent 89.8%, layout 97.7%, hand-off 98.6%.
+- **Measured on 2026-10-19 and not handled yet:**
+    - **The first GPU discovery can time out.** Ollama gives up after 30 s and serves on CPU, while the `ollama list` healthcheck still reports healthy. A restart found the GPU. Check `docker logs <model>` for `inference compute ... library=CUDA` after every start.
+    - **The first request loads the model.** Loading took 582 s for qwen and 68 s for bge-m3 from the Docker Desktop volume on this laptop. DW1's 120 s route timeout fails such a first call, which then degrades to a person. Send one warm-up call after `up`. `OLLAMA_KEEP_ALIVE=-1` keeps the model loaded from then on.
+    - **qwen35 serves one request at a time.** Ollama logs that this architecture "does not currently support parallel requests", so `OLLAMA_NUM_PARALLEL=4` does not apply to it. Requests queue instead.
+    - **api and worker can still reach the internet.** They sit on `dw-edge`, so "nothing is called outside" holds only through configuration (the provider settings and `DW_*_OUTBOUND_ALLOWED_HOSTS`), not through the network. Whether the on-premises overlay should drop `dw-edge` is Đạt's decision.
 
-    `make check-rerank` and the Sales eval (`run_evals.py --live onprem`) are the first things to run on the host.
+    Still not run: the `uat` profile behind Caddy (`make onprem-up`), and anything on the plant's own host.
 
-- **No trivy scan yet** of `ollama/ollama` or `llama.cpp:server`. Owed with the first pull (`reviewing-deployment-security`).
+- **trivy 0.74.0, HIGH/CRITICAL, 2026-10-19.** Both images carry fixable findings:
+    - `llama.cpp:server-b11146`: 2 HIGH, both openssl (CVE-2026-84782, fixed in `3.0.13-0ubuntu3.16`).
+    - `ollama/ollama:0.34.4`: the same 2 in openssl, plus 48 HIGH in the `ollama` Go binary (the Go stdlib, `x/crypto`, `x/net`, `x/text`, `x/image`, `x/mod`, `jsonparser`).
+    - No CRITICAL in either.
+
+    Both serve on `dw-internal` only, with no route off the host, but the pins should move. Before bumping Ollama, scan the newer image (the host's 0.40.4 matched 0.34.4 on the evals) and rerun this section's checks. That is Đạt's call. Scanning the Ollama image needs `--timeout 30m`: its 3.4 GB layer outlasts the default 5 minutes.
 
 ## Signing in and out
 
