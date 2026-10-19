@@ -25,6 +25,10 @@ export const salesApprovalHost: ApprovalHost = {
     label: "Mở hồ sơ để quyết định",
     href: (approval: Approval) => {
       if (approval.approval_type === "sales.rules") return null;
+      // A master-data import (ticket 41) is decided here too: its payload
+      // names the list, the file and the counts; `/sales/master-data` shows
+      // the preview and links to it.
+      if (approval.approval_type === "sales.catalog") return null;
       if (approval.approval_type === "sales.layout") return "/sales/layouts";
       const kind = String(approval.payload.case_kind ?? "");
       const caseId = String(approval.payload.case_id ?? "");
