@@ -656,6 +656,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 | 35, 36 | `8adbe08` | A split line confirmed per schedule; a tenant's own quote rules, pricing, copy and upload template       |
 | 37, 38 | `8894874` | Released rules versions stay readable; rule versions decided on platform approvals                       |
 | batch  | `57d3c20` | Eight batches merged 2026-10-15 (`b2ea975`..`57d3c20`): open items of 05-38 closed (State)               |
+| 40     | `6659d14` | Rules edited in a form drawn from each key's schema; diff before sending and on the approval (look owed) |
 
 ## Open
 

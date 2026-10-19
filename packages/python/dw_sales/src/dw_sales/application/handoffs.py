@@ -354,6 +354,13 @@ _LINE_NAMES: Final = frozenset({"line_no", "item", "quantity", "date"})
 _QUOTE_NAMES: Final = frozenset({"text"})
 
 
+def _named(names: frozenset[str]) -> dict[str, Any]:
+    """The placeholders a field may name, in its JSON Schema, so the rules
+    editor lists them from the set the validator holds, not from a copy
+    (ticket 40)."""
+    return {"x-placeholders": [f"{{{name}}}" for name in sorted(names)]}
+
+
 def _plain_placeholders(text: str, names: frozenset[str]) -> str:
     """``text`` when every placeholder in it is ``{name}`` for one of ``names``."""
     for _, name, spec, conversion in Formatter().parse(text):
@@ -372,8 +379,8 @@ class HandoffTemplate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     to: HandoffTeam
-    subject: str = Field(min_length=1, max_length=300)
-    body: str = Field(min_length=1, max_length=4000)
+    subject: str = Field(min_length=1, max_length=300, json_schema_extra=_named(_TEMPLATE_NAMES))
+    body: str = Field(min_length=1, max_length=4000, json_schema_extra=_named(_TEMPLATE_NAMES))
 
     @field_validator("subject", "body")
     @classmethod
@@ -391,8 +398,8 @@ class HandoffCopy(BaseModel):
     version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     # How a missing value, a line, a quote and a quantity are written.
     unknown: str = Field(min_length=1, max_length=60)
-    line: str = Field(min_length=1, max_length=300)
-    quote: str = Field(min_length=1, max_length=60)
+    line: str = Field(min_length=1, max_length=300, json_schema_extra=_named(_LINE_NAMES))
+    quote: str = Field(min_length=1, max_length=60, json_schema_extra=_named(_QUOTE_NAMES))
     templates: Mapping[HandoffKind, HandoffTemplate]
 
     @field_validator("line")

@@ -29,6 +29,7 @@ import {
   approvalTitle,
 } from "../../components/tool-approval";
 import { approvalClient, approvalInbox } from "../../lib/approvals/registry";
+import { ApprovalHostDetail } from "../../components/approval-host-detail";
 import { APPROVAL_STATUS } from "../../lib/approvals/status";
 import { useAuth } from "../../lib/auth/auth-context";
 import { formatDateTime } from "../../lib/dates";
@@ -181,6 +182,7 @@ export default function ApprovalsPage() {
                   {approval.reason}
                 </Typography.Text>
                 <ToolApprovalPayload payload={approval.payload} />
+                <ApprovalHostDetail approval={approval} />
                 {inbox?.kind === "link" && (
                   <div>
                     <Button

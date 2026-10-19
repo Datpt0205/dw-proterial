@@ -6825,6 +6825,40 @@
         "title": "PermissionSetView",
         "type": "object"
       },
+      "PlatformDocumentView": {
+        "description": "One version of a key the platform released, whole: what a proposal may\nstart from and what a diff compares with while the platform's applies.",
+        "properties": {
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          },
+          "document": {
+            "additionalProperties": true,
+            "title": "Document",
+            "type": "object"
+          },
+          "key": {
+            "$ref": "#/components/schemas/RuleKey"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ref",
+          "version",
+          "current",
+          "document"
+        ],
+        "title": "PlatformDocumentView",
+        "type": "object"
+      },
       "PlatformRuleView": {
         "properties": {
           "key": {
@@ -8648,6 +8682,25 @@
           "document"
         ],
         "title": "RuleProposalBody",
+        "type": "object"
+      },
+      "RuleSchemaView": {
+        "description": "What the rules editor draws one key's form from: the JSON Schema a\nproposal of it is validated by (ticket 40). The schema is the key's own\nmodel's, never a copy, so a field added to the model reaches the form.",
+        "properties": {
+          "json_schema": {
+            "additionalProperties": true,
+            "title": "Json Schema",
+            "type": "object"
+          },
+          "key": {
+            "$ref": "#/components/schemas/RuleKey"
+          }
+        },
+        "required": [
+          "key",
+          "json_schema"
+        ],
+        "title": "RuleSchemaView",
         "type": "object"
       },
       "RuleVersionView": {
@@ -17001,6 +17054,94 @@
           }
         },
         "summary": "Rules In Force",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/{key}/platform": {
+      "get": {
+        "operationId": "rule_platform_documents_api_v1_sales_rules__key__platform_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlatformDocumentView"
+                  },
+                  "title": "Response Rule Platform Documents Api V1 Sales Rules  Key  Platform Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rule Platform Documents",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/{key}/schema": {
+      "get": {
+        "operationId": "rule_schema_api_v1_sales_rules__key__schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleSchemaView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rule Schema",
         "tags": [
           "sales"
         ]

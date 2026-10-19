@@ -1,37 +1,58 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Alert,
   App,
   Button,
   Drawer,
   Form,
   Input,
+  Segmented,
+  Select,
+  Skeleton,
   Space,
   Table,
   Typography,
 } from "antd";
+import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import { formatDateTime, TIME_ZONE_LABEL } from "../../../lib/dates";
+import { errorCode } from "../../../lib/error-message";
 import { salesApi } from "../_lib/api";
-import { ActionError } from "../_lib/errors";
+import { ActionError, detailList } from "../_lib/errors";
 import { usePeople } from "../_lib/people";
 import {
   keyRows,
+  nextVersion,
   parseDocument,
   RULE_KEY,
   RULE_LAYER,
   RULE_STATUS,
-  startingDocument,
+  startOptions,
   type KeyRow,
   type RuleKey,
   type RuleVersion,
+  type StartOption,
 } from "../_lib/rules";
+import { pathLabel } from "../_lib/rule-labels";
+import {
+  formName,
+  fromForm,
+  parseLoc,
+  readSchema,
+  toForm,
+  versionField,
+  type JsonSchema,
+  type RuleNode,
+} from "../_lib/rule-schema";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
 import { salesCrumbs } from "../_components/crumbs";
+import { RuleDiffView } from "../_components/rule-diff-view";
+import { RuleFields } from "../_components/rule-form";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 
@@ -43,12 +64,13 @@ const TONE: Record<RuleVersion["status"], "ok" | "warn" | "err" | "unk"> = {
 };
 
 /**
- * Quy tắc (tickets 19, 38, 36): what applies to the company per key, the
+ * Quy tắc (tickets 19, 38, 36, 40): what applies to the company per key, the
  * platform's or its own, and every version it proposed. A holder of
  * `sales.rules.propose` (Sales phụ trách or Trưởng bộ phận Sales) proposes a
- * whole document for one key; the server validates it against that key's
- * schema and opens a `sales.rules` platform approval, which someone who did
- * not propose it decides on `/approvals` with a comment. Nothing here
+ * whole document for one key in a form drawn from that key's JSON Schema,
+ * reads what it changes against the version in force, and sends it; the
+ * server validates it again and opens a `sales.rules` platform approval,
+ * which someone who did not propose it decides on `/approvals`. Nothing here
  * decides. The server answers this page only to holders of the scope (the
  * documents can hold price rules), and refuses a proposal from anyone else.
  */
@@ -62,13 +84,19 @@ export default function RulesPage() {
   );
 }
 
+interface Proposing {
+  key: RuleKey;
+  /** The `StartOption.id` to open with; what applies now when absent. */
+  start?: string;
+}
+
 function Rules() {
   const name = usePeople();
   const rules = useResource(
     "sales/rules",
     useCallback(() => salesApi().rules(), []),
   );
-  const [proposing, setProposing] = useState<RuleKey | null>(null);
+  const [proposing, setProposing] = useState<Proposing | null>(null);
 
   const keys = rules.data ? keyRows(rules.data) : [];
   const versions = rules.data?.versions ?? [];
@@ -136,7 +164,7 @@ function Rules() {
                 render: (_, k) => (
                   <Button
                     size="small"
-                    onClick={() => setProposing(k.key)}
+                    onClick={() => setProposing({ key: k.key })}
                     aria-label={`Đề xuất phiên bản mới: ${RULE_KEY[k.key]}`}
                   >
                     Đề xuất phiên bản mới
@@ -145,7 +173,7 @@ function Rules() {
               },
             ]}
           />
-          <Typography.Title level={4} className="!mb-0">
+          <Typography.Title level={4} className="mb-0!">
             Các phiên bản của công ty
           </Typography.Title>
           <Table<RuleVersion>
@@ -219,17 +247,30 @@ function Rules() {
                   ),
               },
               {
-                title: "Yêu cầu duyệt",
-                key: "approval",
+                title: "Thao tác",
+                key: "actions",
                 fixed: "right",
-                render: (_, v) =>
-                  v.approval_id ? (
-                    <Link href={`/approvals/${v.approval_id}`}>
-                      Mở yêu cầu duyệt
-                    </Link>
-                  ) : (
-                    ""
-                  ),
+                render: (_, v) => (
+                  <Space orientation="vertical" size={2}>
+                    {v.approval_id ? (
+                      <Link href={`/approvals/${v.approval_id}`}>
+                        Mở yêu cầu duyệt
+                      </Link>
+                    ) : null}
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        setProposing({
+                          key: v.key,
+                          start: `tenant:${v.version_id}`,
+                        })
+                      }
+                      aria-label={`Dùng lại phiên bản này: ${v.ref}`}
+                    >
+                      Dùng lại phiên bản này
+                    </Button>
+                  </Space>
+                ),
               },
             ]}
           />
@@ -237,8 +278,9 @@ function Rules() {
       )}
       {proposing && rules.data ? (
         <ProposeDrawer
-          ruleKey={proposing}
-          start={startingDocument(rules.data, proposing)}
+          ruleKey={proposing.key}
+          initialStart={proposing.start}
+          view={rules.data}
           onClose={() => setProposing(null)}
           onProposed={() => {
             setProposing(null);
@@ -250,105 +292,360 @@ function Rules() {
   );
 }
 
+type View = SalesSchemas["RulesInForceView"];
+
+/** The proposal drawer: loads the key's schema and the platform's versions. */
 function ProposeDrawer({
   ruleKey,
-  start,
+  initialStart,
+  view,
   onClose,
   onProposed,
 }: {
   ruleKey: RuleKey;
-  start: ReturnType<typeof startingDocument>;
+  initialStart?: string;
+  view: View;
+  onClose: () => void;
+  onProposed: () => void;
+}) {
+  const schema = useResource(
+    `sales/rules/${ruleKey}/schema`,
+    useCallback(() => salesApi().ruleSchema(ruleKey), [ruleKey]),
+  );
+  const platform = useResource(
+    `sales/rules/${ruleKey}/platform`,
+    useCallback(() => salesApi().rulePlatformDocuments(ruleKey), [ruleKey]),
+  );
+  const root = useMemo(
+    () =>
+      schema.data
+        ? readSchema(schema.data.json_schema as unknown as JsonSchema)
+        : null,
+    [schema.data],
+  );
+  const options = useMemo(
+    () => (platform.data ? startOptions(view, ruleKey, platform.data) : []),
+    [platform.data, view, ruleKey],
+  );
+  const failed = schema.error ?? platform.error;
+  const title = `Đề xuất phiên bản mới: ${RULE_KEY[ruleKey]}`;
+
+  if (failed || !root || !platform.data)
+    return (
+      <Drawer open onClose={onClose} size="min(960px, 100vw)" title={title}>
+        {failed ? (
+          <LoadError
+            error={failed}
+            onRetry={() => {
+              schema.reload();
+              platform.reload();
+            }}
+          />
+        ) : (
+          <Skeleton active paragraph={{ rows: 10 }} />
+        )}
+      </Drawer>
+    );
+  return (
+    <Editor
+      ruleKey={ruleKey}
+      root={root}
+      options={options}
+      initialStart={initialStart}
+      title={title}
+      onClose={onClose}
+      onProposed={onProposed}
+    />
+  );
+}
+
+type Mode = "form" | "json";
+type Step = "edit" | "review";
+
+const SERVER_REFUSED = "Máy chủ không nhận giá trị này. Kiểm lại theo hướng dẫn của trường.";
+
+/** A start document with the next free version number already in place. */
+function prepared(
+  root: RuleNode,
+  option: StartOption,
+  options: readonly StartOption[],
+): Record<string, unknown> {
+  const field = versionField(root);
+  if (!field) return option.document;
+  return { ...option.document, [field]: nextVersion(options.map((o) => o.ref)) };
+}
+
+function Editor({
+  ruleKey,
+  root,
+  options,
+  initialStart,
+  title,
+  onClose,
+  onProposed,
+}: {
+  ruleKey: RuleKey;
+  root: RuleNode;
+  options: StartOption[];
+  initialStart?: string;
+  title: string;
   onClose: () => void;
   onProposed: () => void;
 }) {
   const { modal } = App.useApp();
   const { run, pending } = useAction();
+  const [form] = Form.useForm();
+  const inForce = options.find((o) => o.inForce) ?? options[0]!;
+  const [startId, setStartId] = useState(
+    options.some((o) => o.id === initialStart) ? initialStart! : inForce.id,
+  );
+  const start = options.find((o) => o.id === startId) ?? inForce;
+  const [initial, setInitial] = useState(() =>
+    toForm(root, prepared(root, start, options)),
+  );
+  const [mode, setMode] = useState<Mode>("form");
+  const [json, setJson] = useState("");
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>("edit");
+  const [proposal, setProposal] = useState<Record<string, unknown> | null>(null);
+  const [failedCount, setFailedCount] = useState(0);
+  const [unplaced, setUnplaced] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(null);
-  const [form] = Form.useForm<{ text: string }>();
+  const touched = useRef(false);
   const id = `propose/${ruleKey}`;
 
-  const propose = async (text: string) => {
-    const parsed = parseDocument(text);
-    if (!parsed.ok) return;
-    const body = { document: parsed.document };
+  // A new start replaces the whole form: the store is reset to it.
+  useEffect(() => {
+    form.resetFields();
+  }, [initial, form]);
+
+  const current = (): Record<string, unknown> =>
+    fromForm(root, form.getFieldsValue(true)) as Record<string, unknown>;
+
+  const confirmDiscard = (onOk: () => void, title: string) => {
+    if (!touched.current) return onOk();
+    modal.confirm({
+      title,
+      content: "Những thay đổi chưa gửi duyệt sẽ mất.",
+      okText: "Bỏ thay đổi",
+      okButtonProps: { danger: true },
+      cancelText: "Tiếp tục sửa",
+      autoFocusButton: "cancel",
+      onOk,
+    });
+  };
+
+  const choose = (next: string) =>
+    confirmDiscard(() => {
+      const option = options.find((o) => o.id === next)!;
+      setStartId(next);
+      setInitial(toForm(root, prepared(root, option, options)));
+      setJson(JSON.stringify(prepared(root, option, options), null, 2));
+      touched.current = false;
+      setError(null);
+      setFailedCount(0);
+      setUnplaced([]);
+    }, "Bắt đầu lại từ phiên bản khác?");
+
+  const switchMode = (next: Mode) => {
+    if (next === "json") {
+      setJson(JSON.stringify(current(), null, 2));
+      setJsonError(null);
+      setMode("json");
+      return;
+    }
+    const parsed = parseDocument(json);
+    if (!parsed.ok) return setJsonError(parsed.error);
+    setInitial(toForm(root, parsed.document));
+    setMode("form");
+  };
+
+  const review = (document: Record<string, unknown>) => {
+    setProposal(document);
+    setFailedCount(0);
+    setStep("review");
+  };
+
+  const toReview = () => {
+    if (mode === "form") return form.submit();
+    const parsed = parseDocument(json);
+    if (!parsed.ok) return setJsonError(parsed.error);
+    review(parsed.document);
+  };
+
+  /** The server's 422 named fields: put each on its field, the rest above. */
+  const placeServerErrors = (refusal: unknown) => {
+    if (!(refusal instanceof ApiError) || errorCode(refusal) !== "validation_failed")
+      return;
+    const locs = detailList(refusal.body.details?.errors);
+    if (!locs.length) return;
+    const values = mode === "form" ? form.getFieldsValue(true) : null;
+    const fields: { name: (string | number)[]; errors: string[] }[] = [];
+    const elsewhere: string[] = [];
+    for (const loc of locs) {
+      const path = parseLoc(loc);
+      const name = mode === "form" ? formName(root, values, path) : null;
+      if (name && name.length) fields.push({ name, errors: [SERVER_REFUSED] });
+      else elsewhere.push(path.length ? pathLabel(ruleKey, root, path) : "Toàn bộ tài liệu");
+    }
+    form.setFields(fields);
+    setFailedCount(fields.length);
+    setUnplaced(elsewhere);
+  };
+
+  const propose = async () => {
+    if (!proposal) return;
+    const body = { document: proposal };
     const result = await run(
       id,
       { ruleKey, ...body },
       (key) => salesApi().proposeRule(ruleKey, body, key),
       `Đã gửi duyệt phiên bản mới của "${RULE_KEY[ruleKey]}". Người khác duyệt trên trang Duyệt.`,
     );
-    if (result.ok) onProposed();
-    else setError(result.error);
+    if (result.ok) return onProposed();
+    setError(result.error);
+    setStep("edit");
+    placeServerErrors(result.error);
   };
 
-  // Closing with an edited document asks first (ui-quality §9).
-  const close = () => {
-    if (!form.isFieldsTouched()) return onClose();
-    modal.confirm({
-      title: "Bỏ tài liệu đang sửa?",
-      content: "Những thay đổi chưa gửi duyệt sẽ mất.",
-      okText: "Bỏ thay đổi",
-      okButtonProps: { danger: true },
-      cancelText: "Tiếp tục sửa",
-      autoFocusButton: "cancel",
-      onOk: onClose,
-    });
-  };
+  const close = () => confirmDiscard(onClose, "Bỏ tài liệu đang sửa?");
+  const proposedRef = proposal
+    ? `${ruleKey}@${String(proposal[versionField(root) ?? "version"] ?? "")}`
+    : "";
 
   return (
     <Drawer
       open
       onClose={close}
-      size="min(720px, 100vw)"
-      title={`Đề xuất phiên bản mới: ${RULE_KEY[ruleKey]}`}
+      size="min(960px, 100vw)"
+      title={title}
       destroyOnHidden
       footer={
-        <Space>
-          <Button
-            type="primary"
-            loading={pending === id}
-            onClick={() => form.submit()}
-          >
-            Gửi duyệt
-          </Button>
-          <Button onClick={close}>Hủy</Button>
-        </Space>
+        step === "edit" ? (
+          <Space wrap>
+            <Button type="primary" onClick={toReview}>
+              Xem thay đổi
+            </Button>
+            <Button onClick={close}>Hủy</Button>
+          </Space>
+        ) : (
+          <Space wrap>
+            <Button type="primary" loading={pending === id} onClick={() => void propose()}>
+              Gửi duyệt
+            </Button>
+            <Button onClick={() => setStep("edit")}>Quay lại sửa</Button>
+          </Space>
+        )
       }
     >
-      <Typography.Paragraph>
-        Gửi toàn bộ tài liệu của quy tắc, kèm số phiên bản mới: máy chủ kiểm tài
-        liệu theo lược đồ của quy tắc, và từ chối số phiên bản nền tảng đã dùng.{" "}
-        {start
-          ? start.inForce
-            ? "Ô dưới mở sẵn phiên bản công ty đang áp dụng."
-            : "Ô dưới mở sẵn phiên bản gần nhất của công ty."
-          : "Công ty chưa có phiên bản riêng của quy tắc này, và tài liệu của nền tảng không gửi tới trang này: hãy dán toàn bộ tài liệu."}
-      </Typography.Paragraph>
-      <Form
-        form={form}
-        layout="vertical"
-        validateTrigger="onBlur"
-        initialValues={{
-          text: start ? JSON.stringify(start.document, null, 2) : "",
-        }}
-        onFinish={({ text }) => propose(text)}
-      >
-        <Form.Item
-          name="text"
-          label="Tài liệu (JSON)"
-          rules={[
-            {
-              validator: async (_, text: string | undefined) => {
-                const parsed = parseDocument(text ?? "");
-                if (!parsed.ok) throw new Error(parsed.error);
-              },
-            },
-          ]}
-        >
-          <Input.TextArea rows={18} spellCheck={false} />
-        </Form.Item>
-      </Form>
-      <ActionError error={error} />
+      <div className="space-y-4">
+        <Typography.Paragraph>
+          Bắt đầu từ một phiên bản, sửa, rồi xem các thay đổi so với bản đang
+          áp dụng trước khi gửi duyệt. Máy chủ kiểm lại toàn bộ tài liệu, và
+          từ chối số phiên bản đã dùng.
+        </Typography.Paragraph>
+        {step === "review" && proposal ? (
+          <RuleDiffView
+            ruleKey={ruleKey}
+            root={root}
+            before={inForce.document}
+            after={proposal}
+            beforeRef={inForce.ref}
+            afterRef={proposedRef}
+          />
+        ) : null}
+        <div hidden={step === "review"} className="space-y-4">
+          <Form.Item
+            label="Bắt đầu từ phiên bản"
+            htmlFor="rule-start"
+            layout="vertical"
+            extra="Dùng lại một phiên bản cũ: nội dung của nó được mở sẵn, và gửi đi như một đề xuất mới."
+          >
+            <Select
+              id="rule-start"
+              value={startId}
+              onChange={choose}
+              options={options.map((o) => ({
+                value: o.id,
+                label: startLabel(o),
+              }))}
+            />
+          </Form.Item>
+          <Segmented<Mode>
+            value={mode}
+            onChange={switchMode}
+            options={[
+              { value: "form", label: "Biểu mẫu" },
+              { value: "json", label: "JSON nâng cao" },
+            ]}
+          />
+          {jsonError ? <Alert type="error" showIcon title={jsonError} /> : null}
+          {failedCount || unplaced.length ? (
+            <Alert
+              type="error"
+              showIcon
+              title={`Còn ${failedCount + unplaced.length} trường cần sửa.`}
+              description={
+                unplaced.length ? (
+                  <ul className="m-0 list-none p-0">
+                    {unplaced.map((where) => (
+                      <li key={where}>{where}: {SERVER_REFUSED}</li>
+                    ))}
+                  </ul>
+                ) : undefined
+              }
+            />
+          ) : null}
+          {mode === "json" ? (
+            <Form.Item label="Tài liệu (JSON)" htmlFor="rule-json" layout="vertical">
+              <Input.TextArea
+                id="rule-json"
+                rows={20}
+                spellCheck={false}
+                value={json}
+                onChange={(e) => {
+                  touched.current = true;
+                  setJson(e.target.value);
+                }}
+              />
+            </Form.Item>
+          ) : (
+            <Form
+              form={form}
+              layout="vertical"
+              validateTrigger="onBlur"
+              scrollToFirstError={{ focus: true }}
+              initialValues={initial as Record<string, unknown>}
+              onValuesChange={() => {
+                touched.current = true;
+              }}
+              onFinishFailed={({ errorFields }) => {
+                setUnplaced([]);
+                setFailedCount(errorFields.length);
+              }}
+              onFinish={() => {
+                setUnplaced([]);
+                review(current());
+              }}
+            >
+              <RuleFields ruleKey={ruleKey} root={root} form={form} base={inForce.document} />
+            </Form>
+          )}
+          <ActionError error={error} />
+        </div>
+      </div>
     </Drawer>
   );
+}
+
+/** "sales_kpi@1.0.1 · Riêng của công ty · Đã duyệt · đang áp dụng". */
+function startLabel(option: StartOption): string {
+  return [
+    option.ref,
+    RULE_LAYER[option.layer],
+    option.status ? RULE_STATUS[option.status] : null,
+    option.inForce ? "đang áp dụng" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

@@ -16,6 +16,7 @@ from dw_platform.application.authorization import ApprovalAudience, ScopeAuthori
 from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import (
+    OVERRIDABLE,
     RULES_APPROVAL,
     RuleDecisions,
     RuleKey,
@@ -480,3 +481,43 @@ async def test_a_delivery_that_loses_the_race_to_another_finds_the_decision_appl
 
     assert settled == applied
     assert len(world.store.state(ALPHA).audit) == audited
+
+
+# ------------------------------------------- what the editor reads (ticket 40) --
+
+
+async def test_each_key_serves_the_schema_its_proposals_are_validated_by() -> None:
+    world = _world()
+    for key in RuleKey:
+        served = await world.services.rules.schema(AN.context(), key.value)
+        assert served.key is key
+        assert served.json_schema == OVERRIDABLE[key].model_json_schema(by_alias=True)
+    # The hand-off copy names its placeholders from the set its validator holds.
+    handoffs = (await world.services.rules.schema(AN.context(), "sales_handoffs")).json_schema
+    template = handoffs["$defs"]["HandoffTemplate"]["properties"]
+    assert "{customer}" in template["body"]["x-placeholders"]
+    assert handoffs["properties"]["quote"]["x-placeholders"] == ["{text}"]
+
+
+async def test_the_platform_documents_are_every_release_newest_first_each_valid() -> None:
+    world = _world()
+    served = await world.services.rules.platform_documents(AN.context(), "sales_order_rules")
+    refs = [d.ref for d in served]
+    assert refs[0] == world.policies.order_rules.version
+    assert "sales_order_rules@1.0.0" in refs
+    assert [d.current for d in served] == [True] + [False] * (len(served) - 1)
+    for document in served:
+        # What a proposal starts from passes the key's schema as it is.
+        assert OrderRules.model_validate(dict(document.document)).ref == document.ref
+
+
+async def test_the_editor_reads_need_the_propose_scope_and_name_a_known_key() -> None:
+    world = _world()
+    for read in (world.services.rules.schema, world.services.rules.platform_documents):
+        with pytest.raises(PermissionDeniedError):
+            await read(READER.context(), "sales_order_rules")
+        # Refused before the key is looked at: a reader learns nothing of it.
+        with pytest.raises(PermissionDeniedError):
+            await read(READER.context(), "sales_nothing")
+        with pytest.raises(NotFoundError):
+            await read(AN.context(), "sales_nothing")

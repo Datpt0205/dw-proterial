@@ -615,6 +615,20 @@ export class SalesApi {
     return this.get<"/api/v1/sales/rules">("/api/v1/sales/rules");
   }
 
+  /** The JSON Schema a proposal of the key is validated by (ticket 40). */
+  ruleSchema(ruleKey: SalesSchemas["RuleKey"]) {
+    return this.get<"/api/v1/sales/rules/{key}/schema">(
+      `/api/v1/sales/rules/${enc(ruleKey)}/schema`,
+    );
+  }
+
+  /** Every version of the key the platform released, newest first, whole. */
+  rulePlatformDocuments(ruleKey: SalesSchemas["RuleKey"]) {
+    return this.get<"/api/v1/sales/rules/{key}/platform">(
+      `/api/v1/sales/rules/${enc(ruleKey)}/platform`,
+    );
+  }
+
   /**
    * Proposes a version of one key. It opens a `sales.rules` platform
    * approval, decided on `/approvals` by someone other than the proposer.
