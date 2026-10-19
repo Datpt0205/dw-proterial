@@ -1,0 +1,1177 @@
+{
+  "sales_bravo_upload": {
+    "$defs": {
+      "UploadColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "enum": [
+              "customer_code",
+              "po_no",
+              "revision",
+              "po_date",
+              "currency",
+              "line_no",
+              "customer_item_code",
+              "prv_code",
+              "description",
+              "quantity",
+              "uom",
+              "unit_price",
+              "amount",
+              "requested_date",
+              "suggested_delivery_date"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "header": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Header",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "header"
+        ],
+        "title": "UploadColumn",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "``configs/policies/sales_bravo_upload@<version>.yaml``.\n\nMOCK until Proterial sends its Bravo import template (requirements doc,\ninputs owed): the file says so, and so does every file made from it.",
+    "properties": {
+      "columns": {
+        "items": {
+          "$ref": "#/$defs/UploadColumn"
+        },
+        "minItems": 1,
+        "title": "Columns",
+        "type": "array"
+      },
+      "description": {
+        "default": "",
+        "title": "Description",
+        "type": "string"
+      },
+      "mock": {
+        "title": "Mock",
+        "type": "boolean"
+      },
+      "policy_id": {
+        "const": "sales_bravo_upload",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "schema_version": {
+        "const": "1.0",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "sheet_name": {
+        "maxLength": 31,
+        "minLength": 1,
+        "pattern": "^[^\\[\\]:*?/\\\\']+$",
+        "title": "Sheet Name",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "mock",
+      "sheet_name",
+      "columns"
+    ],
+    "title": "BravoUploadLayout",
+    "type": "object"
+  },
+  "sales_documents": {
+    "$defs": {
+      "DocumentTemplate": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "patternProperties": {
+              "^[a-z][a-z0-9_.]{0,63}$": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "title": "Columns",
+            "type": "object"
+          },
+          "labels": {
+            "patternProperties": {
+              "^[a-z][a-z0-9_.]{0,63}$": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "title": "Labels",
+            "type": "object"
+          },
+          "title": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "words": {
+            "patternProperties": {
+              "^[a-z][a-z0-9_.]{0,63}$": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "title": "Words",
+            "type": "object"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "DocumentTemplate",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "``configs/copy/sales_documents@<version>.yaml``: every sheet's words.",
+    "properties": {
+      "copy_id": {
+        "const": "sales_documents",
+        "title": "Copy Id",
+        "type": "string"
+      },
+      "description": {
+        "default": "",
+        "title": "Description",
+        "type": "string"
+      },
+      "documents": {
+        "patternProperties": {
+          "^[a-z][a-z0-9_]{2,47}$": {
+            "additionalProperties": {
+              "$ref": "#/$defs/DocumentTemplate"
+            },
+            "propertyNames": {
+              "enum": [
+                "vi",
+                "en",
+                "ja"
+              ]
+            },
+            "type": "object"
+          }
+        },
+        "title": "Documents",
+        "type": "object"
+      },
+      "mock": {
+        "title": "Mock",
+        "type": "boolean"
+      },
+      "schema_version": {
+        "const": "1.0",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "version",
+      "mock",
+      "copy_id",
+      "documents"
+    ],
+    "title": "SalesDocumentCopy",
+    "type": "object"
+  },
+  "sales_emails": {
+    "$defs": {
+      "EmailAddress": {
+        "additionalProperties": false,
+        "description": "One mailbox: an address and the name shown beside it.",
+        "properties": {
+          "address": {
+            "maxLength": 254,
+            "title": "Address",
+            "type": "string"
+          },
+          "display_name": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Display Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "title": "EmailAddress",
+        "type": "object"
+      },
+      "EmailTemplate": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Line"
+          },
+          "subject": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Subject",
+            "type": "string"
+          },
+          "words": {
+            "patternProperties": {
+              "^[a-z][a-z0-9_.]{0,63}$": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "title": "Words",
+            "type": "object"
+          }
+        },
+        "required": [
+          "subject",
+          "body"
+        ],
+        "title": "EmailTemplate",
+        "type": "object"
+      },
+      "SenderPolicy": {
+        "additionalProperties": false,
+        "description": "Who a customer draft is from, until Proterial answers (requirements\ndoc §3.1): ``drafting_pic`` is the address of the PIC who drafts it and\nsends it from their own mailbox; ``shared_sales`` the shared address.\nReply-To is always the shared Sales address.",
+        "properties": {
+          "from": {
+            "enum": [
+              "drafting_pic",
+              "shared_sales"
+            ],
+            "title": "From",
+            "type": "string"
+          },
+          "shared_sales": {
+            "$ref": "#/$defs/EmailAddress"
+          }
+        },
+        "required": [
+          "from",
+          "shared_sales"
+        ],
+        "title": "SenderPolicy",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "``configs/copy/sales_emails@<version>.yaml``: every draft's words.",
+    "properties": {
+      "copy_id": {
+        "const": "sales_emails",
+        "title": "Copy Id",
+        "type": "string"
+      },
+      "description": {
+        "default": "",
+        "title": "Description",
+        "type": "string"
+      },
+      "emails": {
+        "patternProperties": {
+          "^[a-z][a-z0-9_]{2,47}$": {
+            "additionalProperties": {
+              "$ref": "#/$defs/EmailTemplate"
+            },
+            "propertyNames": {
+              "enum": [
+                "vi",
+                "en",
+                "ja"
+              ]
+            },
+            "type": "object"
+          }
+        },
+        "title": "Emails",
+        "type": "object"
+      },
+      "mock": {
+        "title": "Mock",
+        "type": "boolean"
+      },
+      "schema_version": {
+        "const": "1.0",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "sender": {
+        "$ref": "#/$defs/SenderPolicy"
+      },
+      "version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "version",
+      "mock",
+      "copy_id",
+      "sender",
+      "emails"
+    ],
+    "title": "SalesEmailCopy",
+    "type": "object"
+  },
+  "sales_handoffs": {
+    "$defs": {
+      "HandoffTemplate": {
+        "additionalProperties": false,
+        "description": "One kind's words. Placeholders are filled by code from the hand-off:\n``{customer}``, ``{po}``, ``{message_id}``, ``{lines}``, ``{lot}``,\n``{quotes}``, ``{quantity}``.",
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{lines}",
+              "{lot}",
+              "{message_id}",
+              "{po}",
+              "{quantity}",
+              "{quotes}"
+            ]
+          },
+          "subject": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string",
+            "x-placeholders": [
+              "{customer}",
+              "{lines}",
+              "{lot}",
+              "{message_id}",
+              "{po}",
+              "{quantity}",
+              "{quotes}"
+            ]
+          },
+          "to": {
+            "enum": [
+              "pc",
+              "qa"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "subject",
+          "body"
+        ],
+        "title": "HandoffTemplate",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "`configs/copy/sales_handoffs@<version>.yaml`: the hand-off's words.",
+    "properties": {
+      "copy_id": {
+        "pattern": "^sales_handoffs$",
+        "title": "Copy Id",
+        "type": "string"
+      },
+      "line": {
+        "maxLength": 300,
+        "minLength": 1,
+        "title": "Line",
+        "type": "string",
+        "x-placeholders": [
+          "{date}",
+          "{item}",
+          "{line_no}",
+          "{quantity}"
+        ]
+      },
+      "quote": {
+        "maxLength": 60,
+        "minLength": 1,
+        "title": "Quote",
+        "type": "string",
+        "x-placeholders": [
+          "{text}"
+        ]
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "templates": {
+        "additionalProperties": {
+          "$ref": "#/$defs/HandoffTemplate"
+        },
+        "propertyNames": {
+          "enum": [
+            "delivery_change",
+            "complaint",
+            "sample_request"
+          ]
+        },
+        "title": "Templates",
+        "type": "object"
+      },
+      "unknown": {
+        "maxLength": 60,
+        "minLength": 1,
+        "title": "Unknown",
+        "type": "string"
+      },
+      "version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "copy_id",
+      "version",
+      "unknown",
+      "line",
+      "quote",
+      "templates"
+    ],
+    "title": "HandoffCopy",
+    "type": "object"
+  },
+  "sales_kpi": {
+    "$defs": {
+      "StepId": {
+        "description": "The surveyed steps' ids as a closed set: what a value kept per step (the\nKPI's manual baseline) is keyed by, so a version written before a step was\nsurveyed reads that step as the platform has it (`rules.read_over`). Held\nto `WIV_STEPS`, which owns the steps themselves, by a test.",
+        "enum": [
+          "O1",
+          "O2",
+          "O3",
+          "O4",
+          "O5",
+          "O6",
+          "O7",
+          "O8",
+          "O9",
+          "O10",
+          "O11",
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4",
+          "Q5",
+          "Q6",
+          "Q7",
+          "Q8",
+          "Q9",
+          "Q10",
+          "Q11",
+          "Q12"
+        ],
+        "title": "StepId",
+        "type": "string"
+      }
+    },
+    "additionalProperties": false,
+    "description": "What the overview measures against.\n\n``order_confirmation_target_hours``: from the PO's arrival to the order\nconfirmed. ``quotation_target_days``: from the request's arrival to the\nquotation sent (1, Đạt 2026-10-05). ``manual_baseline_minutes``: what one\npass of each surveyed step (O1 … Q12) takes by hand today, the column the\nper-step export carries beside its counts. Every surveyed step is listed:\na step without a baseline would export as if it took no time. Keyed by\n`StepId`, a closed set, so a version written before a step was surveyed\nis read with the platform's baseline for it, and a key the survey does\nnot have is refused.",
+    "properties": {
+      "manual_baseline_minutes": {
+        "additionalProperties": {
+          "type": "integer"
+        },
+        "propertyNames": {
+          "$ref": "#/$defs/StepId"
+        },
+        "title": "Manual Baseline Minutes",
+        "type": "object"
+      },
+      "order_confirmation_target_hours": {
+        "exclusiveMinimum": 0,
+        "maximum": 720,
+        "title": "Order Confirmation Target Hours",
+        "type": "integer"
+      },
+      "policy_id": {
+        "const": "sales_kpi",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "quotation_target_days": {
+        "exclusiveMinimum": 0,
+        "maximum": 90,
+        "title": "Quotation Target Days",
+        "type": "integer"
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "order_confirmation_target_hours",
+      "quotation_target_days",
+      "manual_baseline_minutes"
+    ],
+    "title": "SalesKpi",
+    "type": "object"
+  },
+  "sales_order_rules": {
+    "$defs": {
+      "ExportControlRule": {
+        "additionalProperties": false,
+        "properties": {
+          "denial_list_max_age_days": {
+            "maximum": 3650,
+            "minimum": 1,
+            "title": "Denial List Max Age Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "denial_list_max_age_days"
+        ],
+        "title": "ExportControlRule",
+        "type": "object"
+      },
+      "FindingCode": {
+        "description": "The order checks of the spec's findings table, one code each.",
+        "enum": [
+          "code_unmapped",
+          "code_ambiguous",
+          "price_mismatch",
+          "currency_mismatch",
+          "uom_mismatch",
+          "quotation_missing",
+          "lme_band_mismatch",
+          "moq_violation",
+          "pack_multiple",
+          "line_total_mismatch",
+          "value_uncertain",
+          "customer_unknown",
+          "duplicate_po",
+          "requested_date_short_lt",
+          "missing_noc_esf",
+          "revised_po",
+          "revision_without_base",
+          "customer_temporary",
+          "sender_unverified",
+          "legacy_encoding",
+          "requested_date_missing"
+        ],
+        "title": "FindingCode",
+        "type": "string"
+      },
+      "IntakeCaps": {
+        "additionalProperties": false,
+        "description": "How much of a sender's file a reader opens before refusing it (decision 13).",
+        "properties": {
+          "max_attachment_bytes": {
+            "minimum": 1,
+            "title": "Max Attachment Bytes",
+            "type": "integer"
+          },
+          "max_cells": {
+            "minimum": 1,
+            "title": "Max Cells",
+            "type": "integer"
+          },
+          "max_pages": {
+            "minimum": 1,
+            "title": "Max Pages",
+            "type": "integer"
+          },
+          "max_sheets": {
+            "minimum": 1,
+            "title": "Max Sheets",
+            "type": "integer"
+          },
+          "max_unpacked_bytes": {
+            "minimum": 1,
+            "title": "Max Unpacked Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_attachment_bytes",
+          "max_unpacked_bytes",
+          "max_sheets",
+          "max_pages",
+          "max_cells"
+        ],
+        "title": "IntakeCaps",
+        "type": "object"
+      },
+      "LayoutOnboarding": {
+        "additionalProperties": false,
+        "description": "How a newly approved PO layout earns trust (ticket 30).",
+        "properties": {
+          "uncertain_first_pos": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Uncertain First Pos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "uncertain_first_pos"
+        ],
+        "title": "LayoutOnboarding",
+        "type": "object"
+      },
+      "LmeBandRule": {
+        "additionalProperties": false,
+        "properties": {
+          "months_before_po_date": {
+            "maximum": 12,
+            "minimum": 0,
+            "title": "Months Before Po Date",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "months_before_po_date"
+        ],
+        "title": "LmeBandRule",
+        "type": "object"
+      },
+      "ModelAssist": {
+        "additionalProperties": false,
+        "description": "Which DW1 steps a model takes part in for the tenant (dw_sales ADR 0005).\n\nEach is a switch the platform ships off; a tenant turns one on in its own\nversion of these rules. The case stamps the version it was checked under,\nso what a case was read with never changes after.",
+        "properties": {
+          "description_attributes": {
+            "title": "Description Attributes",
+            "type": "boolean"
+          },
+          "layout_proposal": {
+            "title": "Layout Proposal",
+            "type": "boolean"
+          },
+          "message_intent": {
+            "title": "Message Intent",
+            "type": "boolean"
+          },
+          "reply_intent": {
+            "title": "Reply Intent",
+            "type": "boolean"
+          },
+          "request_handoff": {
+            "title": "Request Handoff",
+            "type": "boolean"
+          },
+          "rfq_extraction": {
+            "title": "Rfq Extraction",
+            "type": "boolean"
+          },
+          "unread_retry_hours": {
+            "maximum": 168,
+            "minimum": 0,
+            "title": "Unread Retry Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "description_attributes",
+          "message_intent",
+          "rfq_extraction",
+          "unread_retry_hours",
+          "reply_intent",
+          "request_handoff",
+          "layout_proposal"
+        ],
+        "title": "ModelAssist",
+        "type": "object"
+      },
+      "PriceRule": {
+        "additionalProperties": false,
+        "properties": {
+          "relative_tolerance": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Relative Tolerance"
+          }
+        },
+        "required": [
+          "relative_tolerance"
+        ],
+        "title": "PriceRule",
+        "type": "object"
+      },
+      "Severity": {
+        "description": "``error`` is blocking; ``warning`` is shown. Both need a decision.",
+        "enum": [
+          "error",
+          "warning"
+        ],
+        "title": "Severity",
+        "type": "string"
+      },
+      "ShortLeadTimeRule": {
+        "additionalProperties": false,
+        "properties": {
+          "day_basis": {
+            "const": "calendar",
+            "title": "Day Basis",
+            "type": "string"
+          },
+          "from": {
+            "enum": [
+              "received_date",
+              "po_date"
+            ],
+            "title": "From",
+            "type": "string"
+          },
+          "lead_time": {
+            "enum": [
+              "item_standard",
+              "quotation"
+            ],
+            "title": "Lead Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "lead_time",
+          "day_basis"
+        ],
+        "title": "ShortLeadTimeRule",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "`sales_order_rules`: the fine print of the order checks, versioned.\n\nEvery finding code has a severity, and a policy that leaves one out is\nrefused: a code with no severity would be a check whose result blocks\nnothing, which reads as a safeguard and is not one.",
+    "properties": {
+      "cross_check_required": {
+        "title": "Cross Check Required",
+        "type": "boolean"
+      },
+      "export_control": {
+        "$ref": "#/$defs/ExportControlRule"
+      },
+      "export_control_mode": {
+        "enum": [
+          "warn",
+          "block_confirmation"
+        ],
+        "title": "Export Control Mode",
+        "type": "string"
+      },
+      "findings": {
+        "additionalProperties": {
+          "$ref": "#/$defs/Severity"
+        },
+        "propertyNames": {
+          "$ref": "#/$defs/FindingCode"
+        },
+        "title": "Findings",
+        "type": "object"
+      },
+      "fiscal_year_start_month": {
+        "maximum": 12,
+        "minimum": 1,
+        "title": "Fiscal Year Start Month",
+        "type": "integer"
+      },
+      "intake": {
+        "$ref": "#/$defs/IntakeCaps"
+      },
+      "layout_onboarding": {
+        "$ref": "#/$defs/LayoutOnboarding"
+      },
+      "lme_band": {
+        "$ref": "#/$defs/LmeBandRule"
+      },
+      "model_assist": {
+        "$ref": "#/$defs/ModelAssist"
+      },
+      "policy_id": {
+        "const": "sales_order_rules",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "price": {
+        "$ref": "#/$defs/PriceRule"
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "short_lead_time": {
+        "$ref": "#/$defs/ShortLeadTimeRule"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "price",
+      "lme_band",
+      "short_lead_time",
+      "cross_check_required",
+      "export_control_mode",
+      "export_control",
+      "intake",
+      "fiscal_year_start_month",
+      "model_assist",
+      "layout_onboarding",
+      "findings"
+    ],
+    "title": "OrderRules",
+    "type": "object"
+  },
+  "sales_pricing": {
+    "$defs": {
+      "CopperAdder": {
+        "additionalProperties": false,
+        "description": "What is added to LME copper while LME is inside ``band``, in USD per tonne.",
+        "properties": {
+          "adder_usd_per_tonne": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Adder Usd Per Tonne"
+          },
+          "band": {
+            "$ref": "#/$defs/LmeBand"
+          }
+        },
+        "required": [
+          "band",
+          "adder_usd_per_tonne"
+        ],
+        "title": "CopperAdder",
+        "type": "object"
+      },
+      "FreightRate": {
+        "additionalProperties": false,
+        "description": "Freight for one incoterm to one destination, per kilometre of cable.",
+        "properties": {
+          "destination": {
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
+            "title": "Destination",
+            "type": "string"
+          },
+          "incoterm": {
+            "enum": [
+              "EXW",
+              "FCA",
+              "FOB",
+              "CIF",
+              "DAP",
+              "DDP"
+            ],
+            "title": "Incoterm",
+            "type": "string"
+          },
+          "usd_per_km": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Usd Per Km"
+          }
+        },
+        "required": [
+          "incoterm",
+          "destination",
+          "usd_per_km"
+        ],
+        "title": "FreightRate",
+        "type": "object"
+      },
+      "LmeBand": {
+        "additionalProperties": false,
+        "description": "The price holds while LME copper is in ``[low, high)`` USD per tonne.",
+        "properties": {
+          "high_usd_per_tonne": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "High Usd Per Tonne"
+          },
+          "kind": {
+            "const": "lme_band",
+            "default": "lme_band",
+            "title": "Kind",
+            "type": "string"
+          },
+          "low_usd_per_tonne": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Low Usd Per Tonne"
+          }
+        },
+        "required": [
+          "low_usd_per_tonne",
+          "high_usd_per_tonne"
+        ],
+        "title": "LmeBand",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "copper_adders": {
+        "items": {
+          "$ref": "#/$defs/CopperAdder"
+        },
+        "minItems": 1,
+        "title": "Copper Adders",
+        "type": "array"
+      },
+      "floor_margin": {
+        "anyOf": [
+          {
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "type": "string"
+          }
+        ],
+        "title": "Floor Margin"
+      },
+      "freight": {
+        "items": {
+          "$ref": "#/$defs/FreightRate"
+        },
+        "minItems": 1,
+        "title": "Freight",
+        "type": "array"
+      },
+      "policy_id": {
+        "const": "sales_pricing",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "copper_adders",
+      "floor_margin",
+      "freight"
+    ],
+    "title": "SalesPricing",
+    "type": "object"
+  },
+  "sales_quote_rules": {
+    "$defs": {
+      "ReferenceRule": {
+        "additionalProperties": false,
+        "description": "How the quote policy forms a reference price, and the band around it.\n\nThe reference is the mean of the prices the item is quoted at on the day,\nto any customer, in the request's currency, counting a price tied to an\nLME band only while the month's LME is inside that band. It is rounded to\nthe precision those prices are quoted in, and the band is rounded inwards,\nso rounding never widens it.",
+        "properties": {
+          "band_above_percent": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Band Above Percent"
+          },
+          "band_below_percent": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Band Below Percent"
+          }
+        },
+        "required": [
+          "band_below_percent",
+          "band_above_percent"
+        ],
+        "title": "ReferenceRule",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "The quote policy: `configs/policies/sales_quote_rules@<version>.yaml`.\n\nWhoever loads the file validates it here, so every version passes the\nsame checks before any of it is applied.",
+    "properties": {
+      "copper_basis": {
+        "enum": [
+          "fixed",
+          "lme_band"
+        ],
+        "title": "Copper Basis",
+        "type": "string"
+      },
+      "design_mailboxes": {
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 20,
+        "title": "Design Mailboxes",
+        "type": "array"
+      },
+      "policy_id": {
+        "const": "sales_quote_rules",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "reference_price": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ReferenceRule"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "validity_days": {
+        "maximum": 366,
+        "minimum": 1,
+        "title": "Validity Days",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "reference_price",
+      "copper_basis",
+      "validity_days",
+      "design_mailboxes"
+    ],
+    "title": "QuoteRules",
+    "type": "object"
+  }
+}

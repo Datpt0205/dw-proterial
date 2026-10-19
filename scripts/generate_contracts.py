@@ -1,4 +1,5 @@
-"""Export the OpenAPI snapshot (contracts/openapi/openapi.json).
+"""Export the OpenAPI snapshot (contracts/openapi/openapi.json), and the JSON
+Schemas a context serves as data (contracts/jsonschema/*.json).
 
 The API app is built with placeholder connection strings — no live services are
 contacted; engines/clients are lazy. The snapshot is the contract-test baseline
@@ -18,6 +19,25 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SNAPSHOT = REPO_ROOT / "contracts" / "openapi" / "openapi.json"
+JSONSCHEMA = REPO_ROOT / "contracts" / "jsonschema"
+
+
+def sales_rule_schemas() -> dict[str, object]:
+    """Each Sales rule key's JSON Schema, as `GET /sales/rules/{key}/schema`
+    serves it (ticket 40). OpenAPI types that route's `json_schema` as an
+    object, so the web's label table is checked against this file instead."""
+    from dw_sales.application.rules import OVERRIDABLE, rule_schema
+
+    return {key.value: rule_schema(key) for key in OVERRIDABLE}
+
+
+# PLUG-IN POINT: a JSON Schema a context serves as a value (not as a route's
+# type) and a test outside Python reads. One file per entry.
+JSON_SCHEMAS = {"sales_rules.json": sales_rule_schemas}
+
+
+def _render(value: object) -> str:
+    return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
 def build_openapi() -> dict[str, object]:
@@ -57,22 +77,29 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="verify snapshot is current")
     args = parser.parse_args()
 
-    schema = build_openapi()
-    rendered = json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    outputs = {SNAPSHOT: _render(build_openapi())}
+    outputs |= {JSONSCHEMA / name: _render(build()) for name, build in JSON_SCHEMAS.items()}
 
     if args.check:
-        if not SNAPSHOT.exists() or SNAPSHOT.read_text(encoding="utf-8") != rendered:
+        stale = [
+            path
+            for path, rendered in outputs.items()
+            if not path.exists() or path.read_text(encoding="utf-8") != rendered
+        ]
+        for path in stale:
             print(
-                "OpenAPI snapshot is stale — run `make generate-contracts`",
+                f"{path.relative_to(REPO_ROOT)} is stale — run `make generate-contracts`",
                 file=sys.stderr,
             )
+        if stale:
             return 1
-        print("OpenAPI snapshot is current.")
+        print("OpenAPI snapshot and JSON Schemas are current.")
         return 0
 
-    SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-    SNAPSHOT.write_text(rendered, encoding="utf-8")
-    print(f"Wrote {SNAPSHOT.relative_to(REPO_ROOT)} ({len(rendered)} bytes)")
+    for path, rendered in outputs.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(rendered, encoding="utf-8")
+        print(f"Wrote {path.relative_to(REPO_ROOT)} ({len(rendered)} bytes)")
     return 0
 
 

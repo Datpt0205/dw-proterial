@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import type { ApiClient } from "@dw/api-client";
 import type { Approval } from "@dw/contracts";
 import { salesApprovalHost } from "../../app/sales/_meta/approvals";
@@ -55,6 +56,20 @@ export function inboxFor(
 /** The client deciding an approval of this type. */
 export function approvalClient(approvalType: string): ApiClient {
   return clientFor(HOSTS, approvalType);
+}
+
+/** What the approval's context draws about it, if anything. */
+export function detailFor(
+  hosts: readonly ApprovalHost[],
+  approval: Approval,
+): ComponentType<{ approval: Approval }> | null {
+  return findHost(hosts, approval.approval_type)?.detail?.(approval) ?? null;
+}
+
+export function approvalDetail(
+  approval: Approval,
+): ComponentType<{ approval: Approval }> | null {
+  return detailFor(HOSTS, approval);
 }
 
 /** Where this approval is decided, when its context has its own inbox. */
