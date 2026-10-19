@@ -11,7 +11,9 @@ describe("the web app manifest", () => {
 
   it("names icons that exist, 192 and 512 among them, one maskable", () => {
     for (const icon of m.icons ?? []) {
-      expect(existsSync(join(__dirname, "..", "..", "public", icon.src))).toBe(true);
+      expect(existsSync(join(__dirname, "..", "..", "public", icon.src))).toBe(
+        true,
+      );
     }
     const sizes = (m.icons ?? []).map((i) => i.sizes);
     expect(sizes).toEqual(expect.arrayContaining(["192x192", "512x512"]));

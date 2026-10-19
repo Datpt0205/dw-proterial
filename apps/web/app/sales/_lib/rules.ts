@@ -87,25 +87,21 @@ export function startOptions(
   const own = view.versions
     .filter((v) => v.key === key)
     .sort((a, b) => b.proposed_at.localeCompare(a.proposed_at))
-    .map(
-      (v): StartOption => ({
-        id: `tenant:${v.version_id}`,
-        ref: v.ref,
-        layer: "tenant",
-        status: v.status,
-        inForce: view.layers[key] === "tenant" && v.ref === inForce,
-        document: v.document,
-      }),
-    );
-  const shipped = platform.map(
-    (p): StartOption => ({
-      id: `platform:${p.ref}`,
-      ref: p.ref,
-      layer: "platform",
-      inForce: view.layers[key] !== "tenant" && p.ref === inForce,
-      document: p.document,
-    }),
-  );
+    .map((v): StartOption => ({
+      id: `tenant:${v.version_id}`,
+      ref: v.ref,
+      layer: "tenant",
+      status: v.status,
+      inForce: view.layers[key] === "tenant" && v.ref === inForce,
+      document: v.document,
+    }));
+  const shipped = platform.map((p): StartOption => ({
+    id: `platform:${p.ref}`,
+    ref: p.ref,
+    layer: "platform",
+    inForce: view.layers[key] !== "tenant" && p.ref === inForce,
+    document: p.document,
+  }));
   const all = [...own, ...shipped];
   return [...all.filter((o) => o.inForce), ...all.filter((o) => !o.inForce)];
 }
@@ -119,18 +115,16 @@ function semver(ref: string): number[] {
  * has used, the company's and the platform's, since the server refuses both.
  */
 export function nextVersion(refs: readonly string[]): string {
-  const highest = refs
-    .map(semver)
-    .reduce(
-      (best, v) => {
-        for (let i = 0; i < 3; i++) {
-          if ((v[i] ?? 0) !== (best[i] ?? 0))
-            return (v[i] ?? 0) > (best[i] ?? 0) ? v : best;
-        }
-        return best;
-      },
-      [0, 0, 0],
-    );
+  const highest = refs.map(semver).reduce(
+    (best, v) => {
+      for (let i = 0; i < 3; i++) {
+        if ((v[i] ?? 0) !== (best[i] ?? 0))
+          return (v[i] ?? 0) > (best[i] ?? 0) ? v : best;
+      }
+      return best;
+    },
+    [0, 0, 0],
+  );
   return `${highest[0] ?? 0}.${highest[1] ?? 0}.${(highest[2] ?? 0) + 1}`;
 }
 

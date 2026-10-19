@@ -8,11 +8,11 @@ can happen on another machine.
 
 ## What runs
 
-| Service  | What                                                   | Network               |
-| -------- | ------------------------------------------------------ | --------------------- |
-| `model`  | Ollama 0.34.4: `qwen3.5-9b-dw` (chat), `bge-m3` (embed) | `dw-internal` only    |
-| `rerank` | llama.cpp b11146 (CPU): `bge-reranker-v2-m3` Q8_0      | `dw-internal` only    |
-| the rest | the usual stack (`docker-compose.yml`)                 | unchanged             |
+| Service  | What                                                    | Network            |
+| -------- | ------------------------------------------------------- | ------------------ |
+| `model`  | Ollama 0.34.4: `qwen3.5-9b-dw` (chat), `bge-m3` (embed) | `dw-internal` only |
+| `rerank` | llama.cpp b11146 (CPU): `bge-reranker-v2-m3` Q8_0       | `dw-internal` only |
+| the rest | the usual stack (`docker-compose.yml`)                  | unchanged          |
 
 - **Profile.** API and worker run on the `onprem` profile (`configs/models/onprem.yaml`).
 - **No outside access.** No gateway, no API key and no Zalo.
@@ -43,15 +43,16 @@ make onprem-up              # uat profile, GPU, Caddy (DW_WEB_HOST/DW_API_HOST/D
 ## Measured, and not yet
 
 - **Measured on this exact model shape** (Ollama, `qwen3.5:9b`, num_ctx 8192, thinking off; 2026-10-13, sales tickets 28 to 33):
-  - DW1's readings, for example 94.6% of RFQ values read into the right field against an 85% bar.
-  - Hardware: a GTX 1080 8 GB.
-  - Data: fictional mock data, not Proterial's documents.
+    - DW1's readings, for example 94.6% of RFQ values read into the right field against an 85% bar.
+    - Hardware: a GTX 1080 8 GB.
+    - Data: fictional mock data, not Proterial's documents.
 - **Not yet run anywhere:**
-  - these compose files;
-  - Ollama 0.34.4's `/v1/embeddings` with bge-m3;
-  - llama.cpp's `/rerank` against `CohereCompatibleRerankAdapter`.
+    - these compose files;
+    - Ollama 0.34.4's `/v1/embeddings` with bge-m3;
+    - llama.cpp's `/rerank` against `CohereCompatibleRerankAdapter`.
 
-  `make check-rerank` and the Sales eval (`run_evals.py --live onprem`) are the first things to run on the host.
+    `make check-rerank` and the Sales eval (`run_evals.py --live onprem`) are the first things to run on the host.
+
 - **No trivy scan yet** of `ollama/ollama` or `llama.cpp:server`. Owed with the first pull (`reviewing-deployment-security`).
 
 ## Signing in and out
@@ -59,11 +60,13 @@ make onprem-up              # uat profile, GPU, Caddy (DW_WEB_HOST/DW_API_HOST/D
 The portal signs people in through **Keycloak, on the same host**. On premises it stays that way; the only question is where the accounts come from.
 
 **Where accounts come from:**
+
 - **Recommended: Proterial's Active Directory, through Keycloak's LDAP user federation.** People sign in with their Windows account. Disabling someone in AD stops their next sign-in. No password is stored in this stack, and no internet is needed.
 - **Microsoft Entra ID (OIDC brokering) also works,** but every sign-in then goes through Microsoft's cloud. This fits only if the plant keeps internet access for M365 anyway.
 - **Before customer SSO is brokered,** close ADR 0024's open item 2 (email-based account linking).
 
 **What the realm does** (`infra/keycloak/dw-realm.json`, tested in `apps/api/tests/unit/test_keycloak_realm.py`):
+
 - **Sign-in length:** a sign-in lasts a shift (idle 8 h, at most 10 h).
 - **Expiry warning:** the portal warns 5 minutes before the end and offers "Tiếp tục phiên"; it never navigates away on its own.
 - **Access tokens** last 5 minutes and are refreshed in the background. A person who signs out, or is disabled, can no longer act after about 5 minutes. The API only verifies the token's signature, so this lifetime is the bound.
@@ -80,11 +83,13 @@ The portal signs people in through **Keycloak, on the same host**. On premises i
 Zalo (and Microsoft Teams) bots work only through the provider's servers, which an on-premises stack does not call.
 
 **What people use instead:**
+
 - **The portal on the LAN** (`https://<DW_WEB_HOST>`, behind Caddy). This is the product: every list, case, approval and decision is there already.
 - **The in-app inbox** (the bell): every approval, hand-off and reminder lands there. It needs nothing outside the host.
 - **Email through Proterial's own mail relay**, as a link only (`/approvals/<id>`, never a price or a PO line). This is the one channel that is not built yet.
 
 **Recommendation on a desktop app:** do not build one. A browser app installs on Windows as an app (Edge or Chrome: "Install this site as an app") once the site has a web manifest and HTTPS. It gets a window and a taskbar icon, and it updates when the server updates. A desktop build (Electron or Tauri) adds:
+
 - code signing;
 - an update channel;
 - a second client to test;
@@ -92,6 +97,7 @@ Zalo (and Microsoft Teams) bots work only through the provider's servers, which 
 and for that it gives nothing a Sales or Purchasing user needs.
 
 **What this requires:**
+
 - **HTTPS on the LAN.** Caddy with `DW_CADDY_LOCAL_CERTS=1` issues certificates from its own CA. Proterial's IT pushes that root certificate to the PCs once, through Group Policy. Without that, browsers warn and refuse to install the app.
 - **Hostnames in the plant's DNS** for `DW_WEB_HOST`, `DW_API_HOST` and `DW_AUTH_HOST`.
 - **A web manifest.** It is in place (`apps/web/app/manifest.ts` and the icons in `public/icons`), and its colours come from the theme. Nobody has installed the app on a real PC yet.

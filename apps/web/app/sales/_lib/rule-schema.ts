@@ -149,7 +149,8 @@ function node(root: JsonSchema, raw: JsonSchema, nullable: boolean): RuleNode {
       );
     throw new Error(`unsupported anyOf in ${schema.title ?? "schema"}`);
   }
-  if ("const" in schema) return { kind: "fixed", value: schema.const, nullable };
+  if ("const" in schema)
+    return { kind: "fixed", value: schema.const, nullable };
   if (schema.enum)
     return { kind: "choice", values: schema.enum.map(String), nullable };
   switch (schema.type) {
@@ -284,8 +285,7 @@ export function fieldPaths(root: RuleNode): string[] {
       // A map of maps draws a heading for each inner map.
       if (n.value.kind === "map") out.push(`${prefix}.*`);
       walk(n.value, `${prefix}.*`);
-    }
-    else if (n.kind === "list") walk(n.item, `${prefix}[]`);
+    } else if (n.kind === "list") walk(n.item, `${prefix}[]`);
   };
   walk(root, "");
   return out;
@@ -375,7 +375,10 @@ export function toForm(n: RuleNode, value: unknown): unknown {
       return Object.fromEntries(
         n.fields.map((f) => [
           f.name,
-          toForm(f.node, f.name in record ? record[f.name] : (f.default ?? empty(f.node))),
+          toForm(
+            f.node,
+            f.name in record ? record[f.name] : (f.default ?? empty(f.node)),
+          ),
         ]),
       );
     }
@@ -399,7 +402,9 @@ export function toForm(n: RuleNode, value: unknown): unknown {
 export function fromForm(n: RuleNode, value: unknown): unknown {
   if (n.nullable && n.kind !== "text") {
     const toggled = (value ?? { on: false }) as Toggled;
-    return toggled.on ? fromForm({ ...n, nullable: false }, toggled.value) : null;
+    return toggled.on
+      ? fromForm({ ...n, nullable: false }, toggled.value)
+      : null;
   }
   switch (n.kind) {
     case "object": {
@@ -422,7 +427,9 @@ export function fromForm(n: RuleNode, value: unknown): unknown {
       if (value === null || value === undefined || value === "") return null;
       return n.decimal ? String(value) : Number(value);
     case "text":
-      return n.nullable && (value === "" || value == null) ? null : (value ?? "");
+      return n.nullable && (value === "" || value == null)
+        ? null
+        : (value ?? "");
     case "switch":
       return Boolean(value);
     default:
@@ -451,7 +458,9 @@ export function formName(
       value = (value as Toggled | undefined)?.value;
     }
     if (n.kind === "object") {
-      const field: RuleField | undefined = n.fields.find((f) => f.name === step);
+      const field: RuleField | undefined = n.fields.find(
+        (f) => f.name === step,
+      );
       if (!field) return null;
       name.push(step);
       value = isRecord(value) ? value[String(step)] : undefined;

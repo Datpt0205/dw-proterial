@@ -53,7 +53,11 @@ function walk(before: unknown, after: unknown, path: DocPath, out: Change[]) {
     ];
     for (const key of keys) {
       if (!(key in after))
-        out.push({ kind: "removed", path: [...path, key], before: before[key] });
+        out.push({
+          kind: "removed",
+          path: [...path, key],
+          before: before[key],
+        });
       else if (!(key in before))
         out.push({ kind: "added", path: [...path, key], after: after[key] });
       else walk(before[key], after[key], [...path, key], out);
@@ -125,7 +129,12 @@ function listDiff(
       // Two objects in one place are one item edited; two scalars are a swap.
       if (isRecord(b) && isRecord(a)) walk(b, a, [...path, added[p]!], out);
       else
-        out.push({ kind: "changed", path: [...path, added[p]!], before: b, after: a });
+        out.push({
+          kind: "changed",
+          path: [...path, added[p]!],
+          before: b,
+          after: a,
+        });
     }
     for (const b of removed.slice(paired))
       out.push({ kind: "removed", path: [...path, b], before: before[b] });

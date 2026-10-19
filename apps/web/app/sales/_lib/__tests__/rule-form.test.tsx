@@ -102,7 +102,12 @@ function Harness({
         onFinish={() => onDone(fromForm(root, form.getFieldsValue(true)))}
         onFinishFailed={({ errorFields }) => onFailed(errorFields.length)}
       >
-        <RuleFields ruleKey="sales_kpi" root={root} form={form} base={DOCUMENT} />
+        <RuleFields
+          ruleKey="sales_kpi"
+          root={root}
+          form={form}
+          base={DOCUMENT}
+        />
         <Button htmlType="submit">Gửi</Button>
       </Form>
     </UiProvider>
@@ -126,17 +131,26 @@ describe("the schema-driven rules form (ticket 40)", () => {
       expect(screen.getByRole("switch", { name: "Enabled" })).toBeTruthy();
       // A long choice is a Select, a short one a Segmented, each value in words.
       expect(screen.getByRole("combobox", { name: "Mode" })).toBeTruthy();
-      expect(screen.getByText("Cảnh báo, xác nhận được sau khi ghi nhận")).toBeTruthy();
+      expect(
+        screen.getByText("Cảnh báo, xác nhận được sau khi ghi nhận"),
+      ).toBeTruthy();
       expect(screen.getByText("Giá cố định")).toBeTruthy();
       expect(screen.getByText("Theo mức LME")).toBeTruthy();
       expect(
-        (screen.getByRole("spinbutton", { name: "Margin" }) as HTMLInputElement).value,
+        (screen.getByRole("spinbutton", { name: "Margin" }) as HTMLInputElement)
+          .value,
       ).toBe("0,18");
-      expect(screen.getByRole("textbox", { name: "Note" }).tagName).toBe("INPUT");
-      expect(screen.getByRole("textbox", { name: "Body" }).tagName).toBe("TEXTAREA");
+      expect(screen.getByRole("textbox", { name: "Note" }).tagName).toBe(
+        "INPUT",
+      );
+      expect(screen.getByRole("textbox", { name: "Body" }).tagName).toBe(
+        "TEXTAREA",
+      );
       // A nested object is a section; a section that may be off is a switch.
       expect(screen.getByText("Limits")).toBeTruthy();
-      expect(screen.getAllByRole("spinbutton", { name: "Max pages" })).toHaveLength(1);
+      expect(
+        screen.getAllByRole("spinbutton", { name: "Max pages" }),
+      ).toHaveLength(1);
       expect(screen.getByRole("switch", { name: "Dùng band" })).toBeTruthy();
       // A list and a map, with their items.
       expect(screen.getByRole("textbox", { name: "Mục 2" })).toBeTruthy();
@@ -209,15 +223,22 @@ describe("the schema-driven rules form (ticket 40)", () => {
     async () => {
       const done = vi.fn();
       render(<Harness onDone={done} />);
-      const list = screen.getByText("Mailboxes").closest(".ant-card") as HTMLElement;
-      fireEvent.click(within(list).getByRole("button", { name: "Chuyển mục 2 lên" }));
+      const list = screen
+        .getByText("Mailboxes")
+        .closest(".ant-card") as HTMLElement;
+      fireEvent.click(
+        within(list).getByRole("button", { name: "Chuyển mục 2 lên" }),
+      );
       fireEvent.click(within(list).getByRole("button", { name: "Thêm mục" }));
       const third = await within(list).findByRole("textbox", { name: "Mục 3" });
       fireEvent.change(third, { target: { value: "c@x.example" } });
       // maxItems 3: no fourth.
       expect(
-        (within(list).getByRole("button", { name: "Thêm mục" }) as HTMLButtonElement)
-          .disabled,
+        (
+          within(list).getByRole("button", {
+            name: "Thêm mục",
+          }) as HTMLButtonElement
+        ).disabled,
       ).toBe(true);
       fireEvent.click(within(list).getByRole("button", { name: "Xóa mục 2" }));
       fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
@@ -235,15 +256,20 @@ describe("the schema-driven rules form (ticket 40)", () => {
     async () => {
       const done = vi.fn();
       render(<Harness onDone={done} />);
-      const map = screen.getByText("Per step").closest(".ant-card") as HTMLElement;
+      const map = screen
+        .getByText("Per step")
+        .closest(".ant-card") as HTMLElement;
       fireEvent.click(within(map).getByRole("button", { name: "Thêm mục" }));
       const minutes = await within(map).findAllByRole("spinbutton");
       expect(minutes).toHaveLength(2);
       fireEvent.change(minutes[1]!, { target: { value: "7" } });
       // Both keys of the closed set are used: nothing more to add.
       expect(
-        (within(map).getByRole("button", { name: "Thêm mục" }) as HTMLButtonElement)
-          .disabled,
+        (
+          within(map).getByRole("button", {
+            name: "Thêm mục",
+          }) as HTMLButtonElement
+        ).disabled,
       ).toBe(true);
       fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
       await waitFor(() => expect(done).toHaveBeenCalledTimes(1));
@@ -257,7 +283,9 @@ describe("the schema-driven rules form (ticket 40)", () => {
       );
       fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
       await waitFor(() => expect(done).toHaveBeenCalledTimes(2));
-      expect((done.mock.calls[1]![0] as typeof DOCUMENT).per_step).toEqual({ O2: 7 });
+      expect((done.mock.calls[1]![0] as typeof DOCUMENT).per_step).toEqual({
+        O2: 7,
+      });
     },
     SLOW,
   );

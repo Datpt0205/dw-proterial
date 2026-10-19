@@ -1,6 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import {
   Alert,
@@ -362,7 +369,8 @@ function ProposeDrawer({
 type Mode = "form" | "json";
 type Step = "edit" | "review";
 
-const SERVER_REFUSED = "Máy chủ không nhận giá trị này. Kiểm lại theo hướng dẫn của trường.";
+const SERVER_REFUSED =
+  "Máy chủ không nhận giá trị này. Kiểm lại theo hướng dẫn của trường.";
 
 /** A start document with the next free version number already in place. */
 function prepared(
@@ -372,7 +380,10 @@ function prepared(
 ): Record<string, unknown> {
   const field = versionField(root);
   if (!field) return option.document;
-  return { ...option.document, [field]: nextVersion(options.map((o) => o.ref)) };
+  return {
+    ...option.document,
+    [field]: nextVersion(options.map((o) => o.ref)),
+  };
 }
 
 function Editor({
@@ -407,7 +418,9 @@ function Editor({
   const [json, setJson] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("edit");
-  const [proposal, setProposal] = useState<Record<string, unknown> | null>(null);
+  const [proposal, setProposal] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [failedCount, setFailedCount] = useState(0);
   const [unplaced, setUnplaced] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(null);
@@ -475,7 +488,10 @@ function Editor({
 
   /** The server's 422 named fields: put each on its field, the rest above. */
   const placeServerErrors = (refusal: unknown) => {
-    if (!(refusal instanceof ApiError) || errorCode(refusal) !== "validation_failed")
+    if (
+      !(refusal instanceof ApiError) ||
+      errorCode(refusal) !== "validation_failed"
+    )
       return;
     const locs = detailList(refusal.body.details?.errors);
     if (!locs.length) return;
@@ -486,7 +502,10 @@ function Editor({
       const path = parseLoc(loc);
       const name = mode === "form" ? formName(root, values, path) : null;
       if (name && name.length) fields.push({ name, errors: [SERVER_REFUSED] });
-      else elsewhere.push(path.length ? pathLabel(ruleKey, root, path) : "Toàn bộ tài liệu");
+      else
+        elsewhere.push(
+          path.length ? pathLabel(ruleKey, root, path) : "Toàn bộ tài liệu",
+        );
     }
     form.setFields(fields);
     setFailedCount(fields.length);
@@ -530,7 +549,11 @@ function Editor({
           </Space>
         ) : (
           <Space wrap>
-            <Button type="primary" loading={pending === id} onClick={() => void propose()}>
+            <Button
+              type="primary"
+              loading={pending === id}
+              onClick={() => void propose()}
+            >
               Gửi duyệt
             </Button>
             <Button onClick={() => setStep("edit")}>Quay lại sửa</Button>
@@ -540,9 +563,9 @@ function Editor({
     >
       <div className="space-y-4">
         <Typography.Paragraph>
-          Bắt đầu từ một phiên bản, sửa, rồi xem các thay đổi so với bản đang
-          áp dụng trước khi gửi duyệt. Máy chủ kiểm lại toàn bộ tài liệu, và
-          từ chối số phiên bản đã dùng.
+          Bắt đầu từ một phiên bản, sửa, rồi xem các thay đổi so với bản đang áp
+          dụng trước khi gửi duyệt. Máy chủ kiểm lại toàn bộ tài liệu, và từ
+          chối số phiên bản đã dùng.
         </Typography.Paragraph>
         {step === "review" && proposal ? (
           <RuleDiffView
@@ -589,7 +612,9 @@ function Editor({
                 unplaced.length ? (
                   <ul className="m-0 list-none p-0">
                     {unplaced.map((where) => (
-                      <li key={where}>{where}: {SERVER_REFUSED}</li>
+                      <li key={where}>
+                        {where}: {SERVER_REFUSED}
+                      </li>
                     ))}
                   </ul>
                 ) : undefined
@@ -597,7 +622,11 @@ function Editor({
             />
           ) : null}
           {mode === "json" ? (
-            <Form.Item label="Tài liệu (JSON)" htmlFor="rule-json" layout="vertical">
+            <Form.Item
+              label="Tài liệu (JSON)"
+              htmlFor="rule-json"
+              layout="vertical"
+            >
               <Input.TextArea
                 id="rule-json"
                 rows={20}
@@ -628,7 +657,12 @@ function Editor({
                 review(current());
               }}
             >
-              <RuleFields ruleKey={ruleKey} root={root} form={form} base={inForce.document} />
+              <RuleFields
+                ruleKey={ruleKey}
+                root={root}
+                form={form}
+                base={inForce.document}
+              />
             </Form>
           )}
           <ActionError error={error} />

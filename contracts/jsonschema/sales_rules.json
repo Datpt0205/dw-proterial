@@ -361,6 +361,320 @@
     "title": "SalesEmailCopy",
     "type": "object"
   },
+  "sales_followups": {
+    "$defs": {
+      "AfterStage": {
+        "additionalProperties": false,
+        "description": "A stage that is due once a wait has lasted a number of hours.",
+        "properties": {
+          "after_hours": {
+            "description": "Sau bao nhiêu giờ chờ thì gửi nhắc (giờ đồng hồ, tính cả ngoài giờ làm việc; ngoài giờ làm việc thì nhắc được hoãn đến đầu giờ làm việc tiếp theo).",
+            "exclusiveMinimum": 0,
+            "maximum": 1440,
+            "title": "After Hours",
+            "type": "integer"
+          },
+          "notify": {
+            "description": "Ai được nhắc: 'pic' là Sales phụ trách hồ sơ (hồ sơ chưa phân công thì nhắc Trưởng bộ phận), 'head' là Trưởng bộ phận Sales.",
+            "items": {
+              "enum": [
+                "pic",
+                "head"
+              ],
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Notify",
+            "type": "array"
+          }
+        },
+        "required": [
+          "after_hours",
+          "notify"
+        ],
+        "title": "AfterStage",
+        "type": "object"
+      },
+      "BeforeStage": {
+        "additionalProperties": false,
+        "description": "A stage that is due a number of hours before a deadline.",
+        "properties": {
+          "hours_before_due": {
+            "description": "Báo trước hạn báo giá bao nhiêu giờ (hạn tính đến hết ngày hạn, giờ địa phương).",
+            "exclusiveMinimum": 0,
+            "maximum": 1440,
+            "title": "Hours Before Due",
+            "type": "integer"
+          },
+          "notify": {
+            "description": "Ai được báo: 'pic' là Sales phụ trách hồ sơ, 'head' là Trưởng bộ phận Sales.",
+            "items": {
+              "enum": [
+                "pic",
+                "head"
+              ],
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Notify",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hours_before_due",
+          "notify"
+        ],
+        "title": "BeforeStage",
+        "type": "object"
+      },
+      "MorningBrief": {
+        "additionalProperties": false,
+        "description": "One notification per person each working morning: what came in since\nthe last brief and its state, what is due soon, what waits on whom.",
+        "properties": {
+          "at": {
+            "description": "Giờ gửi tóm tắt, HH:MM, giờ địa phương, vào ngày làm việc (có thể trước giờ bắt đầu làm việc).",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "At",
+            "type": "string"
+          },
+          "due_within_days": {
+            "description": "Hồ sơ có hạn trong số ngày tới này được tính là 'sắp đến hạn'.",
+            "exclusiveMinimum": 0,
+            "maximum": 30,
+            "title": "Due Within Days",
+            "type": "integer"
+          },
+          "enabled": {
+            "description": "Bật hoặc tắt bản tóm tắt buổi sáng.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "notify": {
+            "description": "Ai nhận: 'pic' là mỗi Sales phụ trách (tóm tắt hồ sơ của mình), 'head' là Trưởng bộ phận (tóm tắt cả bộ phận).",
+            "items": {
+              "enum": [
+                "pic",
+                "head"
+              ],
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Notify",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "at",
+          "notify",
+          "due_within_days"
+        ],
+        "title": "MorningBrief",
+        "type": "object"
+      },
+      "OrderUnconfirmedRule": {
+        "additionalProperties": false,
+        "description": "A PO not yet confirmed: remind the PIC, then tell the head.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt nhắc PO chưa xác nhận.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "escalate": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Báo lên khi PO vẫn chưa được xác nhận, tính từ lúc PO đến; phải sau lần nhắc đầu."
+          },
+          "remind": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Nhắc lần đầu, tính từ lúc PO (bản sửa đổi hiện tại) đến."
+          }
+        },
+        "required": [
+          "enabled",
+          "remind",
+          "escalate"
+        ],
+        "title": "OrderUnconfirmedRule",
+        "type": "object"
+      },
+      "QuoteDeadlineRule": {
+        "additionalProperties": false,
+        "description": "A quote request whose due date is near and that is not yet sent.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt báo hạn báo giá sắp đến.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "warn": {
+            "$ref": "#/$defs/BeforeStage",
+            "description": "Báo khi còn ít hơn số giờ này đến hạn báo giá."
+          }
+        },
+        "required": [
+          "enabled",
+          "warn"
+        ],
+        "title": "QuoteDeadlineRule",
+        "type": "object"
+      },
+      "QuoteWaitingDesignRule": {
+        "additionalProperties": false,
+        "description": "A quote request waiting on Design's BP code and spec.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt nhắc yêu cầu báo giá đang chờ Design.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "remind": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Nhắc khi hồ sơ chờ Design quá số giờ này."
+          }
+        },
+        "required": [
+          "enabled",
+          "remind"
+        ],
+        "title": "QuoteWaitingDesignRule",
+        "type": "object"
+      },
+      "WaitingCustomerRule": {
+        "additionalProperties": false,
+        "description": "A case waiting on the customer (a correction or a spec asked of them).\nDW1 never mails the customer: it reminds the person, who decides.",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt nhắc hồ sơ đang chờ khách hàng.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "remind": {
+            "$ref": "#/$defs/AfterStage",
+            "description": "Nhắc khi hồ sơ chờ khách (sửa PO, thống nhất spec) quá số giờ này."
+          }
+        },
+        "required": [
+          "enabled",
+          "remind"
+        ],
+        "title": "WaitingCustomerRule",
+        "type": "object"
+      },
+      "WorkingHours": {
+        "additionalProperties": false,
+        "description": "When a reminder may be delivered; outside them it waits.",
+        "properties": {
+          "days": {
+            "description": "Ngày làm việc: mon, tue, wed, thu, fri, sat, sun.",
+            "items": {
+              "enum": [
+                "mon",
+                "tue",
+                "wed",
+                "thu",
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "type": "string"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "end": {
+            "description": "Giờ kết thúc làm việc, HH:MM, giờ địa phương; sau giờ bắt đầu.",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "description": "Giờ bắt đầu làm việc, HH:MM, giờ địa phương.",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start",
+            "type": "string"
+          },
+          "time_zone": {
+            "description": "Múi giờ của công ty (tên IANA, ví dụ Asia/Ho_Chi_Minh).",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$",
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time_zone",
+          "days",
+          "start",
+          "end"
+        ],
+        "title": "WorkingHours",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "Every timing and switch of DW1's follow-ups and its morning brief.",
+    "properties": {
+      "morning_brief": {
+        "$ref": "#/$defs/MorningBrief",
+        "description": "Bản tóm tắt buổi sáng."
+      },
+      "order_unconfirmed": {
+        "$ref": "#/$defs/OrderUnconfirmedRule",
+        "description": "PO chưa được xác nhận."
+      },
+      "policy_id": {
+        "const": "sales_followups",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "quote_deadline": {
+        "$ref": "#/$defs/QuoteDeadlineRule",
+        "description": "Hạn báo giá sắp đến."
+      },
+      "quote_waiting_design": {
+        "$ref": "#/$defs/QuoteWaitingDesignRule",
+        "description": "Yêu cầu báo giá đang chờ Design (mã BP, spec)."
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "waiting_customer": {
+        "$ref": "#/$defs/WaitingCustomerRule",
+        "description": "Hồ sơ đang chờ khách hàng."
+      },
+      "working_hours": {
+        "$ref": "#/$defs/WorkingHours",
+        "description": "Giờ làm việc: ngoài giờ này không gửi nhắc, nhắc được hoãn chứ không bỏ."
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "working_hours",
+      "morning_brief",
+      "order_unconfirmed",
+      "quote_waiting_design",
+      "quote_deadline",
+      "waiting_customer"
+    ],
+    "title": "SalesFollowups",
+    "type": "object"
+  },
   "sales_handoffs": {
     "$defs": {
       "HandoffTemplate": {

@@ -1158,9 +1158,13 @@ test("11. An proposes a version of the order rules on the rules page; Giang deci
   const number = drawer.getByRole("textbox", { name: "Số phiên bản mới" });
   await expect(number).not.toHaveValue("");
   await number.fill(VERSION);
-  await drawer.getByRole("button", { name: "Xem thay đổi", exact: true }).click();
+  await drawer
+    .getByRole("button", { name: "Xem thay đổi", exact: true })
+    .click();
   // The proposer reads what changes before sending it.
-  await expect(drawer.getByText(/thay đổi so với sales_order_rules@/)).toBeVisible();
+  await expect(
+    drawer.getByText(/thay đổi so với sales_order_rules@/),
+  ).toBeVisible();
   await drawer.getByRole("button", { name: "Gửi duyệt", exact: true }).click();
   await expect(drawer).toBeHidden();
   const proposed = page.getByRole("row").filter({ hasText: REF });

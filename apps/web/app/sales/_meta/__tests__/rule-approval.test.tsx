@@ -7,7 +7,10 @@ import type { Approval } from "@dw/contracts";
 
 const SCHEMAS = JSON.parse(
   readFileSync(
-    resolve(__dirname, "../../../../../../contracts/jsonschema/sales_rules.json"),
+    resolve(
+      __dirname,
+      "../../../../../../contracts/jsonschema/sales_rules.json",
+    ),
     "utf-8",
   ),
 ) as Record<string, Record<string, unknown>>;
@@ -58,7 +61,10 @@ const api = {
       },
     ],
   })),
-  ruleSchema: vi.fn(async (key: string) => ({ key, json_schema: SCHEMAS[key]! })),
+  ruleSchema: vi.fn(async (key: string) => ({
+    key,
+    json_schema: SCHEMAS[key]!,
+  })),
   rulePlatformDocuments: vi.fn(async () => [
     {
       key: "sales_kpi",
@@ -74,7 +80,10 @@ vi.mock("../../_lib/api", () => ({ salesApi: () => api }));
 import { approvalDetail } from "../../../../lib/approvals/registry";
 import { RuleApprovalChanges } from "../rule-approval";
 
-function approval(approval_type: string, payload: Record<string, unknown>): Approval {
+function approval(
+  approval_type: string,
+  payload: Record<string, unknown>,
+): Approval {
   return {
     id: "a-1",
     approval_type,
@@ -111,24 +120,22 @@ describe("a rule version's changes where the head decides it (ticket 40)", () =>
     expect(approvalDetail(approval("tool.call", {}))).toBeNull();
   });
 
-  it(
-    "shows each field the version changes against the one in force",
-    async () => {
-      render(
-        <UiProvider>
-          <RuleApprovalChanges approval={RULES} />
-        </UiProvider>,
-      );
-      expect(await screen.findByText("2 thay đổi so với sales_kpi@1.0.0.")).toBeTruthy();
-      const row = screen
-        .getByText("Mục tiêu xác nhận đơn hàng", { selector: "strong" })
-        .closest("tr")!;
-      expect(within(row).getByText("8")).toBeTruthy();
-      expect(within(row).getByText("6")).toBeTruthy();
-      expect(api.ruleSchema).toHaveBeenCalledWith("sales_kpi");
-    },
-    20_000,
-  );
+  it("shows each field the version changes against the one in force", async () => {
+    render(
+      <UiProvider>
+        <RuleApprovalChanges approval={RULES} />
+      </UiProvider>,
+    );
+    expect(
+      await screen.findByText("2 thay đổi so với sales_kpi@1.0.0."),
+    ).toBeTruthy();
+    const row = screen
+      .getByText("Mục tiêu xác nhận đơn hàng", { selector: "strong" })
+      .closest("tr")!;
+    expect(within(row).getByText("8")).toBeTruthy();
+    expect(within(row).getByText("6")).toBeTruthy();
+    expect(api.ruleSchema).toHaveBeenCalledWith("sales_kpi");
+  }, 20_000);
 
   it("says why it is not shown, and reads nothing, without sales.rules.propose", () => {
     scopes = ["sales.rules.approve"];
