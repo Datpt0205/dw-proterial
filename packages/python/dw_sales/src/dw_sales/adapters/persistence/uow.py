@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_platform.application.ports import AuditRepositoryPort
+from dw_sales.adapters.persistence.followups import SqlFollowupStore
 from dw_sales.adapters.persistence.layouts import SqlLayoutStore
 from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
 from dw_sales.adapters.persistence.overview import SqlOverviewReader
@@ -55,6 +56,7 @@ class SqlSalesUnitOfWork:
     layouts: SqlLayoutStore
     jobs: SqlProcessingJobs
     approvals: RunLessApprovalsPort
+    followups: SqlFollowupStore
     audit: AuditRepositoryPort
 
     def __init__(
@@ -97,6 +99,7 @@ class SqlSalesUnitOfWork:
         self.layouts = SqlLayoutStore(session, scope)
         self.jobs = SqlProcessingJobs(session, scope)
         self.approvals = self._approvals(session)
+        self.followups = SqlFollowupStore(session, scope)
         self.audit = self._audit(session)
         return self
 

@@ -33,7 +33,9 @@ A key a tenant may override is one whose readers resolve it per tenant
 (`OVERRIDABLE`): order rules (intake, checks, layouts) and the KPI policy (the
 overview), since ticket 19; the quote rules and the pricing policy (the
 quotation flow), the e-mail and document copy and the Bravo upload template
-(every artifact), and the hand-off copy (the inbox), since ticket 36.
+(every artifact), and the hand-off copy (the inbox), since ticket 36; the
+follow-ups and the morning brief (the worker's `sales_followups` lane), since
+ticket 42.
 Proposing any other key is refused (422): a stored version nothing reads would
 look like a safeguard and be none (failure-modes #1).
 
@@ -81,6 +83,7 @@ from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.handoffs import HandoffCopy
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuoteRules
+from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.pricing import SalesPricing
@@ -109,6 +112,7 @@ class RuleKey(StrEnum):
     DOCUMENTS = "sales_documents"
     BRAVO_UPLOAD = "sales_bravo_upload"
     HANDOFFS = "sales_handoffs"
+    FOLLOWUPS = "sales_followups"
 
 
 type Policy = (
@@ -120,6 +124,7 @@ type Policy = (
     | SalesDocumentCopy
     | BravoUploadLayout
     | HandoffCopy
+    | SalesFollowups
 )
 
 # Each key's schema: what a proposal is validated by and what is resolved.
@@ -133,6 +138,7 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.DOCUMENTS: SalesDocumentCopy,
         RuleKey.BRAVO_UPLOAD: BravoUploadLayout,
         RuleKey.HANDOFFS: HandoffCopy,
+        RuleKey.FOLLOWUPS: SalesFollowups,
     }
 )
 # The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
@@ -266,7 +272,8 @@ class TenantRuleBook:
 
     Each reader asks through its own port, which a typed method here
     satisfies: `KpiPort`, `QuotePoliciesPort`, `ArtifactCopyPort` and
-    `HandoffCopyPort`; `OrderRulesPort` through `RuleBookOrderRules`."""
+    `HandoffCopyPort` and `FollowupPolicyPort`; `OrderRulesPort` through
+    `RuleBookOrderRules`."""
 
     platform: Mapping[RuleKey, Policy]
     stored: RuleVersionLookupPort
@@ -338,6 +345,11 @@ class TenantRuleBook:
     async def handoff_copy(self, scope: SalesScope) -> HandoffCopy:
         policy = (await self.current(scope, RuleKey.HANDOFFS)).policy
         assert isinstance(policy, HandoffCopy)
+        return policy
+
+    async def followups(self, scope: SalesScope) -> SalesFollowups:
+        policy = (await self.current(scope, RuleKey.FOLLOWUPS)).policy
+        assert isinstance(policy, SalesFollowups)
         return policy
 
     async def artifact_copy(self, scope: SalesScope, stamps: Sequence[str]) -> ArtifactCopy:

@@ -45,6 +45,7 @@ from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.adapters.order_rules import load_tenant_order_rules
+from dw_sales.adapters.persistence.followups import SqlFollowupScopes
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
@@ -59,6 +60,7 @@ from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.application.access import SalesAuthorizationPort
+from dw_sales.application.followups import FollowupLane
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
@@ -295,6 +297,29 @@ def build_rule_settlement(
     return RuleSettlement(
         uow, rule_book(policies, SqlRuleVersionLookup(session_factory)), clock, ids
     )
+
+
+def build_followup_lane(
+    *,
+    configs: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+    holders: ScopeHoldersPort,
+    notifications: NotificationSenderPort,
+) -> tuple[FollowupLane, SqlFollowupScopes]:
+    """DW1's follow-ups and morning brief (ticket 42), for the worker's
+    `sales_followups` lane, and the workspaces it visits: every one with a
+    Sales case (`sales.followup_scopes()`). Each tenant's timings are its
+    resolved `sales_followups` policy, read through the rule book; nothing
+    else here is DW1's services, so it needs no mailbox and no files."""
+    uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
+    policies = load_sales_policies(configs / "policies", configs / "copy")
+    book = rule_book(policies, SqlRuleVersionLookup(session_factory))
+    lane = FollowupLane(uow, book, holders, notifications, clock, ids)
+    return lane, SqlFollowupScopes(session_factory)
 
 
 def model_requests(

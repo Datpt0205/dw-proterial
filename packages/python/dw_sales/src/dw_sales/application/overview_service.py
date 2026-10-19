@@ -236,7 +236,10 @@ def _stat(spread: Spread) -> TimeStat:
     )
 
 
-_BASIS_BUCKETS: Final[Mapping[CaseKind, Mapping[str, Bucket]]] = {
+# Whose turn a case in each status is, per kind; a status with none waits on
+# nobody (confirmed, closed, recorded, declined). The overview's durations and
+# the morning brief's "what waits on whom" (ticket 42) both read this.
+STATUS_BUCKETS: Final[Mapping[CaseKind, Mapping[str, Bucket]]] = {
     CaseKind.ORDER: {str(status): bucket for status, bucket in _ORDER_BUCKETS.items()},
     CaseKind.QUOTE: {str(status): bucket for status, bucket in _QUOTE_BUCKETS.items()},
 }
@@ -249,7 +252,7 @@ _SURVEY: Final = tuple(
 def figure_basis(inbox_ids: frozenset[str]) -> FigureBasis:
     """What the store computes the figures against, from this module's facts."""
     return FigureBasis(
-        buckets=_BASIS_BUCKETS,
+        buckets=STATUS_BUCKETS,
         draft_ready={kind: str(status) for kind, status in _DRAFT_READY.items()},
         steps=_SURVEY,
         zone=_LOCAL_ZONE,
