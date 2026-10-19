@@ -7,7 +7,7 @@ import { ApiError } from "@dw/api-client";
 import { FINDING_CODE, label } from "./labels";
 
 /** A list the details carry: an array, or the API's text form "['a', 'b']". */
-function list(value: unknown): string[] {
+export function detailList(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String);
   if (typeof value === "string" && value.startsWith("["))
     return [...value.matchAll(/'([^']*)'|"([^"]*)"|(\d+)/g)].map(
@@ -44,20 +44,20 @@ export function refusalSentences(error: unknown): string[] {
   const sentences = [errorMessage(error)];
   if (!(error instanceof ApiError)) return sentences;
   const details = error.body.details ?? {};
-  const open = list(details.open_findings);
+  const open = detailList(details.open_findings);
   if (open.length)
     sentences.push(
       `Còn ${open.length} cờ chưa quyết định: ${open.map(findingKeyLabel).join("; ")}.`,
     );
-  const asked = list(details.ask_customer);
+  const asked = detailList(details.ask_customer);
   if (asked.length)
     sentences.push(
       `Có ${asked.length} cờ đang chờ khách sửa: gửi yêu cầu sửa cho khách trước (${asked.map(findingKeyLabel).join("; ")}).`,
     );
-  const unmapped = list(details.lines_not_mapped);
+  const unmapped = detailList(details.lines_not_mapped);
   if (unmapped.length)
     sentences.push(`Dòng ${unmapped.join(", ")} chưa có mã PRV.`);
-  const missing = list(details.missing);
+  const missing = detailList(details.missing);
   if (details.rule === "source_not_served" && missing.length)
     sentences.push(`Còn phải mở: ${missing.map(regionLabel).join(", ")}.`);
   if (typeof details.latest_month === "string")
@@ -68,7 +68,7 @@ export function refusalSentences(error: unknown): string[] {
     sentences.push(
       "Tệp này được soạn ở phiên bản hồ sơ cũ: soạn lại từ phiên bản hiện tại rồi tải.",
     );
-  const waiting = list(details.lines);
+  const waiting = detailList(details.lines);
   if (waiting.length)
     sentences.push(`Dòng ${waiting.join(", ")} chưa có ngày PC đồng ý.`);
   return sentences;

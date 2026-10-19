@@ -1,5 +1,6 @@
 import type { Approval } from "@dw/contracts";
 import type { ApprovalHost } from "../../../lib/approvals/types";
+import { RuleApprovalChanges } from "./rule-approval";
 
 /** The case pages, by the `case_kind` a DW1 approval's payload names. */
 const CASE_PAGE: Record<string, string> = {
@@ -34,4 +35,8 @@ export const salesApprovalHost: ApprovalHost = {
         : "/sales";
     },
   },
+  // A rule version is decided where it is listed, so its changes are drawn
+  // there, under the payload (ticket 40).
+  detail: (approval: Approval) =>
+    approval.approval_type === "sales.rules" ? RuleApprovalChanges : null,
 };

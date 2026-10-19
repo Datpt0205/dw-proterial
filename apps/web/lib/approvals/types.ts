@@ -1,4 +1,5 @@
 import type { ApiClient } from "@dw/api-client";
+import type { ComponentType } from "react";
 import type { Approval } from "@dw/contracts";
 
 /**
@@ -19,6 +20,14 @@ export interface ApprovalHost {
    * for a type of the host that is decided on `/approvals` itself.
    */
   inbox?: { label: string; href: (approval: Approval) => string | null };
+  /**
+   * What the approval is about, drawn by the context under the payload on
+   * `/approvals` and `/approvals/<id>`, for a type decided there: the
+   * decision binds to what was seen (ui-quality §10). Null for a type the
+   * context draws nothing more for. It reads through the context's own
+   * routes, which answer only whoever may read it.
+   */
+  detail?: (approval: Approval) => ComponentType<{ approval: Approval }> | null;
 }
 
 /** Where a pending approval is decided, when it is not on `/approvals`. */

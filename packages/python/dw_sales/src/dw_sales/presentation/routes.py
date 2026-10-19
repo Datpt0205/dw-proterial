@@ -56,7 +56,13 @@ from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, La
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
-from dw_sales.application.rules import RuleKey, RulesInForceView, RuleVersionView
+from dw_sales.application.rules import (
+    PlatformDocumentView,
+    RuleKey,
+    RuleSchemaView,
+    RulesInForceView,
+    RuleVersionView,
+)
 from dw_sales.application.services import SalesServices
 from dw_sales.application.source import MessageTextView, SourceView
 from dw_sales.application.views import (
@@ -939,6 +945,28 @@ def build_router(
     )
     async def rules_in_force(context: Ctx, svc: Svc) -> RulesInForceView:
         return await svc.rules.list(context)
+
+    # What the editor draws a key's form from (ticket 40): its JSON Schema,
+    # and the platform's released documents to start from and compare with.
+    # A key that is not overridable is not found (404), as any unknown thing
+    # a GET names.
+    @router.get(
+        "/rules/{key}/schema",
+        response_model=RuleSchemaView,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def rule_schema(key: str, context: Ctx, svc: Svc) -> RuleSchemaView:
+        return await svc.rules.schema(context, key)
+
+    @router.get(
+        "/rules/{key}/platform",
+        response_model=list[PlatformDocumentView],
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def rule_platform_documents(
+        key: str, context: Ctx, svc: Svc
+    ) -> list[PlatformDocumentView]:
+        return await svc.rules.platform_documents(context, key)
 
     @router.post(
         "/rules/{key}/versions",
