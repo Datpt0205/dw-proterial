@@ -63,6 +63,8 @@ _CLEARED = (
     # The processing queue (ticket 25): a job left from an earlier rehearsal
     # would hold its message "đang chờ" in an unread mailbox.
     tables.processing_jobs,
+    # What the follow-ups sent (ticket 42): a rehearsal's cases are new cases.
+    tables.followup_deliveries,
     tables.worker_state,
     tables.order_cases,
     tables.quote_cases,

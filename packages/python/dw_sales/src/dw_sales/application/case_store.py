@@ -40,6 +40,7 @@ from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 
 if TYPE_CHECKING:
+    from dw_sales.application.followups import FollowupStorePort
     from dw_sales.application.overview_ports import OverviewReadPort
     from dw_sales.application.rules import RuleVersionStorePort
 
@@ -518,6 +519,9 @@ class SalesUnitOfWork(Protocol):
 
     @property
     def approvals(self) -> RunLessApprovalsPort: ...
+
+    @property
+    def followups(self) -> FollowupStorePort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...
