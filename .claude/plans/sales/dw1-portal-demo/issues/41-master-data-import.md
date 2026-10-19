@@ -135,6 +135,13 @@ read-only.
   `make demo-reset`: the reset deletes `sales.` approvals, which cascades to
   the demo tenant's submitted and approved snapshots (as rule versions).
 
+**Ran on local Docker on 2026-10-19.** The migration was applied to head; `test_sales_catalog_imports.py`, `test_privileges.py` and `test_rls_coverage.py` pass. Two things this route set had broken and nobody had seen:
+
+- **UPDATE was not withheld.** `catalog_import_files` and `catalog_rows` held UPDATE for `dw_app`, against "take no UPDATE" above: a GRANT does not take away what the schema's default privileges gave. `89bcd0d49ea6` revokes it, and `test_privileges.py` was red before that revision.
+- **Two route walks crashed** with `KeyError: 'catalog_list'`. `test_sales_api_access.py` and `test_sales_api_support.py` fill every Sales route's path parameters from `_PARAMS`, which lacked `catalog_list` and `snapshot_id`. Both are added; the two walks pass (7/7 support, the access file whole).
+
+Still owed: the mutation of `SqlApprovedLists`'s cache key, and the page on the stack with a real list.
+
 ## Left open
 
 - A snapshot's rows are kept for ever (superseded ones stay readable by

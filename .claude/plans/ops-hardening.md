@@ -64,10 +64,11 @@ context. All five are done and on `main`. The full narrative is at
   route's provider; a keyless reranker over http only as an allow-listed
   host; realm: 5-minute access tokens, lockout, password floor (the host
   overlay had counted on a brute-force detection nobody enabled); the web
-  manifest. Owed, all on a machine with Docker: the first `onprem-models` and
-  `onprem-up`, Ollama's `/v1/embeddings` with bge-m3 and llama.cpp's
-  `/rerank` against the adapters (read from docs and tests, not measured),
-  trivy on both images, the realm applied to an existing Keycloak by hand.
+  manifest.
+    - **Ran locally on 2026-10-19.** `onprem-models`, plus the compose files in the `local` profile: rerank through `build_reranker`, bge-m3 through `build_embeddings`, and chat with 32/33 layers on the GPU.
+    - **trivy:** llama.cpp has 2 HIGH, Ollama 0.34.4 has 50 HIGH, all fixable; moving the pin is Đạt's call.
+    - **Measured problems:** GPU discovery can time out to CPU behind a healthy check; the first load takes minutes; qwen35 takes no parallel slots. All in `infra/onprem/README.md`.
+    - **Still owed:** `onprem-up` in `uat` behind Caddy, and the realm applied to an existing Keycloak by hand.
 
 - **Offboarding exported each row of a partitioned table twice** (fixed
   2026-10-15, `953086f`). Every partition carries its own tenant policy, so

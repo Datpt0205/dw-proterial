@@ -8,6 +8,25 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-19, local Docker, tests and the on-premises models (Đạt: "chạy
+  test full ... chạy docker lên test"):
+    - **Without Docker:** lint, mypy, import contracts, invariants, the manifest and the contracts all pass. Unit tests: 3430 pass. Web: 466/466 vitest, plus typecheck, lint and format.
+    - **Integration.** One 2-hour run on a loaded machine gave 766 pass, 53 fail and 84 errors. Per file and per package, everything passes except two real defects:
+        - `dw_app` held UPDATE on three append-only tables (tickets 41 and 42); fixed by `89bcd0d49ea6`.
+        - The two Sales route walks lacked tickets 41's path parameters.
+          The rest were load: Qdrant timing out while images built, docgen's toolchain check run right after its fork bomb, and `DW_DOCGEN_URL` defaulting to 8110 where this machine maps 38110.
+    - **Live evals on `qwen3.5-9b-dw`.** Six datasets PASS:
+        - RFQ 94.9%, with **one invented value**;
+        - layout 97.7%;
+        - reply 97.8%;
+        - hand-off 94.5%;
+        - intent 89.8%, **below** the 90% bar the agent proposed;
+        - descriptions VI/EN 71.1%.
+          The container's Ollama 0.34.4 matched the host's 0.40.4.
+    - **The on-premises compose files ran for the first time,** in the `local` profile: rerank, bge-m3 and chat, each through the API's own builders. Findings are in `infra/onprem/README.md`.
+    - **Scope.** Which DW1 feature Proterial's process asks for, which the platform requires, and which we added: `sales/dw1-scope.md`.
+    - **`PUBLIC_REPO_DENYLIST`** is set: the GitHub secret, plus `DW_PUBLIC_REPO_DENYLIST` on Đạt's machine, from the Sales survey and the proposal decks. The list has no customer names yet, because no real Proterial data has arrived.
+
 - 2026-10-19, ticket 41 built (Đạt's goal of 2026-10-18: master data is
   loaded by business users, not hard-coded): customers, items, convert list,
   quotations and LME are imported per list from Excel/CSV on
