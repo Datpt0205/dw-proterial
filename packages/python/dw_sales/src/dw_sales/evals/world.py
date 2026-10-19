@@ -53,6 +53,7 @@ from dw_platform.application.identity import MembershipAccess
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.assembly import model_requests
+from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path
@@ -102,6 +103,7 @@ from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.overview_memory import PythonOverviewReader
+from dw_sales.testing.catalog_store import MemoryCatalogStore
 from dw_sales.testing.scanners import NoMalware
 from dw_sales.workflows.graph import register
 
@@ -1055,6 +1057,10 @@ def open_world(
         runs=runs,
         pending=runs,
         telemetry=telemetry,
+        # Master-data imports (ticket 41): in memory, never exercised by an
+        # eval; the catalog stays the sample's mock.
+        catalog_uow=MemoryCatalogStore(store.approvals),
+        templates=XlsxCatalogTemplates(),
     )
     register(
         graphs=runtime.graphs,
@@ -1063,6 +1069,7 @@ def open_world(
         steps=assembly.decisions,
         layouts=assembly.layout_decisions,
         rules=assembly.rule_decisions,
+        catalog=assembly.catalog_decisions,
         worker_file=worker_file,
     )
     return World(

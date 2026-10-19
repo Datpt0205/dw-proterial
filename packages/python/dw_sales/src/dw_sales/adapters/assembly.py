@@ -8,8 +8,10 @@ on. So neither composition root spells the list out: each hands in what its
 process already built (sessions, the platform's ports, the runtime) and calls
 `build_dw1`.
 
-DW1's master data and mailbox are fictional mocks bound to one (tenant,
-workspace), ``scope``; every other scope reads them empty. So is that
+DW1's mailbox is a fictional mock bound to one (tenant, workspace),
+``scope``; every other scope reads it empty. So is its master data, list by
+list, until a workspace imports and approves its own (ticket 41,
+`SnapshotSalesCatalog`): then that list is the workspace's approved snapshot. So is that
 tenant's own version of the order rules, where the sample set holds one
 (`adapters/mock/data/policies`): every other tenant reads the platform's.
 
@@ -41,10 +43,16 @@ from dw_agent_runtime.registry import (
 )
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.adapters.artifact_files import ArtifactFiles
+from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.adapters.order_rules import load_tenant_order_rules
+from dw_sales.adapters.persistence.catalog import (
+    OutboxFactory,
+    SqlApprovedLists,
+    SqlCatalogUnitOfWorkFactory,
+)
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
@@ -59,6 +67,7 @@ from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.application.access import SalesAuthorizationPort
+from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
@@ -85,6 +94,7 @@ from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.telemetry import SpanPort
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.domain.order_checks import OrderRules
@@ -118,6 +128,8 @@ class Dw1Mount:
     # (`requester_access`, ticket 25), with the queue its reaper settles.
     drain: ProcessingDrain | None = None
     queue: ProcessingQueuePort | None = None
+    # What reads an uploaded master-data file in the worker (ticket 41).
+    catalog_parsing: CatalogParsing | None = None
 
 
 def build_dw1(
@@ -127,6 +139,7 @@ def build_dw1(
     session_factory: async_sessionmaker[AsyncSession],
     audit: AuditFactory,
     approvals: ApprovalsFactory,
+    outbox: OutboxFactory,
     clock: UtcClock,
     ids: IdGenerator,
     authorization: SalesAuthorizationPort,
@@ -156,7 +169,13 @@ def build_dw1(
     holds is the scanned one. Every file is then read through ``reader``, the
     reader sandbox wherever a process is deployed
     (`dw_sales.adapters.reader_client`)."""
-    catalog = MockSalesCatalog.load(scope)
+    # The lists Sales maintains by hand from each workspace's approved import,
+    # the mock where none is approved yet (ticket 41); the ERP's records from
+    # the mock until Bravo is connected.
+    catalog = SnapshotSalesCatalog(SqlApprovedLists(session_factory), MockSalesCatalog.load(scope))
+    catalog_uow = SqlCatalogUnitOfWorkFactory(
+        session_factory, audit=audit, approvals=approvals, outbox=outbox
+    )
     policies = load_sales_policies(configs / "policies", configs / "copy")
     readers = client_readers(reader, policies.order_rules.intake)
     inbox = ScannedInbox(MockInbox.load(scope), scanner, readers.po)
@@ -237,6 +256,8 @@ def build_dw1(
         runs=runs,
         pending=runs,
         telemetry=telemetry,
+        catalog_uow=catalog_uow,
+        templates=XlsxCatalogTemplates(),
     )
     register(
         graphs=runtime.graphs,
@@ -245,20 +266,46 @@ def build_dw1(
         steps=assembly.decisions,
         layouts=assembly.layout_decisions,
         rules=assembly.rule_decisions,
+        catalog=assembly.catalog_decisions,
         worker_file=worker_file,
     )
+    catalog_parsing = CatalogParsing(catalog_uow, readers.tables, scanner, catalog, clock, ids)
     lane = (
         None
         if lane_access is None
         else InboxLane(uow, inbox, assembly.services.processing, lane_access, clock)
     )
     if requester_access is None:
-        return Dw1Mount(services=assembly.services, lane=lane)
+        return Dw1Mount(services=assembly.services, lane=lane, catalog_parsing=catalog_parsing)
     queue = SqlProcessingQueue(session_factory)
     drain = ProcessingDrain(
         queue, uow, assembly.services.dw1, requester_access, clock, ids, channels=lane
     )
-    return Dw1Mount(services=assembly.services, lane=lane, drain=drain, queue=queue)
+    return Dw1Mount(
+        services=assembly.services,
+        lane=lane,
+        drain=drain,
+        queue=queue,
+        catalog_parsing=catalog_parsing,
+    )
+
+
+def build_catalog_settlement(
+    *,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    outbox: OutboxFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> CatalogSettlement:
+    """What carries out a decided master-data import (`sales.catalog.decided`,
+    ticket 41), for the worker's outbox handler. The snapshot and the approval
+    are rows of the approval's own tenant and workspace; no file is read."""
+    uow = SqlCatalogUnitOfWorkFactory(
+        session_factory, audit=audit, approvals=approvals, outbox=outbox
+    )
+    return CatalogSettlement(uow, clock, ids)
 
 
 def build_layout_settlement(
