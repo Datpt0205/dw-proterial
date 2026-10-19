@@ -43,11 +43,13 @@ from pydantic import ValidationError
 from dw_kernel.errors import DomainError, InfrastructureError
 from dw_sales.adapters.formats import refusal, sniff
 from dw_sales.adapters.reader_wire import PdfPage, ReaderArgs, ReaderOp, ReaderReply, ReaderRequest
+from dw_sales.application.catalog_imports import TableUnreadableError
 from dw_sales.application.order_ports import READ_AS, FileType, QuoteForm
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
+from dw_sales.domain.master_data import ImportedTable
 from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
@@ -315,6 +317,35 @@ class ClientSourceView:
         return reply.value(operation)
 
 
+# Why a table could not be read, by the reader's failure kind, when it says no
+# more; a refusal's own sentence is the reader's, written in Vietnamese.
+_TABLE_FAILURES: Final = {
+    "timed_out": "đọc tệp quá thời gian cho phép",
+    "crashed": "trình đọc gặp lỗi với tệp này",
+}
+
+
+@dataclass(frozen=True)
+class ClientTableReader:
+    """`TableReaderPort` over the reader (ticket 41): a master-data file's rows.
+    The bytes say what the file is, never its name."""
+
+    transport: ReaderTransport
+    caps: IntakeCaps
+
+    async def read(self, data: bytes, file_name: str) -> ImportedTable:
+        operation = ReaderOp.TABLE_ROWS
+        reply = await _ask(self.transport, operation, data=data, args=ReaderArgs(caps=self.caps))
+        if _failed(operation, reply):
+            failure = reply.failure or "crashed"
+            refused = reply.detail if failure == "refused" and reply.detail else None
+            raise TableUnreadableError(
+                refused or _TABLE_FAILURES.get(failure, "không đọc được tệp")
+            )
+        table: ImportedTable = reply.value(operation)
+        return table
+
+
 @dataclass(frozen=True)
 class Dw1Readers:
     """Every reader port DW1's services take, over one transport."""
@@ -325,6 +356,7 @@ class Dw1Readers:
     design_reply: ClientDesignReplyReader
     texts: ClientTexts
     source: ClientSourceView
+    tables: ClientTableReader
 
 
 def client_readers(transport: ReaderTransport, caps: IntakeCaps) -> Dw1Readers:
@@ -337,6 +369,7 @@ def client_readers(transport: ReaderTransport, caps: IntakeCaps) -> Dw1Readers:
         design_reply=ClientDesignReplyReader(transport),
         texts=ClientTexts(transport),
         source=ClientSourceView(transport, caps),
+        tables=ClientTableReader(transport, caps),
     )
 
 

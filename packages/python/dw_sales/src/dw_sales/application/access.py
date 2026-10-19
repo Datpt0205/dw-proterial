@@ -52,6 +52,11 @@ class SalesScopes(StrEnum):
     # reject one (the head's): a maker/checker pair (ticket 19).
     RULES_PROPOSE = "sales.rules.propose"
     RULES_APPROVE = "sales.rules.approve"
+    # Import a master-data list from a file and send it to be approved (PIC
+    # and head), and approve or reject one (the head's): a maker/checker pair
+    # (ticket 41).
+    MASTER_DATA_IMPORT = "sales.master_data.import"
+    MASTER_DATA_APPROVE = "sales.master_data.approve"
 
 
 # What a customer may grant FPT support in Sales (dw_sales ADR 0003 §5, ADR
