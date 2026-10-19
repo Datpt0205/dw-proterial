@@ -31,6 +31,7 @@ from dw_sales.application.rules import (
     TenantRuleBook,
     read_over,
 )
+from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.pricing import SalesPricing
@@ -55,6 +56,10 @@ def load_pricing(path: Path) -> SalesPricing:
 
 def load_kpi(path: Path) -> SalesKpi:
     return load_policy(path, SalesKpi)
+
+
+def load_followups(path: Path) -> SalesFollowups:
+    return load_policy(path, SalesFollowups)
 
 
 def load_bravo_upload(path: Path) -> BravoUploadLayout:
@@ -86,6 +91,8 @@ class SalesPolicies:
     upload: BravoUploadLayout
     # The words of a hand-off to PC or QA (ticket 33).
     handoff_copy: HandoffCopy
+    # When DW1 reminds a person, and the morning brief (ticket 42).
+    followups: SalesFollowups
     # Every version of each key the checkout ships, by ref, the ones above
     # included: what a case stamped before a release is read with after it.
     released: Mapping[str, Policy]
@@ -100,6 +107,7 @@ class SalesPolicies:
             RuleKey.DOCUMENTS: self.documents,
             RuleKey.BRAVO_UPLOAD: self.upload,
             RuleKey.HANDOFFS: self.handoff_copy,
+            RuleKey.FOLLOWUPS: self.followups,
         }
 
 
@@ -119,6 +127,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
         documents=load_copy(copy_dir / "sales_documents@1.2.0.yaml", SalesDocumentCopy),
         upload=load_bravo_upload(policies_dir / "sales_bravo_upload@1.1.0.yaml"),
         handoff_copy=load_copy(copy_dir / "sales_handoffs@1.0.0.yaml", HandoffCopy),
+        followups=load_followups(policies_dir / "sales_followups@1.0.0.yaml"),
         released={},
     )
     released = load_released(current.current(), policies_dir, copy_dir)

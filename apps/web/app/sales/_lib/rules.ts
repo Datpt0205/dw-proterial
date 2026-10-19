@@ -18,6 +18,7 @@ export const RULE_KEY: Record<RuleKey, string> = {
   sales_documents: "Nội dung chứng từ",
   sales_bravo_upload: "Mẫu tệp nhập Bravo",
   sales_handoffs: "Nội dung chuyển giao",
+  sales_followups: "Nhắc việc và tóm tắt buổi sáng",
 };
 
 export const RULE_STATUS: Record<RuleVersion["status"], string> = {

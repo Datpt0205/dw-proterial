@@ -76,6 +76,7 @@ from dw_sales.application.case_store import (
     Stored,
     WorkerState,
 )
+from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import (
     LAYOUT_DECIDED,
@@ -98,6 +99,7 @@ from dw_sales.application.source import required_regions
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
+from dw_sales.domain.followups import WaitingCase
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
@@ -236,6 +238,7 @@ class _ScopeState:
     audit: list[AuditEvent] = field(default_factory=list)
     layouts: dict[uuid.UUID, PoLayout] = field(default_factory=dict)
     jobs: dict[str, ProcessingJob] = field(default_factory=dict)
+    followups: dict[FollowupKey, SentFollowup] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -250,6 +253,7 @@ class _ScopeState:
             audit=list(self.audit),
             layouts=dict(self.layouts),
             jobs=dict(self.jobs),
+            followups=dict(self.followups),
         )
 
 
@@ -510,6 +514,79 @@ class _Audit:
         raise NotImplementedError("not exercised by the Sales services")
 
 
+class _Followups:
+    """`FollowupStorePort` over one transaction's state: the cases read as
+    the SQL store reads them (status since its latest event into it from
+    another), and the record unique on its key, as the table's."""
+
+    def __init__(self, state: _ScopeState) -> None:
+        self._state = state
+
+    async def cases(
+        self, statuses: Mapping[CaseKind, frozenset[str]], *, received_since: datetime
+    ) -> Sequence[WaitingCase]:
+        state = self._state
+        found: list[WaitingCase] = []
+        rows: list[tuple[CaseKind, Stored[OrderCase] | Stored[QuoteCase]]] = [
+            *((CaseKind.ORDER, s) for s in state.orders.values()),
+            *((CaseKind.QUOTE, s) for s in state.quotes.values()),
+        ]
+        for kind, stored in rows:
+            case = stored.case
+            status = case.status.value
+            received = case.received_at if isinstance(case, OrderCase) else case.request.received_at
+            if status not in statuses.get(kind, frozenset()) and received < received_since:
+                continue
+            entered = [
+                e.occurred_at
+                for e in state.events
+                if e.case_id == case.case_id
+                and e.case_kind is kind
+                and e.to_status == status
+                and e.from_status != e.to_status
+            ]
+            if isinstance(case, OrderCase):
+                reference, customer, due = case.header.po_no, case.customer_code, case.due
+            else:
+                quote_due = case.request.document.quote_due
+                reference = case.request.reference
+                customer = case.request.customer_code
+                due = None if quote_due is None else quote_due.value
+            found.append(
+                WaitingCase(
+                    kind=kind,
+                    case_id=case.case_id,
+                    status=status,
+                    reference=reference,
+                    customer_code=customer,
+                    received_at=received,
+                    status_since=max(entered, default=received),
+                    assigned_to=stored.origin.assigned_to,
+                    due=due,
+                )
+            )
+        return found
+
+    async def already_sent(self, keys: Sequence[FollowupKey]) -> frozenset[FollowupKey]:
+        return frozenset(key for key in keys if key in self._state.followups)
+
+    async def record(self, sent: SentFollowup) -> bool:
+        if sent.key in self._state.followups:
+            return False
+        self._state.followups[sent.key] = sent
+        return True
+
+    async def forget_briefs_before(self, day: date) -> int:
+        old = [
+            key
+            for key in self._state.followups
+            if key.followup == BRIEF and key.subject < day.isoformat()
+        ]
+        for key in old:
+            del self._state.followups[key]
+        return len(old)
+
+
 class _Work:
     """`SalesUnitOfWork`: one scope's state, copied in, written back on commit."""
 
@@ -526,6 +603,7 @@ class _Work:
         self.audit = _Audit(state.audit)
         self.layouts = _Layouts(state.layouts)
         self.jobs = _Jobs(state.jobs)
+        self.followups = _Followups(state)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)

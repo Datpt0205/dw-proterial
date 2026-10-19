@@ -96,12 +96,14 @@ from dw_platform.retention_policy import load_retention_policy
 from dw_sales.adapters.assembly import (
     Dw1Mount,
     build_dw1,
+    build_followup_lane,
     build_layout_settlement,
     build_rule_settlement,
 )
 from dw_sales.adapters.clamd import malware_scanner
 from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.ports import SalesScope
@@ -132,6 +134,10 @@ from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
 from dw_worker.consumers.sales_decisions import build_decided_handler
+from dw_worker.consumers.sales_followups import (
+    INTERVAL_SECONDS as SALES_FOLLOWUPS_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.sales_followups import build_sales_followups_consumer
 from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTERVAL_SECONDS
 from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
 from dw_worker.consumers.sales_processing import (
@@ -447,6 +453,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # DW1's processing queue (Sales ticket 25): the same, switch or no switch:
     # "DW xử lý" queues a job whether or not the lane runs.
     sales_processing_consumer: Callable[[], Awaitable[None]] | None = None
+    # DW1's follow-ups and morning brief (Sales ticket 42): wherever DW1 is,
+    # over every workspace with a Sales case.
+    sales_followups_consumer: Callable[[], Awaitable[None]] | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -604,6 +613,19 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 )
                 if mount.lane is not None:
                     sales_inbox_consumer = build_sales_inbox_consumer(mount.lane, [mailbox])
+                followups, followup_scopes = build_followup_lane(
+                    configs=REPO_ROOT / "configs",
+                    session_factory=sessions,
+                    audit=SqlAuditRepository,
+                    approvals=SqlApprovalRepository,
+                    clock=clock,
+                    ids=ids,
+                    holders=SqlScopeHolders(sessions),
+                    notifications=SqlNotificationRepository(sessions),
+                )
+                sales_followups_consumer = build_sales_followups_consumer(
+                    followups, followup_scopes
+                )
         registry.register(
             "outbox",
             build_outbox_consumer(
@@ -644,6 +666,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     if sales_inbox_consumer is not None:
         registry.register(
             SALES_INBOX_LANE, sales_inbox_consumer, interval_seconds=SALES_INBOX_INTERVAL_SECONDS
+        )
+    # And its follow-ups and morning brief (ticket 42), which only notify, so
+    # no ReapTarget either.
+    if sales_followups_consumer is not None:
+        registry.register(
+            SALES_FOLLOWUPS_LANE,
+            sales_followups_consumer,
+            interval_seconds=SALES_FOLLOWUPS_INTERVAL_SECONDS,
         )
 
     # build_<context>_components(settings) → registry.register(...), and append
