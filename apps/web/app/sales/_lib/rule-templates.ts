@@ -17,9 +17,11 @@ export type Syntax = "dollar" | "braces";
 
 /** `${name}` placeholders in a `string.Template` text, each once, in order. */
 export function placeholdersIn(text: string): string[] {
-  const found = [...text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g)].map(
-    (m) => `\${${m[1] ?? m[2]}}`,
-  );
+  const found = [
+    ...text.matchAll(
+      /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    ),
+  ].map((m) => `\${${m[1] ?? m[2]}}`);
   return [...new Set(found)];
 }
 

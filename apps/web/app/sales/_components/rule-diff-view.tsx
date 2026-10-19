@@ -7,7 +7,10 @@ import { diffDocuments, type Change } from "../_lib/rule-diff";
 import { describeValue, pathLabel } from "../_lib/rule-labels";
 import type { RuleNode } from "../_lib/rule-schema";
 
-const KIND: Record<Change["kind"], { label: string; tone: "warn" | "ok" | "err" }> = {
+const KIND: Record<
+  Change["kind"],
+  { label: string; tone: "warn" | "ok" | "err" }
+> = {
   changed: { label: "Đổi", tone: "warn" },
   added: { label: "Thêm", tone: "ok" },
   removed: { label: "Bỏ", tone: "err" },

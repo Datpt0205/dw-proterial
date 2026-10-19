@@ -6,7 +6,12 @@ import type { Approval } from "@dw/contracts";
 import { LoadError } from "../../../components/load-error";
 import { useAuth } from "../../../lib/auth/auth-context";
 import { salesApi } from "../_lib/api";
-import { RULE_KEY, RULE_STATUS, startOptions, type RuleKey } from "../_lib/rules";
+import {
+  RULE_KEY,
+  RULE_STATUS,
+  startOptions,
+  type RuleKey,
+} from "../_lib/rules";
 import { readSchema, type JsonSchema } from "../_lib/rule-schema";
 import { useResource } from "../_lib/use-resource";
 import { RuleDiffView } from "../_components/rule-diff-view";
@@ -60,7 +65,9 @@ export function RuleApprovalChanges({ approval }: { approval: Approval }) {
   const { view, schema, platform } = loaded.data;
   const version = view.versions.find((v) => v.version_id === versionId);
   if (!version)
-    return <Typography.Text>Không tìm thấy phiên bản được đề xuất.</Typography.Text>;
+    return (
+      <Typography.Text>Không tìm thấy phiên bản được đề xuất.</Typography.Text>
+    );
   if (version.status !== "proposed")
     return (
       <Typography.Text>
@@ -69,7 +76,9 @@ export function RuleApprovalChanges({ approval }: { approval: Approval }) {
     );
   const inForce = startOptions(view, key, platform).find((o) => o.inForce);
   if (!inForce)
-    return <Typography.Text>Không đọc được phiên bản đang áp dụng.</Typography.Text>;
+    return (
+      <Typography.Text>Không đọc được phiên bản đang áp dụng.</Typography.Text>
+    );
   return (
     <Flex vertical gap="small">
       <Typography.Text strong>

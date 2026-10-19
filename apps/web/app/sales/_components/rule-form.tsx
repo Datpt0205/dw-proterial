@@ -272,9 +272,7 @@ function Toggle({
 
 /** Segmented for a short choice, Select for a long one. */
 function shortChoice(values: string[]): boolean {
-  return (
-    values.length <= 3 && values.every((v) => valueLabel(v).length <= 28)
-  );
+  return values.length <= 3 && values.every((v) => valueLabel(v).length <= 28);
 }
 
 function Control({
@@ -524,7 +522,11 @@ function ListField({
                 doc: [...where.doc, index],
               };
               return node.item.kind === "object" ? (
-                <Section key={field.key} title={`${item} ${index + 1}`} extra={buttons}>
+                <Section
+                  key={field.key}
+                  title={`${item} ${index + 1}`}
+                  extra={buttons}
+                >
                   <Fields fields={node.item.fields} where={child} />
                 </Section>
               ) : (
@@ -535,7 +537,10 @@ function ListField({
                       label={`${item} ${index + 1}`}
                       rules={[requiredRule(item), ...checks(node.item)]}
                     >
-                      <Control node={node.item} label={`${item} ${index + 1}`} />
+                      <Control
+                        node={node.item}
+                        label={`${item} ${index + 1}`}
+                      />
                     </Form.Item>
                   </div>
                   <div className="pt-8">{buttons}</div>
@@ -545,7 +550,9 @@ function ListField({
             <Form.ErrorList errors={errors} />
             <Button
               icon={<PlusOutlined aria-hidden />}
-              disabled={node.maxItems !== undefined && fields.length >= node.maxItems}
+              disabled={
+                node.maxItems !== undefined && fields.length >= node.maxItems
+              }
               onClick={() => add(emptyItem(node.item))}
             >
               Thêm {item.toLowerCase()}
@@ -571,7 +578,13 @@ function emptyItem(node: RuleNode): unknown {
               : f.node.kind === "switch"
                 ? false
                 : f.node.nullable && f.node.kind !== "text"
-                  ? { on: false, value: emptyItem({ ...f.node, nullable: false } as RuleNode) }
+                  ? {
+                      on: false,
+                      value: emptyItem({
+                        ...f.node,
+                        nullable: false,
+                      } as RuleNode),
+                    }
                   : (f.default ?? (f.node.kind === "text" ? "" : null)),
         ]),
       );
@@ -606,7 +619,12 @@ function MapField({
         if (!key) return;
         if (node.keyPattern && !node.keyEnum) {
           const wrong = problem(
-            { kind: "text", pattern: node.keyPattern, multiline: false, nullable: false },
+            {
+              kind: "text",
+              pattern: node.keyPattern,
+              multiline: false,
+              nullable: false,
+            },
             key,
           );
           if (wrong) throw new Error(wrong);
@@ -685,7 +703,10 @@ function MapEntryRow({
       className="w-full"
     />
   ) : (
-    <Input aria-label={`Mã ${item.toLowerCase()} ${index + 1}`} spellCheck={false} />
+    <Input
+      aria-label={`Mã ${item.toLowerCase()} ${index + 1}`}
+      spellCheck={false}
+    />
   );
   const child: Where = {
     name: [fieldName, "value"],
@@ -705,7 +726,11 @@ function MapEntryRow({
   if (node.value.kind === "object" || node.value.kind === "map")
     return (
       <Section title={title} extra={removeButton}>
-        <Form.Item name={[fieldName, "key"]} label={`Mã ${item.toLowerCase()}`} rules={keyRules}>
+        <Form.Item
+          name={[fieldName, "key"]}
+          label={`Mã ${item.toLowerCase()}`}
+          rules={keyRules}
+        >
           {keyControl}
         </Form.Item>
         {node.value.kind === "object" ? (
@@ -718,7 +743,11 @@ function MapEntryRow({
   return (
     <Flex gap="small" align="start" wrap>
       <div className="min-w-48 flex-1">
-        <Form.Item name={[fieldName, "key"]} label={`${item} ${index + 1}`} rules={keyRules}>
+        <Form.Item
+          name={[fieldName, "key"]}
+          label={`${item} ${index + 1}`}
+          rules={keyRules}
+        >
           {keyControl}
         </Form.Item>
       </div>
@@ -726,7 +755,11 @@ function MapEntryRow({
         <Form.Item
           name={child.name}
           label={valueText}
-          rules={[requiredRule(valueText), ...checks(node.value), ...templateRules(node.value, child, base)]}
+          rules={[
+            requiredRule(valueText),
+            ...checks(node.value),
+            ...templateRules(node.value, child, base),
+          ]}
         >
           <Control node={node.value} label={`${valueText}: ${title}`} />
         </Form.Item>

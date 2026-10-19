@@ -32,7 +32,10 @@ const COMMON: Record<string, FieldWords> = {
     help: "Do hệ thống quy định, không sửa.",
   },
   policy_id: { label: "Mã quy tắc", help: "Do hệ thống quy định, không sửa." },
-  copy_id: { label: "Mã bộ nội dung", help: "Do hệ thống quy định, không sửa." },
+  copy_id: {
+    label: "Mã bộ nội dung",
+    help: "Do hệ thống quy định, không sửa.",
+  },
   policy_version: {
     label: "Số phiên bản mới",
     help: "Ba số cách nhau bằng dấu chấm (1.2.0). Không được trùng số nền tảng đã phát hành hay số công ty đã dùng.",
@@ -316,6 +319,97 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "templates.*.subject": { label: "Tiêu đề" },
     "templates.*.body": { label: "Nội dung" },
   },
+  sales_followups: {
+    order_unconfirmed: {
+      label: "PO chưa xác nhận",
+      help: "Nhắc Sales phụ trách, quá lâu thì báo Trưởng bộ phận.",
+    },
+    "order_unconfirmed.enabled": { label: "Bật nhắc PO chưa xác nhận" },
+    "order_unconfirmed.remind": { label: "Lần nhắc đầu" },
+    "order_unconfirmed.remind.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc hồ sơ bắt đầu chờ, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "order_unconfirmed.remind.notify": { label: "Nhắc ai" },
+    "order_unconfirmed.escalate": { label: "Báo lên cấp trên" },
+    "order_unconfirmed.escalate.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc hồ sơ bắt đầu chờ, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "order_unconfirmed.escalate.notify": { label: "Nhắc ai" },
+    quote_waiting_design: {
+      label: "Yêu cầu báo giá chờ Design",
+      help: "Design chưa trả BP code hoặc spec.",
+    },
+    "quote_waiting_design.enabled": { label: "Bật nhắc chờ Design" },
+    "quote_waiting_design.remind": { label: "Lời nhắc" },
+    "quote_waiting_design.remind.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc hồ sơ bắt đầu chờ, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "quote_waiting_design.remind.notify": { label: "Nhắc ai" },
+    quote_deadline: {
+      label: "Hạn báo giá sắp đến",
+      help: "Yêu cầu báo giá chưa gửi khách mà sắp tới hạn.",
+    },
+    "quote_deadline.enabled": { label: "Bật báo hạn báo giá" },
+    "quote_deadline.warn": { label: "Lời báo" },
+    "quote_deadline.warn.hours_before_due": {
+      label: "Báo trước hạn",
+      help: "Hạn tính đến hết ngày hạn, giờ địa phương.",
+      unit: "giờ",
+    },
+    "quote_deadline.warn.notify": { label: "Báo cho ai" },
+    waiting_customer: {
+      label: "Hồ sơ chờ khách hàng",
+      help: "Đã đề nghị khách sửa hoặc bổ sung. DW1 chỉ nhắc người phụ trách, không tự gửi thư cho khách.",
+    },
+    "waiting_customer.enabled": { label: "Bật nhắc chờ khách hàng" },
+    "waiting_customer.remind": { label: "Lời nhắc" },
+    "waiting_customer.remind.after_hours": {
+      label: "Sau bao lâu thì nhắc",
+      help: "Tính từ lúc hồ sơ bắt đầu chờ, cả ngoài giờ làm việc; ngoài giờ thì lời nhắc đợi tới giờ làm việc kế tiếp.",
+      unit: "giờ",
+    },
+    "waiting_customer.remind.notify": { label: "Nhắc ai" },
+    morning_brief: {
+      label: "Bản tin buổi sáng",
+      help: "Mỗi ngày làm việc: việc mới, việc sắp đến hạn, việc đang chờ ai. Không có số tiền.",
+    },
+    "morning_brief.enabled": { label: "Bật bản tin buổi sáng" },
+    "morning_brief.at": {
+      label: "Giờ gửi",
+      help: "Dạng HH:MM, giờ địa phương; có thể trước giờ bắt đầu làm việc.",
+    },
+    "morning_brief.due_within_days": {
+      label: "Coi là sắp đến hạn trong",
+      unit: "ngày",
+    },
+    "morning_brief.notify": {
+      label: "Gửi cho ai",
+      help: "Sales phụ trách nhận tin về hồ sơ của mình; Trưởng bộ phận nhận tin cả bộ phận.",
+    },
+    working_hours: {
+      label: "Giờ làm việc",
+      help: "Ngoài giờ này lời nhắc đợi, không bị bỏ.",
+    },
+    "working_hours.days": { label: "Ngày làm việc" },
+    "working_hours.start": {
+      label: "Bắt đầu",
+      help: "Dạng HH:MM, giờ địa phương.",
+    },
+    "working_hours.end": {
+      label: "Kết thúc",
+      help: "Dạng HH:MM, sau giờ bắt đầu.",
+    },
+    "working_hours.time_zone": {
+      label: "Múi giờ",
+      help: "Tên múi giờ, ví dụ Asia/Ho_Chi_Minh.",
+    },
+  },
 };
 
 /**
@@ -324,6 +418,15 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
  * mean the same wherever they appear.
  */
 const VALUES: Record<string, string> = {
+  pic: "Sales phụ trách",
+  head: "Trưởng bộ phận",
+  mon: "Thứ Hai",
+  tue: "Thứ Ba",
+  wed: "Thứ Tư",
+  thu: "Thứ Năm",
+  fri: "Thứ Sáu",
+  sat: "Thứ Bảy",
+  sun: "Chủ nhật",
   error: "Chặn",
   warning: "Cảnh báo",
   warn: "Cảnh báo, xác nhận được sau khi ghi nhận",
@@ -383,10 +486,7 @@ export function humanise(name: string): string {
 }
 
 /** The table's words for a field, or null when it has none. */
-export function knownFieldWords(
-  key: RuleKey,
-  path: string,
-): FieldWords | null {
+export function knownFieldWords(key: RuleKey, path: string): FieldWords | null {
   return RULE_FIELDS[key][path] ?? COMMON[path] ?? null;
 }
 
@@ -394,7 +494,11 @@ export function knownFieldWords(
 export function fieldWords(key: RuleKey, path: string): FieldWords {
   const known = knownFieldWords(key, path);
   if (known) return known;
-  const last = path.replace(/\[\]/g, "").split(".").filter((p) => p !== "*").pop();
+  const last = path
+    .replace(/\[\]/g, "")
+    .split(".")
+    .filter((p) => p !== "*")
+    .pop();
   return { label: humanise(last ?? path) };
 }
 
@@ -405,16 +509,13 @@ export function fieldWords(key: RuleKey, path: string): FieldWords {
  * person reads it, for the diff. A map key is named by its value's words (a
  * finding, a language, a kind of mail), a list position by its item's.
  */
-export function pathLabel(
-  key: RuleKey,
-  root: RuleNode,
-  path: DocPath,
-): string {
+export function pathLabel(key: RuleKey, root: RuleNode, path: DocPath): string {
   const parts: string[] = [];
   let node: RuleNode | undefined = root;
   let label = "";
   for (const step of path) {
-    if (node && node.nullable && node.kind !== "text") node = { ...node, nullable: false } as RuleNode;
+    if (node && node.nullable && node.kind !== "text")
+      node = { ...node, nullable: false } as RuleNode;
     if (node?.kind === "object") {
       label = label ? `${label}.${String(step)}` : String(step);
       parts.push(fieldWords(key, label).label);

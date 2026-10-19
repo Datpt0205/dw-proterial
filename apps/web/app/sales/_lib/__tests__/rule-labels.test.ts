@@ -25,7 +25,10 @@ import {
  */
 const SCHEMAS = JSON.parse(
   readFileSync(
-    resolve(__dirname, "../../../../../../contracts/jsonschema/sales_rules.json"),
+    resolve(
+      __dirname,
+      "../../../../../../contracts/jsonschema/sales_rules.json",
+    ),
     "utf-8",
   ),
 ) as Record<RuleKey, JsonSchema>;
@@ -37,7 +40,10 @@ describe("the rules editor's words (ticket 40)", () => {
 
   it("labels every field path of every key's schema", () => {
     const missing: string[] = [];
-    for (const [key, schema] of Object.entries(SCHEMAS) as [RuleKey, JsonSchema][])
+    for (const [key, schema] of Object.entries(SCHEMAS) as [
+      RuleKey,
+      JsonSchema,
+    ][])
       for (const path of fieldPaths(readSchema(schema)))
         if (!knownFieldWords(key, path)) missing.push(`${key}: ${path}`);
     expect(missing).toEqual([]);
@@ -49,7 +55,9 @@ describe("the rules editor's words (ticket 40)", () => {
     expect(fieldPaths(readSchema(SCHEMAS.sales_emails))).toContain(
       "emails.*.*.subject",
     );
-    expect(fieldPaths(readSchema(SCHEMAS.sales_order_rules)).length).toBeGreaterThan(30);
+    expect(
+      fieldPaths(readSchema(SCHEMAS.sales_order_rules)).length,
+    ).toBeGreaterThan(30);
   });
 
   it("names every value a choice or a closed map key may take", () => {
@@ -77,15 +85,25 @@ describe("the rules editor's words (ticket 40)", () => {
   it("reads a document path in words, map keys and list positions included", () => {
     const pricing = readSchema(SCHEMAS.sales_pricing);
     expect(
-      pathLabel("sales_pricing", pricing, ["copper_adders", 1, "band", "low_usd_per_tonne"]),
+      pathLabel("sales_pricing", pricing, [
+        "copper_adders",
+        1,
+        "band",
+        "low_usd_per_tonne",
+      ]),
     ).toBe("Phụ phí đồng theo mức LME › Mức LME 2 › Khoảng giá LME › Từ (gồm)");
     const orders = readSchema(SCHEMAS.sales_order_rules);
-    expect(pathLabel("sales_order_rules", orders, ["findings", "price_mismatch"])).toBe(
-      "Mức độ của từng cờ › Đơn giá lệch báo giá",
-    );
+    expect(
+      pathLabel("sales_order_rules", orders, ["findings", "price_mismatch"]),
+    ).toBe("Mức độ của từng cờ › Đơn giá lệch báo giá");
     const emails = readSchema(SCHEMAS.sales_emails);
     expect(
-      pathLabel("sales_emails", emails, ["emails", "confirmation_draft", "vi", "subject"]),
+      pathLabel("sales_emails", emails, [
+        "emails",
+        "confirmation_draft",
+        "vi",
+        "subject",
+      ]),
     ).toBe("Mẫu thư › Thư xác nhận PO (nháp) › tiếng Việt › Tiêu đề");
   });
 });

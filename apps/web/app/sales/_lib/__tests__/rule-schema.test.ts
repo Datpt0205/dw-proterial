@@ -19,7 +19,10 @@ import { placeholdersIn, unknownPlaceholders } from "../rule-templates";
 
 const SCHEMAS = JSON.parse(
   readFileSync(
-    resolve(__dirname, "../../../../../../contracts/jsonschema/sales_rules.json"),
+    resolve(
+      __dirname,
+      "../../../../../../contracts/jsonschema/sales_rules.json",
+    ),
     "utf-8",
   ),
 ) as Record<RuleKey, JsonSchema>;
@@ -32,11 +35,19 @@ const PRICING = {
   policy_version: "1.0.0",
   copper_adders: [
     {
-      band: { kind: "lme_band", low_usd_per_tonne: "9000", high_usd_per_tonne: "9500" },
+      band: {
+        kind: "lme_band",
+        low_usd_per_tonne: "9000",
+        high_usd_per_tonne: "9500",
+      },
       adder_usd_per_tonne: "310",
     },
     {
-      band: { kind: "lme_band", low_usd_per_tonne: "9500", high_usd_per_tonne: "10000" },
+      band: {
+        kind: "lme_band",
+        low_usd_per_tonne: "9500",
+        high_usd_per_tonne: "10000",
+      },
       adder_usd_per_tonne: "335",
     },
   ],
@@ -75,37 +86,66 @@ describe("a key's schema, read into what the editor draws (ticket 40)", () => {
       min: 0,
       exclusiveMax: 1,
     });
-    expect(nodeAt(pricing, ["copper_adders"])).toMatchObject({ kind: "list", minItems: 1 });
-    expect(nodeAt(pricing, ["copper_adders", 0, "band", "kind"])).toMatchObject({
-      kind: "fixed",
-      value: "lme_band",
+    expect(nodeAt(pricing, ["copper_adders"])).toMatchObject({
+      kind: "list",
+      minItems: 1,
     });
+    expect(nodeAt(pricing, ["copper_adders", 0, "band", "kind"])).toMatchObject(
+      {
+        kind: "fixed",
+        value: "lme_band",
+      },
+    );
     const orders = node("sales_order_rules");
-    expect(nodeAt(orders, ["cross_check_required"])).toMatchObject({ kind: "switch" });
+    expect(nodeAt(orders, ["cross_check_required"])).toMatchObject({
+      kind: "switch",
+    });
     expect(nodeAt(orders, ["export_control_mode"])).toMatchObject({
       kind: "choice",
       values: ["warn", "block_confirmation"],
     });
-    const findings = nodeAt(orders, ["findings"]) as Extract<RuleNode, { kind: "map" }>;
+    const findings = nodeAt(orders, ["findings"]) as Extract<
+      RuleNode,
+      { kind: "map" }
+    >;
     expect(findings.kind).toBe("map");
     expect(findings.keyEnum).toContain("price_mismatch");
-    expect(findings.value).toMatchObject({ kind: "choice", values: ["error", "warning"] });
+    expect(findings.value).toMatchObject({
+      kind: "choice",
+      values: ["error", "warning"],
+    });
     expect(nodeAt(orders, ["fiscal_year_start_month"])).toMatchObject({
       kind: "number",
       integer: true,
       min: 1,
       max: 12,
     });
-    expect(nodeAt(node("sales_quote_rules"), ["reference_price"])).toMatchObject({
+    expect(
+      nodeAt(node("sales_quote_rules"), ["reference_price"]),
+    ).toMatchObject({
       kind: "object",
       nullable: true,
     });
     const emails = node("sales_emails");
-    expect(nodeAt(emails, ["emails"])).toMatchObject({ kind: "map", keyPattern: "^[a-z][a-z0-9_]{2,47}$" });
-    expect(nodeAt(emails, ["emails", "x", "vi", "body"])).toMatchObject({ kind: "text", multiline: true });
-    expect(nodeAt(emails, ["emails", "x", "vi", "subject"])).toMatchObject({ kind: "text", multiline: false });
-    expect(nodeAt(emails, ["emails", "x", "vi", "line"])).toMatchObject({ kind: "text", nullable: true });
-    expect(nodeAt(node("sales_handoffs"), ["templates", "complaint", "body"])).toMatchObject({
+    expect(nodeAt(emails, ["emails"])).toMatchObject({
+      kind: "map",
+      keyPattern: "^[a-z][a-z0-9_]{2,47}$",
+    });
+    expect(nodeAt(emails, ["emails", "x", "vi", "body"])).toMatchObject({
+      kind: "text",
+      multiline: true,
+    });
+    expect(nodeAt(emails, ["emails", "x", "vi", "subject"])).toMatchObject({
+      kind: "text",
+      multiline: false,
+    });
+    expect(nodeAt(emails, ["emails", "x", "vi", "line"])).toMatchObject({
+      kind: "text",
+      nullable: true,
+    });
+    expect(
+      nodeAt(node("sales_handoffs"), ["templates", "complaint", "body"]),
+    ).toMatchObject({
       placeholders: expect.arrayContaining(["{customer}", "{po}"]),
     });
     expect(versionField(pricing)).toBe("policy_version");
@@ -125,7 +165,9 @@ describe("a key's schema, read into what the editor draws (ticket 40)", () => {
     const root = node("sales_quote_rules");
     const values = toForm(root, QUOTE) as Record<string, unknown>;
     values.reference_price = { on: false, value: values.reference_price };
-    expect((fromForm(root, values) as Record<string, unknown>).reference_price).toBeNull();
+    expect(
+      (fromForm(root, values) as Record<string, unknown>).reference_price,
+    ).toBeNull();
     expect(toForm(root, { ...QUOTE, reference_price: null })).toMatchObject({
       reference_price: { on: false },
     });
@@ -142,7 +184,12 @@ describe("a key's schema, read into what the editor draws (ticket 40)", () => {
     expect(problem(margin, "1")).toBe("Phải nhỏ hơn 1.");
     const version = nodeAt(orders, ["policy_version"])!;
     expect(problem(version, "1.2")).toMatch(/ba số/);
-    const subject = nodeAt(node("sales_emails"), ["emails", "k", "vi", "subject"])!;
+    const subject = nodeAt(node("sales_emails"), [
+      "emails",
+      "k",
+      "vi",
+      "subject",
+    ])!;
     expect(problem(subject, "a\nb")).toBe("Chỉ một dòng: không xuống dòng.");
     const adders = nodeAt(node("sales_pricing"), ["copper_adders"])!;
     expect(problem(adders, [])).toBe("Cần ít nhất 1 mục.");
@@ -156,25 +203,33 @@ describe("a key's schema, read into what the editor draws (ticket 40)", () => {
       price: { relative_tolerance: "0" },
       findings: { code_unmapped: "error", price_mismatch: "error" },
     });
-    expect(formName(orders, values, parseLoc("findings.price_mismatch"))).toEqual([
-      "findings",
-      1,
-      "value",
-    ]);
-    expect(formName(orders, values, parseLoc("price.relative_tolerance"))).toEqual([
-      "price",
-      "relative_tolerance",
-    ]);
+    expect(
+      formName(orders, values, parseLoc("findings.price_mismatch")),
+    ).toEqual(["findings", 1, "value"]);
+    expect(
+      formName(orders, values, parseLoc("price.relative_tolerance")),
+    ).toEqual(["price", "relative_tolerance"]);
     expect(formName(orders, values, parseLoc("findings.nothing"))).toBeNull();
     const pricing = node("sales_pricing");
     expect(
-      formName(pricing, toForm(pricing, PRICING), parseLoc("copper_adders.1.band.low_usd_per_tonne")),
+      formName(
+        pricing,
+        toForm(pricing, PRICING),
+        parseLoc("copper_adders.1.band.low_usd_per_tonne"),
+      ),
     ).toEqual(["copper_adders", 1, "band", "low_usd_per_tonne"]);
     const quote = node("sales_quote_rules");
     expect(
-      formName(quote, toForm(quote, QUOTE), parseLoc("reference_price.band_below_percent")),
+      formName(
+        quote,
+        toForm(quote, QUOTE),
+        parseLoc("reference_price.band_below_percent"),
+      ),
     ).toEqual(["reference_price", "value", "band_below_percent"]);
-    expect(parseLoc("findings.price_mismatch.[key]")).toEqual(["findings", "price_mismatch"]);
+    expect(parseLoc("findings.price_mismatch.[key]")).toEqual([
+      "findings",
+      "price_mismatch",
+    ]);
     expect(parseLoc("")).toEqual([]);
   });
 });
@@ -185,7 +240,12 @@ describe("what a version changes (ticket 40)", () => {
     next.floor_margin = "0.2";
     next.policy_version = "1.0.1";
     expect(diffDocuments(PRICING, next)).toEqual([
-      { kind: "changed", path: ["policy_version"], before: "1.0.0", after: "1.0.1" },
+      {
+        kind: "changed",
+        path: ["policy_version"],
+        before: "1.0.0",
+        after: "1.0.1",
+      },
       { kind: "changed", path: ["floor_margin"], before: "0.18", after: "0.2" },
     ]);
     // A decimal written another way is the same number.
@@ -195,7 +255,11 @@ describe("what a version changes (ticket 40)", () => {
   it("reads an inserted list item as one added item, not every later one changed", () => {
     const next = structuredClone(PRICING);
     const middle = {
-      band: { kind: "lme_band", low_usd_per_tonne: "9200", high_usd_per_tonne: "9300" },
+      band: {
+        kind: "lme_band",
+        low_usd_per_tonne: "9200",
+        high_usd_per_tonne: "9300",
+      },
       adder_usd_per_tonne: "320",
     };
     next.copper_adders.splice(1, 0, middle);
@@ -205,7 +269,11 @@ describe("what a version changes (ticket 40)", () => {
     const fewer = structuredClone(PRICING);
     fewer.copper_adders.splice(0, 1);
     expect(diffDocuments(PRICING, fewer)).toEqual([
-      { kind: "removed", path: ["copper_adders", 0], before: PRICING.copper_adders[0] },
+      {
+        kind: "removed",
+        path: ["copper_adders", 0],
+        before: PRICING.copper_adders[0],
+      },
     ]);
   });
 
@@ -220,12 +288,12 @@ describe("what a version changes (ticket 40)", () => {
         after: "340",
       },
     ]);
-    expect(
-      diffDocuments({ m: { a: 1, b: 2 } }, { m: { b: 2, c: 3 } }),
-    ).toEqual([
-      { kind: "removed", path: ["m", "a"], before: 1 },
-      { kind: "added", path: ["m", "c"], after: 3 },
-    ]);
+    expect(diffDocuments({ m: { a: 1, b: 2 } }, { m: { b: 2, c: 3 } })).toEqual(
+      [
+        { kind: "removed", path: ["m", "a"], before: 1 },
+        { kind: "added", path: ["m", "c"], after: 3 },
+      ],
+    );
     expect(diffDocuments({ xs: ["a", "b"] }, { xs: ["a", "c"] })).toEqual([
       { kind: "changed", path: ["xs", 1], before: "b", after: "c" },
     ]);
@@ -238,11 +306,18 @@ describe("a template's placeholders (ticket 40)", () => {
       "${po_no}",
       "${revision}",
     ]);
-    expect(unknownPlaceholders("Khách {customer} {customer:>9} {x}", ["{customer}"], "braces")).toEqual([
-      "{customer:>9}",
-      "{x}",
-    ]);
-    expect(unknownPlaceholders("{{literal}} {po}", ["{po}"], "braces")).toEqual([]);
-    expect(unknownPlaceholders("${po_no} ${nope}", ["${po_no}"], "dollar")).toEqual(["${nope}"]);
+    expect(
+      unknownPlaceholders(
+        "Khách {customer} {customer:>9} {x}",
+        ["{customer}"],
+        "braces",
+      ),
+    ).toEqual(["{customer:>9}", "{x}"]);
+    expect(unknownPlaceholders("{{literal}} {po}", ["{po}"], "braces")).toEqual(
+      [],
+    );
+    expect(
+      unknownPlaceholders("${po_no} ${nope}", ["${po_no}"], "dollar"),
+    ).toEqual(["${nope}"]);
   });
 });
