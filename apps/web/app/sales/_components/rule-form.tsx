@@ -143,9 +143,14 @@ function checks(node: RuleNode): FormRule[] {
 /** "Bắt buộc" on submit only, never when someone tabs past (ui-quality §9). */
 function requiredRule(label: string): FormRule {
   return {
+    // A validator, not async-validator's own required check: that one reads
+    // every value as a string and refuses a number it holds.
     required: true,
-    message: `Cần nhập ${label.toLowerCase()}.`,
     validateTrigger: "onSubmit",
+    validator: async (_, value: unknown) => {
+      if (value === null || value === undefined || value === "")
+        throw new Error(`Cần nhập ${label.toLowerCase()}.`);
+    },
   };
 }
 
@@ -278,6 +283,7 @@ function Control({
   label,
   value,
   onChange,
+  onBlur,
   id,
 }: {
   node: RuleNode;
@@ -285,6 +291,8 @@ function Control({
   label: string;
   value?: unknown;
   onChange?: (value: unknown) => void;
+  /** Form.Item's: a field is checked when it is left (`validateTrigger="onBlur"`). */
+  onBlur?: () => void;
   id?: string;
 }) {
   switch (node.kind) {
@@ -311,6 +319,7 @@ function Control({
           aria-label={label}
           value={value as string}
           onChange={(v) => onChange?.(v)}
+          onBlur={onBlur}
           options={node.values.map((v) => ({ value: v, label: valueLabel(v) }))}
           className="w-full"
           showSearch={{ filterOption: viFilter }}
@@ -322,6 +331,7 @@ function Control({
           id={id}
           value={value as string | number | null}
           onChange={(v) => onChange?.(v)}
+          onBlur={onBlur}
           aria-label={label}
           // No min, max or precision here: InputNumber would change what was
           // typed on blur without a word; the schema's check says it instead.
@@ -345,6 +355,7 @@ function Control({
         value: (value as string | null) ?? "",
         onChange: (e: { target: { value: string } }) =>
           onChange?.(e.target.value),
+        onBlur,
         maxLength: node.maxLength,
         spellCheck: true,
       };

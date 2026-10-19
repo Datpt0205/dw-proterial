@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -177,6 +178,11 @@ describe("the schema-driven rules form (ticket 40)", () => {
       const done = vi.fn();
       const failed = vi.fn();
       render(<Harness onDone={done} onFailed={failed} />);
+      // Tab past an emptied required field first: nothing is said yet.
+      const note = screen.getByRole("textbox", { name: "Note" });
+      fireEvent.change(note, { target: { value: "" } });
+      fireEvent.blur(note);
+
       const hours = screen.getByRole("spinbutton", {
         name: "Mục tiêu xác nhận đơn hàng",
       });
@@ -186,11 +192,8 @@ describe("the schema-driven rules form (ticket 40)", () => {
       fireEvent.change(hours, { target: { value: "0" } });
       fireEvent.blur(hours);
       expect(await screen.findByText("Phải lớn hơn 0.")).toBeTruthy();
-
-      const note = screen.getByRole("textbox", { name: "Note" });
-      fireEvent.change(note, { target: { value: "" } });
-      fireEvent.blur(note);
-      await waitFor(() => expect(screen.queryByText("Phải lớn hơn 0.")).toBeTruthy());
+      // The note's blur was checked before the hours' two: it said nothing.
+      await act(() => new Promise((settle) => setTimeout(settle, 500)));
       expect(screen.queryByText("Cần nhập note.")).toBeNull();
 
       fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
@@ -206,15 +209,17 @@ describe("the schema-driven rules form (ticket 40)", () => {
     async () => {
       const done = vi.fn();
       render(<Harness onDone={done} />);
-      fireEvent.click(screen.getByRole("button", { name: "Chuyển mục 2 lên" }));
-      fireEvent.click(screen.getByRole("button", { name: "Thêm mục" }));
-      const third = await screen.findByRole("textbox", { name: "Mục 3" });
+      const list = screen.getByText("Mailboxes").closest(".ant-card") as HTMLElement;
+      fireEvent.click(within(list).getByRole("button", { name: "Chuyển mục 2 lên" }));
+      fireEvent.click(within(list).getByRole("button", { name: "Thêm mục" }));
+      const third = await within(list).findByRole("textbox", { name: "Mục 3" });
       fireEvent.change(third, { target: { value: "c@x.example" } });
       // maxItems 3: no fourth.
       expect(
-        (screen.getByRole("button", { name: "Thêm mục" }) as HTMLButtonElement).disabled,
+        (within(list).getByRole("button", { name: "Thêm mục" }) as HTMLButtonElement)
+          .disabled,
       ).toBe(true);
-      fireEvent.click(screen.getByRole("button", { name: "Xóa mục 2" }));
+      fireEvent.click(within(list).getByRole("button", { name: "Xóa mục 2" }));
       fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
       await waitFor(() => expect(done).toHaveBeenCalledTimes(1));
       expect((done.mock.calls[0]![0] as typeof DOCUMENT).mailboxes).toEqual([
