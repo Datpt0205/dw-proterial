@@ -1,6 +1,6 @@
 # 42 — Follow-ups and the morning brief, every timing the customer's
 
-Status: done (2026-10-19; Đạt's goal of 2026-10-18 "the follow-ups the proposal promised exist, and every timing in them is the customer's to change"; built and mutation-checked by the agent; integration tests written and owed while Docker is down)
+Status: done (2026-10-19, `b92a3bf` and `4235dde`; Đạt's goal of 2026-10-18 "the follow-ups the proposal promised exist, and every timing in them is the customer's to change"; built and mutation-checked by the agent; integration tests written and owed while Docker is down)
 Blocked by: —
 Category: enhancement
 
