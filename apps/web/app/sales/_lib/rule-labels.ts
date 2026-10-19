@@ -1,6 +1,7 @@
 import type { RuleKey } from "./rules";
 import { ARTIFACT_KIND, FIELD, FINDING_CODE, LANGUAGE } from "./labels";
 import { nodeAt, type DocPath, type RuleNode } from "./rule-schema";
+import { formatQuantity } from "../../../lib/money";
 
 /**
  * The words of the rules editor (ticket 40): a label, a short help and a unit
@@ -434,21 +435,16 @@ export function pathLabel(
   return parts.join(" › ");
 }
 
-/** A number as Vietnamese reads it: "9.000", "0,18". */
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 6 }).format(
-    value,
-  );
-}
-
 function formatScalar(node: RuleNode | undefined, value: unknown): string {
   if (value === null || value === undefined) return "(không có)";
   if (typeof value === "boolean") return value ? "Bật" : "Tắt";
   if (node?.kind === "choice" || node?.kind === "fixed")
     return valueLabel(String(value));
   if (node?.kind === "number" || typeof value === "number") {
-    const number = Number(value);
-    return Number.isFinite(number) ? formatNumber(number) : String(value);
+    // "9.000", "0,18": a decimal string goes through whole, digit for digit.
+    return Number.isFinite(Number(value))
+      ? formatQuantity(value as number | string)
+      : String(value);
   }
   if (typeof value === "string") return value === "" ? "(trống)" : value;
   return JSON.stringify(value);
