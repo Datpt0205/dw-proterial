@@ -16,6 +16,8 @@
  * - `type: string|integer|number|boolean` → text, number, switch.
  */
 
+import { formatQuantity } from "../../../lib/money";
+
 export interface JsonSchema {
   $ref?: string;
   $defs?: Record<string, JsonSchema>;
@@ -106,7 +108,8 @@ function resolve(root: JsonSchema, schema: JsonSchema): JsonSchema {
 }
 
 function withoutRef(schema: JsonSchema): JsonSchema {
-  const { $ref: _ref, ...rest } = schema;
+  const rest = { ...schema };
+  delete rest.$ref;
   return rest;
 }
 
@@ -541,11 +544,7 @@ function patternProblem(pattern: string): string {
   return "Giá trị chưa đúng định dạng.";
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 6 }).format(
-    value,
-  );
-}
+const formatNumber = formatQuantity;
 
 /** The field a document's version number is in: `policy_version`, else `version`. */
 export function versionField(root: RuleNode): string | null {
