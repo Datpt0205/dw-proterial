@@ -333,3 +333,54 @@ followup_deliveries = sa.Table(
     sa.Column("sent_at", _TS, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
+
+# Master-data imports (ticket 41, migration 511ef1b71dee): one snapshot per
+# import of one list, the file until it is read, and the parsed records.
+catalog_snapshots = sa.Table(
+    "catalog_snapshots",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("list", sa.Text, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("source", sa.Text, nullable=False),
+    sa.Column("file_name", sa.Text),
+    sa.Column("file_sha256", sa.Text),
+    sa.Column("file_size", sa.Integer),
+    sa.Column("imported_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("imported_at", _TS, nullable=False),
+    sa.Column("as_of", _TS, nullable=False),
+    sa.Column("error", sa.Text),
+    sa.Column("row_count", sa.Integer, nullable=False),
+    sa.Column("rejected_count", sa.Integer, nullable=False),
+    sa.Column("rejected", JSONB, nullable=False),
+    sa.Column("unknown_headers", JSONB, nullable=False),
+    sa.Column("submitted_by", UUID(as_uuid=True)),
+    sa.Column("submitted_at", _TS),
+    sa.Column("approval_id", UUID(as_uuid=True)),
+    sa.Column("base_snapshot_id", UUID(as_uuid=True)),
+    sa.Column("decided_by", UUID(as_uuid=True)),
+    sa.Column("decided_at", _TS),
+    sa.Column("comment", sa.Text),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+catalog_import_files = sa.Table(
+    "catalog_import_files",
+    metadata,
+    *_scope(),
+    sa.Column("snapshot_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("content", sa.LargeBinary, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+catalog_rows = sa.Table(
+    "catalog_rows",
+    metadata,
+    *_scope(),
+    sa.Column("snapshot_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("position", sa.Integer, nullable=False),
+    sa.Column("key", sa.Text, nullable=False),
+    sa.Column("record", JSONB, nullable=False),
+)

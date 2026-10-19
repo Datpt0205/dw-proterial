@@ -43,6 +43,8 @@ PIC = frozenset(
         "sales.worker.pause",
         # Proposes a tenant's own rule version (57a241ea182b, ticket 19).
         "sales.rules.propose",
+        # Imports a master-data list (511ef1b71dee, ticket 41).
+        "sales.master_data.import",
     }
 )
 HEAD = PIC | {
@@ -55,6 +57,8 @@ HEAD = PIC | {
     "sales.layout.approve",
     # Decides a rule version a PIC proposed (57a241ea182b, ticket 19).
     "sales.rules.approve",
+    # Approves a master-data import (511ef1b71dee, ticket 41).
+    "sales.master_data.approve",
 }
 # (subject, tenant) -> the `sales.*` scopes the spec's actor table gives them.
 SPEC: dict[tuple[str, str], frozenset[str]] = {

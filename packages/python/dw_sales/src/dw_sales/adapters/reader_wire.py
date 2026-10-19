@@ -39,6 +39,7 @@ from dw_sales.application.order_ports import QuoteForm
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
+from dw_sales.domain.master_data import ImportedTable
 from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
@@ -64,6 +65,8 @@ class ReaderOp(StrEnum):
     SOURCE_PDF_PAGE = "source.pdf_page"
     SOURCE_SHEET_NAMES = "source.sheet_names"
     SOURCE_SHEET_GRID = "source.sheet_grid"
+    # A master-data file as rows of cells (ticket 41).
+    TABLE_ROWS = "table.rows"
 
 
 class ReaderArgs(BaseModel):
@@ -185,5 +188,6 @@ RESULTS: Final[Mapping[ReaderOp, TypeAdapter[Any]]] = MappingProxyType(
         ReaderOp.SOURCE_PDF_PAGE: TypeAdapter(PdfPage | None),
         ReaderOp.SOURCE_SHEET_NAMES: TypeAdapter(list[str]),
         ReaderOp.SOURCE_SHEET_GRID: TypeAdapter(SheetGrid | None),
+        ReaderOp.TABLE_ROWS: TypeAdapter(ImportedTable),
     }
 )

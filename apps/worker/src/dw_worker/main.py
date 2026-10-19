@@ -81,6 +81,7 @@ from dw_platform.adapters.persistence.partition_maintenance import SqlPartitionM
 from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
+    SqlOutboxRepository,
 )
 from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
@@ -95,6 +96,7 @@ from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.retention_policy import load_retention_policy
 from dw_sales.adapters.assembly import (
     Dw1Mount,
+    build_catalog_settlement,
     build_dw1,
     build_followup_lane,
     build_layout_settlement,
@@ -103,6 +105,7 @@ from dw_sales.adapters.assembly import (
 from dw_sales.adapters.clamd import malware_scanner
 from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
@@ -133,6 +136,7 @@ from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
 from dw_worker.consumers.retention import RetentionPrunePort, build_retention_consumer
+from dw_worker.consumers.sales_catalog import build_catalog_import_handler
 from dw_worker.consumers.sales_decisions import build_decided_handler
 from dw_worker.consumers.sales_followups import (
     INTERVAL_SECONDS as SALES_FOLLOWUPS_INTERVAL_SECONDS,
@@ -350,6 +354,7 @@ def build_sales(
         session_factory=sessions,
         audit=SqlAuditRepository,
         approvals=SqlApprovalRepository,
+        outbox=SqlOutboxRepository,
         clock=clock,
         ids=ids,
         authorization=ScopeAuthorizationService(),
@@ -514,6 +519,19 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             ),
             applied="rules decision applied",
         )
+        # A master-data import (Sales ticket 41): a run-less `sales.catalog`
+        # approval, carried out the same way.
+        handlers[CATALOG_DECIDED] = build_decided_handler(
+            build_catalog_settlement(
+                session_factory=sessions,
+                audit=SqlAuditRepository,
+                approvals=SqlApprovalRepository,
+                outbox=SqlOutboxRepository,
+                clock=clock,
+                ids=ids,
+            ),
+            applied="catalog decision applied",
+        )
         # Pinned by filename, like every other versioned artifact here: the
         # answer to a retention question has to name the version that gave it.
         # One file read once — the two sweeps are two halves of one commitment,
@@ -626,6 +644,11 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 sales_followups_consumer = build_sales_followups_consumer(
                     followups, followup_scopes
                 )
+                # A master-data upload's file, read in the reader sandbox
+                # (ticket 41). Only where DW1 is built: an upload needs the
+                # Sales routes, which the API mounts on the same condition.
+                if mount.catalog_parsing is not None:
+                    handlers[CATALOG_IMPORTED] = build_catalog_import_handler(mount.catalog_parsing)
         registry.register(
             "outbox",
             build_outbox_consumer(

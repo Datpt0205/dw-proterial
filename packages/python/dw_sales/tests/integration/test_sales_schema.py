@@ -20,9 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from dw_sales.application.case_store import JobError, JobStatus
+from dw_sales.application.catalog_imports import ImportSource, ImportStatus
 from dw_sales.application.followups import BRIEF, BRIEF_STAGE
 from dw_sales.application.rules import RuleKey
 from dw_sales.domain import dispositions, followups, orders, quotes
+from dw_sales.domain.master_data import CatalogList
 
 pytestmark = pytest.mark.integration
 
@@ -73,6 +75,10 @@ _SETS: dict[str, set[str]] = {
     # What the follow-ups record (ticket 42).
     "ck_followup_deliveries_followup": _values(followups.Followup) | {BRIEF},
     "ck_followup_deliveries_stage": _values(followups.Stage) | {BRIEF_STAGE},
+    # A master-data import's list and status (ticket 41).
+    "ck_catalog_snapshots_list": _values(CatalogList),
+    "ck_catalog_snapshots_status": set(get_args(ImportStatus)),
+    "ck_catalog_snapshots_source": set(get_args(ImportSource)),
 }
 
 

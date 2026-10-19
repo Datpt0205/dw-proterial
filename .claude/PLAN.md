@@ -14,31 +14,33 @@ git: every slice's commit message, and the pre-split narrative at
 | Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | Done; on-prem stack unrun     |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–39 built                   |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                   |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
 own file and a row here.
 
-## Now (2026-10-18)
+## Now (2026-10-19)
 
 - **Proterial product repo** (`origin` `Datpt0205/dw-proterial`; platform
   seed in `Datpt0205/codebase`). DW1 on mock data: `sales.md`, tickets
   under `sales/dw1-portal-demo/`, runbook `demo.md`, eval `sales@1.3.0`.
 - **On premises** (Đạt, 2026-10-18), DW1 and DW2: Qwen3.5-9B, bge-m3 and
   bge-reranker-v2-m3 on the plant's host, no API called;
-  `infra/onprem/README.md` (`make onprem-models`, `make onprem-up`; sign-in
-  through Keycloak with AD over LDAP; the LAN portal installs as an app).
-- 2026-10-18: every owed decision taken as recommended and built: memory
-  reviews stamped (`89e33d6`), the Sales bar in submenus (`f84643e`), a pause
-  stops rendering (`f4705f9`), exports expire after 30 days, the purge takes
-  service users, 5 superseded versions kept (`981f3a1`); every ADR Accepted.
-- **Next:** on a machine with Docker and a GPU: the integration suites, the
-  migration round trip of `445f93c2ea2a`, `make onprem-models`/`onprem-up`,
-  `make check-rerank`, `run_evals.py --live onprem`, `make web-screens`,
-  trivy on the two new images. Then DW2 (`make new-context NAME=purchasing`)
-  when its documents arrive.
+  `infra/onprem/README.md` (`make onprem-models`, `make onprem-up`).
+- 2026-10-19, so users change DW1 themselves (Đạt): rules edited in a form
+  drawn from each key's schema with a diff before approval (ticket 40);
+  master data imported from Excel, previewed, approved, mock until then
+  (41); follow-ups and the 07:30 brief, every timing in `sales_followups`
+  (42). Migrations `d2b1394c67b1` -> `511ef1b71dee`.
+- **CI on main:** Prettier fixed (`63fe6b3`); the public-repo guard fails
+  until the `PUBLIC_REPO_DENYLIST` secret exists; integration tests red
+  since 2026-10-14, cause unread (logs need sign-in, no Docker here).
+- **Next:** on a machine with Docker and a GPU: the integration suites
+  (why red since 10-14 first), the migration round trips, `onprem-up`,
+  `check-rerank`, the live eval, `make web-screens` (pages of 39-42 never
+  looked at). Then DW2 when its documents arrive.
 
 ## Decisions Đạt owes
 

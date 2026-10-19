@@ -157,6 +157,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/master-data/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog State */
+        get: operations["catalog_state_api_v1_sales_master_data_imports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/master-data/imports/snapshots/{snapshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog Preview */
+        get: operations["catalog_preview_api_v1_sales_master_data_imports_snapshots__snapshot_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/master-data/imports/snapshots/{snapshot_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Catalog Submit */
+        post: operations["catalog_submit_api_v1_sales_master_data_imports_snapshots__snapshot_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/master-data/imports/{catalog_list}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Catalog Upload */
+        post: operations["catalog_upload_api_v1_sales_master_data_imports__catalog_list__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/master-data/imports/{catalog_list}/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog Template */
+        get: operations["catalog_template_api_v1_sales_master_data_imports__catalog_list__template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/master-data/items": {
         parameters: {
             query?: never;
@@ -1196,6 +1281,160 @@ export interface components {
             /** Quotes */
             quotes: string[];
         };
+        /**
+         * CatalogImportView
+         * @description An import as the page shows it: who, when, which file, how far.
+         */
+        CatalogImportView: {
+            /** Approval Id */
+            approval_id: string | null;
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            catalog_list: components["schemas"]["CatalogList"];
+            /** Comment */
+            comment: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Error */
+            error: string | null;
+            /** File Name */
+            file_name: string | null;
+            /** File Sha256 */
+            file_sha256: string | null;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /**
+             * Imported By
+             * Format: uuid
+             */
+            imported_by: string;
+            /** Rejected Count */
+            rejected_count: number;
+            /** Row Count */
+            row_count: number;
+            /**
+             * Snapshot Id
+             * Format: uuid
+             */
+            snapshot_id: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "file" | "erp";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "parsed" | "failed" | "submitted" | "approved" | "rejected" | "superseded" | "discarded";
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Submitted By */
+            submitted_by: string | null;
+        };
+        /**
+         * CatalogInForceView
+         * @description Where a list's rows come from now: an approved snapshot, or the mock.
+         */
+        CatalogInForceView: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            snapshot: components["schemas"]["CatalogImportView"] | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "mock" | "file" | "erp";
+        };
+        /**
+         * CatalogList
+         * @description The lists Sales maintains by hand. The ERP's own records (its sales
+         *     orders and open YCBG) are not among them: they come from Bravo.
+         * @enum {string}
+         */
+        CatalogList: "customers" | "items" | "convert_list" | "quotations" | "lme";
+        /** CatalogListStateView */
+        CatalogListStateView: {
+            /** Can Import */
+            can_import: boolean;
+            catalog_list: components["schemas"]["CatalogList"];
+            /** History */
+            history: components["schemas"]["CatalogImportView"][];
+            in_force: components["schemas"]["CatalogInForceView"];
+            /** Label */
+            label: string;
+            open: components["schemas"]["CatalogImportView"] | null;
+        };
+        /**
+         * CatalogPreviewView
+         * @description A proposed snapshot against the list in force now: rows added,
+         *     changed (old to new) and removed, and the rows the file had that will
+         *     not be applied.
+         */
+        CatalogPreviewView: {
+            /** Added */
+            added: components["schemas"]["DiffRow"][];
+            /** Changed */
+            changed: components["schemas"]["ChangedRow"][];
+            /** Columns */
+            columns: string[];
+            compared_with: components["schemas"]["CatalogInForceView"];
+            /** Rejected */
+            rejected: components["schemas"]["RejectedRow"][];
+            /** Rejected Count */
+            rejected_count: number;
+            /** Removed */
+            removed: components["schemas"]["DiffRow"][];
+            snapshot: components["schemas"]["CatalogImportView"];
+            /** Unchanged */
+            unchanged: number;
+            /** Unknown Headers */
+            unknown_headers: string[];
+        };
+        /** CatalogStateView */
+        CatalogStateView: {
+            /** Lists */
+            lists: components["schemas"]["CatalogListStateView"][];
+        };
+        /**
+         * CatalogUploadBody
+         * @description A master-data file (ticket 41): its name and its bytes, base64. The
+         *     bytes are decoded here and never opened: the worker reads them in the
+         *     reader sandbox.
+         */
+        CatalogUploadBody: {
+            /** Content B64 */
+            content_b64: string;
+            /** File Name */
+            file_name: string;
+        };
+        /** CellChange */
+        CellChange: {
+            /** Column */
+            column: string;
+            /** New */
+            new: string;
+            /** Old */
+            old: string;
+        };
+        /** ChangedRow */
+        ChangedRow: {
+            /** Changes */
+            changes: components["schemas"]["CellChange"][];
+            /** Key */
+            key: string;
+        };
         /** CloseBody */
         CloseBody: {
             /** Case Version */
@@ -1448,6 +1687,18 @@ export interface components {
             reply_date: string;
             /** Ycbg No */
             ycbg_no: string;
+        };
+        /**
+         * DiffRow
+         * @description A record as its template row prints it.
+         */
+        DiffRow: {
+            /** Cells */
+            cells: {
+                [key: string]: string;
+            };
+            /** Key */
+            key: string;
         };
         /** DispositionBody */
         DispositionBody: {
@@ -3006,6 +3257,18 @@ export interface components {
          */
         RegionFlag: "hidden_sheet" | "hidden_row" | "hidden_column" | "font_matches_fill" | "formula_without_cached_value" | "model_read" | "new_layout" | "print_differs" | "ocr";
         /**
+         * RejectedRow
+         * @description A row that is not applied, and why. ``row`` 0 is the file itself.
+         */
+        RejectedRow: {
+            /** Column */
+            column?: string | null;
+            /** Reason */
+            reason: string;
+            /** Row */
+            row: number;
+        };
+        /**
          * RenderBody
          * @description An artifact kind to render from the case at the version the caller saw;
          *     which kinds are open now is `GET .../artifacts`'s ``available``.
@@ -3971,6 +4234,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MasterDataView_CustomerView_"];
+                };
+            };
+        };
+    };
+    catalog_state_api_v1_sales_master_data_imports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogStateView"];
+                };
+            };
+        };
+    };
+    catalog_preview_api_v1_sales_master_data_imports_snapshots__snapshot_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogPreviewView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalog_submit_api_v1_sales_master_data_imports_snapshots__snapshot_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogImportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalog_upload_api_v1_sales_master_data_imports__catalog_list__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                catalog_list: components["schemas"]["CatalogList"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogUploadBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogImportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalog_template_api_v1_sales_master_data_imports__catalog_list__template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalog_list: components["schemas"]["CatalogList"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
