@@ -110,8 +110,8 @@ export const salesNav: NavEntry[] = [
           },
           {
             href: "/sales/master-data",
-            label: "Dữ liệu giả lập",
-            hint: "Khách hàng, mã hàng, bảng quy đổi mã, báo giá và LME của bản demo (chỉ đọc)",
+            label: "Dữ liệu chủ",
+            hint: "Khách hàng, mã hàng, bảng quy đổi mã, báo giá và LME: nhập từ tệp, xem trước, Trưởng bộ phận duyệt",
             icon: DatabaseOutlined,
             scope: "sales.case.read",
           },

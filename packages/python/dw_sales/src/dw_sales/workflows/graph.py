@@ -41,6 +41,7 @@ from dw_agent_runtime.context import access_context_from_run
 from dw_agent_runtime.contracts import RunContext, WorkerDefinition
 from dw_agent_runtime.registry import ConfigError, GraphRegistry, WorkerRegistry
 from dw_platform.application.access_context import AccessContext
+from dw_sales.application.catalog_imports import CATALOG_APPROVAL
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.layouts import LAYOUT_APPROVAL
 from dw_sales.application.rules import RULES_APPROVAL
@@ -174,6 +175,7 @@ def register(
     steps: CaseDecisions,
     layouts: ApprovalDecisionGuard,
     rules: ApprovalDecisionGuard,
+    catalog: ApprovalDecisionGuard,
     worker_file: Path,
 ) -> WorkerDefinition:
     """DW1 on a runtime: its graph, its worker, and its approvals' rules.
@@ -187,9 +189,10 @@ def register(
     - every `sales.` approval strict (a second person who made none of the
       case, and a written comment), and checked by this context before it is
       recorded (`CaseDecisions.check`); a PO layout's (`sales.layout`, no
-      run) by ``layouts`` (`LayoutDecisions.check`) and a rule version's
-      (`sales.rules`, no run) by ``rules`` (`RuleDecisions.check`), each the
-      longer prefix.
+      run) by ``layouts`` (`LayoutDecisions.check`), a rule version's
+      (`sales.rules`, no run) by ``rules`` (`RuleDecisions.check`) and a
+      master-data import's (`sales.catalog`, no run, ticket 41) by
+      ``catalog`` (`CatalogDecisions.check`), each the longer prefix.
     """
     graphs.register(DW1_WORKER_ID, GRAPH_VERSION, lambda: build_graph(steps))
     loaded = workers.load_file(worker_file).definition
@@ -202,4 +205,5 @@ def register(
     approvals.decision_guards[APPROVAL_PREFIX] = steps
     approvals.decision_guards[LAYOUT_APPROVAL] = layouts
     approvals.decision_guards[RULES_APPROVAL] = rules
+    approvals.decision_guards[CATALOG_APPROVAL] = catalog
     return loaded

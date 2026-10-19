@@ -62,6 +62,14 @@ describe("a DW1 approval in the generic inbox", () => {
     ).toBeNull();
   });
 
+  it("leaves a master-data import's approval on /approvals, where it is decided (ticket 41)", () => {
+    expect(
+      approvalInbox(
+        approval("sales.catalog", { catalog_list: "customers", added: 1 }),
+      ),
+    ).toBeNull();
+  });
+
   it("never builds a path from a payload it does not recognise", () => {
     for (const payload of [
       {},

@@ -22,6 +22,12 @@ from dw_sales.application.artifact_content import ArtifactWriterPort
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.catalog_imports import (
+    CatalogDecisions,
+    CatalogImportService,
+    CatalogTemplatePort,
+    CatalogUnitOfWorkFactory,
+)
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
@@ -66,6 +72,8 @@ class SalesServices:
     layouts: LayoutService
     # A tenant's own rule versions, proposed and approved (ticket 19).
     rules: SalesRulesService
+    # Master data imported from a file, previewed and submitted (ticket 41).
+    catalog_imports: CatalogImportService
     gate: Gate
 
 
@@ -77,6 +85,8 @@ class SalesAssembly:
     layout_decisions: LayoutDecisions
     # The decision guard of a rule version's approval (`sales.rules`, ticket 38).
     rule_decisions: RuleDecisions
+    # The decision guard of a master-data import's approval (`sales.catalog`, ticket 41).
+    catalog_decisions: CatalogDecisions
 
 
 def assemble(
@@ -101,6 +111,8 @@ def assemble(
     runs: Dw1RunsPort,
     pending: PendingDecisionsPort,
     telemetry: SpanPort,
+    catalog_uow: CatalogUnitOfWorkFactory,
+    templates: CatalogTemplatePort,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     processing = InboxProcessing(
@@ -144,6 +156,7 @@ def assemble(
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
         rules=SalesRulesService(uow, gate, book, clock, ids),
+        catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing)
@@ -152,4 +165,5 @@ def assemble(
         decisions=decisions,
         layout_decisions=LayoutDecisions(uow, clock),
         rule_decisions=RuleDecisions(uow, book),
+        catalog_decisions=CatalogDecisions(catalog_uow),
     )

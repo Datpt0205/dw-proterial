@@ -1113,6 +1113,444 @@
         "title": "CaseReplyView",
         "type": "object"
       },
+      "CatalogImportView": {
+        "description": "An import as the page shows it: who, when, which file, how far.",
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "catalog_list": {
+            "$ref": "#/components/schemas/CatalogList"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "file_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Sha256"
+          },
+          "imported_at": {
+            "format": "date-time",
+            "title": "Imported At",
+            "type": "string"
+          },
+          "imported_by": {
+            "format": "uuid",
+            "title": "Imported By",
+            "type": "string"
+          },
+          "rejected_count": {
+            "title": "Rejected Count",
+            "type": "integer"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "snapshot_id": {
+            "format": "uuid",
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "file",
+              "erp"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "parsed",
+              "failed",
+              "submitted",
+              "approved",
+              "rejected",
+              "superseded",
+              "discarded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted By"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "catalog_list",
+          "status",
+          "source",
+          "file_name",
+          "file_sha256",
+          "imported_by",
+          "imported_at",
+          "as_of",
+          "error",
+          "row_count",
+          "rejected_count",
+          "submitted_by",
+          "submitted_at",
+          "approval_id",
+          "decided_by",
+          "decided_at",
+          "comment"
+        ],
+        "title": "CatalogImportView",
+        "type": "object"
+      },
+      "CatalogInForceView": {
+        "description": "Where a list's rows come from now: an approved snapshot, or the mock.",
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogImportView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "enum": [
+              "mock",
+              "file",
+              "erp"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "as_of",
+          "snapshot"
+        ],
+        "title": "CatalogInForceView",
+        "type": "object"
+      },
+      "CatalogList": {
+        "description": "The lists Sales maintains by hand. The ERP's own records (its sales\norders and open YCBG) are not among them: they come from Bravo.",
+        "enum": [
+          "customers",
+          "items",
+          "convert_list",
+          "quotations",
+          "lme"
+        ],
+        "title": "CatalogList",
+        "type": "string"
+      },
+      "CatalogListStateView": {
+        "properties": {
+          "can_import": {
+            "title": "Can Import",
+            "type": "boolean"
+          },
+          "catalog_list": {
+            "$ref": "#/components/schemas/CatalogList"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogImportView"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "in_force": {
+            "$ref": "#/components/schemas/CatalogInForceView"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "open": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogImportView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "catalog_list",
+          "label",
+          "in_force",
+          "open",
+          "history",
+          "can_import"
+        ],
+        "title": "CatalogListStateView",
+        "type": "object"
+      },
+      "CatalogPreviewView": {
+        "description": "A proposed snapshot against the list in force now: rows added,\nchanged (old to new) and removed, and the rows the file had that will\nnot be applied.",
+        "properties": {
+          "added": {
+            "items": {
+              "$ref": "#/components/schemas/DiffRow"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "changed": {
+            "items": {
+              "$ref": "#/components/schemas/ChangedRow"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "compared_with": {
+            "$ref": "#/components/schemas/CatalogInForceView"
+          },
+          "rejected": {
+            "items": {
+              "$ref": "#/components/schemas/RejectedRow"
+            },
+            "title": "Rejected",
+            "type": "array"
+          },
+          "rejected_count": {
+            "title": "Rejected Count",
+            "type": "integer"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/DiffRow"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/CatalogImportView"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "unknown_headers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unknown Headers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "snapshot",
+          "compared_with",
+          "columns",
+          "added",
+          "changed",
+          "removed",
+          "unchanged",
+          "rejected",
+          "rejected_count",
+          "unknown_headers"
+        ],
+        "title": "CatalogPreviewView",
+        "type": "object"
+      },
+      "CatalogStateView": {
+        "properties": {
+          "lists": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogListStateView"
+            },
+            "title": "Lists",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lists"
+        ],
+        "title": "CatalogStateView",
+        "type": "object"
+      },
+      "CatalogUploadBody": {
+        "additionalProperties": false,
+        "description": "A master-data file (ticket 41): its name and its bytes, base64. The\nbytes are decoded here and never opened: the worker reads them in the\nreader sandbox.",
+        "properties": {
+          "content_b64": {
+            "maxLength": 2796204,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "content_b64"
+        ],
+        "title": "CatalogUploadBody",
+        "type": "object"
+      },
+      "CellChange": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "new": {
+            "title": "New",
+            "type": "string"
+          },
+          "old": {
+            "title": "Old",
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "old",
+          "new"
+        ],
+        "title": "CellChange",
+        "type": "object"
+      },
+      "ChangedRow": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/CellChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "changes"
+        ],
+        "title": "ChangedRow",
+        "type": "object"
+      },
       "CloseBody": {
         "additionalProperties": false,
         "properties": {
@@ -2024,6 +2462,29 @@
           "expires_at"
         ],
         "title": "DevSessionResponse",
+        "type": "object"
+      },
+      "DiffRow": {
+        "additionalProperties": false,
+        "description": "A record as its template row prints it.",
+        "properties": {
+          "cells": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Cells",
+            "type": "object"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "cells"
+        ],
+        "title": "DiffRow",
         "type": "object"
       },
       "DispositionBody": {
@@ -8274,6 +8735,40 @@
         "title": "RejectSupportGrantBody",
         "type": "object"
       },
+      "RejectedRow": {
+        "additionalProperties": false,
+        "description": "A row that is not applied, and why. ``row`` 0 is the file itself.",
+        "properties": {
+          "column": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "reason": {
+            "maxLength": 300,
+            "title": "Reason",
+            "type": "string"
+          },
+          "row": {
+            "minimum": 0.0,
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "reason"
+        ],
+        "title": "RejectedRow",
+        "type": "object"
+      },
       "RenameTenantRequest": {
         "properties": {
           "name": {
@@ -14388,6 +14883,234 @@
           }
         },
         "summary": "Customers",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/imports": {
+      "get": {
+        "operationId": "catalog_state_api_v1_sales_master_data_imports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Catalog State",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/imports/snapshots/{snapshot_id}": {
+      "get": {
+        "operationId": "catalog_preview_api_v1_sales_master_data_imports_snapshots__snapshot_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPreviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog Preview",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/imports/snapshots/{snapshot_id}/submit": {
+      "post": {
+        "operationId": "catalog_submit_api_v1_sales_master_data_imports_snapshots__snapshot_id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogImportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog Submit",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/imports/{catalog_list}": {
+      "post": {
+        "operationId": "catalog_upload_api_v1_sales_master_data_imports__catalog_list__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_list",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogList"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogUploadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogImportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog Upload",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/master-data/imports/{catalog_list}/template": {
+      "get": {
+        "operationId": "catalog_template_api_v1_sales_master_data_imports__catalog_list__template_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_list",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CatalogList"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog Template",
         "tags": [
           "sales"
         ]

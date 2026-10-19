@@ -35,6 +35,8 @@ names neither implementation (it may not import the app).
 # the app hands in, and FastAPI resolves a string annotation against the
 # module's globals, where those aliases do not exist.
 
+import base64
+import binascii
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -46,12 +48,17 @@ from fastapi import APIRouter, Depends, Query, Response
 from fastapi import Path as PathParam
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dw_kernel.errors import InfrastructureError
+from dw_kernel.errors import DomainError, InfrastructureError
 from dw_kernel.pagination import MAX_PAGE_SIZE, Page
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
+from dw_sales.application.catalog_imports import (
+    CatalogImportView,
+    CatalogPreviewView,
+    CatalogStateView,
+)
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.quotation import ScreeningRow
@@ -86,6 +93,7 @@ from dw_sales.application.views import (
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import LayoutMapping
+from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.orders import CloseReason, Note
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
@@ -114,6 +122,29 @@ class RuleProposalBody(BaseModel):
     model_config = _BODY
 
     document: dict[str, Any]
+
+
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+class CatalogUploadBody(BaseModel):
+    """A master-data file (ticket 41): its name and its bytes, base64. The
+    bytes are decoded here and never opened: the worker reads them in the
+    reader sandbox."""
+
+    model_config = _BODY
+
+    file_name: Annotated[str, Field(min_length=1, max_length=200)]
+    # 2 MiB of bytes, as base64 (`MAX_IMPORT_BYTES`; the service refuses more).
+    content_b64: Annotated[str, Field(min_length=1, max_length=2_796_204)]
+
+    def data(self) -> bytes:
+        try:
+            return base64.b64decode(self.content_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise DomainError(
+                "nội dung tệp không hợp lệ", details={"rule": "file_encoding"}
+            ) from None
 
 
 class VersionBody(BaseModel):
@@ -873,6 +904,70 @@ def build_router(
     @router.get("/master-data/open-ycbg", response_model=MasterDataView[OpenYcbgView])
     async def open_ycbg(context: Ctx, svc: Svc) -> MasterDataView[OpenYcbgView]:
         return await svc.master_data.open_ycbg(context)
+
+    # ------------------------------------- master-data imports (ticket 41) --
+    # A PIC or the head imports a list from a file (`sales.master_data.import`;
+    # the quotation and LME lists need the price scopes too). The file is only
+    # kept here: the worker reads it in the reader sandbox (202). Submitting
+    # opens a `sales.catalog` platform approval, which the head, who neither
+    # imported nor submitted it, decides on `/approvals`: no route here does.
+
+    import_scope = [scopes(SalesScopes.MASTER_DATA_IMPORT)]
+
+    @router.get(
+        "/master-data/imports",
+        response_model=CatalogStateView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def catalog_state(context: Ctx, svc: Svc) -> CatalogStateView:
+        return await svc.catalog_imports.state(context)
+
+    @router.get(
+        "/master-data/imports/{catalog_list}/template",
+        response_class=Response,
+        dependencies=import_scope,
+    )
+    async def catalog_template(catalog_list: CatalogList, context: Ctx, svc: Svc) -> Response:
+        data, file_name = await svc.catalog_imports.template(context, catalog_list)
+        return Response(
+            content=data,
+            media_type=_XLSX,
+            headers={
+                "Content-Disposition": f'attachment; filename="{file_name}"',
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.post(
+        "/master-data/imports/{catalog_list}",
+        response_model=CatalogImportView,
+        status_code=202,
+        dependencies=import_scope,
+    )
+    async def catalog_upload(
+        catalog_list: CatalogList, body: CatalogUploadBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CatalogImportView:
+        view = await svc.catalog_imports.upload(context, catalog_list, body.file_name, body.data())
+        return await idem.record(view, status_code=202)
+
+    @router.get(
+        "/master-data/imports/snapshots/{snapshot_id}",
+        response_model=CatalogPreviewView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def catalog_preview(snapshot_id: uuid.UUID, context: Ctx, svc: Svc) -> CatalogPreviewView:
+        return await svc.catalog_imports.preview(context, snapshot_id)
+
+    @router.post(
+        "/master-data/imports/snapshots/{snapshot_id}/submit",
+        response_model=CatalogImportView,
+        dependencies=import_scope,
+    )
+    async def catalog_submit(
+        snapshot_id: uuid.UUID, context: Ctx, svc: Svc, idem: Idem
+    ) -> CatalogImportView:
+        return await idem.record(await svc.catalog_imports.submit(context, snapshot_id))
 
     # -------------------------------------------------------------- worker --
 

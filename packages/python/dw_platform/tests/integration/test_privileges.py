@@ -77,6 +77,10 @@ _SALES_TABLES = (
     "sales.processing_jobs",
     # Migration d2b1394c67b1 (ticket 42): what DW1's follow-ups delivered.
     "sales.followup_deliveries",
+    # Migration 511ef1b71dee (ticket 41): master-data imports.
+    "sales.catalog_snapshots",
+    "sales.catalog_import_files",
+    "sales.catalog_rows",
 )
 
 
@@ -116,8 +120,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "po_layouts",
         "rule_versions",
         "processing_jobs",
+        "catalog_snapshots",
     ):
         assert {verb for tbl, verb in held if tbl == table} == every, table
+    # An import's file and its parsed records are never updated (ticket 41).
+    for table in ("catalog_import_files", "catalog_rows"):
+        assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
     for table in ("artifacts", "source_served", "followup_deliveries"):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
     event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}

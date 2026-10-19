@@ -61,6 +61,8 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         "sales.layout.approve",
         # Approves or rejects a tenant's own rule version (57a241ea182b, ticket 19).
         "sales.rules.approve",
+        # Approves or rejects a master-data import (511ef1b71dee, ticket 41).
+        "sales.master_data.approve",
     }
     assert pic <= head
     # Both decide a Sales request (cross-check, quote approval), so both carry
@@ -72,6 +74,8 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
     assert "sales.layout.approve" not in pic
     # Both propose a version of a Sales rule; only the head decides one.
     assert "sales.rules.propose" in pic and "sales.rules.approve" not in pic
+    # Both import a master-data list; only the head approves one (ticket 41).
+    assert "sales.master_data.import" in pic and "sales.master_data.approve" not in pic
     assert roles["sales_viewer"] == {"sales.overview.read"}
     # DW1's service account (af154486381e): it processes the mailbox and
     # nothing else; it decides nothing, so not `approvals.decide` either.

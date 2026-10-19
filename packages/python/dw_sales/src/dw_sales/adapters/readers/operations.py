@@ -60,6 +60,7 @@ from dw_sales.adapters.readers.legacy import (
 )
 from dw_sales.adapters.readers.ocr import PageOcrPort, TesseractOcr
 from dw_sales.adapters.readers.pdf import PdfPoReader
+from dw_sales.adapters.readers.tables import read_table
 from dw_sales.adapters.readers.text_parts import AttachmentTexts
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.adapters.source_view import FileSourceView
@@ -277,6 +278,11 @@ async def _sheet_grid(request: ReaderRequest, tools: ReaderTools) -> Any:
     return await FileSourceView(_caps(request)).sheet_grid(data, sheet)
 
 
+async def _table_rows(request: ReaderRequest, tools: ReaderTools) -> Any:
+    data = await asyncio.to_thread(_readable_bytes, request, tools)
+    return await asyncio.to_thread(read_table, data, _caps(request))
+
+
 def _caps(request: ReaderRequest) -> IntakeCaps:
     return request.args.required(request.args.caps, "caps")
 
@@ -297,6 +303,7 @@ OPERATIONS: Final[Mapping[ReaderOp, _Operation]] = MappingProxyType(
         ReaderOp.SOURCE_PDF_PAGE: _pdf_page,
         ReaderOp.SOURCE_SHEET_NAMES: _sheet_names,
         ReaderOp.SOURCE_SHEET_GRID: _sheet_grid,
+        ReaderOp.TABLE_ROWS: _table_rows,
     }
 )
 

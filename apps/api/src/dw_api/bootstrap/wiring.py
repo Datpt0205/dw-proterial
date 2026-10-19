@@ -453,6 +453,7 @@ def build_sales(
     from dw_platform.adapters.persistence.repositories import (
         SqlApprovalRepository,
         SqlAuditRepository,
+        SqlOutboxRepository,
     )
     from dw_sales.adapters.assembly import build_dw1
     from dw_sales.adapters.clamd import malware_scanner
@@ -471,6 +472,8 @@ def build_sales(
         session_factory=session_factory,
         audit=SqlAuditRepository,
         approvals=SqlApprovalRepository,
+        # A master-data upload asks the worker to read its file (ticket 41).
+        outbox=SqlOutboxRepository,
         clock=clock,
         ids=ids,
         authorization=authorization,
