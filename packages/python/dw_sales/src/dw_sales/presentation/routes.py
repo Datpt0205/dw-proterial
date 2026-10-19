@@ -966,7 +966,7 @@ def build_router(
     async def rule_platform_documents(
         key: str, context: Ctx, svc: Svc
     ) -> list[PlatformDocumentView]:
-        return await svc.rules.platform_documents(context, key)
+        return list(await svc.rules.platform_documents(context, key))
 
     @router.post(
         "/rules/{key}/versions",

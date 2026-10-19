@@ -564,7 +564,7 @@ class SalesRulesService:
 
     async def platform_documents(
         self, context: AccessContext, key: str
-    ) -> list[PlatformDocumentView]:
+    ) -> Sequence[PlatformDocumentView]:
         """Every version of the key the platform released, newest first, to
         whoever may propose (a pricing document holds price rules, which the
         holders of `sales.rules.propose` read already in the tenant's own)."""
