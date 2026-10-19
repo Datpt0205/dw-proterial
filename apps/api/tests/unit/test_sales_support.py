@@ -57,6 +57,9 @@ _PARAMS = {
     # A tenant's own rule versions (ticket 19).
     "key": "sales_order_rules",
     "version_id": str(uuid.uuid4()),
+    # Master-data imports (ticket 41).
+    "catalog_list": "customers",
+    "snapshot_id": str(uuid.uuid4()),
 }
 
 

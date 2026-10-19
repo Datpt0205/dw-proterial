@@ -145,8 +145,9 @@ _MONTH_MY: Final = re.compile(r"^(\d{1,2})[-/.](\d{4})$")
 # Digits grouped by dots in threes, with no other separator: "1.000" is one
 # thousand to a Vietnamese reader and one to an English one. Refused, never
 # guessed (ui-quality §9: a dot decimal is read correctly or refused).
-_AMBIGUOUS_DOTS: Final = re.compile(r"^-?\d{1,3}(\.\d{3})+$")
-_AMBIGUOUS_COMMAS: Final = re.compile(r"^-?\d{1,3}(,\d{3})+$")
+# A leading zero is never a thousands group: "0,042" and "0.042" are decimals.
+_AMBIGUOUS_DOTS: Final = re.compile(r"^-?[1-9]\d{0,2}(\.\d{3})+$")
+_AMBIGUOUS_COMMAS: Final = re.compile(r"^-?[1-9]\d{0,2}(,\d{3})+$")
 
 
 def _text(value: CellValue) -> str | None:
