@@ -809,9 +809,11 @@ def _columns_of(spec: ListSpec, header: TableRow) -> dict[int, Column]:
 
 
 def _unknown(spec: ListSpec, header: TableRow) -> tuple[str, ...]:
+    """At most 20 headers no column matched, each cut to 100 characters: the
+    file's own text, shown back to the importer, bounded."""
     known = {key for column in spec.columns for key in column.keys}
     return tuple(
-        text
+        text[:100]
         for cell in header.cells
         if (text := _text(cell)) is not None and header_key(text) not in known
     )[:20]

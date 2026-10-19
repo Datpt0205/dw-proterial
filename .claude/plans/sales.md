@@ -8,6 +8,16 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-19, ticket 41 built (Đạt's goal of 2026-10-18: master data is
+  loaded by business users, not hard-coded): customers, items, convert list,
+  quotations and LME are imported per list from Excel/CSV on
+  `/sales/master-data`, read by the worker in the reader sandbox, previewed
+  as a diff with rejected rows, submitted on a stamped `sales.catalog`
+  approval the head decides on `/approvals`; an approved snapshot replaces
+  the mock for that list (migration `511ef1b71dee`). Bravo orders and open
+  YCBG stay on the mock until the ERP adapter. Owed on Docker: the
+  integration tests and the migration round trip (ticket 41).
+
 - 2026-10-15, batch merge (agent; Đạt: "còn task nào và ticket nào còn
   sót lại không làm luôn đi"): every open Sales, platform and CI item that
   needed no decision of Đạt's was taken up in eight batches, each reviewed
@@ -625,37 +635,38 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 
 ## Slice log
 
-| Ticket | Commit    | What                                                                                                     |
-| ------ | --------- | -------------------------------------------------------------------------------------------------------- |
-| 07     | `78af2bd` | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money                  |
-| 01     | `b5f990b` | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12                |
-| 02, 03 | `ad467dd` | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32        |
-| review | `077d54b` | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping              |
-| 04     | `5ed607b` | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding              |
-| 11     | `87ab107` | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed |
-| 05     | `3557de8` | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`       |
-| 06     | `2f737ca` | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates             |
-| 08     | `88fb7b6` | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown       |
-| 09     | `2284d3c` | Evals `sales@1.0.0` + graders injected; security reviews; demo runbook, `demo-reset`, Playwright walk    |
-| 10     | `8d098b3` | DW1 on the runtime: checker decisions are platform approvals, decide scope stamped, makers refused       |
-| 12     | `e60592c` | Triaged into 13-27; what waits on the requirements doc stays (needs-info)                                |
-| 13     | `a995031` | The quote approval panel sees a newly rendered preview                                                   |
-| 14     | `4027c0d` | An order whose cross-check failed to apply is cross-checked again                                        |
-| 17     | `4db04fc` | The head reassigns a case                                                                                |
-| 15, 16 | `8ac3d33` | Per-field value corrections; the DW1 mailbox lane                                                        |
-| 18     | `395dbf3` | Web vitest on every push, the DW1 browser walk on main and nightly                                       |
-| 20, 22 | `dd5ef1d` | Legacy Vietnamese encodings refused; FPT support reads cases without prices                              |
-| 26     | `dd5ef1d` | Public-repo guard over `git ls-files`, deny-list outside git                                             |
-| 21, 23 | `399920d` | Built in `dd5ef1d`; 21 finished and 23 reviewed 2026-10-13                                               |
-| 28     | `61a5ae5` | A local model reads free-text item descriptions; code verifies (ADR 0005)                                |
-| 29, 31 | `1009491` | A local model reads RFQs in any shape and classifies unread mail                                         |
-| 30-33  | `e97042b` | Model steps for case replies, hand-offs and new PO layouts                                               |
-| 34     | `399920d` | Blank requested dates, an `.xlsx` and its PDF print as one PO                                            |
-| 24, 19 | `399920d` | Overview figures and a paged work list in SQL; a tenant's own rules proposed and approved (2026-10-13)   |
-| 25, 27 | `8adbe08` | "DW xử lý" queued, every file read in the `reader` container; legacy Office and OCR (scanning `399920d`) |
-| 35, 36 | `8adbe08` | A split line confirmed per schedule; a tenant's own quote rules, pricing, copy and upload template       |
-| 37, 38 | `8894874` | Released rules versions stay readable; rule versions decided on platform approvals                       |
-| batch  | `57d3c20` | Eight batches merged 2026-10-15 (`b2ea975`..`57d3c20`): open items of 05-38 closed (State)               |
+| Ticket | Commit    | What                                                                                                      |
+| ------ | --------- | --------------------------------------------------------------------------------------------------------- |
+| 07     | `78af2bd` | antd v6 shell: registry on the `antd` layer, theme owns tokens, top navbar, dates/money                   |
+| 01     | `b5f990b` | Mock catalog and inbox behind `SalesCatalogPort`/`InboxPort`; 12 fictional emails M01–M12                 |
+| 02, 03 | `ad467dd` | Amended to WIV steps: maker/checker, dispositions, revised PO, quote steps 1–12; fixtures M13–M32         |
+| review | `077d54b` | Security review of the core: Design mailbox, decided_by, scope-bound mocks, confirm_mapping               |
+| 04     | `5ed607b` | `sales` schema, RLS by tenant+workspace, maker/checker across revisions, roles, offboarding               |
+| 11     | `87ab107` | Demo personas: `dw_sales.testing.seed_personas`, `khoa.lam`/`tam.ngo` in the platform seed, roster fixed  |
+| 05     | `3557de8` | API routes and scopes, overview/my-work, source gate, pause/resume, actor uuids, `sales_kpi@1.0.0`        |
+| 06     | `2f737ca` | Artifacts: upload file, cross-check, drafts, quotation xlsx+PDF; copy pinned; download gates              |
+| 08     | `88fb7b6` | Sales pages on the E-HSDT v3 visual language; walked in a browser as every persona, refusals shown        |
+| 09     | `2284d3c` | Evals `sales@1.0.0` + graders injected; security reviews; demo runbook, `demo-reset`, Playwright walk     |
+| 10     | `8d098b3` | DW1 on the runtime: checker decisions are platform approvals, decide scope stamped, makers refused        |
+| 12     | `e60592c` | Triaged into 13-27; what waits on the requirements doc stays (needs-info)                                 |
+| 13     | `a995031` | The quote approval panel sees a newly rendered preview                                                    |
+| 14     | `4027c0d` | An order whose cross-check failed to apply is cross-checked again                                         |
+| 17     | `4db04fc` | The head reassigns a case                                                                                 |
+| 15, 16 | `8ac3d33` | Per-field value corrections; the DW1 mailbox lane                                                         |
+| 18     | `395dbf3` | Web vitest on every push, the DW1 browser walk on main and nightly                                        |
+| 20, 22 | `dd5ef1d` | Legacy Vietnamese encodings refused; FPT support reads cases without prices                               |
+| 26     | `dd5ef1d` | Public-repo guard over `git ls-files`, deny-list outside git                                              |
+| 21, 23 | `399920d` | Built in `dd5ef1d`; 21 finished and 23 reviewed 2026-10-13                                                |
+| 28     | `61a5ae5` | A local model reads free-text item descriptions; code verifies (ADR 0005)                                 |
+| 29, 31 | `1009491` | A local model reads RFQs in any shape and classifies unread mail                                          |
+| 30-33  | `e97042b` | Model steps for case replies, hand-offs and new PO layouts                                                |
+| 34     | `399920d` | Blank requested dates, an `.xlsx` and its PDF print as one PO                                             |
+| 24, 19 | `399920d` | Overview figures and a paged work list in SQL; a tenant's own rules proposed and approved (2026-10-13)    |
+| 25, 27 | `8adbe08` | "DW xử lý" queued, every file read in the `reader` container; legacy Office and OCR (scanning `399920d`)  |
+| 35, 36 | `8adbe08` | A split line confirmed per schedule; a tenant's own quote rules, pricing, copy and upload template        |
+| 37, 38 | `8894874` | Released rules versions stay readable; rule versions decided on platform approvals                        |
+| batch  | `57d3c20` | Eight batches merged 2026-10-15 (`b2ea975`..`57d3c20`): open items of 05-38 closed (State)                |
+| 41     | `035d5a7` | Master data imported from a file, previewed, approved on `sales.catalog`; mock until approved (`ed78006`) |
 
 ## Open
 
