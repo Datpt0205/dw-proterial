@@ -20,8 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from dw_sales.application.case_store import JobError, JobStatus
+from dw_sales.application.followups import BRIEF, BRIEF_STAGE
 from dw_sales.application.rules import RuleKey
-from dw_sales.domain import dispositions, orders, quotes
+from dw_sales.domain import dispositions, followups, orders, quotes
 
 pytestmark = pytest.mark.integration
 
@@ -69,6 +70,9 @@ _SETS: dict[str, set[str]] = {
     # A message's processing job and why it failed (ticket 25).
     "ck_processing_jobs_status": set(get_args(JobStatus)),
     "ck_processing_jobs_error_code": set(get_args(JobError)),
+    # What the follow-ups record (ticket 42).
+    "ck_followup_deliveries_followup": _values(followups.Followup) | {BRIEF},
+    "ck_followup_deliveries_stage": _values(followups.Stage) | {BRIEF_STAGE},
 }
 
 

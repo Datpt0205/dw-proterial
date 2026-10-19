@@ -1,0 +1,65 @@
+schema_version: "1.0"
+policy_id: sales_followups
+policy_version: "1.0.0"
+
+# When DW1 reminds a person, and whom (Sales ticket 42). Validated by
+# `dw_sales.domain.followups.SalesFollowups`. The numbers are the ones FPT's
+# DW1 proposal promises; a customer's own timings arrive as the tenant's
+# version of this policy (/sales/rules), never as an edit to this file.
+#
+# A reminder is an in-app notification to a member of the workspace. DW1
+# never mails the customer or Design: it reminds the person, who decides.
+# "pic" is the case's assigned Sales PIC (the head while nobody is
+# assigned); "head" is Trưởng bộ phận Sales. Times are HH:MM, quoted (a bare
+# 07:30 is a number in YAML), in `working_hours.time_zone`.
+
+# Outside these a due reminder is deferred to the next working hour, never
+# dropped. Monday to Saturday.
+working_hours:
+  time_zone: Asia/Ho_Chi_Minh
+  days: [mon, tue, wed, thu, fri, sat]
+  start: "08:00"
+  end: "17:30"
+
+# 07:30 each working day: what came in since the last brief and its state,
+# what is due soon, what waits on whom. Counts only, never an amount.
+morning_brief:
+  enabled: true
+  at: "07:30"
+  notify: [pic, head]
+  due_within_days: 2
+
+# A PO not confirmed 4 h after it arrived: remind the PIC; past 1 day: tell
+# the head.
+order_unconfirmed:
+  enabled: true
+  remind:
+    after_hours: 4
+    notify: [pic]
+  escalate:
+    after_hours: 24
+    notify: [head]
+
+# A quote request (YCBG) waiting on Design (BP code, spec): remind the PIC,
+# who chases Design.
+quote_waiting_design:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]
+
+# The quote deadline under 2 days away and the quotation not yet sent: tell
+# Sales.
+quote_deadline:
+  enabled: true
+  warn:
+    hours_before_due: 48
+    notify: [pic]
+
+# A case waiting on the customer (a PO correction, a spec discussed) past 1
+# day: remind the PIC.
+waiting_customer:
+  enabled: true
+  remind:
+    after_hours: 24
+    notify: [pic]

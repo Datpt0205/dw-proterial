@@ -236,6 +236,24 @@ def test_dw1s_processing_queue_runs_whether_or_not_the_mailbox_lane_does() -> No
     assert "sales_processing" not in build_registry(deployed).all()
 
 
+def test_dw1s_followups_run_wherever_dw1_does_every_five_minutes() -> None:
+    """Sales ticket 42: the follow-ups and the morning brief need DW1's
+    database and the tenants' rules, nothing of the mailbox, so they run
+    wherever DW1 is wired, switch or no switch, every 300 seconds; not on a
+    database alone, and not where a deployed profile has no DW1."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    assert "sales_followups" not in build_registry(bare_settings(database_url=db)).all()
+
+    switched_off = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    registry = build_registry(switched_off)
+    assert "sales_followups" in registry.all()
+    assert registry.interval_for("sales_followups", 1.0) == 300.0
+
+    deployed = bare_settings(database_url=db, s3_endpoint_url=s3, profile="uat")
+    assert "sales_followups" not in build_registry(deployed).all()
+
+
 def test_the_pinned_retention_policy_promises_only_classes_code_can_assign() -> None:
     """A memory class nothing can put on a row is a promise in a compliance
     file that the code does not keep (`failure-modes.md` #1). `sensitive`,

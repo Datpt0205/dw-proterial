@@ -75,6 +75,8 @@ _SALES_TABLES = (
     "sales.rule_versions",
     # Migration 0a78ca5e96d3 (ticket 25): each message's processing job.
     "sales.processing_jobs",
+    # Migration d2b1394c67b1 (ticket 42): what DW1's follow-ups delivered.
+    "sales.followup_deliveries",
 )
 
 
@@ -116,7 +118,7 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "processing_jobs",
     ):
         assert {verb for tbl, verb in held if tbl == table} == every, table
-    for table in ("artifacts", "source_served"):
+    for table in ("artifacts", "source_served", "followup_deliveries"):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
     event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}
     assert {"case_events", "case_events_default"} <= event_tables

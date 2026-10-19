@@ -49,6 +49,33 @@ afterEach(() => {
 });
 
 describe("NotificationBell", () => {
+  it("keeps a body's lines, as DW1's morning brief writes them", async () => {
+    const brief: Inbox = {
+      items: [
+        {
+          id: "n-2",
+          title: "Tóm tắt sáng 22/09: 1 hồ sơ mới (bộ phận Sales)",
+          body: "Từ 07:30 19/09: 1 hồ sơ mới.\nĐang chờ: Sales 1.",
+          link: "/sales",
+          created_at: "2026-09-22T00:30:00Z",
+          read_at: null,
+        },
+      ],
+      unread: 1,
+    };
+    listNotifications.mockResolvedValue(brief);
+    render(<NotificationBell />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Thông báo, 1 chưa đọc" }),
+    );
+    const body = await screen.findByText(/Đang chờ: Sales 1\./);
+    expect(body.textContent).toBe(
+      "Từ 07:30 19/09: 1 hồ sơ mới.\nĐang chờ: Sales 1.",
+    );
+    expect(body.className).toContain("whitespace-pre-line");
+  });
+
   it("shows the unread count, and opening one marks it read and follows its link", async () => {
     listNotifications.mockResolvedValue(inbox("/approvals"));
     markNotificationRead.mockResolvedValue(undefined);

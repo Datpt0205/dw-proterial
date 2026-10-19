@@ -317,3 +317,19 @@ processing_jobs = sa.Table(
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
+
+# What DW1's follow-ups and morning brief delivered (ticket 42, migration
+# d2b1394c67b1): one row per (follow-up, stage, case or day, wait).
+followup_deliveries = sa.Table(
+    "followup_deliveries",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("followup", sa.Text, nullable=False),
+    sa.Column("stage", sa.Text, nullable=False),
+    sa.Column("subject", sa.Text, nullable=False),
+    sa.Column("since", _TS, nullable=False),
+    sa.Column("recipients", sa.Integer, nullable=False),
+    sa.Column("sent_at", _TS, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)

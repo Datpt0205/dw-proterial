@@ -8663,7 +8663,8 @@
           "sales_emails",
           "sales_documents",
           "sales_bravo_upload",
-          "sales_handoffs"
+          "sales_handoffs",
+          "sales_followups"
         ],
         "title": "RuleKey",
         "type": "string"

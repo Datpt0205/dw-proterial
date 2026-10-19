@@ -110,7 +110,12 @@ export function NotificationBell() {
                         {item.title}
                       </Typography.Text>
                       {item.body ? (
-                        <Typography.Text type="secondary">
+                        // A body may hold several lines (DW1's morning
+                        // brief, Sales ticket 42): kept as written.
+                        <Typography.Text
+                          type="secondary"
+                          className="whitespace-pre-line"
+                        >
                           {item.body}
                         </Typography.Text>
                       ) : null}
