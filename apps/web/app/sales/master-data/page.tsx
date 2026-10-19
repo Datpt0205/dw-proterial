@@ -2,7 +2,14 @@
 
 import { Suspense, useCallback, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Alert, Table, Tabs, Typography, type TableColumnsType } from "antd";
+import {
+  Alert,
+  Skeleton,
+  Table,
+  Tabs,
+  Typography,
+  type TableColumnsType,
+} from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
@@ -18,15 +25,24 @@ import {
 import { SCOPE } from "../_components/sales-frame";
 import { salesCrumbs } from "../_components/crumbs";
 import { ScopeGate } from "../_components/scope-gate";
+import type { CatalogList } from "../_lib/catalog";
+import type { Resource } from "../_lib/use-resource";
+import { ImportPanel } from "./import-panel";
 
 type S = SalesSchemas;
 
 /**
- * Dữ liệu giả lập (V3Library/V3Vault re-cut): a read-only view of the mock
- * master data DW1 reads through its ports, each table with the snapshot date
- * it came from. Prices show only with the price scopes; another customer's
- * quotation needs the other-customers scope as well, and the API leaves the
- * figure out otherwise.
+ * Dữ liệu chủ (V3Library/V3Vault re-cut; ticket 41): the master data DW1
+ * reads through its ports, each table with the snapshot date it came from.
+ * The five lists Sales maintains by hand (customers, items, convert list,
+ * quotations, LME) are imported from a file per list: a template, the
+ * upload (read by the worker in the reader sandbox), a preview against the
+ * list in force with the rows it rejects, and a submission the head decides
+ * on `/approvals`. Each says whether it is still the sample data or an
+ * approved import, when and by whom. Bravo's orders and open YCBG come from
+ * the ERP and are not imported. Prices show only with the price scopes;
+ * another customer's quotation needs the other-customers scope as well, and
+ * the API leaves the figure out otherwise.
  */
 export default function MasterDataPage() {
   return (
@@ -56,17 +72,22 @@ function MasterData() {
   const tab = (TABS as readonly string[]).includes(params.get("tab") ?? "")
     ? (params.get("tab") as Tab)
     : "customers";
+  const imports = useResource(
+    "sales/master-data/imports",
+    useCallback(() => salesApi().catalogState(), []),
+  );
+  const imported = (list: CatalogList, table: ReactNode) => (
+    <div className="space-y-4">
+      <ListImport list={list} imports={imports} />
+      {table}
+    </div>
+  );
   return (
     <div className="space-y-4">
       <PageHeader
-        breadcrumb={salesCrumbs("Dữ liệu giả lập")}
-        title="Dữ liệu giả lập"
-        subtitle="Dữ liệu chủ mà DW1 đọc qua cổng kết nối giả lập: hư cấu, chỉ đọc. Khi có Bravo và SharePoint thật, cổng được thay mà quy trình không đổi."
-      />
-      <Alert
-        type="info"
-        showIcon
-        title="Mọi khách hàng, mã hàng và con số ở đây là hư cấu."
+        breadcrumb={salesCrumbs("Dữ liệu chủ")}
+        title="Dữ liệu chủ"
+        subtitle="Dữ liệu chủ DW1 đọc: mỗi danh mục dùng dữ liệu mẫu (hư cấu) cho tới khi Sales nhập tệp thật và Trưởng bộ phận Sales duyệt. Đơn Bravo và YCBG lấy từ ERP."
       />
       <Tabs
         activeKey={tab}
@@ -74,23 +95,76 @@ function MasterData() {
           router.replace(`${pathname}?tab=${key}`, { scroll: false })
         }
         items={[
-          { key: "customers", label: "Khách hàng", children: <Customers /> },
-          { key: "items", label: "Mã hàng", children: <Items /> },
+          {
+            key: "customers",
+            label: "Khách hàng",
+            children: imported("customers", <Customers />),
+          },
+          {
+            key: "items",
+            label: "Mã hàng",
+            children: imported("items", <Items />),
+          },
           {
             key: "convert-list",
             label: "Bảng quy đổi mã",
-            children: <ConvertList />,
+            children: imported("convert_list", <ConvertList />),
           },
-          { key: "quotations", label: "Báo giá", children: <Quotations /> },
-          { key: "lme", label: "LME", children: <Lme /> },
+          {
+            key: "quotations",
+            label: "Báo giá",
+            children: imported("quotations", <Quotations />),
+          },
+          { key: "lme", label: "LME", children: imported("lme", <Lme />) },
           {
             key: "bravo-orders",
             label: "Đơn Bravo 12 tháng",
-            children: <BravoOrders />,
+            children: (
+              <FromErp>
+                <BravoOrders />
+              </FromErp>
+            ),
           },
-          { key: "open-ycbg", label: "YCBG đang mở", children: <OpenYcbg /> },
+          {
+            key: "open-ycbg",
+            label: "YCBG đang mở",
+            children: (
+              <FromErp>
+                <OpenYcbg />
+              </FromErp>
+            ),
+          },
         ]}
       />
+    </div>
+  );
+}
+
+/** One list's import panel, from the one read of every list's state. */
+function ListImport({
+  list,
+  imports,
+}: {
+  list: CatalogList;
+  imports: Resource<SalesSchemas["CatalogStateView"]>;
+}) {
+  if (imports.error)
+    return <LoadError error={imports.error} onRetry={imports.reload} compact />;
+  const state = imports.data?.lists.find((s) => s.catalog_list === list);
+  if (!state) return <Skeleton active paragraph={{ rows: 2 }} />;
+  return <ImportPanel state={state} onChanged={imports.reload} />;
+}
+
+/** The ERP's own records: not imported from a file. */
+function FromErp({ children }: { children: ReactNode }) {
+  return (
+    <div className="space-y-4">
+      <Alert
+        type="info"
+        showIcon
+        title="Dữ liệu mẫu (hư cấu): danh sách này lấy từ Bravo (ERP), không nhập từ tệp. Khi kết nối Bravo, dữ liệu thật thay cho bản mẫu."
+      />
+      {children}
     </div>
   );
 }
@@ -136,7 +210,7 @@ function Customers() {
       cacheKey="sales/master-data/customers"
       load={useCallback(() => salesApi().customers(), [])}
       rowKey={(c) => c.code}
-      empty="Không có khách hàng trong dữ liệu giả lập của không gian làm việc này."
+      empty="Không gian làm việc này chưa có khách hàng: tải mẫu và nhập tệp danh mục khách hàng."
       columns={[
         { title: "Mã", dataIndex: "code" },
         { title: "Tên", dataIndex: "name" },

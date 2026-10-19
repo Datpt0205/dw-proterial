@@ -560,6 +560,61 @@ export class SalesApi {
     );
   }
 
+  // ---- master-data imports (ticket 41) ---------------------------------------
+
+  /** Where each list comes from now, its open import and its history. */
+  catalogState() {
+    return this.get<"/api/v1/sales/master-data/imports">(
+      "/api/v1/sales/master-data/imports",
+    );
+  }
+
+  /** The list's template workbook (Vietnamese headers, a guidance sheet). */
+  async catalogTemplate(list: SalesSchemas["CatalogList"]): Promise<Blob> {
+    const response = await this.client.rawRequest(
+      "GET",
+      `/api/v1/sales/master-data/imports/${enc(list)}/template`,
+    );
+    return response.blob();
+  }
+
+  /**
+   * Uploads a file to import (202): the API keeps it, the worker reads it in
+   * the reader sandbox, and the import is previewed before anyone submits it.
+   */
+  uploadCatalog(
+    list: SalesSchemas["CatalogList"],
+    body: Body<"/api/v1/sales/master-data/imports/{catalog_list}">,
+    key: string,
+  ): Promise<Accepted<"/api/v1/sales/master-data/imports/{catalog_list}">> {
+    return this.client.request(
+      "POST",
+      `/api/v1/sales/master-data/imports/${enc(list)}`,
+      shaped<Accepted<"/api/v1/sales/master-data/imports/{catalog_list}">>(),
+      { body, idempotencyKey: key },
+    );
+  }
+
+  /** The import against the list in force now: added, changed, removed, rejected. */
+  catalogPreview(snapshotId: string) {
+    return this.get<"/api/v1/sales/master-data/imports/snapshots/{snapshot_id}">(
+      `/api/v1/sales/master-data/imports/snapshots/${enc(snapshotId)}`,
+    );
+  }
+
+  /**
+   * Sends a parsed import to be approved: a `sales.catalog` platform
+   * approval, decided on `/approvals` by someone who neither imported nor
+   * submitted it.
+   */
+  submitCatalog(snapshotId: string, key: string) {
+    return this.post<"/api/v1/sales/master-data/imports/snapshots/{snapshot_id}/submit">(
+      `/api/v1/sales/master-data/imports/snapshots/${enc(snapshotId)}/submit`,
+      undefined,
+      key,
+    );
+  }
+
   // ---- worker ---------------------------------------------------------------
 
   pause(reason: string | null, key: string) {

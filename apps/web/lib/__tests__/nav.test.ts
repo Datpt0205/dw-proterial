@@ -121,7 +121,7 @@ describe("the nav registry", () => {
       "Sales › Quản lý",
       "Sales › Quản lý › Mẫu PO",
       "Sales › Quản lý › Quy tắc",
-      "Sales › Quản lý › Dữ liệu giả lập",
+      "Sales › Quản lý › Dữ liệu chủ",
       "Sales › Quản lý › Tổng quan quy trình",
     ]);
     // A count inside a closed submenu is a count nobody sees.
