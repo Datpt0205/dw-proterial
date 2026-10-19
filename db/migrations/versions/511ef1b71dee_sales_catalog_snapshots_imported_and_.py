@@ -224,16 +224,26 @@ _GRANTS = (
 )
 
 
+# Spelled out per table, not looped: `verify_invariants.py` reads this text.
+_ROW_SECURITY = (
+    "ALTER TABLE sales.catalog_snapshots ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE sales.catalog_snapshots FORCE ROW LEVEL SECURITY",
+    "CREATE POLICY tenant_isolation_catalog_snapshots ON sales.catalog_snapshots"
+    f" USING {_SCOPE} WITH CHECK {_SCOPE}",
+    "ALTER TABLE sales.catalog_import_files ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE sales.catalog_import_files FORCE ROW LEVEL SECURITY",
+    "CREATE POLICY tenant_isolation_catalog_import_files ON sales.catalog_import_files"
+    f" USING {_SCOPE} WITH CHECK {_SCOPE}",
+    "ALTER TABLE sales.catalog_rows ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE sales.catalog_rows FORCE ROW LEVEL SECURITY",
+    "CREATE POLICY tenant_isolation_catalog_rows ON sales.catalog_rows"
+    f" USING {_SCOPE} WITH CHECK {_SCOPE}",
+)
+
+
 def upgrade() -> None:
-    for ddl in (_SNAPSHOTS, _FILES, _ROWS, *_INDEXES):
+    for ddl in (_SNAPSHOTS, _FILES, _ROWS, *_INDEXES, *_ROW_SECURITY):
         op.execute(ddl)
-    for table in _TABLES:
-        op.execute(f"ALTER TABLE sales.{table} ENABLE ROW LEVEL SECURITY")
-        op.execute(f"ALTER TABLE sales.{table} FORCE ROW LEVEL SECURITY")
-        op.execute(
-            f"CREATE POLICY tenant_isolation_{table} ON sales.{table}"
-            f" USING {_SCOPE} WITH CHECK {_SCOPE}"
-        )
     op.execute(
         "CREATE TRIGGER touch_updated_at BEFORE UPDATE ON sales.catalog_snapshots"
         " FOR EACH ROW EXECUTE FUNCTION platform.touch_updated_at()"
