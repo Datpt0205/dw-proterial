@@ -74,6 +74,7 @@ _PIC = frozenset(
         _S.QUOTE_PREPARE,
         _S.WORKER_PAUSE,
         _S.RULES_PROPOSE,
+        _S.MASTER_DATA_IMPORT,
     }
 )
 # The demo personas' Sales scopes, by what each step needs (spec "Actors").
@@ -100,6 +101,7 @@ GIANG = Caller(
         _S.CASE_ASSIGN,
         _S.LAYOUT_APPROVE,
         _S.RULES_APPROVE,
+        _S.MASTER_DATA_APPROVE,
     },
 )
 KHOA = Caller(

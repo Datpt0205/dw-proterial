@@ -77,6 +77,12 @@ from dw_sales.application.case_store import (
     Stored,
     WorkerState,
 )
+from dw_sales.application.catalog_imports import (
+    CATALOG_DECIDED,
+    CATALOG_IMPORTED,
+    CatalogParsing,
+    CatalogSettlement,
+)
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import (
     LAYOUT_DECIDED,
@@ -95,6 +101,7 @@ from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSettlement
 from dw_sales.application.runs import subject_of
 from dw_sales.application.services import SalesServices, assemble
+from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import required_regions
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.views import MessageDispositionView
@@ -103,7 +110,7 @@ from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.overview_memory import PythonOverviewReader
-from dw_sales.testing.catalog_store import MemoryCatalogStore
+from dw_sales.testing.catalog_store import MemoryApprovedLists, MemoryCatalogStore
 from dw_sales.testing.scanners import NoMalware
 from dw_sales.workflows.graph import register
 
@@ -745,6 +752,10 @@ class World:
     # The worker's `sales_processing` lane over this world (ticket 25).
     processing: ProcessingDrain
     rule_settlement: RuleSettlement
+    # Master-data imports (ticket 41): the store, and the worker's two steps.
+    catalog_store: MemoryCatalogStore
+    catalog_settlement: CatalogSettlement
+    catalog_parsing: CatalogParsing
 
     async def decide_layout(
         self,
@@ -802,7 +813,51 @@ class World:
         """Each `sales.rules.decided` the decisions announced, carried out."""
         await self._settle(RULES_DECIDED, self.rule_settlement)
 
-    async def _settle(self, event_type: str, settlement: LayoutSettlement | RuleSettlement) -> None:
+    async def read_imports(self) -> list[str]:
+        """Each `sales.catalog.imported` an upload announced, read as the
+        worker's handler reads it (`dw_worker.consumers.sales_catalog`)."""
+        events = self.runtime.outbox.events
+        done: list[str] = []
+        for event in [e for e in events if e.event_type == CATALOG_IMPORTED]:
+            events.remove(event)
+            scope = SalesScope(
+                TenantId(event.tenant_id.value), WorkspaceId(event.workspace_id.value)
+            )
+            snapshot_id = uuid.UUID(str(event.payload["snapshot_id"]))
+            done.append(await self.catalog_parsing.parse(scope, snapshot_id))
+        return done
+
+    async def decide_catalog(
+        self,
+        caller: Caller,
+        snapshot_id: uuid.UUID,
+        *,
+        approve: bool,
+        comment: str,
+        scope: SalesScope = ALPHA,
+    ) -> None:
+        """A decision on the approval a master-data submission opened, as the
+        API's `POST /approvals/{id}/decisions` makes it; then carried out as
+        the worker carries it out (`settle_catalog`)."""
+        snapshot = self.catalog_store.state(scope).snapshots.get(snapshot_id)
+        if snapshot is None or snapshot.approval_id is None:
+            raise LookupError(f"no import {snapshot_id} waits on an approval")
+        await self.runtime.approval_flow.decide(
+            approval_id=snapshot.approval_id,
+            approve=approve,
+            comment=comment,
+            context=caller.context(scope),
+            authorization=ScopeAuthorizationService(),
+        )
+        await self.settle_catalog()
+
+    async def settle_catalog(self) -> None:
+        """Each `sales.catalog.decided` the decisions announced, carried out."""
+        await self._settle(CATALOG_DECIDED, self.catalog_settlement)
+
+    async def _settle(
+        self, event_type: str, settlement: LayoutSettlement | RuleSettlement | CatalogSettlement
+    ) -> None:
         """Each event of ``event_type`` handed to its settlement with the
         envelope's tenancy and the decider, as the worker's handler hands it
         (`dw_worker.consumers.sales_decisions`)."""
@@ -977,7 +1032,11 @@ def open_world(
     ids = Uuid4Generator()
     runtime = MemoryRuntime.build(clock=clock, ids=ids, allowance=allowance, telemetry=telemetry)
     store = MemoryStore(runtime.approvals, clock)
-    catalog = MockSalesCatalog.load(bound_to, sample.data_dir)
+    mock = MockSalesCatalog.load(bound_to, sample.data_dir)
+    # The catalog `build_dw1` builds (ticket 41): a list a workspace imported
+    # and approved, else the sample's mock; with no import, the mock exactly.
+    catalog_store = MemoryCatalogStore(runtime.approvals, outbox=runtime.outbox)
+    catalog = SnapshotSalesCatalog(MemoryApprovedLists(catalog_store), mock)
     readers = client_readers(reader or InProcessReaderTransport(), policies.order_rules.intake)
     # The mailbox every service reads, at the door `build_dw1` puts in front of
     # it (ticket 25): scanned, then held to its names. Nothing is found in the
@@ -1057,9 +1116,8 @@ def open_world(
         runs=runs,
         pending=runs,
         telemetry=telemetry,
-        # Master-data imports (ticket 41): in memory, never exercised by an
-        # eval; the catalog stays the sample's mock.
-        catalog_uow=MemoryCatalogStore(store.approvals),
+        # Master-data imports (ticket 41), in memory.
+        catalog_uow=catalog_store,
         templates=XlsxCatalogTemplates(),
     )
     register(
@@ -1075,7 +1133,7 @@ def open_world(
     return World(
         assembly.services,
         store,
-        catalog,
+        mock,
         inbox,
         notifications,
         objects,
@@ -1086,6 +1144,9 @@ def open_world(
         LayoutSettlement(store, clock, ids),
         ProcessingDrain(store, store, assembly.services.dw1, directory, clock, ids),
         RuleSettlement(store, book, clock, ids),
+        catalog_store,
+        CatalogSettlement(catalog_store, clock, ids),
+        CatalogParsing(catalog_store, readers.tables, scanner or NoMalware(), catalog, clock, ids),
     )
 
 

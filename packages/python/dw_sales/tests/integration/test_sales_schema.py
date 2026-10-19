@@ -20,8 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from dw_sales.application.case_store import JobError, JobStatus
+from dw_sales.application.catalog_imports import ImportSource, ImportStatus
 from dw_sales.application.rules import RuleKey
 from dw_sales.domain import dispositions, orders, quotes
+from dw_sales.domain.master_data import CatalogList
 
 pytestmark = pytest.mark.integration
 
@@ -69,6 +71,10 @@ _SETS: dict[str, set[str]] = {
     # A message's processing job and why it failed (ticket 25).
     "ck_processing_jobs_status": set(get_args(JobStatus)),
     "ck_processing_jobs_error_code": set(get_args(JobError)),
+    # A master-data import's list and status (ticket 41).
+    "ck_catalog_snapshots_list": _values(CatalogList),
+    "ck_catalog_snapshots_status": set(get_args(ImportStatus)),
+    "ck_catalog_snapshots_source": set(get_args(ImportSource)),
 }
 
 
