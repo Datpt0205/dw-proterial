@@ -437,6 +437,48 @@ class RulesInForceView(BaseModel):
     versions: list[RuleVersionView]
 
 
+class RuleSchemaView(BaseModel):
+    """What the rules editor draws one key's form from: the JSON Schema a
+    proposal of it is validated by (ticket 40). The schema is the key's own
+    model's, never a copy, so a field added to the model reaches the form."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: RuleKey
+    json_schema: dict[str, Any]
+
+
+class PlatformDocumentView(BaseModel):
+    """One version of a key the platform released, whole: what a proposal may
+    start from and what a diff compares with while the platform's applies."""
+
+    model_config = ConfigDict(frozen=True)
+
+    key: RuleKey
+    ref: str
+    version: str
+    # What the platform ships now, as opposed to a version it released before.
+    current: bool
+    document: Mapping[str, Any]
+
+
+def rule_schema(key: RuleKey) -> dict[str, Any]:
+    """The JSON Schema of ``key``'s documents, as a proposal is validated."""
+    return OVERRIDABLE[key].model_json_schema(by_alias=True)
+
+
+def rule_key(key: str) -> RuleKey:
+    """``key`` as a key a tenant may override, or not found."""
+    try:
+        return RuleKey(key)
+    except ValueError:
+        raise NotFoundError("no such rule key") from None
+
+
+def _semver(ref: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in ref.rpartition("@")[2].split("."))
+
+
 def _view(version: RuleVersion) -> RuleVersionView:
     return RuleVersionView(
         version_id=version.version_id,
@@ -513,6 +555,38 @@ class SalesRulesService:
             ],
             versions=[_view(v) for v in versions],
         )
+
+    async def schema(self, context: AccessContext, key: str) -> RuleSchemaView:
+        """The key's JSON Schema, to whoever may propose a version of it."""
+        await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        rule = rule_key(key)
+        return RuleSchemaView(key=rule, json_schema=rule_schema(rule))
+
+    async def platform_documents(
+        self, context: AccessContext, key: str
+    ) -> Sequence[PlatformDocumentView]:
+        """Every version of the key the platform released, newest first, to
+        whoever may propose (a pricing document holds price rules, which the
+        holders of `sales.rules.propose` read already in the tenant's own)."""
+        await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        rule = rule_key(key)
+        current = self.book.platform[rule]
+        held = {
+            ref: policy
+            for ref, policy in self.book.released.items()
+            if ref.partition("@")[0] == rule.value
+        }
+        held[current.ref] = current
+        return [
+            PlatformDocumentView(
+                key=rule,
+                ref=ref,
+                version=ref.partition("@")[2],
+                current=ref == current.ref,
+                document=held[ref].model_dump(mode="json", by_alias=True),
+            )
+            for ref in sorted(held, key=_semver, reverse=True)
+        ]
 
     async def propose(
         self, context: AccessContext, key: RuleKey, document: Mapping[str, Any]

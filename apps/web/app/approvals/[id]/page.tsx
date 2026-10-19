@@ -22,6 +22,7 @@ import {
   ToolApprovalPayload,
   approvalTitle,
 } from "../../../components/tool-approval";
+import { ApprovalHostDetail } from "../../../components/approval-host-detail";
 import { APPROVAL_STATUS } from "../../../lib/approvals/status";
 import { useAuth } from "../../../lib/auth/auth-context";
 import { formatDateTime } from "../../../lib/dates";
@@ -190,6 +191,7 @@ function ApprovalDetail() {
               ]}
             />
             <ToolApprovalPayload payload={approval.payload} />
+            <ApprovalHostDetail approval={approval} />
           </Flex>
         </Card>
         <ZaloDecision approval={approval} view={view} />

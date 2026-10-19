@@ -898,6 +898,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/rules/{key}/platform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rule Platform Documents */
+        get: operations["rule_platform_documents_api_v1_sales_rules__key__platform_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/rules/{key}/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rule Schema */
+        get: operations["rule_schema_api_v1_sales_rules__key__schema_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/rules/{key}/versions": {
         parameters: {
             query?: never;
@@ -2524,6 +2558,24 @@ export interface components {
             /** Approval Type */
             approval_type: string;
         };
+        /**
+         * PlatformDocumentView
+         * @description One version of a key the platform released, whole: what a proposal may
+         *     start from and what a diff compares with while the platform's applies.
+         */
+        PlatformDocumentView: {
+            /** Current */
+            current: boolean;
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            };
+            key: components["schemas"]["RuleKey"];
+            /** Ref */
+            ref: string;
+            /** Version */
+            version: string;
+        };
         /** PlatformRuleView */
         PlatformRuleView: {
             key: components["schemas"]["RuleKey"];
@@ -3089,6 +3141,19 @@ export interface components {
             document: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * RuleSchemaView
+         * @description What the rules editor draws one key's form from: the JSON Schema a
+         *     proposal of it is validated by (ticket 40). The schema is the key's own
+         *     model's, never a copy, so a field added to the model reaches the form.
+         */
+        RuleSchemaView: {
+            /** Json Schema */
+            json_schema: {
+                [key: string]: unknown;
+            };
+            key: components["schemas"]["RuleKey"];
         };
         /**
          * RuleVersionView
@@ -5397,6 +5462,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RulesInForceView"];
+                };
+            };
+        };
+    };
+    rule_platform_documents_api_v1_sales_rules__key__platform_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformDocumentView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rule_schema_api_v1_sales_rules__key__schema_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleSchemaView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
