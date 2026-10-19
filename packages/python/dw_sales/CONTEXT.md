@@ -141,6 +141,20 @@ API and the plan use the English terms. The spec is
   `new_layout` for Sales to confirm. A model may pre-fill the mapping, label
   names only (ticket 30).
 
+- **Follow-up** (Nhắc việc): an in-app notification DW1's `sales_followups`
+  lane sends a member when a case has waited past a threshold: a PO not
+  confirmed (`order_unconfirmed`: the PIC, then the head), a quote request
+  waiting on Design (`quote_waiting_design`), a quote due date near
+  (`quote_deadline`), a case waiting on the customer (`waiting_customer`).
+  Each stage goes once per wait; outside working hours it waits for them.
+  It informs and decides nothing: DW1 never mails the customer or Design.
+  Every timing and switch is the tenant-overridable policy
+  `sales_followups` (ticket 42).
+- **Morning brief** (Tóm tắt buổi sáng): one notification per person each
+  working morning at the policy's local time: what came in since the last
+  brief and whose turn it is, what is due soon or overdue, what waits on
+  whom; counts only, never an amount (ticket 42).
+
 ## Roles and permission sets
 
 | Key                    | Kind           | Vietnamese name               |
