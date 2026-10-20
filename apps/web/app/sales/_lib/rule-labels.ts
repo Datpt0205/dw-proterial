@@ -48,8 +48,81 @@ const COMMON: Record<string, FieldWords> = {
     label: "Đánh dấu là mẫu giả lập",
     help: "Bật khi nội dung chưa phải của công ty: mọi tệp tạo từ nó ghi rõ là mẫu giả lập.",
   },
-  description: { label: "Ghi chú về phiên bản" },
+  description: {
+    label: "Ghi chú thay đổi",
+    help: "Một câu cho người duyệt: đổi gì và vì sao. Không bắt buộc.",
+  },
 };
+
+/**
+ * Root fields the system sets and nobody edits (Đạt, 2026-10-20: the form
+ * showed them as fields and read as a developer's screen). They stay in the
+ * document the form submits, drawn as one line, not as controls.
+ */
+export const SYSTEM_FIELDS: ReadonlySet<string> = new Set([
+  "schema_version",
+  "policy_id",
+  "copy_id",
+]);
+
+/** Root fields about the version, not its content: drawn last, together. */
+export const VERSION_FIELDS: ReadonlySet<string> = new Set([
+  "policy_version",
+  "version",
+  "mock",
+  "description",
+]);
+
+/**
+ * A template value's name in words ("{po_no}" → "Số PO"), for the chips under
+ * a template field. A name not listed shows as itself.
+ */
+export const PLACEHOLDER: Record<string, string> = {
+  customer: "Khách hàng",
+  customer_name: "Tên khách hàng",
+  customer_code: "Mã khách hàng",
+  customer_item_code: "Mã hàng của khách",
+  po: "Số PO",
+  po_no: "Số PO",
+  po_date: "Ngày PO",
+  po_value: "Giá trị PO",
+  revision: "Lần sửa PO",
+  rfq_no: "Số RFQ",
+  quote_no: "Số báo giá",
+  quote_due: "Hạn báo giá",
+  ycbg_no: "Số YCBG",
+  bravo_so_no: "Số đơn Bravo",
+  line: "Dòng",
+  line_no: "Số dòng",
+  lines: "Các dòng hàng",
+  description: "Mô tả hàng",
+  prv_code: "Mã PRV",
+  known_prv_code: "Mã PRV đã biết",
+  bp_code: "Mã BP",
+  spec_no: "Số spec",
+  quantity: "Số lượng",
+  uom: "Đơn vị tính",
+  unit_price: "Đơn giá",
+  currency: "Tiền tệ",
+  requested_date: "Ngày khách yêu cầu",
+  confirmed_date: "Ngày xác nhận giao",
+  needed_by: "Ngày cần",
+  valid_to: "Hiệu lực đến",
+  lot: "Số lô",
+  quotes: "Trích lời khách",
+  message_id: "Mã thư gốc",
+  their_reference: "Số tham chiếu của khách",
+  pic: "Người phụ trách",
+  checker: "Người kiểm chéo",
+  reason: "Lý do",
+  summary: "Tóm tắt",
+};
+
+/** "{po_no}", "${po_no}" or "po_no" → "Số PO", or the name itself. */
+export function placeholderLabel(name: string): string {
+  const bare = name.replace(/^\$?\{/, "").replace(/\}$/, "");
+  return PLACEHOLDER[bare] ?? bare;
+}
 
 const TEMPLATE_HELP =
   "Giá trị trong ${…} do hệ thống điền từ hồ sơ; chỉ dùng giá trị mà mẫu này có.";
