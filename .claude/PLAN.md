@@ -40,7 +40,7 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - **Next:** `make web-screens` (pages of 39–42 never looked at); `onprem-up`
   in `uat` behind Caddy, with a warm-up call and a GPU check after the model
-  starts; then DW2 when its documents arrive.
+  starts; then DW2 (Mua hàng, 13/10 deck) when its survey arrives.
 
 ## Decisions Đạt owes
 
@@ -54,8 +54,8 @@ own file and a row here.
   the plant keeps internet (M365, Exchange Online) or none; whether the
   on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
   not only by configuration).
-- **DW1 scope** (`sales/dw1-scope.md`): what DW2 is (decks say CDO and
-  Mua hàng); the agent-proposed bars of t29–t33 (t31 at 89.8% of 90%).
+- **DW1 scope** (`sales/dw1-scope.md`): the agent-proposed bars of
+  t29–t33 (t31 at 89.8% of 90%).
 - **Sales:** Proterial's real data replaces the mock (`sales.md` Inputs
   owed); the interim defaults in `sales.md` Open.
 

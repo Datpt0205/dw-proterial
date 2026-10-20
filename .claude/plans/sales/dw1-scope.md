@@ -33,7 +33,8 @@ biện kiểm lại từng trích dẫn. Số đo AI ở mục 4 là lần chạ
     - ký điện tử (Q9);
     - các bước kiểm soát xuất khẩu WIV-03-032 (mới có cảnh báo NOC/ESF);
     - tạo khách mới WIV-03-031.
-- Hoãn sang DW2: O5, O11 và CDO (WIV-03-022).
+- Hoãn sang DW Giao hàng & CDO: O5, O11 và CDO (WIV-03-022). Deck FPT
+  13/10 xếp DW này sau DW1 và DW2, vào quý I/2027.
 - DW1 không dùng retrieval. bge-m3 và bge-reranker-v2-m3 chỉ phục vụ phần
   knowledge của nền tảng.
 
@@ -62,9 +63,9 @@ biện kiểm lại từng trích dẫn. Số đo AI ở mục 4 là lần chạ
 | F24 Nháp gửi báo giá; dòng master list              | Q10–Q11        | Một phần     | Q11 trên MOCK                                                              |
 | F25 Rà soát mã 12 tháng không có đơn                | Q12            | Một phần     | MOCK                                                                       |
 | F45 Model đọc RFQ                                   | Q1→Q2          | Một phần     | Proterial đề xuất dùng AI ở bước này (KS: Copilot)                         |
-| F49 Nháp chuyển PC/QA                               | O5             | Lệch phạm vi | O5 thuộc DW2; hàng mẫu khảo sát gửi Design, không gửi PC/QA                |
+| F49 Nháp chuyển PC/QA                               | O5             | Lệch phạm vi | O5 thuộc DW CDO; hàng mẫu khảo sát gửi Design, không gửi PC/QA             |
 | F56 Việc chờ Proterial (NOEC, M365, ma trận, Bravo) | WIV-03-032, O1 | Chưa làm     | Ticket 12                                                                  |
-| F58 Phần DW2 của WIV-03-012 (O5, O11)               | O5, O11        | Hoãn DW2     |                                                                            |
+| F58 Phần DW CDO của WIV-03-012 (O5, O11)            | O5, O11        | Hoãn DW CDO  |                                                                            |
 
 ## S — bắt buộc theo nền tảng hoặc bảo mật (17)
 
@@ -163,7 +164,7 @@ lên đầu, mất 1,5 s trên CPU. DW1 chưa dùng hai model này.
 2. Đọc thư trả lời tự do của Design (Q4).
 3. Tóm tắt có trích dẫn một luồng trao đổi spec (Q6).
 4. Nhận diện khiếu nại (WIV-03-011). Phải chờ quyết phạm vi.
-5. Đọc ngày trả lời của PC (O4/O5). Nghiêng về DW2.
+5. Đọc ngày trả lời của PC (O4/O5). Nghiêng về DW Giao hàng & CDO.
 
 Hỏi đáp trên hồ sơ bị chặn: profile `onprem` không có route `chat`.
 
@@ -176,7 +177,8 @@ văn bản gửi khách.
 2. Có chấp nhận kiểm PO với báo giá trước khi nhập Bravo (đổi thứ tự O6/O7) không?
 3. Giữ hay bỏ bước kiểm chéo O9?
 4. Cảnh báo LT ngắn gửi PC hay gửi Sales?
-5. Đổi lịch giao, khiếu nại, hàng mẫu nằm ở DW1 hay DW2? Hàng mẫu gửi Design hay PC/QA?
+5. Khiếu nại và hàng mẫu có thuộc DW1 không? Hàng mẫu gửi Design hay PC/QA?
+   (Đổi lịch giao: deck 13/10 đặt vào DW Giao hàng & CDO.)
 6. Có cho AI chạy trên tài liệu thật, trên máy chủ đặt tại nhà máy không? Máy
    chủ có GPU loại nào?
 7. PO và RFQ thật có mô tả hàng tiếng Nhật không?
@@ -186,8 +188,11 @@ văn bản gửi khách.
 
 ## Cho Đạt
 
-- **DW2 là gì?** Hai deck FPT ghi khác nhau: một deck ghi "Giao hàng & CDO",
-  deck kia và `infra/onprem/README.md` ghi "Mua hàng".
+- **DW2 là gì? Đã rõ (2026-10-20).** Deck 30/09 (v4) đặt DW2 là Giao hàng &
+  CDO. Deck mới hơn, 13/10 (v2), đánh số lại: DW 02 là Mua hàng · Yêu cầu mua
+  & PO (PR, RFQ, PO, xác nhận và lịch giao của nhà cung cấp). Giao hàng & CDO
+  thành một DW riêng của Sales, xếp vào quý I/2027. Phiếu khảo sát phòng Mua
+  hàng mà deck trích dẫn chưa có trong tay; DW2 chưa làm được tới khi có.
 - **Duyệt hoặc sửa bar của t29–t33.** Các bar này do agent đề xuất. t31 hụt 0,2
   điểm ở lần đo này.
 - **Chặn egress ở tầng mạng?** api và worker vẫn nằm trên `dw-edge` kể cả ở
