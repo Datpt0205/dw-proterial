@@ -290,3 +290,96 @@ describe("the schema-driven rules form (ticket 40)", () => {
     SLOW,
   );
 });
+
+/**
+ * Đạt, 2026-10-20: the form read as a developer's screen. The fields the
+ * system sets are kept but not drawn, the version's own fields come last
+ * under "Phiên bản", and a template's values are named in words.
+ */
+describe("the rules form without the system's fields in the way", () => {
+  const VERSIONED: JsonSchema = {
+    type: "object",
+    properties: {
+      schema_version: { type: "string", const: "1.0" },
+      copy_id: { type: "string", const: "sales_emails" },
+      version: { type: "string", pattern: "^[0-9]+\.[0-9]+\.[0-9]+$" },
+      mock: { type: "boolean" },
+      description: { type: "string", maxLength: 400 },
+      body: { type: "string", maxLength: 4000 },
+    },
+    required: ["schema_version", "copy_id", "version", "mock", "body"],
+  };
+  const DOC = {
+    schema_version: "1.0",
+    copy_id: "sales_emails",
+    version: "1.2.1",
+    mock: true,
+    description: "",
+    body: "Kính gửi ${customer_name}, PO ${po_no} đã được xác nhận.",
+  };
+  const versioned = readSchema(VERSIONED);
+
+  function Versioned({ onDone }: { onDone: (document: unknown) => void }) {
+    const [form] = Form.useForm();
+    return (
+      <UiProvider>
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={toForm(versioned, DOC) as Record<string, unknown>}
+          onFinish={() =>
+            onDone(fromForm(versioned, form.getFieldsValue(true)))
+          }
+        >
+          <RuleFields
+            ruleKey="sales_emails"
+            root={versioned}
+            form={form}
+            base={DOC}
+          />
+          <Button htmlType="submit">Gửi</Button>
+        </Form>
+      </UiProvider>
+    );
+  }
+
+  it(
+    "keeps the system's fields in the document without drawing them",
+    async () => {
+      const done = vi.fn();
+      render(<Versioned onDone={done} />);
+      expect(screen.queryByText("Phiên bản lược đồ")).toBeNull();
+      expect(screen.queryByText("Mã bộ nội dung")).toBeNull();
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
+      });
+      await waitFor(() => expect(done).toHaveBeenCalled());
+      expect(done.mock.calls[0][0]).toMatchObject({
+        schema_version: "1.0",
+        copy_id: "sales_emails",
+        version: "1.2.1",
+      });
+    },
+    SLOW,
+  );
+
+  it(
+    "puts the version's fields last, under Phiên bản, and names template values in words",
+    () => {
+      render(<Versioned onDone={() => {}} />);
+      const version = screen.getByText("Phiên bản").closest(".ant-card");
+      expect(version).toBeTruthy();
+      expect(
+        within(version as HTMLElement).getByRole("textbox", {
+          name: "Ghi chú thay đổi",
+        }),
+      ).toBeTruthy();
+      expect(
+        within(version as HTMLElement).queryByRole("textbox", { name: "Body" }),
+      ).toBeNull();
+      expect(screen.getByText(/Số PO/)).toBeTruthy();
+      expect(screen.getByText(/Tên khách hàng/)).toBeTruthy();
+    },
+    SLOW,
+  );
+});

@@ -8,6 +8,27 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-20, the rules editor made plainer (Đạt: "Biểu mẫu và JSON nâng
+  cao nhìn phức tạp ... người cấu hình sẽ mệt"; the configurator is
+  **Proterial's IT**):
+    - **Step 1, done.**
+        - `schema_version`, `policy_id` and `copy_id` are kept in the document but not drawn (`SYSTEM_FIELDS`).
+        - The version's own fields (number, mock, note) come last under "Phiên bản" (`VERSION_FIELDS`).
+        - The note starts empty for a new proposal and is labelled "Ghi chú thay đổi".
+        - Template values carry Vietnamese names and a copy button (`PLACEHOLDER`).
+        - The JSON tab stays for IT.
+        - Tests: `rule-form.test.tsx` +2; a mutation drawing the system fields again turns one red.
+    - **Step 2, decided, not built: "Tạo từ tệp mẫu".**
+        - The rule keys covered: the Bravo upload template (from the Excel template's header row), and the email, document and hand-off copy (from a sample the company sends).
+        - The file is read in `reader` and queued for the worker. The model proposes a version into the same form, every machine-read value is flagged, and the diff and approval stay as they are.
+        - The price, KPI and follow-up rules get suggestions only.
+        - It needs an eval with a prompt-injection case in the uploaded file.
+    - **OCR.**
+        - Templates are born-digital, so `reader` already extracts them without a model.
+        - Scans use the Tesseract (vie) already in `reader`.
+        - EasyOCR and docling were not added: PyTorch would grow the image by GBs and compete for the GPU with Ollama. Measure Tesseract on Proterial's real scans first; Japanese would need `tesseract-ocr-jpn`.
+    - **Owed by Đạt.** IT configures, but `sales.rules.propose` sits on the Sales roles only (`tam.ngo`, tenant IT, holds no `sales.*` scope). Decide whether to grant IT a permission set with `rules.propose`, keeping approval with the Sales head.
+
 - 2026-10-20, the pipeline (Đạt: "UI mà thành từng tab ... k thành 1 cái
   pipeline", then "làm thẳng luôn pipeline", each role its own view):
     - **Board.** `GET /sales/pipeline` (`application/pipeline.py`, `sales.case.read`, no support context):

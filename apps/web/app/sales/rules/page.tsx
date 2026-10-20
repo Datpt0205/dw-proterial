@@ -379,9 +379,13 @@ function prepared(
   options: readonly StartOption[],
 ): Record<string, unknown> {
   const field = versionField(root);
-  if (!field) return option.document;
+  // A new proposal says what it changes: the note of the version it starts
+  // from (the platform's, in English) is not that.
+  const rest = { ...option.document };
+  delete rest.description;
+  if (!field) return rest;
   return {
-    ...option.document,
+    ...rest,
     [field]: nextVersion(options.map((o) => o.ref)),
   };
 }

@@ -22,7 +22,13 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import type { RuleKey } from "../_lib/rules";
-import { fieldWords, valueLabel } from "../_lib/rule-labels";
+import {
+  fieldWords,
+  placeholderLabel,
+  SYSTEM_FIELDS,
+  valueLabel,
+  VERSION_FIELDS,
+} from "../_lib/rule-labels";
 import {
   problem,
   type DocPath,
@@ -98,12 +104,26 @@ export function RuleFields({
   base: unknown;
 }) {
   if (root.kind !== "object") return null;
+  const top = { name: [], abs: [], label: "", doc: [] };
+  const system = root.fields.filter((f) => SYSTEM_FIELDS.has(f.name));
+  const version = root.fields.filter((f) => VERSION_FIELDS.has(f.name));
+  const content = root.fields.filter(
+    (f) => !SYSTEM_FIELDS.has(f.name) && !VERSION_FIELDS.has(f.name),
+  );
   return (
     <RuleFormContext.Provider value={{ ruleKey, form, base }}>
-      <Fields
-        fields={root.fields}
-        where={{ name: [], abs: [], label: "", doc: [] }}
-      />
+      {/* Set by the system: kept in the document, never a control. */}
+      {system.map((f) => (
+        <Form.Item key={f.name} name={[f.name]} hidden>
+          <Input />
+        </Form.Item>
+      ))}
+      <Fields fields={content} where={top} />
+      {version.length ? (
+        <Section title="Phiên bản">
+          <Fields fields={version} where={top} />
+        </Section>
+      ) : null}
     </RuleFormContext.Provider>
   );
 }
@@ -430,12 +450,21 @@ function Placeholders({ node, where }: { node: RuleNode; where: Where }) {
   return (
     <Typography.Paragraph className="-mt-3! mb-4!">
       {node.placeholders
-        ? "Giá trị dùng được: "
+        ? "Giá trị dùng được (bấm biểu tượng để chép, rồi dán vào nội dung): "
         : "Giá trị bản đang áp dụng dùng ở trường này: "}
       {names.map((name) => (
-        <Typography.Text key={name} code>
-          {name}
-        </Typography.Text>
+        <span key={name} className="me-3 inline-block">
+          {placeholderLabel(name)}{" "}
+          <Typography.Text
+            code
+            copyable={{
+              text: name,
+              tooltips: [`Chép ${name}`, "Đã chép"],
+            }}
+          >
+            {name}
+          </Typography.Text>
+        </span>
       ))}
     </Typography.Paragraph>
   );
