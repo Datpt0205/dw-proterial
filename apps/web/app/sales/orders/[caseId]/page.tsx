@@ -48,6 +48,7 @@ import {
 import { CaseReplies } from "../../_components/case-replies";
 import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
+import { CaseHistory } from "../../_components/case-history";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money } from "../../_components/money";
@@ -383,6 +384,13 @@ function OrderDetail() {
           ) : null}
         </Space>
       </Card>
+
+      <CaseHistory
+        kind="order"
+        caseId={data.case_id}
+        status={data.status}
+        version={data.case_version}
+      />
 
       <CaseReplies replies={data.replies} />
 

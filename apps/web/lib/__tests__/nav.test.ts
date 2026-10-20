@@ -33,6 +33,7 @@ function labels(entries: readonly NavEntry[]): string[] {
 const SALES_PAGES = [
   "/sales",
   "/sales/inbox",
+  "/sales/pipeline",
   "/sales/orders",
   "/sales/quotes",
   "/sales/review",
@@ -115,6 +116,7 @@ describe("the nav registry", () => {
       "Sales › Việc cần làm",
       "Sales › Hộp thư",
       "Sales › Hồ sơ",
+      "Sales › Hồ sơ › Pipeline hồ sơ",
       "Sales › Hồ sơ › Đơn hàng",
       "Sales › Hồ sơ › Báo giá",
       "Sales › Hồ sơ › Kiểm chéo & duyệt",

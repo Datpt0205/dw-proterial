@@ -106,6 +106,10 @@ class PythonOverviewReader:
             months=months,
         )
 
+    async def history(self, kind: CaseKind, case_id: uuid.UUID) -> Sequence[LoggedEvent]:
+        # `events` is kept in the order they were written: oldest first.
+        return [e for e in self.events if e.case_kind is kind and e.case_id == case_id]
+
     async def work_page(self, wanted: WorkFilter, request: PageRequest) -> Page[WorkEntry]:
         me = wanted.principal_id
         entries: list[WorkEntry] = []

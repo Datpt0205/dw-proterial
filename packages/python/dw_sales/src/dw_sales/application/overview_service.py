@@ -94,7 +94,7 @@ _QUOTE_BUCKETS: Final[Mapping[str, Bucket]] = {
 }
 # The status a case is "draft ready" in: handed to Sales.
 _DRAFT_READY: Final = {CaseKind.ORDER: OrderStatus.IN_REVIEW.value, CaseKind.QUOTE: "received"}
-_PROCEDURE_KIND: Final = {
+PROCEDURE_KIND: Final = {
     Procedure.ORDER_ENTRY: CaseKind.ORDER,
     Procedure.QUOTATION: CaseKind.QUOTE,
 }
@@ -244,7 +244,7 @@ STATUS_BUCKETS: Final[Mapping[CaseKind, Mapping[str, Bucket]]] = {
     CaseKind.QUOTE: {str(status): bucket for status, bucket in _QUOTE_BUCKETS.items()},
 }
 _SURVEY: Final = tuple(
-    SurveyStep(step.step_id, _PROCEDURE_KIND[step.procedure], frozenset(step.states))
+    SurveyStep(step.step_id, PROCEDURE_KIND[step.procedure], frozenset(step.states))
     for step in WIV_STEPS
 )
 
@@ -520,7 +520,7 @@ def _steps(figures: OverviewFigures) -> list[StepCount]:
             coverage=step.coverage.value,
             states=list(step.states),
             cases=sum(
-                figures.statuses.get(_PROCEDURE_KIND[step.procedure], {}).get(s, 0)
+                figures.statuses.get(PROCEDURE_KIND[step.procedure], {}).get(s, 0)
                 for s in step.states
             ),
         )

@@ -8,6 +8,28 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-20, the pipeline (Đạt: "UI mà thành từng tab ... k thành 1 cái
+  pipeline", then "làm thẳng luôn pipeline", each role its own view):
+    - **Board.** `GET /sales/pipeline` (`application/pipeline.py`, `sales.case.read`, no support context):
+        - one column per status in the enum's order, each with whose turn it is (`STATUS_BUCKETS`) and its WIV steps;
+        - one card per case with its reference, assignee, when it entered its status (the follow-ups' `_entered`), due date and flags;
+        - `my_action` is the caller's next step, read from `my_work`, so a role differs by reading, not by a second rule;
+        - done cases show for 7 days, then are only counted.
+    - **History.** `GET /sales/{orders,quotes}/{id}/history`: the case's events, oldest first (`OverviewReadPort.history`, SQL and in-memory). Another tenant's case answers 404.
+    - **Web.**
+        - `/sales/pipeline` and the home page (`/`) for anyone with `sales.case.read`: two lanes, "Tất cả / Việc của tôi", search;
+        - the order and quote pages gain "Hành trình hồ sơ": the statuses the case passed through, and every event with who did it;
+        - nav: "Pipeline hồ sơ" under "Hồ sơ".
+    - **Denser theme** (`@dw/ui`): controls 28px, `sizeStep` 3, a 48px bar, 20px page titles, tighter page padding; text stays 14/12px.
+    - **Checked.**
+        - Integration: `test_sales_api_pipeline.py` 5/5, plus overview;
+        - mutations: removing the history's existence check turns the cross-tenant test red (200 vs 404), and removing the "mine" filter turns its vitest red;
+        - web: vitest 420, tsc.
+    - **Open.**
+        - Not looked at on a rendered page by anyone yet; `make web-screens` is owed for the pipeline.
+        - Viewers (`sales_viewer`) still get the overview, not the board.
+        - Production build in Docker (`make docker-up`) was started for Đạt to view at localhost:3300.
+
 - 2026-10-19, local Docker, tests and the on-premises models (Đạt: "chạy
   test full ... chạy docker lên test"):
     - **Without Docker:** lint, mypy, import contracts, invariants, the manifest and the contracts all pass. Unit tests: 3430 pass. Web: 466/466 vitest, plus typecheck, lint and format.

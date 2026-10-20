@@ -532,6 +532,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order History */
+        get: operations["order_history_api_v1_sales_orders__case_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/delivery-date": {
         parameters: {
             query?: never;
@@ -651,6 +668,23 @@ export interface paths {
         };
         /** Overview */
         get: operations["overview_api_v1_sales_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/pipeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipeline */
+        get: operations["pipeline_api_v1_sales_pipeline_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -824,6 +858,23 @@ export interface paths {
         put?: never;
         /** Answer */
         post: operations["answer_api_v1_sales_quotes__case_id__findings__finding_key__answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quotes/{case_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote History */
+        get: operations["quote_history_api_v1_sales_quotes__case_id__history_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1233,6 +1284,33 @@ export interface components {
             case_version: number;
             /** Status */
             status: string;
+        };
+        /** CaseHistoryEntry */
+        CaseHistoryEntry: {
+            /** Action */
+            action: string;
+            /**
+             * Actor Kind
+             * @enum {string}
+             */
+            actor_kind: "worker" | "user";
+            /** Actor User Id */
+            actor_user_id: string | null;
+            /** Case Version */
+            case_version: number;
+            /** From Status */
+            from_status: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Reason Code */
+            reason_code: string | null;
+            /** To Status */
+            to_status: string;
+            /** Worker Id */
+            worker_id: string | null;
         };
         /**
          * CaseKind
@@ -2808,6 +2886,79 @@ export interface components {
             approval_id: string;
             /** Approval Type */
             approval_type: string;
+        };
+        /** PipelineCard */
+        PipelineCard: {
+            /** Assigned To */
+            assigned_to: string | null;
+            /** Awaits Cross Check */
+            awaits_cross_check: boolean;
+            /** Blocking Findings */
+            blocking_findings: number;
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Customer Code */
+            customer_code: string;
+            /** Due */
+            due: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "order" | "quote";
+            /** My Action */
+            my_action: string | null;
+            /** Open Findings */
+            open_findings: number;
+            /** Overdue */
+            overdue: boolean;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Reference */
+            reference: string;
+            /** Status */
+            status: string;
+            /**
+             * Status Since
+             * Format: date-time
+             */
+            status_since: string;
+        };
+        /** PipelineColumn */
+        PipelineColumn: {
+            /** Cases */
+            cases: number;
+            /** Hidden */
+            hidden: number;
+            /** Holder */
+            holder: ("dw" | "sales" | "design" | "approver" | "customer") | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "order" | "quote";
+            /** Status */
+            status: string;
+            /** Steps */
+            steps: string[];
+        };
+        /** PipelineView */
+        PipelineView: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /** Cards */
+            cards: components["schemas"]["PipelineCard"][];
+            /** Columns */
+            columns: components["schemas"]["PipelineColumn"][];
         };
         /**
          * PlatformDocumentView
@@ -4952,6 +5103,37 @@ export interface operations {
             };
         };
     };
+    order_history_api_v1_sales_orders__case_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseHistoryEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delivery_date_api_v1_sales_orders__case_id__lines__line_no__delivery_date_post: {
         parameters: {
             query?: never;
@@ -5195,6 +5377,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OverviewView"];
+                };
+            };
+        };
+    };
+    pipeline_api_v1_sales_pipeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineView"];
                 };
             };
         };
@@ -5554,6 +5756,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_history_api_v1_sales_quotes__case_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseHistoryEntry"][];
                 };
             };
             /** @description Validation Error */

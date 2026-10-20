@@ -7,6 +7,7 @@ import {
   FileTextOutlined,
   FolderOpenOutlined,
   InboxOutlined,
+  ProjectOutlined,
   ScheduleOutlined,
   SettingOutlined,
   ShoppingCartOutlined,
@@ -66,6 +67,13 @@ export const salesNav: NavEntry[] = [
         label: "Hồ sơ",
         icon: FolderOpenOutlined,
         items: [
+          {
+            href: "/sales/pipeline",
+            label: "Pipeline hồ sơ",
+            hint: "Mọi đơn hàng và báo giá theo trạng thái: ai đang giữ, ở bước bao lâu, việc nào của bạn",
+            icon: ProjectOutlined,
+            scope: "sales.case.read",
+          },
           {
             href: "/sales/orders",
             label: "Đơn hàng",

@@ -61,6 +61,7 @@ from dw_sales.application.catalog_imports import (
 )
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
+from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.rules import (
@@ -366,6 +367,20 @@ def build_router(
     @router.get("/overview", response_model=OverviewView)
     async def overview(context: ReadCtx, svc: ReadSvc) -> OverviewView:
         return await svc.overview.overview(context)
+
+    # The board and a case's history: a member's own reads, not the support
+    # context's (fail closed until a support case needs them).
+    @router.get("/pipeline", response_model=PipelineView)
+    async def pipeline(context: Ctx, svc: Svc) -> PipelineView:
+        return await svc.pipeline.board(context)
+
+    @router.get("/orders/{case_id}/history", response_model=list[CaseHistoryEntry])
+    async def order_history(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[CaseHistoryEntry]:
+        return await svc.pipeline.history(context, CaseKind.ORDER, case_id)
+
+    @router.get("/quotes/{case_id}/history", response_model=list[CaseHistoryEntry])
+    async def quote_history(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[CaseHistoryEntry]:
+        return await svc.pipeline.history(context, CaseKind.QUOTE, case_id)
 
     @router.get("/my-work", response_model=Page[WorkItem])
     async def my_work(

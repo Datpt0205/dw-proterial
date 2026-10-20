@@ -312,7 +312,12 @@ class Settlement:
 
 @dataclass(frozen=True, slots=True)
 class LoggedEvent:
-    """One case event as the overview reads it: a status move, when, by whom."""
+    """One case event as the overview reads it: a status move, when, by whom.
+
+    ``actor_id`` is the user's id for a person, ``svc|<worker>`` for a worker
+    (`EventActor`); ``reason_code`` a close, decline or routing reason. The
+    case's history (`OverviewReadPort.history`) shows both; the figures read
+    neither."""
 
     case_kind: CaseKind
     case_id: uuid.UUID
@@ -322,6 +327,8 @@ class LoggedEvent:
     to_status: str
     actor_kind: Literal["worker", "user"]
     occurred_at: datetime
+    actor_id: str | None = None
+    reason_code: str | None = None
 
 
 class OrderCaseStorePort(Protocol):

@@ -29,16 +29,15 @@ own file and a row here.
 - **On premises** (Đạt, 2026-10-18), DW1 and DW2: Qwen3.5-9B, bge-m3 and
   bge-reranker-v2-m3 on the plant's host, no API called;
   `infra/onprem/README.md` (`make onprem-models`, `make onprem-up`).
-- 2026-10-19, so users change DW1 themselves (Đạt): rules edited in a form
-  drawn from each key's schema with a diff before approval (ticket 40);
-  master data imported from Excel, previewed, approved, mock until then
-  (41); follow-ups and the 07:30 brief, every timing in `sales_followups`
-  (42). Migrations `d2b1394c67b1` -> `511ef1b71dee`.
+- 2026-10-19, users change DW1 themselves: rules form (40), master data
+  from Excel (41), follow-ups and the 07:30 brief (42).
 - **2026-10-19, local Docker** (`sales.md` State): all suites pass per
   package; two defects fixed (`89bcd0d49ea6`, route walks); six live evals
   PASS on Qwen3.5-9B; on-prem compose ran (README); scope vs Proterial's
   process in `sales/dw1-scope.md`; deny-list secret set.
-- **Next:** `make web-screens` (pages of 39–42 never looked at); `onprem-up`
+- 2026-10-20: pipeline board as the Sales home, a history per case, denser
+  theme (`sales.md` State).
+- **Next:** `make web-screens` (pages of 39–42 and the pipeline never looked at); `onprem-up`
   in `uat` behind Caddy, with a warm-up call and a GPU check after the model
   starts; then DW2 (Mua hàng, 13/10 deck) when its survey arrives.
 

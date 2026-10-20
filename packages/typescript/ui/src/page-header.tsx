@@ -54,8 +54,8 @@ export function PageHeader({
         <h1
           className="m-0 flex min-w-0 items-center gap-2 break-words"
           style={{
-            fontSize: token.fontSizeHeading3,
-            lineHeight: token.lineHeightHeading3,
+            fontSize: token.fontSizeHeading4,
+            lineHeight: token.lineHeightHeading4,
             fontWeight: token.fontWeightStrong,
             color: token.colorText,
           }}

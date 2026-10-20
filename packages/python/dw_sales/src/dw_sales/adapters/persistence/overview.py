@@ -35,7 +35,7 @@ from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence.quotes import stored_quote
 from dw_sales.adapters.persistence.records import disposition_of
-from dw_sales.application.case_store import LoggedMessage
+from dw_sales.application.case_store import LoggedEvent, LoggedMessage
 from dw_sales.application.overview_ports import (
     BUCKETS,
     NO_DUE,
@@ -112,6 +112,39 @@ class SqlOverviewReader:
 
     session: AsyncSession
     scope: SalesScope
+
+    # ------------------------------------------------------------ history --
+
+    async def history(self, kind: CaseKind, case_id: uuid.UUID) -> Sequence[LoggedEvent]:
+        rows = await self.session.execute(
+            sa.select(
+                _E.c.case_version,
+                _E.c.action,
+                _E.c.from_status,
+                _E.c.to_status,
+                _E.c.actor_kind,
+                _E.c.actor_id,
+                _E.c.reason_code,
+                _E.c.occurred_at,
+            )
+            .where(_E.c.case_kind == kind.value, _E.c.case_id == case_id)
+            .order_by(_E.c.occurred_at, _E.c.case_version, _E.c.id)
+        )
+        return [
+            LoggedEvent(
+                case_kind=kind,
+                case_id=case_id,
+                case_version=r["case_version"],
+                action=r["action"],
+                from_status=r["from_status"],
+                to_status=r["to_status"],
+                actor_kind=r["actor_kind"],
+                occurred_at=r["occurred_at"],
+                actor_id=r["actor_id"],
+                reason_code=r["reason_code"],
+            )
+            for r in rows.mappings()
+        ]
 
     # ------------------------------------------------------------ figures --
 

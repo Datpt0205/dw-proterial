@@ -979,6 +979,93 @@
         "title": "CaseChangeView",
         "type": "object"
       },
+      "CaseHistoryEntry": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_kind": {
+            "enum": [
+              "worker",
+              "user"
+            ],
+            "title": "Actor Kind",
+            "type": "string"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "to_status": {
+            "title": "To Status",
+            "type": "string"
+          },
+          "worker_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Id"
+          }
+        },
+        "required": [
+          "case_version",
+          "action",
+          "from_status",
+          "to_status",
+          "actor_kind",
+          "actor_user_id",
+          "worker_id",
+          "reason_code",
+          "occurred_at"
+        ],
+        "title": "CaseHistoryEntry",
+        "type": "object"
+      },
       "CaseKind": {
         "enum": [
           "order",
@@ -7284,6 +7371,203 @@
           "scopes"
         ],
         "title": "PermissionSetView",
+        "type": "object"
+      },
+      "PipelineCard": {
+        "properties": {
+          "assigned_to": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "awaits_cross_check": {
+            "title": "Awaits Cross Check",
+            "type": "boolean"
+          },
+          "blocking_findings": {
+            "title": "Blocking Findings",
+            "type": "integer"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "kind": {
+            "enum": [
+              "order",
+              "quote"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "my_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Action"
+          },
+          "open_findings": {
+            "title": "Open Findings",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_since": {
+            "format": "date-time",
+            "title": "Status Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "case_id",
+          "status",
+          "reference",
+          "customer_code",
+          "assigned_to",
+          "received_at",
+          "status_since",
+          "due",
+          "overdue",
+          "open_findings",
+          "blocking_findings",
+          "awaits_cross_check",
+          "my_action"
+        ],
+        "title": "PipelineCard",
+        "type": "object"
+      },
+      "PipelineColumn": {
+        "properties": {
+          "cases": {
+            "title": "Cases",
+            "type": "integer"
+          },
+          "hidden": {
+            "title": "Hidden",
+            "type": "integer"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dw",
+                  "sales",
+                  "design",
+                  "approver",
+                  "customer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          },
+          "kind": {
+            "enum": [
+              "order",
+              "quote"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "holder",
+          "steps",
+          "cases",
+          "hidden"
+        ],
+        "title": "PipelineColumn",
+        "type": "object"
+      },
+      "PipelineView": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineCard"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "columns",
+          "cards"
+        ],
+        "title": "PipelineView",
         "type": "object"
       },
       "PlatformDocumentView": {
@@ -16053,6 +16337,53 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/history": {
+      "get": {
+        "operationId": "order_history_api_v1_sales_orders__case_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CaseHistoryEntry"
+                  },
+                  "title": "Response Order History Api V1 Sales Orders  Case Id  History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order History",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/lines/{line_no}/delivery-date": {
       "post": {
         "description": "PC agreed the line's short lead time: recorded as who and when.",
@@ -16537,6 +16868,27 @@
           }
         },
         "summary": "Overview",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/pipeline": {
+      "get": {
+        "operationId": "pipeline_api_v1_sales_pipeline_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Pipeline",
         "tags": [
           "sales"
         ]
@@ -17199,6 +17551,53 @@
           }
         },
         "summary": "Answer",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/history": {
+      "get": {
+        "operationId": "quote_history_api_v1_sales_quotes__case_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CaseHistoryEntry"
+                  },
+                  "title": "Response Quote History Api V1 Sales Quotes  Case Id  History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote History",
         "tags": [
           "sales"
         ]

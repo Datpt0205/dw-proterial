@@ -19,7 +19,7 @@ from datetime import date, datetime
 from typing import Final, Literal, Protocol
 
 from dw_kernel.pagination import CursorPosition, Page, PageRequest
-from dw_sales.application.case_store import LoggedMessage, Stored
+from dw_sales.application.case_store import LoggedEvent, LoggedMessage, Stored
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import QuoteCase
@@ -140,4 +140,8 @@ class OverviewReadPort(Protocol):
     async def work_page(self, wanted: WorkFilter, request: PageRequest) -> Page[WorkEntry]:
         """One page of the rows ``wanted`` admits, by (due date or `NO_DUE`,
         received, row id), resuming after ``request.after``."""
+        ...
+
+    async def history(self, kind: CaseKind, case_id: uuid.UUID) -> Sequence[LoggedEvent]:
+        """Every event of one case, oldest first (the pipeline's timeline)."""
         ...

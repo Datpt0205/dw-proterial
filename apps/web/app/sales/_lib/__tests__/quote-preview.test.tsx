@@ -49,6 +49,7 @@ let renderFails = false;
 const api = {
   quote: vi.fn(async () => quote),
   myWork: vi.fn(async () => []),
+  history: vi.fn(async () => []),
   customers: vi.fn(async () => ({ items: [] })),
   lme: vi.fn(async () => ({ items: [] })),
   artifacts: vi.fn(async () => ({
