@@ -41,6 +41,7 @@ const upload: Artifact = {
 
 let paused = false;
 const api = {
+  inbox: vi.fn(async () => []),
   overview: vi.fn(async () => ({
     worker: {
       paused,
@@ -104,8 +105,11 @@ describe("rendering while DW1 is paused (Đạt, 2026-10-18)", () => {
     paused = true;
     page();
     await screen.findByText("DW1 đang tạm dừng");
-    // The frame says what a pause stops: files and drafts too.
-    expect(screen.getByText(/không soạn tệp hay thư nháp/)).toBeTruthy();
+    // The frame says what a pause stops, files and drafts too: on its one
+    // line's info icon (Đạt, 2026-10-20: the bar took too much room).
+    expect(
+      screen.getByRole("img", { name: /không soạn tệp hay thư nháp/ }),
+    ).toBeTruthy();
     const button = await screen.findByRole("button", { name: RENDER });
     await waitFor(() => expect(button.hasAttribute("disabled")).toBe(true));
     expect(

@@ -8,6 +8,21 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-20, "does the AI follow the template?" (Đạt), answered from the code and checked:
+    - **No rule document reaches a prompt.** All nine keys are applied by code: email, document and hand-off copy by `string.Template` / `str.format`, the Bravo file by the upload layout plus openpyxl, and thresholds read as numbers. The model only reads incoming mail (spans); code verifies the spans and fills the tenant's template.
+    - **Config → output tests.** The existing ones cover emails and hand-offs. New: `test_a_bravo_upload_follows_the_tenants_own_template` checks sheet, columns, order and headers, and that a template missing PO/line/item/quantity is refused at validation.
+    - **Live eval on the host's qwen3.5-9b-dw: `sales_handoff` PASS.**
+        - 33 mails, 73 fields: 94.5% right, 0 invented.
+        - By language: vi 100%, en 96.2%, ja 86.4%.
+        - 12.1% go to a person.
+        - Injection cases: nothing followed.
+        - Latency: p50 22 s, max 154 s on the first load.
+    - **Docker stack with the model.** `api` and `worker` point at the host's Ollama through an override kept outside the repo (scratchpad `compose.host-model.yml`); `make demo-reset`, then the inbox lane processed the mailbox with the model.
+    - **UI (Đạt: banner too big, text still large, less scrolling).**
+        - The DW1 bar is one line: state, who paused and why, the mail being read, done/total, queued, failed. It is polled every 5 s while busy; the explanation sits in an info icon.
+        - Body text is 13px, small text pinned at 12px.
+        - Page header: tighter, 16px title, 12px subtitle and breadcrumb.
+
 - 2026-10-20, the rules editor made plainer (Đạt: "Biểu mẫu và JSON nâng
   cao nhìn phức tạp ... người cấu hình sẽ mệt"; the configurator is
   **Proterial's IT**):

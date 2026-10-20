@@ -354,7 +354,7 @@ describe("the rules form without the system's fields in the way", () => {
         fireEvent.click(screen.getByRole("button", { name: "Gửi" }));
       });
       await waitFor(() => expect(done).toHaveBeenCalled());
-      expect(done.mock.calls[0][0]).toMatchObject({
+      expect(done.mock.calls[0]?.[0]).toMatchObject({
         schema_version: "1.0",
         copy_id: "sales_emails",
         version: "1.2.1",

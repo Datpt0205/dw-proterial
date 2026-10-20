@@ -4,11 +4,23 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   type ReactNode,
 } from "react";
-import { Alert, Button, Form, Input, Modal, Space, Typography } from "antd";
 import {
+  Alert,
+  Button,
+  Flex,
+  Form,
+  Input,
+  Modal,
+  theme,
+  Tooltip,
+  Typography,
+} from "antd";
+import {
+  InfoCircleOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
   RobotOutlined,
@@ -25,6 +37,10 @@ import { useResource, type Resource } from "../_lib/use-resource";
 import { GuardedButton } from "./guarded-button";
 
 type Overview = SalesSchemas["OverviewView"];
+type Message = SalesSchemas["InboxMessageView"];
+
+/** How often the bar reads the mailbox again while DW1 has work queued. */
+const PROGRESS_POLL_MS = 5_000;
 
 /** The scopes the Sales screens branch on; the API checks them regardless. */
 export const SCOPE = {
@@ -127,28 +143,56 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
 
   const who = name(worker.changed_by);
   const when = worker.changed_at ? formatDateTime(worker.changed_at) : null;
+  const explain = worker.paused
+    ? "DW1 không xử lý thư mới và không soạn tệp hay thư nháp cho tới khi chạy lại; các bước của Sales vẫn làm được, tệp đã soạn vẫn tải được."
+    : when
+      ? `Thay đổi lần cuối ${when}${who ? ` bởi ${who}` : ""}.`
+      : null;
 
   return (
-    <div className="mb-4">
-      {worker.paused ? (
-        <Alert
-          type="warning"
-          showIcon
-          icon={<PauseCircleOutlined aria-hidden />}
-          role="status"
-          title="DW1 đang tạm dừng"
-          description={
-            <>
-              {who ? `${who} tạm dừng` : "Đã tạm dừng"}
-              {when ? ` lúc ${when}` : ""}.
-              {worker.reason ? ` Lý do: ${worker.reason}.` : ""} DW1 không xử lý
-              thư mới và không soạn tệp hay thư nháp cho tới khi chạy lại; các
-              bước của Sales vẫn làm được, tệp đã soạn vẫn tải được.
-            </>
-          }
-          action={
+    <div className="mb-3">
+      <Alert
+        type={worker.paused ? "warning" : "info"}
+        showIcon
+        icon={
+          worker.paused ? (
+            <PauseCircleOutlined aria-hidden />
+          ) : (
+            <RobotOutlined aria-hidden />
+          )
+        }
+        role="status"
+        className="py-1!"
+        title={
+          <Flex wrap gap={4} align="center">
+            <Typography.Text strong>
+              {worker.paused ? "DW1 đang tạm dừng" : "DW1 đang chạy"}
+            </Typography.Text>
+            {worker.paused ? (
+              <Typography.Text>
+                · {who ? `bởi ${who}` : ""}
+                {when ? ` lúc ${when}` : ""}
+                {worker.reason ? ` · Lý do: ${worker.reason}` : ""}
+              </Typography.Text>
+            ) : null}
+            <WorkerProgress />
+            {explain ? (
+              <Tooltip title={explain}>
+                <InfoCircleOutlined
+                  aria-label={explain}
+                  tabIndex={0}
+                  role="img"
+                />
+              </Tooltip>
+            ) : null}
+          </Flex>
+        }
+        action={
+          worker.paused ? (
             hasScope(SCOPE.pause) || hasScope(SCOPE.resume) ? (
               <GuardedButton
+                size="small"
+                inlineReason={false}
                 icon={<PlayCircleOutlined aria-hidden />}
                 reason={hasScope(SCOPE.resume) ? null : RESUME_REASON}
                 onClick={() => setDialog("resume")}
@@ -156,27 +200,17 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
                 Tiếp tục DW1
               </GuardedButton>
             ) : null
-          }
-        />
-      ) : (
-        <Space wrap className="w-full justify-between" role="status">
-          <Typography.Text>
-            <RobotOutlined aria-hidden className="me-1" />
-            DW1 đang chạy
-            {when
-              ? ` · thay đổi lần cuối ${when}${who ? ` bởi ${who}` : ""}`
-              : ""}
-          </Typography.Text>
-          {hasScope(SCOPE.pause) ? (
+          ) : hasScope(SCOPE.pause) ? (
             <Button
+              size="small"
               icon={<PauseCircleOutlined aria-hidden />}
               onClick={() => setDialog("pause")}
             >
               Tạm dừng DW1
             </Button>
-          ) : null}
-        </Space>
-      )}
+          ) : null
+        }
+      />
       <Modal
         open={dialog !== null}
         title={dialog === "pause" ? "Tạm dừng DW1" : "Cho DW1 chạy lại"}
@@ -225,5 +259,51 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
         </Form>
       </Modal>
     </div>
+  );
+}
+
+/**
+ * Where DW1 stands on the mailbox, in one line: the message it is reading
+ * now, how many it has done of how many, and how many wait or failed. Read
+ * from the mailbox the API owns (`InboxMessageView.processing`), again every
+ * few seconds while anything is queued or running.
+ */
+function WorkerProgress() {
+  const { hasScope } = useAuth();
+  const { token } = theme.useToken();
+  const inbox = useResource<Message[]>(
+    "sales/worker-progress",
+    useCallback(() => salesApi().inbox(), []),
+    { enabled: hasScope(SCOPE.caseRead) },
+  );
+  const messages = inbox.data ?? [];
+  const state = (m: Message) => m.processing?.status ?? null;
+  const running = messages.filter((m) => state(m) === "running");
+  const queued = messages.filter((m) => state(m) === "queued").length;
+  const failed = messages.filter((m) => state(m) === "failed").length;
+  const done = messages.filter(
+    (m) => m.disposition.kind !== "not_yet_processed",
+  ).length;
+  const busy = running.length + queued > 0;
+  const { reload } = inbox;
+  useEffect(() => {
+    if (!busy) return;
+    const timer = window.setInterval(reload, PROGRESS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [busy, reload]);
+  if (!inbox.data) return null;
+  const small = { fontSize: token.fontSizeSM };
+  return (
+    <Typography.Text type="secondary" style={small}>
+      ·{" "}
+      {running.length
+        ? `đang đọc ${running.map((m) => `“${m.subject}”`).join(", ")}`
+        : busy
+          ? "đang chờ lượt đọc thư"
+          : "không có thư đang chờ"}{" "}
+      · đã xử lý {done}/{messages.length} thư
+      {queued ? ` · ${queued} thư đang chờ` : ""}
+      {failed ? ` · ${failed} thư chưa xử lý được` : ""}
+    </Typography.Text>
   );
 }
