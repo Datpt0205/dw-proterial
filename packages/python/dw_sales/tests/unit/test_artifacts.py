@@ -65,6 +65,7 @@ from dw_sales.application.artifact_content import (
     EML,
     PDF,
     XLSX,
+    BravoUploadLayout,
     SalesDocumentCopy,
     SalesEmailCopy,
 )
@@ -1520,6 +1521,51 @@ async def test_drafts_are_written_in_the_tenants_own_copy_and_record_it() -> Non
     assert _eml(data)["Subject"] == f"PO {case.header.po_no} đã xác nhận (demo)"
     other = await book.artifact_copy(OTHER, [])
     assert other.emails.ref == ARTIFACT_COPY.emails.ref
+
+
+async def test_a_bravo_upload_follows_the_tenants_own_template() -> None:
+    """The company's Bravo import template, approved as a tenant version,
+    decides the sheet, the columns, their order and their headers of the file
+    DW1 prepares; the values are still the case's (Đạt, 2026-10-20: "config
+    xong làm k đúng thì hỏng")."""
+    book = _tenant_book()
+    upload = ARTIFACT_COPY.upload.model_dump(mode="json", by_alias=True)
+    upload["sheet_name"] = "DonHang"
+    upload["columns"] = [
+        {"field": "po_no", "header": "So don KH"},
+        {"field": "line_no", "header": "STT"},
+        {"field": "prv_code", "header": "Ma vat tu"},
+        {"field": "quantity", "header": "So luong"},
+        {"field": "customer_code", "header": "Ma khach"},
+    ]
+    _seed(
+        book,
+        SCOPE,
+        BravoUploadLayout.model_validate({**upload, "policy_version": "9.0.1"}),
+    )
+    # A template without the PO, the line, the item and the quantity is
+    # refused before anyone can approve it.
+    with pytest.raises(ValueError, match="names the PO"):
+        BravoUploadLayout.model_validate(
+            {**upload, "columns": upload["columns"][:1], "policy_version": "9.0.2"}
+        )
+    world = World()
+    case = await _prepared_m01()
+
+    (view,) = await render(world, case, "bravo_upload", svc=service(world, book))
+
+    data = world.objects[world.artifacts[(SCOPE, view.artifact_id)].object_key(SCOPE)]
+    assert view.template_ref.endswith("@9.0.1")
+    assert load_workbook(io.BytesIO(data)).sheetnames[0] == "DonHang"
+    header, *rows = _sheet_rows(data)
+    assert header == ["So don KH", "STT", "Ma vat tu", "So luong", "Ma khach"]
+    assert rows
+    for row in rows:
+        assert row[0] == case.header.po_no
+        assert row[4] == case.customer_code
+    # Another tenant still draws the platform's template.
+    other = await book.artifact_copy(OTHER, [])
+    assert other.upload.ref == ARTIFACT_COPY.upload.ref
 
 
 async def test_the_send_draft_attaches_the_final_files_drawn_before_a_new_documents_copy() -> None:

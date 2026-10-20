@@ -79,13 +79,17 @@ const seed: ThemeConfig["token"] = {
   // time); the names after the variable are the fallback before it loads.
   fontFamily: `var(${FONT_VARIABLE.sans}), "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`,
   fontFamilyCode: `var(${FONT_VARIABLE.mono}), "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace`,
-  fontSize: 14,
+  // 13px body, 12px small (Đạt, 2026-10-20: "chữ vẫn to"). antd derives
+  // the small step as 10px from 13, under ui-quality's 12px floor, so it is
+  // pinned here.
+  fontSize: 13,
+  fontSizeSM: 12,
   // The catalog: controls 8, cards 12, dialogs 16; buttons are pills below.
   borderRadius: 8,
   borderRadiusLG: 12,
   borderRadiusSM: 6,
   // Dense by Đạt's call (2026-10-20): more of a case on one screen. The text
-  // keeps 14/12px (ui-quality.md: nothing under 12px), so the density comes
+  // stays at 12px or more (ui-quality.md), so the rest of the density comes
   // from the controls and the spacing (`sizeStep` 3 takes 4px off every
   // padding and margin step), not from antd's compact algorithm, which
   // shrinks the text to 12/10px. A small control stays a 24px target.
@@ -180,8 +184,8 @@ export const appTheme: ThemeConfig = {
     },
     Card: {
       headerFontSize: 14,
-      headerFontSizeSM: 14,
-      headerHeightSM: 42,
+      headerFontSizeSM: 13,
+      headerHeightSM: 36,
     },
     Table: {
       headerBg: derived.colorBgContainer,
@@ -220,6 +224,7 @@ export const appTheme: ThemeConfig = {
       colorError: seed.colorErrorText,
     },
     Breadcrumb: {
+      fontSize: 12,
       itemColor: seed.colorTextTertiary,
       linkColor: seed.colorTextTertiary,
       lastItemColor: seed.colorTextTertiary,

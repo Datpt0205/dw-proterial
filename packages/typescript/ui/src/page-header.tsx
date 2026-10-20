@@ -37,8 +37,8 @@ export function PageHeader({
 }: PageHeaderProps) {
   const { token } = theme.useToken();
   return (
-    <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-      <Flex vertical gap={6} className="min-w-0">
+    <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+      <Flex vertical gap={2} className="min-w-0">
         {breadcrumb && breadcrumb.length > 0 && (
           // antd's Breadcrumb is itself the <nav>; it gets the name.
           <Breadcrumb
@@ -54,8 +54,8 @@ export function PageHeader({
         <h1
           className="m-0 flex min-w-0 items-center gap-2 break-words"
           style={{
-            fontSize: token.fontSizeHeading4,
-            lineHeight: token.lineHeightHeading4,
+            fontSize: token.fontSizeLG + 2,
+            lineHeight: token.lineHeightHeading5,
             fontWeight: token.fontWeightStrong,
             color: token.colorText,
           }}
@@ -68,7 +68,11 @@ export function PageHeader({
           <span className="min-w-0">{title}</span>
         </h1>
         {subtitle && (
-          <Typography.Paragraph type="secondary" className="!mb-0 max-w-3xl">
+          <Typography.Paragraph
+            type="secondary"
+            className="!mb-0"
+            style={{ fontSize: token.fontSizeSM }}
+          >
             {subtitle}
           </Typography.Paragraph>
         )}
