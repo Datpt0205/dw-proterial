@@ -35,6 +35,7 @@ from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
+from dw_sales.application.pipeline import PipelineService
 from dw_sales.application.ports import (
     ArtifactBytesPort,
     InboxPort,
@@ -56,6 +57,8 @@ from dw_sales.application.worker_service import WorkerService
 @dataclass(frozen=True)
 class SalesServices:
     overview: OverviewService
+    # Every case by status, and one case's history (the pipeline board).
+    pipeline: PipelineService
     inbox: InboxQueries
     # "DW xử lý": the routes queue a message (ticket 25); the worker runs it.
     processing: ProcessingService
@@ -129,8 +132,10 @@ def assemble(
         release_manifest_ref,
         SalesSpans(telemetry),
     )
+    overview = OverviewService(uow, gate, clock, inbox, book, directory, pending)
     services = SalesServices(
-        overview=OverviewService(uow, gate, clock, inbox, book, directory, pending),
+        overview=overview,
+        pipeline=PipelineService(uow, gate, clock, overview),
         inbox=InboxQueries(uow, gate, inbox, book),
         processing=ProcessingService(uow, gate, clock, ids, inbox),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),

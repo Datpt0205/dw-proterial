@@ -54,6 +54,7 @@ import {
 } from "../../_components/artifacts-panel";
 import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
+import { CaseHistory } from "../../_components/case-history";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money, Quantity } from "../../_components/money";
@@ -364,6 +365,13 @@ function QuoteDetail() {
           onSource={openField}
         />
       </Card>
+
+      <CaseHistory
+        kind="quote"
+        caseId={data.case_id}
+        status={data.status}
+        version={data.case_version}
+      />
 
       <CaseReplies replies={data.replies} />
 

@@ -278,6 +278,8 @@ def _logged(
         to_status=case.status.value,
         actor_kind=event.actor.kind,
         occurred_at=event.occurred_at,
+        actor_id=event.actor.actor_id,
+        reason_code=event.reason_code,
     )
 
 

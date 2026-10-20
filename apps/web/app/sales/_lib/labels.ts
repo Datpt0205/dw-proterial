@@ -289,6 +289,49 @@ export const ACTION = {
   record_master_list: "Xác nhận master list",
 } as const;
 
+/**
+ * What an event on a case's history did (`CaseEvent.action`, the actions
+ * `case_store.py` writes). An action not listed shows as its code.
+ */
+export const CASE_EVENT = {
+  "order.checked": "DW1 đọc và kiểm tra PO",
+  "order.revised": "Nhận PO sửa đổi",
+  "order.review_started": "Bắt đầu tự kiểm",
+  "order.review_resumed": "Tự kiểm lại",
+  "order.finding_disposed": "Quyết định một cờ",
+  "order.value_corrected": "Sửa một giá trị",
+  "order.mapping_confirmed": "Xác nhận mã PRV",
+  "order.pc_date_recorded": "Ghi ngày PC trả lời",
+  "order.correction_requested": "Yêu cầu khách sửa PO",
+  "order.prepared": "Tự kiểm xong",
+  "order.bravo_recorded": "Ghi số đơn Bravo",
+  "order.cross_checked": "Kiểm chéo đạt",
+  "order.returned": "Kiểm chéo trả lại",
+  "order.cross_check_resent": "Gửi kiểm chéo lại",
+  "order.decision_not_applied": "Quyết định không áp dụng được",
+  "order.confirmed": "Gửi xác nhận cho khách",
+  "order.closed": "Đóng hồ sơ",
+  "order.reassigned": "Giao cho người khác",
+  "quote.received": "Nhận yêu cầu báo giá",
+  "quote.ycbg_drafted": "Soạn YCBG",
+  "quote.ycbg_recorded": "Ghi số YCBG trên Bravo",
+  "quote.sent_to_design": "Gửi Design",
+  "quote.design_replied": "Design phản hồi",
+  "quote.spec_start": "Bắt đầu thảo luận spec",
+  "quote.spec_settle": "Chốt spec",
+  "quote.spec_ask_design_again": "Hỏi lại Design",
+  "quote.finding_answered": "Trả lời một cờ",
+  "quote.value_confirmed": "Xác nhận một giá trị",
+  "quote.priced": "Định giá",
+  "quote.submitted": "Trình duyệt",
+  "quote.approved": "Duyệt báo giá",
+  "quote.returned": "Trả lại định giá",
+  "quote.sent": "Gửi báo giá cho khách",
+  "quote.master_list_recorded": "Ghi master list",
+  "quote.declined": "Từ chối báo giá",
+  "quote.reassigned": "Giao cho người khác",
+} as const;
+
 /** How far this slice takes a surveyed step (`dw_sales.domain.process.Coverage`). */
 export const STEP_COVERAGE = {
   yes: "DW1 làm",

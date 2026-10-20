@@ -32,6 +32,7 @@ let shown: Order = orderInBravo();
 const api = {
   order: vi.fn(async () => shown),
   myWork: vi.fn(async () => []),
+  history: vi.fn(async () => []),
   customers: vi.fn(async () => ({ items: [] })),
   artifacts: vi.fn(async () => ({
     case_version: shown.case_version,

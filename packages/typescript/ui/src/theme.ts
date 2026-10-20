@@ -84,7 +84,14 @@ const seed: ThemeConfig["token"] = {
   borderRadius: 8,
   borderRadiusLG: 12,
   borderRadiusSM: 6,
-  controlHeight: 32,
+  // Dense by Đạt's call (2026-10-20): more of a case on one screen. The text
+  // keeps 14/12px (ui-quality.md: nothing under 12px), so the density comes
+  // from the controls and the spacing (`sizeStep` 3 takes 4px off every
+  // padding and margin step), not from antd's compact algorithm, which
+  // shrinks the text to 12/10px. A small control stays a 24px target.
+  controlHeight: 28,
+  controlHeightSM: 24,
+  sizeStep: 3,
   boxShadowTertiary:
     "0 1px 1px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.05)",
 };
@@ -145,17 +152,17 @@ export const appTheme: ThemeConfig = {
   components: {
     // The navbar is sticky: `globals.css` pads the page's scroll by this
     // height so it never covers the focused element (WCAG 2.4.11). The
-    // prototype's bar is 56px of frosted white.
+    // prototype's bar is 56px of frosted white; 48 since the dense theme.
     Layout: {
       headerBg: "rgba(255, 255, 255, 0.82)",
-      headerHeight: 56,
-      headerPadding: "0 20px",
+      headerHeight: 48,
+      headerPadding: "0 16px",
       bodyBg: derived.colorBgLayout,
     },
     Menu: {
       itemBg: "transparent",
       horizontalItemSelectedBg: "transparent",
-      horizontalLineHeight: "54px",
+      horizontalLineHeight: "46px",
       itemColor: seed.colorTextSecondary,
       itemHoverColor: seed.colorText,
       itemPaddingInline: 12,

@@ -113,6 +113,25 @@ export class SalesApi {
     return this.get<"/api/v1/sales/overview">("/api/v1/sales/overview");
   }
 
+  /**
+   * Every case by status (the pipeline board), each card with the caller's
+   * own next step on it, read from their work list on the server.
+   */
+  pipeline() {
+    return this.get<"/api/v1/sales/pipeline">("/api/v1/sales/pipeline");
+  }
+
+  /** One case's events, oldest first. */
+  history(kind: "order" | "quote", caseId: string) {
+    return kind === "order"
+      ? this.get<"/api/v1/sales/orders/{case_id}/history">(
+          `/api/v1/sales/orders/${enc(caseId)}/history`,
+        )
+      : this.get<"/api/v1/sales/quotes/{case_id}/history">(
+          `/api/v1/sales/quotes/${enc(caseId)}/history`,
+        );
+  }
+
   /** One page of the caller's work, by due date then by when it came in. */
   myWorkPage(cursor: string | null = null, limit = 200) {
     const query = new URLSearchParams({ limit: String(limit) });
