@@ -56,7 +56,7 @@ from dw_sales.domain.orders import PoDocument, PoLine, RegionFlag, Unreadable
 pytestmark = pytest.mark.unit
 
 CAPS = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.5.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.6.0.yaml"
 ).intake
 EXCEL = ExcelPoReader(MOCK_EXCEL_LAYOUTS)
 PDF = PdfPoReader(MOCK_PDF_LAYOUTS)

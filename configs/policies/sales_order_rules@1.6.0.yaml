@@ -1,25 +1,16 @@
 schema_version: "1.0"
 policy_id: sales_order_rules
-policy_version: "1.5.1"
-
-# THE DEMO TENANT'S OWN VERSION of sales_order_rules, in the fictional mock
-# sample set: what the tenant the mock data is bound to (SALES_DEMO_*) checks
-# its orders under. Platform 1.5.0 with the model steps on: model_assist.
-# description_attributes (ticket 28), message_intent (ticket 31),
-# rfq_extraction (ticket 29), reply_intent (ticket 32), request_handoff
-# (ticket 33) and layout_proposal (ticket 30), so the local demo shows a model
-# reading what DW1's own code does not (dw_sales ADR 0005). Every other tenant
-# reads the platform's 1.5.0, where all six are off.
-#
-# A tenant version carries its own number (TenantOrderRules refuses one that
-# reuses the platform's), so a case's rules stamp says which was applied.
-# Stored, proposed and approved tenant versions are ticket 19's; until then a
-# composition root hands this one to the tenant layer, as the mock catalogue
-# stands in for the ERP.
+policy_version: "1.6.0"
 
 # How DW1 checks a customer PO before Sales reviews it (WIV-03-012 steps 1, 2,
 # 4 and 6). Code reads this file and computes every number in a finding from
 # it, the master data and the PO's own cells; no model reads it.
+#
+# Platform layer: every value here is a fictional default. The fine print the
+# Sales requirements leave to the company to confirm (the copper/LME rule, the
+# short lead-time criterion, cross-check, export control) is still owed; a
+# tenant's own answers arrive as its own version of this policy, never as an
+# edit to this file.
 #
 # A finding is stamped with this file's id and version when it is raised, and
 # a case stamps cross_check_required and export_control_mode when it is
@@ -40,6 +31,9 @@ policy_version: "1.5.1"
 # reads with every value flagged. Nothing else changed.
 # 1.5.0 (ticket 34): requested_date_missing, a line printed with no requested
 # date ("date to follow"). Nothing else changed.
+# 1.6.0 (contract acceptance row 3): missing_noc_esf is an error, shown as
+# blocking: the order is held at confirmation until the export-control PIC
+# accepts it, never confirmed automatically. Nothing else changed.
 
 # A PO unit price passes when it is within this fraction of the quoted unit
 # price, in the quotation's currency. "0": it must equal the quotation. A
@@ -73,9 +67,13 @@ short_lead_time:
 # from uploaded_to_bravo straight to confirmed.
 cross_check_required: true
 
-# missing_noc_esf is a warning the export-control PIC acknowledges.
-# warn: once acknowledged, the order may be confirmed.
-# block_confirmation: its presence refuses confirmation even when acknowledged.
+# An order whose customer lacks a valid NOC/ESF (missing_noc_esf) is held: it
+# is never confirmed while that finding is open, and only the export-control
+# PIC (sales.compliance.ack) accepts it, with a reason.
+# warn: confirmation is held until the export-control PIC accepts it; then
+#   the order may be confirmed.
+# block_confirmation: its presence refuses confirmation even once accepted,
+#   so the order is never released.
 export_control_mode: warn
 export_control:
   # A denial-list screening older than this on the day the PO arrives counts
@@ -137,13 +135,13 @@ fiscal_year_start_month: 4
 #   and a second person approves the layout. Values are only ever read by the
 #   reader through an approved layout (ticket 30).
 model_assist:
-  description_attributes: true
-  message_intent: true
-  rfq_extraction: true
+  description_attributes: false
+  message_intent: false
+  rfq_extraction: false
   unread_retry_hours: 24
-  reply_intent: true
-  request_handoff: true
-  layout_proposal: true
+  reply_intent: false
+  request_handoff: false
+  layout_proposal: false
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or
@@ -181,8 +179,9 @@ findings:
   duplicate_po: error
   # The date is Sales' and production control's to agree; the order stands.
   requested_date_short_lt: warning
-  # Export control decides elsewhere (WIV-03-032); DW1 only warns.
-  missing_noc_esf: warning
+  # Export control decides elsewhere (WIV-03-032); DW1 holds the order's
+  # confirmation until the export-control PIC accepts it (export_control_mode).
+  missing_noc_esf: error
   # Sales updates the order already entered, or reads the diff.
   revised_po: warning
   revision_without_base: warning

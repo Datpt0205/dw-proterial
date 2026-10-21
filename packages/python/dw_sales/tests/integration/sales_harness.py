@@ -150,7 +150,7 @@ async def run_mailbox(
         inbox=inbox,
         reader=ClientPoReaders(InProcessReaderTransport()),
         quote_forms=ClientQuoteForms(InProcessReaderTransport()),
-        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.5.0.yaml")),
+        rules=PlatformOrderRules(load_order_rules(_POLICIES / "sales_order_rules@1.6.0.yaml")),
         # Duplicates and revisions are recognised against the cases as stored.
         cases=SqlOrderCaseLookup(sessions),
         new_case_id=uuid.uuid4,

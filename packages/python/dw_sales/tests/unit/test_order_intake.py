@@ -65,7 +65,7 @@ SCOPE = SalesScope(TenantId(uuid.UUID(int=1)), WorkspaceId(uuid.UUID(int=2)))
 CATALOG = MockSalesCatalog.load(SCOPE)
 INBOX = MockInbox.load(SCOPE)
 RULES = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.5.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.6.0.yaml"
 )
 README = (MOCK_ROOT / "README.md").read_text(encoding="utf-8")
 AN = Actor(user_id=uuid.UUID(int=0xA1))
@@ -92,7 +92,7 @@ GOLDEN: dict[str, Expected] = {
         (
             (
                 "missing_noc_esf",
-                "warning",
+                "error",
                 None,
                 _NOC,
                 "no NOC, ESF FY2025, denial-list check 2026-09-01",
@@ -219,7 +219,7 @@ GOLDEN: dict[str, Expected] = {
             ("customer_temporary", "warning", None, "official", "temporary"),
             (
                 "missing_noc_esf",
-                "warning",
+                "error",
                 None,
                 _NOC,
                 "NOC confirmed, ESF FY2026, no denial-list check",
@@ -250,7 +250,7 @@ GOLDEN: dict[str, Expected] = {
         (
             (
                 "missing_noc_esf",
-                "warning",
+                "error",
                 None,
                 _NOC,
                 "no NOC, ESF FY2025, denial-list check 2026-09-01",
@@ -302,7 +302,7 @@ GOLDEN: dict[str, Expected] = {
         (
             (
                 "missing_noc_esf",
-                "warning",
+                "error",
                 None,
                 _NOC,
                 "no NOC, ESF FY2025, denial-list check 2026-09-01",
@@ -670,7 +670,7 @@ def test_a_case_stamps_the_rules_parser_file_and_snapshot_it_was_checked_with(
     case = _case(outcomes, "M01")
     data = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
 
-    assert case.rules_version == "sales_order_rules@1.5.0"
+    assert case.rules_version == "sales_order_rules@1.6.0"
     assert case.document.parser_version == "excel_po_reader@1.6.0"
     assert case.document.attachment_sha256 == hashlib.sha256(data).hexdigest()
     assert case.catalog_as_of == asyncio.run(CATALOG.items(SCOPE)).as_of
@@ -1107,7 +1107,7 @@ async def test_a_code_is_looked_up_in_the_callers_item_master_only() -> None:
 
 async def test_a_line_is_not_checked_again_under_rules_the_case_was_not_checked_under() -> None:
     _, case = await _in_review("M05")
-    newer = RULES.model_copy(update={"policy_version": "1.6.0"})
+    newer = RULES.model_copy(update={"policy_version": "1.7.0"})
 
     with pytest.raises(ConflictError, match="no longer apply"):
         await _intake(rules=newer).confirm_mapping(SCOPE, case, 2, "CB-2005", AN, T0)

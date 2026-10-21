@@ -35,7 +35,7 @@ REPO = Path(__file__).resolve().parents[5]
 
 def _world() -> World:
     """The demo sample set: tenant alpha starts with its own order rules
-    (seeded as approved, `sales_order_rules@1.5.1`), beta with the platform's."""
+    (seeded as approved, `sales_order_rules@1.5.2`), beta with the platform's."""
     return open_world(REPO, SampleSet.of(REPO, None), (*CALLERS, OUTSIDER))
 
 
@@ -193,7 +193,7 @@ async def test_a_newer_approval_supersedes_and_a_stamp_still_reads_its_version()
         v.version: v.status for v in (await world.services.rules.list(GIANG.context())).versions
     }
     # The demo tenant's seeded version went first, then 9.1.0.
-    assert versions == {"1.5.1": "superseded", "9.1.0": "superseded", "9.2.0": "approved"}
+    assert versions == {"1.5.2": "superseded", "9.1.0": "superseded", "9.2.0": "approved"}
     port = world.services.layouts.rules
     assert (await port.rules(ALPHA)).version == "sales_order_rules@9.2.0"
     # A case stamped under 9.1.0 is rechecked under 9.1.0, not what is in force.

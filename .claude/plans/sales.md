@@ -8,6 +8,32 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-21, contract acceptance row 3 made provable ("100% test cases
+  that do not meet export-control conditions are held awaiting approval,
+  never automatically confirmed"). The hold already existed: `OrderCase.confirm`
+  refuses while `missing_noc_esf` is open, and only a holder of
+  `sales.compliance.ack` accepts it, with a reason (mode `warn`, kept; Đạt).
+  What changed: `missing_noc_esf` is `error` (blocking) in platform rules
+  `sales_order_rules@1.6.0` and the demo tenant's `1.5.2` (replaces `1.5.1`,
+  `make demo-reset` installs it), so the order reads "chặn" in the list and
+  on the case; the order page shows "Đơn đang bị giữ: chờ PIC kiểm soát xuất
+  khẩu xác nhận NOC/ESF." while the finding is open; the rules form says
+  `warn` is "Giữ xác nhận cho tới khi PIC kiểm soát xuất khẩu chấp nhận".
+  Evidence: `test_export_control_hold.py` walks every README scenario whose
+  findings include `missing_noc_esf` (read from the table, today M03, M28,
+  M35, M45) to the step before confirm through the real services: refused
+  until accepted, then confirmed; the API test walks M03 to a 409 on
+  `/confirm` with version and status unchanged, then 200 after acceptance; a
+  revision re-opens the hold (`test_orders.py`). Mutations: confirm refusal
+  deleted, `_compliance_finding` returning None, tenant severity `warning`,
+  and the page's condition each turned a test red. Cases checked before keep
+  their stamped `warning` severity; the hold applies to them all the same.
+  Options left open, not decided: a second person for the export-control
+  acceptance (Proterial's survey says the same Sales PIC does export control,
+  so no separation now); moving the hold before the Bravo entry (Đạt: no);
+  the denial list stays a screening date on the customer, not a screening
+  DW1 runs.
+
 - 2026-10-21:
     - **DW1 bar.** It names what DW1 does: reading "<subject>", N waiting, all done and waiting for new mail, or paused. Never a bare "đang chạy" (`worker-bar.test.tsx`).
     - **Contract.** Đạt asked how the contract's acceptance bars and hardware should read against the measured Qwen3.5-9B figures. The advice was given in the session and kept out of the repo, which is public:

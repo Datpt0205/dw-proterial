@@ -650,6 +650,12 @@ test("3. An takes M03 from the source to the Bravo number; Diệu may not acknow
   await expect(
     page.getByRole("heading", { name: `PO ${m03.po_no}` }),
   ).toBeVisible();
+  // BRN has no NOC: the order is held until the export-control PIC accepts
+  // the finding (contract acceptance row 3).
+  const held = page.getByText(
+    "Đơn đang bị giữ: chờ PIC kiểm soát xuất khẩu xác nhận NOC/ESF.",
+  );
+  await expect(held).toBeVisible();
   // The source: the PDF page drawn with the reader's boxes on it.
   await page.getByRole("button", { name: "Mở bản gốc", exact: true }).click();
   const drawer = dialog(page, "Bản gốc");
@@ -672,6 +678,7 @@ test("3. An takes M03 from the source to the Bravo number; Diệu may not acknow
     "Chấp nhận + lý do",
     "Đã kiểm tra danh sách cấm, chờ ESF năm nay",
   );
+  await expect(held).toHaveCount(0);
   // Each decision is a new version of the case: its source is opened again.
   await expectRefused(
     page,
@@ -1138,7 +1145,7 @@ test("11. An proposes a version of the order rules on the rules page; Giang deci
 }) => {
   // Last on purpose: an approved version changes the rules the demo tenant
   // checks orders under, and a case checked under the old ones is not checked
-  // again under the new (ticket 19). The next run's reset puts 1.5.1 back.
+  // again under the new (ticket 19). The next run's reset puts 1.5.2 back.
   const an = await persona(request, AN);
   const giang = await persona(request, GIANG);
   const VERSION = "1.5.99";

@@ -31,7 +31,7 @@ from dw_sales.domain.orders import PoDocument
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[4]
-CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.5.0.yaml").intake
+CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.6.0.yaml").intake
 M01 = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
 
 

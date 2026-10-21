@@ -47,7 +47,7 @@ async def test_an_and_dieu_walk_m01_from_the_mailbox_to_confirmed(
     case = await order_of(an, "M01")
     # DW1 read and checked it, and handed it to An's self-check.
     assert (case["status"], case["assigned_to"]) == ("in_review", str(user_id(AN)))
-    assert case["findings"] == [] and case["rules_version"] == "sales_order_rules@1.5.1"
+    assert case["findings"] == [] and case["rules_version"] == "sales_order_rules@1.5.2"
     assert case["release_manifest_ref"].startswith("sha256:")
 
     up = await uploaded(an, case)
@@ -279,6 +279,47 @@ async def test_missing_noc_esf_is_acknowledged_by_the_export_control_pic_only(ap
         f"/orders/{case['case_id']}/findings/missing_noc_esf:-/disposition", body
     )
     assert acknowledged.status_code == 200, acknowledged.text
+
+
+async def test_m03_is_held_at_confirmation_until_the_export_control_pic_accepts_it(
+    api: Api,
+) -> None:
+    """The contract's acceptance row 3: an order that does not meet the
+    export-control conditions is held awaiting approval, never confirmed.
+    M03's customer has no NOC and last year's ESF."""
+    an, dieu = api.as_(AN), api.as_(DIEU)
+    case = await order_of(an, "M03")
+    noc = next(f for f in case["findings"] if f["key"] == "missing_noc_esf:-")
+    assert (noc["blocking"], noc["disposition"]["kind"]) == (True, "open")
+    case = await decide(
+        an,
+        case,
+        "findings/quotation_missing:2/disposition",
+        {"disposition": "accepted", "reason": "Giá theo báo giá gia hạn qua thư"},
+    )
+    crossed = await cross_checked(dieu, await uploaded(an, case))
+    assert crossed["status"] == "cross_checked"
+
+    held = await an.post(
+        f"/orders/{crossed['case_id']}/confirm",
+        {"case_version": crossed["case_version"], "delivery_dates": dates(crossed)},
+    )
+
+    assert held.status_code == 409, held.text
+    assert "missing_noc_esf" in held.json()["message"]
+    unchanged = await order(an, crossed["case_id"])
+    assert (unchanged["status"], unchanged["case_version"]) == (
+        "cross_checked",
+        crossed["case_version"],
+    )
+    accepted = await decide(
+        an,
+        unchanged,
+        "findings/missing_noc_esf:-/disposition",
+        {"disposition": "accepted", "reason": "Đã nhận NOC và ESF năm nay"},
+    )
+    confirmed = await decide(an, accepted, "confirm", {"delivery_dates": dates(accepted)})
+    assert confirmed["status"] == "confirmed"
 
 
 async def test_a_refused_decision_writes_neither_the_case_nor_an_audit_row(

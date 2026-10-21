@@ -42,7 +42,7 @@ from dw_sales.testing.reading_tools import LEGACY_PO_NO, xls_made_in_reader
 pytestmark = pytest.mark.integration
 
 REPO = Path(__file__).resolve().parents[4]
-CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.5.0.yaml").intake
+CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.6.0.yaml").intake
 READER = os.environ.get("DW_TEST_READER")
 COMPOSE = [
     "docker",

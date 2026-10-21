@@ -13,7 +13,11 @@ import {
   Table,
   Typography,
 } from "antd";
-import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
+import {
+  EyeOutlined,
+  FileSearchOutlined,
+  LockOutlined,
+} from "@ant-design/icons";
 import type { SalesSchemas, SourceRegion } from "@dw/api-client";
 import { PageHeader, StatusTag, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
@@ -189,6 +193,11 @@ function OrderDetail() {
   );
   const openCount = data.findings.filter(isOpen).length;
   const blocking = data.findings.filter((f) => isOpen(f) && f.blocking).length;
+  // The case refuses `confirmed` while NOC/ESF is open (contract acceptance
+  // row 3); the page says so before anyone reaches the confirm button.
+  const heldForExportControl =
+    data.status !== "closed" &&
+    data.findings.some((f) => f.code === "missing_noc_esf" && isOpen(f));
 
   return (
     <div className="space-y-4">
@@ -241,6 +250,16 @@ function OrderDetail() {
         }
       />
 
+      {heldForExportControl ? (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<LockOutlined aria-hidden />}
+          role="status"
+          title={`Đơn đang bị giữ: chờ ${label(SALES_ROLE, "sales_export_control")} xác nhận NOC/ESF.`}
+          description="Chưa thể gửi xác nhận cho khách."
+        />
+      ) : null}
       {data.superseded_by_case ? (
         <Alert
           type="warning"

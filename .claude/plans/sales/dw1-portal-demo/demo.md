@@ -45,7 +45,7 @@ kịch bản này viết cho `make dev`. Profile compose `scan` chỉ dựng ri�
 buổi demo. `clamav` giữ khoảng 944 MiB RAM (đo 2026-10-13).
 
 **Các bước có mô hình (tickets 28–33, ADR 0005 của dw_sales).** Bộ quy tắc
-riêng của tenant-alpha (`sales_order_rules@1.5.1`, `make demo-reset` cài) bật
+riêng của tenant-alpha (`sales_order_rules@1.5.2`, `make demo-reset` cài) bật
 sáu bước có mô hình: đọc mô tả hàng, phân loại thư không đọc được, đọc yêu cầu
 báo giá, đọc trả lời trong luồng hồ sơ, soạn sẵn thư chuyển, gợi ý mẫu PO. Mô
 hình là máy chủ của chính triển khai (`configs/models/onprem.yaml`), không có
@@ -88,13 +88,13 @@ như nhau:
   tenant-alpha (vai `sales_dw1`: chỉ `sales.inbox.process`; không đăng nhập
   được, không có trong danh sách persona);
 - đề xuất và duyệt bộ quy tắc riêng của tenant-alpha,
-  `sales_order_rules@1.5.1` (`dw_sales.testing.seed_rules`): An đề xuất, Giang
+  `sales_order_rules@1.5.2` (`dw_sales.testing.seed_rules`): An đề xuất, Giang
   duyệt trên yêu cầu duyệt `sales.rules`, như mọi phiên bản của tenant;
 - cho mỗi persona một tài khoản Keycloak, mật khẩu là `DW_DEV_USER_PASSWORD`
   trong `.env` (không commit).
 
 Sau đó: hộp thư 45 thư (M01–M45) đều "Chưa xử lý", không có hồ sơ nào, không
-có mẫu PO nào, bộ quy tắc 1.5.1 đang dùng, DW1 đang chạy (với làn hộp thư tắt;
+có mẫu PO nào, bộ quy tắc 1.5.2 đang dùng, DW1 đang chạy (với làn hộp thư tắt;
 bật thì DW1 xử lý hết trong vài phút). Chỉ chạy được ở profile `local`/`test`.
 
 Đăng nhập ở `http://localhost:3300` bằng email persona và mật khẩu trên. Đổi
@@ -179,7 +179,9 @@ trước, đúng thứ tự WIV-03-012 bước 8.
    `missing_noc_esf` của M03 qua API → **403**.
 2. **An** mở hồ sơ M03 (BRN, PDF tiếng Việt, VND): khách, giờ nhận (giờ Việt
    Nam), số cờ, người phụ trách. Bấm **Mở bản gốc**: trang PDF hiện với khung
-   quanh từng giá trị đọc được.
+   quanh từng giá trị đọc được. Khách BRN chưa có NOC: trang báo "Đơn đang bị
+   giữ: chờ PIC kiểm soát xuất khẩu xác nhận NOC/ESF." cho tới khi cờ được
+   chấp nhận (điều kiện nghiệm thu 3 của hợp đồng).
 3. Quyết định từng cờ bằng **Chấp nhận + lý do** → **Ghi quyết định**:
     - "Không có báo giá còn hiệu lực, dòng 2" — ví dụ "Khách xác nhận giá theo
       thư ngày 22/09";
@@ -325,7 +327,7 @@ Chưa có trong `sales-demo.spec.ts`; chưa đi thử trên trình duyệt (Dock
 2026-10-15).
 
 Chưa có trang quy tắc trên cổng; `make demo-reset` đã đi đường này cho bản
-1.5.1. Muốn cho khán giả thấy:
+1.5.2. Muốn cho khán giả thấy:
 
 1. **An** đề xuất qua API: `POST /api/v1/sales/rules/{key}/versions` (ví dụ
    `sales_order_rules`) với thân `{"document": …}` là cả tài liệu, trong đó
