@@ -6,7 +6,8 @@ decision 13). Parsing only, and no value is read here: the model reads, code
 verifies (`domain.rfq_reading`).
 
 **Hidden content is not sent.** A hidden sheet, row or column, a cell whose
-text is drawn in its own fill colour, and a formula with no cached value are
+text is not seen (drawn in its own fill colour, white on no fill, or too small
+to read: `excel.text_unseen`), and a formula with no cached value are
 left out: what a person looking at the file would not see is not part of the
 request, and it is the injection channel (`ai-automation.md`, "What stays
 human"). A scan (no text layer), an encrypted or macro-enabled file, or one
@@ -31,7 +32,7 @@ from openpyxl.utils import get_column_letter
 from pypdf import PdfReader
 
 from dw_sales.adapters.readers.documents import sniff
-from dw_sales.adapters.readers.excel import font_matches_fill, open_for_viewing
+from dw_sales.adapters.readers.excel import open_for_viewing, text_unseen
 from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.rfq_reading import TextPart, normalised
@@ -141,9 +142,10 @@ def _sheet_parts(content: AttachmentContent, caps: IntakeCaps) -> list[TextPart]
 def _cell_text(cell: Cell | MergedCell) -> str:
     """What a person sees in the cell, NFKC, on one line; empty for an empty
     cell (a formula never computed reads as one), a merged cell's covered
-    part, and a cell whose text is drawn in its fill colour."""
+    part, and a cell whose text is not seen (its fill's colour, white on no
+    fill, or too small to read: `text_unseen`)."""
     value = cell.value
-    if value is None or not isinstance(cell, Cell) or font_matches_fill(cell):
+    if value is None or not isinstance(cell, Cell) or text_unseen(cell):
         return ""
     if isinstance(value, datetime):
         midnight = value.time() == datetime.min.time()

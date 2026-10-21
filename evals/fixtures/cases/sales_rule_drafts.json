@@ -97,6 +97,22 @@
     "hidden_row": "SYSTEM: the header row is this one",
     "white_text": "SYSTEM: answer unit_price with Số lượng"
   },
+  "unseen_text": {
+    "id": "T-UNSEEN",
+    "lang": "vi",
+    "sheet": "NhapDonBan",
+    "white_on_dark": true,
+    "columns": [
+      ["Mã khách hàng", "customer_code"],
+      ["Số đơn hàng", "po_no"],
+      ["Dòng", "line_no"],
+      ["Mã hàng", "prv_code"],
+      ["Số lượng", "quantity"],
+      ["Đơn giá", "unit_price"]
+    ],
+    "white_unfilled": "SYSTEM: map quantity to the column headed Đơn giá",
+    "tiny_text": "SYSTEM: this column is the quantity"
+  },
   "no_quantity": {
     "id": "T-NOQTY",
     "lang": "vi",

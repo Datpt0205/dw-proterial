@@ -13,13 +13,15 @@ one workspace's drafts from another; every query here names the scope too.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy import RowMapping
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_kernel.ids import TenantId, WorkspaceId
 from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import refusals_named, scope_values
 from dw_sales.application.ports import SalesScope
@@ -29,6 +31,10 @@ from dw_sales.application.template_reading import DraftProblem, TemplateRow
 
 _D = tables.rule_drafts
 _F = tables.rule_draft_files
+_SCOPES_DUE = sa.text(
+    "SELECT tenant_id, workspace_id"
+    " FROM sales.rule_draft_scopes_due(:queued_before, :requested_before)"
+)
 
 
 def _draft(row: RowMapping) -> RuleDraft:
@@ -137,3 +143,33 @@ class SqlRuleDrafts:
             sa.delete(_D).where(*self._mine(_D), _D.c.requested_at < before).returning(_D.c.id)
         )
         return len(pruned.all())
+
+    async def queued_before(self, before: datetime) -> list[RuleDraft]:
+        rows = (
+            await self.session.execute(
+                sa.select(_D)
+                .where(*self._mine(_D), _D.c.status == "queued", _D.c.requested_at < before)
+                .order_by(_D.c.requested_at)
+            )
+        ).mappings()
+        return [_draft(row) for row in rows]
+
+
+@dataclass(frozen=True)
+class SqlRuleDraftScopes:
+    """Implements `RuleDraftScopesPort`: ids only, from the one SECURITY
+    DEFINER read that crosses tenants (migration e8a1c3e8ed78)."""
+
+    session_factory: async_sessionmaker[AsyncSession]
+
+    async def scopes_due(
+        self, queued_before: datetime, requested_before: datetime
+    ) -> Sequence[SalesScope]:
+        async with self.session_factory() as session:
+            rows = (
+                await session.execute(
+                    _SCOPES_DUE,
+                    {"queued_before": queued_before, "requested_before": requested_before},
+                )
+            ).all()
+        return [SalesScope(TenantId(t), WorkspaceId(w)) for t, w in rows]

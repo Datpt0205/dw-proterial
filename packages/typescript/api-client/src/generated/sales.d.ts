@@ -1852,7 +1852,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "column_unmapped" | "header_not_in_template" | "header_ambiguous" | "header_twice" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota";
+            code: "column_unmapped" | "header_not_in_template" | "header_too_long" | "header_ambiguous" | "header_twice" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota";
             /** Field */
             field?: ("customer_code" | "po_no" | "revision" | "po_date" | "currency" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
             /** Header */
@@ -3803,6 +3803,8 @@ export interface components {
             row: number;
             /** Text */
             text: string;
+            /** Text Unseen */
+            text_unseen: boolean;
         };
         /** SheetGrid */
         SheetGrid: {

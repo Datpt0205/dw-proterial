@@ -254,6 +254,23 @@ def test_dw1s_followups_run_wherever_dw1_does_every_five_minutes() -> None:
     assert "sales_followups" not in build_registry(deployed).all()
 
 
+def test_dw1s_rule_drafts_are_swept_wherever_dw1_drafts_them() -> None:
+    """ "Tạo từ tệp mẫu": a draft its event lost, or one nobody asks after for
+    30 days, is dealt with by a lane of its own, under the name the drafting
+    audits as, every ten minutes, wherever DW1 drafts (failure-modes #6)."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    s3 = "http://localhost:9000"
+    assert "sales_rule_drafts" not in build_registry(bare_settings(database_url=db)).all()
+
+    switched_off = bare_settings(database_url=db, s3_endpoint_url=s3, sales_inbox_lane=False)
+    registry = build_registry(switched_off)
+    assert "sales_rule_drafts" in registry.all()
+    assert registry.interval_for("sales_rule_drafts", 1.0) == 600.0
+
+    deployed = bare_settings(database_url=db, s3_endpoint_url=s3, profile="uat")
+    assert "sales_rule_drafts" not in build_registry(deployed).all()
+
+
 def test_the_pinned_retention_policy_promises_only_classes_code_can_assign() -> None:
     """A memory class nothing can put on a row is a promise in a compliance
     file that the code does not keep (`failure-modes.md` #1). `sensitive`,

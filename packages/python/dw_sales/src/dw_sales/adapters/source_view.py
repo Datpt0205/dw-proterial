@@ -4,7 +4,8 @@ Parsing only, pure Python, bounded by the caps reading uses (the order rules'
 `IntakeCaps`, spec decision 13). A PDF page is copied out as a one-page PDF
 for the browser to render (pdf.js): nothing is rasterised here. A sheet is
 its cells with every flag a person could miss a value by: a hidden sheet,
-row or column, a font the colour of its fill, a formula with no cached
+row or column, a font the colour of its fill (or white on none, or too
+small to read), a formula with no cached
 value, and the colours themselves.
 """
 
@@ -20,7 +21,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from pypdf import PdfReader, PdfWriter
 
 from dw_sales.adapters.readers.documents import sniff
-from dw_sales.adapters.readers.excel import font_matches_fill, open_for_viewing
+from dw_sales.adapters.readers.excel import font_matches_fill, open_for_viewing, text_unseen
 from dw_sales.application.source import SheetCell, SheetGrid
 from dw_sales.domain.order_checks import IntakeCaps
 
@@ -101,6 +102,7 @@ class FileSourceView:
                         hidden_row=cell.row in hidden_rows,
                         hidden_column=cell.column in hidden_columns,
                         font_matches_fill=font_matches_fill(cell),
+                        text_unseen=text_unseen(cell),
                         formula_without_cached_value=no_cache,
                         font_rgb=_rgb(
                             cell.font.color.rgb if cell.font and cell.font.color else None

@@ -378,8 +378,11 @@ function ProposeDrawer({
   );
 }
 
-// How often a template the worker is still reading is asked about again.
+// How often a template the worker is still reading is asked about again,
+// and for how long before the page stops asking.
 const POLL_MS = 3000;
+const POLL_GIVE_UP_MS = 3 * 60 * 1000;
+const DRAFT_STALLED = "DW1 chưa đọc xong tệp mẫu, hãy thử tải lại sau.";
 
 type Mode = "form" | "json";
 type Step = "edit" | "review";
@@ -428,12 +431,28 @@ function Editor({
   const { modal, message } = App.useApp();
   const { run, pending } = useAction();
   const [form] = Form.useForm();
-  // "Tạo từ tệp mẫu": the draft of the template uploaded here, if any.
-  const [draft, setDraft] = useState<RuleDraft | null>(null);
+  // "Tạo từ tệp mẫu": every template uploaded here, the latest last. An
+  // earlier draft stays a start option while a later one is read.
+  const [drafts, setDrafts] = useState<RuleDraft[]>([]);
+  const draft = drafts[drafts.length - 1] ?? null;
+  const keepDraft = useCallback(
+    (next: RuleDraft) =>
+      setDrafts((list) =>
+        list.some((d) => d.draft_id === next.draft_id)
+          ? list.map((d) => (d.draft_id === next.draft_id ? next : d))
+          : [...list, next],
+      ),
+    [],
+  );
+  // The draft the page stopped asking about: the API answered with an
+  // error, or the worker did not finish within `POLL_GIVE_UP_MS`.
+  const [unpolled, setUnpolled] = useState<string | null>(null);
   const options = useMemo(() => {
-    const drafted = draft ? draftOption(draft) : null;
-    return drafted ? [...versions, drafted] : versions;
-  }, [versions, draft]);
+    const drafted = drafts
+      .map(draftOption)
+      .filter((o): o is StartOption => o !== null);
+    return [...versions, ...drafted];
+  }, [versions, drafts]);
   const inForce = options.find((o) => o.inForce) ?? options[0]!;
   const [startId, setStartId] = useState(
     options.some((o) => o.id === initialStart) ? initialStart! : inForce.id,
@@ -488,15 +507,31 @@ function Editor({
       setUnplaced([]);
     }, "Bắt đầu lại từ phiên bản khác?");
 
-  // A template the worker has not read yet: asked about again until it has.
+  // A template the worker has not read yet: asked about again until it has,
+  // an error answers, or `POLL_GIVE_UP_MS` passes.
+  const polled =
+    draft?.status === "queued" && draft.draft_id !== unpolled
+      ? draft.draft_id
+      : null;
   useEffect(() => {
-    if (draft?.status !== "queued") return;
-    const draftId = draft.draft_id;
+    if (!polled) return;
     const timer = window.setInterval(() => {
-      salesApi().ruleDraft(draftId).then(setDraft, setError);
+      salesApi()
+        .ruleDraft(polled)
+        .then(keepDraft, (failure: unknown) => {
+          setUnpolled(polled);
+          setError(failure);
+        });
     }, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [draft?.status, draft?.draft_id]);
+    const giveUp = window.setTimeout(
+      () => setUnpolled(polled),
+      POLL_GIVE_UP_MS,
+    );
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(giveUp);
+    };
+  }, [polled, keepDraft]);
 
   // Read, the draft opens as the version to start from (once per draft).
   const opened = useRef<string | null>(null);
@@ -529,7 +564,7 @@ function Editor({
       (key) => salesApi().requestRuleDraft(ruleKey, body, key),
       `Đã nhận tệp ${file.name}: DW1 đang đọc, bản nháp tự mở ở đây khi xong.`,
     );
-    if (result.ok) setDraft(result.value);
+    if (result.ok) keepDraft(result.value);
     else setError(result.error);
   };
 
@@ -684,16 +719,16 @@ function Editor({
               >
                 <Button
                   icon={<UploadOutlined aria-hidden />}
-                  loading={
-                    pending === `draft/${ruleKey}` || draft?.status === "queued"
-                  }
+                  loading={pending === `draft/${ruleKey}` || polled !== null}
                 >
                   Tạo từ tệp mẫu
                 </Button>
               </Upload>
             </Form.Item>
           ) : null}
-          {draft ? <DraftNotice draft={draft} /> : null}
+          {draft ? (
+            <DraftNotice draft={draft} stalled={draft.draft_id === unpolled} />
+          ) : null}
           <Segmented<Mode>
             value={mode}
             onChange={switchMode}
@@ -779,8 +814,25 @@ function Editor({
  * opened and what the person still has to settle (the template's columns no
  * value takes, why DW1's mapping was not taken, the template's headers).
  */
-function DraftNotice({ draft }: { draft: RuleDraft }) {
+function DraftNotice({
+  draft,
+  stalled,
+}: {
+  draft: RuleDraft;
+  /** The page stopped asking about it while it was still queued. */
+  stalled: boolean;
+}) {
   const title = `${DRAFT_STATUS[draft.status]}: ${draft.file_name}`;
+  if (draft.status === "queued" && stalled)
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        role="status"
+        title={DRAFT_STALLED}
+        description={draft.file_name}
+      />
+    );
   if (draft.status === "queued")
     return (
       <Alert

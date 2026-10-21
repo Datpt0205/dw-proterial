@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import unicodedata
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -26,7 +27,9 @@ from dw_sales.application.rule_drafts import (
     KEPT_FOR,
     PROMPT_TOKENS,
     RULE_DRAFT_REQUESTED,
+    STALE_AFTER,
     RuleDrafting,
+    Swept,
 )
 from dw_sales.application.rules import RuleKey
 from dw_sales.application.source import SheetCell, SheetGrid
@@ -62,11 +65,12 @@ _CASES = json.loads(
 GOLDEN: dict[str, Any] = _CASES["golden"][0]
 INJECTION: dict[str, Any] = _CASES["injection"]
 NO_QUANTITY: dict[str, Any] = _CASES["no_quantity"]
+UNSEEN: dict[str, Any] = _CASES["unseen_text"]
 BASE = platform_layout(REPO)
 
 
 def _cell(ref: str, row: int, column: int, text: str, **flags: bool) -> SheetCell:
-    return SheetCell(ref=ref, row=row, column=column, text=text, **flags)
+    return SheetCell(ref=ref, row=row, column=column, text=text, **{"text_unseen": False, **flags})
 
 
 def _grid(cells: list[SheetCell], *, hidden_sheet: bool = False) -> SheetGrid:
@@ -115,6 +119,7 @@ def test_hidden_cells_are_dropped_before_the_header_row_is_read() -> None:
         _cell("D2", 2, 4, "white", font_matches_fill=True),
         _cell("E2", 2, 5, "Mã hàng"),
         _cell("F2", 2, 6, "Số lượng"),
+        _cell("G2", 2, 7, "white on no fill, or 1pt", text_unseen=True),
     ]
     row = header_row(_grid(cells))
     assert row is not None and row.row == 2
@@ -166,7 +171,7 @@ def test_a_mapping_of_visible_headers_drafts_the_template_in_its_own_order() -> 
 
 
 def test_a_header_the_template_does_not_hold_verbatim_is_refused() -> None:
-    for invented in ("Số lượng ", "so luong", "Số Lượng"):
+    for invented in ("so luong", "Số Lượng", "Số lượng đặt"):
         refused = verify({**ANSWER, "quantity": invented}, ROW, BASE)
         assert isinstance(refused, Refused)
         assert [(p.code, p.field) for p in refused.problems] == [
@@ -199,11 +204,36 @@ def test_a_required_field_left_out_is_refused_by_name() -> None:
     ]
 
 
-def test_a_mapping_that_is_no_valid_layout_is_refused_with_where() -> None:
+def test_a_header_is_compared_and_written_nfc_without_surrounding_spaces() -> None:
+    decomposed = unicodedata.normalize("NFD", "Số lượng")
+    row = _row("Số PO", "Dòng", "Mã hàng", f"  {decomposed} ")
+    for asked in ("Số lượng", f"{decomposed}  ", " Số lượng"):
+        drafted = verify({**ANSWER, "quantity": asked}, row, BASE)
+        assert isinstance(drafted, Proposal), asked
+        assert drafted.document["columns"][3] == {"field": "quantity", "header": "Số lượng"}
+        assert drafted.evidence["columns.3.header"] == "Mau!D1"
+
+
+def test_a_header_longer_than_a_layout_holds_is_refused_by_name_and_cell() -> None:
     long = "Số lượng đặt hàng theo đơn vị tính của khách hàng (bao gồm hàng tặng kèm)"
-    refused = verify({**ANSWER, "quantity": long}, _row("Số PO", "Dòng", "Mã hàng", long), BASE)
+    assert len(long) > 64
+    row = _row("Số PO", "Dòng", "Mã hàng", long)
+    # The model saw the header cut to what a layout holds (`mapping_inputs`),
+    # and may answer that or the whole text: either way, the cell is named.
+    shown = json.loads(mapping_inputs(row, room=4000)["headers"])[3]["header"]
+    for asked in (long, shown):
+        refused = verify({**ANSWER, "quantity": asked}, row, BASE)
+        assert isinstance(refused, Refused)
+        assert [(p.code, p.field, p.ref) for p in refused.problems] == [
+            ("header_too_long", "quantity", "D1")
+        ]
+
+
+def test_a_mapping_that_is_no_valid_layout_is_refused_with_where() -> None:
+    row = TemplateRow(sheet="Mẫu: nhập", row=1, headers=ROW.headers)
+    refused = verify(ANSWER, row, BASE)
     assert isinstance(refused, Refused)
-    assert [(p.code, p.where) for p in refused.problems] == [("layout_invalid", "columns.3.header")]
+    assert [(p.code, p.where) for p in refused.problems] == [("layout_invalid", "sheet_name")]
 
 
 def test_without_a_mapping_only_the_sheet_read_is_offered() -> None:
@@ -309,6 +339,29 @@ def test_nothing_hidden_in_the_template_reaches_the_model() -> None:
         assert text not in sent
     assert "Số lượng" in sent
     assert view.status == "ready"
+
+
+def test_white_text_on_no_fill_and_1pt_text_never_reach_the_model() -> None:
+    model = Recorded(raw=gold(UNSEEN))
+    view = asyncio.run(Bench.of(REPO, model, (AN,)).draft(UNSEEN))
+    (sent,) = ("".join(inputs.values()) for _, _, inputs in model.calls)
+    assert [UNSEEN["white_unfilled"], UNSEEN["tiny_text"]] == hidden_texts(UNSEEN)
+    for text in hidden_texts(UNSEEN):
+        assert text not in sent
+    # Headers printed white on a dark fill are seen, and sent.
+    for header, _ in UNSEEN["columns"]:
+        assert header in sent
+    assert view.template is not None
+    assert [h.text for h in view.template.headers] == [h for h, _ in UNSEEN["columns"]]
+    assert view.status == "ready"
+
+
+@pytest.mark.parametrize("key", ["white_unfilled", "tiny_text"])
+def test_a_header_only_an_unseen_cell_holds_is_refused(key: str) -> None:
+    answer = {**gold(UNSEEN), "quantity": UNSEEN[key]}
+    view = asyncio.run(Bench.of(REPO, Recorded(raw=answer), (AN,)).draft(UNSEEN))
+    assert view.status == "refused"
+    assert ("header_not_in_template", "quantity") in [(p.code, p.field) for p in view.problems]
 
 
 def test_a_header_only_a_hidden_cell_holds_is_refused() -> None:
@@ -436,3 +489,73 @@ def test_a_request_drops_the_workspaces_old_drafts() -> None:
     )
     newer = asyncio.run(bench.draft(GOLDEN))
     assert set(bench.store.state(ALPHA).drafts) == {newer.draft_id}
+
+
+# ------------------------------------------------------------- the sweep --
+
+
+def _request(bench: Bench, scope: Any = ALPHA, *, aged: timedelta = timedelta(0)) -> uuid.UUID:
+    """A draft requested ``aged`` ago and never read, as an event lost on
+    the way leaves it."""
+    view = asyncio.run(
+        bench.service().request(
+            AN.context(scope), RuleKey.BRAVO_UPLOAD, "m.xlsx", template_xlsx(GOLDEN)
+        )
+    )
+    state = bench.store.state(scope)
+    stored = state.drafts[view.draft_id]
+    state.drafts[view.draft_id] = stored.model_copy(
+        update={"requested_at": stored.requested_at - aged}
+    )
+    return view.draft_id
+
+
+def test_the_sweep_fails_a_draft_its_event_lost_and_drops_its_file() -> None:
+    bench = Bench.of(REPO, None, (AN,))
+    lost = _request(bench, aged=STALE_AFTER + timedelta(minutes=1))
+    reading = _request(bench, aged=STALE_AFTER - timedelta(minutes=1))
+    sweep = bench.sweep()
+    assert asyncio.run(sweep.due()) == [ALPHA]
+    assert asyncio.run(sweep.sweep(ALPHA)) == Swept(expired=1, pruned=0)
+    state = bench.store.state(ALPHA)
+    assert set(state.files) == {reading}
+    assert state.drafts[reading].status == "queued"
+    view = asyncio.run(bench.service().get(AN.context(), lost))
+    assert (view.status, view.error) == (
+        "failed",
+        "DW1 không đọc xong tệp trong 1 giờ: hãy tải lại tệp mẫu",
+    )
+    audit = bench.store.audit.events[-1]
+    assert (audit.action, audit.resource_id, audit.details["actor"]) == (
+        "sales.rule_draft.failed",
+        str(lost),
+        "system:sales_rule_drafts",
+    )
+    assert audit.details["reason"] == "stale"
+    # Nothing is due any more until the second one is stale too.
+    assert asyncio.run(sweep.due()) == []
+
+
+def test_the_sweep_drops_old_drafts_with_no_request_to_come_for_them() -> None:
+    bench = Bench.of(REPO, Recorded(raw=gold(GOLDEN)), (AN,))
+    old = asyncio.run(bench.draft(GOLDEN)).draft_id
+    kept = asyncio.run(bench.draft(GOLDEN)).draft_id
+    # Aged after the last request: nobody asks again in this workspace.
+    state = bench.store.state(ALPHA)
+    stored = state.drafts[old]
+    state.drafts[old] = stored.model_copy(
+        update={"requested_at": stored.requested_at - KEPT_FOR - timedelta(minutes=1)}
+    )
+    assert asyncio.run(bench.sweep().due()) == [ALPHA]
+    assert asyncio.run(bench.sweep().sweep(ALPHA)) == Swept(expired=0, pruned=1)
+    assert set(bench.store.state(ALPHA).drafts) == {kept}
+
+
+def test_the_sweep_visits_only_workspaces_with_something_due() -> None:
+    bench = Bench.of(REPO, None, (AN,))
+    _request(bench, ALPHA_OTHER)
+    lost = _request(bench, ALPHA, aged=STALE_AFTER + timedelta(minutes=1))
+    assert asyncio.run(bench.sweep().due()) == [ALPHA]
+    asyncio.run(bench.sweep().sweep(ALPHA_OTHER))
+    assert bench.store.state(ALPHA).drafts[lost].status == "queued"
+    assert [d.status for d in bench.store.state(ALPHA_OTHER).drafts.values()] == ["queued"]

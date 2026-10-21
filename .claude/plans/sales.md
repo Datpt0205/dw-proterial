@@ -21,7 +21,7 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
         - Statuses: `ready`; `refused` (fields named); `unavailable` (model down, not configured, or plan day spent); `failed` (with the reason). The file's bytes are deleted once read.
         - refused and unavailable still open: the version in force with only the template's sheet name, columns not guessed, the template's headers offered as AutoComplete choices.
     - **Storage.** `42868d8c21c5`: `sales.rule_drafts` and `sales.rule_draft_files`, RLS ENABLE+FORCE in the workspace shape, CHECKs on status, key, document and error. `dw_app` holds no UPDATE on the files.
-        - A request prunes the workspace's drafts older than 30 days.
+        - A request prunes the workspace's drafts older than 30 days, and so does the worker's sweep (review fixes).
         - Found by the CHECK on the first run: JSONB `None` is written as JSON `null` unless the column says `none_as_null`.
     - **Checked.**
         - Unit: `test_rule_drafts.py` 35, the worker consumer 2, the one-call door 1, routes 3.
@@ -29,12 +29,20 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
         - Eval `sales_rule_drafts@1.0.0`: 5/5 with full security coverage. The smoke scripts the right mapping (no live reading recorded yet). Whole smoke passes.
         - Web: `rule-drafts.test.tsx` 8, tsc, lint, prettier.
         - Mutations, each turning a test red: verbatim header match loosened; hidden-cell filter removed (2 unit tests and the injection eval); RLS removed from the migration (2 isolation tests); the asker's scope re-check removed; the service gate removed; the door given its own plan service; the "Máy đọc" chip kept after an edit.
+    - **Review fixes (same day).**
+        - Unseen text: the reader sets `SheetCell.text_unseen` (`excel.text_unseen`): font the colour of its fill, white on a cell with no solid fill (ARGB, theme 0 / lt1, indexed 1 or 9), or 2pt and smaller. The template's header row drops it, and so does `text_parts` (what a model reads of an attachment). White on a dark fill stays visible. New eval case `sales-rule-draft-sec-unseen-text` (grader `sales.rule_draft_unseen_text`).
+        - Headers are compared NFC without surrounding spaces, and the document holds the cell's own text so. A header over 64 characters is refused as `header_too_long` with its cell; the 64 now has one owner, `artifact_content.UPLOAD_HEADER_MAX`.
+        - Web: the poll stops on an error answer (shown in the editor's error) and gives up after 3 minutes with "DW1 chưa đọc xong tệp mẫu, hãy thử tải lại sau."; the upload button is offered again; an earlier draft stays a start option while a second template is read.
+        - Lifecycle: the worker lane `sales_rule_drafts` (every 10 minutes) visits each workspace `sales.rule_draft_scopes_due` names (SECURITY DEFINER, migration `e8a1c3e8ed78`, EXECUTE to `dw_app` only) and, in that workspace's RLS, fails a draft still queued after 1 hour (`STALE_AFTER`, file dropped, lane audit) and drops drafts older than 30 days.
+        - `test_live_lane.py` now lists `sales_rule_drafts@1.0.0` among the model steps (it was red since phase 1).
     - **Open.**
         - No live measurement on Qwen3.5-9B yet (`--live onprem` on the dataset).
         - A layout cannot hold a blank template column, so unmapped columns are only listed.
         - A version proposed from a draft does not record that it was machine-drafted (the approver sees the diff only).
-        - A draft whose scanner or reader never answers stays `queued` with its bytes once the outbox gives up, until the next request's prune (as master-data imports do).
         - Drafts are not listed: closing the drawer loses the link to one.
+        - `KEPT_FOR` (30 days) and `STALE_AFTER` (1 hour) are code constants in `rule_drafts.py`, not terms of `retention@*.yaml`; the drop of an old draft is not audited (its request and outcome are).
+        - A PO value white on no fill or 2pt is still read without a `RegionFlag` (`excel.flags` checks only `font_matches_fill`), and the source viewer's grid does not mark `text_unseen` cells.
+        - `sales_rule_drafts@1.0.0` gained a case in place (unreleased, local commits only), so the manifest pins new checksums under the same version.
 
 - 2026-10-21:
     - **DW1 bar.** It names what DW1 does: reading "<subject>", N waiting, all done and waiting for new mail, or paused. Never a bare "đang chạy" (`worker-bar.test.tsx`).

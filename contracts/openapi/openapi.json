@@ -2719,6 +2719,7 @@
             "enum": [
               "column_unmapped",
               "header_not_in_template",
+              "header_too_long",
               "header_ambiguous",
               "header_twice",
               "required_missing",
@@ -10137,13 +10138,18 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "text_unseen": {
+            "title": "Text Unseen",
+            "type": "boolean"
           }
         },
         "required": [
           "ref",
           "row",
           "column",
-          "text"
+          "text",
+          "text_unseen"
         ],
         "title": "SheetCell",
         "type": "object"
