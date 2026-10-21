@@ -384,3 +384,39 @@ catalog_rows = sa.Table(
     sa.Column("key", sa.Text, nullable=False),
     sa.Column("record", JSONB, nullable=False),
 )
+
+# Rule drafts from a company's template ("Tạo từ tệp mẫu", migration
+# 42868d8c21c5): one row per uploaded template, and its bytes until read.
+rule_drafts = sa.Table(
+    "rule_drafts",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("rule_key", sa.Text, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("requested_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("requested_at", _TS, nullable=False),
+    sa.Column("file_name", sa.Text, nullable=False),
+    sa.Column("file_sha256", sa.Text, nullable=False),
+    sa.Column("file_size", sa.Integer, nullable=False),
+    # SQL NULL for None, not JSON `null`, which `ck_rule_drafts_document` refuses.
+    sa.Column("template", JSONB(none_as_null=True)),
+    sa.Column("document", JSONB(none_as_null=True)),
+    sa.Column("machine_read", JSONB, nullable=False),
+    sa.Column("evidence", JSONB, nullable=False),
+    sa.Column("problems", JSONB, nullable=False),
+    sa.Column("error", sa.Text),
+    sa.Column("prompt_ref", sa.Text),
+    sa.Column("model_profile", sa.Text),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+rule_draft_files = sa.Table(
+    "rule_draft_files",
+    metadata,
+    *_scope(),
+    sa.Column("draft_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("content", sa.LargeBinary, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)

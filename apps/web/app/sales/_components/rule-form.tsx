@@ -2,6 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import {
+  AutoComplete,
   Button,
   Card,
   Flex,
@@ -21,7 +22,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
-import type { RuleKey } from "../_lib/rules";
+import type { MachineRead, RuleKey } from "../_lib/rules";
 import {
   fieldWords,
   placeholderLabel,
@@ -38,6 +39,7 @@ import {
 } from "../_lib/rule-schema";
 import { placeholdersIn, unknownPlaceholders } from "../_lib/rule-templates";
 import { matches } from "../../../lib/search";
+import { ValueStateTag } from "./tags";
 
 /**
  * One form for every rule key (ticket 40): the key's JSON Schema, read by
@@ -55,6 +57,10 @@ interface Ctx {
   form: FormInstance;
   /** The version in force, for the placeholders its templates use. */
   base: unknown;
+  /** What a draft's machine filled, by document path ("columns.0.header"). */
+  machineRead?: Record<string, MachineRead>;
+  /** Values a text field offers, by label path ("columns[].header"). */
+  choices?: Record<string, string[]>;
 }
 
 const RuleFormContext = createContext<Ctx | null>(null);
@@ -97,11 +103,15 @@ export function RuleFields({
   root,
   form,
   base,
+  machineRead,
+  choices,
 }: {
   ruleKey: RuleKey;
   root: RuleNode;
   form: FormInstance;
   base: unknown;
+  machineRead?: Record<string, MachineRead>;
+  choices?: Record<string, string[]>;
 }) {
   if (root.kind !== "object") return null;
   const top = { name: [], abs: [], label: "", doc: [] };
@@ -111,7 +121,9 @@ export function RuleFields({
     (f) => !SYSTEM_FIELDS.has(f.name) && !VERSION_FIELDS.has(f.name),
   );
   return (
-    <RuleFormContext.Provider value={{ ruleKey, form, base }}>
+    <RuleFormContext.Provider
+      value={{ ruleKey, form, base, machineRead, choices }}
+    >
       {/* Set by the system: kept in the document, never a control. */}
       {system.map((f) => (
         <Form.Item key={f.name} name={[f.name]} hidden>
@@ -183,8 +195,9 @@ function NodeField({
   required: boolean;
   where: Where;
 }) {
-  const { ruleKey, base } = useCtx();
+  const { ruleKey, base, machineRead, choices } = useCtx();
   const words = fieldWords(ruleKey, where.label);
+  const read = machineRead?.[where.doc.join(".")];
   if (node.nullable && node.kind !== "text")
     return <Toggle node={node} words={words} where={where} />;
   switch (node.kind) {
@@ -204,7 +217,16 @@ function NodeField({
           <Form.Item
             name={where.name}
             label={words.label}
-            extra={words.help}
+            extra={
+              read ? (
+                <>
+                  {words.help}
+                  <MachineReadMark abs={where.abs} read={read} />
+                </>
+              ) : (
+                words.help
+              )
+            }
             rules={[
               ...(required && node.kind !== "switch" && node.kind !== "fixed"
                 ? [requiredRule(words.label)]
@@ -213,7 +235,12 @@ function NodeField({
               ...templateRules(node, where, base),
             ]}
           >
-            <Control node={node} unit={words.unit} label={words.label} />
+            <Control
+              node={node}
+              unit={words.unit}
+              label={words.label}
+              choices={choices?.[where.label]}
+            />
           </Form.Item>
           <Placeholders node={node} where={where} />
         </>
@@ -303,6 +330,7 @@ function Control({
   onChange,
   onBlur,
   id,
+  choices,
 }: {
   node: RuleNode;
   unit?: string;
@@ -312,6 +340,8 @@ function Control({
   /** Form.Item's: a field is checked when it is left (`validateTrigger="onBlur"`). */
   onBlur?: () => void;
   id?: string;
+  /** Values a text field offers (a template's headers), still free to type. */
+  choices?: string[];
 }) {
   switch (node.kind) {
     case "switch":
@@ -368,6 +398,19 @@ function Control({
         </Typography.Text>
       );
     case "text": {
+      if (choices?.length && !node.multiline)
+        return (
+          <AutoComplete
+            id={id}
+            aria-label={label}
+            value={(value as string | null) ?? ""}
+            onChange={(v: string) => onChange?.(v)}
+            onBlur={onBlur}
+            options={choices.map((c) => ({ value: c, label: c }))}
+            showSearch={{ filterOption: viFilter }}
+            className="w-full"
+          />
+        );
       const common = {
         id,
         value: (value as string | null) ?? "",
@@ -386,6 +429,28 @@ function Control({
     default:
       return null;
   }
+}
+
+/**
+ * "Máy đọc · Đọc từ Mẫu!C3": a value a draft's machine filled, for as long as
+ * the field still holds it. Edited, it is the person's and the mark goes.
+ */
+function MachineReadMark({
+  abs,
+  read,
+}: {
+  abs: (string | number)[];
+  read: MachineRead;
+}) {
+  const { form } = useCtx();
+  const value: unknown = Form.useWatch(abs, form);
+  if (value !== read.value) return null;
+  return (
+    <span className="ms-2 inline-flex flex-wrap items-center gap-1">
+      <ValueStateTag state="dw" />
+      <Typography.Text type="secondary">Đọc từ {read.evidence}</Typography.Text>
+    </span>
+  );
 }
 
 /** "ha noi" finds "Hà Nội" (ui-quality §8), by label or by code. */

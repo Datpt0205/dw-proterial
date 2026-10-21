@@ -1034,6 +1034,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/rules/drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rule Draft */
+        get: operations["rule_draft_api_v1_sales_rules_drafts__draft_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/rules/{key}/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Rule Draft */
+        post: operations["request_rule_draft_api_v1_sales_rules__key__drafts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/rules/{key}/platform": {
         parameters: {
             query?: never;
@@ -1807,6 +1841,26 @@ export interface components {
             /** Source */
             source?: string | null;
             value?: components["schemas"]["Words"] | null;
+        };
+        /**
+         * DraftProblem
+         * @description Why a draft is not, or not wholly, what the template says. Names a
+         *     field, a cell and that cell's own text: never a word of the model's.
+         */
+        DraftProblem: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "column_unmapped" | "header_not_in_template" | "header_too_long" | "header_ambiguous" | "header_twice" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota";
+            /** Field */
+            field?: ("customer_code" | "po_no" | "revision" | "po_date" | "currency" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
+            /** Header */
+            header?: string | null;
+            /** Ref */
+            ref?: string | null;
+            /** Where */
+            where?: string | null;
         };
         /**
          * EvidenceView
@@ -3541,6 +3595,67 @@ export interface components {
             returned_by: string;
         };
         /**
+         * RuleDraftBody
+         * @description A company's template to draft a rule version from ("Tạo từ tệp
+         *     mẫu"): its name and its bytes, base64, decoded here and never opened.
+         */
+        RuleDraftBody: {
+            /** Content B64 */
+            content_b64: string;
+            /** File Name */
+            file_name: string;
+        };
+        /**
+         * RuleDraftView
+         * @description A draft as the rules editor reads it.
+         */
+        RuleDraftView: {
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            /** Error */
+            error: string | null;
+            /** Evidence */
+            evidence: {
+                [key: string]: string;
+            };
+            /** File Name */
+            file_name: string;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Machine Read */
+            machine_read: string[];
+            /** Model Profile */
+            model_profile: string | null;
+            /** Problems */
+            problems: components["schemas"]["DraftProblem"][];
+            /** Prompt Ref */
+            prompt_ref: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Requested By
+             * Format: uuid
+             */
+            requested_by: string;
+            rule_key: components["schemas"]["RuleKey"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "ready" | "refused" | "unavailable" | "failed";
+            template: components["schemas"]["TemplateRow"] | null;
+        };
+        /**
          * RuleKey
          * @description The Sales policies and copy a tenant may hold its own version of.
          * @enum {string}
@@ -3623,6 +3738,8 @@ export interface components {
          * @description What applies to the tenant now, per key, and every version it holds.
          */
         RulesInForceView: {
+            /** Draftable */
+            draftable: components["schemas"]["RuleKey"][];
             /** In Force */
             in_force: {
                 [key: string]: string;
@@ -3686,6 +3803,8 @@ export interface components {
             row: number;
             /** Text */
             text: string;
+            /** Text Unseen */
+            text_unseen: boolean;
         };
         /** SheetGrid */
         SheetGrid: {
@@ -3936,6 +4055,30 @@ export interface components {
             measured: components["schemas"]["TimeStat"];
             /** Target Seconds */
             target_seconds: number;
+        };
+        /**
+         * TemplateHeader
+         * @description One visible cell of the header row, as the workbook holds it.
+         */
+        TemplateHeader: {
+            /** Column */
+            column: number;
+            /** Ref */
+            ref: string;
+            /** Text */
+            text: string;
+        };
+        /**
+         * TemplateRow
+         * @description The template's header row: its sheet, its row number, its cells.
+         */
+        TemplateRow: {
+            /** Headers */
+            headers: components["schemas"]["TemplateHeader"][];
+            /** Row */
+            row: number;
+            /** Sheet */
+            sheet: string;
         };
         /**
          * TextRange
@@ -6110,6 +6253,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RulesInForceView"];
+                };
+            };
+        };
+    };
+    rule_draft_api_v1_sales_rules_drafts__draft_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_rule_draft_api_v1_sales_rules__key__drafts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                key: components["schemas"]["RuleKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleDraftBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -29,12 +29,14 @@ from dw_agent_runtime.adapters.model_stack import (
 )
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.adapters.spend_guard import SqlSpendGuardStore
+from dw_agent_runtime.allowance import DailyAllowance
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.autonomy import AutonomyApprovalPolicy
 from dw_agent_runtime.model.gateway import RoutingModelGateway
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_agent_runtime.model.run_policy import load_worker_run_policy
+from dw_agent_runtime.model.single_call import SingleCallModelGateway
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_kernel.net_guard import ensure_allowed_outbound_url
 from dw_kernel.ports import IdGenerator, SystemClock, UtcClock, Uuid7Generator
@@ -300,6 +302,10 @@ class WorkflowRuntime:
     # The process's model gateway, the one whose ledger the runner frees: a
     # context's step that reads a document through a model calls this one.
     gateway: RoutingModelGateway
+    # The same gateway for a call made with no run around it (a template
+    # drafted from an outbox event): the plan's daily allowance checked by
+    # the runner's own rule before the call, the ledger entry freed after.
+    one_call: SingleCallModelGateway
 
 
 def build_workflow_runtime(
@@ -351,4 +357,12 @@ def build_workflow_runtime(
         clock=clock,
         id_generator=ids,
     )
-    return WorkflowRuntime(graphs, workers, runner, approval_flow, stack.gateway)
+    one_call = stack.one_call(
+        DailyAllowance(
+            allowance=runner.allowance,
+            runs=run_store,
+            spend=runner.spend_store,
+            clock=clock,
+        )
+    )
+    return WorkflowRuntime(graphs, workers, runner, approval_flow, stack.gateway, one_call)

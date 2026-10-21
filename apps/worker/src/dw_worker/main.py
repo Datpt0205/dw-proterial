@@ -111,6 +111,7 @@ from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
+from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
 from dw_worker.composition import (
     REPO_ROOT,
@@ -148,6 +149,11 @@ from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.sales_processing import build_sales_processing_consumer
+from dw_worker.consumers.sales_rule_drafts import INTERVAL_SECONDS as RULE_DRAFTS_INTERVAL_SECONDS
+from dw_worker.consumers.sales_rule_drafts import (
+    build_rule_draft_handler,
+    build_rule_draft_sweep_consumer,
+)
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -379,6 +385,9 @@ def build_sales(
         # As the API passes it: only a process that reaches a model server of
         # its own reads a description through one (dw_sales ADR 0005).
         model=runtime.gateway if Provider.ONPREM in runtime.gateway.adapters else None,
+        # The same rule for a template drafted outside a run, through the
+        # one-call door: the plan's daily allowance checked before the call.
+        one_call_model=runtime.one_call if Provider.ONPREM in runtime.gateway.adapters else None,
     )
     return mount, scope
 
@@ -461,6 +470,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # DW1's follow-ups and morning brief (Sales ticket 42): wherever DW1 is,
     # over every workspace with a Sales case.
     sales_followups_consumer: Callable[[], Awaitable[None]] | None = None
+    # Its rule drafts ("Tạo từ tệp mẫu"): a draft its event lost failed, old
+    # ones dropped, with no request to come for them.
+    sales_rule_drafts_consumer: Callable[[], Awaitable[None]] | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -649,6 +661,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # Sales routes, which the API mounts on the same condition.
                 if mount.catalog_parsing is not None:
                     handlers[CATALOG_IMPORTED] = build_catalog_import_handler(mount.catalog_parsing)
+                # A company's template, drafted into a rule version ("Tạo từ
+                # tệp mẫu"), on the same condition.
+                if mount.rule_drafting is not None:
+                    handlers[RULE_DRAFT_REQUESTED] = build_rule_draft_handler(mount.rule_drafting)
+                if mount.rule_draft_sweep is not None:
+                    sales_rule_drafts_consumer = build_rule_draft_sweep_consumer(
+                        mount.rule_draft_sweep
+                    )
         registry.register(
             "outbox",
             build_outbox_consumer(
@@ -697,6 +717,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             SALES_FOLLOWUPS_LANE,
             sales_followups_consumer,
             interval_seconds=SALES_FOLLOWUPS_INTERVAL_SECONDS,
+        )
+
+    # And its rule drafts' sweep, under the name the drafting audits as.
+    if sales_rule_drafts_consumer is not None:
+        registry.register(
+            RULE_DRAFT_LANE,
+            sales_rule_drafts_consumer,
+            interval_seconds=RULE_DRAFTS_INTERVAL_SECONDS,
         )
 
     # build_<context>_components(settings) → registry.register(...), and append
