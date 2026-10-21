@@ -81,6 +81,9 @@ _SALES_TABLES = (
     "sales.catalog_snapshots",
     "sales.catalog_import_files",
     "sales.catalog_rows",
+    # Migration 42868d8c21c5: rule drafts from a company's template.
+    "sales.rule_drafts",
+    "sales.rule_draft_files",
 )
 
 
@@ -121,10 +124,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "rule_versions",
         "processing_jobs",
         "catalog_snapshots",
+        "rule_drafts",
     ):
         assert {verb for tbl, verb in held if tbl == table} == every, table
-    # An import's file and its parsed records are never updated (ticket 41).
-    for table in ("catalog_import_files", "catalog_rows"):
+    # An import's file and its parsed records are never updated (ticket 41),
+    # nor is a template kept for a rule draft.
+    for table in ("catalog_import_files", "catalog_rows", "rule_draft_files"):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
     for table in ("artifacts", "source_served", "followup_deliveries"):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table

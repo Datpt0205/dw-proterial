@@ -113,6 +113,7 @@ const VIEW: View = {
     { key: "sales_kpi", ref: "sales_kpi@1.0.0" },
   ],
   versions: [version({}), WAITING, REJECTED],
+  draftable: ["sales_bravo_upload"],
 };
 
 const PLATFORM_KPI: PlatformDocument[] = [

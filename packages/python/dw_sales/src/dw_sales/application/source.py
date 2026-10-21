@@ -70,6 +70,10 @@ class SheetCell(BaseModel):
     hidden_row: bool = False
     hidden_column: bool = False
     font_matches_fill: bool = False
+    # No text a person sees: in its fill's colour, white on no fill, or too
+    # small to read (`readers.excel.text_unseen`). No default: a reply that
+    # does not say reads as a refusal, never as visible text.
+    text_unseen: bool
     formula_without_cached_value: bool = False
     font_rgb: str | None = None
     fill_rgb: str | None = None

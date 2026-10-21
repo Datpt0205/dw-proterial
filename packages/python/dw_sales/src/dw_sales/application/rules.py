@@ -141,6 +141,9 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.FOLLOWUPS: SalesFollowups,
     }
 )
+# The keys a version may be drafted for from the company's own file ("Tạo từ
+# tệp mẫu", `rule_drafts`): the Bravo upload template now, the copy in phase 2.
+DRAFTABLE: Final = frozenset({RuleKey.BRAVO_UPLOAD})
 # The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
 _ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
 RuleStatus = Literal["proposed", "approved", "rejected", "superseded"]
@@ -447,6 +450,8 @@ class RulesInForceView(BaseModel):
     layers: dict[RuleKey, Layer]
     platform: list[PlatformRuleView]
     versions: list[RuleVersionView]
+    # The keys a version may be drafted for from the company's own file.
+    draftable: list[RuleKey]
 
 
 class RuleSchemaView(BaseModel):
@@ -566,6 +571,7 @@ class SalesRulesService:
                 PlatformRuleView(key=key, ref=self.book.platform[key].ref) for key in OVERRIDABLE
             ],
             versions=[_view(v) for v in versions],
+            draftable=sorted(DRAFTABLE),
         )
 
     async def schema(self, context: AccessContext, key: str) -> RuleSchemaView:
