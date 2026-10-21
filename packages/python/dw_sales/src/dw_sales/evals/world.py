@@ -113,6 +113,7 @@ from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.overview_memory import PythonOverviewReader
 from dw_sales.testing.catalog_store import MemoryApprovedLists, MemoryCatalogStore
+from dw_sales.testing.draft_store import MemoryRuleDraftStore
 from dw_sales.testing.scanners import NoMalware
 from dw_sales.workflows.graph import register
 
@@ -836,6 +837,8 @@ class World:
     catalog_store: MemoryCatalogStore
     catalog_settlement: CatalogSettlement
     catalog_parsing: CatalogParsing
+    # Rule drafts from a company's template ("Tạo từ tệp mẫu"), in memory.
+    draft_store: MemoryRuleDraftStore
 
     async def decide_layout(
         self,
@@ -1116,6 +1119,7 @@ def open_world(
     # The catalog `build_dw1` builds (ticket 41): a list a workspace imported
     # and approved, else the sample's mock; with no import, the mock exactly.
     catalog_store = MemoryCatalogStore(runtime.approvals, outbox=runtime.outbox)
+    draft_store = MemoryRuleDraftStore(outbox=runtime.outbox)
     catalog = SnapshotSalesCatalog(MemoryApprovedLists(catalog_store), mock)
     readers = client_readers(reader or InProcessReaderTransport(), policies.order_rules.intake)
     # The mailbox every service reads, at the door `build_dw1` puts in front of
@@ -1199,6 +1203,7 @@ def open_world(
         # Master-data imports (ticket 41), in memory.
         catalog_uow=catalog_store,
         templates=XlsxCatalogTemplates(),
+        draft_uow=draft_store,
     )
     register(
         graphs=runtime.graphs,
@@ -1227,6 +1232,7 @@ def open_world(
         catalog_store,
         CatalogSettlement(catalog_store, clock, ids),
         CatalogParsing(catalog_store, readers.tables, scanner or NoMalware(), catalog, clock, ids),
+        draft_store,
     )
 
 

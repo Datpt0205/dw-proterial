@@ -47,6 +47,7 @@ from dw_sales.application.ports import (
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
+from dw_sales.application.rule_drafts import RuleDraftService, RuleDraftUnitOfWorkFactory
 from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
 from dw_sales.application.source import SourceService, SourceViewPort
@@ -75,6 +76,8 @@ class SalesServices:
     layouts: LayoutService
     # A tenant's own rule versions, proposed and approved (ticket 19).
     rules: SalesRulesService
+    # A rule version drafted from the company's own file ("Tạo từ tệp mẫu").
+    rule_drafts: RuleDraftService
     # Master data imported from a file, previewed and submitted (ticket 41).
     catalog_imports: CatalogImportService
     gate: Gate
@@ -116,6 +119,7 @@ def assemble(
     telemetry: SpanPort,
     catalog_uow: CatalogUnitOfWorkFactory,
     templates: CatalogTemplatePort,
+    draft_uow: RuleDraftUnitOfWorkFactory,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     processing = InboxProcessing(
@@ -161,6 +165,7 @@ def assemble(
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
         rules=SalesRulesService(uow, gate, book, clock, ids),
+        rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         gate=gate,
     )

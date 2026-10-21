@@ -1,0 +1,531 @@
+"""A rule version drafted from a company's own file ("Tạo từ tệp mẫu", phase 1).
+
+The person uploads the Excel template their Bravo imports; DW1 drafts a
+`sales_bravo_upload` document from it, which opens in the rules editor as a
+start option. **Nothing here writes a rule version**: the person reviews the
+diff and sends it through `POST /rules/{key}/versions`
+(`rules.SalesRulesService.propose`), and the head approves it there as any
+other proposal. Only `DRAFTABLE` keys are drafted; the copy templates
+(emails, documents, hand-offs) are phase 2.
+
+- **queued**: uploaded by a holder of `sales.rules.propose`
+  (`RuleDraftService.request`, 202). The bytes are kept until they are read,
+  and one outbox event, `sales.rule_draft.requested`, asks the worker to read
+  them. **The API reads no customer file** (ticket 25). A request also drops
+  the workspace's drafts older than `KEPT_FOR`: a draft is a starting point,
+  not a record (the audit keeps who asked for what).
+- The worker (`RuleDrafting.draft`) scans the file (`MalwareScanPort`), has
+  the reader sandbox open its sheets (`TemplateSheetsPort`), picks the header
+  row by code and drops hidden cells (`template_reading`), and asks the model
+  through the one-call door, as the person who asked, resolved again now
+  (`RequesterAccessPort`, cut to `DRAFT_CEILING`): a person who lost the scope
+  since gets nothing drafted. The bytes are dropped with the outcome:
+- **ready**: the mapping passed every check (`template_reading.verify`); the
+  document is the version in force with the template's sheet and columns.
+- **refused**: the model answered and code refused it (the fields named).
+- **unavailable**: no usable answer (model down, not configured on this
+  host, or the plan's day spent).
+- refused and unavailable still carry a document a person can start from:
+  the version in force with only the template's sheet, the template's
+  headers offered as choices, nothing guessed (`template_reading.offered`).
+- **failed**: no draft at all (the file infected, unreadable, without a
+  header row, or the asker no longer permitted), with the reason.
+
+Every step is audited; the worker's as itself (`lane_audit_event`,
+`system:sales_rule_drafts`): ids, the key, the status, the file's hash and
+the problem codes, never a header or a value.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+import re
+import uuid
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from types import TracebackType
+from typing import Any, Final, Literal, Protocol, Self
+
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+
+from dw_agent_runtime.contracts import RunContext
+from dw_kernel.errors import DomainError, InfrastructureError, NotFoundError, QuotaExceededError
+from dw_kernel.ids import TenantId, UserId, WorkspaceId
+from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.access_context import AccessContext
+from dw_platform.application.identity import context_from
+from dw_platform.application.ports import AuditRepositoryPort
+from dw_platform.domain.audit import AuditEvent, lane_audit_event
+from dw_platform.domain.outbox import OutboxEvent
+from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.artifact_content import BravoUploadLayout
+from dw_sales.application.catalog_imports import OutboxPort
+from dw_sales.application.malware import MalwareScanPort
+from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
+from dw_sales.application.ports import SalesScope
+from dw_sales.application.processing import RequesterAccessPort
+from dw_sales.application.rules import DRAFTABLE, Resolved, RuleKey
+from dw_sales.application.runs import WEB_CHANNEL
+from dw_sales.application.source import SheetGrid
+from dw_sales.application.template_reading import (
+    MAX_SHEETS,
+    DraftProblem,
+    ModelBravoMapping,
+    Proposal,
+    Refused,
+    TemplateRow,
+    header_row,
+    mapping_inputs,
+    offered,
+    verify,
+)
+
+logger = logging.getLogger("dw_sales.rule_drafts")
+
+_FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
+_RESOURCE: Final = "sales_rule_draft"
+
+# What the upload announces, for the worker to read the file.
+RULE_DRAFT_REQUESTED: Final = "sales.rule_draft.requested"
+RULE_DRAFT_EVENT_SCHEMA: Final = "1.0.0"
+# The worker's lane name for its audit rows (ADR 0011-a-background-lane-audits-as-itself).
+RULE_DRAFT_LANE: Final = "sales_rule_drafts"
+# What the drafting needs, and so all a context it builds carries.
+DRAFT_CEILING: Final = frozenset({SalesScopes.RULES_PROPOSE.value})
+# The prompt a template is mapped with. Its file is
+# `configs/prompts/sales/bravo_template_mapping@1.0.0.yaml`; a test holds the
+# two together, and a new wording is a new version here and a new file there.
+BRAVO_TEMPLATE_MAPPING: Final = PromptRef("sales.bravo_template_mapping", "1.0.0")
+# What the prompt itself costs, held above its rendered size by a test.
+PROMPT_TOKENS: Final = 1500
+# Fifteen short headers or nulls: about 300 tokens.
+_OUTPUT_TOKENS: Final = 600
+
+MAX_DRAFT_BYTES: Final = 2 * 1024 * 1024
+DRAFT_EXTENSIONS: Final = (".xlsx", ".xls")
+_FILE_NAME: Final = re.compile(r"^[^/\\\x00-\x1f]{1,200}$")
+# How long a draft is kept: a new request drops the workspace's older ones.
+KEPT_FOR: Final = timedelta(days=30)
+
+DraftStatus = Literal["queued", "ready", "refused", "unavailable", "failed"]
+
+
+class RuleDraft(BaseModel):
+    """One draft and what became of it (module docstring)."""
+
+    model_config = _FROZEN
+
+    draft_id: uuid.UUID
+    rule_key: RuleKey
+    status: DraftStatus
+    requested_by: uuid.UUID
+    requested_at: AwareDatetime
+    file_name: str = Field(max_length=200)
+    file_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    file_size: int = Field(ge=1, le=MAX_DRAFT_BYTES)
+    # The header row code read, with every visible header: what a person
+    # picks from when the columns were not drafted.
+    template: TemplateRow | None = None
+    document: Mapping[str, Any] | None = None
+    machine_read: tuple[str, ...] = ()
+    evidence: Mapping[str, str] = Field(default_factory=dict)
+    problems: tuple[DraftProblem, ...] = ()
+    error: str | None = Field(default=None, max_length=500)
+    prompt_ref: str | None = None
+    model_profile: str | None = None
+
+
+class RuleDraftView(BaseModel):
+    """A draft as the rules editor reads it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    draft_id: uuid.UUID
+    rule_key: RuleKey
+    status: DraftStatus
+    requested_by: uuid.UUID
+    requested_at: datetime
+    file_name: str
+    file_sha256: str
+    template: TemplateRow | None
+    # A whole document of the key, for every status but queued and failed.
+    document: dict[str, Any] | None
+    # Document paths (``columns.0.header``) the machine filled, and the cell
+    # each came from (``Sheet!C1``).
+    machine_read: list[str]
+    evidence: dict[str, str]
+    problems: list[DraftProblem]
+    error: str | None
+    prompt_ref: str | None
+    model_profile: str | None
+
+
+def draft_view(draft: RuleDraft) -> RuleDraftView:
+    return RuleDraftView(
+        draft_id=draft.draft_id,
+        rule_key=draft.rule_key,
+        status=draft.status,
+        requested_by=draft.requested_by,
+        requested_at=draft.requested_at,
+        file_name=draft.file_name,
+        file_sha256=draft.file_sha256,
+        template=draft.template,
+        document=None if draft.document is None else dict(draft.document),
+        machine_read=list(draft.machine_read),
+        evidence=dict(draft.evidence),
+        problems=list(draft.problems),
+        error=draft.error,
+        prompt_ref=draft.prompt_ref,
+        model_profile=draft.model_profile,
+    )
+
+
+# ------------------------------------------------------------------ ports --
+
+
+class RuleDraftStorePort(Protocol):
+    """The workspace's drafts inside a unit of work (RLS-bound)."""
+
+    async def add(self, draft: RuleDraft, content: bytes) -> None: ...
+
+    async def get(self, draft_id: uuid.UUID) -> RuleDraft | None: ...
+
+    async def content(self, draft_id: uuid.UUID) -> bytes | None:
+        """The bytes of a file not read yet; None once read."""
+        ...
+
+    async def settle(self, draft: RuleDraft) -> bool:
+        """Writes ``draft``'s outcome where the row is still queued, and drops
+        its bytes: False, and nothing written, otherwise."""
+        ...
+
+    async def prune(self, before: datetime) -> int:
+        """Drops the drafts requested before ``before``, with their bytes."""
+        ...
+
+
+class RuleDraftUnitOfWork(Protocol):
+    """One transaction in one workspace; leaving without `commit` rolls back."""
+
+    @property
+    def drafts(self) -> RuleDraftStorePort: ...
+
+    @property
+    def audit(self) -> AuditRepositoryPort: ...
+
+    @property
+    def outbox(self) -> OutboxPort: ...
+
+    async def commit(self) -> None: ...
+
+    async def __aenter__(self) -> Self: ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None: ...
+
+
+class RuleDraftUnitOfWorkFactory(Protocol):
+    def __call__(self, scope: SalesScope) -> RuleDraftUnitOfWork: ...
+
+
+class TemplateSheetsPort(Protocol):
+    """A workbook's sheets, opened in the reader sandbox (`ClientSourceView`).
+    ``kind`` reads magic numbers only, in this process. The two reads raise
+    `DomainError` for a file the reader could not open, and an
+    `InfrastructureError` when the sandbox does not answer."""
+
+    def kind(self, data: bytes) -> Literal["pdf", "xlsx"] | None: ...
+
+    async def sheet_names(self, data: bytes) -> list[str]: ...
+
+    async def sheet_grid(self, data: bytes, sheet: str) -> SheetGrid | None: ...
+
+
+class RulesInForcePort(Protocol):
+    """The tenant's rule in force for a key (`TenantRuleBook.current`)."""
+
+    async def current(self, scope: SalesScope, key: RuleKey) -> Resolved: ...
+
+
+# ---------------------------------------------------------------- service --
+
+
+def _details(draft: RuleDraft) -> dict[str, object]:
+    return {
+        "rule_key": draft.rule_key.value,
+        "status": draft.status,
+        "file_sha256": draft.file_sha256,
+        "problems": sorted({p.code for p in draft.problems}),
+    }
+
+
+@dataclass(frozen=True)
+class RuleDraftService:
+    """The editor's side: request a draft, read it."""
+
+    uow: RuleDraftUnitOfWorkFactory
+    gate: Gate
+    clock: UtcClock
+    ids: IdGenerator
+
+    async def request(
+        self, context: AccessContext, key: RuleKey, file_name: str, data: bytes
+    ) -> RuleDraftView:
+        """A template to draft from: kept, queued for the worker (202)."""
+        await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        if key not in DRAFTABLE:
+            raise DomainError(
+                "chỉ tạo được từ tệp mẫu cho Mẫu tệp nhập Bravo",
+                details={"rule": "key_not_draftable", "key": key.value},
+            )
+        name = file_name.strip()
+        if not _FILE_NAME.match(name):
+            raise DomainError("tên tệp không hợp lệ", details={"rule": "file_name"})
+        if not name.casefold().endswith(DRAFT_EXTENSIONS):
+            raise DomainError("chỉ nhận tệp mẫu .xlsx hoặc .xls", details={"rule": "file_type"})
+        if not data:
+            raise DomainError("tệp rỗng", details={"rule": "file_empty"})
+        if len(data) > MAX_DRAFT_BYTES:
+            raise DomainError(
+                f"tệp lớn hơn {MAX_DRAFT_BYTES // (1024 * 1024)} MB", details={"rule": "file_size"}
+            )
+        now = self.clock.now()
+        draft = RuleDraft(
+            draft_id=self.ids.new_uuid(),
+            rule_key=key,
+            status="queued",
+            requested_by=context.principal_id,
+            requested_at=now,
+            file_name=name,
+            file_sha256=hashlib.sha256(data).hexdigest(),
+            file_size=len(data),
+        )
+        async with self.uow(sales_scope(context)) as work:
+            await work.drafts.prune(now - KEPT_FOR)
+            await work.drafts.add(draft, data)
+            await work.outbox.add(
+                OutboxEvent(
+                    id=self.ids.new_uuid(),
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    event_type=RULE_DRAFT_REQUESTED,
+                    schema_version=RULE_DRAFT_EVENT_SCHEMA,
+                    aggregate_id=draft.draft_id,
+                    occurred_at=now,
+                    payload={"draft_id": str(draft.draft_id)},
+                    actor_id=context.principal_id,
+                )
+            )
+            await work.audit.append(
+                AuditEvent(
+                    id=self.ids.new_uuid(),
+                    tenant_id=TenantId(context.tenant_id),
+                    workspace_id=WorkspaceId(context.workspace_id),
+                    actor_id=UserId(context.principal_id),
+                    action="sales.rule_draft.requested",
+                    resource_type=_RESOURCE,
+                    resource_id=str(draft.draft_id),
+                    occurred_at=now,
+                    details=_details(draft) | {"file_size": len(data)},
+                )
+            )
+            await work.commit()
+        return draft_view(draft)
+
+    async def get(self, context: AccessContext, draft_id: uuid.UUID) -> RuleDraftView:
+        """The draft, to whoever may propose. Another workspace's is not
+        found: RLS leaves it out of every read here."""
+        await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        async with self.uow(sales_scope(context)) as work:
+            draft = await work.drafts.get(draft_id)
+        if draft is None:
+            raise NotFoundError("no such draft", details={"draft_id": str(draft_id)})
+        return draft_view(draft)
+
+
+# ---------------------------------------------------------- the drafting --
+
+
+def _failed(draft: RuleDraft, reason: str) -> RuleDraft:
+    return draft.model_copy(update={"status": "failed", "error": reason[:500]})
+
+
+@dataclass(frozen=True)
+class RuleDrafting:
+    """The worker's side of a request: `RULE_DRAFT_REQUESTED`, carried out.
+
+    ``model`` is the one-call door to DW1's model (the plan's daily allowance
+    checked first); None on a host with no model server for DW1's profile,
+    where every draft is `unavailable`. ``worker_id`` and ``worker_version``
+    are DW1's (`configs/workers/sales.yaml`): what the call is recorded under."""
+
+    uow: RuleDraftUnitOfWorkFactory
+    sheets: TemplateSheetsPort
+    scanner: MalwareScanPort
+    rules: RulesInForcePort
+    access: RequesterAccessPort
+    model: InterpretationPort | None
+    clock: UtcClock
+    ids: IdGenerator
+    worker_id: str
+    worker_version: str
+
+    async def draft(self, scope: SalesScope, draft_id: uuid.UUID) -> str:
+        """Drafts one queued request; what it did, for the log. Idempotent: a
+        draft no longer queued is left alone. Raises `InfrastructureError`
+        when the scanner or the reader did not answer, so the outbox delivers
+        it again."""
+        async with self.uow(scope) as work:
+            draft = await work.drafts.get(draft_id)
+            content = None if draft is None else await work.drafts.content(draft_id)
+        if draft is None or draft.status != "queued":
+            return "draft not queued"
+        settled = (
+            _failed(draft, "tệp không còn để đọc")
+            if content is None
+            else await self._settle(scope, draft, content)
+        )
+        async with self.uow(scope) as work:
+            if not await work.drafts.settle(settled):
+                return "draft changed meanwhile"
+            await work.audit.append(
+                lane_audit_event(
+                    lane=RULE_DRAFT_LANE,
+                    event_id=self.ids.new_uuid(),
+                    tenant_id=TenantId(scope.tenant_id.value),
+                    workspace_id=WorkspaceId(scope.workspace_id.value),
+                    action=f"sales.rule_draft.{settled.status}",
+                    resource_type=_RESOURCE,
+                    resource_id=str(draft_id),
+                    occurred_at=self.clock.now(),
+                    details=_details(settled) | {"requested_by": str(draft.requested_by)},
+                )
+            )
+            await work.commit()
+        return f"draft {settled.status}"
+
+    async def _settle(self, scope: SalesScope, draft: RuleDraft, content: bytes) -> RuleDraft:
+        verdict = await self.scanner.scan(content)
+        if verdict.outcome == "unavailable":
+            raise InfrastructureError(
+                "chưa quét được tệp, thử lại", details={"reason_code": "scanner_unavailable"}
+            )
+        if verdict.outcome == "infected":
+            return _failed(draft, "tệp bị trình quét mã độc chặn")
+        context = await self._asker(scope, draft)
+        if context is None:
+            return _failed(draft, "người tải tệp không còn quyền đề xuất quy tắc")
+        if self.sheets.kind(content) != "xlsx":
+            return _failed(draft, "tệp không phải bảng tính Excel")
+        try:
+            row = await self._header_row(content)
+        except DomainError:
+            return _failed(draft, "không mở được tệp mẫu")
+        if row is None:
+            return _failed(
+                draft, "không tìm thấy hàng tiêu đề: cần một hàng có ít nhất 4 ô tiêu đề hiện"
+            )
+        base = (await self.rules.current(scope, draft.rule_key)).policy
+        assert isinstance(base, BravoUploadLayout)  # the only key in `DRAFTABLE`
+        drafted = draft.model_copy(update={"template": row})
+        if self.model is None:
+            return self._without_mapping(drafted, row, base, "unavailable", "model_not_configured")
+        stamped = drafted.model_copy(
+            update={
+                "prompt_ref": str(BRAVO_TEMPLATE_MAPPING),
+                "model_profile": self.model.model_profile,
+            }
+        )
+        try:
+            answer = await self.model.interpret(
+                BRAVO_TEMPLATE_MAPPING,
+                mapping_inputs(row, self.model.max_input_tokens - PROMPT_TOKENS),
+                ModelBravoMapping,
+                run=self._run(context, draft),
+                max_output_tokens=_OUTPUT_TOKENS,
+            )
+        except ModelUnavailableError:
+            return self._without_mapping(stamped, row, base, "unavailable", "model_unavailable")
+        except QuotaExceededError:
+            return self._without_mapping(stamped, row, base, "unavailable", "model_quota")
+        checked = verify(answer.model_dump(), row, base)
+        if isinstance(checked, Refused):
+            fallback = offered(row, base)
+            return _with(stamped, "refused", fallback, (*checked.problems, *fallback.problems))
+        return _with(stamped, "ready", checked, checked.problems)
+
+    def _without_mapping(
+        self,
+        draft: RuleDraft,
+        row: TemplateRow,
+        base: BravoUploadLayout,
+        status: DraftStatus,
+        why: Literal["model_unavailable", "model_not_configured", "model_quota"],
+    ) -> RuleDraft:
+        fallback = offered(row, base)
+        return _with(draft, status, fallback, (DraftProblem(code=why), *fallback.problems))
+
+    async def _asker(self, scope: SalesScope, draft: RuleDraft) -> AccessContext | None:
+        """Who asked, as the platform resolves them now, cut to the ceiling;
+        None when they may no longer propose, or the context is another
+        workspace's."""
+        access = await self.access.find_linked_access(
+            draft.requested_by, scope.tenant_id.value, scope.workspace_id.value, DRAFT_CEILING
+        )
+        if access is None:
+            return None
+        context = context_from(access)
+        if sales_scope(context) != scope or SalesScopes.RULES_PROPOSE.value not in context.scopes:
+            return None
+        return context
+
+    async def _header_row(self, content: bytes) -> TemplateRow | None:
+        for name in (await self.sheets.sheet_names(content))[:MAX_SHEETS]:
+            grid = await self.sheets.sheet_grid(content, name)
+            row = None if grid is None else header_row(grid)
+            if row is not None:
+                return row
+        return None
+
+    def _run(self, context: AccessContext, draft: RuleDraft) -> RunContext:
+        """The one call's run, as the asker: their plan is what the allowance
+        checks, and the call is recorded under DW1's worker."""
+        run_id = self.ids.new_uuid()
+        return RunContext(
+            run_id=run_id,
+            tenant_id=context.tenant_id,
+            workspace_id=context.workspace_id,
+            actor_id=context.principal_id,
+            worker_id=self.worker_id,
+            worker_version=self.worker_version,
+            channel=WEB_CHANNEL,
+            plan_id=context.plan_id,
+            roles=context.roles,
+            scopes=context.scopes,
+            clearance=context.clearance,
+            record_visibility=context.record_visibility,
+            visible_owners=context.visible_owners,
+            autonomy_ceiling=context.max_autonomy_level,
+            trace_id=f"sales-draft-{run_id.hex[:12]}",
+            subject_ref=f"{_RESOURCE}:{draft.draft_id}",
+        )
+
+
+def _with(
+    draft: RuleDraft, status: DraftStatus, proposal: Proposal, problems: Sequence[DraftProblem]
+) -> RuleDraft:
+    return draft.model_copy(
+        update={
+            "status": status,
+            "document": proposal.document,
+            "machine_read": proposal.machine_read,
+            "evidence": dict(proposal.evidence),
+            "problems": tuple(problems)[:60],
+        }
+    )

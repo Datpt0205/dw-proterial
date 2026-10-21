@@ -340,6 +340,11 @@ UploadField = Literal[
     "requested_date",
     "suggested_delivery_date",
 ]
+# What every upload names: the PO, the line, the item and the quantity. Read by
+# the layout's own check and by a draft made from a template (`template_reading`).
+REQUIRED_UPLOAD_FIELDS: Final[frozenset[UploadField]] = frozenset(
+    {"po_no", "line_no", "prv_code", "quantity"}
+)
 
 
 class UploadColumn(BaseModel):
@@ -376,7 +381,7 @@ class BravoUploadLayout(BaseModel):
 
     @model_validator(mode="after")
     def _names_the_lines(self) -> BravoUploadLayout:
-        if not {"po_no", "line_no", "prv_code", "quantity"} <= {c.field for c in self.columns}:
+        if not {c.field for c in self.columns} >= REQUIRED_UPLOAD_FIELDS:
             raise ValueError("an upload names the PO, the line, the item and the quantity")
         return self
 

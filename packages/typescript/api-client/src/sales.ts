@@ -718,6 +718,31 @@ export class SalesApi {
       key,
     );
   }
+
+  /**
+   * Uploads the company's own file to draft a version of the key from (202,
+   * "Tạo từ tệp mẫu"): the worker reads it in the reader sandbox. A draft is
+   * a start for the editor, never a version: `proposeRule` still sends it.
+   */
+  requestRuleDraft(
+    ruleKey: SalesSchemas["RuleKey"],
+    body: Body<"/api/v1/sales/rules/{key}/drafts">,
+    key: string,
+  ): Promise<Accepted<"/api/v1/sales/rules/{key}/drafts">> {
+    return this.client.request(
+      "POST",
+      `/api/v1/sales/rules/${enc(ruleKey)}/drafts`,
+      shaped<Accepted<"/api/v1/sales/rules/{key}/drafts">>(),
+      { body, idempotencyKey: key },
+    );
+  }
+
+  /** A draft: queued, or what DW1 read from the file and proposes. */
+  ruleDraft(draftId: string) {
+    return this.get<"/api/v1/sales/rules/drafts/{draft_id}">(
+      `/api/v1/sales/rules/drafts/${enc(draftId)}`,
+    );
+  }
 }
 
 /** A page of a PDF, or a sheet of a workbook: what the source route opens. */
