@@ -118,7 +118,7 @@ async def _read(
         await _customer(customer),
         kind,
         received_on=RECEIVED,
-        rules_version="sales_order_rules@1.5.1",
+        rules_version="sales_order_rules@1.5.2",
         run=RUN,
     )
 
@@ -426,7 +426,7 @@ def test_a_hand_off_keeps_lines_only_on_a_resolved_order() -> None:
         "prompt": "sales.request_handoff@1.0.0",
         "model_profile": "onprem",
         "route": "structured_extraction",
-        "rules": "sales_order_rules@1.5.1",
+        "rules": "sales_order_rules@1.5.2",
     }
     line = {"reference": {"text": "2", "start": 0, "end": 1}, "line_no": 2, "new_quantity": "5"}
     with pytest.raises(ValidationError):

@@ -41,7 +41,7 @@ from dw_sales.domain.orders import PoDocument, Unreadable
 pytestmark = pytest.mark.unit
 
 CAPS = load_order_rules(
-    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.5.0.yaml"
+    Path(__file__).resolve().parents[5] / "configs" / "policies" / "sales_order_rules@1.6.0.yaml"
 ).intake
 M01 = "M01_VLX-PO-2609-0118.xlsx"
 M03 = "M03_BRN-PO-2609-031.pdf"

@@ -33,7 +33,7 @@ from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.testing.reading_tools import xls_made_in_reader
 
 REPO = Path(__file__).resolve().parent.parent
-CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.5.0.yaml").intake
+CAPS = load_order_rules(REPO / "configs/policies/sales_order_rules@1.6.0.yaml").intake
 COMPOSE = [
     "docker",
     "compose",

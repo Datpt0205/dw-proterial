@@ -196,7 +196,7 @@ class OrderRules(BaseModel):
 
     @property
     def version(self) -> str:
-        """What a finding is stamped with: ``sales_order_rules@1.5.0``."""
+        """What a finding is stamped with: ``sales_order_rules@1.6.0``."""
         return f"{self.policy_id}@{self.policy_version}"
 
     @property
@@ -700,7 +700,8 @@ def check_customer(
 
     `customer_unknown` when the customer was taken from the buyer the document
     names rather than the sender's domain; `customer_temporary`;
-    `missing_noc_esf` (DW1 warns and decides nothing about export control);
+    `missing_noc_esf`, which holds the order's confirmation until the
+    export-control PIC accepts it (DW1 decides nothing about export control);
     `sender_unverified` when the mail system's results are not all ``pass``.
     """
     found: list[Finding] = []

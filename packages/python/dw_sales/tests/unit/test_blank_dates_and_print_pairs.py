@@ -59,7 +59,7 @@ from dw_sales.evals.world import SampleSet, World, open_world
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.5.0.yaml")
+RULES = load_order_rules(REPO / "configs" / "policies" / "sales_order_rules@1.6.0.yaml")
 T0 = datetime(2026, 10, 2, 19, 0, tzinfo=UTC)
 ACTOR = Actor(user_id=AN.user_id)
 MISSING = "requested_date_missing:2"
@@ -116,7 +116,7 @@ def test_every_shipped_rules_version_blocks_on_a_missing_date() -> None:
     tenant = load_order_rules(
         REPO
         / "packages/python/dw_sales/src/dw_sales/adapters/mock/data/policies"
-        / "sales_order_rules@1.5.1.yaml"
+        / "sales_order_rules@1.5.2.yaml"
     )
     for rules in (RULES, tenant):
         assert rules.findings[FindingCode.REQUESTED_DATE_MISSING] is Severity.ERROR

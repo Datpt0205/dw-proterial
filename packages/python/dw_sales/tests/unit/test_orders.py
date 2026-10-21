@@ -52,7 +52,7 @@ from dw_sales.domain.process import WIV_STEPS, Coverage, Procedure, StepId, step
 
 pytestmark = pytest.mark.unit
 
-RULES = "sales_order_rules@1.5.0"
+RULES = "sales_order_rules@1.6.0"
 SHA = "a" * 64
 T0 = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 # Principal ids, as `AccessContext.principal_id` carries them (fictional).
@@ -154,7 +154,6 @@ def _finding(code: FindingCode, line_no: int | None = None, **values: Any) -> Fi
 
 _WARNINGS = {
     FindingCode.REQUESTED_DATE_SHORT_LT,
-    FindingCode.MISSING_NOC_ESF,
     FindingCode.REVISED_PO,
     FindingCode.REVISION_WITHOUT_BASE,
     FindingCode.CUSTOMER_TEMPORARY,
@@ -518,6 +517,33 @@ def test_block_confirmation_refuses_even_an_acknowledged_missing_noc_esf() -> No
 
     with pytest.raises(ConflictError, match="export control blocks"):
         crossed.confirm(AN, T0, _dates(crossed))
+
+
+def test_a_revision_holds_confirmation_again_after_missing_noc_esf_was_accepted() -> None:
+    accepted = _accept(
+        _review(_finding(FindingCode.MISSING_NOC_ESF)), "missing_noc_esf:-", EXPORT_PIC
+    )
+    crossed = _uploaded(accepted).cross_check(DIEU, T0)
+    # The customer revises the PO; checked afresh, its NOC/ESF is still missing.
+    revision = _checked(
+        (
+            _finding(FindingCode.REVISED_PO, expected="0", actual="1"),
+            _finding(FindingCode.MISSING_NOC_ESF),
+        ),
+        (_line(1), _line(2, quantity=Decimal(12200))),
+        revision=1,
+        message_id="M07",
+    )
+
+    review = crossed.revise(revision)
+
+    assert review.finding("missing_noc_esf:-").is_open
+    applied = _accept(review, "revised_po:-").apply_change(AN, T0, entry_compared=True)
+    again = applied.cross_check(DIEU, T0)
+    with pytest.raises(ConflictError, match="missing_noc_esf is not acknowledged"):
+        again.confirm(AN, T0, _dates(again))
+    released = _accept(again, "missing_noc_esf:-", EXPORT_PIC)
+    assert released.confirm(AN, T0, _dates(released)).status is S.CONFIRMED
 
 
 def test_a_short_lead_time_needs_a_pc_date_before_confirmation() -> None:

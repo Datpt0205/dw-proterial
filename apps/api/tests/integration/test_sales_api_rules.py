@@ -3,7 +3,7 @@
 
 A proposal opens a `sales.rules` platform approval; the head decides it on
 `/approvals` and the worker carries the decision out (`_carry_out` does here
-what the worker does). The demo tenant's version (`sales_order_rules@1.5.1`,
+what the worker does). The demo tenant's version (`sales_order_rules@1.5.2`,
 in the sample set) went the same way when the suite's database was seeded
 (`seed_demo_rules`), as `make demo-reset` does. Each test here that approves
 another version puts the seeded one back in force after.

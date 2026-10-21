@@ -156,7 +156,7 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     },
     export_control_mode: {
       label: "Cờ thiếu NOC/ESF",
-      help: "Cảnh báo: xác nhận được sau khi người phụ trách kiểm soát xuất khẩu ghi nhận. Chặn: không xác nhận được dù đã ghi nhận.",
+      help: "Giữ xác nhận: đơn không được xác nhận với khách cho tới khi PIC kiểm soát xuất khẩu chấp nhận cờ, kèm lý do. Chặn xác nhận: không xác nhận được kể cả khi đã chấp nhận.",
     },
     export_control: { label: "Kiểm soát xuất khẩu" },
     "export_control.denial_list_max_age_days": {
@@ -502,7 +502,7 @@ const VALUES: Record<string, string> = {
   sun: "Chủ nhật",
   error: "Chặn",
   warning: "Cảnh báo",
-  warn: "Cảnh báo, xác nhận được sau khi ghi nhận",
+  warn: "Giữ xác nhận cho tới khi PIC kiểm soát xuất khẩu chấp nhận",
   block_confirmation: "Chặn xác nhận",
   received_date: "Ngày nhận PO",
   item_standard: "Lead time chuẩn của mã hàng",

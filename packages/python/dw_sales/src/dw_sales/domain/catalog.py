@@ -78,7 +78,9 @@ def month_key(day: date) -> str:
 
 
 class Compliance(BaseModel):
-    """Export-control status. DW1 warns on it and decides nothing.
+    """Export-control status. DW1 decides nothing on it: a customer without a
+    valid NOC, ESF or denial-list check raises `missing_noc_esf`, which holds
+    the order's confirmation until the export-control PIC accepts it.
 
     NOC is confirmed once per customer; the export screening form (ESF) is
     renewed every fiscal year, so it is recorded by the year it covers.

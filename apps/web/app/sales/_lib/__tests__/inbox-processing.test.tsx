@@ -225,7 +225,7 @@ describe("what a model read is shown with the case code resolved it to (ticket 3
               prompt: "sales.message_intent@1.0.0",
               model_profile: "local-small",
               route: "onprem",
-              rules: "sales_order_rules@1.5.1",
+              rules: "sales_order_rules@1.5.2",
               outcome: "read",
               kind: "reply_to_case",
               language: "vi",

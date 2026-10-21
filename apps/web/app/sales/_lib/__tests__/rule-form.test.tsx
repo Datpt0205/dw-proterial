@@ -132,7 +132,9 @@ describe("the schema-driven rules form (ticket 40)", () => {
       // A long choice is a Select, a short one a Segmented, each value in words.
       expect(screen.getByRole("combobox", { name: "Mode" })).toBeTruthy();
       expect(
-        screen.getByText("Cảnh báo, xác nhận được sau khi ghi nhận"),
+        screen.getByText(
+          "Giữ xác nhận cho tới khi PIC kiểm soát xuất khẩu chấp nhận",
+        ),
       ).toBeTruthy();
       expect(screen.getByText("Giá cố định")).toBeTruthy();
       expect(screen.getByText("Theo mức LME")).toBeTruthy();
