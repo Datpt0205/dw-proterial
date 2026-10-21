@@ -92,6 +92,17 @@ const PERSONAS: Record<string, { roles: string[]; scopes: string[] }> = {
     scopes: [...MEMBER, "sales.overview.read"],
   },
   "binh.tran (no sales.*)": { roles: ["member"], scopes: MEMBER },
+  // Tenant IT with the set `sales_rules_editor` (2026-10-21): the rules page
+  // and no other Sales page.
+  "tam.ngo (org_admin + sales_rules_editor)": {
+    roles: ["org_admin"],
+    scopes: [
+      "directory.read",
+      "platform.members.read",
+      "platform.members.write",
+      "sales.rules.propose",
+    ],
+  },
 };
 
 function salesPages(persona: string): string[] {
@@ -164,6 +175,7 @@ describe("visibleNav", () => {
     // The viewer reads aggregates only: the overview, and no other Sales page.
     ["ha.vu (sales_viewer)", ["/sales/overview"]],
     ["binh.tran (no sales.*)", []],
+    ["tam.ngo (org_admin + sales_rules_editor)", ["/sales/rules"]],
   ])("gives %s the Sales pages %j", (persona, pages) => {
     expect(salesPages(persona)).toEqual(pages);
   });
@@ -235,6 +247,10 @@ describe("visibleNav", () => {
     const noRules = salesBar(PIC.filter((s) => s !== "sales.rules.propose"));
     expect(noRules).toContain("Quản lý");
     expect(noRules).not.toContain("Quản lý › Quy tắc");
+  });
+
+  it("shows a viewer holding only sales.rules.propose the rules page alone", () => {
+    expect(salesBar(["sales.rules.propose"])).toEqual(["Quy tắc"]);
   });
 
   it("draws a submenu left with one page as that page, never a submenu of one", () => {

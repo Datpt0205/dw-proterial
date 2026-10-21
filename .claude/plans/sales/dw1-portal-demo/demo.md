@@ -110,7 +110,7 @@ người: đăng xuất rồi đăng nhập lại (hoặc mở cửa sổ ẩn d
 | Lâm Minh Khoa   | `khoa.lam@alpha.local`   | Sales phụ trách (PIC) + người duyệt báo giá thay      | duyệt báo giá Giang định giá                          |
 | Vũ Thanh Hà     | `ha.vu@alpha.local`      | Lãnh đạo (xem tổng hợp)                               | chỉ xem tổng quan                                     |
 | Trần Thị Bình   | `binh.tran@alpha.local`  | Mua hàng, không có quyền Sales                        | bị từ chối mọi trang Sales                            |
-| Ngô Minh Tâm    | `tam.ngo@alpha.local`    | IT (quản trị tenant), không có quyền Sales            | không thấy Sales, không thấy giá                      |
+| Ngô Minh Tâm    | `tam.ngo@alpha.local`    | IT (quản trị tenant) + người đề xuất quy tắc          | đề xuất quy tắc không chứa giá; không thấy hồ sơ, giá |
 | Phạm Quốc Bảo   | `bao.pham@beta.local`    | Sales phụ trách ở **tenant khác** (tenant-beta)       | hộp thư rỗng, 404 trên hồ sơ của tenant-alpha         |
 
 Tên hiển thị lấy từ `configs/demo/demo_users.yaml`; nếu lệch, file đó đúng.
@@ -272,9 +272,13 @@ trước, đúng thứ tự WIV-03-012 bước 8.
   (`GET /api/v1/approvals`) không có yêu cầu `sales.*` nào: yêu cầu chỉ hiện
   cho người được quyết định và người đã yêu cầu.
 - **Bình** (mua hàng): **403** trên mọi `/api/v1/sales/*`; menu không có Sales.
-- **Tâm** (IT tenant): không có quyền Sales nào, không thấy giá; luật tách nhiệm
-  của nền tảng không cho một membership giữ cả `platform.members.write` lẫn
-  `sales.price.read`.
+- **Tâm** (IT tenant, người đề xuất quy tắc): menu Sales chỉ có _Quy tắc_;
+  danh sách không có "Chính sách giá" và "Quy tắc báo giá" (quy tắc chứa giá
+  cần `sales.price.read`). Tâm đề xuất "Mẫu tệp nhập Bravo" → chờ duyệt; Tâm
+  tự quyết yêu cầu đó → **403**; Giang duyệt được. Mọi trang hồ sơ, tổng
+  quan, dữ liệu chủ → **403**. Luật tách nhiệm của nền tảng không cho một
+  membership giữ `platform.members.write` cùng `sales.price.read`, hay cùng
+  `sales.rules.approve`.
 - **Bảo** (tenant-beta): hộp thư rỗng; mở một hồ sơ của tenant-alpha bằng id
   → **404** (không phải 403: không xác nhận hồ sơ tồn tại).
 

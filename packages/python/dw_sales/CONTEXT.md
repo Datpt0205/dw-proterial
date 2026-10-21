@@ -165,7 +165,16 @@ API and the plan use the English terms. The spec is
 | `sales_price_evidence` | permission set | Xem giá đã báo cho khách khác |
 | `sales_quote_approver` | permission set | Người duyệt báo giá thay      |
 | `sales_export_control` | permission set | PIC kiểm soát xuất khẩu       |
+| `sales_rules_editor`   | permission set | Người đề xuất quy tắc         |
 | `sales_dw1`            | role           | DW1 (tài khoản dịch vụ)       |
+
+**Rules editor** (Người đề xuất quy tắc, set `sales_rules_editor`): tenant IT
+proposing a version of a Sales rule (`sales.rules.propose`, dw_sales ADR 0003
+addendum of 2026-10-21). A key holding prices or price policy (the pricing
+inputs, the quote rules) also asks for `sales.price.read`, which IT never
+holds, so it is not shown to IT at all. The Sales head approves; a
+separation-of-duty rule keeps `platform.members.write` and
+`sales.rules.approve` off one membership.
 
 DW1 itself is the **Digital Worker** (tài khoản dịch vụ DW1). Its events
 carry `actor_kind = worker`.

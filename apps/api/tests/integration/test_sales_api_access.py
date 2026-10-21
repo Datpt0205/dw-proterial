@@ -1,9 +1,10 @@
 """Who reaches which Sales route, signed in as each persona (ticket 11).
 
-The negative half of the actor table: the purchasing manager and tenant IT
-hold no `sales.*` scope and get 403 on every route; leadership reaches the
-overview and nothing else; another tenant's PIC sees an empty mailbox and no
-customers, and another tenant's case is not found, never forbidden.
+The negative half of the actor table: the purchasing manager holds no
+`sales.*` scope and gets 403 on every route; tenant IT reaches the rules
+routes and nothing else (`sales_rules_editor`, 2026-10-21); leadership reaches
+the overview and nothing else; another tenant's PIC sees an empty mailbox and
+no customers, and another tenant's case is not found, never forbidden.
 """
 
 from __future__ import annotations
@@ -54,17 +55,28 @@ async def _call(persona: Persona, method: str, path: str) -> int:
     return (await persona.post(path, {"case_version": 1})).status_code
 
 
-@pytest.mark.parametrize("subject", [BINH, TAM])
-async def test_a_member_without_sales_scopes_is_refused_on_every_sales_route(
-    api: Api, subject: str
-) -> None:
-    persona = api.as_(subject)
+async def test_a_member_without_sales_scopes_is_refused_on_every_sales_route(api: Api) -> None:
+    persona = api.as_(BINH)
     routes = _sales_routes()
     assert len(routes) >= 40  # the inventory was read, not an empty app
 
     answers = {route: await _call(persona, *route) for route in routes}
 
     assert {route for route, status in answers.items() if status != 403} == set()
+
+
+async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> None:
+    """`sales_rules_editor` is `sales.rules.propose` alone: no case, no
+    overview, no master data, no price. The proposal here carries no document,
+    so it is refused as invalid (422) and writes nothing."""
+    answers = {route: await _call(api.as_(TAM), *route) for route in _sales_routes()}
+
+    assert {route for route, status in answers.items() if status != 403} == {
+        ("GET", "/rules"),
+        ("GET", "/rules/sales_order_rules/schema"),
+        ("GET", "/rules/sales_order_rules/platform"),
+        ("POST", "/rules/sales_order_rules/versions"),
+    }
 
 
 async def test_leadership_reaches_the_overview_and_nothing_else(api: Api) -> None:
