@@ -7,7 +7,7 @@ Started: 2026-10-02
 ## Why
 
 Proterial Vietnam's Sales department was proposed two Digital Workers. DW1
-(Đơn hàng & Báo giá) is in scope now; DW2 (Giao hàng & CDO) is not. Proterial
+(Đơn hàng & Báo giá) is in scope now; DW2 is Mua hàng (13/10 deck) and Giao hàng & CDO a later DW (2027 Q1); neither is here. Proterial
 has not sent any data yet (the requirements doc v1.2 is still to be sent), so
 this slice proves the whole DW1 flow end to end on **mock data behind real
 ports**. The mocks are later replaced by Bravo, SharePoint/OneDrive or

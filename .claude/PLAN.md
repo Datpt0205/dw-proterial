@@ -56,8 +56,8 @@ own file and a row here.
 - **DW1 scope** (`sales/dw1-scope.md`): the agent-proposed bars of
   t29–t33 (t31 at 89.8% of 90%). Whether Proterial's IT, who configures
   the rules, gets `sales.rules.propose` (`sales.md` State, 2026-10-20).
-- **Sales:** Proterial's real data replaces the mock (`sales.md` Inputs
-  owed); the interim defaults in `sales.md` Open.
+- **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
+  the model, decided on Proterial's server (`sales.md` State 2026-10-21).
 
 ## How a feature is checked here
 

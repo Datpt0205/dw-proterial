@@ -8,6 +8,27 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-21, decisions and owed work from Đạt's review (no code):
+    - **HIGH PRIORITY, owed; decide once DW1 runs on Proterial's server.** Raise 9B's accuracy with code around the model, never with keyword tables or prompt examples fitted to the eval. The audit found every refused description line was a word left out (16), a span not in the text (5) or one span used twice (2); `single_candidate_wrong` is 0, so a higher score means less manual work, not fewer wrong codes. In order:
+        1. A targeted second call on exactly the words the checks named, then the same checks; a still-unexplained word still goes to a person.
+        2. 1–3 lines per call instead of 10.
+        3. Load the Bravo convert list, so a listed line needs no model.
+        4. Catalog retrieval (bge-m3), only to suggest codes for a person to pick.
+
+        Measure each as a new prompt version on the same datasets, plus fresh unseen lines.
+
+    - **Not ReAct.** No model-driven tool loop for reading customer documents: ADR 0007 forbids tools on document-content turns (injection), the 9B is slow per call, and the code checks are what keep wrong codes at 0. A read-only ReAct/deepagents agent stays a fit for staff Q&A over system data (questions come from staff, not from customer files).
+    - **UI gaps from the same audit, not yet fixed:**
+        1. Prepare relabels every unflagged value "Đã kiểm" (`views.py` ~497-502), though nobody opened them, and the cross-checker then trusts them.
+        2. "Xác nhận" on RFQ values can be pressed before the source is opened, and the server then answers 409.
+        3. Flags sit below the history.
+        4. The quote page has no coverage statement.
+        5. Show the cross-checker which values nobody opened.
+    - **Channels.** Portal first. Teams preferred over Zalo, through a Teams bot whose inbound goes Azure Bot → an Azure Function queue that the plant server polls outbound. No domain, certificate or inbound port is needed. Proterial's IT owes an Entra app registration, approval of the Teams app, an Azure subscription and outbound 443.
+    - **Out of scope for now.** NOEC and ESF drafting (WIV-03-032 steps 4–6) wait for a survey; the contract wording should say so. CDO is not built (a later DW).
+    - **Model.** Stay on Qwen3.5-9B. Candidates, measured on our eval sets before any switch: Qwen3.8-27B or Gemma 4 31B (24–48 GB), Gemma 4 12B (8 GB).
+    - **Flaky test.** `rule-drafts.test.tsx` "uploads a template, polls…" failed once under the full parallel vitest run on a loaded machine and passed alone 11/11.
+
 - 2026-10-21, "Tạo từ tệp mẫu", phase 1 (Bravo upload template only; the email, document and hand-off copy are phase 2):
     - **Flow.** In the rules editor, for `sales_bravo_upload`, "Tạo từ tệp mẫu" uploads the company's Excel template.
         - `POST /sales/rules/{key}/drafts` answers 202; `GET /sales/rules/drafts/{id}` reads the draft. Both need `sales.rules.propose`.
