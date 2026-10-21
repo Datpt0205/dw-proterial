@@ -171,7 +171,7 @@ API and the plan use the English terms. The spec is
 **Rules editor** (Người đề xuất quy tắc, set `sales_rules_editor`): tenant IT
 proposing a version of a Sales rule (`sales.rules.propose`, dw_sales ADR 0003
 addendum of 2026-10-21). A key holding prices or price policy (the pricing
-inputs, the quote rules) also asks for `sales.price.read`, which IT never
+inputs, the quote rules, the order rules) also asks for `sales.price.read`, which IT never
 holds, so it is not shown to IT at all. The Sales head approves; a
 separation-of-duty rule keeps `platform.members.write` and
 `sales.rules.approve` off one membership.

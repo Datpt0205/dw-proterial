@@ -11,7 +11,13 @@ from typing import Any
 import pytest
 
 from dw_agent_runtime.approval_flow import ProposedDecision
-from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
+from dw_kernel.errors import (
+    ConflictError,
+    DomainError,
+    DWError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.access import SalesScopes
@@ -555,7 +561,6 @@ async def test_a_proposer_without_price_read_is_shown_no_price_bearing_key() -> 
     # Written out on purpose: a key added to `RuleKey` fails here until
     # someone decides whether its documents hold prices (fail closed).
     assert shown == {
-        RuleKey.ORDER_RULES,
         RuleKey.KPI,
         RuleKey.EMAILS,
         RuleKey.DOCUMENTS,
@@ -582,3 +587,36 @@ async def test_a_proposer_without_price_read_is_shown_no_price_bearing_key() -> 
         await world.decide_rules(IT, proposed.version_id, approve=True, comment="Đồng ý")
     await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Đồng ý")
     assert (await rules.list(IT.context())).layers[RuleKey.BRAVO_UPLOAD] == "tenant"
+
+
+async def test_it_holding_approvals_decide_still_decides_no_rule_version() -> None:
+    """IT that granted itself `sales_quote_approver` (the open item in dw_sales
+    ADR 0003's addendum) holds `approvals.decide`, but never the stamp
+    `sales.rules.approve`: its decision is refused on the version it proposed
+    and on another proposer's alike, so the stamp alone is what refuses it.
+    The other's approval is not even served to it: a stamped request is seen
+    by its requester and by who may decide it, and is absent to anyone else
+    (`ApprovalAudience`, docs/adr/0011), so that refusal reads as not found."""
+    it_approver = replace(IT, scopes=IT.scopes | {SalesScopes.QUOTE_APPROVE, "approvals.decide"})
+    world = open_world(REPO, SampleSet.of(REPO, None), (*CALLERS, OUTSIDER, it_approver))
+    rules = world.services.rules
+    own = await rules.propose(
+        it_approver.context(),
+        RuleKey.BRAVO_UPLOAD,
+        _bumped(world, RuleKey.BRAVO_UPLOAD, "9.0.1"),
+    )
+    others = await rules.propose(AN.context(), RuleKey.KPI, _bumped(world, RuleKey.KPI, "9.0.1"))
+
+    refusals: tuple[tuple[RuleVersionView, type[DWError]], ...] = (
+        (own, PermissionDeniedError),
+        (others, NotFoundError),
+    )
+    for version, refusal in refusals:
+        with pytest.raises(refusal):
+            await world.decide_rules(
+                it_approver, version.version_id, approve=True, comment="Đồng ý"
+            )
+        assert (await _listed(world, version.version_id)).status == "proposed"
+    # The search can fail: the head, who holds the stamp, decides the same one.
+    await world.decide_rules(GIANG, others.version_id, approve=True, comment="Đồng ý")
+    assert (await _listed(world, others.version_id)).status == "approved"

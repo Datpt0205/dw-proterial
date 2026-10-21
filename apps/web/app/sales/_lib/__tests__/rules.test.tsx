@@ -484,12 +484,25 @@ describe("the rules page for a proposer who reads no price (2026-10-21)", () => 
     "lists only the keys the server returns: a price key it leaves out is simply absent",
     async () => {
       // Tenant IT: `sales.rules.propose` alone. The server leaves out the
-      // keys that hold prices; the page names no key of its own.
+      // keys that hold prices (the order rules among them); the page names
+      // no key of its own.
       scopes = ["sales.rules.propose"];
+      api.rules.mockResolvedValueOnce({
+        in_force: { sales_kpi: VIEW.in_force.sales_kpi! },
+        layers: { sales_kpi: "tenant" },
+        platform: VIEW.platform.filter((p) => p.key === "sales_kpi"),
+        versions: [version({}), REJECTED],
+      });
       renderPage();
       await screen.findByText("sales_kpi@1.0.0");
-      expect(screen.getByText("2 quy tắc")).toBeTruthy();
-      for (const text of ["Chính sách giá", "sales_pricing", "Quy tắc báo giá"])
+      expect(screen.getByText("1 quy tắc")).toBeTruthy();
+      for (const text of [
+        "Chính sách giá",
+        "sales_pricing",
+        "Quy tắc báo giá",
+        "Quy tắc kiểm tra đơn hàng",
+        "sales_order_rules@1.5.1",
+      ])
         expect(screen.queryByText(text), text).toBeNull();
       cleanup();
 

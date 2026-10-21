@@ -273,8 +273,8 @@ trước, đúng thứ tự WIV-03-012 bước 8.
   cho người được quyết định và người đã yêu cầu.
 - **Bình** (mua hàng): **403** trên mọi `/api/v1/sales/*`; menu không có Sales.
 - **Tâm** (IT tenant, người đề xuất quy tắc): menu Sales chỉ có _Quy tắc_;
-  danh sách không có "Chính sách giá" và "Quy tắc báo giá" (quy tắc chứa giá
-  cần `sales.price.read`). Tâm đề xuất "Mẫu tệp nhập Bravo" → chờ duyệt; Tâm
+  danh sách không có "Chính sách giá", "Quy tắc báo giá" và "Quy tắc kiểm tra
+  đơn hàng" (quy tắc chứa giá hay chính sách giá cần `sales.price.read`). Tâm đề xuất "Mẫu tệp nhập Bravo" → chờ duyệt; Tâm
   tự quyết yêu cầu đó → **403**; Giang duyệt được. Mọi trang hồ sơ, tổng
   quan, dữ liệu chủ → **403**. Luật tách nhiệm của nền tảng không cho một
   membership giữ `platform.members.write` cùng `sales.price.read`, hay cùng
