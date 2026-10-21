@@ -8,6 +8,15 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-21:
+    - **DW1 bar.** It names what DW1 does: reading "<subject>", N waiting, all done and waiting for new mail, or paused. Never a bare "đang chạy" (`worker-bar.test.tsx`).
+    - **Contract.** Đạt asked how the contract's acceptance bars and hardware should read against the measured Qwen3.5-9B figures. The advice was given in the session and kept out of the repo, which is public:
+        - define the test set and that routing to a person is not an error;
+        - split digital and scanned POs;
+        - every new PRV code confirmed by Sales (descriptions measure 71%);
+        - Q&A only over agreed question types (not measured; Teams needs internet);
+        - one shared server: L4 24 GB or a 32 GB card, 64 GB RAM, RAID1 NVMe, internal backup disks plus a daily off-machine copy.
+
 - 2026-10-20, "does the AI follow the template?" (Đạt), answered from the code and checked:
     - **No rule document reaches a prompt.** All nine keys are applied by code: email, document and hand-off copy by `string.Template` / `str.format`, the Bravo file by the upload layout plus openpyxl, and thresholds read as numbers. The model only reads incoming mail (spans); code verifies the spans and fills the tenant's template.
     - **Config → output tests.** The existing ones cover emails and hand-offs. New: `test_a_bravo_upload_follows_the_tenants_own_template` checks sheet, columns, order and headers, and that a template missing PO/line/item/quantity is refused at validation.

@@ -122,7 +122,7 @@ describe("rendering while DW1 is paused (Đạt, 2026-10-18)", () => {
 
   it("offers the render while DW1 runs", async () => {
     page();
-    await screen.findByText(/DW1 đang chạy/);
+    await screen.findByText("DW1 đã xử lý hết thư, đang chờ thư mới");
     const button = await screen.findByRole("button", { name: RENDER });
     expect(button.hasAttribute("disabled")).toBe(false);
   }, 20_000);
