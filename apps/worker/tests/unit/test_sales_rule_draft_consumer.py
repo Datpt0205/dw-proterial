@@ -1,6 +1,7 @@
 """The `sales.rule_draft.requested` handler ("Tạo từ tệp mẫu"): the
 envelope's tenancy and the payload's draft, handed to the drafting; nothing
-else."""
+else. And the sweep lane: every workspace due is swept, one failing costs the
+others nothing."""
 
 from __future__ import annotations
 
@@ -12,9 +13,12 @@ import pytest
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.rule_drafts import RULE_DRAFT_REQUESTED
+from dw_sales.application.rule_drafts import RULE_DRAFT_REQUESTED, Swept
 from dw_worker.consumers.outbox import UndeliverableEventError
-from dw_worker.consumers.sales_rule_drafts import build_rule_draft_handler
+from dw_worker.consumers.sales_rule_drafts import (
+    build_rule_draft_handler,
+    build_rule_draft_sweep_consumer,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -61,3 +65,29 @@ async def test_a_payload_that_names_anything_else_is_undeliverable() -> None:
             _event({"draft_id": str(uuid.uuid4()), "tenant_id": str(uuid.uuid4())})
         )
     assert drafting.calls == []
+
+
+def _scope() -> SalesScope:
+    return SalesScope(TenantId(uuid.uuid4()), WorkspaceId(uuid.uuid4()))
+
+
+class _Sweep:
+    def __init__(self, scopes: list[SalesScope], failing: SalesScope) -> None:
+        self.scopes, self.failing = scopes, failing
+        self.swept: list[SalesScope] = []
+
+    async def due(self) -> list[SalesScope]:
+        return self.scopes
+
+    async def sweep(self, scope: SalesScope) -> Swept:
+        if scope == self.failing:
+            raise RuntimeError("one workspace's database row is broken")
+        self.swept.append(scope)
+        return Swept(expired=1, pruned=0)
+
+
+async def test_the_sweep_lane_sweeps_every_workspace_due_past_one_that_fails() -> None:
+    first, broken, last = _scope(), _scope(), _scope()
+    sweep = _Sweep([first, broken, last], failing=broken)
+    await build_rule_draft_sweep_consumer(sweep)()
+    assert sweep.swept == [first, last]

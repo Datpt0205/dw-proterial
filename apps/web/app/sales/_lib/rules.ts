@@ -194,6 +194,8 @@ export function draftProblemText(problem: DraftProblem): string {
       return `Cột ${problem.ref ?? ""} “${problem.header ?? ""}” của mẫu không ứng với giá trị nào: tệp nhập Bravo chưa có cột để trống, nên cột này không có trong tệp.`;
     case "header_not_in_template":
       return `${field}: DW1 nêu một tiêu đề không có nguyên văn ở hàng tiêu đề của mẫu, nên không lấy.`;
+    case "header_too_long":
+      return `${field}: tiêu đề ở cột ${problem.ref ?? ""} dài hơn 64 ký tự, mẫu tệp nhập Bravo chỉ giữ được tiêu đề tối đa 64 ký tự.`;
     case "header_ambiguous":
       return `${field}: tiêu đề DW1 nêu có ở hai cột của mẫu, không biết lấy cột nào.`;
     case "header_twice":

@@ -10,14 +10,17 @@ This module is the part that decides, and it decides in code (dw_sales ADR
 - **What is read** (`header_row`): the first visible sheet with a row of at
   least `MIN_HEADERS` visible text cells; that row is the template's header
   row, its cells in column order. A hidden sheet, row or column, and a cell
-  whose font is the colour of its fill, are dropped before anything else: a
-  person reviewing the template cannot see them, so an instruction hidden
-  there never reaches the model (`visible`).
+  whose text cannot be seen (its font the colour of its fill, white on no
+  fill, or 2pt and smaller: `text_unseen`, which the reader sandbox sets) are
+  dropped before anything else: a person reviewing the template cannot see
+  them, so an instruction hidden there never reaches the model (`visible`).
 - **What the model is asked** (`ModelBravoMapping`, one optional header per
   `UploadField`, built from that list so the two cannot drift): which header
   names which field, copied exactly, or null.
 - **What code accepts** (`verify`): every header the model names is exactly
-  one visible cell of the header row, no cell is named for two fields, the
+  one visible cell of the header row (both NFC, without surrounding spaces:
+  `plain`; the document holds the cell's own text so), a header no longer
+  than a layout holds (`HEADER_LIMIT`), no cell is named for two fields, the
   fields every upload needs are named (`REQUIRED_UPLOAD_FIELDS`), the columns
   come in the template's own order, the sheet is the one read, and the whole
   document passes `BravoUploadLayout`. Anything else is refused, with the
@@ -32,6 +35,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -41,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
 from dw_sales.application.artifact_content import (
     REQUIRED_UPLOAD_FIELDS,
+    UPLOAD_HEADER_MAX,
     BravoUploadLayout,
     UploadField,
 )
@@ -55,8 +60,8 @@ MIN_HEADERS: Final = 4
 # How many sheets of a workbook are looked at for a header row.
 MAX_SHEETS: Final = 10
 # The longest header a layout may hold (`UploadColumn.header`): a longer one is
-# sent cut to it, and so never matches the cell it was cut from.
-HEADER_LIMIT: Final = 64
+# sent cut to it, and a mapping naming it is refused as `header_too_long`.
+HEADER_LIMIT: Final = UPLOAD_HEADER_MAX
 
 UPLOAD_FIELDS: Final[tuple[UploadField, ...]] = get_args(UploadField)
 
@@ -90,9 +95,16 @@ class TemplateRow(BaseModel):
         return f"{self.sheet}!{self.headers[0].ref}:{self.headers[-1].ref}"
 
 
+def plain(text: str) -> str:
+    """A header as compared and as written: NFC, without surrounding spaces.
+    A workbook may hold Vietnamese decomposed (NFD) and a model answers
+    composed; neither is a different header."""
+    return unicodedata.normalize("NFC", text).strip()
+
+
 def visible(cell: SheetCell) -> bool:
     """Whether a person looking at the sheet sees this cell's text."""
-    return not (cell.hidden_row or cell.hidden_column or cell.font_matches_fill)
+    return not (cell.hidden_row or cell.hidden_column or cell.font_matches_fill or cell.text_unseen)
 
 
 def header_row(grid: SheetGrid) -> TemplateRow | None:
@@ -139,7 +151,7 @@ def mapping_inputs(row: TemplateRow, room: int) -> dict[str, str]:
     width = HEADER_LIMIT
     while True:
         headers = json.dumps(
-            [{"column": _letters(h.ref), "header": h.text[:width]} for h in row.headers],
+            [{"column": _letters(h.ref), "header": plain(h.text)[:width]} for h in row.headers],
             ensure_ascii=False,
         )
         if estimated_tokens(headers) <= room or width <= 16:
@@ -154,6 +166,8 @@ ProblemCode = Literal[
     "column_unmapped",
     # The model named a header the header row does not hold, exactly.
     "header_not_in_template",
+    # The header is longer than a layout's column holds (`HEADER_LIMIT`).
+    "header_too_long",
     # The header the model named is printed on two columns.
     "header_ambiguous",
     # Two fields were given the same column.
@@ -206,6 +220,13 @@ def _base(layout: BravoUploadLayout) -> dict[str, Any]:
     return layout.model_dump(mode="json", by_alias=True)
 
 
+def _names(asked: str, header: TemplateHeader) -> bool:
+    """Whether ``asked`` is this cell's header: its whole text, or, for one
+    longer than a layout holds, the part of it the model was shown."""
+    text = plain(header.text)
+    return asked == text or (len(text) > HEADER_LIMIT and asked == text[:HEADER_LIMIT].strip())
+
+
 def verify(
     answer: Mapping[str, object], row: TemplateRow, base: BravoUploadLayout
 ) -> Proposal | Refused:
@@ -216,14 +237,17 @@ def verify(
     named: set[UploadField] = set()
     for name in UPLOAD_FIELDS:
         header = answer.get(name)
-        if not isinstance(header, str) or not header:
+        asked = plain(header) if isinstance(header, str) else ""
+        if not asked:
             continue
         named.add(name)
-        found = [h for h in row.headers if h.text == header]
+        found = [h for h in row.headers if _names(asked, h)]
         if not found:
             problems.append(DraftProblem(code="header_not_in_template", field=name))
         elif len(found) > 1:
             problems.append(DraftProblem(code="header_ambiguous", field=name))
+        elif len(plain(found[0].text)) > HEADER_LIMIT:
+            problems.append(DraftProblem(code="header_too_long", field=name, ref=found[0].ref))
         else:
             chosen[name] = found[0]
     taken = Counter(cell.ref for cell in chosen.values())
@@ -246,7 +270,7 @@ def verify(
         "mock": False,
         "description": "",
         "sheet_name": row.sheet,
-        "columns": [{"field": name, "header": cell.text} for name, cell in ordered],
+        "columns": [{"field": name, "header": plain(cell.text)} for name, cell in ordered],
     }
     try:
         BravoUploadLayout.model_validate(document)

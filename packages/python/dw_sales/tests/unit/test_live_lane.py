@@ -33,6 +33,7 @@ MODEL_STEPS = [
     "sales_reply@1.0.0",
     "sales_handoff@1.0.0",
     "sales_layout@1.0.0",
+    "sales_rule_drafts@1.0.0",
 ]
 REASON = "the live model gave no usable answer"
 

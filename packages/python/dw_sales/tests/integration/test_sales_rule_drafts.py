@@ -1,7 +1,8 @@
 """Rule drafts in PostgreSQL, as the application role ("Tạo từ tệp mẫu").
 
 A template is requested through the service, drafted by the worker's step
-from the id its outbox event carries, read back, and its bytes are gone.
+from the id its outbox event carries, read back, and its bytes are gone; one
+whose event was lost is failed by the sweep, its bytes gone too.
 Each negative is checked against rows that are really there (read back as
 the migrator), so a zero is isolation and not an empty table.
 """
@@ -29,6 +30,7 @@ from dw_platform.adapters.persistence.repositories import (
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_sales.adapters.persistence.catalog import SqlCatalogUnitOfWorkFactory
+from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ClientSourceView
@@ -40,6 +42,7 @@ from dw_sales.application.rule_drafts import (
     RULE_DRAFT_REQUESTED,
     RuleDrafting,
     RuleDraftService,
+    RuleDraftSweep,
     RuleDraftView,
 )
 from dw_sales.application.rules import RuleKey
@@ -239,3 +242,72 @@ async def test_a_template_file_is_never_rewritten(
                 sa.text("UPDATE sales.rule_draft_files SET content = 'x' WHERE draft_id = :id"),
                 {"id": queued.draft_id},
             )
+
+
+async def test_the_sweep_fails_a_lost_draft_in_its_own_workspace_only(
+    world: World,
+    drafts: SqlCatalogUnitOfWorkFactory,
+    app_sessions: async_sessionmaker[AsyncSession],
+    migrator: AsyncEngine,
+) -> None:
+    service = _service(drafts)
+    data = template_xlsx(_TEMPLATE)
+    lost = await service.request(AN.context(world.alpha), RuleKey.BRAVO_UPLOAD, "m.xlsx", data)
+    fresh = await service.request(AN.context(world.beta), RuleKey.BRAVO_UPLOAD, "m.xlsx", data)
+    async with migrator.begin() as conn:
+        await conn.execute(
+            sa.text(
+                "UPDATE sales.rule_drafts SET requested_at = now() - interval '2 hours'"
+                " WHERE id = :id"
+            ),
+            {"id": lost.draft_id},
+        )
+    sweep = RuleDraftSweep(
+        drafts, SqlRuleDraftScopes(app_sessions), SystemClock(), Uuid4Generator()
+    )
+
+    # The one read across tenants, as the application role with no tenant set.
+    due = await sweep.due()
+    assert world.alpha in due and world.beta not in due
+    swept = await sweep.sweep(world.alpha)
+    assert swept.expired >= 1
+
+    view = await service.get(AN.context(world.alpha), lost.draft_id)
+    assert (view.status, view.error) == (
+        "failed",
+        "DW1 không đọc xong tệp trong 1 giờ: hãy tải lại tệp mẫu",
+    )
+    for draft_id, files in ((lost.draft_id, 0), (fresh.draft_id, 1)):
+        held = await _count(
+            migrator,
+            "SELECT count(*) FROM sales.rule_draft_files WHERE draft_id = :id",
+            id=draft_id,
+        )
+        assert held == files
+    assert (await service.get(AN.context(world.beta), fresh.draft_id)).status == "queued"
+    audited = await _count(
+        migrator,
+        "SELECT count(*) FROM platform.audit_events WHERE resource_id = :id"
+        " AND action = 'sales.rule_draft.failed' AND tenant_id = :t"
+        " AND details->>'actor' = 'system:sales_rule_drafts'",
+        id=str(lost.draft_id),
+        t=world.alpha.tenant_id.value,
+    )
+    assert audited == 1
+
+
+async def test_only_the_application_role_may_ask_which_workspaces_are_due(
+    migrator: AsyncEngine,
+) -> None:
+    function = "sales.rule_draft_scopes_due(timestamp with time zone, timestamp with time zone)"
+    async with migrator.connect() as conn:
+        app, public = (
+            await conn.execute(
+                sa.text(
+                    "SELECT has_function_privilege('dw_app', :f, 'EXECUTE'),"
+                    " has_function_privilege('public', :f, 'EXECUTE')"
+                ),
+                {"f": function},
+            )
+        ).one()
+    assert (app, public) == (True, False)

@@ -44,11 +44,12 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import get_args
+from typing import Final, get_args
 
 from openpyxl import load_workbook
 from openpyxl.cell.cell import Cell
 from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.styles.colors import Color
 from openpyxl.workbook.workbook import Workbook
 from openpyxl.worksheet.cell_range import CellRange
 from openpyxl.worksheet.worksheet import Worksheet
@@ -479,6 +480,42 @@ def font_matches_fill(cell: Cell) -> bool:
     font_colour = cell.font.color.rgb if cell.font is not None and cell.font.color else None
     fill_colour = fill.fgColor.rgb if fill.fgColor is not None else None
     return isinstance(font_colour, str) and font_colour == fill_colour
+
+
+# Text this small (points) is a line on the screen, not a word.
+UNREADABLE_POINTS: Final = 2.0
+# White as openpyxl exposes a font colour: ARGB (any alpha), the theme's
+# first colour (lt1, "Background 1"), and the legacy palette's two whites.
+_WHITE_THEME: Final = 0
+_WHITE_INDEXED: Final = frozenset({1, 9})
+
+
+def _white(colour: Color | None) -> bool:
+    if colour is None:
+        return False
+    match colour.type:
+        case "rgb":
+            rgb = colour.rgb
+            return isinstance(rgb, str) and len(rgb) in (6, 8) and rgb[-6:].upper() == "FFFFFF"
+        case "theme":
+            return colour.theme == _WHITE_THEME
+        case "indexed":
+            return colour.indexed in _WHITE_INDEXED
+        case _:
+            return False
+
+
+def text_unseen(cell: Cell) -> bool:
+    """Text a person looking at the sheet does not see: in its fill's colour
+    (`font_matches_fill`), white on a cell with no fill (the sheet's own
+    white, the commonest way to hide a line), or too small to read."""
+    font = cell.font
+    if font is not None and font.sz is not None and font.sz <= UNREADABLE_POINTS:
+        return True
+    if font_matches_fill(cell):
+        return True
+    unfilled = cell.fill is None or cell.fill.fill_type != "solid"
+    return unfilled and font is not None and _white(font.color)
 
 
 def _table(sheet: _Sheet, layout: ExcelLayout) -> _Table | None:

@@ -347,11 +347,16 @@ REQUIRED_UPLOAD_FIELDS: Final[frozenset[UploadField]] = frozenset(
 )
 
 
+# The longest header an upload column holds; a draft from a template refuses
+# a longer one by name (`template_reading`).
+UPLOAD_HEADER_MAX: Final = 64
+
+
 class UploadColumn(BaseModel):
     model_config = _FROZEN
 
     field: UploadField
-    header: Annotated[str, Field(min_length=1, max_length=64)]
+    header: Annotated[str, Field(min_length=1, max_length=UPLOAD_HEADER_MAX)]
 
 
 class BravoUploadLayout(BaseModel):

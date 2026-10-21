@@ -29,7 +29,14 @@ other proposal. Only `DRAFTABLE` keys are drafted; the copy templates
   the version in force with only the template's sheet, the template's
   headers offered as choices, nothing guessed (`template_reading.offered`).
 - **failed**: no draft at all (the file infected, unreadable, without a
-  header row, or the asker no longer permitted), with the reason.
+  header row, or the asker no longer permitted), with the reason; or still
+  queued after `STALE_AFTER` (its event spent the outbox's retries, say),
+  failed by the sweep with its file dropped.
+
+**What no request has to come for** (`RuleDraftSweep`, the worker's
+`RULE_DRAFT_LANE`): each workspace with a draft due, in its own unit of work,
+fails the drafts queued past `STALE_AFTER` and drops the drafts older than
+`KEPT_FOR`, with their files (failure-modes #6).
 
 Every step is audited; the worker's as itself (`lane_audit_event`,
 `system:sales_rule_drafts`): ids, the key, the status, the file's hash and
@@ -106,8 +113,11 @@ _OUTPUT_TOKENS: Final = 600
 MAX_DRAFT_BYTES: Final = 2 * 1024 * 1024
 DRAFT_EXTENSIONS: Final = (".xlsx", ".xls")
 _FILE_NAME: Final = re.compile(r"^[^/\\\x00-\x1f]{1,200}$")
-# How long a draft is kept: a new request drops the workspace's older ones.
+# How long a draft is kept: the sweep, and a new request, drop older ones.
 KEPT_FOR: Final = timedelta(days=30)
+# How long a draft may stay queued. The worker reads one in a minute or two;
+# one queued longer was lost on the way, and its file would be kept for good.
+STALE_AFTER: Final = timedelta(hours=1)
 
 DraftStatus = Literal["queued", "ready", "refused", "unavailable", "failed"]
 
@@ -205,6 +215,10 @@ class RuleDraftStorePort(Protocol):
         """Drops the drafts requested before ``before``, with their bytes."""
         ...
 
+    async def queued_before(self, before: datetime) -> list[RuleDraft]:
+        """The drafts still queued that were requested before ``before``."""
+        ...
+
 
 class RuleDraftUnitOfWork(Protocol):
     """One transaction in one workspace; leaving without `commit` rolls back."""
@@ -245,6 +259,17 @@ class TemplateSheetsPort(Protocol):
     async def sheet_names(self, data: bytes) -> list[str]: ...
 
     async def sheet_grid(self, data: bytes, sheet: str) -> SheetGrid | None: ...
+
+
+class RuleDraftScopesPort(Protocol):
+    """Every workspace with a draft due for the sweep, ids only, across
+    tenants (`sales.rule_draft_scopes_due`): one still queued that was
+    requested before ``queued_before``, or any requested before
+    ``requested_before``."""
+
+    async def scopes_due(
+        self, queued_before: datetime, requested_before: datetime
+    ) -> Sequence[SalesScope]: ...
 
 
 class RulesInForcePort(Protocol):
@@ -529,3 +554,62 @@ def _with(
             "problems": tuple(problems)[:60],
         }
     )
+
+
+# ------------------------------------------------------------- the sweep --
+
+_STALE_REASON: Final = "DW1 không đọc xong tệp trong 1 giờ: hãy tải lại tệp mẫu"
+
+
+@dataclass(frozen=True, slots=True)
+class Swept:
+    """What one workspace's sweep did: drafts failed as stale, and dropped."""
+
+    expired: int
+    pruned: int
+
+
+@dataclass(frozen=True)
+class RuleDraftSweep:
+    """The worker's `RULE_DRAFT_LANE` (module docstring): ``due`` names the
+    workspaces to visit, ``sweep`` visits one, as the lane."""
+
+    uow: RuleDraftUnitOfWorkFactory
+    scopes: RuleDraftScopesPort
+    clock: UtcClock
+    ids: IdGenerator
+
+    async def due(self) -> Sequence[SalesScope]:
+        now = self.clock.now()
+        return await self.scopes.scopes_due(now - STALE_AFTER, now - KEPT_FOR)
+
+    async def sweep(self, scope: SalesScope) -> Swept:
+        """Fails the workspace's drafts queued past `STALE_AFTER`, dropping
+        their files, then drops its drafts older than `KEPT_FOR`. A draft the
+        worker settles meanwhile is left as it settled (`settle` writes only
+        a queued one)."""
+        now = self.clock.now()
+        expired = 0
+        async with self.uow(scope) as work:
+            for draft in await work.drafts.queued_before(now - STALE_AFTER):
+                failed = _failed(draft, _STALE_REASON)
+                if not await work.drafts.settle(failed):
+                    continue
+                expired += 1
+                await work.audit.append(
+                    lane_audit_event(
+                        lane=RULE_DRAFT_LANE,
+                        event_id=self.ids.new_uuid(),
+                        tenant_id=TenantId(scope.tenant_id.value),
+                        workspace_id=WorkspaceId(scope.workspace_id.value),
+                        action="sales.rule_draft.failed",
+                        resource_type=_RESOURCE,
+                        resource_id=str(draft.draft_id),
+                        occurred_at=now,
+                        details=_details(failed)
+                        | {"requested_by": str(draft.requested_by), "reason": "stale"},
+                    )
+                )
+            pruned = await work.drafts.prune(now - KEPT_FOR)
+            await work.commit()
+        return Swept(expired=expired, pruned=pruned)

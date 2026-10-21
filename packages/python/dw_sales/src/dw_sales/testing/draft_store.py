@@ -3,7 +3,8 @@
 
 Holds the SQL store's contract, not only the happy path: each scope's drafts
 are its own (what RLS gives the SQL store), `settle` writes only a draft still
-queued and drops its file, `prune` drops a draft with its file, and a
+queued and drops its file, `prune` drops a draft with its file, `scopes_due`
+names the workspaces the sweep visits (`sales.rule_draft_scopes_due`), and a
 transaction that does not commit writes nothing. The platform's audit and
 outbox are written at once, as the eval store's are.
 """
@@ -11,6 +12,7 @@ outbox are written at once, as the eval store's are.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from types import TracebackType
@@ -64,6 +66,16 @@ class _Drafts:
             self._state.files.pop(draft_id, None)
         return len(old)
 
+    async def queued_before(self, before: datetime) -> list[RuleDraft]:
+        return sorted(
+            (
+                d
+                for d in self._state.drafts.values()
+                if d.status == "queued" and d.requested_at < before
+            ),
+            key=lambda d: d.requested_at,
+        )
+
 
 class _Work:
     def __init__(self, store: MemoryRuleDraftStore, scope: SalesScope) -> None:
@@ -103,3 +115,18 @@ class MemoryRuleDraftStore:
 
     def __call__(self, scope: SalesScope) -> _Work:
         return _Work(self, scope)
+
+    async def scopes_due(
+        self, queued_before: datetime, requested_before: datetime
+    ) -> Sequence[SalesScope]:
+        """Implements `RuleDraftScopesPort`."""
+        due = [
+            scope
+            for scope, state in self.states.items()
+            if any(
+                (d.status == "queued" and d.requested_at < queued_before)
+                or d.requested_at < requested_before
+                for d in state.drafts.values()
+            )
+        ]
+        return sorted(due, key=lambda s: (str(s.tenant_id.value), str(s.workspace_id.value)))

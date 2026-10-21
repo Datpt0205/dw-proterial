@@ -432,7 +432,7 @@
       "version": "1.0.0"
     },
     {
-      "checksum": "b97b3be0011ee91a2bcb69b0902b6c2738aac3f1169e0e6c7dd0c254895ce962",
+      "checksum": "6ac0fafc455d80e588ccd77d28f89235b7ab1238b697260562b2ad0906059f50",
       "dataset_id": "sales_rule_drafts",
       "files": [
         {
@@ -440,14 +440,14 @@
           "path": "evals/expected/sales_rule_drafts.json"
         },
         {
-          "checksum": "a0f69d1802e42a89add5c3cd6ad8f9bbb5331f8b87c28e1a8256ef37bb847926",
+          "checksum": "097b77b8a2f1fd2bb002600c3f69c6d159851f066b728df68c2240fb00195776",
           "path": "evals/fixtures/cases/sales_rule_drafts.json"
         }
       ],
       "version": "1.0.0"
     }
   ],
-  "git_sha": "667957f8c4a10e1165bffebbb001bd37604472fa",
+  "git_sha": "9b287bb4bde4999e2e0d658b6da80ceae70c9d39",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [

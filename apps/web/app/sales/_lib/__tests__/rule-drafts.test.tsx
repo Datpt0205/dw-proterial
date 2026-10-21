@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -10,7 +11,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
-import type { SalesSchemas } from "@dw/api-client";
+import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { AN } from "./fixtures";
 import {
   draftChoices,
@@ -181,6 +182,7 @@ const SLOW = 30_000;
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -201,11 +203,11 @@ async function openBravo() {
   return screen.findByRole("button", { name: /Tạo từ tệp mẫu/ });
 }
 
-function upload() {
+function upload(name = "mau.xlsx") {
   const input = document.querySelector(
     'input[type="file"]',
   ) as HTMLInputElement;
-  const file = new File(["PK"], "mau.xlsx", {
+  const file = new File(["PK"], name, {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   fireEvent.change(input, { target: { files: [file] } });
@@ -388,6 +390,95 @@ describe("Tạo từ tệp mẫu on the rules page", () => {
         ),
       ).toBeTruthy();
       expect(screen.queryByText(/Bản nháp từ tệp/)).toBeNull();
+    },
+    SLOW,
+  );
+
+  const STALLED = "DW1 chưa đọc xong tệp mẫu, hãy thử tải lại sau.";
+  const POLL = 3000;
+
+  /** Fake timers that still move on their own, so the page renders. */
+  function fakeClock() {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  }
+
+  async function passes(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  it(
+    "stops asking when the API answers with an error, and says so",
+    async () => {
+      fakeClock();
+      api.ruleDraft.mockRejectedValue(
+        new ApiError(503, {
+          code: "service_unavailable",
+          message: "down",
+          details: {},
+          request_id: "r-1",
+        }),
+      );
+      renderPage();
+      const button = await openBravo();
+      upload();
+      expect(await screen.findByText("Đang đọc tệp: mau.xlsx")).toBeTruthy();
+      await passes(POLL);
+      expect(await screen.findByText("Máy chủ từ chối")).toBeTruthy();
+      expect(screen.getByText(STALLED)).toBeTruthy();
+      await passes(POLL * 5);
+      expect(api.ruleDraft).toHaveBeenCalledTimes(1);
+      // The upload is offered again, not left spinning.
+      expect(button.className).not.toMatch(/ant-btn-loading/);
+    },
+    SLOW,
+  );
+
+  it(
+    "gives up on a draft that stays queued, with a notice to try again later",
+    async () => {
+      fakeClock();
+      api.ruleDraft.mockResolvedValue(draft({}));
+      renderPage();
+      const button = await openBravo();
+      upload();
+      expect(await screen.findByText("Đang đọc tệp: mau.xlsx")).toBeTruthy();
+      await passes(POLL * 2);
+      expect(api.ruleDraft).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(STALLED)).toBeNull();
+      await passes(3 * 60 * 1000);
+      expect(await screen.findByText(STALLED)).toBeTruthy();
+      const asked = api.ruleDraft.mock.calls.length;
+      await passes(POLL * 5);
+      expect(api.ruleDraft).toHaveBeenCalledTimes(asked);
+      expect(button.className).not.toMatch(/ant-btn-loading/);
+    },
+    SLOW,
+  );
+
+  it(
+    "keeps the earlier draft selected while a second template is read",
+    async () => {
+      const second = "1bb10bb0-c939-7000-8539-31fd3e6217d2";
+      api.requestRuleDraft
+        .mockResolvedValueOnce(READY)
+        .mockResolvedValueOnce(
+          draft({ draft_id: second, file_name: "mau2.xlsx" }),
+        );
+      api.ruleDraft.mockResolvedValue(
+        draft({ draft_id: second, file_name: "mau2.xlsx" }),
+      );
+      renderPage();
+      await openBravo();
+      upload();
+      const label = "Bản nháp từ tệp mau.xlsx · Đã đọc xong";
+      expect(await screen.findByText(label)).toBeTruthy();
+      upload("mau2.xlsx");
+      expect(await screen.findByText("Đang đọc tệp: mau2.xlsx")).toBeTruthy();
+      // Still the start, and still marked as read by the machine.
+      expect(screen.getByText(label)).toBeTruthy();
+      expect(screen.getAllByText("Đọc từ NhapDonBan!D3")).toHaveLength(2);
     },
     SLOW,
   );

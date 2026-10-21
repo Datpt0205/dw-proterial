@@ -58,6 +58,7 @@ from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
+from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.persistence.uow import (
     ApprovalsFactory,
@@ -94,7 +95,7 @@ from dw_sales.application.processing import (
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
-from dw_sales.application.rule_drafts import RuleDrafting
+from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
@@ -136,6 +137,8 @@ class Dw1Mount:
     # What drafts a rule version from an uploaded template in the worker
     # ("Tạo từ tệp mẫu"); built with the drain, which resolves who asked.
     rule_drafting: RuleDrafting | None = None
+    # What fails a draft its event lost and drops old ones, with no request.
+    rule_draft_sweep: RuleDraftSweep | None = None
 
 
 def build_dw1(
@@ -315,6 +318,9 @@ def build_dw1(
         queue=queue,
         catalog_parsing=catalog_parsing,
         rule_drafting=rule_drafting,
+        rule_draft_sweep=RuleDraftSweep(
+            catalog_uow, SqlRuleDraftScopes(session_factory), clock, ids
+        ),
     )
 
 
