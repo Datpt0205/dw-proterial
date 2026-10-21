@@ -114,7 +114,9 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
   const [dialog, setDialog] = useState<"pause" | "resume" | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [form] = Form.useForm<{ reason?: string }>();
+  const { token } = theme.useToken();
   const worker = overview.data?.worker;
+  const progress = useWorkerProgress(Boolean(worker));
   if (!worker) return null;
 
   const submit = async ({ reason }: { reason?: string }) => {
@@ -166,7 +168,7 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
         title={
           <Flex wrap gap={4} align="center">
             <Typography.Text strong>
-              {worker.paused ? "DW1 đang tạm dừng" : "DW1 đang chạy"}
+              {worker.paused ? "DW1 đang tạm dừng" : headline(progress)}
             </Typography.Text>
             {worker.paused ? (
               <Typography.Text>
@@ -175,7 +177,14 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
                 {worker.reason ? ` · Lý do: ${worker.reason}` : ""}
               </Typography.Text>
             ) : null}
-            <WorkerProgress />
+            {progress ? (
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: token.fontSizeSM }}
+              >
+                · {progressLine(progress)}
+              </Typography.Text>
+            ) : null}
             {explain ? (
               <Tooltip title={explain}>
                 <InfoCircleOutlined
@@ -262,29 +271,35 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
   );
 }
 
+interface Progress {
+  /** The messages DW1 is reading now. */
+  reading: Message[];
+  queued: number;
+  failed: number;
+  done: number;
+  total: number;
+  /** When DW1 last decided a message. */
+  lastAt: string | null;
+}
+
 /**
- * Where DW1 stands on the mailbox, in one line: the message it is reading
- * now, how many it has done of how many, and how many wait or failed. Read
- * from the mailbox the API owns (`InboxMessageView.processing`), again every
- * few seconds while anything is queued or running.
+ * Where DW1 stands on the mailbox, read from the mailbox the API owns
+ * (`InboxMessageView.processing`), again every few seconds while anything is
+ * queued or running. Null for a viewer who may not read the mailbox.
  */
-function WorkerProgress() {
+function useWorkerProgress(workerKnown: boolean): Progress | null {
   const { hasScope } = useAuth();
-  const { token } = theme.useToken();
   const inbox = useResource<Message[]>(
     "sales/worker-progress",
     useCallback(() => salesApi().inbox(), []),
-    { enabled: hasScope(SCOPE.caseRead) },
+    // Only once DW1's own state is known: the bar is drawn from both.
+    { enabled: workerKnown && hasScope(SCOPE.caseRead) },
   );
   const messages = inbox.data ?? [];
   const state = (m: Message) => m.processing?.status ?? null;
-  const running = messages.filter((m) => state(m) === "running");
+  const reading = messages.filter((m) => state(m) === "running");
   const queued = messages.filter((m) => state(m) === "queued").length;
-  const failed = messages.filter((m) => state(m) === "failed").length;
-  const done = messages.filter(
-    (m) => m.disposition.kind !== "not_yet_processed",
-  ).length;
-  const busy = running.length + queued > 0;
+  const busy = reading.length + queued > 0;
   const { reload } = inbox;
   useEffect(() => {
     if (!busy) return;
@@ -292,18 +307,43 @@ function WorkerProgress() {
     return () => window.clearInterval(timer);
   }, [busy, reload]);
   if (!inbox.data) return null;
-  const small = { fontSize: token.fontSizeSM };
-  return (
-    <Typography.Text type="secondary" style={small}>
-      ·{" "}
-      {running.length
-        ? `đang đọc ${running.map((m) => `“${m.subject}”`).join(", ")}`
-        : busy
-          ? "đang chờ lượt đọc thư"
-          : "không có thư đang chờ"}{" "}
-      · đã xử lý {done}/{messages.length} thư
-      {queued ? ` · ${queued} thư đang chờ` : ""}
-      {failed ? ` · ${failed} thư chưa xử lý được` : ""}
-    </Typography.Text>
-  );
+  const times = messages
+    .map((m) => m.disposition.processed_at)
+    .filter((t): t is string => Boolean(t))
+    .sort();
+  return {
+    reading,
+    queued,
+    failed: messages.filter((m) => state(m) === "failed").length,
+    done: messages.filter((m) => m.disposition.kind !== "not_yet_processed")
+      .length,
+    total: messages.length,
+    lastAt: times.at(-1) ?? null,
+  };
+}
+
+/** What DW1 is doing now, in words (Đạt, 2026-10-21: never just "đang chạy"). */
+function headline(progress: Progress | null): string {
+  if (!progress) return "DW1 đang bật";
+  if (progress.reading.length)
+    return `DW1 đang đọc ${progress.reading
+      .map((m) => `“${m.subject}”`)
+      .join(", ")}`;
+  if (progress.queued) return `DW1 sắp đọc ${progress.queued} thư đang chờ`;
+  return "DW1 đã xử lý hết thư, đang chờ thư mới";
+}
+
+function progressLine(progress: Progress): string {
+  return [
+    `đã xử lý ${progress.done}/${progress.total} thư`,
+    progress.reading.length && progress.queued
+      ? `${progress.queued} thư đang chờ`
+      : null,
+    progress.failed ? `${progress.failed} thư chưa xử lý được` : null,
+    progress.lastAt
+      ? `thư gần nhất lúc ${formatDateTime(progress.lastAt, { zoneLabel: false })}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
