@@ -67,6 +67,24 @@ export function isOpen(finding: Finding): boolean {
   return finding.disposition.kind === "open";
 }
 
+/**
+ * Why export control holds the order short of `confirmed`, as
+ * `OrderCase.confirm` refuses it: NOC/ESF still open (`awaiting_ack`), or
+ * present at all under the case's stamped `block_confirmation`
+ * (`blocked_by_rule`). Null once nothing is held, or once the case is
+ * confirmed or closed and confirmation is no longer ahead of it.
+ */
+export type ExportControlHold = "awaiting_ack" | "blocked_by_rule";
+
+export function exportControlHold(order: Order): ExportControlHold | null {
+  if (order.status === "confirmed" || order.status === "closed") return null;
+  const noc = order.findings.filter((f) => f.code === "missing_noc_esf");
+  if (noc.some(isOpen)) return "awaiting_ack";
+  if (noc.length && order.export_control_mode === "block_confirmation")
+    return "blocked_by_rule";
+  return null;
+}
+
 /** Open findings that block preparation: every open one but NOC/ESF. */
 export function openBlockingPreparation(order: Order): Finding[] {
   return order.findings.filter(
@@ -213,14 +231,14 @@ export function orderOffers(
     status === "cross_checked" ||
     (status === "uploaded_to_bravo" && order.cross_check_required === false);
   if (confirmable) {
-    const noc = order.findings.filter((f) => f.code === "missing_noc_esf");
+    const hold = exportControlHold(order);
     const waiting = shortLeadTimeWaiting(order);
     offers.confirm = {
       reason: !canPrepare
         ? noPrepare
-        : noc.some(isOpen)
+        : hold === "awaiting_ack"
           ? `"${label(FINDING_CODE, "missing_noc_esf")}" chưa được ${EXPORT_PIC} xác nhận.`
-          : noc.length && order.export_control_mode === "block_confirmation"
+          : hold === "blocked_by_rule"
             ? `Quy tắc kiểm soát xuất khẩu đang chặn xác nhận đơn có cờ "${label(FINDING_CODE, "missing_noc_esf")}".`
             : waiting.length
               ? `Dòng ${waiting.join(", ")} có ngày yêu cầu ngắn hơn lead time và chưa ghi PC đồng ý.`

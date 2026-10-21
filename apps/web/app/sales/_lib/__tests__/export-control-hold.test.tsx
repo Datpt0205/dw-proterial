@@ -62,6 +62,7 @@ let shown: Order = crossChecked();
 const api = {
   order: vi.fn(async () => shown),
   myWork: vi.fn(async () => []),
+  history: vi.fn(async () => []),
   customers: vi.fn(async () => ({ items: [] })),
   artifacts: vi.fn(async () => ({
     case_version: shown.case_version,
@@ -86,6 +87,8 @@ function page() {
 
 const SLOW = 20_000;
 const HELD = "Đơn đang bị giữ: chờ PIC kiểm soát xuất khẩu xác nhận NOC/ESF.";
+const BLOCKED =
+  "Quy tắc kiểm soát xuất khẩu đang chặn xác nhận đơn có cờ Thiếu NOC/ESF.";
 
 afterEach(() => {
   cleanup();
@@ -126,6 +129,28 @@ describe("an order held for export control (contract acceptance row 3)", () => {
         )[0],
       ).toBeTruthy();
       expect(screen.queryByText(HELD)).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "says the rule holds it when the case's mode blocks confirmation, accepted or not",
+    async () => {
+      shown = {
+        ...crossChecked({ disposition: ACCEPTED }),
+        export_control_mode: "block_confirmation",
+      };
+      page();
+      const title = await screen.findByText(BLOCKED, undefined, {
+        timeout: 5000,
+      });
+      expect(title.closest("[role='status']")).not.toBeNull();
+      expect(screen.queryByText(HELD)).toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Đã gửi xác nhận" })
+          .hasAttribute("disabled"),
+      ).toBe(true);
     },
     SLOW,
   );
