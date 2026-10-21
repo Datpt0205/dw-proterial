@@ -431,14 +431,18 @@ async def test_tenant_it_is_shown_no_price_bearing_rule_and_cannot_propose_one(
     listed = await tam.get("/rules")
 
     assert listed.status_code == 200, listed.text
-    for hidden in ("sales_pricing", "sales_quote_rules", floor, "copper_adders"):
+    # The order rules too: the tenant's seeded version holds the price
+    # tolerance and the LME rule (dw_sales ADR 0003).
+    price_keys = ("sales_pricing", "sales_quote_rules", "sales_order_rules")
+    for hidden in (*price_keys, floor, "copper_adders"):
         assert hidden not in listed.text, hidden
-    # The search can fail: An, who reads prices, is shown both.
+    # The search can fail: An, who reads prices, is shown all three.
     shown = (await rules_api.as_(AN).get("/rules")).text
-    assert all(text in shown for text in ("sales_pricing", "sales_quote_rules", floor))
+    assert all(text in shown for text in (*price_keys, floor))
     for key, document in (
         ("sales_pricing", _bumped(pricing, "9.0.2")),
         ("sales_quote_rules", _quote_rules("9.0.2", 60)),
+        ("sales_order_rules", _document("9.0.2")),
     ):
         assert (await tam.get(f"/rules/{key}/schema")).status_code == 403
         assert (await tam.get(f"/rules/{key}/platform")).status_code == 403

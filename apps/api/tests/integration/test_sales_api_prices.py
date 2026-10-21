@@ -1,8 +1,8 @@
 """Prices reach only those allowed to see them (spec decision 8, G2).
 
 After M04 is decided and M10 approved, leadership, tenant IT and a member
-without Sales scopes call every Sales route and the platform's audit log, and
-no known price string is in anything they get back. The same walk as An,
+without Sales scopes call every Sales route, the platform's audit log and the
+rules each is listed, and no known price string is in anything they get back. The same walk as An,
 who may see prices, does find them: the search can fail.
 """
 
@@ -119,6 +119,23 @@ async def _everything(persona: Persona, world: dict[str, Any]) -> list[Any]:
         ).json()
     )
     bodies.append((await persona.platform("/audit/events?limit=200")).json())
+    bodies += await _rules(persona)
+    return bodies
+
+
+async def _rules(persona: Persona) -> list[Any]:
+    """The rules list, and the schema and platform documents of every key it
+    lists to this persona: what tenant IT reaches (`sales_rules_editor`). A
+    refused read (403) is skipped: it carries nothing to leak."""
+    listed = await persona.get("/rules")
+    if listed.status_code == 403:
+        return []
+    bodies = [listed.json()]
+    for key in listed.json()["in_force"]:
+        for read in ("platform", "schema"):
+            answer = await persona.get(f"/rules/{key}/{read}")
+            if answer.status_code != 403:
+                bodies.append(answer.json())
     return bodies
 
 

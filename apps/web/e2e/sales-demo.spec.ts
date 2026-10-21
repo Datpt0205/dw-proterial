@@ -1001,7 +1001,7 @@ test("8. Giang prices M14 and may not approve it; Khoa approves it", async ({
   );
 });
 
-test("9. Who sees what: Hà the overview only, Bình and Tâm nothing, Bảo none of tenant Alpha", async ({
+test("9. Who sees what: Hà the overview only, Bình nothing, Tâm the rules alone, Bảo none of tenant Alpha", async ({
   page,
   request,
 }) => {

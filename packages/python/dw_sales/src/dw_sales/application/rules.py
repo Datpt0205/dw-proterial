@@ -144,13 +144,14 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
     }
 )
 # The keys whose documents hold prices or price policy: the pricing inputs
-# (copper adders, the floor, freight) and the quote rules (the reference price
-# band, the copper basis). Reading, starting from or proposing one also asks
-# for `sales.price.read` (dw_sales ADR 0003 §2), so a proposer without it (tenant
-# IT, whom `sod_sales_price_vs_member_admin` keeps from it) is not shown them at
-# all. A key added to `RuleKey` fails `test_rules.py` until someone decides
-# whether it belongs here.
-PRICE_BEARING: Final = frozenset({RuleKey.QUOTE_RULES, RuleKey.PRICING})
+# (copper adders, the floor, freight), the quote rules (the reference price
+# band, the copper basis) and the order rules (`price.relative_tolerance`, the
+# LME rule, which ADR 0003 names confidential). Reading, starting from or
+# proposing one also asks for `sales.price.read` (dw_sales ADR 0003 §2), so a
+# proposer without it (tenant IT, whom `sod_sales_price_vs_member_admin` keeps
+# from it) is not shown them at all. A key added to `RuleKey` fails
+# `test_rules.py` until someone decides whether it belongs here.
+PRICE_BEARING: Final = frozenset({RuleKey.ORDER_RULES, RuleKey.QUOTE_RULES, RuleKey.PRICING})
 # The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
 _ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
 RuleStatus = Literal["proposed", "approved", "rejected", "superseded"]

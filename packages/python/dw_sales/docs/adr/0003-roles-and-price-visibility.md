@@ -78,7 +78,8 @@ Decided by Đạt. The customer's IT may propose a version of a Sales rule
   IT membership (migration `59cf23d3a859`). `org_admin` itself still holds no
   `sales.*` scope, so decision 4 stands for the role.
 - A key whose documents hold prices or price policy (`sales_pricing`,
-  `sales_quote_rules`: `PRICE_BEARING` in `dw_sales.application.rules`) also
+  `sales_quote_rules`, and `sales_order_rules` for its price tolerance and
+  the LME rule: `PRICE_BEARING` in `dw_sales.application.rules`) also
   asks for `sales.price.read`, which decision 4's rule keeps off IT. The rules
   list leaves such a key out for a caller without it, and its schema, its
   platform documents and a proposal of it answer 403. Decision 2 extended to

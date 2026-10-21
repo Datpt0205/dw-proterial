@@ -27,8 +27,9 @@ _PARAMS = {
     "finding_key": "price_mismatch:2",
     "line_no": "1",
     "message_id": "M01",
-    # A tenant's own rule versions (ticket 19).
-    "key": "sales_order_rules",
+    # A tenant's own rule versions (ticket 19): a key holding no price, so
+    # tenant IT's answer on it is the rules scope's, not the price scope's.
+    "key": "sales_bravo_upload",
     "version_id": str(uuid.uuid4()),
     # Master data imports (ticket 41).
     "catalog_list": "customers",
@@ -73,9 +74,9 @@ async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> 
 
     assert {route for route, status in answers.items() if status != 403} == {
         ("GET", "/rules"),
-        ("GET", "/rules/sales_order_rules/schema"),
-        ("GET", "/rules/sales_order_rules/platform"),
-        ("POST", "/rules/sales_order_rules/versions"),
+        ("GET", "/rules/sales_bravo_upload/schema"),
+        ("GET", "/rules/sales_bravo_upload/platform"),
+        ("POST", "/rules/sales_bravo_upload/versions"),
     }
 
 
