@@ -498,7 +498,10 @@ def _white(colour: Color | None) -> bool:
             rgb = colour.rgb
             return isinstance(rgb, str) and len(rgb) in (6, 8) and rgb[-6:].upper() == "FFFFFF"
         case "theme":
-            return colour.theme == _WHITE_THEME
+            # A negative tint darkens the theme colour ("White, Background 1,
+            # Darker 15%..50%" is a visible grey); only an undarkened theme
+            # white is white.
+            return colour.theme == _WHITE_THEME and (colour.tint or 0.0) >= 0
         case "indexed":
             return colour.indexed in _WHITE_INDEXED
         case _:

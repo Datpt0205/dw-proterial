@@ -99,6 +99,10 @@ async def test_hidden_sheets_columns_and_text_in_its_fill_colour_are_not_sent() 
         # White on a dark fill is how many headers are printed: seen.
         (Font(color="FFFFFFFF"), PatternFill(fill_type="solid", fgColor="FF1F4E79"), False),
         (Font(color=Color(theme=1)), None, False),
+        # "White, Background 1, Darker 15% / 50%": a visible grey, read.
+        (Font(color=Color(theme=0, tint=-0.149998474074526)), None, False),
+        (Font(color=Color(theme=0, tint=-0.499984740745262)), None, False),
+        (Font(color=Color(theme=0, tint=0.5)), None, True),
         (Font(sz=8), None, False),
         (Font(), None, False),
     ],
