@@ -1,5 +1,5 @@
-"""DW1's roles and permission sets in the platform catalogue (migration
-68305ebe4a83, dw_sales ADR 0003)."""
+"""DW1's roles and permission sets in the platform catalogue (migrations
+68305ebe4a83 and 59cf23d3a859, dw_sales ADR 0003)."""
 
 from __future__ import annotations
 
@@ -20,6 +20,8 @@ pytestmark = pytest.mark.integration
 # The platform's own rungs, and the two catalogue rows that are not a rung.
 _GENERIC = ("member", "approver", "manager", "director", "executive", "org_admin")
 _RULE = "sod_sales_price_vs_member_admin"
+# Tenant IT proposes rules and never approves one (59cf23d3a859).
+_RULES_RULE = "sod_sales_rules_approve_vs_member_admin"
 
 
 async def _scopes(engine: AsyncEngine, table: str) -> dict[str, set[str]]:
@@ -85,6 +87,9 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
     # decider for it besides the request's stamp (docs/adr/0011).
     assert permission_sets["sales_quote_approver"] == {"sales.quote.approve", "approvals.decide"}
     assert permission_sets["sales_export_control"] == {"sales.compliance.ack"}
+    # Tenant IT's: proposing a rule version, nothing else (59cf23d3a859). It
+    # decides nothing, so not `approvals.decide` either.
+    assert permission_sets["sales_rules_editor"] == {"sales.rules.propose"}
     async with migrator.connect() as conn:
         name = await conn.scalar(
             sa.text("SELECT name FROM platform.roles WHERE key = 'sales_head'")
@@ -166,6 +171,9 @@ async def test_it_cannot_also_hold_a_price_scope(
         (["sales_pic"], ["sales_quote_approver"]),
         # The viewer sees counts and times, never a price.
         (["org_admin", "sales_viewer"], []),
+        # Tenant IT proposes rules (dev|tam.ngo, 59cf23d3a859); so may a PIC.
+        (["org_admin"], ["sales_rules_editor"]),
+        (["sales_pic"], ["sales_rules_editor"]),
     ],
 )
 async def test_the_spec_personas_combinations_are_allowed(
@@ -178,9 +186,46 @@ async def test_the_spec_personas_combinations_are_allowed(
     await _grant(app_sessions, migrator, world, roles, permission_sets)
 
 
-async def test_the_rule_is_not_waivable(migrator: AsyncEngine) -> None:
+async def test_it_cannot_also_approve_rules(
+    app_sessions: async_sessionmaker[AsyncSession], migrator: AsyncEngine, world: World
+) -> None:
+    """Whoever administers members never holds `sales.rules.approve`, even
+    through a set that carries no price (so the price rule is not what
+    refuses it). No catalogue row is such a set today: the test makes one."""
+    probe = f"probe_rules_approver_{uuid.uuid4().hex[:8]}"
+    async with migrator.begin() as conn:
+        await conn.execute(
+            sa.text(
+                "INSERT INTO platform.permission_sets (key, name, scopes)"
+                " VALUES (:k, :k, CAST(:scopes AS jsonb))"
+            ),
+            {"k": probe, "scopes": json.dumps(["sales.rules.approve"])},
+        )
+    try:
+        with pytest.raises(IntegrityError) as refused:
+            await _grant(app_sessions, migrator, world, ["org_admin"], [probe])
+        cause = getattr(refused.value.orig, "__cause__", None)
+        assert getattr(cause, "constraint_name", None) == _RULES_RULE
+        # The same set without member administration is allowed.
+        await _grant(app_sessions, migrator, world, ["sales_pic"], [probe])
+    finally:
+        async with migrator.begin() as conn:
+            await conn.execute(
+                sa.text(
+                    "DELETE FROM platform.memberships"
+                    " WHERE permission_set_keys @> CAST(:keys AS jsonb)"
+                ),
+                {"keys": json.dumps([probe])},
+            )
+            await conn.execute(
+                sa.text("DELETE FROM platform.permission_sets WHERE key = :k"), {"k": probe}
+            )
+
+
+@pytest.mark.parametrize("rule", [_RULE, _RULES_RULE])
+async def test_the_rule_is_not_waivable(migrator: AsyncEngine, rule: str) -> None:
     async with migrator.connect() as conn:
         waivable = await conn.scalar(
-            sa.text("SELECT waivable FROM platform.sod_rules WHERE key = :k"), {"k": _RULE}
+            sa.text("SELECT waivable FROM platform.sod_rules WHERE key = :k"), {"k": rule}
         )
     assert waivable is False

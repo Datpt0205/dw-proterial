@@ -84,13 +84,16 @@ const TONE: Record<RuleVersion["status"], "ok" | "warn" | "err" | "unk"> = {
 /**
  * Quy tắc (tickets 19, 38, 36, 40): what applies to the company per key, the
  * platform's or its own, and every version it proposed. A holder of
- * `sales.rules.propose` (Sales phụ trách or Trưởng bộ phận Sales) proposes a
- * whole document for one key in a form drawn from that key's JSON Schema,
- * reads what it changes against the version in force, and sends it; the
- * server validates it again and opens a `sales.rules` platform approval,
- * which someone who did not propose it decides on `/approvals`. Nothing here
- * decides. The server answers this page only to holders of the scope (the
- * documents can hold price rules), and refuses a proposal from anyone else.
+ * `sales.rules.propose` (Sales phụ trách, Trưởng bộ phận Sales, or the
+ * company's IT holding `sales_rules_editor`) proposes a whole document for
+ * one key in a form drawn from that key's JSON Schema, reads what it changes
+ * against the version in force, and sends it; the server validates it again
+ * and opens a `sales.rules` platform approval, which someone who did not
+ * propose it decides on `/approvals`. Nothing here decides. The server
+ * answers this page only to holders of the scope, and lists only the keys the
+ * caller may read: one holding prices or price policy is absent for someone
+ * without `sales.price.read`, so the page draws the keys it is given and
+ * names none of its own.
  */
 export default function RulesPage() {
   return (

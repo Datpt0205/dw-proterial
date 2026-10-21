@@ -3687,7 +3687,8 @@ export interface components {
         /**
          * RuleVersionView
          * @description A version as the rules list shows it: who proposed and decided it, and
-         *     the document only to whoever may propose (it can hold price rules).
+         *     the document only to whoever may propose, and a price-bearing key's only
+         *     to whoever may also read prices.
          */
         RuleVersionView: {
             /** Approval Id */

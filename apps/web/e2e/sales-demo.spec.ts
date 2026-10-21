@@ -58,7 +58,7 @@ const GIANG = "dev|giang.do"; // Trưởng bộ phận
 const KHOA = "dev|khoa.lam"; // duyệt báo giá thay
 const HA = "dev|ha.vu"; // Lãnh đạo (xem tổng hợp)
 const BINH = "dev|binh.tran"; // purchasing, no Sales
-const TAM = "dev|tam.ngo"; // IT, no Sales
+const TAM = "dev|tam.ngo"; // IT: proposes rules, nothing else in Sales
 const BAO = "dev|bao.pham"; // tenant-beta PIC
 
 /**
@@ -1008,7 +1008,7 @@ test("8. Giang prices M14 and may not approve it; Khoa approves it", async ({
   );
 });
 
-test("9. Who sees what: Hà the overview only, Bình and Tâm nothing, Bảo none of tenant Alpha", async ({
+test("9. Who sees what: Hà the overview only, Bình nothing, Tâm the rules alone, Bảo none of tenant Alpha", async ({
   page,
   request,
 }) => {
@@ -1064,7 +1064,8 @@ test("9. Who sees what: Hà the overview only, Bình and Tâm nothing, Bảo non
     ).toEqual([]);
   }
 
-  // Bình (purchasing) and Tâm (IT): no Sales route at all, so no price.
+  // Bình (purchasing) and Tâm (IT, the rules alone): no overview or case
+  // route, so no price.
   for (const subject of [BINH, TAM]) {
     const outsider = await persona(request, subject);
     for (const url of ["/overview", ...caseUrls]) {
