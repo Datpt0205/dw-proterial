@@ -22,17 +22,27 @@ import {
   Space,
   Table,
   Typography,
+  Upload,
 } from "antd";
+import { UploadOutlined } from "@ant-design/icons";
 import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import { formatDateTime, TIME_ZONE_LABEL } from "../../../lib/dates";
 import { errorCode } from "../../../lib/error-message";
 import { salesApi } from "../_lib/api";
+import { toBase64 } from "../_lib/catalog";
 import { ActionError, detailList } from "../_lib/errors";
 import { usePeople } from "../_lib/people";
 import {
+  DRAFT_ACCEPT,
+  DRAFT_STATUS,
+  draftChoices,
+  draftOption,
+  draftProblemText,
   keyRows,
+  machineRead,
+  MAX_DRAFT_BYTES,
   nextVersion,
   parseDocument,
   RULE_KEY,
@@ -40,6 +50,7 @@ import {
   RULE_STATUS,
   startOptions,
   type KeyRow,
+  type RuleDraft,
   type RuleKey,
   type RuleVersion,
   type StartOption,
@@ -359,12 +370,16 @@ function ProposeDrawer({
       root={root}
       options={options}
       initialStart={initialStart}
+      draftable={view.draftable.includes(ruleKey)}
       title={title}
       onClose={onClose}
       onProposed={onProposed}
     />
   );
 }
+
+// How often a template the worker is still reading is asked about again.
+const POLL_MS = 3000;
 
 type Mode = "form" | "json";
 type Step = "edit" | "review";
@@ -393,8 +408,9 @@ function prepared(
 function Editor({
   ruleKey,
   root,
-  options,
+  options: versions,
   initialStart,
+  draftable,
   title,
   onClose,
   onProposed,
@@ -403,13 +419,21 @@ function Editor({
   root: RuleNode;
   options: StartOption[];
   initialStart?: string;
+  /** Whether a version of this key may be drafted from the company's file. */
+  draftable: boolean;
   title: string;
   onClose: () => void;
   onProposed: () => void;
 }) {
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const { run, pending } = useAction();
   const [form] = Form.useForm();
+  // "Tạo từ tệp mẫu": the draft of the template uploaded here, if any.
+  const [draft, setDraft] = useState<RuleDraft | null>(null);
+  const options = useMemo(() => {
+    const drafted = draft ? draftOption(draft) : null;
+    return drafted ? [...versions, drafted] : versions;
+  }, [versions, draft]);
   const inForce = options.find((o) => o.inForce) ?? options[0]!;
   const [startId, setStartId] = useState(
     options.some((o) => o.id === initialStart) ? initialStart! : inForce.id,
@@ -463,6 +487,51 @@ function Editor({
       setFailedCount(0);
       setUnplaced([]);
     }, "Bắt đầu lại từ phiên bản khác?");
+
+  // A template the worker has not read yet: asked about again until it has.
+  useEffect(() => {
+    if (draft?.status !== "queued") return;
+    const draftId = draft.draft_id;
+    const timer = window.setInterval(() => {
+      salesApi().ruleDraft(draftId).then(setDraft, setError);
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [draft?.status, draft?.draft_id]);
+
+  // Read, the draft opens as the version to start from (once per draft).
+  const opened = useRef<string | null>(null);
+  useEffect(() => {
+    if (!draft || draft.status === "queued") return;
+    if (opened.current === draft.draft_id) return;
+    opened.current = draft.draft_id;
+    const option = draftOption(draft);
+    if (option) choose(option.id);
+  });
+
+  const requestDraft = async (file: File) => {
+    setError(null);
+    if (file.size > MAX_DRAFT_BYTES) {
+      void message.error("Tệp lớn hơn 2 MB: bỏ các sheet hoặc dòng không cần.");
+      return;
+    }
+    const body = {
+      file_name: file.name,
+      content_b64: toBase64(new Uint8Array(await file.arrayBuffer())),
+    };
+    const result = await run(
+      `draft/${ruleKey}`,
+      {
+        ruleKey,
+        name: file.name,
+        size: file.size,
+        modified: file.lastModified,
+      },
+      (key) => salesApi().requestRuleDraft(ruleKey, body, key),
+      `Đã nhận tệp ${file.name}: DW1 đang đọc, bản nháp tự mở ở đây khi xong.`,
+    );
+    if (result.ok) setDraft(result.value);
+    else setError(result.error);
+  };
 
   const switchMode = (next: Mode) => {
     if (next === "json") {
@@ -598,6 +667,33 @@ function Editor({
               }))}
             />
           </Form.Item>
+          {draftable ? (
+            <Form.Item
+              label="Mẫu của công ty"
+              layout="vertical"
+              extra="Tệp mẫu nhập Bravo của công ty (.xlsx, .xls, tối đa 2 MB). DW1 đọc hàng tiêu đề và gợi ý cột cho từng giá trị; bạn kiểm, xem thay đổi rồi gửi duyệt như mọi phiên bản."
+            >
+              <Upload
+                accept={DRAFT_ACCEPT}
+                showUploadList={false}
+                maxCount={1}
+                beforeUpload={(file) => {
+                  void requestDraft(file);
+                  return false;
+                }}
+              >
+                <Button
+                  icon={<UploadOutlined aria-hidden />}
+                  loading={
+                    pending === `draft/${ruleKey}` || draft?.status === "queued"
+                  }
+                >
+                  Tạo từ tệp mẫu
+                </Button>
+              </Upload>
+            </Form.Item>
+          ) : null}
+          {draft ? <DraftNotice draft={draft} /> : null}
           <Segmented<Mode>
             value={mode}
             onChange={switchMode}
@@ -666,6 +762,8 @@ function Editor({
                 root={root}
                 form={form}
                 base={inForce.document}
+                machineRead={start.draft ? machineRead(start.draft) : undefined}
+                choices={start.draft ? draftChoices(start.draft) : undefined}
               />
             </Form>
           )}
@@ -676,8 +774,66 @@ function Editor({
   );
 }
 
+/**
+ * Where a draft stands, in words: still being read, why it failed, or what
+ * opened and what the person still has to settle (the template's columns no
+ * value takes, why DW1's mapping was not taken, the template's headers).
+ */
+function DraftNotice({ draft }: { draft: RuleDraft }) {
+  const title = `${DRAFT_STATUS[draft.status]}: ${draft.file_name}`;
+  if (draft.status === "queued")
+    return (
+      <Alert
+        type="info"
+        showIcon
+        role="status"
+        title={title}
+        description="DW1 đọc tệp trong vùng cách ly; bản nháp tự mở ở đây khi xong."
+      />
+    );
+  if (draft.status === "failed")
+    return (
+      <Alert type="error" showIcon title={title} description={draft.error} />
+    );
+  const template = draft.template;
+  const ready = draft.status === "ready";
+  return (
+    <Alert
+      type={ready && !draft.problems.length ? "success" : "warning"}
+      showIcon
+      title={title}
+      description={
+        <div>
+          <Typography.Paragraph className="mb-2!">
+            {ready
+              ? "Đã mở bản nháp: mỗi trường gắn “Máy đọc” do DW1 đọc từ mẫu, kèm ô đã đọc. Kiểm từng cột trước khi xem thay đổi."
+              : "Đã mở bản đang áp dụng với tên sheet của mẫu; các cột chưa đổi, không đoán. Chọn tiêu đề cho từng cột trong danh sách tiêu đề của mẫu."}
+          </Typography.Paragraph>
+          {draft.problems.length ? (
+            <ul className="m-0 mb-2 ps-5">
+              {draft.problems.map((p, i) => (
+                <li key={`${p.code}-${p.field ?? ""}-${p.ref ?? ""}-${i}`}>
+                  {draftProblemText(p)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {template ? (
+            <Typography.Paragraph className="mb-0!">
+              Tiêu đề của mẫu (sheet {template.sheet}, hàng {template.row}):{" "}
+              {template.headers.map((h) => h.text).join(" · ")}
+            </Typography.Paragraph>
+          ) : null}
+        </div>
+      }
+    />
+  );
+}
+
 /** "sales_kpi@1.0.1 · Riêng của công ty · Đã duyệt · đang áp dụng". */
 function startLabel(option: StartOption): string {
+  if (option.draft)
+    return `Bản nháp từ tệp ${option.draft.file_name} · ${DRAFT_STATUS[option.draft.status]}`;
   return [
     option.ref,
     RULE_LAYER[option.layer],

@@ -94,6 +94,7 @@ from dw_sales.application.processing import (
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
+from dw_sales.application.rule_drafts import RuleDrafting
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
@@ -132,6 +133,9 @@ class Dw1Mount:
     queue: ProcessingQueuePort | None = None
     # What reads an uploaded master-data file in the worker (ticket 41).
     catalog_parsing: CatalogParsing | None = None
+    # What drafts a rule version from an uploaded template in the worker
+    # ("Tạo từ tệp mẫu"); built with the drain, which resolves who asked.
+    rule_drafting: RuleDrafting | None = None
 
 
 def build_dw1(
@@ -157,6 +161,7 @@ def build_dw1(
     lane_access: ServiceAccessPort | None = None,
     requester_access: RequesterAccessPort | None = None,
     model: ModelGateway | None = None,
+    one_call_model: ModelGateway | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
@@ -166,7 +171,10 @@ def build_dw1(
     and, given ``lane_access``, the mailbox lane over the same services;
     given ``requester_access``, the drain of the processing queue that "DW
     xử lý" and the lane fill (ticket 25), which runs each job as whoever
-    asked, resolved again by the platform. Every attachment is scanned by
+    asked, resolved again by the platform, and the drafting of a rule version
+    from an uploaded template, asked of ``one_call_model`` (the one-call door:
+    the plan's daily allowance checked before the call), as whoever uploaded
+    it. Every attachment is scanned by
     ``scanner`` before anything reads it (ticket 25): the mailbox each service
     holds is the scanned one. Every file is then read through ``reader``, the
     reader sandbox wherever a process is deployed
@@ -260,6 +268,7 @@ def build_dw1(
         telemetry=telemetry,
         catalog_uow=catalog_uow,
         templates=XlsxCatalogTemplates(),
+        draft_uow=catalog_uow,
     )
     register(
         graphs=runtime.graphs,
@@ -283,12 +292,29 @@ def build_dw1(
     drain = ProcessingDrain(
         queue, uow, assembly.services.dw1, requester_access, clock, ids, channels=lane
     )
+    rule_drafting = RuleDrafting(
+        uow=catalog_uow,
+        sheets=readers.source,
+        scanner=scanner,
+        rules=book,
+        access=requester_access,
+        model=(
+            None
+            if one_call_model is None
+            else interpretation_for(one_call_model, configs, worker.default_model_profile)
+        ),
+        clock=clock,
+        ids=ids,
+        worker_id=worker.worker_id,
+        worker_version=worker.worker_version,
+    )
     return Dw1Mount(
         services=assembly.services,
         lane=lane,
         drain=drain,
         queue=queue,
         catalog_parsing=catalog_parsing,
+        rule_drafting=rule_drafting,
     )
 
 

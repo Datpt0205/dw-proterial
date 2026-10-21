@@ -2711,6 +2711,97 @@
         "title": "DispositionView",
         "type": "object"
       },
+      "DraftProblem": {
+        "additionalProperties": false,
+        "description": "Why a draft is not, or not wholly, what the template says. Names a\nfield, a cell and that cell's own text: never a word of the model's.",
+        "properties": {
+          "code": {
+            "enum": [
+              "column_unmapped",
+              "header_not_in_template",
+              "header_ambiguous",
+              "header_twice",
+              "required_missing",
+              "layout_invalid",
+              "sheet_name_invalid",
+              "model_unavailable",
+              "model_not_configured",
+              "model_quota"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "enum": [
+                  "customer_code",
+                  "po_no",
+                  "revision",
+                  "po_date",
+                  "currency",
+                  "line_no",
+                  "customer_item_code",
+                  "prv_code",
+                  "description",
+                  "quantity",
+                  "uom",
+                  "unit_price",
+                  "amount",
+                  "requested_date",
+                  "suggested_delivery_date"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "header": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "where": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Where"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "DraftProblem",
+        "type": "object"
+      },
       "EvidenceView": {
         "description": "What Sales weighs for one line (step 7). Only for `sales.price.read`;\nother customers' rows and the reference price only for\n`sales.price.other_customers.read` too.",
         "properties": {
@@ -9432,6 +9523,167 @@
         "title": "RoleView",
         "type": "object"
       },
+      "RuleDraftBody": {
+        "additionalProperties": false,
+        "description": "A company's template to draft a rule version from (\"Tạo từ tệp\nmẫu\"): its name and its bytes, base64, decoded here and never opened.",
+        "properties": {
+          "content_b64": {
+            "maxLength": 2796204,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "content_b64"
+        ],
+        "title": "RuleDraftBody",
+        "type": "object"
+      },
+      "RuleDraftView": {
+        "description": "A draft as the rules editor reads it.",
+        "properties": {
+          "document": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "draft_id": {
+            "format": "uuid",
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "evidence": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "object"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_sha256": {
+            "title": "File Sha256",
+            "type": "string"
+          },
+          "machine_read": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Machine Read",
+            "type": "array"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/DraftProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requested_by": {
+            "format": "uuid",
+            "title": "Requested By",
+            "type": "string"
+          },
+          "rule_key": {
+            "$ref": "#/components/schemas/RuleKey"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "ready",
+              "refused",
+              "unavailable",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemplateRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "draft_id",
+          "rule_key",
+          "status",
+          "requested_by",
+          "requested_at",
+          "file_name",
+          "file_sha256",
+          "template",
+          "document",
+          "machine_read",
+          "evidence",
+          "problems",
+          "error",
+          "prompt_ref",
+          "model_profile"
+        ],
+        "title": "RuleDraftView",
+        "type": "object"
+      },
       "RuleKey": {
         "description": "The Sales policies and copy a tenant may hold its own version of.",
         "enum": [
@@ -9604,6 +9856,13 @@
       "RulesInForceView": {
         "description": "What applies to the tenant now, per key, and every version it holds.",
         "properties": {
+          "draftable": {
+            "items": {
+              "$ref": "#/components/schemas/RuleKey"
+            },
+            "title": "Draftable",
+            "type": "array"
+          },
           "in_force": {
             "additionalProperties": {
               "type": "string"
@@ -9647,7 +9906,8 @@
           "in_force",
           "layers",
           "platform",
-          "versions"
+          "versions",
+          "draftable"
         ],
         "title": "RulesInForceView",
         "type": "object"
@@ -10967,6 +11227,67 @@
           "measured"
         ],
         "title": "TargetView",
+        "type": "object"
+      },
+      "TemplateHeader": {
+        "additionalProperties": false,
+        "description": "One visible cell of the header row, as the workbook holds it.",
+        "properties": {
+          "column": {
+            "minimum": 1.0,
+            "title": "Column",
+            "type": "integer"
+          },
+          "ref": {
+            "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}$",
+            "title": "Ref",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "column",
+          "text"
+        ],
+        "title": "TemplateHeader",
+        "type": "object"
+      },
+      "TemplateRow": {
+        "additionalProperties": false,
+        "description": "The template's header row: its sheet, its row number, its cells.",
+        "properties": {
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateHeader"
+            },
+            "minItems": 4,
+            "title": "Headers",
+            "type": "array"
+          },
+          "row": {
+            "minimum": 1.0,
+            "title": "Row",
+            "type": "integer"
+          },
+          "sheet": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet",
+          "row",
+          "headers"
+        ],
+        "title": "TemplateRow",
         "type": "object"
       },
       "TenantMemberView": {
@@ -18177,6 +18498,118 @@
           }
         },
         "summary": "Rules In Force",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/drafts/{draft_id}": {
+      "get": {
+        "operationId": "rule_draft_api_v1_sales_rules_drafts__draft_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rule Draft",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/{key}/drafts": {
+      "post": {
+        "operationId": "request_rule_draft_api_v1_sales_rules__key__drafts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RuleKey"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleDraftBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Rule Draft",
         "tags": [
           "sales"
         ]

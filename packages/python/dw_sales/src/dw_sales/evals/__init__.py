@@ -2,8 +2,9 @@
 composition root to hand to `dw_evals.runner.run_dataset` (see `graders`,
 and `descriptions`, `intents`, `requests`, `replies`, `handoffs` and
 `layouts` for the model steps of tickets 28, 31, 29, 32, 33 and 30,
-`legacy` for ticket 27's converted and scanned POs, and `corrections` for
-ticket 15's header path)."""
+`legacy` for ticket 27's converted and scanned POs, `corrections` for
+ticket 15's header path, and `rule_drafts` for a layout drafted from a
+company's template)."""
 
 from dw_sales.evals.corrections import GRADERS as CORRECTION_GRADERS
 from dw_sales.evals.descriptions import GRADERS as DESCRIPTION_GRADERS
@@ -15,6 +16,7 @@ from dw_sales.evals.legacy import GRADERS as LEGACY_GRADERS
 from dw_sales.evals.recorded import failing_without_live_answers
 from dw_sales.evals.replies import GRADERS as REPLY_GRADERS
 from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
+from dw_sales.evals.rule_drafts import GRADERS as RULE_DRAFT_GRADERS
 
 # Every grader, failing a live case whose model gave no usable answer
 # (`recorded.failing_without_live_answers`): one wrap here, so a grader
@@ -31,6 +33,7 @@ GRADERS = {
         **HANDOFF_GRADERS,
         **LAYOUT_GRADERS,
         **LEGACY_GRADERS,
+        **RULE_DRAFT_GRADERS,
     }.items()
 }
 

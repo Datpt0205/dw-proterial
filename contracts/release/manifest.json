@@ -430,9 +430,24 @@
         }
       ],
       "version": "1.0.0"
+    },
+    {
+      "checksum": "b97b3be0011ee91a2bcb69b0902b6c2738aac3f1169e0e6c7dd0c254895ce962",
+      "dataset_id": "sales_rule_drafts",
+      "files": [
+        {
+          "checksum": "4d91b86b82fbe116914417322574ef50e3c26f2c918095f2ad859b2852415f08",
+          "path": "evals/expected/sales_rule_drafts.json"
+        },
+        {
+          "checksum": "a0f69d1802e42a89add5c3cd6ad8f9bbb5331f8b87c28e1a8256ef37bb847926",
+          "path": "evals/fixtures/cases/sales_rule_drafts.json"
+        }
+      ],
+      "version": "1.0.0"
     }
   ],
-  "git_sha": "63fe6b3e3f664363555308337dc1fc736faf01f4",
+  "git_sha": "667957f8c4a10e1165bffebbb001bd37604472fa",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -570,6 +585,11 @@
       "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
       "prompt_id": "platform.untrusted_demo",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "f9c6a4ea7e0524ff5f74d36a5c03ace1457dc2cbc190e200cdd45b3627aee173",
+      "prompt_id": "sales.bravo_template_mapping",
+      "version": "1.0.0"
     },
     {
       "checksum": "40b7dcacc569ed4fc4050054058fc39e2d4148144d3f85362bde04e25243ff75",

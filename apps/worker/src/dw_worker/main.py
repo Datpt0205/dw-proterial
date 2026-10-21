@@ -111,6 +111,7 @@ from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
+from dw_sales.application.rule_drafts import RULE_DRAFT_REQUESTED
 from dw_sales.application.rules import RULES_DECIDED
 from dw_worker.composition import (
     REPO_ROOT,
@@ -148,6 +149,7 @@ from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.sales_processing import build_sales_processing_consumer
+from dw_worker.consumers.sales_rule_drafts import build_rule_draft_handler
 from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
@@ -379,6 +381,9 @@ def build_sales(
         # As the API passes it: only a process that reaches a model server of
         # its own reads a description through one (dw_sales ADR 0005).
         model=runtime.gateway if Provider.ONPREM in runtime.gateway.adapters else None,
+        # The same rule for a template drafted outside a run, through the
+        # one-call door: the plan's daily allowance checked before the call.
+        one_call_model=runtime.one_call if Provider.ONPREM in runtime.gateway.adapters else None,
     )
     return mount, scope
 
@@ -649,6 +654,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 # Sales routes, which the API mounts on the same condition.
                 if mount.catalog_parsing is not None:
                     handlers[CATALOG_IMPORTED] = build_catalog_import_handler(mount.catalog_parsing)
+                # A company's template, drafted into a rule version ("Tạo từ
+                # tệp mẫu"), on the same condition.
+                if mount.rule_drafting is not None:
+                    handlers[RULE_DRAFT_REQUESTED] = build_rule_draft_handler(mount.rule_drafting)
         registry.register(
             "outbox",
             build_outbox_consumer(

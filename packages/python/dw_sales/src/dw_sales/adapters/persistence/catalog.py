@@ -36,6 +36,7 @@ from dw_platform.adapters.persistence.tenant_session import (
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import refusals_named, scope_values
+from dw_sales.adapters.persistence.rule_drafts import SqlRuleDrafts
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.catalog_imports import (
     OPEN,
@@ -222,9 +223,12 @@ class SqlCatalogSnapshots:
 
 
 class SqlCatalogUnitOfWork:
-    """Implements `CatalogUnitOfWork`."""
+    """Implements `CatalogUnitOfWork`, and `RuleDraftUnitOfWork` with the
+    same transaction: an uploaded file kept for the worker, its outbox event
+    and its audit row, in one workspace."""
 
     snapshots: SqlCatalogSnapshots
+    drafts: SqlRuleDrafts
     approvals: RunLessApprovalsPort
     audit: AuditRepositoryPort
     outbox: OutboxPort
@@ -250,6 +254,7 @@ class SqlCatalogUnitOfWork:
             raise
         self._session = session
         self.snapshots = SqlCatalogSnapshots(session, self._scope)
+        self.drafts = SqlRuleDrafts(session, self._scope)
         self.approvals = self._factory.approvals(session)
         self.audit = self._factory.audit(session)
         self.outbox = self._factory.outbox(session)
@@ -275,7 +280,7 @@ class SqlCatalogUnitOfWork:
 
 @dataclass(frozen=True)
 class SqlCatalogUnitOfWorkFactory:
-    """Implements `CatalogUnitOfWorkFactory`."""
+    """Implements `CatalogUnitOfWorkFactory` and `RuleDraftUnitOfWorkFactory`."""
 
     session_factory: async_sessionmaker[AsyncSession]
     audit: AuditFactory

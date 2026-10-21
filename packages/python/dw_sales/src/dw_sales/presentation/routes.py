@@ -64,6 +64,7 @@ from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkI
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
+from dw_sales.application.rule_drafts import RuleDraftView
 from dw_sales.application.rules import (
     PlatformDocumentView,
     RuleKey,
@@ -140,12 +141,29 @@ class CatalogUploadBody(BaseModel):
     content_b64: Annotated[str, Field(min_length=1, max_length=2_796_204)]
 
     def data(self) -> bytes:
-        try:
-            return base64.b64decode(self.content_b64, validate=True)
-        except (binascii.Error, ValueError):
-            raise DomainError(
-                "nội dung tệp không hợp lệ", details={"rule": "file_encoding"}
-            ) from None
+        return _file_bytes(self.content_b64)
+
+
+class RuleDraftBody(BaseModel):
+    """A company's template to draft a rule version from ("Tạo từ tệp
+    mẫu"): its name and its bytes, base64, decoded here and never opened."""
+
+    model_config = _BODY
+
+    file_name: Annotated[str, Field(min_length=1, max_length=200)]
+    # 2 MiB of bytes, as base64 (`MAX_DRAFT_BYTES`; the service refuses more).
+    content_b64: Annotated[str, Field(min_length=1, max_length=2_796_204)]
+
+    def data(self) -> bytes:
+        return _file_bytes(self.content_b64)
+
+
+def _file_bytes(content_b64: str) -> bytes:
+    """An uploaded file's base64, decoded; a refusal names no byte of it."""
+    try:
+        return base64.b64decode(content_b64, validate=True)
+    except (binascii.Error, ValueError):
+        raise DomainError("nội dung tệp không hợp lệ", details={"rule": "file_encoding"}) from None
 
 
 class VersionBody(BaseModel):
@@ -1087,6 +1105,30 @@ def build_router(
         key: RuleKey, body: RuleProposalBody, context: Ctx, svc: Svc, idem: Idem
     ) -> RuleVersionView:
         return await idem.record(await svc.rules.propose(context, key, body.document))
+
+    # "Tạo từ tệp mẫu": a company's template, kept for the worker to draft a
+    # version of the key from (202). A draft is a start for the editor, never
+    # a version: the proposal above stays the only way one is written. A key
+    # with no drafting yet is refused (422).
+    @router.post(
+        "/rules/{key}/drafts",
+        response_model=RuleDraftView,
+        status_code=202,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def request_rule_draft(
+        key: RuleKey, body: RuleDraftBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> RuleDraftView:
+        view = await svc.rule_drafts.request(context, key, body.file_name, body.data())
+        return await idem.record(view, status_code=202)
+
+    @router.get(
+        "/rules/drafts/{draft_id}",
+        response_model=RuleDraftView,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def rule_draft(draft_id: uuid.UUID, context: Ctx, svc: Svc) -> RuleDraftView:
+        return await svc.rule_drafts.get(context, draft_id)
 
     return router
 
