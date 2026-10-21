@@ -62,8 +62,11 @@ users:
   - subject: dev|tam.ngo
     display_name: Ngô Minh Tâm
     description: >-
-      IT quản trị tenant (org_admin) — quản lý thành viên và vai trò; không có
-      quyền Sales nào và không xem được giá (tách nhiệm: IT không phải Sales)
+      IT quản trị tenant (org_admin), kiêm người đề xuất quy tắc
+      (sales_rules_editor) — quản lý thành viên và vai trò; đề xuất phiên bản
+      quy tắc Sales không chứa giá, Trưởng bộ phận Sales duyệt; không xem được
+      giá, không duyệt quy tắc, không mở hồ sơ Sales nào (tách nhiệm: IT không
+      phải Sales)
     roles: [org_admin]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
     tenant_name: FDX

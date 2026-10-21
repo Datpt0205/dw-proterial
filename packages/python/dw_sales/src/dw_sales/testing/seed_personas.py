@@ -15,7 +15,8 @@ mailbox lane acts under (``seed_dw1_accounts``). It holds the role
 not in the sign-in roster.
 
 Each write passes the database's separation-of-duty trigger, so a persona that
-broke a rule (tenant IT holding a price scope) cannot be seeded at all.
+broke a rule (tenant IT holding a price scope, or approving rules) cannot be
+seeded at all.
 
 Re-running is a no-op: a membership already holding exactly its Sales keys is
 not written. The platform seed sets a membership's roles outright, so the full
@@ -89,10 +90,14 @@ PERSONAS: tuple[Persona, ...] = (
     Persona("dev|khoa.lam", "tenant-alpha", ("sales_pic",), ("sales_quote_approver",)),
     # Leadership: counts and times only.
     Persona("dev|ha.vu", "tenant-alpha", ("sales_viewer",)),
+    # Tenant IT: proposes a rule version (`sales_rules_editor`), never a
+    # price-bearing one and never approves (dw_sales ADR 0003, 2026-10-21).
+    # The separation-of-duty rules keep prices and the approval off a
+    # membership that administers members.
+    Persona("dev|tam.ngo", "tenant-alpha", (), ("sales_rules_editor",)),
     # Listed with nothing, so a Sales key handed to them by hand is removed on
-    # the next seed: tenant IT, the purchasing manager (the negative persona)
-    # and the platform admin no walk-through uses.
-    Persona("dev|tam.ngo", "tenant-alpha"),
+    # the next seed: the purchasing manager (the negative persona) and the
+    # platform admin no walk-through uses.
     Persona("dev|binh.tran", "tenant-alpha"),
     Persona("dev|chi.le", "tenant-alpha"),
     # Another tenant's PIC, for the cross-tenant tests.

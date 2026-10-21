@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 import sqlalchemy as sa
-from sales_api_harness import AN, BAO, DIEU, GIANG, HA, Api, user_id
+from sales_api_harness import AN, BAO, DIEU, GIANG, HA, TAM, Api, user_id
 from sales_flow import (
     cross_checked,
     dates,
@@ -374,3 +374,79 @@ async def test_the_table_refuses_a_document_naming_no_key_or_another_keys_versio
                     ),
                     {"document": json.dumps(document)},
                 )
+
+
+# ------------------------------------- tenant IT proposes (2026-10-21) --
+
+
+def _bumped(document: dict[str, Any], version: str) -> dict[str, Any]:
+    """A platform document under a tenant's number: a policy names it
+    ``policy_version``, a copy file ``version``."""
+    field = "policy_version" if "policy_version" in document else "version"
+    return {**document, field: version}
+
+
+async def test_tenant_it_proposes_a_rule_and_the_head_approves_it(
+    rules_api: Api, migrator: AsyncEngine
+) -> None:
+    """dw_sales ADR 0003 addendum: Tâm (`sales_rules_editor`) proposes the
+    Bravo upload template; his own decision is refused (no `approvals.decide`,
+    no `sales.rules.approve`), and the head's is carried out."""
+    tam, giang = rules_api.as_(TAM), rules_api.as_(GIANG)
+    upload = PLATFORM.upload.model_dump(mode="json", by_alias=True)
+    proposed = await tam.post(
+        "/rules/sales_bravo_upload/versions", {"document": _bumped(upload, "9.0.1")}
+    )
+    assert proposed.status_code == 200, proposed.text
+    assert proposed.json()["proposed_by"] == str(user_id(TAM))
+    approval_id = proposed.json()["approval_id"]
+
+    refused = await tam.decide(approval_id, {"approve": True, "comment": "Đồng ý"})
+    assert refused.status_code == 403, refused.text
+    approved = await giang.decide(approval_id, {"approve": True, "comment": "Đồng ý"})
+    assert approved.status_code == 200, approved.text
+    assert await _carry_out(rules_api, migrator, approval_id) == "approved"
+    body = (await tam.get("/rules")).json()
+    assert body["in_force"]["sales_bravo_upload"] == "sales_bravo_upload@9.0.1"
+
+
+async def test_tenant_it_is_shown_no_price_bearing_rule_and_cannot_propose_one(
+    rules_api: Api, migrator: AsyncEngine
+) -> None:
+    """A key holding prices or price policy asks for `sales.price.read` too,
+    which IT never holds: absent from Tâm's list, every version of it
+    included, and 403 on its schema, its platform documents and a proposal."""
+    # A price the tenant's own pricing version holds, and nobody else's.
+    floor = "0.2468"
+    pricing = PLATFORM.pricing.model_dump(mode="json", by_alias=True)
+    await _approved(
+        rules_api,
+        migrator,
+        "sales_pricing",
+        {**_bumped(pricing, "9.0.1"), "floor_margin": floor},
+    )
+    await _approved(rules_api, migrator, "sales_quote_rules", _quote_rules("9.0.1", 45))
+    tam = rules_api.as_(TAM)
+
+    listed = await tam.get("/rules")
+
+    assert listed.status_code == 200, listed.text
+    for hidden in ("sales_pricing", "sales_quote_rules", floor, "copper_adders"):
+        assert hidden not in listed.text, hidden
+    # The search can fail: An, who reads prices, is shown both.
+    shown = (await rules_api.as_(AN).get("/rules")).text
+    assert all(text in shown for text in ("sales_pricing", "sales_quote_rules", floor))
+    for key, document in (
+        ("sales_pricing", _bumped(pricing, "9.0.2")),
+        ("sales_quote_rules", _quote_rules("9.0.2", 60)),
+    ):
+        assert (await tam.get(f"/rules/{key}/schema")).status_code == 403
+        assert (await tam.get(f"/rules/{key}/platform")).status_code == 403
+        refused = await tam.post(f"/rules/{key}/versions", {"document": document})
+        assert refused.status_code == 403, key
+    async with migrator.connect() as conn:
+        versions = await conn.scalar(
+            sa.text("SELECT count(*) FROM sales.rule_versions WHERE proposed_by = :u"),
+            {"u": user_id(TAM)},
+        )
+    assert versions == 0

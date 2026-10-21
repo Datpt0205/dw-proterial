@@ -1042,8 +1042,10 @@ def build_router(
         )
 
     # ---------------------------------- a tenant's own rules (ticket 19) --
-    # A PIC or the head proposes a version of one key (`sales.rules.propose`),
-    # which opens a `sales.rules` platform approval; the head, who did not
+    # A PIC, the head or tenant IT proposes a version of one key
+    # (`sales.rules.propose`; a price-bearing key also asks for
+    # `sales.price.read`, checked by the service), which opens a
+    # `sales.rules` platform approval; the head, who did not
     # propose it, decides it there (`sales.rules.approve`, ticket 38): no
     # Sales route decides. An unknown key, or one no reader resolves per
     # tenant yet, is not a path this router has: 422.

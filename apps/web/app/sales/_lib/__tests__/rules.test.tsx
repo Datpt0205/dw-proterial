@@ -478,3 +478,35 @@ describe("the rules page (tickets 38, 40)", () => {
     expect(api.rules).not.toHaveBeenCalled();
   });
 });
+
+describe("the rules page for a proposer who reads no price (2026-10-21)", () => {
+  it(
+    "lists only the keys the server returns: a price key it leaves out is simply absent",
+    async () => {
+      // Tenant IT: `sales.rules.propose` alone. The server leaves out the
+      // keys that hold prices; the page names no key of its own.
+      scopes = ["sales.rules.propose"];
+      renderPage();
+      await screen.findByText("sales_kpi@1.0.0");
+      expect(screen.getByText("2 quy tắc")).toBeTruthy();
+      for (const text of ["Chính sách giá", "sales_pricing", "Quy tắc báo giá"])
+        expect(screen.queryByText(text), text).toBeNull();
+      cleanup();
+
+      // The search can fail: the same key, returned, is listed.
+      api.rules.mockResolvedValueOnce({
+        ...VIEW,
+        in_force: { ...VIEW.in_force, sales_pricing: "sales_pricing@1.0.0" },
+        layers: { ...VIEW.layers, sales_pricing: "platform" },
+        platform: [
+          ...VIEW.platform,
+          { key: "sales_pricing", ref: "sales_pricing@1.0.0" },
+        ],
+      });
+      renderPage();
+      expect(await screen.findByText("Chính sách giá")).toBeTruthy();
+      expect(screen.getByText("3 quy tắc")).toBeTruthy();
+    },
+    SLOW,
+  );
+});

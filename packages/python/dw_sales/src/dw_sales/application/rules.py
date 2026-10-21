@@ -7,8 +7,10 @@ runtime, never as an edit to the checkout (`CLAUDE.md`, "Per-tenant
 artifacts"). The platform layer is the file in ``configs/policies``; a
 tenant's layer is a version a person proposed and a second person approved.
 
-- **Proposed** by a holder of `sales.rules.propose` (PIC or head), validated by
-  the key's own schema; the proposal opens a run-less platform approval,
+- **Proposed** by a holder of `sales.rules.propose` (PIC, head, or tenant IT
+  holding the set `sales_rules_editor`), validated by the key's own schema; a
+  key that holds prices or price policy (`PRICE_BEARING`) also asks for
+  `sales.price.read`. The proposal opens a run-less platform approval,
   `sales.rules`, in its transaction, stamped with `sales.rules.approve` and
   naming the proposer as its maker (dw_sales ADR 0004, ticket 38).
 - **Approved or rejected** on that approval by a holder of the stamp (the
@@ -97,7 +99,7 @@ _RESOURCE: Final = "sales_rule_version"
 RULES_APPROVAL: Final = "sales.rules"
 RULES_DECIDED: Final = decided_event_type(RULES_APPROVAL)
 _RULES_REASON: Final = (
-    "Phiên bản quy tắc chờ duyệt: Sales đề xuất, Trưởng bộ phận duyệt (ticket 38)"
+    "Phiên bản quy tắc chờ duyệt: Trưởng bộ phận duyệt, không phải người đề xuất (ticket 38)"
 )
 
 
@@ -141,6 +143,14 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.FOLLOWUPS: SalesFollowups,
     }
 )
+# The keys whose documents hold prices or price policy: the pricing inputs
+# (copper adders, the floor, freight) and the quote rules (the reference price
+# band, the copper basis). Reading, starting from or proposing one also asks
+# for `sales.price.read` (dw_sales ADR 0003 §2), so a proposer without it (tenant
+# IT, whom `sod_sales_price_vs_member_admin` keeps from it) is not shown them at
+# all. A key added to `RuleKey` fails `test_rules.py` until someone decides
+# whether it belongs here.
+PRICE_BEARING: Final = frozenset({RuleKey.QUOTE_RULES, RuleKey.PRICING})
 # The copy an artifact is drawn with, in the order `ArtifactCopy` takes it.
 _ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
 RuleStatus = Literal["proposed", "approved", "rejected", "superseded"]
@@ -411,7 +421,8 @@ class RuleBookOrderRules:
 
 class RuleVersionView(BaseModel):
     """A version as the rules list shows it: who proposed and decided it, and
-    the document only to whoever may propose (it can hold price rules)."""
+    the document only to whoever may propose, and a price-bearing key's only
+    to whoever may also read prices."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -549,22 +560,24 @@ class SalesRulesService:
     ids: IdGenerator
 
     async def list(self, context: AccessContext) -> RulesInForceView:
+        """Every key the caller may read, and the tenant's versions of them:
+        a price-bearing key is absent, not empty, for a caller without
+        `sales.price.read`."""
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         scope = sales_scope(context)
+        keys = [key for key in OVERRIDABLE if self._readable(context, key)]
         async with self.uow(scope) as work:
-            versions = list(await work.rule_versions.list_all())
+            versions = [v for v in await work.rule_versions.list_all() if v.key in keys]
         in_force: dict[RuleKey, str] = {}
         layers: dict[RuleKey, Layer] = {}
-        for key in OVERRIDABLE:
+        for key in keys:
             resolved = await self.book.current(scope, key)
             in_force[key] = resolved.policy.ref
             layers[key] = resolved.layer
         return RulesInForceView(
             in_force=in_force,
             layers=layers,
-            platform=[
-                PlatformRuleView(key=key, ref=self.book.platform[key].ref) for key in OVERRIDABLE
-            ],
+            platform=[PlatformRuleView(key=key, ref=self.book.platform[key].ref) for key in keys],
             versions=[_view(v) for v in versions],
         )
 
@@ -572,16 +585,18 @@ class SalesRulesService:
         """The key's JSON Schema, to whoever may propose a version of it."""
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         rule = rule_key(key)
+        await self._require_readable(context, rule)
         return RuleSchemaView(key=rule, json_schema=rule_schema(rule))
 
     async def platform_documents(
         self, context: AccessContext, key: str
     ) -> Sequence[PlatformDocumentView]:
         """Every version of the key the platform released, newest first, to
-        whoever may propose (a pricing document holds price rules, which the
-        holders of `sales.rules.propose` read already in the tenant's own)."""
+        whoever may propose it (a price-bearing key's to whoever may also
+        read prices, as the tenant's own versions of it are)."""
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         rule = rule_key(key)
+        await self._require_readable(context, rule)
         current = self.book.platform[rule]
         held = {
             ref: policy
@@ -604,6 +619,7 @@ class SalesRulesService:
         self, context: AccessContext, key: RuleKey, document: Mapping[str, Any]
     ) -> RuleVersionView:
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        await self._require_readable(context, key)
         policy = _validated(key, document)
         if self.book.ships(key, policy.ref):
             raise ConflictError(
@@ -642,6 +658,17 @@ class SalesRulesService:
             )
             await work.commit()
         return _view(version)
+
+    def _readable(self, context: AccessContext, key: RuleKey) -> bool:
+        return key not in PRICE_BEARING or self.gate.allows(context, SalesScopes.PRICE_READ)
+
+    async def _require_readable(self, context: AccessContext, key: RuleKey) -> None:
+        """403 naming `sales.price.read` for a key `_readable` refuses, the way
+        the gate refuses any scope."""
+        if not self._readable(context, key):
+            await self.gate.require(
+                context, SalesScopes.PRICE_READ, resource_type=_RESOURCE, resource_id=key.value
+            )
 
 
 # ----------------------------------------------------------- the decision --
