@@ -32,7 +32,13 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
   acceptance (Proterial's survey says the same Sales PIC does export control,
   so no separation now); moving the hold before the Bravo entry (Đạt: no);
   the denial list stays a screening date on the customer, not a screening
-  DW1 runs.
+  DW1 runs. Review follow-up: the page and the confirm button read one
+  helper, `exportControlHold` in `order-actions.ts` (`awaiting_ack` or
+  `blocked_by_rule`, the case's stamped `block_confirmation`, which the page
+  now names in the rule's words); the notice uses antd's own warning icon,
+  not the padlock that means masked prices. Mutations: the helper ignoring
+  `block_confirmation`, holding closed cases, and the page drawing one wording
+  for both each turned `export-control-hold.test.tsx` red.
 
 - 2026-10-21:
     - **DW1 bar.** It names what DW1 does: reading "<subject>", N waiting, all done and waiting for new mail, or paused. Never a bare "đang chạy" (`worker-bar.test.tsx`).

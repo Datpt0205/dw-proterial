@@ -13,11 +13,7 @@ import {
   Table,
   Typography,
 } from "antd";
-import {
-  EyeOutlined,
-  FileSearchOutlined,
-  LockOutlined,
-} from "@ant-design/icons";
+import { EyeOutlined, FileSearchOutlined } from "@ant-design/icons";
 import type { SalesSchemas, SourceRegion } from "@dw/api-client";
 import { PageHeader, StatusTag, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
@@ -29,6 +25,7 @@ import {
   CLOSE_REASON,
   DERIVATION,
   FIELD,
+  FINDING_CODE,
   label,
   NOT_APPLIED_REASON,
   ORDER_STATE,
@@ -43,7 +40,7 @@ import {
 } from "../../_lib/served";
 import { coverageStatement } from "../../_lib/statements";
 import { useResource } from "../../_lib/use-resource";
-import { isOpen } from "../../_lib/order-actions";
+import { exportControlHold, isOpen } from "../../_lib/order-actions";
 import { useSalesViewer } from "../../_lib/viewer";
 import {
   ArtifactsPanel,
@@ -193,11 +190,9 @@ function OrderDetail() {
   );
   const openCount = data.findings.filter(isOpen).length;
   const blocking = data.findings.filter((f) => isOpen(f) && f.blocking).length;
-  // The case refuses `confirmed` while NOC/ESF is open (contract acceptance
-  // row 3); the page says so before anyone reaches the confirm button.
-  const heldForExportControl =
-    data.status !== "closed" &&
-    data.findings.some((f) => f.code === "missing_noc_esf" && isOpen(f));
+  // The case refuses `confirmed` while export control holds it (contract
+  // acceptance row 3); the page says so before anyone reaches the button.
+  const hold = exportControlHold(data);
 
   return (
     <div className="space-y-4">
@@ -250,13 +245,16 @@ function OrderDetail() {
         }
       />
 
-      {heldForExportControl ? (
+      {hold ? (
         <Alert
           type="warning"
           showIcon
-          icon={<LockOutlined aria-hidden />}
           role="status"
-          title={`Đơn đang bị giữ: chờ ${label(SALES_ROLE, "sales_export_control")} xác nhận NOC/ESF.`}
+          title={
+            hold === "awaiting_ack"
+              ? `Đơn đang bị giữ: chờ ${label(SALES_ROLE, "sales_export_control")} xác nhận NOC/ESF.`
+              : `Quy tắc kiểm soát xuất khẩu đang chặn xác nhận đơn có cờ ${label(FINDING_CODE, "missing_noc_esf")}.`
+          }
           description="Chưa thể gửi xác nhận cho khách."
         />
       ) : null}
