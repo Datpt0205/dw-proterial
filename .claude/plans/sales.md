@@ -8,6 +8,33 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-21, end-user browser tests and `make web-screens` (Đạt: "test kiểu end user thôi"):
+    - **Five new specs** under `apps/web/e2e/`, black box through the UI, each resetting the demo itself and run serially (shared database):
+        - `enduser-forms` 12: input validation, double submit, cancel, close, decline, return, reassign;
+        - `enduser-data` 6: master-data import, rules editor diff, "Tạo từ tệp mẫu", layouts, approvals, tenant IT;
+        - `enduser-nav` 11: pipeline filters in the URL, Back, case history, viewer forbidden, 320 px, reload, keyboard, offline;
+        - `enduser-race` 4 scenarios + 3 known-defect tests: pricing conflict, NOC/ESF hold, pause/resume, the DW1 bar;
+        - `case-screens`: case pages per persona at wide-1440 and phone-320 (`DW_SCREENS_SETUP=1`, then `DW_SCREENS=1`).
+    - **The first run was blind to its own stack** (failure-modes #0): the reader container was built 2026-10-20, before `text_unseen`, so every Excel source answered 500. Rebuilt; the three markers that blamed it are gone. Rebuild the reader with the API after a change to `dw_sales` the reader imports.
+    - **Open defects, each a `test.fail` test that reports when fixed:**
+        - C. Right after a reset the DW1 bar says "đã xử lý hết thư" at 0/45 (`sales-frame.tsx` `headline()`).
+        - D. After "DW xử lý tất cả" the bar does not refresh until reload (`useWorkerProgress` polls only once its own fetch saw work: one fact, two resources).
+        - E. A pricing conflict shows "hồ sơ đã thay đổi" but not the price the other person saved (ui-quality §4 "conflict").
+    - **Open defects with no e2e test** (no black-box way to provoke them on a healthy stack):
+        - A. A 500 leaves without CORS headers (`exception_handlers.py` runs in `ServerErrorMiddleware`, outside `CORSMiddleware`), so the UI shows "Mất kết nối mạng".
+        - B. A reader reply that fails validation becomes a retried `ReaderUnavailableError` (500; a template draft keeps "Đang đọc tệp") instead of a worded refusal.
+    - **Not a defect:** a resent identical PO (M08) opens its own case with `duplicate_po`, closed as duplicate (`order_checks.check_history`, issue 02). The board could say "PO trùng" on the card.
+    - **Possible defect, unconfirmed:** on a quote at "Đã nhận", opening "Đã lập YCBG" while "Soạn YCBG" is still running closes the dialog when the latter finishes (`quotes/[caseId]/actions.tsx` `finish()` → `setDialog(null)`).
+    - **Baseline:**
+        - `sales-demo` passes stage 1. Stage 2 times out: 45 mails at about 13 reads a minute take about 9.5 minutes against an 8-minute budget (environment, not app).
+        - `platform-pages.spec.ts:110` is stale: "Quản trị nền tảng" moved into the account dropdown's header (92b155a).
+    - **Visual review of the 304 screenshots**, not yet fixed:
+        - the floating chat button covers the first column on most pages, desktop and phone;
+        - pipeline cards are 160–230 px tall, with 23 in one column and nine empty columns. The "Việc của bạn: …" tag overflows the card; on a phone the first screenful is two empty columns;
+        - the inbox table is wider than 1440 and its rows are 70–95 px tall;
+        - at 320 px the DW1 bar wraps to six lines, Segmented tabs are cut, and identifiers are clipped;
+        - 28 admin/platform shots are an HTTP 429 page (seven navigations in 5 s), and that page says "không kết nối được" in English detail instead of "đang bận".
+
 - 2026-10-21, decisions and owed work from Đạt's review (no code):
     - **HIGH PRIORITY, owed; decide once DW1 runs on Proterial's server.** Raise 9B's accuracy with code around the model, never with keyword tables or prompt examples fitted to the eval. The audit found every refused description line was a word left out (16), a span not in the text (5) or one span used twice (2); `single_candidate_wrong` is 0, so a higher score means less manual work, not fewer wrong codes. In order:
         1. A targeted second call on exactly the words the checks named, then the same checks; a still-unexplained word still goes to a person.
