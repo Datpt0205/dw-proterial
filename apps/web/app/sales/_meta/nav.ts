@@ -22,9 +22,11 @@ import { SALES_BADGE } from "./badge-keys";
  *
  * Each item is keyed to the scope its page reads with (ticket 05): the case
  * pages to `sales.case.read`, the overview to `sales.overview.read`, the
- * rules to `sales.rules.propose` (the documents can hold price rules). So a
- * viewer who reads aggregates only (`sales_viewer`) is shown the overview and
- * nothing else, and someone with no `sales.*` scope sees no Sales group.
+ * rules to `sales.rules.propose` (a PIC, the head, or tenant IT holding
+ * `sales_rules_editor`; the server leaves out the keys that hold prices for
+ * whoever cannot read them). So a viewer who reads aggregates only
+ * (`sales_viewer`) is shown the overview and nothing else, tenant IT the rules
+ * alone, and someone with no `sales.*` scope sees no Sales group.
  * Navigation, never authorization: every route checks its scope again.
  *
  * `context` makes the group the whole bar for someone whose work is Sales

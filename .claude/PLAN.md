@@ -54,8 +54,8 @@ own file and a row here.
   on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
   not only by configuration).
 - **DW1 scope** (`sales/dw1-scope.md`): the agent-proposed bars of
-  t29–t33 (t31 at 89.8% of 90%). Whether Proterial's IT, who configures
-  the rules, gets `sales.rules.propose` (`sales.md` State, 2026-10-20).
+  t29–t33 (t31 at 89.8% of 90%). Whether tenant IT may grant `sales_*`
+  sets in the admin console at all (`sales.md` State, 2026-10-21).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21).
 

@@ -9737,7 +9737,7 @@
         "type": "object"
       },
       "RuleVersionView": {
-        "description": "A version as the rules list shows it: who proposed and decided it, and\nthe document only to whoever may propose (it can hold price rules).",
+        "description": "A version as the rules list shows it: who proposed and decided it, and\nthe document only to whoever may propose, and a price-bearing key's only\nto whoever may also read prices.",
         "properties": {
           "approval_id": {
             "anyOf": [

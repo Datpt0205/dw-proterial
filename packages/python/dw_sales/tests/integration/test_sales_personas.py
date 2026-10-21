@@ -67,7 +67,8 @@ SPEC: dict[tuple[str, str], frozenset[str]] = {
     ("dev|giang.do", ALPHA): HEAD,
     ("dev|khoa.lam", ALPHA): PIC | {"sales.quote.approve"},
     ("dev|ha.vu", ALPHA): frozenset({"sales.overview.read"}),
-    ("dev|tam.ngo", ALPHA): frozenset(),
+    # Tenant IT holding `sales_rules_editor` (59cf23d3a859, 2026-10-21).
+    ("dev|tam.ngo", ALPHA): frozenset({"sales.rules.propose"}),
     ("dev|binh.tran", ALPHA): frozenset(),
     ("dev|chi.le", ALPHA): frozenset(),
     ("dev|bao.pham", BETA): PIC,
@@ -157,10 +158,15 @@ async def test_the_quote_pic_cannot_approve_whatever_approver_boost_gives_her(
     assert approvers == {"dev|giang.do", "dev|khoa.lam"}
 
 
-async def test_it_administers_members_and_holds_no_sales_scope(personas: SignedIn) -> None:
+async def test_it_administers_members_and_proposes_rules_and_nothing_else_in_sales(
+    personas: SignedIn,
+) -> None:
+    """Tenant IT is not Sales (dw_sales ADR 0003 §4): it proposes rule
+    versions (the set, not its role), reads no price and approves nothing."""
     tam = personas["dev|tam.ngo", ALPHA]
     assert "platform.members.write" in tam.scopes
-    assert _sales(tam.scopes) == frozenset()
+    assert _sales(tam.scopes) == {"sales.rules.propose"}
+    assert not tam.scopes & {"sales.price.read", "sales.rules.approve", "approvals.decide"}
 
 
 async def test_the_other_tenants_pic_is_no_member_of_alpha(

@@ -68,3 +68,30 @@ reach the browser.
   order and quote lists and details) and every other Sales route refuses a
   support context. The support ADR is platform ADR 0024 (it was 0008 when
   this was written).
+
+## Addendum, 2026-10-21: IT proposes rules, the head approves
+
+Decided by Đạt. The customer's IT may propose a version of a Sales rule
+(ticket 19); approving one stays with the Sales head.
+
+- A permission set `sales_rules_editor` = `{sales.rules.propose}` goes on an
+  IT membership (migration `59cf23d3a859`). `org_admin` itself still holds no
+  `sales.*` scope, so decision 4 stands for the role.
+- A key whose documents hold prices or price policy (`sales_pricing`,
+  `sales_quote_rules`, and `sales_order_rules` for its price tolerance and
+  the LME rule: `PRICE_BEARING` in `dw_sales.application.rules`) also
+  asks for `sales.price.read`, which decision 4's rule keeps off IT. The rules
+  list leaves such a key out for a caller without it, and its schema, its
+  platform documents and a proposal of it answer 403. Decision 2 extended to
+  policy documents: fail closed.
+- A second non-waivable rule, `sod_sales_rules_approve_vs_member_admin`,
+  keeps `platform.members.write` and `sales.rules.approve` off one
+  membership: whoever can grant roles cannot become the checker of a rule
+  they proposed.
+- The demo's tenant IT (`dev|tam.ngo`) holds the set and every other Sales
+  route still refuses him.
+
+Open: the admin console refuses only `platform.*` scopes on a grant, so a
+tenant IT member can grant a `sales_*` set without a price scope to anyone,
+themselves included (`sales_quote_approver`, for one). Whether IT may hand
+out Sales sets at all is owed by Đạt.
