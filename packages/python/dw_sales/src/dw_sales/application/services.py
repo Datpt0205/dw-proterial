@@ -44,6 +44,7 @@ from dw_sales.application.ports import (
     SalesCatalogPort,
     ScopeHoldersPort,
 )
+from dw_sales.application.process_settings import ProcessSettingsService
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
@@ -76,6 +77,8 @@ class SalesServices:
     layouts: LayoutService
     # A tenant's own rule versions, proposed and approved (ticket 19).
     rules: SalesRulesService
+    # The process page: each step and the rule fields it reads (2026-10-22).
+    process_settings: ProcessSettingsService
     # A rule version drafted from the company's own file ("Tạo từ tệp mẫu").
     rule_drafts: RuleDraftService
     # Master data imported from a file, previewed and submitted (ticket 41).
@@ -164,7 +167,8 @@ def assemble(
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
-        rules=SalesRulesService(uow, gate, book, clock, ids),
+        rules=SalesRulesService(uow, gate, book, clock, ids, directory),
+        process_settings=ProcessSettingsService(gate),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         gate=gate,

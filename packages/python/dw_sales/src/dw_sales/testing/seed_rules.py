@@ -25,6 +25,7 @@ from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.ports import SystemClock, Uuid7Generator
+from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
@@ -112,7 +113,14 @@ async def seed_demo_rules(database_url: str) -> str | None:
         )
         book = rule_book(load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy"), lookup)
         clock, ids = SystemClock(), Uuid7Generator()
-        service = SalesRulesService(uow, Gate(ScopeAuthorizationService()), book, clock, ids)
+        service = SalesRulesService(
+            uow,
+            Gate(ScopeAuthorizationService()),
+            book,
+            clock,
+            ids,
+            SqlWorkspaceDirectory(sessions),
+        )
         stored = await lookup.find(scope, RuleKey.ORDER_RULES, own.policy_version)
         if stored is None or stored.status != "proposed" or stored.approval_id is None:
             document = own.model_dump(mode="json", by_alias=True)

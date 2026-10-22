@@ -403,6 +403,15 @@ export const TIME_BUCKET = {
   customer: "Chờ khách hàng",
 } as const;
 
+/** A status that waits on nobody (`STATUS_BUCKETS` has no holder): done. */
+export const NO_HOLDER = "Đã xong";
+
+/** A case kind's lane, as the process page names its tabs. */
+export const CASE_KIND = {
+  order: "Đơn hàng",
+  quote: "Báo giá",
+} as const;
+
 /** The files DW1 renders (ticket 06's artifact table), by kind. */
 export const ARTIFACT_KIND = {
   bravo_upload: "Tệp nhập Bravo (mẫu giả lập)",

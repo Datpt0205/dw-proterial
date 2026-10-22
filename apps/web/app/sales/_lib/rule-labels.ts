@@ -1,3 +1,4 @@
+import type { SalesSchemas } from "@dw/api-client";
 import type { RuleKey } from "./rules";
 import { ARTIFACT_KIND, FIELD, FINDING_CODE, LANGUAGE } from "./labels";
 import { nodeAt, type DocPath, type RuleNode } from "./rule-schema";
@@ -484,6 +485,33 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     },
   },
 };
+
+/**
+ * Why the process page draws a field without editing it, by the reason the
+ * server serves with the field (`process_settings.py` `LockReason`): which
+ * fields are locked, and why, is the server's; the words are here. Keyed by
+ * every reason, so one the server adds fails the typecheck until it has words.
+ */
+const LOCK_REASON: Record<LockReason, string> = {
+  model_bar_unchecked:
+    "Một bước dùng mô hình chỉ được bật khi bài đánh giá thực tế của bước đó đạt ngưỡng (ADR 0005), và hệ thống chưa tự kiểm ngưỡng này.",
+  bound_at_build:
+    "Bộ đọc tệp đang dùng giới hạn của bản nền tảng, nên phiên bản riêng của công ty có thể chưa có tác dụng.",
+  trust:
+    "Danh sách này quyết định thư của ai được coi là của Design: đây là thiết lập tin cậy.",
+  two_owners:
+    "Ngày nhận PO và các tệp vẫn tính theo giờ Việt Nam cố định, nên đổi múi giờ ở đây làm hai nơi lệch nhau.",
+};
+
+const LOCKED_ELSEWHERE =
+  "Vẫn đổi được ở trang Quy tắc, qua đề xuất và duyệt như mọi phiên bản.";
+
+type LockReason = SalesSchemas["LockReason"];
+
+/** Why a locked field is not edited on the process page, in words. */
+export function lockReason(reason: LockReason): string {
+  return `${LOCK_REASON[reason]} ${LOCKED_ELSEWHERE}`;
+}
 
 /**
  * The words for a value a choice or a closed map key may take: a severity,

@@ -10,7 +10,13 @@ from datetime import UTC, datetime
 
 from dw_kernel.errors import ConflictError
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.rules import Policy, RuleKey, RuleVersion, TenantRuleBook
+from dw_sales.application.rules import (
+    ONE_OPEN_PROPOSAL,
+    Policy,
+    RuleKey,
+    RuleVersion,
+    TenantRuleBook,
+)
 from dw_sales.domain.order_checks import OrderRules
 
 # Who proposed and approved a version seeded as the demo tenant's (fictional).
@@ -83,6 +89,17 @@ class TenantRuleVersions:
                 details={
                     "version_id": str(version.version_id),
                     "constraint": "uq_rule_versions_tenant_id_key_version",
+                },
+            )
+        if version.status == "proposed" and any(
+            v.key == version.key and v.status == "proposed" for v in self._held.values()
+        ):
+            raise ConflictError(
+                "quy tắc này đã có một phiên bản chờ duyệt",
+                details={
+                    "version_id": str(version.version_id),
+                    "constraint": "uq_rule_versions_one_proposed",
+                    "rule": ONE_OPEN_PROPOSAL,
                 },
             )
         self._held[version.version_id] = version

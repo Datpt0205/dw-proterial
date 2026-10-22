@@ -52,7 +52,8 @@ from dw_sales.domain.quotes import QuoteStatus
 _VIEW = ConfigDict(frozen=True)
 # How long a case that waits on nobody stays on the board.
 DONE_WINDOW: Final = timedelta(days=7)
-_STATUSES: Final[Mapping[CaseKind, type[StrEnum]]] = {
+# Each kind's statuses, in the order a board shows them (the enum's).
+CASE_STATUSES: Final[Mapping[CaseKind, type[StrEnum]]] = {
     CaseKind.ORDER: OrderStatus,
     CaseKind.QUOTE: QuoteStatus,
 }
@@ -116,7 +117,8 @@ class CaseHistoryEntry(BaseModel):
     occurred_at: datetime
 
 
-def _steps(kind: CaseKind, status: str) -> list[str]:
+def steps_at(kind: CaseKind, status: str) -> list[str]:
+    """The surveyed steps a case of ``kind`` is at while in ``status``."""
     return [
         step.step_id
         for step in WIV_STEPS
@@ -151,7 +153,9 @@ class PipelineService:
         now = self.clock.now()
         today = local_day(now)
         mine = await self._mine(context)
-        everything = {kind: frozenset(s.value for s in enum) for kind, enum in _STATUSES.items()}
+        everything = {
+            kind: frozenset(s.value for s in enum) for kind, enum in CASE_STATUSES.items()
+        }
         async with self.uow(sales_scope(context)) as work:
             orders = await work.orders.list_all()
             quotes = await work.quotes.list_all()
@@ -231,12 +235,12 @@ class PipelineService:
                 kind=kind.value,
                 status=status.value,
                 holder=STATUS_BUCKETS[kind].get(status.value),
-                steps=_steps(kind, status.value),
+                steps=steps_at(kind, status.value),
                 cases=shown.get((kind.value, status.value), 0)
                 + hidden.get((kind, status.value), 0),
                 hidden=hidden.get((kind, status.value), 0),
             )
-            for kind, enum in _STATUSES.items()
+            for kind, enum in CASE_STATUSES.items()
             for status in enum
         ]
         return PipelineView(as_of=now, columns=columns, cards=cards)

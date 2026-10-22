@@ -70,7 +70,8 @@ async def test_a_member_without_sales_scopes_is_refused_on_every_sales_route(api
 
 async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> None:
     """`sales_rules_editor` is `sales.rules.propose` alone: no case, no
-    overview, no master data, no price. The proposal here carries no document,
+    overview, no master data, no price. The process page reads the same
+    scope (2026-10-22). The proposal here carries no document,
     so it is refused as invalid (422) and writes nothing. Drafting a version
     from the company's template ("Tạo từ tệp mẫu") is the same scope, so IT,
     who configures the rules, reaches those two routes too; the walk's draft
@@ -85,6 +86,7 @@ async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> 
 
     assert {named(route) for route, status in answers.items() if status != 403} == {
         ("GET", "/rules"),
+        ("GET", "/rules/process"),
         ("GET", "/rules/sales_bravo_upload/schema"),
         ("GET", "/rules/sales_bravo_upload/platform"),
         ("POST", "/rules/sales_bravo_upload/versions"),

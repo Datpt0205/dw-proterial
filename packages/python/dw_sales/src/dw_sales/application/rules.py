@@ -13,6 +13,17 @@ tenant's layer is a version a person proposed and a second person approved.
   `sales.price.read`. The proposal opens a run-less platform approval,
   `sales.rules`, in its transaction, stamped with `sales.rules.approve` and
   naming the proposer as its maker (dw_sales ADR 0004, ticket 38).
+- **One waiting per key** (Đạt, 2026-10-22): a version is the whole
+  document and approving one supersedes what is in force, so two proposals
+  waiting side by side, started from one version, would each undo the other
+  when both are approved. While one waits, another on the same key, from any
+  workspace of the tenant, is refused (409, `ONE_OPEN_PROPOSAL`) naming the
+  waiting version, who proposed it and when; `uq_rule_versions_one_proposed`
+  holds it whatever writes the row. A decision frees the key, and so does a
+  settlement that cannot apply an approved number (`RuleSettlement`). What
+  it does not refuse is a proposal started from a version superseded since:
+  a proposal records no base, and the head reads its diff against the
+  version in force (`rule-approval.tsx`).
 - **Approved or rejected** on that approval by a holder of the stamp (the
   head), never by its proposer: `sales.` is strict, `RuleDecisions.check` (the
   decision guard) refuses what the version would refuse before it is
@@ -79,11 +90,12 @@ from dw_sales.application.artifact_content import (
     BravoUploadLayout,
     SalesDocumentCopy,
     SalesEmailCopy,
+    local_time,
 )
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.handoffs import HandoffCopy
-from dw_sales.application.ports import SalesScope
+from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
@@ -159,6 +171,11 @@ PRICE_BEARING: Final = frozenset({RuleKey.ORDER_RULES, RuleKey.QUOTE_RULES, Rule
 _ARTIFACT_COPY: Final = (RuleKey.EMAILS, RuleKey.DOCUMENTS, RuleKey.BRAVO_UPLOAD)
 RuleStatus = Literal["proposed", "approved", "rejected", "superseded"]
 Layer = Literal["platform", "tenant"]
+# The rule a refusal reports when a key already has a proposal waiting on its
+# approval (`uq_rule_versions_one_proposed`, e8192ed5cc59): a version is the
+# whole document, so a second proposal started from the same version would be
+# undone, or would undo the first, when both are approved.
+ONE_OPEN_PROPOSAL: Final = "one_open_proposal"
 
 
 class RuleVersion(BaseModel):
@@ -265,7 +282,9 @@ class RuleVersionStorePort(Protocol):
     async def get(self, version_id: uuid.UUID) -> RuleVersion | None: ...
 
     async def add(self, version: RuleVersion) -> None:
-        """A proposal. Refused with a conflict when the key already has the version."""
+        """A proposal. Refused with a conflict when the key already has the
+        version, or already has a proposal waiting (``details["rule"]`` is
+        `ONE_OPEN_PROPOSAL`); approving or rejecting that one frees the key."""
         ...
 
     async def decide(self, version: RuleVersion, *, superseding: uuid.UUID | None) -> None:
@@ -491,6 +510,13 @@ class PlatformDocumentView(BaseModel):
     document: Mapping[str, Any]
 
 
+def readable(gate: Gate, context: AccessContext, key: RuleKey) -> bool:
+    """Whether ``context`` may read ``key``'s documents: a price-bearing key
+    also asks for `sales.price.read` (dw_sales ADR 0003 §2). Where it says no,
+    the key is absent from what is served, not empty."""
+    return key not in PRICE_BEARING or gate.allows(context, SalesScopes.PRICE_READ)
+
+
 def rule_schema(key: RuleKey) -> dict[str, Any]:
     """The JSON Schema of ``key``'s documents, as a proposal is validated."""
     return OVERRIDABLE[key].model_json_schema(by_alias=True)
@@ -564,6 +590,8 @@ class SalesRulesService:
     book: TenantRuleBook
     clock: UtcClock
     ids: IdGenerator
+    # Who proposed the version a refused second proposal waits behind, by name.
+    directory: MemberDirectoryPort
 
     async def list(self, context: AccessContext) -> RulesInForceView:
         """Every key the caller may read, and the tenant's versions of them:
@@ -659,15 +687,72 @@ class SalesRulesService:
                 )
             )
             # After its approval: the row names it (`fk_rule_versions_approval_requests`).
-            await work.rule_versions.add(version)
+            try:
+                await work.rule_versions.add(version)
+            except ConflictError as refused:
+                if refused.details.get("rule") != ONE_OPEN_PROPOSAL:
+                    raise
+                waiting = next(
+                    (
+                        v
+                        for v in await work.rule_versions.list_all()
+                        if v.key == key and v.status == "proposed"
+                    ),
+                    None,
+                )
+                raise await self._one_open(context, key, waiting) from None
             await work.audit.append(
                 _audit(self.ids, self.clock, context, "sales.rules.proposed", version)
             )
             await work.commit()
         return _view(version)
 
+    async def _one_open(
+        self, context: AccessContext, key: RuleKey, waiting: RuleVersion | None
+    ) -> ConflictError:
+        """The refusal of a second proposal on ``key``, naming the version it
+        waits behind, who proposed it and when. ``waiting`` is None when it
+        was decided since the refusal.
+
+        Worded for every case the refusal meets: the waiting version may come
+        from another workspace of the tenant (the key is the tenant's), whose
+        approval only that workspace's head sees, so the sentence names the
+        proposer's head, not the caller's; and it may be decided already and
+        not yet carried out by the worker, so it says what to do then. Either
+        way the next proposal starts from the version in force by then: one
+        resent from the form refused here would undo what was approved."""
+        details: dict[str, object] = {"key": key.value, "rule": ONE_OPEN_PROPOSAL}
+        if waiting is None:
+            return ConflictError(
+                "Phiên bản chờ duyệt của quy tắc này vừa được quyết định: tải lại trang"
+                " và bắt đầu lại từ phiên bản đang áp dụng.",
+                details=details,
+            )
+        if waiting.proposed_by == context.principal_id:
+            who, whose = "bạn", "bạn"
+        else:
+            names = {m.user_id: m.display_name for m in await self.directory.list_members(context)}
+            who = names.get(waiting.proposed_by, "một người khác trong công ty")
+            whose = "người đề xuất"
+        when = local_time(waiting.proposed_at).strftime("%H:%M %d/%m/%Y")
+        return ConflictError(
+            f"Quy tắc này đã có phiên bản {waiting.version} chờ duyệt, do {who} đề xuất"
+            f" lúc {when} (giờ Việt Nam), và mỗi quy tắc chỉ có một phiên bản chờ duyệt."
+            f" Trưởng bộ phận của {whose} duyệt hoặc từ chối phiên bản đó ở trang Duyệt;"
+            " sau đó, đề xuất lại bắt đầu từ phiên bản đang áp dụng. Nếu phiên bản đó"
+            " vừa được quyết định, đợi một lát rồi tải lại trang.",
+            details={
+                **details,
+                "version_id": str(waiting.version_id),
+                "version": waiting.version,
+                "proposed_by": str(waiting.proposed_by),
+                "proposed_at": waiting.proposed_at.isoformat(),
+                "approval_id": str(waiting.approval_id) if waiting.approval_id else None,
+            },
+        )
+
     def _readable(self, context: AccessContext, key: RuleKey) -> bool:
-        return key not in PRICE_BEARING or self.gate.allows(context, SalesScopes.PRICE_READ)
+        return readable(self.gate, context, key)
 
     async def _require_readable(self, context: AccessContext, key: RuleKey) -> None:
         """403 naming `sales.price.read` for a key `_readable` refuses, the way
@@ -777,7 +862,10 @@ class RuleSettlement:
         a redelivery finds the version decided on this approval and writes
         nothing, and so does one that lost a race with another delivery (the
         worker and the demo seed both carry the same decision out). Raises the
-        refusals the version makes (409, 404); none changes on a retry."""
+        refusals the version makes (409, 404); none changes on a retry. An
+        approval whose number the platform has shipped since is not refused:
+        the version is recorded as rejected, saying why, so it never waits on
+        a decision already taken."""
         # Read as the decider holding the stamp the platform required of them
         # when they decided: nobody reaches here but through that decision.
         audience = ApprovalAudience(
@@ -835,8 +923,18 @@ class RuleSettlement:
                 approval_id, workspace_id=decider.workspace_id, audience=audience
             )
             superseding = None
+            comment = _reason(decision)
+            refused: str | None = None
+            if approve and self.book.ships(proposed.key, proposed.ref):
+                # Approved, then a deploy shipped the number before this ran:
+                # `RuleDecisions.check` passed it, and nothing can apply it
+                # now (a stamp of it would name two documents). Refusing here
+                # on every retry would leave it waiting with no decision left
+                # to take, holding its key (`uq_rule_versions_one_proposed`),
+                # so it is recorded as not applied, with why.
+                approve, refused = False, "platform_version_reused"
+                comment = _PLATFORM_SHIPPED.format(version=proposed.version)
             if approve:
-                _unreleased(self.book, proposed)
                 current = next(
                     (
                         v
@@ -852,18 +950,27 @@ class RuleSettlement:
                     "status": "approved" if approve else "rejected",
                     "decided_by": decider.principal_id,
                     "decided_at": self.clock.now(),
-                    "comment": _reason(decision),
+                    "comment": comment,
                 }
             )
             await work.rule_versions.decide(decided, superseding=superseding)
             action = "sales.rules.approved" if approve else "sales.rules.rejected"
-            await work.audit.append(_audit(self.ids, self.clock, decider, action, decided))
+            await work.audit.append(
+                _audit(self.ids, self.clock, decider, action, decided, refused=refused)
+            )
             await work.commit()
         return _view(decided)
 
 
 # What `rule_versions.comment` holds (`ck_rule_versions_comment`).
 _COMMENT_LIMIT: Final = 500
+# Why an approved version was not applied: the platform shipped its number
+# between the decision and its settlement (the head's own comment stays whole
+# on the approval).
+_PLATFORM_SHIPPED: Final = (
+    "Đã được duyệt nhưng không áp dụng: nền tảng đã phát hành số phiên bản {version}"
+    " trước khi phiên bản này được áp dụng. Đề xuất lại với một số phiên bản khác."
+)
 
 
 def _reason(decision: ApprovalDecision | None) -> str | None:
@@ -877,9 +984,16 @@ def _reason(decision: ApprovalDecision | None) -> str | None:
 
 
 def _audit(
-    ids: IdGenerator, clock: UtcClock, context: AccessContext, action: str, version: RuleVersion
+    ids: IdGenerator,
+    clock: UtcClock,
+    context: AccessContext,
+    action: str,
+    version: RuleVersion,
+    *,
+    refused: str | None = None,
 ) -> AuditEvent:
-    """The key, the version, its status and its approval: never the document."""
+    """The key, the version, its status and its approval: never the document.
+    ``refused`` names the rule that turned an approval into a rejection."""
     details: dict[str, object] = {
         "key": version.key.value,
         "version": version.version,
@@ -887,6 +1001,8 @@ def _audit(
     }
     if version.approval_id is not None:
         details["approval_id"] = str(version.approval_id)
+    if refused is not None:
+        details["rule"] = refused
     return AuditEvent(
         id=ids.new_uuid(),
         tenant_id=TenantId(context.tenant_id),

@@ -39,6 +39,7 @@ const SALES_PAGES = [
   "/sales/review",
   "/sales/layouts",
   "/sales/rules",
+  "/sales/rules/process",
   "/sales/master-data",
   "/sales/overview",
 ];
@@ -134,6 +135,7 @@ describe("the nav registry", () => {
       "Sales › Quản lý",
       "Sales › Quản lý › Mẫu PO",
       "Sales › Quản lý › Quy tắc",
+      "Sales › Quản lý › Quy trình DW1",
       "Sales › Quản lý › Dữ liệu chủ",
       "Sales › Quản lý › Tổng quan quy trình",
     ]);
@@ -175,7 +177,10 @@ describe("visibleNav", () => {
     // The viewer reads aggregates only: the overview, and no other Sales page.
     ["ha.vu (sales_viewer)", ["/sales/overview"]],
     ["binh.tran (no sales.*)", []],
-    ["tam.ngo (org_admin + sales_rules_editor)", ["/sales/rules"]],
+    [
+      "tam.ngo (org_admin + sales_rules_editor)",
+      ["/sales/rules", "/sales/rules/process"],
+    ],
   ])("gives %s the Sales pages %j", (persona, pages) => {
     expect(salesPages(persona)).toEqual(pages);
   });
@@ -227,6 +232,7 @@ describe("visibleNav", () => {
     expect(labels(bar.entries)).toEqual([
       "Quản lý",
       "Quản lý › Quy tắc",
+      "Quản lý › Quy trình DW1",
       "Quản lý › Tổng quan quy trình",
     ]);
   });
@@ -249,8 +255,12 @@ describe("visibleNav", () => {
     expect(noRules).not.toContain("Quản lý › Quy tắc");
   });
 
-  it("shows a viewer holding only sales.rules.propose the rules page alone", () => {
-    expect(salesBar(["sales.rules.propose"])).toEqual(["Quy tắc"]);
+  it("shows a viewer holding only sales.rules.propose the two rules pages alone", () => {
+    expect(salesBar(["sales.rules.propose"])).toEqual([
+      "Quản lý",
+      "Quản lý › Quy tắc",
+      "Quản lý › Quy trình DW1",
+    ]);
   });
 
   it("draws a submenu left with one page as that page, never a submenu of one", () => {

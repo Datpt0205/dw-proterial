@@ -62,6 +62,7 @@ from dw_sales.application.catalog_imports import (
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
+from dw_sales.application.process_settings import ProcessSettingsView
 from dw_sales.application.quotation import ScreeningRow
 from dw_sales.application.quotes_service import PricedLine
 from dw_sales.application.rule_drafts import RuleDraftView
@@ -1075,6 +1076,18 @@ def build_router(
     )
     async def rules_in_force(context: Ctx, svc: Svc) -> RulesInForceView:
         return await svc.rules.list(context)
+
+    # The process page (2026-10-22): each lane's statuses and moves, and the
+    # rule fields each step, lane and the whole process read, by key and
+    # path, never a value. A price-bearing key is absent for a caller without
+    # `sales.price.read`, as in the list above.
+    @router.get(
+        "/rules/process",
+        response_model=ProcessSettingsView,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def rules_process(context: Ctx, svc: Svc) -> ProcessSettingsView:
+        return await svc.process_settings.view(context)
 
     # What the editor draws a key's form from (ticket 40): its JSON Schema,
     # and the platform's released documents to start from and compare with.

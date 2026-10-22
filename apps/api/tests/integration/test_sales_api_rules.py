@@ -164,9 +164,12 @@ async def test_proposed_by_a_pic_approved_by_the_head_and_stamped_on_the_next_ca
     decision = {"approve": True, "comment": "Đồng ý"}
 
     # Without `sales.rules.approve` the stamped approval is not even visible;
-    # the head may not approve her own; a decision says why.
+    # the head may not approve her own (on another key: 9.0.1 holds this
+    # one's single open proposal); a decision says why.
     assert (await dieu.decide(approval_id, decision)).status_code == 404
-    own = await giang.post("/rules/sales_order_rules/versions", {"document": _document("9.0.2")})
+    kpi = PLATFORM.kpi.model_dump(mode="json", by_alias=True)
+    own = await giang.post("/rules/sales_kpi/versions", {"document": _bumped(kpi, "9.0.2")})
+    assert own.status_code == 200, own.text
     refused = await giang.decide(own.json()["approval_id"], decision)
     assert refused.status_code == 409
     assert refused.json()["details"]["rule"] == "maker_checker"
@@ -454,3 +457,122 @@ async def test_tenant_it_is_shown_no_price_bearing_rule_and_cannot_propose_one(
             {"u": user_id(TAM)},
         )
     assert versions == 0
+
+
+# ------------------------- one proposal waiting per key (2026-10-22) --
+
+
+async def _open_rule_approvals(migrator: AsyncEngine) -> int:
+    async with migrator.connect() as conn:
+        count = await conn.scalar(
+            sa.text(
+                "SELECT count(*) FROM platform.approval_requests"
+                " WHERE approval_type = 'sales.rules' AND status = 'pending'"
+            )
+        )
+    return int(count or 0)
+
+
+async def test_a_second_proposal_on_a_key_waits_until_the_first_is_decided(
+    rules_api: Api, migrator: AsyncEngine
+) -> None:
+    """`uq_rule_versions_one_proposed`: a version is the whole document, so a
+    second proposal started from the same version would silently undo the
+    first when both are approved. While one waits, another on the same key is
+    refused (409) naming the waiting version, who proposed it and when, and
+    writes nothing; rejecting or approving the first frees the key."""
+    an, dieu, giang = rules_api.as_(AN), rules_api.as_(DIEU), rules_api.as_(GIANG)
+    first = await an.post("/rules/sales_order_rules/versions", {"document": _document("9.3.0")})
+    assert first.status_code == 200, first.text
+    waiting = await _open_rule_approvals(migrator)
+
+    refused = await dieu.post("/rules/sales_order_rules/versions", {"document": _document("9.3.1")})
+
+    assert refused.status_code == 409, refused.text
+    body = refused.json()
+    assert body["details"]["rule"] == "one_open_proposal"
+    assert body["details"]["version_id"] == first.json()["version_id"]
+    assert body["details"]["proposed_by"] == str(user_id(AN))
+    assert "9.3.0" in body["message"] and "Nguyễn Văn An" in body["message"]
+    assert "(giờ Việt Nam)" in body["message"]
+    # Nothing written: no second version, and the approval the refused
+    # proposal opened in its transaction rolled back with it.
+    assert await _open_rule_approvals(migrator) == waiting
+    listed = (await an.get("/rules")).json()["versions"]
+    assert [v["version"] for v in listed if v["status"] == "proposed"] == ["9.3.0"]
+    # Another key is not held by it.
+    kpi = PLATFORM.kpi.model_dump(mode="json", by_alias=True)
+    other = await dieu.post("/rules/sales_kpi/versions", {"document": _bumped(kpi, "9.3.0")})
+    assert other.status_code == 200, other.text
+
+    # Rejected: the key is free.
+    rejected = await giang.decide(
+        first.json()["approval_id"], {"approve": False, "comment": "Chưa"}
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert await _carry_out(rules_api, migrator, first.json()["approval_id"]) == "rejected"
+    second = await dieu.post("/rules/sales_order_rules/versions", {"document": _document("9.3.1")})
+    assert second.status_code == 200, second.text
+    # Approved: free again.
+    approval_id = second.json()["approval_id"]
+    assert (
+        await giang.decide(approval_id, {"approve": True, "comment": "Đồng ý"})
+    ).status_code == 200
+    assert await _carry_out(rules_api, migrator, approval_id) == "approved"
+    third = await an.post("/rules/sales_order_rules/versions", {"document": _document("9.3.2")})
+    assert third.status_code == 200, third.text
+
+    # The database refuses a second waiting row whatever writes it: the
+    # rejected first one put back to waiting beside the third.
+    async with migrator.begin() as conn:
+        with pytest.raises(sa.exc.IntegrityError, match="uq_rule_versions_one_proposed"):
+            await conn.execute(
+                sa.text(
+                    "UPDATE sales.rule_versions SET status = 'proposed', decided_by = NULL,"
+                    " decided_at = NULL WHERE id = :id"
+                ),
+                {"id": first.json()["version_id"]},
+            )
+
+
+async def test_another_tenants_waiting_proposal_holds_nothing_here(rules_api: Api) -> None:
+    """Narrowed by tenant: beta's open proposal on a key is beta's alone."""
+    bao = rules_api.as_(BAO, tenant="tenant-beta")
+    beta = await bao.post("/rules/sales_order_rules/versions", {"document": _document("9.4.0")})
+    assert beta.status_code == 200, beta.text
+
+    alpha = await rules_api.as_(AN).post(
+        "/rules/sales_order_rules/versions", {"document": _document("9.4.0")}
+    )
+
+    assert alpha.status_code == 200, alpha.text
+    # The search can fail: beta's key is held, by beta's own waiting one.
+    again = await bao.post("/rules/sales_order_rules/versions", {"document": _document("9.4.1")})
+    assert again.status_code == 409
+    assert again.json()["details"]["version_id"] == beta.json()["version_id"]
+
+
+# ------------------------------------------- the process page (2026-10-22) --
+
+
+async def test_the_process_page_serves_no_price_bearing_key_to_tenant_it(rules_api: Api) -> None:
+    """Absent, not empty: Tâm (no `sales.price.read`) is served every step
+    and no field of a key holding prices; An is served them; a viewer is
+    refused."""
+    served = await rules_api.as_(TAM).get("/rules/process")
+
+    assert served.status_code == 200, served.text
+    body = served.json()
+    assert [lane["kind"] for lane in body["lanes"]] == ["order", "quote"]
+    assert len(body["steps"]) == 23
+    for hidden in (
+        "sales_order_rules",
+        "sales_quote_rules",
+        "sales_pricing",
+        "price.relative_tolerance",
+        "floor_margin",
+    ):
+        assert hidden not in served.text, hidden
+    shown = await rules_api.as_(AN).get("/rules/process")
+    assert all(key in shown.text for key in ("sales_order_rules", "sales_pricing", "floor_margin"))
+    assert (await rules_api.as_(HA).get("/rules/process")).status_code == 403

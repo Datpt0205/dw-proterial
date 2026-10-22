@@ -5,6 +5,7 @@ import {
   AutoComplete,
   Button,
   Card,
+  ConfigProvider,
   Flex,
   Form,
   Input,
@@ -31,7 +32,10 @@ import {
   VERSION_FIELDS,
 } from "../_lib/rule-labels";
 import {
+  drawsPath,
+  holdsPath,
   problem,
+  withinPath,
   type DocPath,
   type MapEntry,
   type RuleField,
@@ -50,7 +54,18 @@ import { ValueStateTag } from "./tags";
  * The form holds the document as `rule-schema.ts` `toForm` shapes it (a map
  * as a key/value list, a section that may be off as `{ on, value }`), so the
  * caller converts with `toForm`/`fromForm` at the edges.
+ *
+ * `only` draws one process step's fields and the sections on the way to them
+ * (`drawsPath`); the store still holds the whole document. An entry of a map
+ * the step holds only part of keeps its key: the step edits its value, never
+ * which entries the map has. `locked` fields are drawn disabled, with why.
  */
+
+/** A field drawn but not edited, and why (the process page's locks). */
+export interface LockedField {
+  path: DocPath;
+  reason: string;
+}
 
 interface Ctx {
   ruleKey: RuleKey;
@@ -61,6 +76,9 @@ interface Ctx {
   machineRead?: Record<string, MachineRead>;
   /** Values a text field offers, by label path ("columns[].header"). */
   choices?: Record<string, string[]>;
+  /** The document paths drawn; every field when absent. */
+  only?: readonly DocPath[];
+  locked?: readonly LockedField[];
 }
 
 const RuleFormContext = createContext<Ctx | null>(null);
@@ -105,6 +123,8 @@ export function RuleFields({
   base,
   machineRead,
   choices,
+  only,
+  locked,
 }: {
   ruleKey: RuleKey;
   root: RuleNode;
@@ -112,6 +132,10 @@ export function RuleFields({
   base: unknown;
   machineRead?: Record<string, MachineRead>;
   choices?: Record<string, string[]>;
+  /** Draw only these document paths (one process step's), each with its subtree. */
+  only?: readonly DocPath[];
+  /** Fields drawn disabled, each with why. */
+  locked?: readonly LockedField[];
 }) {
   if (root.kind !== "object") return null;
   const top = { name: [], abs: [], label: "", doc: [] };
@@ -122,7 +146,7 @@ export function RuleFields({
   );
   return (
     <RuleFormContext.Provider
-      value={{ ruleKey, form, base, machineRead, choices }}
+      value={{ ruleKey, form, base, machineRead, choices, only, locked }}
     >
       {/* Set by the system: kept in the document, never a control. */}
       {system.map((f) => (
@@ -131,19 +155,33 @@ export function RuleFields({
         </Form.Item>
       ))}
       <Fields fields={content} where={top} />
+      {/* Every proposal names its number and its note, whatever it edits. */}
       {version.length ? (
         <Section title="Phiên bản">
-          <Fields fields={version} where={top} />
+          <Fields fields={version} where={top} every />
         </Section>
       ) : null}
     </RuleFormContext.Provider>
   );
 }
 
-function Fields({ fields, where }: { fields: RuleField[]; where: Where }) {
+function Fields({
+  fields,
+  where,
+  every,
+}: {
+  fields: RuleField[];
+  where: Where;
+  /** Draw every field, whatever `only` says. */
+  every?: boolean;
+}) {
+  const { only } = useCtx();
+  const drawn = every
+    ? fields
+    : fields.filter((f) => drawsPath(only, [...where.doc, f.name]));
   return (
     <>
-      {fields.map((field) => (
+      {drawn.map((field) => (
         <NodeField
           key={field.name}
           node={field.node}
@@ -186,7 +224,27 @@ function requiredRule(label: string): FormRule {
   };
 }
 
-function NodeField({
+/** A field, disabled with its reason where a lock starts. */
+function NodeField(props: { node: RuleNode; required: boolean; where: Where }) {
+  const { locked } = useCtx();
+  const lock = locked?.find(
+    (l) =>
+      l.path.length === props.where.doc.length &&
+      withinPath(props.where.doc, l.path),
+  );
+  if (!lock) return <NodeControl {...props} />;
+  return (
+    <ConfigProvider componentDisabled>
+      <Typography.Paragraph className="mb-2!">
+        <Typography.Text strong>Chỉ xem ở trang này.</Typography.Text>{" "}
+        {lock.reason}
+      </Typography.Paragraph>
+      <NodeControl {...props} />
+    </ConfigProvider>
+  );
+}
+
+function NodeControl({
   node,
   required,
   where,
@@ -700,10 +758,12 @@ function MapField({
   node: Extract<RuleNode, { kind: "map" }>;
   where: Where;
 }) {
-  const { ruleKey, form } = useCtx();
+  const { ruleKey, form, only } = useCtx();
   const words = fieldWords(ruleKey, where.label);
   const item = words.item ?? "Mục";
   const valueText = words.value ?? "Nội dung";
+  // A step that holds only some entries edits their values, never the set.
+  const whole = holdsPath(only, where.doc);
   const entries = (): MapEntry[] =>
     (form.getFieldValue(where.abs) as MapEntry[] | undefined) ?? [];
   const keyRules: FormRule[] = [
@@ -732,11 +792,17 @@ function MapField({
     <Section title={words.label} help={words.help}>
       <Form.List name={where.name}>
         {(fields, { add, remove }) => {
-          const used = new Set(entries().map((e) => e?.key));
+          const all = entries();
+          const used = new Set(all.map((e) => e?.key));
           const free = node.keyEnum?.filter((k) => !used.has(k)) ?? [];
+          const drawn = whole
+            ? fields
+            : fields.filter((field) =>
+                drawsPath(only, [...where.doc, all[field.name]?.key ?? ""]),
+              );
           return (
             <>
-              {fields.map((field, index) => (
+              {drawn.map((field, index) => (
                 <MapEntryRow
                   key={field.key}
                   node={node}
@@ -746,18 +812,21 @@ function MapField({
                   item={item}
                   valueLabel={valueText}
                   keyRules={keyRules}
+                  fixedKey={!whole}
                   onRemove={() => remove(field.name)}
                 />
               ))}
-              <Button
-                icon={<PlusOutlined aria-hidden />}
-                disabled={node.keyEnum !== undefined && free.length === 0}
-                onClick={() =>
-                  add({ key: free[0] ?? "", value: emptyItem(node.value) })
-                }
-              >
-                Thêm {item.toLowerCase()}
-              </Button>
+              {whole ? (
+                <Button
+                  icon={<PlusOutlined aria-hidden />}
+                  disabled={node.keyEnum !== undefined && free.length === 0}
+                  onClick={() =>
+                    add({ key: free[0] ?? "", value: emptyItem(node.value) })
+                  }
+                >
+                  Thêm {item.toLowerCase()}
+                </Button>
+              ) : null}
             </>
           );
         }}
@@ -774,6 +843,7 @@ function MapEntryRow({
   item,
   valueLabel: valueText,
   keyRules,
+  fixedKey,
   onRemove,
 }: {
   node: Extract<RuleNode, { kind: "map" }>;
@@ -783,11 +853,16 @@ function MapEntryRow({
   item: string;
   valueLabel: string;
   keyRules: FormRule[];
+  /** The entry's key is kept as it is: no key control, no remove. */
+  fixedKey: boolean;
   onRemove: () => void;
 }) {
   const { form, base } = useCtx();
   const abs = [...where.abs, fieldName];
-  const key = Form.useWatch([...abs, "key"], form) as string | undefined;
+  const watched = Form.useWatch([...abs, "key"], form) as string | undefined;
+  // Before the first watch settles, the store already knows the key.
+  const key =
+    watched ?? (form.getFieldValue([...abs, "key"]) as string | undefined);
   const title = key ? valueLabel(key) : `${item} ${index + 1}`;
   const keyControl = node.keyEnum ? (
     <Select
@@ -808,7 +883,7 @@ function MapEntryRow({
     label: `${where.label}.*`,
     doc: [...where.doc, key ?? ""],
   };
-  const removeButton = (
+  const removeButton = fixedKey ? null : (
     <Button
       size="small"
       danger
@@ -817,6 +892,23 @@ function MapEntryRow({
       onClick={onRemove}
     />
   );
+  if (fixedKey && node.value.kind !== "object" && node.value.kind !== "map")
+    return (
+      <>
+        <Form.Item
+          name={child.name}
+          label={title}
+          rules={[
+            requiredRule(valueText),
+            ...checks(node.value),
+            ...templateRules(node.value, child, base),
+          ]}
+        >
+          <Control node={node.value} label={`${valueText}: ${title}`} />
+        </Form.Item>
+        <Placeholders node={node.value} where={child} />
+      </>
+    );
   if (node.value.kind === "object" || node.value.kind === "map")
     return (
       <Section title={title} extra={removeButton}>
@@ -824,6 +916,7 @@ function MapEntryRow({
           name={[fieldName, "key"]}
           label={`Mã ${item.toLowerCase()}`}
           rules={keyRules}
+          hidden={fixedKey}
         >
           {keyControl}
         </Form.Item>
