@@ -1,0 +1,777 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { UiProvider } from "@dw/ui";
+import { ApiError, type SalesSchemas } from "@dw/api-client";
+import { AN, GIANG } from "./fixtures";
+import { PROCESS } from "./process-fixture";
+import type { PlatformDocument, RuleVersion } from "../rules";
+
+type View = SalesSchemas["ProcessSettingsView"];
+type RulesView = SalesSchemas["RulesInForceView"];
+
+const SCHEMAS = JSON.parse(
+  readFileSync(
+    resolve(
+      __dirname,
+      "../../../../../../contracts/jsonschema/sales_rules.json",
+    ),
+    "utf-8",
+  ),
+) as Record<string, Record<string, unknown>>;
+
+const PRICE_KEYS = ["sales_order_rules", "sales_quote_rules", "sales_pricing"];
+
+let scopes = ["sales.case.read", "sales.rules.propose", "sales.price.read"];
+vi.mock("../../../../lib/auth/auth-context", () => ({
+  useAuth: () => ({
+    principalId: AN,
+    displayName: "An",
+    active: { workspaceId: "w-1" },
+    hasScope: (scope: string) => scopes.includes(scope),
+  }),
+}));
+vi.mock("../../../../lib/session", () => ({
+  apiClient: () => ({ listWorkspaceMembers: vi.fn().mockResolvedValue([]) }),
+}));
+
+// The URL the page reads and writes, with a history Back can walk.
+const nav = vi.hoisted(() => {
+  let history = [""];
+  const listeners = new Set<() => void>();
+  let current = new URLSearchParams();
+  const go = (url: string) => {
+    current = new URLSearchParams(url.split("?")[1] ?? "");
+    listeners.forEach((l) => l());
+  };
+  return {
+    reset(query = "") {
+      history = [query];
+      current = new URLSearchParams(query);
+    },
+    get: () => current,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    push: vi.fn((url: string) => {
+      history.push(url.split("?")[1] ?? "");
+      go(url);
+    }),
+    replace: vi.fn((url: string) => {
+      history[history.length - 1] = url.split("?")[1] ?? "";
+      go(url);
+    }),
+    back: vi.fn(() => {
+      history.pop();
+      go(`?${history[history.length - 1] ?? ""}`);
+    }),
+  };
+});
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    useSearchParams: () => useSyncExternalStore(nav.subscribe, nav.get),
+    usePathname: () => "/sales/rules/process",
+    useRouter: () => ({
+      push: nav.push,
+      replace: nav.replace,
+      back: nav.back,
+    }),
+  };
+});
+
+const KPI_DOC = {
+  schema_version: "1.0",
+  policy_id: "sales_kpi",
+  policy_version: "1.0.1",
+  order_confirmation_target_hours: 8,
+  quotation_target_days: 1,
+  manual_baseline_minutes: { O1: 5, Q1: 10 },
+};
+
+const FOLLOWUPS_DOC = {
+  schema_version: "1.0",
+  policy_id: "sales_followups",
+  policy_version: "1.0.0",
+  working_hours: {
+    time_zone: "Asia/Ho_Chi_Minh",
+    days: ["mon", "tue"],
+    start: "08:00",
+    end: "17:30",
+  },
+};
+
+const KPI_VERSION: RuleVersion = {
+  version_id: "0aa10aa0-c939-7000-8539-31fd3e621700",
+  key: "sales_kpi",
+  version: "1.0.1",
+  ref: "sales_kpi@1.0.1",
+  layer: "tenant",
+  status: "approved",
+  proposed_by: AN,
+  proposed_at: "2026-10-10T02:00:00Z",
+  decided_by: GIANG,
+  decided_at: "2026-10-10T03:00:00Z",
+  comment: null,
+  document: KPI_DOC,
+  approval_id: "0aa10aa0-c939-7000-8539-31fd3e621701",
+};
+
+/** What `/rules` answers someone who reads no price: no price key at all. */
+const RULES: RulesView = {
+  in_force: {
+    sales_kpi: "sales_kpi@1.0.1",
+    sales_followups: "sales_followups@1.0.0",
+  },
+  layers: { sales_kpi: "tenant", sales_followups: "platform" },
+  platform: [
+    { key: "sales_kpi", ref: "sales_kpi@1.0.0" },
+    { key: "sales_followups", ref: "sales_followups@1.0.0" },
+  ],
+  versions: [KPI_VERSION],
+  draftable: [],
+};
+
+const PLATFORM: Record<string, PlatformDocument[]> = {
+  sales_kpi: [
+    {
+      key: "sales_kpi",
+      ref: "sales_kpi@1.0.0",
+      version: "1.0.0",
+      current: true,
+      document: { ...KPI_DOC, policy_version: "1.0.0" },
+    },
+  ],
+  sales_followups: [
+    {
+      key: "sales_followups",
+      ref: "sales_followups@1.0.0",
+      version: "1.0.0",
+      current: true,
+      document: FOLLOWUPS_DOC,
+    },
+  ],
+};
+
+/** The view as the server leaves it for a caller without `sales.price.read`. */
+function withoutPrices(view: View): View {
+  const keep = (s: { key: string }) => !PRICE_KEYS.includes(s.key);
+  return {
+    ...view,
+    steps: view.steps.map((s) => ({ ...s, settings: s.settings.filter(keep) })),
+    lane_settings: Object.fromEntries(
+      Object.entries(view.lane_settings).map(([k, v]) => [k, v.filter(keep)]),
+    ),
+    process_settings: view.process_settings.filter(keep),
+  };
+}
+
+const api = {
+  rulesProcess: vi.fn(async (): Promise<View> => PROCESS),
+  rules: vi.fn(async (): Promise<RulesView> => RULES),
+  ruleSchema: vi.fn(async (key: string) => ({
+    key,
+    json_schema: SCHEMAS[key]!,
+  })),
+  rulePlatformDocuments: vi.fn(async (key: string) => PLATFORM[key] ?? []),
+  proposeRule: vi.fn(async (...args: unknown[]) => (void args, KPI_VERSION)),
+};
+vi.mock("../api", () => ({ salesApi: () => api }));
+
+import ProcessPage from "../../rules/process/page";
+import RulesPage from "../../rules/page";
+
+const SLOW = 30_000;
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  nav.reset();
+  scopes = ["sales.case.read", "sales.rules.propose", "sales.price.read"];
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: media(false),
+  });
+});
+
+/** A `matchMedia` for a wide screen (every antd `min-width` up to xl) or a phone. */
+function media(wide: boolean) {
+  return (query: string) => {
+    const min = /min-width:\s*(\d+)px/.exec(query);
+    return {
+      matches: wide && min !== null && Number(min[1]) <= 1200,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    };
+  };
+}
+
+function renderPage(query = "") {
+  nav.reset(query);
+  render(
+    <UiProvider>
+      <ProcessPage />
+    </UiProvider>,
+  );
+}
+
+/** A status card: a link named by its whole card, its status first. */
+const status = (words: string) =>
+  screen.findByRole("link", {
+    name: new RegExp(`^${words.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+  });
+
+const drawer = (title: string) =>
+  screen
+    .getAllByRole("dialog")
+    .find((d) => within(d).queryByText(title)) as HTMLElement;
+
+/** Opens the KPI section of the order lane's "Đã nhận" status (step O1). */
+async function openReceivedKpi() {
+  renderPage("node=order.received");
+  await screen.findByText("Đơn hàng · Đã nhận");
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Xem và đề xuất thay đổi: Chỉ tiêu KPI",
+    }),
+  );
+  return (await screen.findByRole("spinbutton", {
+    name: "Số phút: Đơn hàng, bước 1 (O1)",
+  })) as HTMLInputElement;
+}
+
+describe("the DW1 process page (2026-10-22)", () => {
+  it(
+    "draws every status the server serves, a status it adds included, and none of its own",
+    async () => {
+      const order = PROCESS.lanes[0]!;
+      api.rulesProcess.mockResolvedValueOnce({
+        ...PROCESS,
+        lanes: [
+          {
+            ...order,
+            nodes: [
+              ...order.nodes,
+              { status: "on_hold", steps: [], holder: "sales" },
+            ],
+            edges: [
+              ...order.edges,
+              { from: "in_review", to: "on_hold" },
+              { from: "on_hold", to: "in_review" },
+            ],
+          },
+          PROCESS.lanes[1]!,
+        ],
+      });
+      renderPage();
+      expect(await status("on_hold")).toBeTruthy();
+      for (const words of ["Chờ PIC tự kiểm", "Đã nhập Bravo", "Đã đóng"])
+        expect(await status(words)).toBeTruthy();
+      // Each card is a real link to its drawer, so it opens in a new tab too.
+      expect((await status("Đã nhận")).getAttribute("href")).toBe(
+        "/sales/rules/process?node=order.received",
+      );
+      // The ways back and the exits are written, not drawn.
+      expect(
+        screen.getByText(
+          "Có thể đóng từ: Đã nhận, Đã kiểm tra, Chờ PIC tự kiểm, Chờ khách sửa PO, PIC đã tự kiểm",
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.getAllByText("Có thể quay lại: Chờ PIC tự kiểm").length,
+      ).toBeGreaterThan(0);
+      // Steps no status stands for follow the statuses.
+      expect(
+        screen.getByRole("button", { name: /^Đơn hàng, bước 4 \(O4\)/ }),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "on a wide screen, draws the statuses in a grid with an arrow per forward move",
+    async () => {
+      Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        value: media(true),
+      });
+      renderPage();
+      const card = await status("Chờ PIC tự kiểm");
+      expect(card.textContent).toContain("O6 · DW1 làm");
+      expect(card.textContent).toContain("Đến lượt: Sales quyết định");
+      // Tab follows the drawing: column by column.
+      const order = [...document.querySelectorAll("[data-status]")].map((n) =>
+        n.getAttribute("data-status"),
+      );
+      expect(order.slice(0, 2)).toEqual(["received", "checked"]);
+      const arrows = document.querySelectorAll(
+        "svg[aria-hidden] path[data-move]",
+      );
+      expect([...arrows].map((a) => a.getAttribute("data-move"))).toContain(
+        "prepared->uploaded_to_bravo",
+      );
+      // The order lane draws 11 of its 23 moves: 7 go back and 5 close.
+      expect(arrows.length).toBe(11);
+    },
+    SLOW,
+  );
+
+  it(
+    "opens a status from a link, and its close button takes the link away",
+    async () => {
+      renderPage("node=order.in_review");
+      expect(
+        await screen.findByText("Đơn hàng · Chờ PIC tự kiểm"),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(
+          "Thay đổi chỉ áp dụng cho hồ sơ được kiểm sau khi phiên bản mới được duyệt.",
+        ),
+      ).toBeTruthy();
+      const open = drawer("Đơn hàng · Chờ PIC tự kiểm");
+      expect(
+        within(open).getByText("Có thể quay lại: Đã kiểm tra"),
+      ).toBeTruthy();
+      // On to: the ways back are not among them.
+      const onward = within(open).getByText(/^Chuyển tiếp sang:/);
+      expect(onward.textContent).not.toContain("Đã kiểm tra");
+      expect(document.title).toBe(
+        "Quy trình DW1 · Đơn hàng · Chờ PIC tự kiểm · Sales",
+      );
+      fireEvent.click(document.querySelector(".ant-drawer-close")!);
+      await waitFor(() => expect(nav.get().get("node")).toBeNull());
+      expect(nav.replace).toHaveBeenCalledTimes(1);
+      expect(nav.back).not.toHaveBeenCalled();
+    },
+    SLOW,
+  );
+
+  it(
+    "puts the open status in the URL, and Back closes it",
+    async () => {
+      renderPage();
+      fireEvent.click(await status("Đã nhận"));
+      expect(nav.push).toHaveBeenCalledWith(
+        "/sales/rules/process?node=order.received",
+        { scroll: false },
+      );
+      expect(await screen.findByText("Đơn hàng · Đã nhận")).toBeTruthy();
+      fireEvent.click(document.querySelector(".ant-drawer-close")!);
+      expect(nav.back).toHaveBeenCalledTimes(1);
+      // Closed as a drawer, focus back on the card that opened it.
+      await waitFor(() =>
+        expect(document.activeElement?.getAttribute("data-node")).toBe(
+          "order.received",
+        ),
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "edits only the step's fields, and proposes the whole document with a diff of what changed",
+    async () => {
+      const minutes = await openReceivedKpi();
+      expect(minutes.value).toBe("5");
+      // The key's other fields are not drawn: not the target, not Q1's minutes.
+      expect(
+        screen.queryByRole("spinbutton", {
+          name: "Mục tiêu xác nhận đơn hàng",
+        }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("spinbutton", {
+          name: "Số phút: Báo giá, bước 1 (Q1)",
+        }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /^Xóa/ }),
+        "an entry the step holds keeps its key",
+      ).toBeNull();
+      expect(
+        (
+          screen.getByRole("textbox", {
+            name: "Số phiên bản mới",
+          }) as HTMLInputElement
+        ).value,
+      ).toBe("1.0.2");
+      // Limited to a step, no JSON: it would edit the fields drawn read-only.
+      expect(screen.queryByText("JSON nâng cao")).toBeNull();
+      expect(nav.get().get("edit")).toBe("sales_kpi");
+
+      fireEvent.change(minutes, { target: { value: "7" } });
+      fireEvent.blur(minutes);
+      fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
+      expect(
+        await screen.findByText("2 thay đổi so với sales_kpi@1.0.1."),
+      ).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Gửi duyệt" }));
+      await waitFor(() => expect(api.proposeRule).toHaveBeenCalledTimes(1));
+      const [key, body] = api.proposeRule.mock.calls[0] as [string, unknown];
+      expect([key, body]).toEqual([
+        "sales_kpi",
+        {
+          document: {
+            ...KPI_DOC,
+            policy_version: "1.0.2",
+            manual_baseline_minutes: { O1: 7, Q1: 10 },
+          },
+        },
+      ]);
+    },
+    SLOW,
+  );
+
+  it(
+    "lists a refusal of a field outside the step above the form, and puts one inside on its field",
+    async () => {
+      api.proposeRule.mockRejectedValueOnce(
+        new ApiError(422, {
+          code: "validation_failed",
+          message: "the document is not a valid version of this key",
+          details: {
+            key: "sales_kpi",
+            errors:
+              "['order_confirmation_target_hours', 'manual_baseline_minutes.O1']",
+          },
+          request_id: "r-1",
+        }),
+      );
+      await openReceivedKpi();
+      fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Gửi duyệt" }));
+
+      expect(await screen.findByText("Còn 2 trường cần sửa.")).toBeTruthy();
+      expect(
+        screen.getByText(
+          /^Mục tiêu xác nhận đơn hàng: Máy chủ không nhận giá trị này/,
+        ),
+      ).toBeTruthy();
+      const minutes = screen.getByRole("spinbutton", {
+        name: "Số phút: Đơn hàng, bước 1 (O1)",
+      });
+      expect(
+        within(minutes.closest(".ant-form-item") as HTMLElement).getByText(
+          /Máy chủ không nhận giá trị này/,
+        ),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "shows why a proposal waiting on the key refused this one, keeps what was typed, and does not send it again",
+    async () => {
+      const reason =
+        "Quy tắc này đã có phiên bản 1.0.5 chờ duyệt, do Giang đề xuất lúc 09:00 14/10/2026 (giờ Việt Nam), và mỗi quy tắc chỉ có một phiên bản chờ duyệt.";
+      api.proposeRule.mockRejectedValueOnce(
+        new ApiError(409, {
+          code: "conflict",
+          message: reason,
+          details: {
+            key: "sales_kpi",
+            rule: "one_open_proposal",
+            version: "1.0.5",
+          },
+          request_id: "r-2",
+        }),
+      );
+      const minutes = await openReceivedKpi();
+      fireEvent.change(minutes, { target: { value: "9" } });
+      fireEvent.blur(minutes);
+      fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Gửi duyệt" }));
+
+      expect(await screen.findByText(reason)).toBeTruthy();
+      expect(
+        (
+          screen.getByRole("spinbutton", {
+            name: "Số phút: Đơn hàng, bước 1 (O1)",
+          }) as HTMLInputElement
+        ).value,
+      ).toBe("9");
+      // The form started from a version a decision may since have replaced:
+      // it is not sent again, and the page asks for the versions again.
+      expect(screen.getByText(/^Biểu mẫu này không gửi lại được/)).toBeTruthy();
+      await waitFor(() => expect(api.rules).toHaveBeenCalledTimes(2));
+      fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
+      const send = await screen.findByRole("button", { name: "Gửi duyệt" });
+      expect((send as HTMLButtonElement).disabled).toBe(true);
+      expect(api.proposeRule).toHaveBeenCalledTimes(1);
+    },
+    SLOW,
+  );
+
+  it(
+    "says a version is waiting on the key before anyone edits, and sends nothing while it waits",
+    async () => {
+      api.rules.mockImplementation(async () => ({
+        ...RULES,
+        versions: [
+          {
+            ...KPI_VERSION,
+            version_id: "0aa10aa0-c939-7000-8539-31fd3e621702",
+            version: "1.0.5",
+            ref: "sales_kpi@1.0.5",
+            status: "proposed",
+            proposed_by: GIANG,
+            proposed_at: "2026-10-14T02:00:00Z",
+            decided_by: null,
+            decided_at: null,
+            approval_id: "0aa10aa0-c939-7000-8539-31fd3e621703",
+          },
+          KPI_VERSION,
+        ],
+      }));
+      renderPage("node=order.received");
+      const notice = await screen.findByText(
+        /^Phiên bản sales_kpi@1\.0\.5 đang chờ duyệt, do .+ đề xuất lúc 09:00 14\/10\/2026 \(giờ Việt Nam\)\.$/,
+      );
+      expect(notice).toBeTruthy();
+      expect(
+        screen
+          .getByRole("link", { name: "Mở yêu cầu duyệt" })
+          .getAttribute("href"),
+      ).toBe("/approvals/0aa10aa0-c939-7000-8539-31fd3e621703");
+      // Still viewable; the editor says it too, and does not send.
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Xem và đề xuất thay đổi: Chỉ tiêu KPI",
+        }),
+      );
+      await screen.findByRole("spinbutton", {
+        name: "Số phút: Đơn hàng, bước 1 (O1)",
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
+      const send = await screen.findByRole("button", { name: "Gửi duyệt" });
+      expect((send as HTMLButtonElement).disabled).toBe(true);
+      expect(api.proposeRule).not.toHaveBeenCalled();
+      api.rules.mockImplementation(async () => RULES);
+    },
+    SLOW,
+  );
+
+  it(
+    "puts the editor in the URL: Back closes it, and with unsent changes asks first",
+    async () => {
+      renderPage("node=order.received");
+      await screen.findByText("Đơn hàng · Đã nhận");
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "Xem và đề xuất thay đổi: Chỉ tiêu KPI",
+        }),
+      );
+      expect(nav.push).toHaveBeenLastCalledWith(
+        "/sales/rules/process?node=order.received&edit=sales_kpi",
+        { scroll: false },
+      );
+      const minutes = (await screen.findByRole("spinbutton", {
+        name: "Số phút: Đơn hàng, bước 1 (O1)",
+      })) as HTMLInputElement;
+      fireEvent.change(minutes, { target: { value: "7" } });
+
+      // Back, with a change not sent: the editor stays, and the page asks.
+      const asked = () => document.querySelectorAll(".ant-modal-confirm");
+      act(() => nav.back());
+      await waitFor(() => expect(asked().length).toBe(1));
+      expect(asked()[0]!.textContent).toContain("Bỏ tài liệu đang sửa?");
+      expect(nav.get().get("edit")).toBe("sales_kpi");
+      fireEvent.click(screen.getByRole("button", { name: "Tiếp tục sửa" }));
+      expect(
+        (
+          screen.getByRole("spinbutton", {
+            name: "Số phút: Đơn hàng, bước 1 (O1)",
+          }) as HTMLInputElement
+        ).value,
+      ).toBe("7");
+
+      // Back again, and the change thrown away: the editor closes, the
+      // status stays open.
+      const before = screen.getAllByRole("button", { name: "Bỏ thay đổi" });
+      act(() => nav.back());
+      await waitFor(() =>
+        expect(
+          screen.getAllByRole("button", { name: "Bỏ thay đổi" }).length,
+        ).toBeGreaterThan(before.length),
+      );
+      expect(nav.get().get("edit")).toBe("sales_kpi");
+      const leave = screen.getAllByRole("button", { name: "Bỏ thay đổi" });
+      fireEvent.click(leave[leave.length - 1]!);
+      await waitFor(() => expect(nav.get().get("edit")).toBeNull());
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("spinbutton", {
+            name: "Số phút: Đơn hàng, bước 1 (O1)",
+          }),
+        ).toBeNull(),
+      );
+      expect(nav.get().get("node")).toBe("order.received");
+    },
+    SLOW,
+  );
+
+  it(
+    "draws a locked field read-only with why, beside the fields it may edit",
+    async () => {
+      renderPage("node=process");
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "Xem và đề xuất thay đổi: Nhắc việc và tóm tắt buổi sáng",
+        }),
+      );
+      const zone = (await screen.findByRole("textbox", {
+        name: "Múi giờ",
+      })) as HTMLInputElement;
+      expect(zone.disabled).toBe(true);
+      expect(screen.getByText("Chỉ xem ở trang này.")).toBeTruthy();
+      expect(screen.getByText(/giờ Việt Nam cố định/)).toBeTruthy();
+      expect(
+        (screen.getByRole("textbox", { name: "Bắt đầu" }) as HTMLInputElement)
+          .disabled,
+      ).toBe(false);
+    },
+    SLOW,
+  );
+
+  it("draws the forbidden state, and asks nothing, without sales.rules.propose", () => {
+    scopes = ["sales.case.read", "sales.price.read"];
+    renderPage();
+    expect(
+      screen.getByText(/Quyền của bạn trong không gian làm việc này/),
+    ).toBeTruthy();
+    expect(api.rulesProcess).not.toHaveBeenCalled();
+  });
+
+  it(
+    "draws a failure with its request id, and an empty process as empty",
+    async () => {
+      api.rulesProcess.mockRejectedValueOnce(
+        new ApiError(500, {
+          code: "internal",
+          message: "Máy chủ gặp lỗi.",
+          details: {},
+          request_id: "req-process-1",
+        }),
+      );
+      renderPage();
+      expect(await screen.findByText(/req-process-1/)).toBeTruthy();
+      cleanup();
+
+      api.rulesProcess.mockResolvedValueOnce({ ...PROCESS, lanes: [] });
+      renderPage();
+      expect(
+        await screen.findByText("Máy chủ chưa trả về quy trình nào."),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+});
+
+describe("the DW1 process page for a proposer who reads no price", () => {
+  /** Opens each status, step and lane of both lanes, and every key's editor. */
+  async function openEverything() {
+    await status("Đã nhận");
+    const view = (await api.rulesProcess.mock.results[0]!.value) as View;
+    const ids = [
+      "process",
+      ...view.lanes.flatMap((lane) => [
+        lane.kind,
+        ...lane.nodes.map((n) => `${lane.kind}.${n.status}`),
+        ...lane.stateless_steps.map((s) => `${lane.kind}.${s}`),
+      ]),
+    ];
+    for (const id of ids) {
+      cleanup();
+      renderPage(`node=${id}`);
+      await screen.findByText(
+        "Thay đổi chỉ áp dụng cho hồ sơ được kiểm sau khi phiên bản mới được duyệt.",
+      );
+      for (const button of screen.queryAllByRole("button", {
+        name: /^Xem và đề xuất thay đổi: /,
+      }))
+        fireEvent.click(button);
+      await waitFor(() =>
+        expect(screen.queryAllByText(/Đang tải/)).toEqual([]),
+      );
+    }
+  }
+
+  const askedFor = () =>
+    new Set(
+      [
+        ...api.ruleSchema.mock.calls,
+        ...api.rulePlatformDocuments.mock.calls,
+      ].map(([key]) => key),
+    );
+
+  it("never asks for a price key's schema or documents, and names none", async () => {
+    scopes = ["sales.rules.propose"];
+    api.rulesProcess.mockImplementation(async () => withoutPrices(PROCESS));
+    renderPage();
+    await openEverything();
+    expect([...askedFor()].sort()).toEqual(["sales_followups", "sales_kpi"]);
+    for (const words of [
+      "Quy tắc kiểm tra đơn hàng",
+      "Quy tắc báo giá",
+      "Chính sách giá",
+    ])
+      expect(screen.queryByText(words), words).toBeNull();
+    api.rulesProcess.mockReset();
+  }, 120_000);
+
+  it("the search can fail: served the price keys, the page asks for them", async () => {
+    api.rulesProcess.mockImplementation(async () => PROCESS);
+    renderPage();
+    await openEverything();
+    expect([...askedFor()]).toEqual(expect.arrayContaining(PRICE_KEYS));
+    api.rulesProcess.mockReset();
+  }, 120_000);
+});
+
+describe("/sales/rules after the editor moved out", () => {
+  it(
+    "still proposes a whole key from its own drawer",
+    async () => {
+      render(
+        <UiProvider>
+          <RulesPage />
+        </UiProvider>,
+      );
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "Đề xuất phiên bản mới: Chỉ tiêu KPI",
+        }),
+      );
+      // The whole key: the target and every step's minutes.
+      expect(
+        await screen.findByRole("spinbutton", {
+          name: "Mục tiêu xác nhận đơn hàng",
+        }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("spinbutton", {
+          name: "Số phút: Báo giá, bước 1 (Q1)",
+        }),
+      ).toBeTruthy();
+      expect(drawer("Đề xuất phiên bản mới: Chỉ tiêu KPI")).toBeTruthy();
+      // The whole key, so JSON too.
+      expect(screen.getByText("JSON nâng cao")).toBeTruthy();
+    },
+    SLOW,
+  );
+});

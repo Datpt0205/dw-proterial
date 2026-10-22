@@ -606,11 +606,13 @@ test("6. Tâm (tenant IT) sees the rules alone: no price-bearing key, a Bravo pr
   ])
     await expect(body).not.toContainText(hidden);
 
-  // The menu's Sales group offers "Quy tắc".
+  // The menu's Sales group offers "Quy tắc", under "Quản lý" since tenant
+  // IT also has "Quy trình DW1" there.
   await page
     .getByRole("navigation", { name: "Điều hướng chính" })
     .getByRole("menuitem", { name: "Sales" })
     .hover();
+  await page.getByRole("menuitem", { name: "Quản lý" }).first().hover();
   await expect(
     page.getByRole("menuitem", { name: "Quy tắc" }).first(),
   ).toBeVisible();

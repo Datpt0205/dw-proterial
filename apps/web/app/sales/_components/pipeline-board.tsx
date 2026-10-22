@@ -27,7 +27,9 @@ import { salesApi } from "../_lib/api";
 import { useCustomerName } from "../_lib/customers";
 import {
   ACTION,
+  CASE_KIND,
   label,
+  NO_HOLDER,
   ORDER_STATE,
   QUOTE_STATE,
   TIME_BUCKET,
@@ -42,8 +44,8 @@ type CaseCard = SalesSchemas["PipelineCard"];
 type Kind = Column["kind"];
 
 const LANES: { kind: Kind; title: string; procedure: string }[] = [
-  { kind: "order", title: "Đơn hàng", procedure: "WIV-03-012" },
-  { kind: "quote", title: "Báo giá", procedure: "WIV-03-023" },
+  { kind: "order", title: CASE_KIND.order, procedure: "WIV-03-012" },
+  { kind: "quote", title: CASE_KIND.quote, procedure: "WIV-03-023" },
 ];
 const VIEWS = ["all", "mine"] as const;
 const SORTS = ["age"] as const;
@@ -199,7 +201,7 @@ function ColumnView({ column, cards }: { column: Column; cards: CaseCard[] }) {
           </Typography.Text>
         </Flex>
         <Typography.Text type="secondary" className="block" style={small}>
-          {column.holder ? label(TIME_BUCKET, column.holder) : "Đã xong"}
+          {column.holder ? label(TIME_BUCKET, column.holder) : NO_HOLDER}
           {column.steps.length ? ` · ${column.steps.join(", ")}` : ""}
         </Typography.Text>
       </div>

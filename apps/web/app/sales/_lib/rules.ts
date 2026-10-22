@@ -1,4 +1,5 @@
 import type { SalesSchemas } from "@dw/api-client";
+import { formatDateTime } from "../../../lib/dates";
 import { valueLabel } from "./rule-labels";
 
 type RulesView = SalesSchemas["RulesInForceView"];
@@ -35,6 +36,30 @@ export const RULE_LAYER: Record<RuleVersion["layer"], string> = {
   platform: "Của nền tảng",
   tenant: "Riêng của công ty",
 };
+
+/** The version of ``key`` waiting on its approval, if one is: at most one (`uq_rule_versions_one_proposed`). */
+export function waitingVersion(
+  view: RulesView,
+  key: RuleKey,
+): RuleVersion | undefined {
+  return view.versions.find((v) => v.key === key && v.status === "proposed");
+}
+
+/**
+ * What a key with a version waiting says before anyone edits it: the server
+ * refuses a second proposal on the key until the first is decided (409
+ * `one_open_proposal`), so the page says so first, with who and when.
+ */
+export function waitingNotice(
+  version: RuleVersion,
+  who: string,
+): { title: string; description: string } {
+  return {
+    title: `Phiên bản ${version.ref} đang chờ duyệt, do ${who} đề xuất lúc ${formatDateTime(version.proposed_at)}.`,
+    description:
+      "Mỗi quy tắc chỉ có một phiên bản chờ duyệt: chưa gửi duyệt được phiên bản mới cho đến khi phiên bản đó được duyệt hoặc từ chối. Vẫn xem được các trường ở đây.",
+  };
+}
 
 export interface KeyRow {
   key: RuleKey;

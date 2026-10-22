@@ -689,6 +689,18 @@ export class SalesApi {
     return this.get<"/api/v1/sales/rules">("/api/v1/sales/rules");
   }
 
+  /**
+   * The DW1 process as its configuration page draws it: each lane's statuses
+   * and moves, and the rule fields each step, lane and the whole process
+   * read, by key and path, never a value. A key holding prices is absent for
+   * a caller without `sales.price.read`.
+   */
+  rulesProcess() {
+    return this.get<"/api/v1/sales/rules/process">(
+      "/api/v1/sales/rules/process",
+    );
+  }
+
   /** The JSON Schema a proposal of the key is validated by (ticket 40). */
   ruleSchema(ruleKey: SalesSchemas["RuleKey"]) {
     return this.get<"/api/v1/sales/rules/{key}/schema">(

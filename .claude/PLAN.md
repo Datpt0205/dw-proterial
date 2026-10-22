@@ -37,9 +37,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 2026-10-20: pipeline board as the Sales home, a history per case, denser
   theme (`sales.md` State).
-- **Next:** defects A–E and the screenshot review (`sales.md` State, 2026-10-21 end-user); `onprem-up`
-  in `uat` behind Caddy, with a warm-up call and a GPU check after the model
-  starts; then DW2 (Mua hàng, 13/10 deck) when its survey arrives.
+- **Next:** "Quy trình DW1" slices 2–3, defects A–E, the screenshot review (`sales.md` State 2026-10-21/22);
+  `onprem-up` in `uat` behind Caddy; DW2 (Mua hàng) when its survey arrives, after the reuse decisions in `sales.md`.
 
 ## Decisions Đạt owes
 

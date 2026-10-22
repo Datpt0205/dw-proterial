@@ -1808,6 +1808,17 @@
         "title": "CorrectionBody",
         "type": "object"
       },
+      "Coverage": {
+        "description": "How far this slice takes the step.",
+        "enum": [
+          "yes",
+          "suggestion",
+          "mock",
+          "out"
+        ],
+        "title": "Coverage",
+        "type": "string"
+      },
       "CoverageView": {
         "properties": {
           "checks_run": {
@@ -5021,6 +5032,17 @@
         "title": "Located",
         "type": "object"
       },
+      "LockReason": {
+        "description": "Why the page shows a field without editing it: served with the field,\nworded by the web (`rule-labels.ts`, keyed by these values, so a reason\nadded here fails its typecheck until it has words).",
+        "enum": [
+          "model_bar_unchecked",
+          "bound_at_build",
+          "trust",
+          "two_owners"
+        ],
+        "title": "LockReason",
+        "type": "string"
+      },
       "MappingBody": {
         "additionalProperties": false,
         "properties": {
@@ -8026,6 +8048,171 @@
         "title": "PrintDifferenceView",
         "type": "object"
       },
+      "ProcessEdgeView": {
+        "properties": {
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "title": "ProcessEdgeView",
+        "type": "object"
+      },
+      "ProcessLaneView": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessEdgeView"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CaseKind"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessNodeView"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "stateless_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stateless Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "nodes",
+          "edges",
+          "stateless_steps"
+        ],
+        "title": "ProcessLaneView",
+        "type": "object"
+      },
+      "ProcessNodeView": {
+        "properties": {
+          "holder": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dw",
+                  "sales",
+                  "design",
+                  "approver",
+                  "customer"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holder"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "steps",
+          "holder"
+        ],
+        "title": "ProcessNodeView",
+        "type": "object"
+      },
+      "ProcessSettingsView": {
+        "properties": {
+          "lane_settings": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/SettingView"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/CaseKind"
+            },
+            "title": "Lane Settings",
+            "type": "object"
+          },
+          "lanes": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessLaneView"
+            },
+            "title": "Lanes",
+            "type": "array"
+          },
+          "process_settings": {
+            "items": {
+              "$ref": "#/components/schemas/SettingView"
+            },
+            "title": "Process Settings",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lanes",
+          "steps",
+          "lane_settings",
+          "process_settings"
+        ],
+        "title": "ProcessSettingsView",
+        "type": "object"
+      },
+      "ProcessStepView": {
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/Coverage"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/SettingView"
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_id",
+          "coverage",
+          "settings"
+        ],
+        "title": "ProcessStepView",
+        "type": "object"
+      },
       "ProcessingJobView": {
         "description": "A message's processing job (ticket 25): ids, a status and a reason\ncode, never anything read from the message.",
         "properties": {
@@ -10076,6 +10263,34 @@
           "permission_set_keys"
         ],
         "title": "SetPermissionSetsBody",
+        "type": "object"
+      },
+      "SettingView": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/RuleKey"
+          },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LockReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "path",
+          "lock"
+        ],
+        "title": "SettingView",
         "type": "object"
       },
       "SheetCell": {
@@ -18547,6 +18762,27 @@
           }
         },
         "summary": "Rule Draft",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/process": {
+      "get": {
+        "operationId": "rules_process_api_v1_sales_rules_process_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Rules Process",
         "tags": [
           "sales"
         ]

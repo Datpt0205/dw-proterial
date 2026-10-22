@@ -1051,6 +1051,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/rules/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rules Process */
+        get: operations["rules_process_api_v1_sales_rules_process_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/rules/{key}/drafts": {
         parameters: {
             query?: never;
@@ -1603,6 +1620,12 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * Coverage
+         * @description How far this slice takes the step.
+         * @enum {string}
+         */
+        Coverage: "yes" | "suggestion" | "mock" | "out";
         /** CoverageView */
         CoverageView: {
             /** Checks Run */
@@ -2436,6 +2459,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /**
+         * LockReason
+         * @description Why the page shows a field without editing it: served with the field,
+         *     worded by the web (`rule-labels.ts`, keyed by these values, so a reason
+         *     added here fails its typecheck until it has words).
+         * @enum {string}
+         */
+        LockReason: "model_bar_unchecked" | "bound_at_build" | "trust" | "two_owners";
         /** MappingBody */
         MappingBody: {
             /** Case Version */
@@ -3127,6 +3158,53 @@ export interface components {
             /** Line No */
             line_no: number | null;
         };
+        /** ProcessEdgeView */
+        ProcessEdgeView: {
+            /** From */
+            from: string;
+            /** To */
+            to: string;
+        };
+        /** ProcessLaneView */
+        ProcessLaneView: {
+            /** Edges */
+            edges: components["schemas"]["ProcessEdgeView"][];
+            kind: components["schemas"]["CaseKind"];
+            /** Nodes */
+            nodes: components["schemas"]["ProcessNodeView"][];
+            /** Stateless Steps */
+            stateless_steps: string[];
+        };
+        /** ProcessNodeView */
+        ProcessNodeView: {
+            /** Holder */
+            holder: ("dw" | "sales" | "design" | "approver" | "customer") | null;
+            /** Status */
+            status: string;
+            /** Steps */
+            steps: string[];
+        };
+        /** ProcessSettingsView */
+        ProcessSettingsView: {
+            /** Lane Settings */
+            lane_settings: {
+                [key: string]: components["schemas"]["SettingView"][];
+            };
+            /** Lanes */
+            lanes: components["schemas"]["ProcessLaneView"][];
+            /** Process Settings */
+            process_settings: components["schemas"]["SettingView"][];
+            /** Steps */
+            steps: components["schemas"]["ProcessStepView"][];
+        };
+        /** ProcessStepView */
+        ProcessStepView: {
+            coverage: components["schemas"]["Coverage"];
+            /** Settings */
+            settings: components["schemas"]["SettingView"][];
+            /** Step Id */
+            step_id: string;
+        };
         /**
          * ProcessingJobView
          * @description A message's processing job (ticket 25): ids, a status and a reason
@@ -3766,6 +3844,13 @@ export interface components {
             prv_code: string;
             /** Quote Nos */
             quote_nos: string[];
+        };
+        /** SettingView */
+        SettingView: {
+            key: components["schemas"]["RuleKey"];
+            lock: components["schemas"]["LockReason"] | null;
+            /** Path */
+            path: string;
         };
         /**
          * SheetCell
@@ -6285,6 +6370,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rules_process_api_v1_sales_rules_process_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessSettingsView"];
                 };
             };
         };

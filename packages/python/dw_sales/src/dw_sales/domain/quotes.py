@@ -29,6 +29,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from decimal import ROUND_DOWN, ROUND_HALF_UP, ROUND_UP, Decimal
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal, Self, get_args
 
 from pydantic import (
@@ -1363,30 +1364,38 @@ def _with_decline(*targets: QuoteStatus) -> frozenset[QuoteStatus]:
 
 
 # Every move a quotation may make; anything else is refused.
-_MOVES: Final[Mapping[QuoteStatus, frozenset[QuoteStatus]]] = {
-    QuoteStatus.RECEIVED: _with_decline(QuoteStatus.YCBG_DRAFTED),
-    QuoteStatus.YCBG_DRAFTED: _with_decline(QuoteStatus.YCBG_RECORDED),
-    QuoteStatus.YCBG_RECORDED: _with_decline(QuoteStatus.SENT_TO_DESIGN),
-    QuoteStatus.SENT_TO_DESIGN: _with_decline(QuoteStatus.DESIGN_REPLIED),
-    QuoteStatus.DESIGN_REPLIED: _with_decline(QuoteStatus.SPEC_DISCUSSION, QuoteStatus.PRICED),
-    # Settled with the customer (back to design_replied), or Design must
-    # answer again (sent_to_design).
-    QuoteStatus.SPEC_DISCUSSION: _with_decline(
-        QuoteStatus.DESIGN_REPLIED, QuoteStatus.SENT_TO_DESIGN
-    ),
-    # Priced again: Sales may change the price until it is submitted.
-    QuoteStatus.PRICED: _with_decline(QuoteStatus.PRICED, QuoteStatus.PENDING_APPROVAL),
-    # Back to priced: a change to price, MOQ or lead time after submitting
-    # withdraws the document the approver was shown.
-    QuoteStatus.PENDING_APPROVAL: _with_decline(
-        QuoteStatus.APPROVED, QuoteStatus.RETURNED, QuoteStatus.PRICED
-    ),
-    QuoteStatus.RETURNED: _with_decline(QuoteStatus.PRICED),
-    QuoteStatus.APPROVED: _with_decline(QuoteStatus.SENT, QuoteStatus.PRICED),
-    QuoteStatus.SENT: frozenset({QuoteStatus.MASTER_LIST_RECORDED}),
-    QuoteStatus.MASTER_LIST_RECORDED: frozenset(),
-    QuoteStatus.DECLINED: frozenset(),
-}
+_MOVES: Final[Mapping[QuoteStatus, frozenset[QuoteStatus]]] = MappingProxyType(
+    {
+        QuoteStatus.RECEIVED: _with_decline(QuoteStatus.YCBG_DRAFTED),
+        QuoteStatus.YCBG_DRAFTED: _with_decline(QuoteStatus.YCBG_RECORDED),
+        QuoteStatus.YCBG_RECORDED: _with_decline(QuoteStatus.SENT_TO_DESIGN),
+        QuoteStatus.SENT_TO_DESIGN: _with_decline(QuoteStatus.DESIGN_REPLIED),
+        QuoteStatus.DESIGN_REPLIED: _with_decline(QuoteStatus.SPEC_DISCUSSION, QuoteStatus.PRICED),
+        # Settled with the customer (back to design_replied), or Design must
+        # answer again (sent_to_design).
+        QuoteStatus.SPEC_DISCUSSION: _with_decline(
+            QuoteStatus.DESIGN_REPLIED, QuoteStatus.SENT_TO_DESIGN
+        ),
+        # Priced again: Sales may change the price until it is submitted.
+        QuoteStatus.PRICED: _with_decline(QuoteStatus.PRICED, QuoteStatus.PENDING_APPROVAL),
+        # Back to priced: a change to price, MOQ or lead time after submitting
+        # withdraws the document the approver was shown.
+        QuoteStatus.PENDING_APPROVAL: _with_decline(
+            QuoteStatus.APPROVED, QuoteStatus.RETURNED, QuoteStatus.PRICED
+        ),
+        QuoteStatus.RETURNED: _with_decline(QuoteStatus.PRICED),
+        QuoteStatus.APPROVED: _with_decline(QuoteStatus.SENT, QuoteStatus.PRICED),
+        QuoteStatus.SENT: frozenset({QuoteStatus.MASTER_LIST_RECORDED}),
+        QuoteStatus.MASTER_LIST_RECORDED: frozenset(),
+        QuoteStatus.DECLINED: frozenset(),
+    }
+)
+
+
+def quote_moves() -> Mapping[QuoteStatus, frozenset[QuoteStatus]]:
+    """Every move a quotation may make, read-only: `_MOVES` itself, for a
+    reader that draws the process (`application.process_settings`)."""
+    return _MOVES
 
 
 def transition(current: QuoteStatus, target: QuoteStatus) -> QuoteStatus:

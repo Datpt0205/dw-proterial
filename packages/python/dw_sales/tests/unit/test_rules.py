@@ -18,11 +18,14 @@ from dw_kernel.errors import (
     NotFoundError,
     PermissionDeniedError,
 )
+from dw_kernel.ids import WorkspaceId
 from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.access import SalesScopes
+from dw_sales.application.artifact_content import local_time
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import (
+    ONE_OPEN_PROPOSAL,
     OVERRIDABLE,
     PRICE_BEARING,
     RULES_APPROVAL,
@@ -620,3 +623,108 @@ async def test_it_holding_approvals_decide_still_decides_no_rule_version() -> No
     # The search can fail: the head, who holds the stamp, decides the same one.
     await world.decide_rules(GIANG, others.version_id, approve=True, comment="Đồng ý")
     assert (await _listed(world, others.version_id)).status == "approved"
+
+
+# ---------------------------- one proposal waiting per key (2026-10-22) --
+
+
+async def test_a_second_proposal_waits_until_the_first_is_decided() -> None:
+    """A version is the whole document, so two proposals started from one
+    version would undo each other when both are approved: while one waits,
+    a second on the same key is refused, naming the waiting version, who
+    proposed it and when. Approving or rejecting it frees the key."""
+    world = _world()
+    rules = world.services.rules
+    first = await rules.propose(AN.context(), RuleKey.ORDER_RULES, _version(world, "9.10.0"))
+
+    with pytest.raises(ConflictError) as refused:
+        await rules.propose(GIANG.context(), RuleKey.ORDER_RULES, _version(world, "9.10.1"))
+
+    details = refused.value.details
+    assert details["rule"] == ONE_OPEN_PROPOSAL
+    assert (details["version_id"], details["version"]) == (str(first.version_id), "9.10.0")
+    assert details["proposed_by"] == str(AN.user_id)
+    message = refused.value.message
+    assert "9.10.0" in message and "Nguyễn Văn An" in message
+    assert local_time(first.proposed_at).strftime("%H:%M %d/%m/%Y") in message
+    # The proposer asking again is told it is theirs.
+    with pytest.raises(ConflictError) as own:
+        await rules.propose(AN.context(), RuleKey.ORDER_RULES, _version(world, "9.10.1"))
+    assert "do bạn đề xuất" in own.value.message
+    # No version was written by either refusal. (The approval each opened in
+    # the same unit of work is rolled back by the database, which the memory
+    # store does not model: `test_sales_api_rules.py` asserts that half.)
+    listed = await rules.list(GIANG.context())
+    assert [v.version for v in listed.versions if v.status == "proposed"] == ["9.10.0"]
+
+    # Another key is not held, nor another tenant.
+    await rules.propose(AN.context(), RuleKey.KPI, _bumped(world, RuleKey.KPI, "9.10.0"))
+    await rules.propose(OUTSIDER.context(BETA), RuleKey.ORDER_RULES, _version(world, "9.10.0"))
+
+    # Rejected: the key is free again.
+    await world.decide_rules(GIANG, first.version_id, approve=False, comment="Chưa")
+    second = await rules.propose(AN.context(), RuleKey.ORDER_RULES, _version(world, "9.10.1"))
+    # Approved: free again too.
+    await world.decide_rules(GIANG, second.version_id, approve=True, comment="Đồng ý")
+    third = await rules.propose(AN.context(), RuleKey.ORDER_RULES, _version(world, "9.10.2"))
+    assert third.status == "proposed"
+
+
+async def test_a_waiting_proposal_from_another_workspace_holds_the_key_and_names_its_head() -> None:
+    """The key is the tenant's, so a proposal waiting in another workspace
+    holds it here too; its approval is that workspace's, which this caller's
+    head never sees, so the refusal sends nobody to their own head."""
+    world = _world()
+    rules = world.services.rules
+    elsewhere = SalesScope(ALPHA.tenant_id, WorkspaceId(uuid.UUID(int=0xA1FC)))
+    first = await rules.propose(
+        DIEU.context(elsewhere), RuleKey.ORDER_RULES, _version(world, "9.12.0")
+    )
+
+    with pytest.raises(ConflictError) as refused:
+        await rules.propose(AN.context(), RuleKey.ORDER_RULES, _version(world, "9.12.1"))
+
+    assert refused.value.details["rule"] == ONE_OPEN_PROPOSAL
+    assert refused.value.details["version_id"] == str(first.version_id)
+    message = refused.value.message
+    assert "Trưởng bộ phận của người đề xuất" in message
+    assert "bắt đầu từ phiên bản đang áp dụng" in message
+    # Decided and not yet carried out, the sentence says what to do then.
+    assert "vừa được quyết định" in message
+
+
+async def test_a_number_the_platform_shipped_since_approval_is_rejected_and_frees_the_key() -> None:
+    """Approved, then a deploy ships the number before the worker carries the
+    decision out: nothing can apply it, and a refusal on every retry would
+    leave it waiting with no decision left to take, holding its key for good.
+    It is recorded as rejected, saying why, and the key takes a proposal."""
+    world = _world()
+    proposed, request = await _opened(world, "9.11.0")
+    await world.runtime.approval_flow.decide(
+        approval_id=request.id,
+        approve=True,
+        comment="Đồng ý",
+        context=GIANG.context(),
+        authorization=ScopeAuthorizationService(),
+    )
+    book = world.services.rules.book
+    shipped = OrderRules.model_validate(_version(world, "9.11.0"))
+    released = TenantRuleBook(book.platform, book.stored, {**book.released, shipped.ref: shipped})
+    settlement = replace(world.rule_settlement, book=released)
+
+    settled = await settlement.settle(request.id, GIANG.context())
+
+    assert (settled.status, settled.decided_by) == ("rejected", GIANG.user_id)
+    assert settled.comment is not None
+    assert "không áp dụng" in settled.comment and "9.11.0" in settled.comment
+    event = world.store.state(ALPHA).audit[-1]
+    assert event.action == "sales.rules.rejected"
+    assert event.details["rule"] == "platform_version_reused"
+    assert await world.services.layouts.rules.rules_at(ALPHA, proposed.ref) is None
+    # A redelivery writes nothing more.
+    assert await settlement.settle(request.id, GIANG.context()) == settled
+    # The key is free.
+    again = await world.services.rules.propose(
+        AN.context(), RuleKey.ORDER_RULES, _version(world, "9.11.1")
+    )
+    assert again.status == "proposed"

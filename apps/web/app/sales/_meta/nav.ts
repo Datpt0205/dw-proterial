@@ -1,4 +1,5 @@
 import {
+  ApartmentOutlined,
   AuditOutlined,
   BuildOutlined,
   ControlOutlined,
@@ -116,6 +117,13 @@ export const salesNav: NavEntry[] = [
             label: "Quy tắc",
             hint: "Quy tắc và nội dung của công ty: đang áp dụng bản nào, đề xuất phiên bản mới, người khác duyệt",
             icon: ControlOutlined,
+            scope: "sales.rules.propose",
+          },
+          {
+            href: "/sales/rules/process",
+            label: "Quy trình DW1",
+            hint: "Các bước của quy trình đơn hàng và báo giá, và quy tắc mỗi bước đọc: sửa theo bước, người khác duyệt như mọi phiên bản",
+            icon: ApartmentOutlined,
             scope: "sales.rules.propose",
           },
           {

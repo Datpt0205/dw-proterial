@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import type { RuleKey } from "../rules";
 import { diffDocuments } from "../rule-diff";
 import {
+  drawsPath,
   formName,
   fromForm,
+  holdsPath,
   nodeAt,
   parseLoc,
   problem,
@@ -319,5 +321,26 @@ describe("a template's placeholders (ticket 40)", () => {
     expect(
       unknownPlaceholders("${po_no} ${nope}", ["${po_no}"], "dollar"),
     ).toEqual(["${nope}"]);
+  });
+});
+
+describe("a form limited to one step's fields (2026-10-22)", () => {
+  const only = [parseLoc("findings.price_mismatch"), parseLoc("price")];
+
+  it("draws a placed field, what lies in it, and the sections on the way", () => {
+    expect(drawsPath(only, ["findings"])).toBe(true);
+    expect(drawsPath(only, ["findings", "price_mismatch"])).toBe(true);
+    expect(drawsPath(only, ["price", "relative_tolerance"])).toBe(true);
+    expect(drawsPath(only, ["findings", "moq_violation"])).toBe(false);
+    expect(drawsPath(only, ["intake"])).toBe(false);
+    expect(drawsPath(undefined, ["intake"])).toBe(true);
+  });
+
+  it("holds only what lies in a placed field, not the section on the way", () => {
+    expect(holdsPath(only, ["findings", "price_mismatch"])).toBe(true);
+    expect(holdsPath(only, ["price", "relative_tolerance"])).toBe(true);
+    expect(holdsPath(only, ["findings"])).toBe(false);
+    expect(holdsPath(only, [])).toBe(false);
+    expect(holdsPath(undefined, [])).toBe(true);
   });
 });

@@ -8,6 +8,56 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-22, "Quy trình DW1" (`/sales/rules/process`), slice 1. Đạt asked for a config page that draws DW1's process as nodes and edges, where a click opens that step's numbers, not hardcoded; the structure stays fixed for now.
+    - **Decided by Đạt:**
+        - drawn with antd and inline SVG, no diagram library;
+        - one open proposal per rule key, refused on the server;
+        - the page is for `sales.rules.propose` holders only, as `/sales/rules` is.
+    - **Built:**
+        - **Graph:** `GET /sales/rules/process` serves it from the domain's own transition tables (`order_moves()`, `quote_moves()`), with no second copy on the web.
+        - **Step settings:** `application/process_settings.py` maps every `StepId` to the rule paths it reads, plus lane-wide and process-wide groups.
+        - **Locked paths:** model_assist, design_mailboxes, working_hours.time_zone and intake are served as locked, each with a `LockReason`.
+        - **Never placed:** `NOT_ON_PAGE` and `BASELINE_ONLY` list, with a reason each, what the page never places.
+        - **Price:** price-bearing keys are absent for a caller without `sales.price.read`.
+        - **Editing:** the drawer reuses the rules editor, limited to the step's fields. It proposes the whole document through the same propose → approve path.
+    - **Guard:** migration `e8192ed5cc59` adds `uq_rule_versions_one_proposed` on `(tenant_id, key) WHERE status = 'proposed'`.
+        - The 409 names who proposed the waiting version and when.
+        - The upgrade stops on a proposal that has no approval.
+        - Settlement now rejects a version whose number the platform shipped before it was applied, so the key is not blocked forever.
+    - **Checked:**
+        - unit 3535, integration 51 (rules, access, schema), contracts, web vitest 514;
+        - security, correctness and UI reviews, with their findings fixed;
+        - mutations on the settlement fix, the Back guard, the disabled "Gửi duyệt" and focus return, each turning a test red.
+        - **Not yet:** a Playwright run and a look on the Docker build.
+    - **Open:**
+        - A proposal records no base version, so a stale form can still undo an approved one; the editor now reloads after a 409 to reduce this. This is the other half of decision 2.
+        - The 409 does not name the other workspace.
+        - Settlement still audits as the decider, not the lane (ADR 0011).
+        - The order lane is about 1830 px wide and scrolls inside its frame at 1440.
+    - **Slice 2:** an edge table with Vietnamese action and guard labels, step titles, and copy and templates on steps.
+    - **Slice 3:**
+        - move the RFQ required fields and the 12-month screening look-back into rules;
+        - fix the intake binding, which reads the platform file at build time (`assembly.py:192-193`), so a tenant's version is likely unread: failure-mode #1;
+        - give the time zone one owner (`order_checks.py:64` against `sales_followups`).
+- 2026-10-22, DW2 (Mua hàng) readiness, audited with no code changed:
+    - `new_context.py --name purchasing` wires 15 seams and passed every scaffold-smoke gate. It was run once in a throwaway clone, since removed.
+    - **Left to do by hand:**
+        - migrations, roles and permission sets;
+        - configs, prompts and the eval dataset;
+        - all web seams (nav, approvals host, badges, roles, api-client);
+        - the `purchasing.` approval prefix and its `.decided` handler;
+        - demo data.
+    - **What blocks reuse:** the reader sandbox and malware scan import `dw_sales` (`apps/reader`), as do the rules editor, master-data import, pipeline, my-work and worker pause.
+    - **Before DW2 starts,** decide whether to lift these to the platform (ADR 0004 `dw_evidence`) and whether to port DW01 from `C:\Users\phung\dw` or write it anew. The "30–51 công" line above and the 2026-10-21 "reuse only the ideas" talk disagree.
+    - **Drift found:**
+        - several files still call delivery/CDO "DW2" (`spec.md`, `dw_sales/CONTEXT.md:284`, `process.py:37`, tickets 02/06/21/33/35);
+        - `PolicyOverridePort` is read by nothing;
+        - CLAUDE.md says `@dw/ui` owns the case workspace, but it lives in `app/sales`;
+        - `Makefile:161` says 13 seams, the script says 15.
+- 2026-10-22, model comparison on the home lab: nine configurations in the Excel in Downloads.
+    - **Candidates:** Gemma 4 12B with thinking off is the small candidate (6/6 bars). Gemma 4 26B-A4B and Qwen3.6-35B-A3B are the 24 GB candidates.
+    - **Ruled out:** Nemotron 3.5 30B-A3B (4/6) and MiMo 9B (5/6, 6 invented RFQ values).
+    - **Decision:** the switch from Qwen3.5-9B is still decided on Proterial's server with real data. Before it, check Gemma 4 12B's licence and its thinking switch on Ollama.
 - 2026-10-21, end-user browser tests and `make web-screens` (Đạt: "test kiểu end user thôi"):
     - **Five new specs** under `apps/web/e2e/`, black box through the UI, each resetting the demo itself and run serially (shared database):
         - `enduser-forms` 12: input validation, double submit, cancel, close, decline, return, reassign;

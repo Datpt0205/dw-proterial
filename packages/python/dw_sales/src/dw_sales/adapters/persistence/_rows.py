@@ -22,6 +22,7 @@ from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_sales.adapters.persistence import tables
 from dw_sales.application.case_store import STALE_CASE_VERSION, CaseEvent
 from dw_sales.application.ports import SalesScope
+from dw_sales.application.rules import ONE_OPEN_PROPOSAL
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import MAKER_CHECKER_REFUSAL
 
@@ -46,6 +47,12 @@ _RULES = {
     "ck_quote_cases_approver_not_pricer": (
         "approver_not_pricer",
         "tách nhiệm: người định giá báo giá này không tự duyệt được",
+    ),
+    # A key's second proposal while one waits (e8192ed5cc59); the rules
+    # service names the waiting version, its proposer and when.
+    "uq_rule_versions_one_proposed": (
+        ONE_OPEN_PROPOSAL,
+        "quy tắc này đã có một phiên bản chờ duyệt",
     ),
 }
 

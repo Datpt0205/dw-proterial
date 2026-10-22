@@ -321,6 +321,41 @@ export function nodeAt(root: RuleNode, path: DocPath): RuleNode | undefined {
   return current;
 }
 
+// ------------------------------------------- a form limited to some fields --
+
+/** Whether `path` is `subtree` or lies under it. */
+export function withinPath(path: DocPath, subtree: DocPath): boolean {
+  return (
+    subtree.length <= path.length &&
+    subtree.every((step, i) => String(step) === String(path[i]))
+  );
+}
+
+/**
+ * Whether a form limited to `only` (one process step's fields, each with its
+ * subtree) draws the field at `path`: one of them, inside one, or a section
+ * on the way to one. With no limit, every field is drawn. A field not drawn
+ * stays in the form's store, and so in the whole document a proposal sends.
+ */
+export function drawsPath(
+  only: readonly DocPath[] | undefined,
+  path: DocPath,
+): boolean {
+  return !only || only.some((p) => withinPath(path, p) || withinPath(p, path));
+}
+
+/**
+ * Whether `path` lies wholly inside a field the limited form draws, so a
+ * refusal there has a control to land on. A section drawn only for one of
+ * its fields does not hold its other fields.
+ */
+export function holdsPath(
+  only: readonly DocPath[] | undefined,
+  path: DocPath,
+): boolean {
+  return !only || only.some((p) => withinPath(path, p));
+}
+
 // ------------------------------------------------- document <-> form values --
 
 /** A map entry as the form holds it: a key/value list keeps order and edits keys. */

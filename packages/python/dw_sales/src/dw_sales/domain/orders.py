@@ -1334,6 +1334,12 @@ _NEXT: Final[Mapping[OrderStatus, frozenset[OrderStatus]]] = MappingProxyType(
 )
 
 
+def order_moves() -> Mapping[OrderStatus, frozenset[OrderStatus]]:
+    """Every move an order case may make, read-only: `_NEXT` itself, for a
+    reader that draws the process (`application.process_settings`)."""
+    return _NEXT
+
+
 def transition(current: OrderStatus, target: OrderStatus) -> OrderStatus:
     """``target`` when the case may move there from ``current``; refused otherwise."""
     if target not in _NEXT[current]:
