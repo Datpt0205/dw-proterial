@@ -7,6 +7,7 @@ import {
   formatMoney,
   formatMoneyShort,
   formatQuantity,
+  formatShare,
   moneyInWords,
   parseAmountInput,
   type Currency,
@@ -14,6 +15,16 @@ import {
 
 // The space before the unit is a no-break space.
 const NBSP = "\u00a0";
+
+describe("formatShare", () => {
+  it("writes a share as a percentage with a decimal comma, at most one decimal", () => {
+    expect(formatShare(0.85)).toBe("85%");
+    expect(formatShare(0.875)).toBe("87,5%");
+    expect(formatShare(2 / 3)).toBe("66,7%");
+    expect(formatShare(0)).toBe("0%");
+    expect(formatShare(1)).toBe("100%");
+  });
+});
 
 describe("formatMoney", () => {
   it("writes dong with Vietnamese grouping and 'đ', not '₫'", () => {

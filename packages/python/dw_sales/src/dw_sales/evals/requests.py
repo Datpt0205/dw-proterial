@@ -60,6 +60,7 @@ from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH
 from dw_sales.adapters.reader_client import ClientTexts
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import (
     DescriptionReader,
     ModelUnavailableError,
@@ -68,6 +69,7 @@ from dw_sales.application.quotation import RequestNotExtractedError
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION, RequestRead, RfqModelReader
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import RegionFlag
 from dw_sales.domain.quotes import (
     QuoteCase,
@@ -80,9 +82,6 @@ from dw_sales.evals.intents import _demo_rules, message_of
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
 
-# The proposed bar (ticket 29; Đạt sets the final one): at least this share
-# of the stated VI/EN values read into the right field. Reported, not enforced.
-PROPOSED_BAR = 0.85
 RECORDED = "evals/fixtures/cases/sales_rfq_recorded.json"
 INTENTS = "evals/fixtures/cases/sales_intent_recorded.json"
 DESCRIPTIONS = "evals/fixtures/cases/sales_descriptions_recorded.json"
@@ -334,11 +333,12 @@ def grade_golden(
         "by_form": {
             form: summary([s for s in scored if s.form == form]) for form in ("body", "pdf", "xlsx")
         },
-        "proposed_bar_vi_en": PROPOSED_BAR,
-        "meets_proposed_bar_vi_en": vi_en["right_field"] >= PROPOSED_BAR,
         "latency": latency(model, RFQ_EXTRACTION.prompt_id),
         "missed": {s.request_id: list(s.misses) for s in scored if s.misses},
     }
+    # The bar the step must meet before a tenant's switch does anything
+    # (`model_readiness.BARS`): reported here, enforced from a live run.
+    details["bar"] = bar_verdict(ModelStep.RFQ_EXTRACTION, details)
     if any(s.unflagged for s in scored):
         return GradeResult.fail("a model-read value is not flagged", **details)
     floor = float(expected.get("min_right_field_vi_en", 0.0))
@@ -683,13 +683,15 @@ async def _beta_asks_nothing(ctx: GraderContext, alpha: str, beta: str, calls: i
 
 def _service(ctx: GraderContext, inbox: MockInbox, catalog: MockSalesCatalog, model: Any) -> Any:
     """The quotation flow over ``inbox``, with the demo tenant's rules as the
-    API composes them (the step on for the demo tenant, off for any other)."""
+    API composes them (the step on for the demo tenant, off for any other),
+    and the demo tenant's step measured at its bar (ADR 0005, addendum of
+    2026-10-23): the other tenant has no measurement either."""
     from dw_sales.adapters.assembly import model_requests
     from dw_sales.adapters.memory_rules import MemoryRuleVersions
     from dw_sales.adapters.policy_files import load_sales_policies, rule_book
     from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader
     from dw_sales.application.quotation import QuotationService
-    from dw_sales.evals.world import MemoryStore
+    from dw_sales.evals.world import MemoryStore, measured_gate
 
     policies = load_sales_policies(
         ctx.repo_root / "configs" / "policies", ctx.repo_root / "configs" / "copy"
@@ -704,7 +706,11 @@ def _service(ctx: GraderContext, inbox: MockInbox, catalog: MockSalesCatalog, mo
         # The platform's quote rules and pricing: no tenant holds a version here.
         policies=rule_book(policies, MemoryRuleVersions()),
         requests=model_requests(
-            model, catalog, _demo_rules(), ClientTexts(InProcessReaderTransport())
+            model,
+            catalog,
+            _demo_rules(),
+            ClientTexts(InProcessReaderTransport()),
+            measured_gate(ctx.repo_root, ALPHA)[0],
         ),
     )
 

@@ -45,7 +45,15 @@ from dw_sales.domain.quotes import (
 )
 from dw_sales.evals.graders import AN, CALLERS, DIEU, READER
 from dw_sales.evals.recorded import Recorded
-from dw_sales.evals.world import ALPHA, Caller, MemoryStore, SampleSet, World, open_world
+from dw_sales.evals.world import (
+    ALPHA,
+    Caller,
+    MemoryStore,
+    SampleSet,
+    World,
+    measured_gate,
+    open_world,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -132,11 +140,16 @@ class _Down:
         raise ModelUnavailableError("descriptions are ticket 28's")
 
 
-def _service(model: Any, *, on: bool = True, inbox: MockInbox | None = None) -> QuotationService:
+def _service(
+    model: Any, *, on: bool = True, inbox: MockInbox | None = None, measured: bool = True
+) -> QuotationService:
+    """``on``: the tenant's rules turn the step on; ``measured``: its live
+    eval met the bar (dw_sales ADR 0005, addendum of 2026-10-23)."""
     assert DEMO is not None
     catalog = MockSalesCatalog.load(SCOPE)
     rules = PlatformOrderRules(DEMO if on else POLICIES.order_rules)
-    requests = model_requests(model, catalog, rules, ClientTexts(InProcessReaderTransport()))
+    gate, _ = measured_gate(REPO, *((SCOPE,) if measured else ()))
+    requests = model_requests(model, catalog, rules, ClientTexts(InProcessReaderTransport()), gate)
     # Descriptions are read by ticket 28's reader; here it is down, so a
     # line's candidates say so and nothing else moves.
     reader = requests.reader
@@ -148,6 +161,7 @@ def _service(model: Any, *, on: bool = True, inbox: MockInbox | None = None) -> 
             type(reader.descriptions)(_Down()),
         ),
         rules=rules,
+        gate=gate,
     )
     return QuotationService(
         catalog=catalog,
@@ -239,6 +253,18 @@ async def test_with_the_switch_off_no_model_is_asked_and_the_request_is_routed()
 
     with pytest.raises(RequestNotExtractedError, match="no_request_file"):
         await _service(model, on=False).open_case(SCOPE, "M37", uuid.UUID(int=7), run=RUN)
+
+    assert model.calls == []
+
+
+async def test_with_the_step_on_and_not_measured_no_model_is_asked() -> None:
+    """The rules turn the step on and no live eval met its bar for this
+    tenant (dw_sales ADR 0005, addendum of 2026-10-23): the request is not
+    read, exactly as with the switch off."""
+    model = Recorded(raw=M37)
+
+    with pytest.raises(RequestNotExtractedError, match="no_request_file"):
+        await _service(model, measured=False).open_case(SCOPE, "M37", uuid.UUID(int=7), run=RUN)
 
     assert model.calls == []
 

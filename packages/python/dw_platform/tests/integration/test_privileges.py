@@ -84,6 +84,9 @@ _SALES_TABLES = (
     # Migration 42868d8c21c5: rule drafts from a company's template.
     "sales.rule_drafts",
     "sales.rule_draft_files",
+    # Migration 2d97d03c937a (dw_sales ADR 0005, addendum of 2026-10-23): each
+    # live measurement of a model step.
+    "sales.model_step_measurements",
 )
 
 
@@ -133,6 +136,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
     for table in ("artifacts", "source_served", "followup_deliveries"):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
+    # A model step's live measurement is a fact about the past, like the audit
+    # log: never rewritten or removed by the application.
+    assert {verb for tbl, verb in held if tbl == "model_step_measurements"} == {
+        "SELECT",
+        "INSERT",
+    }
     event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}
     assert {"case_events", "case_events_default"} <= event_tables
     for table in event_tables:

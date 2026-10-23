@@ -16,6 +16,8 @@ import {
 } from "@ant-design/icons";
 import { StatusTag, type StatusTone } from "@dw/ui";
 import {
+  ACTIVITY_RESULT,
+  AI_STATE,
   FINDING_DISPOSITION,
   label,
   MAPPING_STATUS,
@@ -194,4 +196,45 @@ const READ_BY_LOOK: Record<string, Look> = {
  * or it is the model's label, which Sales checks against the text (ticket 28). */
 export function ReadByTag({ by }: { by: string }) {
   return <Chip look={READ_BY_LOOK[by]}>{label(READ_BY, by)}</Chip>;
+}
+
+const AI_LOOK: Record<keyof typeof AI_STATE, Look> = {
+  on: ["ok", i.robot],
+  failing: ["warn", i.warn],
+  off: ["gray", i.minus],
+};
+
+/**
+ * A model step's state on the process page: on and passing, on and not
+ * passing (a person does the step), or off. `count`: how many of a status's
+ * model steps are in it, said when more than one.
+ */
+export function AiStateTag({
+  state,
+  count = 1,
+}: {
+  state: keyof typeof AI_STATE;
+  count?: number;
+}) {
+  return (
+    <Chip look={AI_LOOK[state]}>
+      {AI_STATE[state]}
+      {count > 1 ? ` (${count} bước)` : ""}
+    </Chip>
+  );
+}
+
+const RESULT_LOOK: Record<keyof typeof ACTIVITY_RESULT, Look> = {
+  accepted: ["ok", i.check],
+  to_person: ["pri", i.sync],
+  unavailable: ["warn", i.warn],
+};
+
+/** What came of one thing DW1 did: accepted, handed to a person, or no answer. */
+export function ActivityResultTag({
+  result,
+}: {
+  result: keyof typeof ACTIVITY_RESULT;
+}) {
+  return <Chip look={RESULT_LOOK[result]}>{ACTIVITY_RESULT[result]}</Chip>;
 }

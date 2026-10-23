@@ -52,6 +52,8 @@ from dw_kernel.errors import DomainError, InfrastructureError
 from dw_kernel.pagination import MAX_PAGE_SIZE, Page
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import SalesScopes
+from dw_sales.application.activity import ActivityService
+from dw_sales.application.activity_ports import CaseListActivity, HandledBy
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
 from dw_sales.application.catalog_imports import (
@@ -93,10 +95,12 @@ from dw_sales.application.views import (
     QuoteSummaryView,
     WorkerStateView,
 )
+from dw_sales.domain.activity import StepResult
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import LayoutMapping
 from dw_sales.domain.master_data import CatalogList
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import CloseReason, Note
 from dw_sales.domain.pricing import Incoterm
 from dw_sales.domain.quotes import DeclineReason, Guidance, Reason
@@ -107,6 +111,21 @@ _BODY = ConfigDict(extra="forbid", hide_input_in_errors=True)
 _FindingKey = Annotated[str, Field(pattern=r"^[a-z_]{1,40}:([1-9][0-9]{0,4}|-)$")]
 _MessageId = Annotated[str, Field(pattern=r"^[!-~]{1,512}$")]
 _AttachmentId = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,128}$")]
+
+
+def case_list_activity(
+    step: ModelStep | None = None,
+    handled_by: HandledBy | None = None,
+    result: StepResult | None = None,
+    reason_code: Annotated[str | None, Query(pattern=r"^[a-z_]{1,40}$")] = None,
+    lane: CaseKind | None = None,
+    start: Annotated[date | None, Query(alias="from")] = None,
+    end: Annotated[date | None, Query(alias="to")] = None,
+) -> CaseListActivity:
+    """A case list's filter from the activity page: the parameters of a
+    count's `ActivityFilter`, as the summary serialises them. Only packed
+    here; the service checks it after the caller's scope."""
+    return CaseListActivity(step, handled_by, result, reason_code, lane, start, end)
 
 
 class LayoutBody(BaseModel):
@@ -335,6 +354,8 @@ class SalesMount:
     source is configured for this deployment."""
 
     services: SalesServices | None
+    # What DW1's model steps did (slice 3), mounted by `activity_routes`.
+    activity: ActivityService | None = None
 
 
 def build_router(
@@ -442,9 +463,11 @@ def build_router(
 
     # -------------------------------------------------------------- orders --
 
+    Activity = Annotated[CaseListActivity, Depends(case_list_activity)]  # noqa: N806 (a type alias)
+
     @router.get("/orders", response_model=list[OrderSummaryView])
-    async def orders(context: ReadCtx, svc: ReadSvc) -> list[OrderSummaryView]:
-        return await svc.orders.summaries(context)
+    async def orders(context: ReadCtx, svc: ReadSvc, activity: Activity) -> list[OrderSummaryView]:
+        return await svc.orders.summaries(context, activity)
 
     @router.get("/orders/{case_id}", response_model=OrderCaseView)
     async def order(case_id: uuid.UUID, context: ReadCtx, svc: ReadSvc) -> OrderCaseView:
@@ -721,8 +744,8 @@ def build_router(
     # -------------------------------------------------------------- quotes --
 
     @router.get("/quotes", response_model=list[QuoteSummaryView])
-    async def quotes(context: ReadCtx, svc: ReadSvc) -> list[QuoteSummaryView]:
-        return await svc.quotes.summaries(context)
+    async def quotes(context: ReadCtx, svc: ReadSvc, activity: Activity) -> list[QuoteSummaryView]:
+        return await svc.quotes.summaries(context, activity)
 
     @router.get("/quotes/screening", response_model=list[ScreeningRow])
     async def screening(

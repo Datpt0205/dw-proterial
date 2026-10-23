@@ -21,6 +21,7 @@ from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_sales.application.access import Gate
+from dw_sales.application.activity_ports import CaseListActivity
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
 from dw_sales.application.decisions import CaseDecisions
@@ -68,9 +69,9 @@ STORE: Any = _Untouchable()
 CLOCK = FixedClock(datetime(2026, 10, 2, tzinfo=UTC))
 IDS = Uuid4Generator()
 
-order_queries = OrderQueries(STORE, GATE, STORE)
+order_queries = OrderQueries(STORE, GATE, STORE, STORE)
 order_commands = OrderCommands(STORE, GATE, CLOCK, IDS, STORE, STORE)
-quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE)
+quote_queries = QuoteQueries(STORE, GATE, CLOCK, STORE, STORE, STORE)
 quote_commands = QuoteCommands(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 # The routes' way to start DW1, and the steps the run takes: both check.
 dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
@@ -89,6 +90,16 @@ type Call = Callable[[AccessContext], Awaitable[object]]
 
 CALLS: dict[str, tuple[str, Call]] = {
     "orders.summaries": ("sales.case.read", order_queries.summaries),
+    # Narrowed by the activity page's filter, half of one: the scope is
+    # checked before the filter, and before a step row is read.
+    "orders.summaries.activity": (
+        "sales.case.read",
+        lambda c: order_queries.summaries(c, CaseListActivity(handled_by="dw1")),
+    ),
+    "quotes.summaries.activity": (
+        "sales.case.read",
+        lambda c: quote_queries.summaries(c, CaseListActivity(handled_by="dw1")),
+    ),
     "orders.get": ("sales.case.read", lambda c: order_queries.get(c, CASE)),
     "orders.prepare": (
         "sales.order.prepare",

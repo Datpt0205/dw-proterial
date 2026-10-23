@@ -42,6 +42,7 @@ from dw_sales.domain.messages import (
     InboundMessage,
     is_email_address,
 )
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.pricing import Incoterm, SalesPricing
 from dw_sales.domain.quotes import (
     INTAKE_FINDINGS,
@@ -687,7 +688,7 @@ class QuotationService:
         if step is None or run is None:
             raise RequestNotExtractedError(message_id, "no_request_file")
         rules = await step.rules.rules(scope)
-        if not rules.model_assist.rfq_extraction:
+        if not await step.gate.allows(scope, rules, ModelStep.RFQ_EXTRACTION):
             raise RequestNotExtractedError(message_id, "no_request_file")
         by_domain = await self.catalog.customer_by_email_domain(scope, message.sender.domain)
         customer = by_domain.data

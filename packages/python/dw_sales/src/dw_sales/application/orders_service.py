@@ -29,6 +29,11 @@ from dw_kernel.errors import DomainError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
+from dw_sales.application.activity_ports import (
+    CaseListActivity,
+    StepActivityReadPort,
+    activity_cases,
+)
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.runs import (
@@ -54,6 +59,7 @@ from dw_sales.application.views import (
     order_change,
     order_summary,
 )
+from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
     Accepted,
@@ -76,12 +82,25 @@ class OrderQueries:
     uow: SalesUnitOfWorkFactory
     gate: Gate
     decisions: PendingDecisionsPort
+    # The step rows a list narrowed by DW1's activity is read through.
+    activity: StepActivityReadPort
 
-    async def summaries(self, context: AccessContext) -> list[OrderSummaryView]:
+    async def summaries(
+        self, context: AccessContext, activity: CaseListActivity | None = None
+    ) -> list[OrderSummaryView]:
+        """The workspace's orders; with ``activity``, only those a matching
+        step row names (the activity page's drill-down), checked after the
+        scope."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_ORDER)
-        async with self.uow(sales_scope(context)) as work:
+        scope = sales_scope(context)
+        kept = await activity_cases(self.activity, scope, CaseKind.ORDER, activity)
+        async with self.uow(scope) as work:
             stored = await work.orders.list_all()
-        return [order_summary(s.case, s.origin.assigned_to) for s in stored]
+        return [
+            order_summary(s.case, s.origin.assigned_to)
+            for s in stored
+            if kept is None or s.case.case_id in kept
+        ]
 
     async def get(self, context: AccessContext, case_id: uuid.UUID) -> OrderCaseView:
         await self.gate.require(

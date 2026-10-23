@@ -3,6 +3,23 @@
  * Regenerate with `make generate-contracts`.
  */
 export interface paths {
+    "/api/v1/sales/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Activity Summary */
+        get: operations["activity_summary_api_v1_sales_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox": {
         parameters: {
             query?: never;
@@ -353,6 +370,23 @@ export interface paths {
         };
         /** Order */
         get: operations["order_api_v1_sales_orders__case_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Activity */
+        get: operations["order_activity_api_v1_sales_orders__case_id__activity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -736,6 +770,23 @@ export interface paths {
         };
         /** Quote */
         get: operations["quote_api_v1_sales_quotes__case_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quotes/{case_id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote Activity */
+        get: operations["quote_activity_api_v1_sales_quotes__case_id__activity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1174,7 +1225,126 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActivityEntry */
+        ActivityEntry: {
+            /** Calls */
+            calls: number;
+            check: components["schemas"]["CheckView"];
+            /** Duration Ms */
+            duration_ms: number | null;
+            /**
+             * Handled By
+             * @enum {string}
+             */
+            handled_by: "dw1" | "person";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "read" | "route" | "check" | "to_person" | "model_unavailable";
+            /** Line No */
+            line_no: number | null;
+            /** Message Id */
+            message_id: string;
+            /** Model */
+            model: string | null;
+            /** Model Profile */
+            model_profile: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Process Steps */
+            process_steps: components["schemas"]["StepId"][];
+            /** Produced */
+            produced: components["schemas"]["ProducedValue"][];
+            /** Prompt */
+            prompt: string;
+            /** Refusals */
+            refusals: {
+                [key: string]: number;
+            };
+            step: components["schemas"]["ModelStep"];
+            /** Taken Over By */
+            taken_over_by: string | null;
+        };
+        /**
+         * ActivityFilter
+         * @description The case list filter a count stands for: the parameters, not a URL.
+         */
+        ActivityFilter: {
+            /**
+             * From
+             * Format: date
+             */
+            from: string;
+            /** Handled By */
+            handled_by?: ("dw1" | "person") | null;
+            lane?: components["schemas"]["CaseKind"] | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /** Result */
+            result?: ("accepted" | "refused" | "unavailable") | null;
+            step: components["schemas"]["ModelStep"];
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
+        };
+        /** ActivitySummaryView */
+        ActivitySummaryView: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /** Days */
+            days: components["schemas"]["DayView"][];
+            /**
+             * From
+             * Format: date
+             */
+            from: string;
+            lane: components["schemas"]["CaseKind"] | null;
+            /** Steps */
+            steps: components["schemas"]["StepSummaryView"][];
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
+        };
+        /**
+         * ActorView
+         * @description A role or a permission set holding scopes the step's actions need.
+         */
+        ActorView: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "role" | "permission_set";
+            /** Name */
+            name: string;
+            /** Scopes */
+            scopes: string[];
+        };
         Amount: string | components["schemas"]["Hidden"];
+        /**
+         * AnchorRef
+         * @description Where the case view anchors the value: the line (None for the
+         *     request's or the PO's own fields) and the field its ``anchors`` key it by.
+         */
+        AnchorRef: {
+            /** Field */
+            field: string;
+            /** Line No */
+            line_no: number | null;
+        };
         /** AnswerBody */
         AnswerBody: {
             /** Case Version */
@@ -1319,6 +1489,17 @@ export interface components {
             po_revision: number;
             /** So No */
             so_no: string;
+        };
+        /** CaseActivityView */
+        CaseActivityView: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            case_kind: components["schemas"]["CaseKind"];
+            /** Entries */
+            entries: components["schemas"]["ActivityEntry"][];
         };
         /**
          * CaseChangeView
@@ -1564,6 +1745,20 @@ export interface components {
             /** Key */
             key: string;
         };
+        /**
+         * CheckView
+         * @description Code's check of the model's answer: passed, refused with the reason
+         *     code, or not run because no answer came.
+         */
+        CheckView: {
+            /** Reason Code */
+            reason_code: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "passed" | "refused" | "not_run";
+        };
         /** CloseBody */
         CloseBody: {
             /** Case Version */
@@ -1665,6 +1860,26 @@ export interface components {
             sales_pic: string | null;
             /** Status */
             status: string;
+        };
+        /** DayStepView */
+        DayStepView: {
+            /** Automatic */
+            automatic: number;
+            /** Handled */
+            handled: number;
+            step: components["schemas"]["ModelStep"];
+            /** To Person */
+            to_person: number;
+        };
+        /** DayView */
+        DayView: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Steps */
+            steps: components["schemas"]["DayStepView"][];
         };
         /** DeclineBody */
         DeclineBody: {
@@ -1885,6 +2100,18 @@ export interface components {
             /** Where */
             where?: string | null;
         };
+        /**
+         * EdgeAction
+         * @description What makes a case move: the domain method that moves it.
+         * @enum {string}
+         */
+        EdgeAction: "check" | "close" | "start_review" | "prepare" | "request_correction" | "revise" | "resume_review" | "record_bravo_entry" | "edit" | "cross_check" | "return" | "confirm" | "apply_change" | "draft_ycbg" | "record_ycbg" | "send_to_design" | "record_design_reply" | "discuss_spec" | "settle_spec" | "price" | "submit" | "approve" | "send" | "record_master_list" | "decline";
+        /**
+         * EdgeGuard
+         * @description What the domain refuses a move without.
+         * @enum {string}
+         */
+        EdgeGuard: "blocking_findings" | "ask_customer" | "entry_compared" | "approval" | "maker_checker" | "cross_check_not_required" | "export_control_hold" | "pc_confirmed_date" | "request_findings";
         /**
          * EvidenceView
          * @description What Sales weighs for one line (step 7). Only for `sales.price.read`;
@@ -2179,6 +2406,18 @@ export interface components {
             line_no?: number | null;
         };
         /**
+         * LatencyView
+         * @description The step's time per message, nearest-rank percentiles.
+         */
+        LatencyView: {
+            /** P50 Ms */
+            p50_ms: number | null;
+            /** P95 Ms */
+            p95_ms: number | null;
+            /** Samples */
+            samples: number;
+        };
+        /**
          * LayoutBody
          * @description A mapping of the form one message's attachment prints (ticket 30).
          */
@@ -2425,6 +2664,27 @@ export interface components {
             /** Schedule Dates */
             schedule_dates?: string[] | null;
         };
+        /** LinkedCount */
+        LinkedCount: {
+            /** Count */
+            count: number;
+            filter: components["schemas"]["ActivityFilter"];
+        };
+        /**
+         * LiveShareView
+         * @description What the step handled in the workspace over the last ``window_days``
+         *     days, and how much of it DW1 carried (`StepTally`).
+         */
+        LiveShareView: {
+            /** Automatic */
+            automatic: number;
+            /** Handled */
+            handled: number;
+            /** Share */
+            share: number | null;
+            /** Window Days */
+            window_days: number;
+        };
         /**
          * LmeBand
          * @description The price holds while LME copper is in ``[low, high)`` USD per tonne.
@@ -2466,7 +2726,7 @@ export interface components {
          *     added here fails its typecheck until it has words).
          * @enum {string}
          */
-        LockReason: "model_bar_unchecked" | "bound_at_build" | "trust" | "two_owners";
+        LockReason: "model_bar" | "bound_at_build" | "trust" | "two_owners";
         /** MappingBody */
         MappingBody: {
             /** Case Version */
@@ -2568,6 +2828,22 @@ export interface components {
             /** Items */
             items: components["schemas"]["QuotationRowView"][];
         };
+        /** MeasurementView */
+        MeasurementView: {
+            /**
+             * Measured At
+             * Format: date-time
+             */
+            measured_at: string;
+            /** Model */
+            model: string;
+            /** Passed */
+            passed: boolean;
+            /** Prompt */
+            prompt: string;
+            /** Value */
+            value: number;
+        };
         /** MessageDispositionView */
         MessageDispositionView: {
             /** Case Id */
@@ -2626,6 +2902,15 @@ export interface components {
             /** Without Disposition */
             without_disposition: number;
         };
+        /**
+         * ModelStep
+         * @description The DW1 steps a model may take part in: each a switch of `ModelAssist`
+         *     by the same name (a test holds the two together), and each with the bar
+         *     its live eval must meet before the switch does anything
+         *     (`application.model_readiness.BARS`).
+         * @enum {string}
+         */
+        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal";
         /** OpenYcbgView */
         OpenYcbgView: {
             /** Customer Code */
@@ -3160,8 +3445,16 @@ export interface components {
         };
         /** ProcessEdgeView */
         ProcessEdgeView: {
+            action: components["schemas"]["EdgeAction"];
+            /**
+             * Actor
+             * @enum {string}
+             */
+            actor: "dw" | "sales" | "design" | "approver" | "customer";
             /** From */
             from: string;
+            /** Guards */
+            guards: components["schemas"]["EdgeGuard"][];
             /** To */
             to: string;
         };
@@ -3199,11 +3492,16 @@ export interface components {
         };
         /** ProcessStepView */
         ProcessStepView: {
+            /** Actors */
+            actors: components["schemas"]["ActorView"][];
             coverage: components["schemas"]["Coverage"];
+            /** Models */
+            models: components["schemas"]["StepModelView"][];
             /** Settings */
             settings: components["schemas"]["SettingView"][];
             /** Step Id */
             step_id: string;
+            uses: components["schemas"]["UsesView"];
         };
         /**
          * ProcessingJobView
@@ -3240,6 +3538,16 @@ export interface components {
         ProcessingQueuedView: {
             /** Jobs */
             jobs: components["schemas"]["ProcessingJobView"][];
+        };
+        /** ProducedValue */
+        ProducedValue: {
+            anchor: components["schemas"]["AnchorRef"] | null;
+            /** Field */
+            field: string;
+            /** Line No */
+            line_no: number | null;
+            /** Value */
+            value: string;
         };
         /** QuotationBasisView */
         QuotationBasisView: {
@@ -3529,6 +3837,14 @@ export interface components {
             status: string;
             /** Ycbg No */
             ycbg_no: string | null;
+        };
+        /** ReasonCount */
+        ReasonCount: {
+            /** Count */
+            count: number;
+            filter: components["schemas"]["ActivityFilter"];
+            /** Reason Code */
+            reason_code: string;
         };
         /**
          * RegionFlag
@@ -4076,6 +4392,51 @@ export interface components {
             /** Step Id */
             step_id: string;
         };
+        /**
+         * StepId
+         * @description The surveyed steps' ids as a closed set: what a value kept per step (the
+         *     KPI's manual baseline) is keyed by, so a version written before a step was
+         *     surveyed reads that step as the platform has it (`rules.read_over`). Held
+         *     to `WIV_STEPS`, which owns the steps themselves, by a test.
+         * @enum {string}
+         */
+        StepId: "O1" | "O2" | "O3" | "O4" | "O5" | "O6" | "O7" | "O8" | "O9" | "O10" | "O11" | "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7" | "Q8" | "Q9" | "Q10" | "Q11" | "Q12";
+        /**
+         * StepModelView
+         * @description One model step of a process step, read-only.
+         */
+        StepModelView: {
+            /** Bar */
+            bar: number;
+            /** Effective */
+            effective: boolean;
+            /** Enabled */
+            enabled: boolean;
+            latest: components["schemas"]["MeasurementView"] | null;
+            live_share: components["schemas"]["LiveShareView"];
+            /** Metric */
+            metric: string;
+            /** Model */
+            model: string | null;
+            /** Prompt */
+            prompt: string;
+            step: components["schemas"]["ModelStep"];
+        };
+        /** StepSummaryView */
+        StepSummaryView: {
+            automatic: components["schemas"]["LinkedCount"];
+            /** Automatic Share */
+            automatic_share: number | null;
+            handled: components["schemas"]["LinkedCount"];
+            latency: components["schemas"]["LatencyView"];
+            model_unavailable: components["schemas"]["LinkedCount"];
+            /** Process Steps */
+            process_steps: components["schemas"]["StepId"][];
+            step: components["schemas"]["ModelStep"];
+            to_person: components["schemas"]["LinkedCount"];
+            /** Top Reasons */
+            top_reasons: components["schemas"]["ReasonCount"][];
+        };
         /** SubmissionView */
         SubmissionView: {
             /** Document Sha256 */
@@ -4226,6 +4587,13 @@ export interface components {
              */
             run_id: string;
         };
+        /** UsesView */
+        UsesView: {
+            /** Layouts */
+            layouts: boolean;
+            /** Lists */
+            lists: components["schemas"]["CatalogList"][];
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -4348,6 +4716,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    activity_summary_api_v1_sales_activity_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                lane?: components["schemas"]["CaseKind"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySummaryView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     inbox_api_v1_sales_inbox_get: {
         parameters: {
             query?: never;
@@ -4885,7 +5286,15 @@ export interface operations {
     };
     orders_api_v1_sales_orders_get: {
         parameters: {
-            query?: never;
+            query?: {
+                step?: components["schemas"]["ModelStep"] | null;
+                handled_by?: ("dw1" | "person") | null;
+                result?: ("accepted" | "refused" | "unavailable") | null;
+                reason_code?: string | null;
+                lane?: components["schemas"]["CaseKind"] | null;
+                from?: string | null;
+                to?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4899,6 +5308,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderSummaryView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4921,6 +5339,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderCaseView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_activity_api_v1_sales_orders__case_id__activity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseActivityView"];
                 };
             };
             /** @description Validation Error */
@@ -5632,7 +6081,15 @@ export interface operations {
     };
     quotes_api_v1_sales_quotes_get: {
         parameters: {
-            query?: never;
+            query?: {
+                step?: components["schemas"]["ModelStep"] | null;
+                handled_by?: ("dw1" | "person") | null;
+                result?: ("accepted" | "refused" | "unavailable") | null;
+                reason_code?: string | null;
+                lane?: components["schemas"]["CaseKind"] | null;
+                from?: string | null;
+                to?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5646,6 +6103,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuoteSummaryView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5702,6 +6168,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuoteCaseView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_activity_api_v1_sales_quotes__case_id__activity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseActivityView"];
                 };
             };
             /** @description Validation Error */

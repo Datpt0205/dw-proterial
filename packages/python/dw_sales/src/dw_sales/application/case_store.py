@@ -40,6 +40,7 @@ from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 
 if TYPE_CHECKING:
+    from dw_sales.application.activity_ports import StepActivityLogPort
     from dw_sales.application.followups import FollowupStorePort
     from dw_sales.application.overview_ports import OverviewReadPort
     from dw_sales.application.rules import RuleVersionStorePort
@@ -529,6 +530,11 @@ class SalesUnitOfWork(Protocol):
 
     @property
     def followups(self) -> FollowupStorePort: ...
+
+    # What each model step did for a message (slice 3), written with the
+    # message's disposition and its case.
+    @property
+    def step_activity(self) -> StepActivityLogPort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

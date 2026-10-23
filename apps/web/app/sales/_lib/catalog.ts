@@ -11,6 +11,15 @@ export type CatalogImport = SalesSchemas["CatalogImportView"];
 export type CatalogPreview = SalesSchemas["CatalogPreviewView"];
 export type InForce = SalesSchemas["CatalogInForceView"];
 
+/** Each list's name, as its tab on the master-data page and the process page say it. */
+export const LIST_NAME: Record<CatalogList, string> = {
+  customers: "Khách hàng",
+  items: "Mã hàng",
+  convert_list: "Bảng quy đổi mã",
+  quotations: "Báo giá",
+  lme: "LME",
+};
+
 /** The tab each list lives on, by the list the API names. */
 export const TAB_OF: Record<CatalogList, string> = {
   customers: "customers",

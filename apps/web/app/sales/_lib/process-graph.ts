@@ -8,11 +8,12 @@ import type { SalesSchemas } from "@dw/api-client";
  * without a change here. Nothing below names a status.
  *
  * - A **back move** (to a status already on the way from the start, found by
- *   walking the moves depth first) is not drawn as an arrow: it is written on
- *   its node ("Có thể quay lại: …").
+ *   walking the moves depth first) is drawn as a dashed curve under the cards
+ *   on a wide screen (`process-flow.tsx`, 2026-10-23); below `lg` the list
+ *   writes it on its node ("Có thể quay lại: …").
  * - A **many-to-one exit** (a move into a final status that more than one
- *   status reaches, like closing or declining a case) is not drawn either: the
- *   final status lists where it is reached from ("Có thể đóng từ: …").
+ *   status reaches, like closing or declining a case) is not drawn: the final
+ *   status lists where it is reached from ("Có thể đóng từ: …").
  * - Every other move goes forward: a status's column is the longest run of
  *   forward moves from the start, and final statuses share the last column,
  *   so every arrow points right.
@@ -35,6 +36,8 @@ export interface LaneLayout {
   nodes: PlacedStatus[];
   /** Drawn as arrows; each goes to a later column. */
   forward: Move[];
+  /** The back moves, in the API's order; each goes to an earlier status. */
+  backward: Move[];
   /** Per status, the earlier statuses it may move back to. */
   back: Record<string, string[]>;
   /** Per final status reached from more than one, where from. */
@@ -121,6 +124,7 @@ export function layoutLane(lane: Lane): LaneLayout {
     rows: Math.max(0, ...Object.values(perColumn)),
     nodes,
     forward,
+    backward: moves.filter((m) => backMoves.has(m)),
     back,
     exitsFrom,
     next,

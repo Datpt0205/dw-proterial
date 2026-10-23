@@ -7,7 +7,9 @@ import {
   formatDateTime,
   formatDuration,
   formatInstant,
+  formatLatency,
   formatMonth,
+  lastDays,
   fromPickerDay,
   toPickerDay,
   TIME_ZONE_LABEL,
@@ -103,6 +105,23 @@ describe("durations", () => {
     expect(formatAge("not a date", Date.now())).toBe(UNKNOWN_TIME);
     expect(dayDeadline(null, Date.now())).toBeNull();
     expect(dayDeadline("2026-02-30", Date.now())).toBeNull();
+  });
+
+  it("writes a model step's time in the unit that tells two apart", () => {
+    expect(formatLatency(850)).toBe("850 ms");
+    expect(formatLatency(1_240)).toBe("1,2 giây");
+    expect(formatLatency(125_000)).toBe("2 phút 5 giây");
+    expect(formatLatency(120_000)).toBe("2 phút");
+    expect(formatLatency(null)).toBe(UNKNOWN_TIME);
+    expect(formatLatency(-5)).toBe(UNKNOWN_TIME);
+  });
+
+  it("counts the last days in Vietnam, today included, whatever this zone", () => {
+    process.env.TZ = "America/Los_Angeles";
+    // 23:30 on 22/10 in UTC is 06:30 on 23/10 in Vietnam.
+    const now = Date.parse("2026-10-22T23:30:00Z");
+    expect(lastDays(7, now)).toEqual({ from: "2026-10-17", to: "2026-10-23" });
+    expect(lastDays(30, now)).toEqual({ from: "2026-09-24", to: "2026-10-23" });
   });
 
   it("writes the API's month as mm/yyyy", () => {

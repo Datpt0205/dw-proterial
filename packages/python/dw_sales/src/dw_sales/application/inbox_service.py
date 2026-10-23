@@ -34,6 +34,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.activity import STEPS_BY_PROMPT
 from dw_sales.application.case_store import (
     CaseOrigin,
     LoggedMessage,
@@ -41,6 +42,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWorkFactory,
 )
 from dw_sales.application.handoffs import HandoffCopy, HandoffCopyPort, render
+from dw_sales.application.model_calls import model_calls, recording_model_calls
 from dw_sales.application.order_intake import (
     QUOTATION_KINDS,
     Classification,
@@ -73,6 +75,7 @@ from dw_sales.application.views import (
     message_disposition,
 )
 from dw_sales.application.worker_service import require_running
+from dw_sales.domain.activity import outcomes_of
 from dw_sales.domain.dispositions import (
     SALES_PIC_POOL,
     CaseKind,
@@ -187,7 +190,9 @@ class InboxProcessing:
                 "the message is already on a case",
                 details={"message_id": message_id, "disposition": existing.kind.value},
             )
-        return await self._process(context, scope, message_id, run)
+        # The message's model calls, timed for its step rows (slice 3).
+        with recording_model_calls():
+            return await self._process(context, scope, message_id, run)
 
     async def process_all(
         self, context: AccessContext, *, run: RunContext
@@ -201,7 +206,8 @@ class InboxProcessing:
         results = []
         for message in await self.inbox.list_messages(scope):
             if message.message_id not in done:
-                results.append(await self._process(context, scope, message.message_id, run))
+                with recording_model_calls():
+                    results.append(await self._process(context, scope, message.message_id, run))
         return results
 
     # ------------------------------------------------------------- helpers --
@@ -280,7 +286,7 @@ class InboxProcessing:
                         work, context, self.ids, stored.case, case, revised, run_id=run.run_id
                     )
                     case = await self._start_review(work, context, case, run)
-            await self._record(work, context, disposition, ingest, run)
+            await self._record(work, context, disposition, ingest, run, case=case)
             await work.commit()
         if before is not None and case is not None:
             # A revision of an order awaiting its cross-check: that check
@@ -386,7 +392,7 @@ class InboxProcessing:
                     run_id=run.run_id,
                 )
             )
-            await self._record(work, context, disposition, ingest, run)
+            await self._record(work, context, disposition, ingest, run, case=case)
             await work.commit()
         return disposition, case
 
@@ -432,7 +438,7 @@ class InboxProcessing:
                 await save_quote(
                     work, context, self.ids, stored.case, replied, event, run_id=run.run_id
                 )
-            await self._record(work, context, disposition, ingest, run)
+            await self._record(work, context, disposition, ingest, run, case=replied)
             await work.commit()
         return disposition, replied
 
@@ -468,10 +474,25 @@ class InboxProcessing:
         disposition: MessageDisposition,
         ingest: datetime,
         run: RunContext,
+        *,
+        case: OrderCase | QuoteCase | None = None,
     ) -> None:
         """The disposition and its audit row, which names the DW1 run that
-        processed the message, as a decision's row names the run it resumed."""
+        processed the message, as a decision's row names the run it resumed;
+        and what each model step did for the message (``case``: the case as
+        stored, which holds the stamps of the steps that read into it), so
+        the rows commit or roll back with what they describe."""
         await work.messages.record(disposition, ingest)
+        await work.step_activity.append(
+            outcomes_of(
+                disposition,
+                case,
+                model_calls(),
+                steps_by_prompt=STEPS_BY_PROMPT,
+                at=self.clock.now(),
+                new_id=self.ids.new_uuid,
+            )
+        )
         details: dict[str, object] = {
             "disposition": disposition.kind.value,
             "actor_kind": "worker",

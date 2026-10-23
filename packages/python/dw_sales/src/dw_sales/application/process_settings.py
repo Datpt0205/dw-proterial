@@ -30,30 +30,61 @@ _settings.py` holds every placement to the key's schema, and every leaf of
 every schema to a placement or to `NOT_ON_PAGE`, so a field added to a rule
 fails until someone decides where it is shown.
 
+Per step, three more facts, each read from its owner (2026-10-23):
+
+- **models**: the model steps the step's placed `model_assist.<step>` fields
+  name, each with the tenant's switch, the bar (`model_readiness.BARS`), the
+  latest measurement for the model and prompt it runs on now, whether it is
+  in effect (on AND passing), and its live share over the last 7 days (what
+  the step handled in this workspace and how much of it DW1 carried,
+  `activity_ports.automatic_share_last_7_days`). Read-only; absent with the
+  key that holds the switches, for a caller who may not read it, and the
+  share with it: it is not read at all for that caller.
+- **uses**: the master-data lists and whether PO layouts are read by the step
+  (`STEP_USES`, declared here: no other owner says it; held total by a test).
+- **actors**: the roles and permission sets whose scopes perform or approve
+  the step's actions (`STEP_SCOPES`), read from the platform's catalog
+  (`RoleCatalogPort`), never a list of role names typed here.
+
+Each edge carries its action, who takes it and what guards it (`EDGES`),
+checked against the domain's move tables by a test, so a move added to the
+domain fails until it says what it is.
+
 A price-bearing key (`rules.PRICE_BEARING`) is absent, not empty, for a caller
 without `sales.price.read`, as the rules list leaves it out (`rules.readable`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.access import Gate, SalesScopes
+from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.activity_ports import (
+    WEEK,
+    StepActivityReadPort,
+    automatic_share_last_7_days,
+)
+from dw_sales.application.model_readiness import BARS, ModelReadiness
+from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.overview_ports import Bucket
 from dw_sales.application.overview_service import PROCEDURE_KIND, STATUS_BUCKETS
 from dw_sales.application.pipeline import CASE_STATUSES, steps_at
 from dw_sales.application.rules import RuleKey, readable
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.orders import order_moves
+from dw_sales.domain.master_data import CatalogList
+from dw_sales.domain.order_checks import ModelStep
+from dw_sales.domain.orders import OrderStatus, order_moves
 from dw_sales.domain.process import WIV_STEPS, Coverage, StepId
-from dw_sales.domain.quotes import quote_moves
+from dw_sales.domain.quotes import QuoteStatus, quote_moves
 
 _VIEW = ConfigDict(frozen=True)
 _RESOURCE: Final = "sales_rules_process"
@@ -228,6 +259,262 @@ BASELINE_ONLY: Final[Mapping[StepId, str]] = MappingProxyType(
     }
 )
 
+
+@dataclass(frozen=True, slots=True)
+class Uses:
+    """What a step reads besides its rules: master-data lists, PO layouts."""
+
+    lists: frozenset[CatalogList] = frozenset()
+    layouts: bool = False
+
+
+_L = CatalogList
+
+# What each surveyed step reads, keyed by every `StepId` (2026-10-23, read
+# from the code that does each step): no other owner says it, so it is
+# declared here beside the fields, and a test holds it total. A list written
+# but not read (the master list Q11 records) is not one the step uses.
+STEP_USES: Final[Mapping[StepId, Uses]] = MappingProxyType(
+    {
+        # The sender's customer, and the PO read with the customer's layout.
+        StepId.O1: Uses(frozenset({_L.CUSTOMERS}), layouts=True),
+        StepId.O2: Uses(frozenset({_L.CONVERT_LIST, _L.ITEMS})),
+        # A new layout's first POs, read value by value.
+        StepId.O3: Uses(layouts=True),
+        # The item's standard lead time, else the quotation's.
+        StepId.O4: Uses(frozenset({_L.ITEMS, _L.QUOTATIONS})),
+        StepId.O5: Uses(),
+        StepId.O6: Uses(frozenset({_L.ITEMS, _L.QUOTATIONS, _L.LME})),
+        StepId.O7: Uses(),
+        StepId.O8: Uses(),
+        StepId.O9: Uses(),
+        StepId.O10: Uses(),
+        StepId.O11: Uses(),
+        StepId.Q1: Uses(frozenset({_L.CUSTOMERS, _L.ITEMS, _L.CONVERT_LIST})),
+        StepId.Q2: Uses(frozenset({_L.CUSTOMERS, _L.ITEMS, _L.CONVERT_LIST})),
+        StepId.Q3: Uses(),
+        StepId.Q4: Uses(),
+        StepId.Q5: Uses(),
+        StepId.Q6: Uses(),
+        StepId.Q7: Uses(frozenset({_L.QUOTATIONS, _L.LME})),
+        StepId.Q8: Uses(frozenset({_L.CUSTOMERS})),
+        StepId.Q9: Uses(),
+        StepId.Q10: Uses(),
+        StepId.Q11: Uses(),
+        StepId.Q12: Uses(frozenset({_L.QUOTATIONS})),
+    }
+)
+
+_S = SalesScopes
+
+# The scopes that perform or approve each step's actions, keyed by every
+# `StepId`; who holds them is the platform's catalog (`RoleCatalogPort`). An
+# OUT step (another worker's) has none here.
+STEP_SCOPES: Final[Mapping[StepId, frozenset[SalesScopes]]] = MappingProxyType(
+    {
+        StepId.O1: frozenset({_S.INBOX_PROCESS}),
+        StepId.O2: frozenset({_S.ORDER_PREPARE}),
+        StepId.O3: frozenset({_S.ORDER_PREPARE, _S.LAYOUT_APPROVE}),
+        StepId.O4: frozenset({_S.ORDER_PREPARE}),
+        StepId.O5: frozenset(),
+        StepId.O6: frozenset({_S.ORDER_PREPARE}),
+        StepId.O7: frozenset({_S.ORDER_PREPARE}),
+        StepId.O8: frozenset({_S.ORDER_PREPARE}),
+        StepId.O9: frozenset({_S.ORDER_CROSS_CHECK}),
+        StepId.O10: frozenset({_S.ORDER_PREPARE, _S.COMPLIANCE_ACK}),
+        StepId.O11: frozenset(),
+        StepId.Q1: frozenset({_S.INBOX_PROCESS, _S.QUOTE_PREPARE}),
+        StepId.Q2: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q3: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q4: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q5: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q6: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q7: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q8: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q9: frozenset({_S.QUOTE_PREPARE, _S.QUOTE_APPROVE}),
+        StepId.Q10: frozenset({_S.QUOTE_PREPARE}),
+        StepId.Q11: frozenset({_S.QUOTE_PREPARE}),
+        # The screening report is read, not acted on.
+        StepId.Q12: frozenset({_S.CASE_READ}),
+    }
+)
+
+
+class EdgeAction(StrEnum):
+    """What makes a case move: the domain method that moves it."""
+
+    CHECK = "check"
+    CLOSE = "close"
+    START_REVIEW = "start_review"
+    PREPARE = "prepare"
+    REQUEST_CORRECTION = "request_correction"
+    # The customer's next revision of the PO joins the case.
+    REVISE = "revise"
+    RESUME_REVIEW = "resume_review"
+    RECORD_BRAVO_ENTRY = "record_bravo_entry"
+    # A change to a prepared case reopens its self-check.
+    EDIT = "edit"
+    CROSS_CHECK = "cross_check"
+    # The checker or the approver sends the case back.
+    RETURN = "return"
+    CONFIRM = "confirm"
+    APPLY_CHANGE = "apply_change"
+    DRAFT_YCBG = "draft_ycbg"
+    RECORD_YCBG = "record_ycbg"
+    SEND_TO_DESIGN = "send_to_design"
+    RECORD_DESIGN_REPLY = "record_design_reply"
+    DISCUSS_SPEC = "discuss_spec"
+    SETTLE_SPEC = "settle_spec"
+    # Sales decides the price, the first time or again.
+    PRICE = "price"
+    SUBMIT = "submit"
+    APPROVE = "approve"
+    SEND = "send"
+    RECORD_MASTER_LIST = "record_master_list"
+    DECLINE = "decline"
+
+
+class EdgeGuard(StrEnum):
+    """What the domain refuses a move without."""
+
+    # No open finding but `missing_noc_esf`, none sent back to the customer,
+    # every line mapped (an order); each blocking price finding accepted with
+    # a reason (a quotation's approval).
+    BLOCKING_FINDINGS = "blocking_findings"
+    # A finding is sent back to the customer.
+    ASK_CUSTOMER = "ask_customer"
+    # The PIC states the Bravo entry was compared with the PO.
+    ENTRY_COMPARED = "entry_compared"
+    # Decided on a platform approval (strict: a second person, a comment).
+    APPROVAL = "approval"
+    # Nobody who made the case decides it.
+    MAKER_CHECKER = "maker_checker"
+    # Straight to confirmed only when the rules stamped on the case need no
+    # cross-check.
+    CROSS_CHECK_NOT_REQUIRED = "cross_check_not_required"
+    # `missing_noc_esf` acknowledged, and absent under `block_confirmation`.
+    EXPORT_CONTROL_HOLD = "export_control_hold"
+    # A short lead time has a date production control confirmed.
+    PC_CONFIRMED_DATE = "pc_confirmed_date"
+    # The request's own findings are answered.
+    REQUEST_FINDINGS = "request_findings"
+
+
+@dataclass(frozen=True, slots=True)
+class Edge:
+    action: EdgeAction
+    # Who takes it: Sales in the portal, DW1, or someone outside whose message
+    # DW1 processes (the customer, Design).
+    actor: Bucket
+    guards: tuple[EdgeGuard, ...] = ()
+
+
+_A, _G, _O, _Q = EdgeAction, EdgeGuard, OrderStatus, QuoteStatus
+
+
+def _edge(action: EdgeAction, actor: Bucket, *guards: EdgeGuard) -> Edge:
+    return Edge(action, actor, guards)
+
+
+_DECLINE = _edge(_A.DECLINE, "sales")
+_PRICE = _edge(_A.PRICE, "sales")
+
+_ORDER_EDGES: Final[Mapping[tuple[OrderStatus, OrderStatus], Edge]] = {
+    (_O.RECEIVED, _O.CHECKED): _edge(_A.CHECK, "dw"),
+    (_O.RECEIVED, _O.CLOSED): _edge(_A.CLOSE, "sales"),
+    (_O.CHECKED, _O.IN_REVIEW): _edge(_A.START_REVIEW, "sales"),
+    (_O.CHECKED, _O.CLOSED): _edge(_A.CLOSE, "sales"),
+    (_O.IN_REVIEW, _O.PREPARED): _edge(_A.PREPARE, "sales", _G.BLOCKING_FINDINGS),
+    (_O.IN_REVIEW, _O.CORRECTION_REQUESTED): _edge(_A.REQUEST_CORRECTION, "sales", _G.ASK_CUSTOMER),
+    (_O.IN_REVIEW, _O.CHECKED): _edge(_A.REVISE, "customer"),
+    (_O.IN_REVIEW, _O.CLOSED): _edge(_A.CLOSE, "sales"),
+    (_O.CORRECTION_REQUESTED, _O.CHECKED): _edge(_A.REVISE, "customer"),
+    (_O.CORRECTION_REQUESTED, _O.IN_REVIEW): _edge(_A.RESUME_REVIEW, "sales"),
+    (_O.CORRECTION_REQUESTED, _O.CLOSED): _edge(_A.CLOSE, "sales"),
+    (_O.PREPARED, _O.UPLOADED_TO_BRAVO): _edge(_A.RECORD_BRAVO_ENTRY, "sales", _G.ENTRY_COMPARED),
+    (_O.PREPARED, _O.IN_REVIEW): _edge(_A.EDIT, "sales"),
+    (_O.PREPARED, _O.CHECKED): _edge(_A.REVISE, "customer"),
+    (_O.PREPARED, _O.CLOSED): _edge(_A.CLOSE, "sales"),
+    (_O.UPLOADED_TO_BRAVO, _O.CROSS_CHECKED): _edge(
+        _A.CROSS_CHECK, "sales", _G.APPROVAL, _G.MAKER_CHECKER
+    ),
+    (_O.UPLOADED_TO_BRAVO, _O.CONFIRMED): _edge(
+        _A.CONFIRM,
+        "sales",
+        _G.CROSS_CHECK_NOT_REQUIRED,
+        _G.EXPORT_CONTROL_HOLD,
+        _G.PC_CONFIRMED_DATE,
+    ),
+    (_O.UPLOADED_TO_BRAVO, _O.IN_REVIEW): _edge(_A.RETURN, "sales", _G.APPROVAL, _G.MAKER_CHECKER),
+    (_O.UPLOADED_TO_BRAVO, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CROSS_CHECKED, _O.CONFIRMED): _edge(
+        _A.CONFIRM, "sales", _G.EXPORT_CONTROL_HOLD, _G.PC_CONFIRMED_DATE
+    ),
+    (_O.CROSS_CHECKED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CONFIRMED, _O.CHANGE_REVIEW): _edge(_A.REVISE, "customer"),
+    (_O.CHANGE_REVIEW, _O.UPLOADED_TO_BRAVO): _edge(
+        _A.APPLY_CHANGE, "sales", _G.BLOCKING_FINDINGS, _G.ENTRY_COMPARED
+    ),
+}
+_QUOTE_EDGES: Final[Mapping[tuple[QuoteStatus, QuoteStatus], Edge]] = {
+    (_Q.RECEIVED, _Q.YCBG_DRAFTED): _edge(_A.DRAFT_YCBG, "sales", _G.REQUEST_FINDINGS),
+    (_Q.RECEIVED, _Q.DECLINED): _DECLINE,
+    (_Q.YCBG_DRAFTED, _Q.YCBG_RECORDED): _edge(_A.RECORD_YCBG, "sales"),
+    (_Q.YCBG_DRAFTED, _Q.DECLINED): _DECLINE,
+    (_Q.YCBG_RECORDED, _Q.SENT_TO_DESIGN): _edge(_A.SEND_TO_DESIGN, "sales"),
+    (_Q.YCBG_RECORDED, _Q.DECLINED): _DECLINE,
+    (_Q.SENT_TO_DESIGN, _Q.DESIGN_REPLIED): _edge(_A.RECORD_DESIGN_REPLY, "design"),
+    (_Q.SENT_TO_DESIGN, _Q.DECLINED): _DECLINE,
+    (_Q.DESIGN_REPLIED, _Q.SPEC_DISCUSSION): _edge(_A.DISCUSS_SPEC, "sales"),
+    (_Q.DESIGN_REPLIED, _Q.PRICED): _PRICE,
+    (_Q.DESIGN_REPLIED, _Q.DECLINED): _DECLINE,
+    (_Q.SPEC_DISCUSSION, _Q.DESIGN_REPLIED): _edge(_A.SETTLE_SPEC, "sales"),
+    (_Q.SPEC_DISCUSSION, _Q.SENT_TO_DESIGN): _edge(_A.SEND_TO_DESIGN, "sales"),
+    (_Q.SPEC_DISCUSSION, _Q.DECLINED): _DECLINE,
+    (_Q.PRICED, _Q.PENDING_APPROVAL): _edge(_A.SUBMIT, "sales"),
+    (_Q.PRICED, _Q.DECLINED): _DECLINE,
+    (_Q.PENDING_APPROVAL, _Q.APPROVED): _edge(
+        _A.APPROVE, "approver", _G.APPROVAL, _G.MAKER_CHECKER, _G.BLOCKING_FINDINGS
+    ),
+    (_Q.PENDING_APPROVAL, _Q.RETURNED): _edge(_A.RETURN, "approver", _G.APPROVAL, _G.MAKER_CHECKER),
+    (_Q.PENDING_APPROVAL, _Q.PRICED): _PRICE,
+    (_Q.PENDING_APPROVAL, _Q.DECLINED): _DECLINE,
+    (_Q.RETURNED, _Q.PRICED): _PRICE,
+    (_Q.RETURNED, _Q.DECLINED): _DECLINE,
+    (_Q.APPROVED, _Q.SENT): _edge(_A.SEND, "sales"),
+    (_Q.APPROVED, _Q.PRICED): _PRICE,
+    (_Q.APPROVED, _Q.DECLINED): _DECLINE,
+    (_Q.SENT, _Q.MASTER_LIST_RECORDED): _edge(_A.RECORD_MASTER_LIST, "sales"),
+}
+
+# Every move each lane's domain allows, less staying put, with what it is,
+# by status value. `test_process_settings.py` holds each to its domain's move
+# table (`order_moves`, `quote_moves`), so neither changes without the other.
+EDGES: Final[Mapping[CaseKind, Mapping[tuple[str, str], Edge]]] = MappingProxyType(
+    {
+        kind: MappingProxyType({(s.value, t.value): edge for (s, t), edge in table.items()})
+        for kind, table in (
+            (CaseKind.ORDER, _ORDER_EDGES),
+            (CaseKind.QUOTE, _QUOTE_EDGES),
+        )
+    }
+)
+
+
+def model_steps(step: StepId) -> tuple[ModelStep, ...]:
+    """The model steps a process step takes part in: the `model_assist`
+    switches placed on it (`STEP_SETTINGS`), so the two cannot disagree."""
+    prefix = "model_assist."
+    names = {s.value for s in ModelStep}
+    return tuple(
+        ModelStep(p.path.removeprefix(prefix))
+        for p in STEP_SETTINGS[step]
+        if p.key is RuleKey.ORDER_RULES
+        and p.path.startswith(prefix)
+        and p.path.removeprefix(prefix) in names
+    )
+
+
 # Fields that govern a whole lane: its follow-up and its KPI target.
 LANE_SETTINGS: Final[Mapping[CaseKind, tuple[Placement, ...]]] = MappingProxyType(
     {
@@ -259,9 +546,10 @@ class LockReason(StrEnum):
     worded by the web (`rule-labels.ts`, keyed by these values, so a reason
     added here fails its typecheck until it has words)."""
 
-    # Model steps: ADR 0005 turns one on once its live eval meets the bar, and
-    # no code checks that bar (sales_order_rules@1.6.0).
-    MODEL_BAR_UNCHECKED = "model_bar_unchecked"
+    # Model steps: a version that turns one on is refused unless its live eval
+    # met the bar (ADR 0005, addendum of 2026-10-23). Proposed on /sales/rules;
+    # each step's measurement is served beside it (`ProcessStepView.models`).
+    MODEL_BAR = "model_bar"
     # The readers bind the platform file's intake caps when they are built
     # (adapters/assembly.py), so a tenant's version may not reach them.
     BOUND_AT_BUILD = "bound_at_build"
@@ -276,7 +564,7 @@ class LockReason(StrEnum):
 # itself or inside a placement of its own (`test_process_settings.py`).
 LOCKED: Final[Mapping[Placement, LockReason]] = MappingProxyType(
     {
-        Placement(_ORDER, "model_assist"): LockReason.MODEL_BAR_UNCHECKED,
+        Placement(_ORDER, "model_assist"): LockReason.MODEL_BAR,
         Placement(_ORDER, "intake"): LockReason.BOUND_AT_BUILD,
         Placement(_QUOTE, "design_mailboxes"): LockReason.TRUST,
         Placement(_FOLLOWUPS, "working_hours.time_zone"): LockReason.TWO_OWNERS,
@@ -364,6 +652,10 @@ class ProcessEdgeView(BaseModel):
 
     source: str = Field(alias="from")
     to: str
+    action: EdgeAction
+    # Who takes the move.
+    actor: Bucket
+    guards: list[EdgeGuard]
 
 
 class ProcessLaneView(BaseModel):
@@ -376,12 +668,79 @@ class ProcessLaneView(BaseModel):
     stateless_steps: list[str]
 
 
+class MeasurementView(BaseModel):
+    model_config = _VIEW
+
+    value: float
+    passed: bool
+    model: str
+    prompt: str
+    measured_at: datetime
+
+
+class LiveShareView(BaseModel):
+    """What the step handled in the workspace over the last ``window_days``
+    days, and how much of it DW1 carried (`StepTally`)."""
+
+    model_config = _VIEW
+
+    handled: int
+    automatic: int
+    # Automatic over handled; None when the step handled nothing.
+    share: float | None
+    # `activity_ports.WEEK`, in days.
+    window_days: int
+
+
+class StepModelView(BaseModel):
+    """One model step of a process step, read-only."""
+
+    model_config = _VIEW
+
+    step: ModelStep
+    # The tenant's switch, in its order rules in force.
+    enabled: bool
+    bar: float
+    metric: str
+    # The model and the prompt the step runs on now; model None: unresolved.
+    model: str | None
+    prompt: str
+    # The newest measurement on that model and prompt; None: never measured.
+    latest: MeasurementView | None
+    # Enabled AND that measurement passes at today's bar: the model is used.
+    effective: bool
+    live_share: LiveShareView
+
+
+class UsesView(BaseModel):
+    model_config = _VIEW
+
+    lists: list[CatalogList]
+    layouts: bool
+
+
+class ActorView(BaseModel):
+    """A role or a permission set holding scopes the step's actions need."""
+
+    model_config = _VIEW
+
+    kind: Literal["role", "permission_set"]
+    key: str
+    name: str
+    # The step's scopes it holds.
+    scopes: list[str]
+
+
 class ProcessStepView(BaseModel):
     model_config = _VIEW
 
     step_id: str
     coverage: Coverage
     settings: list[SettingView]
+    # Empty for a caller who may not read the order rules, which hold the switches.
+    models: list[StepModelView]
+    uses: UsesView
+    actors: list[ActorView]
 
 
 class ProcessSettingsView(BaseModel):
@@ -407,7 +766,7 @@ def _lane(kind: CaseKind) -> ProcessLaneView:
             for status in statuses
         ],
         edges=[
-            ProcessEdgeView(source=source.value, to=target.value)
+            _edge_view(kind, source.value, target.value)
             for source in statuses
             for target in statuses
             if target is not source and target in moves[source]
@@ -420,11 +779,70 @@ def _lane(kind: CaseKind) -> ProcessLaneView:
     )
 
 
+def _edge_view(kind: CaseKind, source: str, target: str) -> ProcessEdgeView:
+    edge = EDGES[kind][(source, target)]
+    return ProcessEdgeView(
+        source=source, to=target, action=edge.action, actor=edge.actor, guards=list(edge.guards)
+    )
+
+
+class CatalogEntry(Protocol):
+    """A role or a permission set as the platform's catalog holds it."""
+
+    @property
+    def key(self) -> str: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def scopes(self) -> tuple[str, ...]: ...
+
+
+class RoleCatalogPort(Protocol):
+    """The platform's role and permission-set catalog (`platform.roles`,
+    `platform.permission_sets`), read as its admin console reads it: the
+    composition root hands in the platform's own repository."""
+
+    async def list_roles(self) -> Sequence[CatalogEntry]: ...
+
+    async def list_permission_sets(self) -> Sequence[CatalogEntry]: ...
+
+
+def _actors(
+    scopes: frozenset[SalesScopes],
+    roles: Sequence[CatalogEntry],
+    sets: Sequence[CatalogEntry],
+) -> list[ActorView]:
+    """The roles, then the permission sets, holding any of ``scopes``."""
+    wanted = {scope.value for scope in scopes}
+    found: list[ActorView] = []
+    for kind, entries in (("role", roles), ("permission_set", sets)):
+        found.extend(
+            ActorView(
+                kind="role" if kind == "role" else "permission_set",
+                key=entry.key,
+                name=entry.name,
+                scopes=held,
+            )
+            for entry in entries
+            if (held := sorted(wanted & set(entry.scopes)))
+        )
+    return found
+
+
 @dataclass(frozen=True)
 class ProcessSettingsService:
     """The process page's one read, to whoever may propose a rule version."""
 
     gate: Gate
+    # The tenant's order rules in force: where its model switches are.
+    rules: OrderRulesPort
+    readiness: ModelReadiness
+    roles: RoleCatalogPort
+    # What the model steps did, for each one's share over the last week.
+    activity: StepActivityReadPort
+    clock: UtcClock
 
     async def view(self, context: AccessContext) -> ProcessSettingsView:
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
@@ -436,16 +854,66 @@ class ProcessSettingsService:
                 if readable(self.gate, context, p.key)
             ]
 
-        return ProcessSettingsView(
-            lanes=[_lane(kind) for kind in CASE_STATUSES],
-            steps=[
+        roles = await self.roles.list_roles()
+        sets = await self.roles.list_permission_sets()
+        models = await self._models(context)
+        steps: list[ProcessStepView] = []
+        for step in WIV_STEPS:
+            step_id = StepId(step.step_id)
+            uses = STEP_USES[step_id]
+            steps.append(
                 ProcessStepView(
                     step_id=step.step_id,
                     coverage=step.coverage,
-                    settings=shown(STEP_SETTINGS[StepId(step.step_id)]),
+                    settings=shown(STEP_SETTINGS[step_id]),
+                    models=[models[m] for m in model_steps(step_id) if m in models],
+                    uses=UsesView(lists=sorted(uses.lists), layouts=uses.layouts),
+                    actors=_actors(STEP_SCOPES[step_id], roles, sets),
                 )
-                for step in WIV_STEPS
-            ],
+            )
+        return ProcessSettingsView(
+            lanes=[_lane(kind) for kind in CASE_STATUSES],
+            steps=steps,
             lane_settings={kind: shown(placed) for kind, placed in LANE_SETTINGS.items()},
             process_settings=shown(PROCESS_SETTINGS),
         )
+
+    async def _models(self, context: AccessContext) -> dict[ModelStep, StepModelView]:
+        """Every model step as the tenant has it now; none for a caller who
+        may not read the order rules, which hold the switches."""
+        if not readable(self.gate, context, RuleKey.ORDER_RULES):
+            return {}
+        scope = sales_scope(context)
+        rules = await self.rules.rules(scope)
+        shares = await automatic_share_last_7_days(self.activity, scope, now=self.clock.now())
+        found: dict[ModelStep, StepModelView] = {}
+        for step in ModelStep:
+            share = shares[step]
+            readiness = await self.readiness.check(scope, step)
+            latest = readiness.latest
+            enabled = rules.model_assist.on(step)
+            found[step] = StepModelView(
+                step=step,
+                enabled=enabled,
+                bar=readiness.bar,
+                metric=BARS[step].metric,
+                model=readiness.model,
+                prompt=readiness.prompt,
+                latest=None
+                if latest is None
+                else MeasurementView(
+                    value=latest.value,
+                    passed=latest.passed,
+                    model=latest.model,
+                    prompt=latest.prompt,
+                    measured_at=latest.measured_at,
+                ),
+                effective=enabled and readiness.ready,
+                live_share=LiveShareView(
+                    handled=share.handled,
+                    automatic=share.automatic,
+                    share=share.share,
+                    window_days=WEEK.days,
+                ),
+            )
+        return found

@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ACTIVITY_PARAMS, activityFromUrl } from "./activity";
 
 /**
  * A list's view, kept in the URL (`?tab=…&q=…&sort=…&status=a,b`), so the
@@ -60,4 +61,27 @@ export function useListView<Tab extends string, Sort extends string>(
     query: rawQuery ?? "",
     setQuery: (next: string) => setRawQuery(next || null),
   };
+}
+
+/**
+ * The activity filter a count on "Hoạt động DW1" put in the URL (`?step=…&
+ * from=…&to=…`), as the list's API call takes it, and a way to drop it. Null
+ * when the URL carries none.
+ */
+export function useActivityFilter() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const filter = useMemo(
+    () => activityFromUrl(new URLSearchParams(params.toString())),
+    [params],
+  );
+  const clear = useCallback(() => {
+    const query = new URLSearchParams(params.toString());
+    for (const name of ACTIVITY_PARAMS) query.delete(name);
+    router.replace(`${pathname}${query.size ? `?${query}` : ""}`, {
+      scroll: false,
+    });
+  }, [params, router, pathname]);
+  return [filter, clear] as const;
 }

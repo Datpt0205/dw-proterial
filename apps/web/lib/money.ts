@@ -66,6 +66,16 @@ export function formatQuantity(value: Decimal): string {
   return QUANTITY.format(numeric(value) as number);
 }
 
+const SHARE = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
+
+/**
+ * "85%", "87,5%": a share (0..1) as a percentage, a decimal comma and at most
+ * one decimal. A bar, a measurement and an automatic share all read this way.
+ */
+export function formatShare(value: number): string {
+  return `${SHARE.format(value * 100)}%`;
+}
+
 // ------------------------------------------------------------- money input --
 
 /**

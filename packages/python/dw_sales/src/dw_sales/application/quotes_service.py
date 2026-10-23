@@ -31,6 +31,11 @@ from dw_kernel.errors import ConflictError, DomainError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.activity_ports import (
+    CaseListActivity,
+    StepActivityReadPort,
+    activity_cases,
+)
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesCatalogPort
 from dw_sales.application.quotation import QuotationService, ScreeningRow
@@ -120,13 +125,26 @@ class QuoteQueries:
     clock: UtcClock
     service: QuotationService
     decisions: PendingDecisionsPort
+    # The step rows a list narrowed by DW1's activity is read through.
+    activity: StepActivityReadPort
 
-    async def summaries(self, context: AccessContext) -> list[QuoteSummaryView]:
+    async def summaries(
+        self, context: AccessContext, activity: CaseListActivity | None = None
+    ) -> list[QuoteSummaryView]:
+        """The workspace's quotations; with ``activity``, only those a
+        matching step row names (the activity page's drill-down), checked
+        after the scope."""
         await self.gate.require(context, SalesScopes.CASE_READ, resource_type=_QUOTE)
         today = local_day(self.clock.now())
-        async with self.uow(sales_scope(context)) as work:
+        scope = sales_scope(context)
+        kept = await activity_cases(self.activity, scope, CaseKind.QUOTE, activity)
+        async with self.uow(scope) as work:
             stored = await work.quotes.list_all()
-        return [quote_summary(s.case, s.origin.assigned_to, today) for s in stored]
+        return [
+            quote_summary(s.case, s.origin.assigned_to, today)
+            for s in stored
+            if kept is None or s.case.case_id in kept
+        ]
 
     async def get(
         self,

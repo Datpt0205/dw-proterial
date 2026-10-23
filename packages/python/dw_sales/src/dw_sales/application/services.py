@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.application.access import Gate, SalesAuthorizationPort
+from dw_sales.application.activity_ports import StepActivityReadPort
 from dw_sales.application.artifact_content import ArtifactWriterPort
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
@@ -32,6 +33,7 @@ from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
 from dw_sales.application.master_data_service import MasterDataService
+from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
@@ -44,7 +46,7 @@ from dw_sales.application.ports import (
     SalesCatalogPort,
     ScopeHoldersPort,
 )
-from dw_sales.application.process_settings import ProcessSettingsService
+from dw_sales.application.process_settings import ProcessSettingsService, RoleCatalogPort
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
@@ -123,6 +125,9 @@ def assemble(
     catalog_uow: CatalogUnitOfWorkFactory,
     templates: CatalogTemplatePort,
     draft_uow: RuleDraftUnitOfWorkFactory,
+    readiness: ModelReadiness,
+    roles: RoleCatalogPort,
+    step_activity: StepActivityReadPort,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     processing = InboxProcessing(
@@ -146,9 +151,9 @@ def assemble(
         inbox=InboxQueries(uow, gate, inbox, book),
         processing=ProcessingService(uow, gate, clock, ids, inbox),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
-        orders=OrderQueries(uow, gate, pending),
+        orders=OrderQueries(uow, gate, pending, step_activity),
         order_commands=OrderCommands(uow, gate, clock, ids, intake, pending),
-        quotes=QuoteQueries(uow, gate, clock, quotation, pending),
+        quotes=QuoteQueries(uow, gate, clock, quotation, pending, step_activity),
         quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog, pending),
         sources=SourceService(uow, gate, clock, inbox, files),
         artifacts=ArtifactService(
@@ -167,8 +172,10 @@ def assemble(
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
-        rules=SalesRulesService(uow, gate, book, clock, ids, directory),
-        process_settings=ProcessSettingsService(gate),
+        rules=SalesRulesService(uow, gate, book, clock, ids, directory, readiness),
+        process_settings=ProcessSettingsService(
+            gate, intake.rules, readiness, roles, step_activity, clock
+        ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         gate=gate,
@@ -178,6 +185,6 @@ def assemble(
         services=services,
         decisions=decisions,
         layout_decisions=LayoutDecisions(uow, clock),
-        rule_decisions=RuleDecisions(uow, book),
+        rule_decisions=RuleDecisions(uow, book, readiness),
         catalog_decisions=CatalogDecisions(catalog_uow),
     )

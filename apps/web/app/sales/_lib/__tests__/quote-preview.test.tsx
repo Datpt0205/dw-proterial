@@ -50,6 +50,7 @@ const api = {
   quote: vi.fn(async () => quote),
   myWork: vi.fn(async () => []),
   history: vi.fn(async () => []),
+  caseActivity: vi.fn(async () => ({ entries: [] })),
   customers: vi.fn(async () => ({ items: [] })),
   lme: vi.fn(async () => ({ items: [] })),
   artifacts: vi.fn(async () => ({

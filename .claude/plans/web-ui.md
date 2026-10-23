@@ -162,6 +162,51 @@ the theme, the shell and the shared composites, not primitive wrappers.
   run) and a visual check at 992/1280/1440/1600 px.
 - `pnpm audit` (2026-10-15): 2 moderate next.js advisories, fixed in next
   15.5.27, below the high gate; bumping next is a separate item.
+- 2026-10-23, React Flow for the DW1 process map (Đạt's decision, the first
+  exception to antd-only; CLAUDE.md "Web UI"). `@xyflow/react` **12.12.0**,
+  MIT: the latest stable on 2026-10-23, published 2026-09-24 (29 days;
+  13.0.0 is only `next.0`); its transitive packages are all older than two
+  weeks (newest `@types/d3-zoom` 3.0.9, 2026-09-29). Lockfile committed with
+  it.
+    - **Confined:** only `app/sales/_components/process-flow.tsx` imports it
+      (and its stylesheet). `antd-only.test.ts` fails any other file, any
+      import of `@xyflow/system`, `reactflow` or `react-flow-renderer`, and
+      any runtime dependency of `apps/web` or `@dw/ui` not on its allowlist;
+      ESLint says the same (an override for that one file). Mutated: an
+      import in the process page turned both red.
+    - **CSP, unchanged:** React Flow writes `style` attributes and ships a
+      stylesheet; `lib/csp.ts` already allows inline styles
+      (`'unsafe-inline'` in `style-src`, which antd needs too) and the CSS
+      is bundled from `'self'`. It runs no eval, injects no script, loads no image or font
+      and makes no request, so `script-src` (nonce + `strict-dynamic`),
+      `connect-src` and `img-src` hold. Its stylesheet is unlayered but every
+      selector is `.react-flow*`; colours are mapped to antd tokens through
+      its `--xy-*` variables, not its defaults. Owed: e2e
+      `enduser-nav.spec.ts` 10 checks the page under the real header with no
+      violation (written, not run).
+    - **Bundle (measured, `next build` into a scratch dist dir; the route
+      table is not printed on this Windows account because the standalone
+      copy fails with EPERM, so gzip sizes are summed from
+      `app-build-manifest.json`):** React Flow is two chunks, 21.9 + 31.7 kB
+      gz (`d3-zoom`/`d3-drag` included), loaded by `/sales/rules/process`
+      only; its CSS 2.6 kB gz. That page: 200.7 kB gz of JS beyond the root
+      layout's 402.6 kB (about 147 kB without React Flow). Not lazy-loaded:
+      a phone below `lg` downloads it without drawing it; `next/dynamic` is
+      the fix if that matters.
+    - **Accessibility:** cards are the focus stops (real links, Enter opens
+      the drawer, Tab in column order); nodes and edges are not focusable or
+      selectable; each edge has a Vietnamese `aria-label`; the controls'
+      names are Vietnamese. React Flow fixes `role="application"` on its
+      wrapper and keeps its "React Flow" attribution link (its authors ask
+      Pro subscribers only to hide it).
+- 2026-10-23, Sales slices 2–3 web half checked: `tsc --noEmit`, `next lint`
+  (whole app), prettier on every changed file, the full web vitest suite
+  (74 files, 550 tests, rule-drafts and quote-preview included), api-client
+  `tsc`. Mutations, each red then restored: an `@xyflow/react` import outside
+  the allowed file (test and ESLint); a dropped `EDGE_ACTION` key and a
+  dropped reason label; a count link without `tab=all`; the order list
+  ignoring the URL's filter; the AI section drawn for an empty `models`; the
+  arch direction swapped.
 
 ## Theme from the E-HSDT v3 prototype (2026-10-05, committed in `92b155a`)
 

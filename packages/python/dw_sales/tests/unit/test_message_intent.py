@@ -43,6 +43,7 @@ from dw_sales.domain.messages import Attachment, EmailAddress, InboundMessage, M
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded
+from dw_sales.evals.world import measured_gate
 
 pytestmark = pytest.mark.unit
 
@@ -117,7 +118,9 @@ class _Cases:
         ]
 
 
-def _intake(inbox: MockInbox, model: Any, rules: OrderRules | None = DEMO) -> OrderIntake:
+def _intake(
+    inbox: MockInbox, model: Any, rules: OrderRules | None = DEMO, *, measured: bool = True
+) -> OrderIntake:
     assert rules is not None
     ids = itertools.count(1)
     return OrderIntake(
@@ -129,6 +132,9 @@ def _intake(inbox: MockInbox, model: Any, rules: OrderRules | None = DEMO) -> Or
         cases=_Cases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),
         intents=None if model is None else IntentReader(model, CATALOG, _Cases()),
+        # The step measured at its bar for this tenant (ADR 0005, addendum of
+        # 2026-10-23): the gate is passed, not removed.
+        model_steps=measured_gate(REPO, *((SCOPE,) if measured else ()))[0],
     )
 
 
@@ -147,6 +153,20 @@ async def test_with_the_switch_off_the_keyword_tables_decide_and_no_model_is_ask
     classified = await _intake(inbox, model, PLATFORM).classify(SCOPE, message, run=RUN)
 
     assert classified.kind is MessageKind.OTHER and classified.reading is None
+    assert model.calls == []
+
+
+async def test_with_the_step_on_and_not_measured_it_classifies_as_if_off() -> None:
+    """dw_sales ADR 0005, addendum of 2026-10-23: the rules turn the step on,
+    no live eval met its bar for this tenant, and the keyword tables decide
+    exactly as with the switch off."""
+    message, inbox = _message("Đề nghị lùi ngày nhận hàng", "Bên em xin lùi ngày nhận hàng.")
+    model = _says("delivery_change")
+
+    gated = await _intake(inbox, model, measured=False).classify(SCOPE, message, run=RUN)
+    off = await _intake(inbox, model, PLATFORM).classify(SCOPE, message, run=RUN)
+
+    assert gated == off and gated.reading is None
     assert model.calls == []
 
 

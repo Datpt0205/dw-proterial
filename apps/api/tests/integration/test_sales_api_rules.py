@@ -4,13 +4,15 @@
 A proposal opens a `sales.rules` platform approval; the head decides it on
 `/approvals` and the worker carries the decision out (`_carry_out` does here
 what the worker does). The demo tenant's version (`sales_order_rules@1.5.2`,
-in the sample set) went the same way when the suite's database was seeded
-(`seed_demo_rules`), as `make demo-reset` does. Each test here that approves
-another version puts the seeded one back in force after.
+in the sample set, every model step on over stand-in measurements) went the
+same way when the suite's database was seeded (`seed_demo_rules`), as
+`make demo-reset` does with 1.5.3 (every step off). Each test here that
+approves another version puts the seeded one back in force after.
 """
 
 from __future__ import annotations
 
+import ast
 import email
 import email.policy
 import json
@@ -110,9 +112,14 @@ async def _carry_out(api: Api, migrator: AsyncEngine, approval_id: str) -> str:
 
 
 def _document(version: str, **changes: Any) -> dict[str, Any]:
+    """The demo version renumbered, its model steps as the platform ships
+    them (off): turning one on is refused without a passing measurement for
+    the proposing tenant (dw_sales ADR 0005, addendum of 2026-10-23), which
+    only the demo tenant has here; a test about that turns one on itself."""
     assert DEMO is not None
     document = DEMO.model_dump(mode="json", by_alias=True)
     document["policy_version"] = version
+    document["model_assist"] = PLATFORM.order_rules.model_assist.model_dump(mode="json")
     document.update(changes)
     return document
 
@@ -576,3 +583,58 @@ async def test_the_process_page_serves_no_price_bearing_key_to_tenant_it(rules_a
     shown = await rules_api.as_(AN).get("/rules/process")
     assert all(key in shown.text for key in ("sales_order_rules", "sales_pricing", "floor_margin"))
     assert (await rules_api.as_(HA).get("/rules/process")).status_code == 403
+
+
+# ----------------------------- a model step earns its switch (2026-10-23) --
+
+
+async def test_a_tenant_with_no_measurement_cannot_turn_a_model_step_on(rules_api: Api) -> None:
+    """Beta runs the platform's rules (every step off) and no live eval was
+    recorded for it: a version turning a step on is refused, naming the step,
+    its bar and "chưa đo"; the same version with the step off is not."""
+    bao = rules_api.as_(BAO, tenant="tenant-beta")
+    document = _document("9.6.0")
+    document["model_assist"]["message_intent"] = True
+
+    refused = await bao.post("/rules/sales_order_rules/versions", {"document": document})
+
+    assert refused.status_code == 409, refused.text
+    body = refused.json()
+    assert body["details"]["rule"] == "model_bar_unmet"
+    # The error envelope serves each detail as a string (`exception_handlers`).
+    steps = ast.literal_eval(body["details"]["steps"])
+    assert [step["step"] for step in steps] == ["message_intent"]
+    assert "chưa đo" in body["message"] and "90%" in body["message"]
+    allowed = await bao.post("/rules/sales_order_rules/versions", {"document": _document("9.6.0")})
+    assert allowed.status_code == 200, allowed.text
+
+
+async def test_the_process_page_serves_each_steps_model_uses_actors_and_edge_actions(
+    rules_api: Api,
+) -> None:
+    """The demo tenant's version turns every model step on, and the suite
+    recorded a measurement at its bar for each: each is served in effect.
+    The actors are the database's own roles and permission sets."""
+    body = (await rules_api.as_(AN).get("/rules/process")).json()
+    steps = {step["step_id"]: step for step in body["steps"]}
+    models = [model for step in body["steps"] for model in step["models"]]
+    assert len(models) == 6
+    for model in models:
+        assert model["enabled"] and model["effective"], model
+        assert model["latest"]["passed"] and model["latest"]["model"] == model["model"]
+    assert steps["O1"]["uses"] == {"lists": ["customers"], "layouts": True}
+    cross = {actor["key"] for actor in steps["O9"]["actors"]}
+    assert cross and all(
+        actor["scopes"] == ["sales.order.cross_check"] for actor in steps["O9"]["actors"]
+    )
+    edge = next(
+        e
+        for lane in body["lanes"]
+        for e in lane["edges"]
+        if (e["from"], e["to"]) == ("pending_approval", "approved")
+    )
+    assert (edge["action"], edge["actor"]) == ("approve", "approver")
+    assert "approval" in edge["guards"]
+    # Tenant IT reads no order rules, so no model switch is served to it.
+    hidden = (await rules_api.as_(TAM).get("/rules/process")).json()
+    assert all(step["models"] == [] for step in hidden["steps"])

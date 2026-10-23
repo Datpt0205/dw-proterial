@@ -52,6 +52,7 @@ from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
+from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.approval_codes import (
     SqlApprovalCodeRetention,
     SqlApprovalCodeStore,
@@ -103,6 +104,7 @@ from dw_sales.adapters.assembly import (
     build_rule_settlement,
 )
 from dw_sales.adapters.clamd import malware_scanner
+from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
@@ -167,7 +169,7 @@ logger = logging.getLogger("dw_worker")
 
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
-RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.8.0.yaml"
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.9.0.yaml"
 # How long a processing job may run before the reaper takes it for a dead
 # worker's (Sales ticket 25). A job is one message: its scan, a few files read
 # in the reader sandbox (each killed at its own wall clock) and a model call or
@@ -382,6 +384,8 @@ def build_sales(
             deployed=settings.is_deployed,
         ),
         reader=sales_reader(settings),
+        # The platform's role catalog, as the API passes it (the process page).
+        roles=SqlAdminConsoleRepository(sessions),
         # As the API passes it: only a process that reaches a model server of
         # its own reads a description through one (dw_sales ADR 0005).
         model=runtime.gateway if Provider.ONPREM in runtime.gateway.adapters else None,
@@ -473,6 +477,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # Its rule drafts ("Tạo từ tệp mẫu"): a draft its event lost failed, old
     # ones dropped, with no request to come for them.
     sales_rule_drafts_consumer: Callable[[], Awaitable[None]] | None = None
+    # What DW1's model steps did (slice 3): the months of `sales.step_outcomes`
+    # past the policy file's term, dropped wherever DW1 is.
+    sales_step_outcomes_retention: RetentionPrunePort | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -656,6 +663,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 sales_followups_consumer = build_sales_followups_consumer(
                     followups, followup_scopes
                 )
+                sales_step_outcomes_retention = SqlStepOutcomeRetention(
+                    session_factory=sessions, policy=retention_policy, clock=clock
+                )
                 # A master-data upload's file, read in the reader sandbox
                 # (ticket 41). Only where DW1 is built: an upload needs the
                 # Sales routes, which the API mounts on the same condition.
@@ -717,6 +727,15 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             SALES_FOLLOWUPS_LANE,
             sales_followups_consumer,
             interval_seconds=SALES_FOLLOWUPS_INTERVAL_SECONDS,
+        )
+
+    # And the months of its step rows past their term (slice 3), hourly like
+    # every retention lane; `partitions` creates them ahead.
+    if sales_step_outcomes_retention is not None:
+        registry.register(
+            "sales_step_outcomes_retention",
+            build_retention_consumer(sales_step_outcomes_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
 
     # And its rule drafts' sweep, under the name the drafting audits as.

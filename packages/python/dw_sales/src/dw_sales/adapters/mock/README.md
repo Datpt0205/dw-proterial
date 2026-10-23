@@ -141,8 +141,10 @@ one-sheet Excel layout for this.
 and their descriptions are written the way the customer's store writes them
 (Vietnamese words, `TC`/`BRD`/`GRY`), which DW1's own vocabulary does not
 read: each line is `code_unmapped`. Where the tenant's rules turn on
-`model_assist.description_attributes` (the demo tenant's own version in
-`data/policies/` does) and a model server is configured, a local model reads
+`model_assist.description_attributes` (the sample set's 1.5.2 in
+`data/policies/` does, for the tests and evals; the 1.5.3 `make demo-reset`
+installs from `data/policies/no_model/` turns every step off until one is
+measured) and a model server is configured, a local model reads
 them instead (ticket 28, dw_sales ADR 0005): line 1 then fits `HW-1002`,
 line 3 `CB-2001`, each a candidate Sales confirms with the model's labels
 shown beside the text they were read from. Line 2's `RL` names no value the
@@ -153,7 +155,7 @@ without a model, which is what the eval smoke runs.
 29): the body of a mail, the customer's own PDF and the customer's own
 spreadsheet. `free_requests.json` holds what each states. Without a model
 each is routed to Sales, as the table says. Where the tenant's rules turn on
-`model_assist.rfq_extraction` (the demo tenant's own version does) and a
+`model_assist.rfq_extraction` (1.5.2 does) and a
 model server is configured, a local model reads each into a quote case
 instead (dw_sales ADR 0005): every value it read is flagged `model_read` and
 raises `value_uncertain` for Sales to confirm field by field, the customer is

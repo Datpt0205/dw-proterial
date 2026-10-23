@@ -42,6 +42,7 @@ const SALES_PAGES = [
   "/sales/rules/process",
   "/sales/master-data",
   "/sales/overview",
+  "/sales/activity",
 ];
 
 /**
@@ -138,6 +139,7 @@ describe("the nav registry", () => {
       "Sales › Quản lý › Quy trình DW1",
       "Sales › Quản lý › Dữ liệu chủ",
       "Sales › Quản lý › Tổng quan quy trình",
+      "Sales › Quản lý › Hoạt động DW1",
     ]);
     // A count inside a closed submenu is a count nobody sees.
     const top = isNavGroup(SALES) ? SALES.items : [];
@@ -174,19 +176,23 @@ describe("visibleNav", () => {
     ["an.nguyen (sales_pic)", SALES_PAGES],
     ["dieu.hoang (sales_pic)", SALES_PAGES],
     ["giang.do (sales_head)", SALES_PAGES],
-    // The viewer reads aggregates only: the overview, and no other Sales page.
-    ["ha.vu (sales_viewer)", ["/sales/overview"]],
+    // The viewer reads aggregates only: the overview and DW1's activity
+    // (counts, no case), and no other Sales page.
+    ["ha.vu (sales_viewer)", ["/sales/overview", "/sales/activity"]],
     ["binh.tran (no sales.*)", []],
+    // Tenant IT: the rules, and the activity of the steps it turns on.
     [
       "tam.ngo (org_admin + sales_rules_editor)",
-      ["/sales/rules", "/sales/rules/process"],
+      ["/sales/rules", "/sales/rules/process", "/sales/activity"],
     ],
   ])("gives %s the Sales pages %j", (persona, pages) => {
     expect(salesPages(persona)).toEqual(pages);
   });
 
   it("keys every Sales page to a scope the API checks on its reads", () => {
-    const scopes = navPages([SALES]).map((item) => item.scope);
+    const scopes = navPages([SALES]).flatMap(
+      (item) => item.anyScope ?? [item.scope],
+    );
     expect(new Set(scopes)).toEqual(
       new Set([
         "sales.case.read",
@@ -234,6 +240,7 @@ describe("visibleNav", () => {
       "Quản lý › Quy tắc",
       "Quản lý › Quy trình DW1",
       "Quản lý › Tổng quan quy trình",
+      "Quản lý › Hoạt động DW1",
     ]);
   });
 
@@ -255,18 +262,53 @@ describe("visibleNav", () => {
     expect(noRules).not.toContain("Quản lý › Quy tắc");
   });
 
-  it("shows a viewer holding only sales.rules.propose the two rules pages alone", () => {
+  it("shows a viewer holding only sales.rules.propose the rules pages and the activity alone", () => {
     expect(salesBar(["sales.rules.propose"])).toEqual([
       "Quản lý",
       "Quản lý › Quy tắc",
       "Quản lý › Quy trình DW1",
+      "Quản lý › Hoạt động DW1",
     ]);
   });
 
+  it("shows the activity page to either of the scopes its API reads with", () => {
+    const pages = (scopes: string[]) =>
+      navPages(visibleNav(NAV, viewer(scopes))).map((item) => item.href);
+    expect(pages(["sales.overview.read"])).toContain("/sales/activity");
+    expect(pages(["sales.rules.propose"])).toContain("/sales/activity");
+    expect(pages(["sales.case.read"])).not.toContain("/sales/activity");
+  });
+
   it("draws a submenu left with one page as that page, never a submenu of one", () => {
-    // ha.vu sees the overview alone: on the bar, not behind "Quản lý".
+    // Since "Hoạt động DW1" no Sales persona sees one page alone in a
+    // submenu, so a context of two pages stands in for one.
+    const icon = () => null;
+    const nav: NavEntry[] = [
+      {
+        key: "ctx",
+        label: "Ngữ cảnh",
+        icon,
+        context: { product: "Ngữ cảnh", roleKeyPrefix: "ctx_" },
+        items: [
+          {
+            key: "ctx-manage",
+            label: "Quản lý",
+            icon,
+            items: [
+              { href: "/ctx/a", label: "A", hint: "", icon, scope: "ctx.a" },
+              { href: "/ctx/b", label: "B", hint: "", icon, scope: "ctx.b" },
+            ],
+          },
+        ],
+      },
+    ];
+    expect(labels(barNav(visibleNav(nav, viewer(["ctx.a"]))).entries)).toEqual([
+      "A",
+    ]);
     expect(salesBar(PERSONAS["ha.vu (sales_viewer)"]!.scopes)).toEqual([
-      "Tổng quan quy trình",
+      "Quản lý",
+      "Quản lý › Tổng quan quy trình",
+      "Quản lý › Hoạt động DW1",
     ]);
   });
 
@@ -318,7 +360,7 @@ describe("barNav", () => {
   it.each([
     ["an.nguyen (sales_pic)", SALES_PAGES],
     ["giang.do (sales_head)", SALES_PAGES],
-    ["ha.vu (sales_viewer)", ["/sales/overview"]],
+    ["ha.vu (sales_viewer)", ["/sales/overview", "/sales/activity"]],
   ])("is the Sales pages alone for %s", (persona, pages) => {
     const { entries, context } = bar(persona);
     expect(context?.key).toBe("sales");

@@ -624,3 +624,83 @@ test("9. The Excel source of an order opens: the sheet is drawn, never 'Mất k�
   await expect(drawer.getByText("Mất kết nối mạng")).toHaveCount(0);
   await expect(drawer.getByText("Đã mở lúc")).toBeVisible({ timeout: 5_000 });
 });
+
+// Slices 2 and 3 (2026-10-23): the React Flow map and DW1's activity, under
+// the page's real Content-Security-Policy (React Flow writes style attributes
+// and ships its own stylesheet; `lib/csp.ts` allows inline styles, never
+// inline scripts), and at a 320 px phone.
+test("10. Quy trình DW1 draws on its canvas and Hoạt động DW1 opens, with no CSP violation; Hà reads the activity, no price", async ({
+  page,
+  request,
+}) => {
+  const violations: string[] = [];
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (/Content Security Policy|Refused to/i.test(message.text()))
+      violations.push(message.text());
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+
+  await signIn(page, request, AN);
+  const response = await page.goto("/sales/rules/process");
+  expect(response?.headers()["content-security-policy"] ?? "").toMatch(
+    /style-src [^;]*'unsafe-inline'/,
+  );
+  const canvas = page.getByRole("application", {
+    name: "Sơ đồ quy trình Đơn hàng",
+  });
+  await expect(canvas).toBeVisible();
+  await expect(canvas.getByText("DW1 đọc và kiểm tra")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("process-map.png") });
+  await canvas.getByRole("link", { name: /^Chờ PIC tự kiểm/ }).click();
+  await expect(page).toHaveURL(/node=order\.in_review/);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/node=/);
+
+  await page.goto("/sales/activity?lane=order");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Hoạt động DW1" }),
+  ).toBeVisible();
+  // The summary has answered once its as-of time prints. The mails tests 1-9
+  // process are read by code, no model step among them, so the page may
+  // rightly draw its empty state instead of the table.
+  await expect(page.getByText(/số liệu lúc/)).toBeVisible();
+  await expect(
+    page
+      .getByRole("table")
+      .first()
+      .or(page.getByText(/^DW1 chưa xử lý mục nào ở bước có mô hình/)),
+  ).toBeVisible();
+  expect(violations).toEqual([]);
+  expect(errors).toEqual([]);
+
+  await signIn(page, request, HA);
+  await page.goto("/sales/activity");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Hoạt động DW1" }),
+  ).toBeVisible();
+  await expect(page.getByText(FORBIDDEN)).toHaveCount(0);
+  expect(leaked(await page.locator("body").innerText())).toEqual([]);
+});
+
+test.describe("11. Phone width 320 px, slices 2 and 3", () => {
+  test.use({ viewport: { width: 320, height: 640 }, hasTouch: true });
+
+  test("11a. the process page is a list, the activity page fits", async ({
+    page,
+    request,
+  }) => {
+    await signIn(page, request, AN);
+    await page.goto("/sales/rules/process");
+    await expect(
+      page.getByRole("link", { name: /^Chờ PIC tự kiểm/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("application")).toHaveCount(0);
+    await noHorizontalScroll(page);
+    await page.goto("/sales/activity");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Hoạt động DW1" }),
+    ).toBeVisible();
+    await noHorizontalScroll(page);
+  });
+});

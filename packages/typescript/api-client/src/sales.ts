@@ -67,6 +67,18 @@ export type Artifact = SalesSchemas["ArtifactView"];
 export type PendingDecision = SalesSchemas["PendingDecisionView"];
 /** A message's processing job (ticket 25): "DW xử lý" queues it, the worker runs it. */
 export type ProcessingJob = SalesSchemas["ProcessingJobView"];
+/**
+ * A case list narrowed to the cases a count on the activity page stands for
+ * (`ActivityFilter`): the server checks it whole and refuses (422) one that
+ * names no step or no window.
+ */
+export type CaseListActivity = NonNullable<
+  paths["/api/v1/sales/orders"]["get"]["parameters"]["query"]
+>;
+/** The activity summary's window and lane; the server defaults the window. */
+export type ActivityQuery = NonNullable<
+  paths["/api/v1/sales/activity"]["get"]["parameters"]["query"]
+>;
 
 export class SalesApi {
   constructor(private readonly client: ApiClient) {}
@@ -132,6 +144,31 @@ export class SalesApi {
         );
   }
 
+  /**
+   * "DW1 đã làm gì": what DW1's model steps did on one case, oldest first. A
+   * price is absent, not masked, for a caller without `sales.price.read`.
+   */
+  caseActivity(kind: "order" | "quote", caseId: string) {
+    return kind === "order"
+      ? this.get<"/api/v1/sales/orders/{case_id}/activity">(
+          `/api/v1/sales/orders/${enc(caseId)}/activity`,
+        )
+      : this.get<"/api/v1/sales/quotes/{case_id}/activity">(
+          `/api/v1/sales/quotes/${enc(caseId)}/activity`,
+        );
+  }
+
+  /**
+   * Per model step over a window of local days: counts, each with the case
+   * list filter it stands for, the top reasons, the latency and a series per
+   * day. No case content and no amount.
+   */
+  activity(query: ActivityQuery = {}) {
+    return this.get<"/api/v1/sales/activity">(
+      `/api/v1/sales/activity${queryOf(query)}`,
+    );
+  }
+
   /** One page of the caller's work, by due date then by when it came in. */
   myWorkPage(cursor: string | null = null, limit = 200) {
     const query = new URLSearchParams({ limit: String(limit) });
@@ -183,8 +220,11 @@ export class SalesApi {
 
   // ---- orders -------------------------------------------------------------
 
-  orders() {
-    return this.get<"/api/v1/sales/orders">("/api/v1/sales/orders");
+  /** Every order case; with `activity`, only those its count stands for. */
+  orders(activity?: CaseListActivity) {
+    return this.get<"/api/v1/sales/orders">(
+      `/api/v1/sales/orders${queryOf(activity)}`,
+    );
   }
 
   order(caseId: string) {
@@ -326,8 +366,11 @@ export class SalesApi {
 
   // ---- quotes -------------------------------------------------------------
 
-  quotes() {
-    return this.get<"/api/v1/sales/quotes">("/api/v1/sales/quotes");
+  /** Every quote case; with `activity`, only those its count stands for. */
+  quotes(activity?: CaseListActivity) {
+    return this.get<"/api/v1/sales/quotes">(
+      `/api/v1/sales/quotes${queryOf(activity)}`,
+    );
   }
 
   screening() {
@@ -759,6 +802,17 @@ export class SalesApi {
 
 /** A page of a PDF, or a sheet of a workbook: what the source route opens. */
 export type SourceRegion = { page: number } | { sheet: string };
+
+/** `?a=1&b=2` from the parameters that are set; "" when none is. */
+function queryOf(
+  params: Record<string, string | null | undefined> | undefined,
+): string {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(params ?? {}))
+    if (value !== null && value !== undefined && value !== "")
+      query.set(name, value);
+  return query.size ? `?${query}` : "";
+}
 
 function regionQuery(region: SourceRegion): string {
   return "page" in region

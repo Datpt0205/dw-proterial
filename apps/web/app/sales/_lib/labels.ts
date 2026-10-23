@@ -1,3 +1,5 @@
+import type { SalesSchemas } from "@dw/api-client";
+
 /**
  * The Vietnamese words for every Sales code the API sends, keyed by code.
  *
@@ -401,6 +403,139 @@ export const TIME_BUCKET = {
   design: "Chờ Design",
   approver: "Chờ người duyệt",
   customer: "Chờ khách hàng",
+} as const;
+
+/**
+ * What makes a case move, by the action the process page serves on each move
+ * (`process_settings.EdgeAction`). Keyed by every action the API names, so
+ * one it adds fails the typecheck until it has words; `process-labels.test.ts`
+ * also holds the keys to the OpenAPI enum.
+ */
+export const EDGE_ACTION: Record<SalesSchemas["EdgeAction"], string> = {
+  check: "DW1 đọc và kiểm tra",
+  close: "Đóng hồ sơ",
+  start_review: "Bắt đầu tự kiểm",
+  prepare: "Tự kiểm xong",
+  request_correction: "Yêu cầu khách sửa PO",
+  revise: "Khách gửi PO sửa đổi",
+  resume_review: "Tự kiểm lại",
+  record_bravo_entry: "Ghi số đơn Bravo",
+  edit: "Sửa sau khi tự kiểm",
+  cross_check: "Kiểm chéo",
+  return: "Trả lại",
+  confirm: "Gửi xác nhận cho khách",
+  apply_change: "Áp dụng thay đổi PO",
+  draft_ycbg: "Soạn YCBG",
+  record_ycbg: "Ghi số YCBG trên Bravo",
+  send_to_design: "Gửi Design",
+  record_design_reply: "Ghi phản hồi của Design",
+  discuss_spec: "Thảo luận spec với khách",
+  settle_spec: "Chốt spec",
+  price: "Định giá",
+  submit: "Trình duyệt",
+  approve: "Duyệt báo giá",
+  send: "Gửi báo giá cho khách",
+  record_master_list: "Ghi master list",
+  decline: "Từ chối báo giá",
+};
+
+/** What the domain refuses a move without (`process_settings.EdgeGuard`). */
+export const EDGE_GUARD: Record<SalesSchemas["EdgeGuard"], string> = {
+  blocking_findings: "Không còn cờ chặn",
+  ask_customer: "Có cờ gửi khách",
+  entry_compared: "Đã đối chiếu Bravo với PO",
+  approval: "Cần duyệt",
+  maker_checker: "Người làm không tự duyệt",
+  cross_check_not_required: "Quy tắc không yêu cầu kiểm chéo",
+  export_control_hold: "Không bị giữ vì kiểm soát xuất khẩu",
+  pc_confirmed_date: "PC đã xác nhận ngày",
+  request_findings: "Đã trả lời cờ của yêu cầu",
+};
+
+/** Who takes a move: DW1, Sales, or someone outside whose mail DW1 reads. */
+export const MOVE_ACTOR: Record<
+  SalesSchemas["ProcessEdgeView"]["actor"],
+  string
+> = {
+  dw: "DW1",
+  sales: "Sales",
+  design: "Design",
+  approver: "Người duyệt",
+  customer: "Khách hàng",
+};
+
+/**
+ * A model step as the process page shows it: switched on and its latest
+ * measurement passing (the model is used), switched on and not passing (a
+ * person does the step), or switched off.
+ */
+export const AI_STATE = {
+  on: "AI bật · đạt",
+  failing: "AI bật · chưa đạt — người làm",
+  off: "AI tắt",
+} as const;
+
+/** What one entry of "DW1 đã làm gì" was (`ActivityEntry.kind`). */
+export const ACTIVITY_KIND: Record<
+  SalesSchemas["ActivityEntry"]["kind"],
+  string
+> = {
+  read: "DW1 đọc",
+  route: "DW1 phân loại và chuyển thư",
+  check: "Kiểm tra của DW1 không nhận câu trả lời",
+  to_person: "Đọc được, nhưng không mã hàng nào khớp",
+  model_unavailable: "Mô hình không trả lời",
+};
+
+/** Kết quả of an entry: DW1 carried it, a person does it, or no answer came. */
+export const ACTIVITY_RESULT = {
+  accepted: "Đã chấp nhận",
+  to_person: "Chuyển cho người",
+  unavailable: "Model không trả lời",
+} as const;
+
+/**
+ * Why DW1 left an item to a person, or refused a value inside one, for the
+ * reason codes no other table here names (`domain/activity.py`, the layout
+ * checks, the request and hand-off readers). `reasonLabel` in `activity.ts`
+ * reads this, `READING_REASON` and `ROUTING_REASON`, and composes the
+ * per-field codes (`description_not_found`).
+ */
+export const ACTIVITY_REASON: Record<string, string> = {
+  no_item_fits: "Đọc được, nhưng không mã hàng nào khớp",
+  nothing_located: "Không tìm thấy trong thư điều mô hình chỉ ra",
+  not_used: "Mô hình đã trả lời, nhưng DW1 không dùng được",
+  refused: "DW1 không nhận đề xuất của mô hình",
+  other: "Lý do khác",
+  incomplete_proposal: "Đề xuất của mô hình thiếu phần",
+  label_not_found: "Không thấy nhãn trên mẫu",
+  label_repeated: "Nhãn xuất hiện hơn một lần trên mẫu",
+  columns_not_on_one_row: "Tên cột không nằm trên cùng một dòng",
+  unreadable: "Không đọc được tệp theo đề xuất",
+  no_total: "Không thấy tổng của PO",
+  line_total_mismatch: "Tổng dòng không khớp tổng PO",
+  quantity_not_whole: "Số lượng không phải số nguyên",
+  price_out_of_quoted_range: "Đơn giá ngoài khoảng đã báo",
+  requested_before_po_date: "Ngày yêu cầu trước ngày PO",
+  requested_is_po_date: "Ngày yêu cầu trùng ngày PO",
+  no_item_known: "Không mã hàng nào của khách được biết",
+  part_unknown: "Mô hình chỉ tới phần không có trong thư",
+  line_unanchored: "Không xác định được vị trí dòng trong tệp",
+  quantity_unit_unknown: "Số lượng không có đơn vị DW1 báo giá",
+};
+
+/** The fields an activity entry or a refusal names that `FIELD` does not. */
+export const ACTIVITY_FIELD = {
+  kind: "Loại thư",
+  language: "Ngôn ngữ",
+  stated_target_price: "Giá khách nêu",
+  new_quantity: "Số lượng mới",
+  new_date: "Ngày giao mới",
+  so_no: "Số đơn bán (SO)",
+  lot: "Số lô",
+  line: "Dòng",
+  item: "Mặt hàng mẫu",
+  quote: "Câu khách viết",
 } as const;
 
 /** A status that waits on nobody (`STATUS_BUCKETS` has no holder): done. */

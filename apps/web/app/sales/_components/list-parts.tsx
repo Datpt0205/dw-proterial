@@ -4,12 +4,14 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ClockCircleOutlined,
+  CloseOutlined,
   RightOutlined,
   SearchOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import {
   Avatar,
+  Button,
   Card,
   Input,
   Segmented,
@@ -18,9 +20,11 @@ import {
   Tooltip,
   Typography,
 } from "antd";
+import type { CaseListActivity } from "@dw/api-client";
 import { STATUS_TONES, type StatusTone } from "@dw/ui";
 import { dayDeadline, UNKNOWN_TIME } from "../../../lib/dates";
 import { initials } from "../../../lib/initials";
+import { describeActivity } from "../_lib/activity";
 
 /**
  * The pieces every Sales list is drawn with, from the prototype's list
@@ -351,4 +355,37 @@ export function listFooter(
   if (inTab < total)
     return `${inTab} ${noun} trong nhóm này · đã tải đủ ${total} ${noun}`;
   return `Đã hiện đủ ${total} ${noun}`;
+}
+
+// ------------------------------------------------- activity filter chip --
+
+/**
+ * "Lọc theo hoạt động DW1": the list narrowed to the cases a count on the
+ * activity page stands for, said in words, and "Xóa" to see them all.
+ */
+export function ActivityFilterChip({
+  filter,
+  onClear,
+}: {
+  filter: CaseListActivity;
+  onClear: () => void;
+}) {
+  const words = describeActivity(filter);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        size="small"
+        icon={<CloseOutlined aria-hidden />}
+        iconPlacement="end"
+        className="h-auto! whitespace-normal! text-start"
+        aria-label={`Bỏ lọc theo hoạt động DW1: ${words}`}
+        onClick={onClear}
+      >
+        Lọc theo hoạt động DW1: {words}
+      </Button>
+      <Button size="small" type="link" onClick={onClear}>
+        Xóa
+      </Button>
+    </div>
+  );
 }

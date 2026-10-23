@@ -9,13 +9,13 @@ git: every slice's commit message, and the pre-split narrative at
 
 ## Areas
 
-| Area                               | File                                | State                         |
-| ---------------------------------- | ----------------------------------- | ----------------------------- |
-| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | Done; on-prem ran locally     |
-| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps       |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd only; product theme; CSP |
-| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                   |
-| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed     |
+| Area                               | File                                | State                      |
+| ---------------------------------- | ----------------------------------- | -------------------------- |
+| Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | Done; on-prem ran locally  |
+| Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps    |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd + React Flow map; CSP |
+| Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                |
+| Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed  |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -37,7 +37,7 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 2026-10-20: pipeline board as the Sales home, a history per case, denser
   theme (`sales.md` State).
-- **Next:** "Quy trình DW1" slices 2–3, defects A–E, the screenshot review (`sales.md` State 2026-10-21/22);
+- **Next:** the Docker-off integration and e2e runs owed for "Quy trình DW1" slices 2–3 (web half built 10-23, React Flow map; `sales.md` State), a browser look at the map, defects A–E, the screenshot review;
   `onprem-up` in `uat` behind Caddy; DW2 (Mua hàng) when its survey arrives, after the reuse decisions in `sales.md`.
 
 ## Decisions Đạt owes
@@ -56,7 +56,8 @@ own file and a row here.
   t29–t33 (t31 at 89.8% of 90%). Whether tenant IT may grant `sales_*`
   sets in the admin console at all (`sales.md` State, 2026-10-21).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
-  the model, decided on Proterial's server (`sales.md` State 2026-10-21).
+  the model, decided on Proterial's server (`sales.md` State 2026-10-21);
+  the retention term of `sales.step_outcomes` (365 days proposed, 10-23).
 
 ## How a feature is checked here
 

@@ -25,7 +25,7 @@ import {
 import { SCOPE } from "../_components/sales-frame";
 import { salesCrumbs } from "../_components/crumbs";
 import { ScopeGate } from "../_components/scope-gate";
-import type { CatalogList } from "../_lib/catalog";
+import { LIST_NAME, type CatalogList } from "../_lib/catalog";
 import type { Resource } from "../_lib/use-resource";
 import { ImportPanel } from "./import-panel";
 
@@ -97,25 +97,29 @@ function MasterData() {
         items={[
           {
             key: "customers",
-            label: "Khách hàng",
+            label: LIST_NAME.customers,
             children: imported("customers", <Customers />),
           },
           {
             key: "items",
-            label: "Mã hàng",
+            label: LIST_NAME.items,
             children: imported("items", <Items />),
           },
           {
             key: "convert-list",
-            label: "Bảng quy đổi mã",
+            label: LIST_NAME.convert_list,
             children: imported("convert_list", <ConvertList />),
           },
           {
             key: "quotations",
-            label: "Báo giá",
+            label: LIST_NAME.quotations,
             children: imported("quotations", <Quotations />),
           },
-          { key: "lme", label: "LME", children: imported("lme", <Lme />) },
+          {
+            key: "lme",
+            label: LIST_NAME.lme,
+            children: imported("lme", <Lme />),
+          },
           {
             key: "bravo-orders",
             label: "Đơn Bravo 12 tháng",

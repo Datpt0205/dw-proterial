@@ -22,6 +22,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -213,6 +214,27 @@ async def test_support_reads_the_overview_and_the_cases_without_a_price(
     assert {line["unit_price"] == HIDDEN for line in quote["pricing"]["lines"]} == {True}
     # The same reads as the PIC who may see prices do find them.
     assert any(leaks(r.json()) for r in await _reads(api.as_(AN), world))
+
+
+async def test_support_is_served_no_printed_target_price_nor_its_anchor(
+    api: Api, staff: Staff
+) -> None:
+    """M10's form prints a target price, and its anchor quotes the printed
+    words: a caller without `sales.price.read` gets the amount marked hidden
+    and no anchor at all (the harness's price search now knows the target, so
+    the walks above would catch it too). The PIC who may see prices gets
+    both, so the assertion can fail."""
+    world = await _decided_world(api)
+    path = f"/quotes/{world['m10']['case_id']}"
+
+    (line,) = (await staff.get(path)).json()["lines"]
+    (pic_line,) = (await api.as_(AN).get(path)).json()["lines"]
+
+    assert line["target_price"] == HIDDEN
+    assert "target_price" not in line["anchors"]
+    # The sheet's cell is a number: 0.6500 is read as the value 0.65.
+    assert Decimal(pic_line["target_price"]) == Decimal("0.6500")
+    assert "target_price" in pic_line["anchors"]
 
 
 async def _every_case(persona: Persona | Staff) -> list[Any]:

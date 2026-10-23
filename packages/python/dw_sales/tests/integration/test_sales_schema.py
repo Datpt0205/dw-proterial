@@ -26,6 +26,7 @@ from dw_sales.application.rule_drafts import DraftStatus
 from dw_sales.application.rules import DRAFTABLE, RuleKey
 from dw_sales.domain import dispositions, followups, orders, quotes
 from dw_sales.domain.master_data import CatalogList
+from dw_sales.domain.order_checks import ModelStep
 
 pytestmark = pytest.mark.integration
 
@@ -83,6 +84,8 @@ _SETS: dict[str, set[str]] = {
     # A rule draft's status and the keys drafted ("Tạo từ tệp mẫu").
     "ck_rule_drafts_status": set(get_args(DraftStatus)),
     "ck_rule_drafts_rule_key": {key.value for key in DRAFTABLE},
+    # The model steps a measurement is of (ADR 0005, addendum of 2026-10-23).
+    "ck_model_step_measurements_step": _values(ModelStep),
 }
 
 
@@ -169,6 +172,9 @@ _TENANT_WIDE = {
     # A tenant's own rule version applies in every workspace of the tenant,
     # whichever it was proposed in (ticket 19, migration 57a241ea182b).
     "rule_versions",
+    # A model step's measurement backs a switch in those rules: the tenant's,
+    # whichever workspace recorded it (migration 2d97d03c937a).
+    "model_step_measurements",
 }
 
 

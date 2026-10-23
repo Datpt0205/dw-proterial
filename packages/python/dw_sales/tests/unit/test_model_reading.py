@@ -22,6 +22,8 @@ from dw_agent_runtime.model.budget import BudgetExceededError
 from dw_agent_runtime.ports import ModelOutputInvalidError, ModelRequest
 from dw_kernel.errors import InfrastructureError, NotFoundError
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_kernel.ports import Uuid4Generator
+from dw_sales.adapters.assembly import step_model
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.model_interpretation import GatewayInterpretation
@@ -29,17 +31,21 @@ from dw_sales.adapters.order_rules import PlatformOrderRules, load_tenant_order_
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.model_readiness import ModelMeasurement, ModelReadiness
 from dw_sales.application.model_reading import (
     DESCRIPTION_ATTRIBUTES,
     DescriptionReader,
     ModelUnavailableError,
 )
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.order_ports import ModelStepGatePort
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.description_reading import ModelDescriptionReading
-from dw_sales.domain.order_checks import OrderRules
+from dw_sales.domain.order_checks import ModelStep, OrderRules
 from dw_sales.domain.orders import FindingCode, MappingStatus, OrderCase
 from dw_sales.evals.descriptions import Replayed
+from dw_sales.evals.world import NOW, measured_gate
+from dw_sales.testing.measurements import FixedStepModel, MemoryModelMeasurements, passing
 
 pytestmark = pytest.mark.unit
 
@@ -102,7 +108,9 @@ ANSWERS: dict[str, Mapping[str, Any] | None] = {
 }
 
 
-def _intake(model: Any, rules: OrderRules | None = DEMO) -> OrderIntake:
+def _intake(
+    model: Any, rules: OrderRules | None = DEMO, gate: ModelStepGatePort | None = None
+) -> OrderIntake:
     assert rules is not None
     ids = itertools.count(1)
     return OrderIntake(
@@ -114,6 +122,9 @@ def _intake(model: Any, rules: OrderRules | None = DEMO) -> OrderIntake:
         cases=_NoCases(),
         new_case_id=lambda: uuid.UUID(int=next(ids)),
         descriptions=None if model is None else DescriptionReader(model),
+        # The step measured at its bar for this tenant (ADR 0005, addendum of
+        # 2026-10-23): the gate is passed, not removed.
+        model_steps=measured_gate(REPO, SCOPE)[0] if gate is None else gate,
     )
 
 
@@ -182,6 +193,41 @@ async def test_with_the_switch_off_the_model_is_never_called() -> None:
     assert model.calls == []
     assert all(line.mapping.status is MappingStatus.UNMAPPED for line in case.lines)
     assert all(line.basis.description_reading is None for line in case.lines)
+
+
+def _unready(why: str) -> ModelReadiness:
+    """The gate with the step on but not measured at its bar, for ``why``."""
+    model = step_model(REPO / "configs", "onprem").model_for(SCOPE.tenant_id.value)
+    log = MemoryModelMeasurements(unreadable=why == "store unreadable")
+    row = passing(ModelStep.DESCRIPTION_ATTRIBUTES, model, NOW, Uuid4Generator())
+    variants: dict[str, dict[str, Any]] = {
+        "never measured": {},
+        "store unreadable": {},
+        "another model": {"model": "another-model:7b"},
+        "another prompt": {"prompt": "sales.description_attributes@0.9.0"},
+        "failed": {"value": 0.5, "passed": False},
+    }
+    changes = variants[why]
+    if why != "never measured":
+        log.seed(SCOPE, ModelMeasurement.model_validate({**row.model_dump(), **changes}))
+    return ModelReadiness(log, FixedStepModel(model))
+
+
+@pytest.mark.parametrize(
+    "why", ["never measured", "store unreadable", "another model", "another prompt", "failed"]
+)
+async def test_a_step_on_without_a_passing_measurement_runs_as_if_it_were_off(why: str) -> None:
+    """dw_sales ADR 0005, addendum of 2026-10-23: the rules turn the step on,
+    and the gate in front of the model keeps the lines with a person exactly
+    as the switch off does."""
+    model = Replayed(answers=ANSWERS)
+    gated = await _case(_intake(model, gate=_unready(why)), "M36")
+    off = await _case(_intake(Replayed(answers=ANSWERS), rules=PLATFORM), "M36")
+
+    assert model.calls == []
+    assert [line.mapping for line in gated.lines] == [line.mapping for line in off.lines]
+    assert all(line.basis.description_reading is None for line in gated.lines)
+    assert {f.key for f in gated.findings} == {f.key for f in off.findings}
 
 
 async def test_outside_a_run_the_model_is_never_called() -> None:

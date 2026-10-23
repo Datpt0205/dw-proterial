@@ -212,7 +212,7 @@
           "path": "evals/fixtures/cases/sales_pricer_approver_pic.json"
         },
         {
-          "checksum": "8fb22e2a9a22c9e1ccab28f79357b39e6f2574311352ae2ab43f2f821662bf76",
+          "checksum": "0a377bc5f1f716ee535d9b0e866f5090a774a2f3b55ffc2ad9958f1ac651363b",
           "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/README.md"
         },
         {
@@ -447,7 +447,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "c29e589ef83d6c4437aafb2959b61732dcda6984",
+  "git_sha": "f05768268811f3df19c86b5f9bdd26c00f8448f6",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -498,6 +498,11 @@
       "checksum": "ab14ee8601fa9bae54158dc6495f95c88f725483266d304be3bdd5ebea512391",
       "policy_id": "retention",
       "version": "1.8.0"
+    },
+    {
+      "checksum": "82abfd5221ec45ad096c2ae81876ed091456f547a1aecf9b452ea0ab86bf7e27",
+      "policy_id": "retention",
+      "version": "1.9.0"
     },
     {
       "checksum": "c5035251d916d76a355d7d647388dd2844f933a9ae5b3d0846a48788c5dc14ef",

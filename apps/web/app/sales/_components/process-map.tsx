@@ -1,29 +1,27 @@
 "use client";
 
-import {
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
+import type { MouseEvent } from "react";
 import Link from "next/link";
 import { Card, Tag, theme, Typography } from "antd";
-import {
-  inColumnOrder,
-  type LaneLayout,
-  type PlacedStatus,
-} from "../_lib/process-graph";
+import type { AI_STATE } from "../_lib/labels";
+import { inColumnOrder, type LaneLayout } from "../_lib/process-graph";
+import { AiStateTag } from "./tags";
 
 /**
- * A lane of the DW1 process, drawn from `process-graph.ts`'s placement: on a
- * wide screen a grid of statuses with the forward moves as arrows, below
- * `lg` a list in the same order (ui-quality §12). Each status is a card in a
- * real link to its settings (§3: a card that opens is wrapped in a `Link`),
- * so it opens in a new tab too; the arrows are decoration (`aria-hidden`),
- * because every move is also written in words on the card or in its drawer.
+ * A lane's statuses as cards (2026-10-22, re-cut 2026-10-23). On a wide
+ * screen they sit on the React Flow canvas (`process-flow.tsx`, the only file
+ * allowed that library), below `lg` in this list, in the same order
+ * (ui-quality §12). Each status is a card in a real link to its settings
+ * (§3: a card that opens is wrapped in a `Link`), so it opens in a new tab
+ * too, and Enter on it opens the drawer.
  */
+
+/** A status's AI state, once per state its model steps are in. */
+export interface AiSummary {
+  state: keyof typeof AI_STATE;
+  /** How many of the status's model steps are in it. */
+  count: number;
+}
 
 /** What a status card says, in words, and where it opens; the page composes it. */
 export interface StatusCard {
@@ -32,57 +30,16 @@ export interface StatusCard {
   item: string;
   href: string;
   label: string;
-  /** One line each. */
-  facts: ReactNode;
-}
-
-// The grid's geometry. A row is as tall as its tallest card; the arrows are
-// drawn from where the cards are measured to be (from these numbers until
-// they are, and where nothing is laid out at all).
-const WIDTH = 168;
-const MIN_HEIGHT = 120;
-const GAP_X = 40;
-const GAP_Y = 16;
-/** Between two long arrows' tracks under the grid. */
-const TRACK = 10;
-
-const left = (column: number) => column * (WIDTH + GAP_X);
-
-interface Box {
-  top: number;
-  height: number;
-}
-
-/** Each card's top and height in the grid, by status; null until laid out. */
-function useBoxes(layout: LaneLayout) {
-  const grid = useRef<HTMLDivElement>(null);
-  const [boxes, setBoxes] = useState<Record<string, Box> | null>(null);
-  useLayoutEffect(() => {
-    const element = grid.current;
-    if (!element) return;
-    const measure = () => {
-      const next: Record<string, Box> = {};
-      for (const card of element.querySelectorAll<HTMLElement>("[data-status]"))
-        next[card.dataset.status!] = {
-          top: card.offsetTop,
-          height: card.offsetHeight,
-        };
-      const laidOut = Object.values(next).some((b) => b.height > 0);
-      setBoxes((before) =>
-        !laidOut
-          ? null
-          : before && JSON.stringify(before) === JSON.stringify(next)
-            ? before
-            : next,
-      );
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [layout]);
-  return { grid, boxes };
+  steps: { step_id: string; coverage: string }[];
+  /** Whose turn a case in the status is. */
+  holder: string;
+  /** How many settings its steps read. */
+  settings: number;
+  ai: AiSummary[];
+  /** Status labels it may move back to, comma separated; "" for none. */
+  back: string;
+  /** Status labels a final status is reached from; "" for none. */
+  exits: string;
 }
 
 /** Opens in place on a plain click; a click asking for a new tab is the browser's. */
@@ -99,15 +56,18 @@ function openHere(event: MouseEvent, open: () => void) {
   open();
 }
 
-function StatusLink({
+/**
+ * One status card in its link. `drawn`: the moves back are drawn beside it
+ * (the canvas), so the card does not write them too.
+ */
+export function StatusLink({
   card,
   onOpen,
-  place,
+  drawn = false,
 }: {
   card: StatusCard;
   onOpen: (item: string) => void;
-  /** Its cell in the grid; absent in the list. */
-  place?: PlacedStatus;
+  drawn?: boolean;
 }) {
   const { token } = theme.useToken();
   return (
@@ -117,160 +77,42 @@ function StatusLink({
       data-node={card.item}
       data-status={card.status}
       className="block"
-      style={{
-        color: token.colorText,
-        ...(place
-          ? { gridColumn: place.column + 1, gridRow: place.row + 1 }
-          : {}),
-      }}
+      style={{ color: token.colorText }}
       onClick={(event) => openHere(event, () => onOpen(card.item))}
     >
       <Card size="small" hoverable className="h-full">
         <div className="flex flex-col items-start gap-1">
           <Typography.Text strong>{card.label}</Typography.Text>
-          {card.facts}
+          <StepTags steps={card.steps} />
+          <span>Đến lượt: {card.holder}</span>
+          <span>
+            {card.settings
+              ? `${card.settings} thiết lập`
+              : "Không có thiết lập"}
+          </span>
+          {card.ai.length ? (
+            <span className="flex flex-wrap gap-1">
+              {card.ai.map((a) => (
+                <AiStateTag key={a.state} state={a.state} count={a.count} />
+              ))}
+            </span>
+          ) : null}
+          {card.back && !drawn ? (
+            <span className="line-clamp-2">Có thể quay lại: {card.back}</span>
+          ) : null}
+          {card.exits ? (
+            <span className="line-clamp-2">Có thể đóng từ: {card.exits}</span>
+          ) : null}
         </div>
       </Card>
     </Link>
   );
 }
 
-export function ProcessMap({
-  layout,
-  cards,
-  onOpen,
-}: {
-  layout: LaneLayout;
-  cards: Record<string, StatusCard>;
-  onOpen: (item: string) => void;
-}) {
-  const { token } = theme.useToken();
-  const marker = useId();
-  const { grid, boxes } = useBoxes(layout);
-  const scroller = useRef<HTMLDivElement>(null);
-  const [cut, setCut] = useState(false);
-  useLayoutEffect(() => {
-    const element = scroller.current;
-    if (!element) return;
-    const check = () => setCut(element.scrollWidth > element.clientWidth + 1);
-    check();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(check);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [layout]);
-
-  const place = Object.fromEntries(layout.nodes.map((n) => [n.status, n]));
-  const width = layout.columns * WIDTH + (layout.columns - 1) * GAP_X;
-  const box = (status: string): Box =>
-    boxes?.[status] ?? {
-      top: place[status]!.row * (MIN_HEIGHT + GAP_Y),
-      height: MIN_HEIGHT,
-    };
-  const height = Math.max(
-    0,
-    ...layout.nodes.map((n) => box(n.status).top + box(n.status).height),
-  );
-  // An arrow that skips a column would cross a card: it runs under the grid.
-  const long = layout.forward.filter(
-    (m) => place[m.to]!.column - place[m.from]!.column > 1,
-  );
-  const below = long.length ? GAP_Y + long.length * TRACK : 0;
-  const path = (from: string, to: string) => {
-    const a = box(from);
-    const b = box(to);
-    const x1 = left(place[from]!.column) + WIDTH;
-    const y1 = a.top + a.height / 2;
-    const x2 = left(place[to]!.column);
-    const y2 = b.top + b.height / 2;
-    const track = long.findIndex((m) => m.from === from && m.to === to);
-    if (track < 0) {
-      const bend = GAP_X / 2;
-      return `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
-    }
-    const y = height + GAP_Y + track * TRACK;
-    const out = x1 + GAP_X / 3;
-    const back = x2 - GAP_X / 3;
-    return `M ${x1} ${y1} L ${out} ${y1} L ${out} ${y} L ${back} ${y} L ${back} ${y2} L ${x2} ${y2}`;
-  };
-  return (
-    <div className="space-y-2">
-      {cut ? (
-        <Typography.Paragraph className="mb-0!">
-          Quy trình rộng hơn khung: kéo ngang trong khung để xem hết{" "}
-          {layout.nodes.length} trạng thái.
-        </Typography.Paragraph>
-      ) : null}
-      <div ref={scroller} className="overflow-x-auto pb-2">
-        <div
-          className="relative"
-          style={{ width, minHeight: height + below, paddingBottom: below }}
-        >
-          <svg
-            aria-hidden
-            focusable="false"
-            className="pointer-events-none absolute inset-0"
-            width={width}
-            height={height + below}
-          >
-            <defs>
-              <marker
-                id={marker}
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="7"
-                markerHeight="7"
-                orient="auto-start-reverse"
-              >
-                <path
-                  d="M 0 0 L 10 5 L 0 10 z"
-                  fill={token.colorTextTertiary}
-                />
-              </marker>
-            </defs>
-            {layout.forward.map((m) => (
-              <path
-                key={`${m.from}->${m.to}`}
-                data-move={`${m.from}->${m.to}`}
-                d={path(m.from, m.to)}
-                fill="none"
-                stroke={token.colorTextTertiary}
-                strokeWidth={1.5}
-                markerEnd={`url(#${marker})`}
-              />
-            ))}
-          </svg>
-          <div
-            ref={grid}
-            className="relative grid"
-            style={{
-              gridTemplateColumns: `repeat(${layout.columns}, ${WIDTH}px)`,
-              gridAutoRows: `minmax(${MIN_HEIGHT}px, auto)`,
-              columnGap: GAP_X,
-              rowGap: GAP_Y,
-            }}
-          >
-            {/* In drawing order, so Tab follows what is drawn. */}
-            {inColumnOrder(layout).map((n) => (
-              <StatusLink
-                key={n.status}
-                card={cards[n.status]!}
-                onOpen={onOpen}
-                place={n}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /**
  * Below `lg`: the same statuses, in the same order, one under another. A
  * plain list: the lane branches and loops, so nothing here is numbered or
- * drawn as the current one.
+ * drawn as the current one, and the ways back are written on each card.
  */
 export function ProcessList({
   layout,

@@ -15,12 +15,14 @@ document cannot call one (ADR 0007-document-content-turns-cannot-call-outbound-t
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from pydantic import BaseModel
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.ports import ModelGateway, ModelOutputInvalidError, ModelRequest
 from dw_kernel.errors import InfrastructureError, NotFoundError
 from dw_sales.application.model_reading import ModelUnavailableError, PromptRef
@@ -80,3 +82,17 @@ class GatewayInterpretation:
                 type(exc).__name__,
             )
             raise ModelUnavailableError(type(exc).__name__) from exc
+
+
+@dataclass(frozen=True)
+class ProfileStepModel:
+    """Implements `StepModelPort`: the model DW1's profile routes its steps to
+    for a tenant, resolved as the gateway resolves it (the tenant's own
+    profile where it has one, the platform's otherwise; `_TASK`'s route)."""
+
+    profiles: ModelProfileRegistry
+    model_profile: str
+
+    def model_for(self, tenant_id: uuid.UUID) -> str:
+        profile = self.profiles.resolve(self.model_profile, tenant_id=tenant_id)
+        return profile.structured_extraction.model

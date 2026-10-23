@@ -36,7 +36,7 @@ from dw_sales.application.model_reading import (
     PromptRef,
     estimated_tokens,
 )
-from dw_sales.application.order_ports import OrderRulesPort
+from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer, Item
 from dw_sales.domain.descriptions import candidates, read_description
@@ -324,8 +324,11 @@ def _requested(
 
 @dataclass(frozen=True)
 class ModelRequests:
-    """The quotation flow's model step: the reader, and the tenant's rules
-    that say whether it is on (`model_assist.rfq_extraction`)."""
+    """The quotation flow's model step: the reader, the tenant's rules that
+    say whether it is on (`model_assist.rfq_extraction`), and the gate that
+    says whether its live eval met the bar for the model and prompt it runs
+    on now (dw_sales ADR 0005, addendum of 2026-10-23)."""
 
     reader: RfqModelReader
     rules: OrderRulesPort
+    gate: ModelStepGatePort

@@ -46,8 +46,9 @@ from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
-from dw_sales.adapters.model_interpretation import GatewayInterpretation
+from dw_sales.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
 from dw_sales.adapters.order_rules import load_tenant_order_rules
+from dw_sales.adapters.persistence.activity import SqlStepActivityReader
 from dw_sales.adapters.persistence.catalog import (
     OutboxFactory,
     SqlApprovedLists,
@@ -55,6 +56,7 @@ from dw_sales.adapters.persistence.catalog import (
 )
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
+from dw_sales.adapters.persistence.measurements import SqlModelMeasurements
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
@@ -69,6 +71,7 @@ from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.application.access import SalesAuthorizationPort
+from dw_sales.application.activity import ActivityService
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
 from dw_sales.application.followups import FollowupLane
 from dw_sales.application.handoffs import HandoffReader
@@ -76,9 +79,11 @@ from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
 from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
+from dw_sales.application.model_calls import TimedInterpretation
+from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
-from dw_sales.application.order_ports import OrderRulesPort
+from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.ports import (
     ArtifactBytesPort,
     MemberDirectoryPort,
@@ -87,6 +92,7 @@ from dw_sales.application.ports import (
     SalesScope,
     ScopeHoldersPort,
 )
+from dw_sales.application.process_settings import RoleCatalogPort
 from dw_sales.application.processing import (
     ProcessingDrain,
     ProcessingQueuePort,
@@ -139,6 +145,9 @@ class Dw1Mount:
     rule_drafting: RuleDrafting | None = None
     # What fails a draft its event lost and drops old ones, with no request.
     rule_draft_sweep: RuleDraftSweep | None = None
+    # What DW1's model steps did, per case and over time (slice 3), for the
+    # activity routes (`dw_sales.presentation.activity_routes`).
+    activity: ActivityService | None = None
 
 
 def build_dw1(
@@ -161,6 +170,7 @@ def build_dw1(
     telemetry: SpanPort,
     scanner: MalwareScanPort,
     reader: ReaderTransport,
+    roles: RoleCatalogPort,
     lane_access: ServiceAccessPort | None = None,
     requester_access: RequesterAccessPort | None = None,
     model: ModelGateway | None = None,
@@ -181,7 +191,10 @@ def build_dw1(
     ``scanner`` before anything reads it (ticket 25): the mailbox each service
     holds is the scanned one. Every file is then read through ``reader``, the
     reader sandbox wherever a process is deployed
-    (`dw_sales.adapters.reader_client`)."""
+    (`dw_sales.adapters.reader_client`). A model step runs only where the
+    tenant's rules turn it on and its live eval met the bar for the model and
+    prompt it runs on (`model_readiness`, read from the database); the process
+    page names who acts on each step from ``roles``, the platform's catalog."""
     # The lists Sales maintains by hand from each workspace's approved import,
     # the mock where none is approved yet (ticket 41); the ERP's records from
     # the mock until Bravo is connected.
@@ -199,9 +212,19 @@ def build_dw1(
     worker_file = configs / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
     order_cases = SqlOrderCaseLookup(session_factory)
+    # Each call timed, on the model it ran on, for the step rows (slice 3).
     interpretation = (
-        None if model is None else interpretation_for(model, configs, worker.default_model_profile)
+        None
+        if model is None
+        else TimedInterpretation(
+            interpretation_for(model, configs, worker.default_model_profile),
+            step_model(configs, worker.default_model_profile),
+        )
     )
+    readiness = model_readiness(configs, session_factory)
+    # What DW1's model steps did: the activity routes, the process page's
+    # share and the case lists' drill-down read it.
+    step_activity = SqlStepActivityReader(session_factory)
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     layout_checks = LayoutChecks(readers.po, catalog)
     quotation = QuotationService(
@@ -215,7 +238,7 @@ def build_dw1(
         requests=(
             None
             if interpretation is None
-            else model_requests(interpretation, catalog, tenant_rules, readers.texts)
+            else model_requests(interpretation, catalog, tenant_rules, readers.texts, readiness)
         ),
     )
     intake = OrderIntake(
@@ -239,6 +262,7 @@ def build_dw1(
         layout_prefiller=(
             None if interpretation is None else LayoutPrefiller(interpretation, layout_checks)
         ),
+        model_steps=readiness,
     )
     runs = RuntimeDw1Runs(
         runtime.runner,
@@ -272,6 +296,9 @@ def build_dw1(
         catalog_uow=catalog_uow,
         templates=XlsxCatalogTemplates(),
         draft_uow=catalog_uow,
+        readiness=readiness,
+        roles=roles,
+        step_activity=step_activity,
     )
     register(
         graphs=runtime.graphs,
@@ -284,13 +311,19 @@ def build_dw1(
         worker_file=worker_file,
     )
     catalog_parsing = CatalogParsing(catalog_uow, readers.tables, scanner, catalog, clock, ids)
+    activity = ActivityService(uow, assembly.services.gate, step_activity, clock)
     lane = (
         None
         if lane_access is None
         else InboxLane(uow, inbox, assembly.services.processing, lane_access, clock)
     )
     if requester_access is None:
-        return Dw1Mount(services=assembly.services, lane=lane, catalog_parsing=catalog_parsing)
+        return Dw1Mount(
+            services=assembly.services,
+            lane=lane,
+            catalog_parsing=catalog_parsing,
+            activity=activity,
+        )
     queue = SqlProcessingQueue(session_factory)
     drain = ProcessingDrain(
         queue, uow, assembly.services.dw1, requester_access, clock, ids, channels=lane
@@ -321,6 +354,7 @@ def build_dw1(
         rule_draft_sweep=RuleDraftSweep(
             catalog_uow, SqlRuleDraftScopes(session_factory), clock, ids
         ),
+        activity=activity,
     )
 
 
@@ -374,7 +408,11 @@ def build_rule_settlement(
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     policies = load_sales_policies(configs / "policies", configs / "copy")
     return RuleSettlement(
-        uow, rule_book(policies, SqlRuleVersionLookup(session_factory)), clock, ids
+        uow,
+        rule_book(policies, SqlRuleVersionLookup(session_factory)),
+        clock,
+        ids,
+        model_readiness(configs, session_factory),
     )
 
 
@@ -406,12 +444,41 @@ def model_requests(
     catalog: SalesCatalogPort,
     rules: OrderRulesPort,
     texts: AttachmentTextPort,
+    gate: ModelStepGatePort,
 ) -> ModelRequests:
     """The quotation flow's model step over ``model`` (ticket 29): requests
     read from the mail and the attachments' ``texts``, item descriptions as
-    ticket 28 reads them, switched by the tenant's rules."""
+    ticket 28 reads them, switched by the tenant's rules and held to the
+    step's bar by ``gate``."""
     reader = RfqModelReader(model, texts, catalog, DescriptionReader(model))
-    return ModelRequests(reader=reader, rules=rules)
+    return ModelRequests(reader=reader, rules=rules, gate=gate)
+
+
+def _profiles(configs: Path) -> ModelProfileRegistry:
+    profiles = ModelProfileRegistry()
+    profiles.load_directory(configs / "models")
+    return profiles
+
+
+def step_model(configs: Path, profile: str) -> ProfileStepModel:
+    """The model DW1's steps run on per tenant, read from the profile files
+    the gateway reads."""
+    return ProfileStepModel(_profiles(configs), profile)
+
+
+def model_readiness(
+    configs: Path, session_factory: async_sessionmaker[AsyncSession]
+) -> ModelReadiness:
+    """Whether a model step has met its bar for a tenant (dw_sales ADR 0005,
+    addendum of 2026-10-23): the tenant's measurements, under its RLS, for
+    the model DW1's worker profile (`configs/workers/sales.yaml`) routes it
+    to. Built with or without a model server: a proposal that turns a step on
+    is checked either way."""
+    worker, _ = parse_worker_file(configs / "workers" / "sales.yaml")
+    return ModelReadiness(
+        SqlModelMeasurements(session_factory),
+        step_model(configs, worker.default_model_profile),
+    )
 
 
 def interpretation_for(model: ModelGateway, configs: Path, profile: str) -> GatewayInterpretation:
@@ -419,9 +486,7 @@ def interpretation_for(model: ModelGateway, configs: Path, profile: str) -> Gate
     structured route declares it may be sent (`ModelRoute.max_input_tokens`):
     read here, from the profile file, so the bound has one owner. A route
     that declares none is refused at startup, not on the first long mail."""
-    profiles = ModelProfileRegistry()
-    profiles.load_directory(configs / "models")
-    route = profiles.resolve(profile).structured_extraction
+    route = _profiles(configs).resolve(profile).structured_extraction
     if route.max_input_tokens is None:
         raise ConfigError(f"model profile {profile} declares no max_input_tokens for DW1's route")
     return GatewayInterpretation(model, profile, route.max_input_tokens)

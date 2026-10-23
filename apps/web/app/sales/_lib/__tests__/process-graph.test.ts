@@ -54,10 +54,9 @@ describe("placing a lane's statuses from the served moves (2026-10-22)", () => {
     const quotes = layoutLane(QUOTES);
     expect(Object.keys(quotes.exitsFrom)).toEqual(["declined"]);
     // A final status reached from one status is an arrow.
-    expect(quotes.forward).toContainEqual({
-      from: "sent",
-      to: "master_list_recorded",
-    });
+    expect(quotes.forward).toContainEqual(
+      expect.objectContaining({ from: "sent", to: "master_list_recorded" }),
+    );
     expect(quotes.back.returned).toEqual(["priced"]);
   });
 
@@ -70,8 +69,20 @@ describe("placing a lane's statuses from the served moves (2026-10-22)", () => {
       ],
       edges: [
         ...ORDERS.edges,
-        { from: "in_review", to: "on_hold" },
-        { from: "on_hold", to: "in_review" },
+        {
+          from: "in_review",
+          to: "on_hold",
+          action: "edit",
+          actor: "sales",
+          guards: [],
+        },
+        {
+          from: "on_hold",
+          to: "in_review",
+          action: "edit",
+          actor: "sales",
+          guards: [],
+        },
       ],
     };
     const layout = layoutLane(lane);
@@ -85,8 +96,20 @@ describe("placing a lane's statuses from the served moves (2026-10-22)", () => {
       ...ORDERS,
       edges: [
         ...ORDERS.edges,
-        { from: "received", to: "received" },
-        { from: "received", to: "nowhere" },
+        {
+          from: "received",
+          to: "received",
+          action: "edit",
+          actor: "sales",
+          guards: [],
+        },
+        {
+          from: "received",
+          to: "nowhere",
+          action: "edit",
+          actor: "sales",
+          guards: [],
+        },
       ],
     });
     expect(layout.next.received).toEqual(["checked", "closed"]);

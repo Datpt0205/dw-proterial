@@ -49,6 +49,7 @@ import {
 import { CaseReplies } from "../../_components/case-replies";
 import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
+import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -407,6 +408,13 @@ function OrderDetail() {
         caseId={data.case_id}
         status={data.status}
         version={data.case_version}
+      />
+
+      <CaseActivity
+        kind="order"
+        caseId={data.case_id}
+        version={data.case_version}
+        onOpenSource={openSource}
       />
 
       <CaseReplies replies={data.replies} />

@@ -493,8 +493,8 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
  * every reason, so one the server adds fails the typecheck until it has words.
  */
 const LOCK_REASON: Record<LockReason, string> = {
-  model_bar_unchecked:
-    "Một bước dùng mô hình chỉ được bật khi bài đánh giá thực tế của bước đó đạt ngưỡng (ADR 0005), và hệ thống chưa tự kiểm ngưỡng này.",
+  model_bar:
+    "Một bước dùng mô hình chỉ bật được khi lần đo thực tế gần nhất của bước đó, trên mô hình và lời nhắc đang dùng, đạt ngưỡng; hệ thống từ chối phiên bản bật bước chưa đạt, và chưa đạt thì DW1 để người làm. Đề xuất ở trang Quy tắc.",
   bound_at_build:
     "Bộ đọc tệp đang dùng giới hạn của bản nền tảng, nên phiên bản riêng của công ty có thể chưa có tác dụng.",
   trust:

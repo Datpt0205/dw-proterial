@@ -17,6 +17,7 @@ import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from enum import StrEnum
 from typing import Final, Literal, NamedTuple, Self, assert_never, get_args
 from zoneinfo import ZoneInfo
 
@@ -114,6 +115,20 @@ class IntakeCaps(BaseModel):
     max_cells: int = Field(ge=1)
 
 
+class ModelStep(StrEnum):
+    """The DW1 steps a model may take part in: each a switch of `ModelAssist`
+    by the same name (a test holds the two together), and each with the bar
+    its live eval must meet before the switch does anything
+    (`application.model_readiness.BARS`)."""
+
+    DESCRIPTION_ATTRIBUTES = "description_attributes"
+    MESSAGE_INTENT = "message_intent"
+    RFQ_EXTRACTION = "rfq_extraction"
+    REPLY_INTENT = "reply_intent"
+    REQUEST_HANDOFF = "request_handoff"
+    LAYOUT_PROPOSAL = "layout_proposal"
+
+
 class ModelAssist(BaseModel):
     """Which DW1 steps a model takes part in for the tenant (dw_sales ADR 0005).
 
@@ -147,6 +162,13 @@ class ModelAssist(BaseModel):
     # A local model proposes which label on a new PO form names which field,
     # for the layout-onboarding screen a person completes (ticket 30).
     layout_proposal: bool
+
+    def on(self, step: ModelStep) -> bool:
+        """Whether the tenant's rules turn ``step`` on. On is not enough to use
+        the model: its live eval must have met the bar too (ADR 0005, addendum
+        of 2026-10-23, `application.model_readiness`)."""
+        switch: bool = getattr(self, step.value)
+        return switch
 
 
 class LayoutOnboarding(BaseModel):

@@ -221,9 +221,12 @@ async def seed_demo(database_url: str) -> None:
     await seed_dw1_accounts(database_url)
     # Imported here: it builds the Sales services, which this module's other
     # callers (the API's test conftest at import time) do not need.
-    from dw_sales.testing.seed_rules import seed_demo_rules
+    from dw_sales.testing.seed_rules import DEMO_POLICIES, seed_demo_rules
 
-    rules = await seed_demo_rules(database_url)
+    # Every model step off: the demo runs with no model server and records no
+    # measurement, so nothing here is refused by a step's bar (dw_sales ADR
+    # 0005, addendum of 2026-10-23); a refusal is a defect and stops the seed.
+    rules = await seed_demo_rules(database_url, DEMO_POLICIES)
     print(
         f"platform seed done; {written} Sales persona membership(s) written;"
         f" DW1's service account in {', '.join(DW1_ACCOUNT_TENANTS)};"

@@ -53,6 +53,7 @@ from dw_sales.adapters.mock.generate_attachments import (
 from dw_sales.adapters.reader_client import ClientPoReaders
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.layouts import LAYOUT_PROPOSAL, LayoutChecks, LayoutPrefiller
+from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import ModelUnavailableError, PromptRef
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.layouts import (
@@ -63,14 +64,11 @@ from dw_sales.domain.layouts import (
     label_key,
 )
 from dw_sales.domain.messages import Attachment, AttachmentContent
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.evals.intents import _demo_rules
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
 
-# The proposed bar (ticket 30; Đạt sets the final one): at least this share of
-# the golden forms' fields mapped right before human edits, and no accepted
-# swap or injection. Reported, not enforced.
-PROPOSED_BAR = 0.90
 RECORDED = "evals/fixtures/cases/sales_layout_recorded.json"
 _RUN = RunContext(
     run_id=uuid.UUID(int=0x30),
@@ -303,12 +301,15 @@ def grade_golden(
             lang: scores([r for r in rows if r.lang == lang]) for lang in ("vi", "en", "ja")
         },
         "by_kind": {kind: scores([r for r in rows if r.kind == kind]) for kind in ("xlsx", "pdf")},
-        "proposed_bar": PROPOSED_BAR,
-        "meets_proposed_bar": overall["right"] >= PROPOSED_BAR and not overall["accepted_wrong"],
         "latency": latency(model, LAYOUT_PROPOSAL.prompt_id),
         "missed": sorted(f"{r.form_id}:{','.join(r.missed)}" for r in rows if r.missed),
         "refused": problems,
     }
+    # The bar the step must meet before a tenant's switch does anything
+    # (`model_readiness.BARS`): reported here, enforced from a live run.
+    details["bar"] = bar_verdict(
+        ModelStep.LAYOUT_PROPOSAL, details, holds=not overall["accepted_wrong"]
+    )
     if overall["accepted_wrong"]:
         return GradeResult.fail("a pre-fill with a wrong label was accepted", **details)
     floor = float(expected.get("min_right", 0.0))

@@ -95,6 +95,12 @@ from dw_sales.application.artifact_content import (
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.drafting import ArtifactCopy
 from dw_sales.application.handoffs import HandoffCopy
+from dw_sales.application.model_readiness import (
+    MODEL_BAR_UNMET,
+    ModelReadiness,
+    StepReadiness,
+    refusal,
+)
 from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.domain.followups import SalesFollowups
@@ -321,6 +327,10 @@ class TenantRuleBook:
 
     def _read(self, version: RuleVersion) -> Policy:
         return read_over(OVERRIDABLE[version.key], version.document, self.platform[version.key])
+
+    def policy_of(self, version: RuleVersion) -> Policy:
+        """``version``'s document as today's schema reads it."""
+        return self._read(version)
 
     async def current(self, scope: SalesScope, key: RuleKey) -> Resolved:
         """The tenant's approved version, or the platform's: never sideways."""
@@ -592,6 +602,10 @@ class SalesRulesService:
     ids: IdGenerator
     # Who proposed the version a refused second proposal waits behind, by name.
     directory: MemberDirectoryPort
+    # Whether a model step a version turns on has met its bar (dw_sales ADR
+    # 0005, addendum of 2026-10-23): a version that turns on one that has not
+    # is refused when it is proposed, decided and carried out.
+    readiness: ModelReadiness
 
     async def list(self, context: AccessContext) -> RulesInForceView:
         """Every key the caller may read, and the tenant's versions of them:
@@ -661,6 +675,10 @@ class SalesRulesService:
                 "a tenant version needs a number the platform does not ship",
                 details={"key": key.value, "rule": "platform_version_reused"},
             )
+        if unready := await model_steps_unready(
+            self.readiness, self.book, sales_scope(context), policy
+        ):
+            raise refusal(unready)
         version = RuleVersion(
             version_id=self.ids.new_uuid(),
             key=key,
@@ -826,6 +844,7 @@ class RuleDecisions:
 
     uow: SalesUnitOfWorkFactory
     book: TenantRuleBook
+    readiness: ModelReadiness
 
     async def check(
         self, request: ApprovalRequest, decision: ProposedDecision, context: AccessContext
@@ -840,6 +859,10 @@ class RuleDecisions:
             )
         if decision.approve:
             _unreleased(self.book, version)
+            if unready := await model_steps_unready(
+                self.readiness, self.book, sales_scope(context), self.book.policy_of(version)
+            ):
+                raise refusal(unready)
 
 
 @dataclass(frozen=True)
@@ -852,6 +875,7 @@ class RuleSettlement:
     book: TenantRuleBook
     clock: UtcClock
     ids: IdGenerator
+    readiness: ModelReadiness
 
     async def settle(self, approval_id: uuid.UUID, decider: AccessContext) -> RuleVersionView:
         """The decision on the version, as its decider. What was decided is
@@ -934,6 +958,18 @@ class RuleSettlement:
                 # so it is recorded as not applied, with why.
                 approve, refused = False, "platform_version_reused"
                 comment = _PLATFORM_SHIPPED.format(version=proposed.version)
+            elif approve and (
+                unready := await model_steps_unready(
+                    self.readiness, self.book, sales_scope(decider), self.book.policy_of(proposed)
+                )
+            ):
+                # Approved while its model steps were ready, and a measurement
+                # or the model they run on changed before this ran: carried
+                # out as not applied, with why, so the key is not held.
+                approve, refused = False, MODEL_BAR_UNMET
+                comment = _MODEL_BAR_UNMET_COMMENT.format(
+                    steps=", ".join(r.step.value for r in unready)
+                )
             if approve:
                 current = next(
                     (
@@ -971,6 +1007,27 @@ _PLATFORM_SHIPPED: Final = (
     "Đã được duyệt nhưng không áp dụng: nền tảng đã phát hành số phiên bản {version}"
     " trước khi phiên bản này được áp dụng. Đề xuất lại với một số phiên bản khác."
 )
+
+
+# Why an approved version was not applied: a model step it turns on had no
+# passing measurement for the model and prompt it runs on when it was carried
+# out (dw_sales ADR 0005, addendum of 2026-10-23).
+_MODEL_BAR_UNMET_COMMENT: Final = (
+    "Đã được duyệt nhưng không áp dụng: bước có mô hình mà phiên bản này bật ({steps})"
+    " chưa có lần đo đạt ngưỡng trên mô hình và lời nhắc đang dùng. Đo lại rồi đề xuất lại."
+)
+
+
+async def model_steps_unready(
+    readiness: ModelReadiness, book: TenantRuleBook, scope: SalesScope, policy: Policy
+) -> list[StepReadiness]:
+    """Why a version of the order rules may not take effect: the model steps
+    it turns on (on in it, off in the version in force) whose live eval has
+    not met the bar for the model and prompt each runs on now. None for any
+    other key, and for a version that turns none on."""
+    if not isinstance(policy, OrderRules):
+        return []
+    return await readiness.unready(scope, policy, await book.order_rules(scope))
 
 
 def _reason(decision: ApprovalDecision | None) -> str | None:

@@ -27,7 +27,11 @@ from sqlalchemy.pool import NullPool
 
 from dw_platform.testing.seed_env import seed_test_env
 from dw_sales.testing.seed_personas import seed_sales_personas
-from dw_sales.testing.seed_rules import seed_demo_rules
+from dw_sales.testing.seed_rules import (
+    MODEL_STEP_POLICIES,
+    seed_demo_rules,
+    seed_test_measurements,
+)
 
 TEST_DB = "dw_test_sales_api"
 
@@ -37,7 +41,7 @@ TEST_DB = "dw_test_sales_api"
 _CLEAR = (
     "TRUNCATE sales.order_cases, sales.quote_cases, sales.messages, sales.artifacts,"
     " sales.po_layouts, sales.processing_jobs, sales.followup_deliveries,"
-    " sales.source_served, sales.worker_state, sales.case_events,"
+    " sales.source_served, sales.worker_state, sales.case_events, sales.step_outcomes,"
     " platform.approval_decisions, platform.approval_requests, platform.worker_runs,"
     " platform.run_checkpoint_writes, platform.run_checkpoints,"
     " platform.notifications, platform.idempotency_keys CASCADE"
@@ -58,9 +62,14 @@ def sales_api_db() -> DatabaseUrls:
     async def seed() -> None:
         await seed_test_env(urls.migrator)
         await seed_sales_personas(urls.migrator)
+        # The sample set's version turns DW1's model steps on, which is
+        # refused without a passing live measurement of each (dw_sales ADR
+        # 0005, addendum of 2026-10-23): stand-ins, written as the attesting
+        # lane writes them. (`make demo-reset` installs 1.5.3, every step off.)
+        await seed_test_measurements(urls.app)
         # The demo tenant's own order rules, proposed and approved through
         # the service as the app role (ticket 19), as `make demo-reset` does.
-        await seed_demo_rules(urls.app)
+        await seed_demo_rules(urls.app, MODEL_STEP_POLICIES)
 
     asyncio.run(seed())
     return urls
@@ -84,7 +93,7 @@ async def clean_sales(sales_api_db: DatabaseUrls, migrator: AsyncEngine) -> None
     # truncates the demo tenant's own rules with them: put them back the way
     # the session seeded them. Missed once: 12 tests ran on the platform's
     # rules in CI run 38537473712.
-    await seed_demo_rules(sales_api_db.app)
+    await seed_demo_rules(sales_api_db.app, MODEL_STEP_POLICIES)
 
 
 @pytest.fixture

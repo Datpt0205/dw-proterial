@@ -374,7 +374,7 @@ async def _opened(world: World, version: str) -> tuple[RuleVersionView, Approval
 
 async def test_the_guard_refuses_an_approval_no_proposal_opened_or_stamped_otherwise() -> None:
     world = _world()
-    guard = RuleDecisions(world.store, world.services.rules.book)
+    guard = RuleDecisions(world.store, world.services.rules.book, world.services.rules.readiness)
     _, request = await _opened(world, "9.6.0")
 
     for forged in (
@@ -400,7 +400,7 @@ async def test_the_guard_refuses_a_version_no_longer_waiting_and_a_number_releas
     world = _world()
     proposed, request = await _opened(world, "9.7.0")
     await world.decide_rules(GIANG, proposed.version_id, approve=False, comment="Chưa")
-    guard = RuleDecisions(world.store, world.services.rules.book)
+    guard = RuleDecisions(world.store, world.services.rules.book, world.services.rules.readiness)
     with pytest.raises(ConflictError) as stale:
         await guard.check(request, _decision(), GIANG.context())
     assert stale.value.details["rule"] == "decision_stale"
@@ -410,10 +410,14 @@ async def test_the_guard_refuses_a_version_no_longer_waiting_and_a_number_releas
     later = OrderRules.model_validate(_version(world, "9.8.0"))
     released = TenantRuleBook(book.platform, book.stored, {**book.released, later.ref: later})
     with pytest.raises(ConflictError) as reused:
-        await RuleDecisions(world.store, released).check(request, _decision(), GIANG.context())
+        await RuleDecisions(world.store, released, world.services.rules.readiness).check(
+            request, _decision(), GIANG.context()
+        )
     assert reused.value.details["rule"] == "platform_version_reused"
     # Rejecting it is still allowed: nothing is stamped with a rejected number.
-    await RuleDecisions(world.store, released).check(request, _decision(False), GIANG.context())
+    await RuleDecisions(world.store, released, world.services.rules.readiness).check(
+        request, _decision(False), GIANG.context()
+    )
 
 
 async def test_a_pending_approval_is_not_settled_and_a_rejection_is_recorded() -> None:
@@ -487,6 +491,7 @@ async def test_a_delivery_that_loses_the_race_to_another_finds_the_decision_appl
         world.services.rules.book,
         world.rule_settlement.clock,
         world.rule_settlement.ids,
+        world.rule_settlement.readiness,
     )
     settled = await racing.settle(request.id, GIANG.context())
 

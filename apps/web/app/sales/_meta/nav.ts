@@ -9,6 +9,7 @@ import {
   FolderOpenOutlined,
   InboxOutlined,
   ProjectOutlined,
+  RobotOutlined,
   ScheduleOutlined,
   SettingOutlined,
   ShoppingCartOutlined,
@@ -25,9 +26,11 @@ import { SALES_BADGE } from "./badge-keys";
  * pages to `sales.case.read`, the overview to `sales.overview.read`, the
  * rules to `sales.rules.propose` (a PIC, the head, or tenant IT holding
  * `sales_rules_editor`; the server leaves out the keys that hold prices for
- * whoever cannot read them). So a viewer who reads aggregates only
- * (`sales_viewer`) is shown the overview and nothing else, tenant IT the rules
- * alone, and someone with no `sales.*` scope sees no Sales group.
+ * whoever cannot read them), and "Hoạt động DW1" to either of the overview's
+ * and the rules' scopes, as its API reads. So a viewer who reads aggregates
+ * only (`sales_viewer`) is shown the overview and the activity, tenant IT the
+ * rules and the activity, and someone with no `sales.*` scope sees no Sales
+ * group.
  * Navigation, never authorization: every route checks its scope again.
  *
  * `context` makes the group the whole bar for someone whose work is Sales
@@ -139,6 +142,16 @@ export const salesNav: NavEntry[] = [
             hint: "Số hồ sơ ở mỗi bước WIV-03-012 và WIV-03-023, trên bộ mẫu giả lập",
             icon: DashboardOutlined,
             scope: "sales.overview.read",
+          },
+          {
+            href: "/sales/activity",
+            label: "Hoạt động DW1",
+            hint: "Mỗi bước có mô hình: DW1 tự làm bao nhiêu, chuyển cho người bao nhiêu và vì sao, theo ngày; mỗi số mở danh sách hồ sơ",
+            icon: RobotOutlined,
+            // The summary's two readers (`ActivityService.summary`): who
+            // reads the overview, and who proposes the versions that turn a
+            // model step on.
+            anyScope: ["sales.overview.read", "sales.rules.propose"],
           },
         ],
       },

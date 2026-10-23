@@ -9,17 +9,19 @@ import { SCOPE } from "./sales-frame";
 /**
  * A Sales page the viewer's scopes do not reach draws the 403 state, without
  * asking the server first (the server refuses it anyway). A viewer who reads
- * the overview is pointed there.
+ * the overview is pointed there. `scope` may list several: any one opens the
+ * page, for a page the API opens to either.
  */
 export function ScopeGate({
   scope,
   children,
 }: {
-  scope: string;
+  scope: string | readonly string[];
   children: ReactNode;
 }) {
   const { hasScope } = useAuth();
-  if (hasScope(scope)) return <>{children}</>;
+  const any = typeof scope === "string" ? [scope] : scope;
+  if (any.some((s) => hasScope(s))) return <>{children}</>;
   return (
     <RegionState
       kind="forbidden"
