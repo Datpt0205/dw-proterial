@@ -85,3 +85,33 @@ def test_a_policy_without_the_model_assist_switch_is_refused(tmp_path: Path) -> 
 
     with pytest.raises(ValidationError, match="model_assist"):
         load_order_rules(broken)
+
+
+def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() -> None:
+    """`make demo-reset` installs 1.5.3 (`seed_rules.DEMO_POLICIES`): the mock
+    demo has no model server and records no measurement, so a step turned on
+    would be refused by its bar and the tenant left on the platform's rules
+    (dw_sales ADR 0005, addendum of 2026-10-23). It is 1.5.2, the version the
+    tests run the model steps under, in every other field: a rule changed in
+    one and not the other fails here."""
+    from dw_sales.domain.order_checks import ModelStep, OrderRules
+    from dw_sales.testing.seed_rules import DEMO_POLICIES, MODEL_STEP_POLICIES
+
+    demo = load_tenant_order_rules(DEMO_POLICIES)
+    steps_on = load_tenant_order_rules(MODEL_STEP_POLICIES)
+    assert demo is not None and steps_on is not None
+    assert (demo.version, steps_on.version) == (
+        "sales_order_rules@1.5.3",
+        "sales_order_rules@1.5.2",
+    )
+    assert not any(demo.model_assist.on(step) for step in ModelStep)
+    assert all(steps_on.model_assist.on(step) for step in ModelStep)
+
+    def rest(rules: OrderRules) -> dict[str, object]:
+        dumped = rules.model_dump(mode="json")
+        dumped.pop("policy_version")
+        assist = dumped.pop("model_assist")
+        dumped["unread_retry_hours"] = assist["unread_retry_hours"]
+        return dumped
+
+    assert rest(demo) == rest(steps_on)

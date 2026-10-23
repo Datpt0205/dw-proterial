@@ -1443,7 +1443,11 @@ def quote_case(
                     description=item.description.source,
                     quantity=item.quantity.source,
                     uom=item.uom.source,
-                    target_price=item.target_price.source if item.target_price else None,
+                    # Its `quote` is the price as the form prints it: absent,
+                    # like the value, for a caller who may not see prices.
+                    target_price=(
+                        item.target_price.source if item.target_price and prices.amounts else None
+                    ),
                     stated_target_price=(
                         item.stated_target_price.source
                         if item.stated_target_price and prices.amounts

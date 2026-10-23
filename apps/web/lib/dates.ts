@@ -109,6 +109,43 @@ export function formatDuration(
   return `${minutes} phút`;
 }
 
+const LATENCY = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
+
+/**
+ * "850 ms", "1,2 giây", "2 phút 5 giây": how long a model step took, where
+ * `formatDuration`'s "dưới 1 phút" would hide every difference. A missing or
+ * negative span is unknown.
+ */
+export function formatLatency(milliseconds: number | null | undefined): string {
+  if (
+    milliseconds == null ||
+    !Number.isFinite(milliseconds) ||
+    milliseconds < 0
+  )
+    return UNKNOWN_TIME;
+  if (milliseconds < 1_000) return `${Math.round(milliseconds)} ms`;
+  if (milliseconds < MINUTE)
+    return `${LATENCY.format(milliseconds / 1_000)} giây`;
+  const minutes = Math.floor(milliseconds / MINUTE);
+  const seconds = Math.round((milliseconds % MINUTE) / 1_000);
+  return seconds ? `${minutes} phút ${seconds} giây` : `${minutes} phút`;
+}
+
+/**
+ * The last `days` calendar days in Vietnam up to the day `now` falls on, both
+ * ends included, as the API's dates ("2026-10-17" to "2026-10-23").
+ */
+export function lastDays(
+  days: number,
+  now: number,
+): { from: string; to: string } {
+  const today = dayjs(now).tz(TIME_ZONE).startOf("day");
+  return {
+    from: today.subtract(days - 1, "day").format("YYYY-MM-DD"),
+    to: today.format("YYYY-MM-DD"),
+  };
+}
+
 /** The instant `value` names, in milliseconds; null when it names none. */
 export function instantMs(value: string | null | undefined): number | null {
   if (!value || DATE_ONLY.test(value)) return null;

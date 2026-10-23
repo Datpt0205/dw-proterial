@@ -63,6 +63,7 @@ const api = {
   order: vi.fn(async () => shown),
   myWork: vi.fn(async () => []),
   history: vi.fn(async () => []),
+  caseActivity: vi.fn(async () => ({ entries: [] })),
   customers: vi.fn(async () => ({ items: [] })),
   artifacts: vi.fn(async () => ({
     case_version: shown.case_version,

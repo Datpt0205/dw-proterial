@@ -48,6 +48,7 @@ from dw_evals.graders import GraderContext, GradeResult
 from dw_sales.adapters.assembly import demo_order_rules
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.policy_files import load_sales_policies
+from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import (
     DESCRIPTION_ATTRIBUTES,
     DescriptionReader,
@@ -64,18 +65,11 @@ from dw_sales.domain.description_reading import (
     parse_pack_length,
     parse_spec_no,
 )
-from dw_sales.domain.order_checks import MappedLine
+from dw_sales.domain.order_checks import MappedLine, ModelStep
 from dw_sales.domain.orders import MappingStatus, PoLine, PoLineAnchors
 from dw_sales.evals.recorded import latency
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
 
-# The bar (ticket 28; set by Đạt on 2026-10-15 at 70%, from a proposed 80%,
-# against 71.1% measured on the local Qwen 9B with thinking off): the gold
-# code among the candidates for at least this share of VI/EN golden lines.
-# A line below it goes to a person, never to a wrong code (0 wrong single
-# candidates), so the bar prices the work saved, not a risk. Reported, not
-# enforced: the spec reports results on a sample set without a verdict.
-PROPOSED_BAR = 0.70
 _PARSERS = {
     "cores": parse_cores,
     "gauge": parse_gauge,
@@ -306,11 +300,12 @@ def grade_golden(
         "all": scores(reads),
         "vi_en": vi_en,
         "by_language": by_lang,
-        "proposed_bar_vi_en": PROPOSED_BAR,
-        "meets_proposed_bar_vi_en": vi_en["gold_in_candidates"] >= PROPOSED_BAR,
         "latency": latency(model, DESCRIPTION_ATTRIBUTES.prompt_id),
         "missed": sorted(r.line_id for r in reads if r.gold not in r.candidates),
     }
+    # The bar the step must meet before a tenant's switch does anything
+    # (`model_readiness.BARS`): reported here, enforced from a live run.
+    details["bar"] = bar_verdict(ModelStep.DESCRIPTION_ATTRIBUTES, details)
     if broken:
         return GradeResult.fail("a guard gave way", broken=broken, **details)
     floor = float(expected.get("min_gold_in_candidates_vi_en", 0.0))

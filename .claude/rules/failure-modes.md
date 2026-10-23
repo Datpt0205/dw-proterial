@@ -99,7 +99,7 @@ move on.
 
 A new guard ships with a demonstration that removing the guard turns a test red.
 
-## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 6×)
+## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 7×)
 
 MinIO withdrew both its images from Docker Hub; the error read as a credentials
 problem. The move to quay.io held until MinIO withdrew them there too: twelve
@@ -111,7 +111,10 @@ narrowed `sys.platform` differently per machine, so a typecheck passed locally a
 failed in CI. The on-premises compose said four requests share Ollama's loaded
 model; run, Ollama refused parallel slots for qwen35. On its first start, its
 GPU discovery timed out and it served on CPU behind a passing healthcheck
-(2026-10-19, `infra/onprem/README.md`).
+(2026-10-19, `infra/onprem/README.md`). PostgreSQL's regex engine refuses a
+repetition count above 255, so a CHECK written `^[!-~]{1,512}$` fails every
+insert at run time while the migration applies cleanly: twice, `0a78ca5e96d3` and
+`4bca401bcb3a` (2026-10-24). Bound the length with `char_length`, not `{n,m}`.
 
 No amount of care catches these. The habit that does:
 

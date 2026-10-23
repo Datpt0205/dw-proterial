@@ -163,12 +163,19 @@ const PLATFORM: Record<string, PlatformDocument[]> = {
   ],
 };
 
-/** The view as the server leaves it for a caller without `sales.price.read`. */
+/**
+ * The view as the server leaves it for a caller without `sales.price.read`:
+ * no price key, and no model step (their switches are in the order rules).
+ */
 function withoutPrices(view: View): View {
   const keep = (s: { key: string }) => !PRICE_KEYS.includes(s.key);
   return {
     ...view,
-    steps: view.steps.map((s) => ({ ...s, settings: s.settings.filter(keep) })),
+    steps: view.steps.map((s) => ({
+      ...s,
+      settings: s.settings.filter(keep),
+      models: [],
+    })),
     lane_settings: Object.fromEntries(
       Object.entries(view.lane_settings).map(([k, v]) => [k, v.filter(keep)]),
     ),
@@ -271,8 +278,20 @@ describe("the DW1 process page (2026-10-22)", () => {
             ],
             edges: [
               ...order.edges,
-              { from: "in_review", to: "on_hold" },
-              { from: "on_hold", to: "in_review" },
+              {
+                from: "in_review",
+                to: "on_hold",
+                action: "edit",
+                actor: "sales",
+                guards: [],
+              },
+              {
+                from: "on_hold",
+                to: "in_review",
+                action: "edit",
+                actor: "sales",
+                guards: [],
+              },
             ],
           },
           PROCESS.lanes[1]!,
@@ -304,7 +323,7 @@ describe("the DW1 process page (2026-10-22)", () => {
   );
 
   it(
-    "on a wide screen, draws the statuses in a grid with an arrow per forward move",
+    "on a wide screen, draws the statuses on a canvas, every move but the exits labelled",
     async () => {
       Object.defineProperty(window, "matchMedia", {
         writable: true,
@@ -314,19 +333,104 @@ describe("the DW1 process page (2026-10-22)", () => {
       const card = await status("Chờ PIC tự kiểm");
       expect(card.textContent).toContain("O6 · DW1 làm");
       expect(card.textContent).toContain("Đến lượt: Sales quyết định");
-      // Tab follows the drawing: column by column.
-      const order = [...document.querySelectorAll("[data-status]")].map((n) =>
-        n.getAttribute("data-status"),
+      // The ways back are drawn, so the card does not write them too.
+      expect(card.textContent).not.toContain("Có thể quay lại");
+      // The order lane draws 18 of its 23 moves: 11 forward, 7 back; the
+      // 5 closing ones stay words on "Đã đóng".
+      const canvas = screen.getByRole("application", {
+        name: "Sơ đồ quy trình Đơn hàng",
+      });
+      const moves = [...canvas.querySelectorAll("[data-move]")];
+      expect(moves.map((m) => m.getAttribute("data-move")).sort()).toEqual(
+        [
+          ...PROCESS.lanes[0]!.edges.filter((e) => e.to !== "closed").map(
+            (e) => `${e.from}->${e.to}`,
+          ),
+        ].sort(),
       );
-      expect(order.slice(0, 2)).toEqual(["received", "checked"]);
-      const arrows = document.querySelectorAll(
-        "svg[aria-hidden] path[data-move]",
+      expect(moves.length).toBe(18);
+      const move = (id: string) =>
+        moves.find((m) => m.getAttribute("data-move") === id)!;
+      // Each move says its action, and its guards as tags.
+      expect(move("received->checked").textContent).toBe("DW1 đọc và kiểm tra");
+      const prepare = move("in_review->prepared");
+      expect(prepare.textContent).toContain("Tự kiểm xong");
+      expect(
+        [...prepare.querySelectorAll(".ant-tag")].map((t) => t.textContent),
+      ).toEqual(["Không còn cờ chặn"]);
+      // A move back is said as one, to a screen reader too.
+      expect(
+        canvas
+          .querySelector('[aria-label^="Chờ PIC tự kiểm → Đã kiểm tra"]')
+          ?.getAttribute("aria-label"),
+      ).toBe(
+        "Chờ PIC tự kiểm → Đã kiểm tra; Khách gửi PO sửa đổi (Khách hàng); quay lại",
       );
-      expect([...arrows].map((a) => a.getAttribute("data-move"))).toContain(
-        "prepared->uploaded_to_bravo",
+      // A move back arches: over the first row between two of its cards,
+      // under the cards from a lower row, never a flat line along their tops.
+      const curve = (id: string) => {
+        const d = canvas
+          .querySelector(`[data-testid="rf__edge-${id}"] path`)!
+          .getAttribute("d")!;
+        const [, y1, , c1, , c2, , y2] = d
+          .replace(/[MC,]/g, " ")
+          .trim()
+          .split(/\s+/)
+          .map(Number);
+        // Each control point's lift from its own end: up is negative.
+        return [c1! - y1!, c2! - y2!];
+      };
+      for (const lift of curve("in_review->checked"))
+        expect(lift).toBeLessThan(0);
+      for (const lift of curve("prepared->in_review"))
+        expect(lift).toBeGreaterThan(0);
+      expect(
+        screen.getByText(
+          "Có thể đóng từ: Đã nhận, Đã kiểm tra, Chờ PIC tự kiểm, Chờ khách sửa PO, PIC đã tự kiểm",
+        ),
+      ).toBeTruthy();
+      // The controls speak Vietnamese.
+      for (const name of ["Phóng to", "Thu nhỏ", "Xem cả quy trình"])
+        expect(screen.getByRole("button", { name })).toBeTruthy();
+    },
+    SLOW,
+  );
+
+  it(
+    "says per status whether its model steps run, in words",
+    async () => {
+      const steps = PROCESS.steps.map((s) =>
+        s.step_id === "O2"
+          ? {
+              ...s,
+              models: s.models.map((m) => ({
+                ...m,
+                effective: false,
+                latest: m.latest && { ...m.latest, value: 0.6, passed: false },
+              })),
+            }
+          : s.step_id === "O3"
+            ? {
+                ...s,
+                models: s.models.map((m) => ({
+                  ...m,
+                  enabled: false,
+                  effective: false,
+                })),
+              }
+            : s,
       );
-      // The order lane draws 11 of its 23 moves: 7 go back and 5 close.
-      expect(arrows.length).toBe(11);
+      api.rulesProcess.mockResolvedValueOnce({ ...PROCESS, steps });
+      renderPage();
+      expect((await status("Đã nhận")).textContent).toContain(
+        "AI bật · đạt (3 bước)",
+      );
+      expect((await status("Đã kiểm tra")).textContent).toContain(
+        "AI bật · chưa đạt — người làm",
+      );
+      expect((await status("Đã nhập Bravo")).textContent).toContain("AI tắt");
+      // A status none of whose steps has a model step says nothing of AI.
+      expect((await status("Đã đóng")).textContent).not.toContain("AI");
     },
     SLOW,
   );
@@ -682,6 +786,142 @@ describe("the DW1 process page (2026-10-22)", () => {
   );
 });
 
+describe("a step's drawer: its AI, the data it reads, who acts (2026-10-23)", () => {
+  /** The drawer of the order lane's "Đã nhận" (step O1). */
+  async function openReceived(view: View = PROCESS) {
+    api.rulesProcess.mockResolvedValueOnce(view);
+    renderPage("node=order.received");
+    await screen.findByText("Đơn hàng · Đã nhận");
+    return drawer("Đơn hàng · Đã nhận");
+  }
+  const section = (open: HTMLElement, title: string) =>
+    within(open).getByText(title).closest(".ant-card") as HTMLElement;
+
+  it(
+    "shows each model step's switch, bar, latest measurement and use, read-only",
+    async () => {
+      const open = await openReceived();
+      const ai = section(open, "AI ở bước này");
+      expect(ai.textContent).toContain(
+        "Một bước chỉ bật được khi lần đo gần nhất",
+      );
+      const intent = within(ai).getByRole("region", {
+        name: "Phân loại thư không có tài liệu đọc được",
+      });
+      expect(intent.textContent).toContain("AI bật · đạt");
+      expect(intent.textContent).toContain(
+        "90% · Tự động 7 ngày qua: chưa có dữ liệu",
+      );
+      expect(intent.textContent).toContain("90% · đạt");
+      expect(intent.textContent).toContain(
+        "qwen3.5-9b-dw · sales.message_intent@1.0.0 · 10:00 05/10/2026 (giờ Việt Nam)",
+      );
+      expect(intent.textContent).toContain("Đang dùng mô hình");
+      // Read-only: nothing in the section switches a step.
+      expect(within(ai).queryByRole("switch")).toBeNull();
+      expect(within(ai).queryByRole("button")).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "says the week's share beside the bar, and a step never measured or failing in words",
+    async () => {
+      const steps = PROCESS.steps.map((s) =>
+        s.step_id !== "O1"
+          ? s
+          : {
+              ...s,
+              models: s.models.map((m, i) =>
+                i === 0
+                  ? {
+                      ...m,
+                      live_share: {
+                        handled: 10,
+                        automatic: 6,
+                        share: 0.6,
+                        window_days: 7,
+                      },
+                    }
+                  : i === 1
+                    ? { ...m, latest: null, effective: false }
+                    : { ...m, enabled: false, effective: false },
+              ),
+            },
+      );
+      const open = await openReceived({ ...PROCESS, steps });
+      const ai = section(open, "AI ở bước này");
+      const region = (name: string) => within(ai).getByRole("region", { name });
+      expect(
+        region("Phân loại thư không có tài liệu đọc được").textContent,
+      ).toContain("90% · Tự động 7 ngày qua: 60% (6/10)");
+      const reply = region("Đọc thư trả lời của khách trong hồ sơ");
+      expect(reply.textContent).toContain("Chưa đo");
+      expect(reply.textContent).toContain("AI bật · chưa đạt — người làm");
+      expect(reply.textContent).toContain(
+        "Chưa dùng mô hình: lần đo chưa đạt, người làm bước này",
+      );
+      const handoff = region("Soạn nháp chuyển giao cho PC/QA từ thư");
+      expect(handoff.textContent).toContain("AI tắt");
+      expect(handoff.textContent).toContain("Tắt: người làm bước này");
+    },
+    SLOW,
+  );
+
+  it(
+    "links the lists and the PO layouts the step reads, and names who acts on it",
+    async () => {
+      const open = await openReceived();
+      const uses = section(open, "Dữ liệu bước này dùng");
+      expect(
+        within(uses)
+          .getByRole("link", { name: "Khách hàng" })
+          .getAttribute("href"),
+      ).toBe("/sales/master-data?tab=customers");
+      expect(
+        within(uses).getByRole("link", { name: "Mẫu PO" }).getAttribute("href"),
+      ).toBe("/sales/layouts");
+      const people = section(open, "Ai làm, ai duyệt");
+      expect(people.textContent).toContain("Vai trò: DW1");
+      expect(people.textContent).toContain("Quyền: sales.inbox.process");
+      // Who may change the members is pointed to them; nobody else is.
+      expect(within(people).queryByRole("link")).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "points who may change the members to the roles page",
+    async () => {
+      scopes = [...scopes, "platform.members.write"];
+      const open = await openReceived();
+      expect(
+        within(section(open, "Ai làm, ai duyệt"))
+          .getByRole("link", {
+            name: "Đổi người giữ vai trò ở trang Vai trò và quyền",
+          })
+          .getAttribute("href"),
+      ).toBe("/admin");
+    },
+    SLOW,
+  );
+
+  it(
+    "draws no AI, data or people section for a lane's or the process's settings",
+    async () => {
+      renderPage("node=order");
+      await screen.findByText("Đơn hàng · Thiết lập của cả luồng");
+      for (const title of [
+        "AI ở bước này",
+        "Dữ liệu bước này dùng",
+        "Ai làm, ai duyệt",
+      ])
+        expect(screen.queryByText(title)).toBeNull();
+    },
+    SLOW,
+  );
+});
+
 describe("the DW1 process page for a proposer who reads no price", () => {
   /** Opens each status, step and lane of both lanes, and every key's editor. */
   async function openEverything() {
@@ -724,6 +964,8 @@ describe("the DW1 process page for a proposer who reads no price", () => {
     api.rulesProcess.mockImplementation(async () => withoutPrices(PROCESS));
     renderPage();
     await openEverything();
+    // Served no model step, the drawer draws no AI section, not an empty one.
+    expect(screen.queryByText("AI ở bước này")).toBeNull();
     expect([...askedFor()].sort()).toEqual(["sales_followups", "sales_kpi"]);
     for (const words of [
       "Quy tắc kiểm tra đơn hàng",

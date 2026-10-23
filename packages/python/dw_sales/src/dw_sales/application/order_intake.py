@@ -63,6 +63,7 @@ from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (
     READ_AS,
     LayoutLookupPort,
+    ModelStepGatePort,
     OrderCaseLookupPort,
     OrderRulesPort,
     PoDocumentReaderPort,
@@ -92,6 +93,7 @@ from dw_sales.domain.order_checks import (
     HISTORY_CHECK_CODES,
     IntakeCaps,
     MappedLine,
+    ModelStep,
     OrderRules,
     check_customer,
     check_document,
@@ -264,6 +266,12 @@ class OrderIntake:
     # A model pre-filling the mapping of a form no layout reads (ticket 30),
     # for a tenant whose rules turn it on. None: no model is wired.
     layout_prefiller: LayoutPrefiller | None = None
+    # Whether a model step the tenant's rules turn on may run: its live eval
+    # met the bar for the model and prompt it runs on now (dw_sales ADR 0005,
+    # addendum of 2026-10-23). Asked before every model call above; where it
+    # says no, the step does what it does when it is off. None: no step may
+    # run, whatever the rules say.
+    model_steps: ModelStepGatePort | None = None
 
     async def classify(
         self,
@@ -350,9 +358,18 @@ class OrderIntake:
             thread = await self.threads.linked_case(scope, message, sender)
             if thread is not None:
                 return Classification(MessageKind.CASE_REPLY, thread=thread)
-        if self.intents is not None and run is not None and rules.model_assist.message_intent:
+        if (
+            self.intents is not None
+            and run is not None
+            and await self._model_step(scope, rules, ModelStep.MESSAGE_INTENT)
+        ):
             return await self._intent(scope, message, attached, sender, rules, run, now)
         return Classification(self._kind(message, attached))
+
+    async def _model_step(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool:
+        """Whether ``step`` may call a model for this tenant now: on in its
+        rules and measured at its bar (`model_steps`); never without a gate."""
+        return self.model_steps is not None and await self.model_steps.allows(scope, rules, step)
 
     async def _by_content(
         self,
@@ -440,7 +457,11 @@ class OrderIntake:
         allow. Nothing on the case changes: Sales confirms any step."""
         rules = await self.rules.rules(scope)
         reading = None
-        if self.replies is not None and run is not None and rules.model_assist.reply_intent:
+        if (
+            self.replies is not None
+            and run is not None
+            and await self._model_step(scope, rules, ModelStep.REPLY_INTENT)
+        ):
             reading = await self.replies.read(
                 newest_part(message), thread, rules_version=rules.version, run=run
             )
@@ -472,7 +493,7 @@ class OrderIntake:
         if kind is None or sender is None or self.handoffs is None or run is None:
             return outcome
         rules = await self.rules.rules(scope)
-        if not rules.model_assist.request_handoff:
+        if not await self._model_step(scope, rules, ModelStep.REQUEST_HANDOFF):
             return outcome
         handoff = await self.handoffs.read(
             scope,
@@ -617,7 +638,7 @@ class OrderIntake:
         prefiller, disposition = self.layout_prefiller, outcome.disposition
         if prefiller is None or run is None or disposition is None:
             return outcome
-        if not rules.model_assist.layout_proposal:
+        if not await self._model_step(scope, rules, ModelStep.LAYOUT_PROPOSAL):
             return outcome
         for content in readable:
             file_type = self.reader.sniff(content.data)
@@ -673,7 +694,7 @@ class OrderIntake:
             mapped_lines.append((po_line, map_line(po_line, entry=entry.data, items=items.data)))
             if wants_reading(po_line, entry=entry.data):
                 unread.append(po_line)
-        read = await self._read(unread, items.data, rules, run)
+        read = await self._read(scope, unread, items.data, rules, run)
         checks: list[LineCheck] = []
         for po_line, by_code in mapped_lines:
             mapped = read.get(po_line.line_no, by_code)
@@ -883,18 +904,19 @@ class OrderIntake:
 
     async def _read(
         self,
+        scope: SalesScope,
         lines: Sequence[PoLine],
         items: Sequence[Item],
         rules: OrderRules,
         run: RunContext | None,
     ) -> dict[int, MappedLine]:
         """The lines a model read (dw_sales ADR 0005), by line number: only
-        where the tenant's rules turn it on, a model is wired, and a DW1 run
-        is doing the processing. Otherwise none, and every line keeps the
-        mapping code gave it."""
-        if not lines or not rules.model_assist.description_attributes:
+        where the tenant's rules turn it on and its live eval met the bar, a
+        model is wired, and a DW1 run is doing the processing. Otherwise none,
+        and every line keeps the mapping code gave it."""
+        if not lines or self.descriptions is None or run is None:
             return {}
-        if self.descriptions is None or run is None:
+        if not await self._model_step(scope, rules, ModelStep.DESCRIPTION_ATTRIBUTES):
             return {}
         return await self.descriptions.read(lines, items, run=run)
 

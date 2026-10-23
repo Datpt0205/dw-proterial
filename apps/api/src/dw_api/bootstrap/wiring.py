@@ -485,6 +485,9 @@ def build_sales(
         runtime=runtime,
         telemetry=telemetry,
         model=model,
+        # Who holds the scopes each process step needs, from the platform's
+        # catalog (the process page, 2026-10-23).
+        roles=SqlAdminConsoleRepository(session_factory),
         # The settings' scanner (ticket 25); a test hands in its own.
         scanner=(
             cast(MalwareScanPort, scanner)
@@ -505,7 +508,7 @@ def build_sales(
             )
         ),
     )
-    return SalesMount(services=mount.services)
+    return SalesMount(services=mount.services, activity=mount.activity)
 
 
 def register_sales_support(catalog: SupportScopeCatalog) -> None:

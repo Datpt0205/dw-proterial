@@ -105,9 +105,14 @@ test("the shell is reached by its Vietnamese names", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Thông báo/ })).toBeVisible();
   await page.getByRole("button", { name: /^Tài khoản/ }).click();
   await expect(page.getByRole("menuitem", { name: "Đăng xuất" })).toBeVisible();
-  // The account menu names the operator, never a role code.
+  // The account menu names the operator, never a role code. The name sits in
+  // the dropdown's header above the menu (session-chip.tsx popupRender), not
+  // inside role=menu, so look in the menu's parent.
   await expect(
-    page.getByRole("menu").getByText("Quản trị nền tảng"),
+    page
+      .getByRole("menu")
+      .locator("xpath=..")
+      .getByText("Quản trị nền tảng", { exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(

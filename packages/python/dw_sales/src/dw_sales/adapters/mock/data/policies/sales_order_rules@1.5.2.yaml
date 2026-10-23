@@ -7,9 +7,13 @@ policy_version: "1.5.2"
 # its orders under. Platform 1.6.0 with the model steps on: model_assist.
 # description_attributes (ticket 28), message_intent (ticket 31),
 # rfq_extraction (ticket 29), reply_intent (ticket 32), request_handoff
-# (ticket 33) and layout_proposal (ticket 30), so the local demo shows a model
-# reading what DW1's own code does not (dw_sales ADR 0005). Every other tenant
-# reads the platform's 1.6.0, where all six are off.
+# (ticket 33) and layout_proposal (ticket 30), for the unit tests and evals
+# that run a model over a recorded answer, and the API's integration suite
+# over stand-in measurements (dw_sales ADR 0005). `make demo-reset` installs
+# 1.5.3 instead (`no_model/`): this version with every step off, since a
+# step turned on is refused until its live eval met its bar, and the mock
+# demo has neither a model nor a measurement. Every other tenant reads the
+# platform's 1.6.0, where all six are off.
 #
 # A tenant version carries its own number (TenantOrderRules refuses one that
 # reuses the platform's), so a case's rules stamp says which was applied.

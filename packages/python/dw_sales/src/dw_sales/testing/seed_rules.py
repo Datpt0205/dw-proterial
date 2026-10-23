@@ -10,6 +10,24 @@ step as a person whose access context is resolved from their membership. So
 the demo exercises the maker/checker rule and the audit trail instead of a row
 written around them. Re-running is a no-op once that version is in force.
 
+Which version is the caller's to name, because a version that turns a model
+step on is refused unless the step's live eval met its bar for the model
+DW1's profile routes it to (dw_sales ADR 0005, addendum of 2026-10-23):
+
+- `DEMO_POLICIES`, `sales_order_rules@1.5.3`, every model step off: what
+  `make demo-reset` installs. The mock demo runs with no model server (none is
+  composed without `DW_ONPREM_MODEL_BASE_URL`) and records no measurement, a
+  measurement being what a live run says, not what a seed asserts; so the
+  tenant's own rules (the NOC/ESF hold, the price tolerance) are in force and
+  nothing is refused. A developer with a local model attests the steps
+  (`run_evals.py --live onprem --attest`) and proposes a version that turns
+  them on, through the same route.
+- `MODEL_STEP_POLICIES`, `sales_order_rules@1.5.2`, all six on: the API's
+  integration suite, whose test database no live run reaches, records
+  stand-in measurements first (`seed_test_measurements`, through the lane's
+  own write path) and seeds this one, so the model steps run through the
+  gate, not around it.
+
 Local and test profiles only (`demo_reset`, the API's integration suite).
 """
 
@@ -24,6 +42,7 @@ from sqlalchemy.pool import NullPool
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
@@ -36,12 +55,15 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.identity import context_from
 from dw_platform.testing.seed_env import sid
+from dw_sales.adapters.assembly import model_readiness, step_model
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.order_rules import load_tenant_order_rules
+from dw_sales.adapters.persistence.measurements import SqlMeasurementLog
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.application.access import Gate, sales_scope
+from dw_sales.application.model_readiness import BARS, ModelAttestation
 from dw_sales.application.rules import (
     RULES_APPROVAL,
     RuleDecisions,
@@ -51,6 +73,10 @@ from dw_sales.application.rules import (
 )
 
 DEMO_TENANT = "tenant-alpha"
+# The demo tenant's version with every model step off (`make demo-reset`), and
+# the sample set's own with all six on (tests over seeded measurements).
+DEMO_POLICIES = DATA_DIR / "policies" / "no_model"
+MODEL_STEP_POLICIES = DATA_DIR / "policies"
 PROPOSER = "dev|an.nguyen"  # Sales PIC
 APPROVER = "dev|giang.do"  # Sales head
 _CONFIGS = Path(__file__).resolve().parents[6] / "configs"
@@ -92,10 +118,11 @@ async def _context(sessions: async_sessionmaker[AsyncSession], subject: str) -> 
     return context_from(access)
 
 
-async def seed_demo_rules(database_url: str) -> str | None:
-    """Propose and approve the demo tenant's own order rules; the version in
-    force afterwards, or None when the sample set holds none."""
-    own = load_tenant_order_rules(DATA_DIR / "policies")
+async def seed_demo_rules(database_url: str, policies: Path) -> str | None:
+    """Propose and approve the demo tenant's own order rules, the version
+    ``policies`` holds (`DEMO_POLICIES` or `MODEL_STEP_POLICIES`); the version
+    in force afterwards, or None when ``policies`` holds none."""
+    own = load_tenant_order_rules(policies)
     if own is None:
         return None
     engine = create_async_engine(database_url, poolclass=NullPool)
@@ -113,6 +140,7 @@ async def seed_demo_rules(database_url: str) -> str | None:
         )
         book = rule_book(load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy"), lookup)
         clock, ids = SystemClock(), Uuid7Generator()
+        readiness = model_readiness(_CONFIGS, sessions)
         service = SalesRulesService(
             uow,
             Gate(ScopeAuthorizationService()),
@@ -120,6 +148,7 @@ async def seed_demo_rules(database_url: str) -> str | None:
             clock,
             ids,
             SqlWorkspaceDirectory(sessions),
+            readiness,
         )
         stored = await lookup.find(scope, RuleKey.ORDER_RULES, own.policy_version)
         if stored is None or stored.status != "proposed" or stored.approval_id is None:
@@ -137,7 +166,7 @@ async def seed_demo_rules(database_url: str) -> str | None:
             clock=clock,
             id_generator=ids,
             strict_approval_prefixes=frozenset({"sales."}),
-            decision_guards={RULES_APPROVAL: RuleDecisions(uow, book)},
+            decision_guards={RULES_APPROVAL: RuleDecisions(uow, book, readiness)},
         )
         await flow.decide(
             approval_id=stored.approval_id,
@@ -149,7 +178,38 @@ async def seed_demo_rules(database_url: str) -> str | None:
         # What the worker does with the `sales.rules.decided` event, done here so
         # the version is in force when the seed returns; the worker's own
         # delivery of the event then finds it settled and writes nothing.
-        decided = await RuleSettlement(uow, book, clock, ids).settle(stored.approval_id, head)
+        decided = await RuleSettlement(uow, book, clock, ids, readiness).settle(
+            stored.approval_id, head
+        )
         return decided.ref
+    finally:
+        await engine.dispose()
+
+
+async def seed_test_measurements(database_url: str) -> None:
+    """For a test database only: a measurement at its bar of every model step
+    for the demo tenant, on the model DW1's profile routes it to, written as
+    the attesting lane writes one (`ModelAttestation`, audited). A stand-in
+    for the live run a test database cannot have, so the suite exercises the
+    model steps `MODEL_STEP_POLICIES` (1.5.2) turns on through the gate, not
+    around it. Never called by `make demo-reset`."""
+    engine = create_async_engine(database_url, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        scope = sales_scope(await _context(sessions, PROPOSER))
+        worker, _ = parse_worker_file(_CONFIGS / "workers" / "sales.yaml")
+        model = step_model(_CONFIGS, worker.default_model_profile).model_for(scope.tenant_id.value)
+        attest = ModelAttestation(
+            SqlMeasurementLog(sessions, audit=SqlAuditRepository), SystemClock(), Uuid7Generator()
+        )
+        for step, owner in BARS.items():
+            await attest.attest(
+                scope,
+                step,
+                model=model,
+                value=owner.bar,
+                held=True,
+                dataset=f"{owner.dataset}@1.0.0",
+            )
     finally:
         await engine.dispose()

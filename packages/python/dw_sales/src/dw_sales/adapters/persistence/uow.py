@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_platform.application.ports import AuditRepositoryPort
+from dw_sales.adapters.persistence.activity import SqlStepActivityLog
 from dw_sales.adapters.persistence.followups import SqlFollowupStore
 from dw_sales.adapters.persistence.layouts import SqlLayoutStore
 from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
@@ -57,6 +58,8 @@ class SqlSalesUnitOfWork:
     jobs: SqlProcessingJobs
     approvals: RunLessApprovalsPort
     followups: SqlFollowupStore
+    # What DW1's model steps did (slice 3): `StepActivityLogPort`.
+    step_activity: SqlStepActivityLog
     audit: AuditRepositoryPort
 
     def __init__(
@@ -100,6 +103,7 @@ class SqlSalesUnitOfWork:
         self.jobs = SqlProcessingJobs(session, scope)
         self.approvals = self._approvals(session)
         self.followups = SqlFollowupStore(session, scope)
+        self.step_activity = SqlStepActivityLog(session, scope)
         self.audit = self._audit(session)
         return self
 

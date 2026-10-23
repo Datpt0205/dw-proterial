@@ -52,7 +52,7 @@ from dw_platform.application.directory import WorkspaceMember
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
-from dw_sales.adapters.assembly import model_requests
+from dw_sales.adapters.assembly import model_requests, step_model
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
@@ -62,6 +62,7 @@ from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies, r
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.runtime import RuntimeDw1Runs
+from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
     ArtifactRecord,
@@ -93,6 +94,7 @@ from dw_sales.application.layouts import (
 )
 from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
+from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import InboxPort, SalesScope
@@ -106,14 +108,18 @@ from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import required_regions
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.views import MessageDispositionView
+from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
 from dw_sales.domain.followups import WaitingCase
 from dw_sales.domain.layouts import LayoutStatus, PoLayout
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.overview_memory import PythonOverviewReader
 from dw_sales.testing.catalog_store import MemoryApprovedLists, MemoryCatalogStore
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
+from dw_sales.testing.measurements import MemoryModelMeasurements, passing
+from dw_sales.testing.role_catalog import StaticRoleCatalog
 from dw_sales.testing.scanners import NoMalware
 from dw_sales.workflows.graph import register
 
@@ -249,6 +255,8 @@ class _ScopeState:
     layouts: dict[uuid.UUID, PoLayout] = field(default_factory=dict)
     jobs: dict[str, ProcessingJob] = field(default_factory=dict)
     followups: dict[FollowupKey, SentFollowup] = field(default_factory=dict)
+    # What each model step did (slice 3), in the order written.
+    step_outcomes: list[StepOutcome] = field(default_factory=list)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -264,6 +272,7 @@ class _ScopeState:
             layouts=dict(self.layouts),
             jobs=dict(self.jobs),
             followups=dict(self.followups),
+            step_outcomes=list(self.step_outcomes),
         )
 
 
@@ -599,6 +608,21 @@ class _Followups:
         return len(old)
 
 
+class _StepActivity:
+    """`StepActivityLogPort` over one transaction's state: the rows commit or
+    roll back with it, and a row already written is refused, as the table's
+    key (`pk_step_outcomes`) refuses it."""
+
+    def __init__(self, held: list[StepOutcome]) -> None:
+        self._held = held
+
+    async def append(self, rows: Sequence[StepOutcome]) -> None:
+        ids = [r.outcome_id for r in rows]
+        if len(set(ids)) < len(ids) or {r.outcome_id for r in self._held} & set(ids):
+            raise ConflictError("a step row is written once")
+        self._held.extend(rows)
+
+
 class _Work:
     """`SalesUnitOfWork`: one scope's state, copied in, written back on commit."""
 
@@ -616,6 +640,7 @@ class _Work:
         self.layouts = _Layouts(state.layouts)
         self.jobs = _Jobs(state.jobs)
         self.followups = _Followups(state)
+        self.step_activity = _StepActivity(state.step_outcomes)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)
@@ -652,9 +677,9 @@ class _Work:
 
 class MemoryStore:
     """Implements `SalesUnitOfWorkFactory`, `OrderCaseLookupPort`,
-    `QuoteCaseLookupPort`, `LayoutLookupPort` and `ProcessingQueuePort` in
-    memory, per scope: what one scope committed no other scope reads.
-    ``clock`` says when a queued job is due."""
+    `QuoteCaseLookupPort`, `LayoutLookupPort`, `ProcessingQueuePort` and
+    `StepActivityReadPort` in memory, per scope: what one scope committed no
+    other scope reads. ``clock`` says when a queued job is due."""
 
     def __init__(
         self, approvals: MemoryApprovals | None = None, clock: FixedClock | None = None
@@ -711,6 +736,32 @@ class MemoryStore:
             if layout_ref
             in {stored.case.document.layout_ref}
             | {old.document.layout_ref for old in stored.case.superseded}
+        )
+
+    async def for_case(
+        self, scope: SalesScope, kind: CaseKind, case_id: uuid.UUID
+    ) -> Sequence[StepOutcome]:
+        """`StepActivityReadPort.for_case`, ordered as the SQL reader orders."""
+        found = [
+            r for r in self.state(scope).step_outcomes if r.case_id == case_id and r.lane is kind
+        ]
+        return sorted(found, key=lambda r: (r.occurred_at, r.outcome_id))
+
+    async def between(
+        self, scope: SalesScope, start: datetime, end: datetime, lane: CaseKind | None
+    ) -> Sequence[StepOutcome]:
+        found = [
+            r
+            for r in self.state(scope).step_outcomes
+            if start <= r.occurred_at < end and (lane is None or r.lane is lane)
+        ]
+        return sorted(found, key=lambda r: (r.occurred_at, r.outcome_id))
+
+    async def cases(self, scope: SalesScope, rows: StepRowFilter) -> frozenset[uuid.UUID]:
+        return frozenset(
+            r.case_id
+            for r in self.state(scope).step_outcomes
+            if rows.matches(r) and r.case_id is not None
         )
 
     async def cases_for_ycbg(self, scope: SalesScope, ycbg_no: str) -> Sequence[QuoteCase]:
@@ -839,6 +890,9 @@ class World:
     catalog_parsing: CatalogParsing
     # Rule drafts from a company's template ("Tạo từ tệp mẫu"), in memory.
     draft_store: MemoryRuleDraftStore
+    # Each tenant's live measurements of the model steps (ADR 0005, addendum
+    # of 2026-10-23), which the gate in front of every model call reads.
+    measurements: MemoryModelMeasurements
 
     async def decide_layout(
         self,
@@ -1081,6 +1135,24 @@ class World:
         return self.order(case_id)
 
 
+def measured_gate(
+    repo_root: Path, *scopes: SalesScope
+) -> tuple[ModelReadiness, MemoryModelMeasurements]:
+    """The gate in front of every model call (ADR 0005, addendum of
+    2026-10-23) over measurements in memory, every step of each of
+    ``scopes``' tenants measured at its bar on the model DW1's profile routes
+    it to, as the live lane would have recorded it. A tenant not named has
+    none, and its steps stay with a person whatever its rules say."""
+    worker, _ = parse_worker_file(repo_root / "configs" / "workers" / "sales.yaml")
+    models = step_model(repo_root / "configs", worker.default_model_profile)
+    measurements = MemoryModelMeasurements()
+    ids = Uuid4Generator()
+    for scope in scopes:
+        model = models.model_for(scope.tenant_id.value)
+        measurements.seed(scope, *(passing(step, model, NOW, ids) for step in ModelStep))
+    return ModelReadiness(measurements, models), measurements
+
+
 def open_world(
     repo_root: Path,
     sample: SampleSet,
@@ -1092,6 +1164,7 @@ def open_world(
     model: InterpretationPort | None = None,
     scanner: MalwareScanPort | None = None,
     reader: ReaderTransport | None = None,
+    measured: bool = True,
 ) -> World:
     """DW1 as `apps/api`'s `build_sales` assembles it, the store in memory and
     the mocks bound to ``bound_to``; runs unmetered unless ``allowance``
@@ -1102,7 +1175,11 @@ def open_world(
     ``model`` is what reads a description DW1's vocabulary does not (dw_sales
     ADR 0005): a recorded or scripted one in the smoke, the local model in the
     live lane. None, as in a process with no model server: no model is called
-    at all.
+    at all. With one, a model step runs where the tenant's rules turn it on
+    and its live eval met the bar (`model_readiness`): ``measured`` seeds a
+    passing measurement of every step for the bound tenant, on the model
+    DW1's profile routes it to, as the live lane would have recorded it;
+    without it the gate finds none and every step stays with a person.
 
     ``reader`` reads every file: the readers in this process unless a test
     hands in its own (`InProcessReaderTransport`, through the same wire as
@@ -1137,6 +1214,11 @@ def open_world(
         store.rule_versions.seed_approved(bound_to.tenant_id.value, own)
     book = rule_book(policies, store.rule_versions)
     order_rules = RuleBookOrderRules(book)
+    worker_file = repo_root / "configs" / "workers" / "sales.yaml"
+    worker, _ = parse_worker_file(worker_file)
+    readiness, measurements = measured_gate(
+        repo_root, *((bound_to,) if model is not None and measured else ())
+    )
     layout_checks = LayoutChecks(readers.po, catalog)
     quotation = QuotationService(
         catalog=catalog,
@@ -1147,7 +1229,9 @@ def open_world(
         ledger=catalog,
         policies=book,
         requests=(
-            None if model is None else model_requests(model, catalog, order_rules, readers.texts)
+            None
+            if model is None
+            else model_requests(model, catalog, order_rules, readers.texts, readiness)
         ),
     )
     intake = OrderIntake(
@@ -1165,12 +1249,11 @@ def open_world(
         handoffs=None if model is None else HandoffReader(model, catalog, store),
         layouts=store,
         layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
+        model_steps=readiness,
     )
     directory = Directory(tuple(callers))
     notifications = Notifications()
     objects = Objects()
-    worker_file = repo_root / "configs" / "workers" / "sales.yaml"
-    worker, _ = parse_worker_file(worker_file)
     runs = RuntimeDw1Runs(
         runtime.runner,
         runtime.approval_flow,
@@ -1204,6 +1287,9 @@ def open_world(
         catalog_uow=catalog_store,
         templates=XlsxCatalogTemplates(),
         draft_uow=draft_store,
+        readiness=readiness,
+        roles=StaticRoleCatalog(),
+        step_activity=store,
     )
     register(
         graphs=runtime.graphs,
@@ -1228,11 +1314,12 @@ def open_world(
         runs,
         LayoutSettlement(store, clock, ids),
         ProcessingDrain(store, store, assembly.services.dw1, directory, clock, ids),
-        RuleSettlement(store, book, clock, ids),
+        RuleSettlement(store, book, clock, ids, readiness),
         catalog_store,
         CatalogSettlement(catalog_store, clock, ids),
         CatalogParsing(catalog_store, readers.tables, scanner or NoMalware(), catalog, clock, ids),
         draft_store,
+        measurements,
     )
 
 

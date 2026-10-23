@@ -378,8 +378,8 @@ def known_price_values() -> frozenset[Decimal]:
 
 
 def _known_prices() -> tuple[set[Decimal], set[Decimal]]:
-    """Every price in the mock data (unit prices, line amounts, PO totals)
-    and every quantity, as numbers."""
+    """Every price in the mock data (unit prices, line amounts, PO totals,
+    the target prices requests carry) and every PO quantity, as numbers."""
     prices: set[Decimal] = set()
     quantities: set[Decimal] = set()
     for row in json.loads((MOCK_DATA / "quotations.json").read_text(encoding="utf-8")):
@@ -401,6 +401,13 @@ def _known_prices() -> tuple[set[Decimal], set[Decimal]]:
                 total += amount
         if total:
             prices.add(total)
+    # A target price a request prints, or a customer states in the mail: a
+    # case view anchors it with the printed words (`SourceAnchor.quote`).
+    for name in ("quote_requests.json", "free_requests.json"):
+        for row in json.loads((MOCK_DATA / name).read_text(encoding="utf-8")):
+            for line in row.get("lines", []):
+                if "target_price" in line:
+                    prices.add(Decimal(line["target_price"]))
     return prices, quantities
 
 

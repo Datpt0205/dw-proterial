@@ -129,6 +129,12 @@ of shadcn/ui; the measurements behind it are in `.claude/plans/web-ui.md`.
   and in `@dw/ui`; ESLint says the same in the app. Notices go through
   `App.useApp()`. ProComponents waits for a stable release that supports v6
   (its v6 line was still beta on 2026-09-27).
+- **One exception, React Flow** (Đạt, 2026-10-23): `@xyflow/react` 12.12.0
+  (MIT, pinned) draws the DW1 process map and nothing else, because antd has
+  nothing for a branching, looping graph with labelled moves back. Only
+  `app/sales/_components/process-flow.tsx` imports it; the antd-only test and
+  ESLint fail any other file, and the test holds both manifests' runtime
+  dependencies to an allowlist, so any further library is a decision here.
 - **Tailwind is for layout only** (flex, grid, spacing). Colour, type and
   radius come from the antd theme.
 - **One owner of the tokens:** the antd theme (`ConfigProvider`, `vi_VN`

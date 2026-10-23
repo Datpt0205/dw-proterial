@@ -420,3 +420,23 @@ rule_draft_files = sa.Table(
     sa.Column("content", sa.LargeBinary, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
+
+# Each live measurement of a model step (dw_sales ADR 0005, addendum of
+# 2026-10-23, migration 2d97d03c937a): append-only, narrowed by tenant only.
+model_step_measurements = sa.Table(
+    "model_step_measurements",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("step", sa.Text, nullable=False),
+    sa.Column("model", sa.Text, nullable=False),
+    sa.Column("prompt", sa.Text, nullable=False),
+    sa.Column("metric", sa.Text, nullable=False),
+    sa.Column("value", sa.Numeric(5, 4), nullable=False),
+    sa.Column("bar", sa.Numeric(5, 4), nullable=False),
+    sa.Column("passed", sa.Boolean, nullable=False),
+    sa.Column("dataset", sa.Text, nullable=False),
+    sa.Column("measured_at", _TS, nullable=False),
+    sa.Column("recorded_by", sa.Text, nullable=False),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+)

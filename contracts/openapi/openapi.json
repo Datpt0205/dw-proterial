@@ -1,6 +1,308 @@
 {
   "components": {
     "schemas": {
+      "ActivityEntry": {
+        "properties": {
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "check": {
+            "$ref": "#/components/schemas/CheckView"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "handled_by": {
+            "enum": [
+              "dw1",
+              "person"
+            ],
+            "title": "Handled By",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "read",
+              "route",
+              "check",
+              "to_person",
+              "model_unavailable"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "model_profile": {
+            "title": "Model Profile",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "process_steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepId"
+            },
+            "title": "Process Steps",
+            "type": "array"
+          },
+          "produced": {
+            "items": {
+              "$ref": "#/components/schemas/ProducedValue"
+            },
+            "title": "Produced",
+            "type": "array"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "refusals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Refusals",
+            "type": "object"
+          },
+          "step": {
+            "$ref": "#/components/schemas/ModelStep"
+          },
+          "taken_over_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken Over By"
+          }
+        },
+        "required": [
+          "step",
+          "process_steps",
+          "kind",
+          "occurred_at",
+          "calls",
+          "duration_ms",
+          "model",
+          "model_profile",
+          "prompt",
+          "message_id",
+          "line_no",
+          "check",
+          "handled_by",
+          "taken_over_by",
+          "produced",
+          "refusals"
+        ],
+        "title": "ActivityEntry",
+        "type": "object"
+      },
+      "ActivityFilter": {
+        "description": "The case list filter a count stands for: the parameters, not a URL.",
+        "properties": {
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "handled_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dw1",
+                  "person"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled By"
+          },
+          "lane": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "enum": [
+                  "accepted",
+                  "refused",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "step": {
+            "$ref": "#/components/schemas/ModelStep"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "from",
+          "to"
+        ],
+        "title": "ActivityFilter",
+        "type": "object"
+      },
+      "ActivitySummaryView": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayView"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "from": {
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "lane": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepSummaryView"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "to": {
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "lane",
+          "as_of",
+          "steps",
+          "days"
+        ],
+        "title": "ActivitySummaryView",
+        "type": "object"
+      },
+      "ActorView": {
+        "description": "A role or a permission set holding scopes the step's actions need.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "role",
+              "permission_set"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "name",
+          "scopes"
+        ],
+        "title": "ActorView",
+        "type": "object"
+      },
       "AddOperatorRequest": {
         "properties": {
           "email": {
@@ -61,6 +363,32 @@
             "$ref": "#/components/schemas/Hidden"
           }
         ]
+      },
+      "AnchorRef": {
+        "description": "Where the case view anchors the value: the line (None for the\nrequest's or the PO's own fields) and the field its ``anchors`` key it by.",
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          }
+        },
+        "required": [
+          "line_no",
+          "field"
+        ],
+        "title": "AnchorRef",
+        "type": "object"
       },
       "AnswerBody": {
         "additionalProperties": false,
@@ -950,6 +1278,32 @@
         "title": "CancelResult",
         "type": "object"
       },
+      "CaseActivityView": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_kind": {
+            "$ref": "#/components/schemas/CaseKind"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_kind",
+          "case_id",
+          "entries"
+        ],
+        "title": "CaseActivityView",
+        "type": "object"
+      },
       "CaseChangeView": {
         "description": "What a mutation answers: which case, at which version, in which state.",
         "properties": {
@@ -1638,6 +1992,37 @@
         "title": "ChangedRow",
         "type": "object"
       },
+      "CheckView": {
+        "description": "Code's check of the model's answer: passed, refused with the reason\ncode, or not run because no answer came.",
+        "properties": {
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "result": {
+            "enum": [
+              "passed",
+              "refused",
+              "not_run"
+            ],
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result",
+          "reason_code"
+        ],
+        "title": "CheckView",
+        "type": "object"
+      },
       "CloseBody": {
         "additionalProperties": false,
         "properties": {
@@ -1994,6 +2379,55 @@
           "denial_list_checked_on"
         ],
         "title": "CustomerView",
+        "type": "object"
+      },
+      "DayStepView": {
+        "properties": {
+          "automatic": {
+            "title": "Automatic",
+            "type": "integer"
+          },
+          "handled": {
+            "title": "Handled",
+            "type": "integer"
+          },
+          "step": {
+            "$ref": "#/components/schemas/ModelStep"
+          },
+          "to_person": {
+            "title": "To Person",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "handled",
+          "automatic",
+          "to_person"
+        ],
+        "title": "DayStepView",
+        "type": "object"
+      },
+      "DayView": {
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/DayStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day",
+          "steps"
+        ],
+        "title": "DayView",
         "type": "object"
       },
       "DecisionRequest": {
@@ -2813,6 +3247,54 @@
         ],
         "title": "DraftProblem",
         "type": "object"
+      },
+      "EdgeAction": {
+        "description": "What makes a case move: the domain method that moves it.",
+        "enum": [
+          "check",
+          "close",
+          "start_review",
+          "prepare",
+          "request_correction",
+          "revise",
+          "resume_review",
+          "record_bravo_entry",
+          "edit",
+          "cross_check",
+          "return",
+          "confirm",
+          "apply_change",
+          "draft_ycbg",
+          "record_ycbg",
+          "send_to_design",
+          "record_design_reply",
+          "discuss_spec",
+          "settle_spec",
+          "price",
+          "submit",
+          "approve",
+          "send",
+          "record_master_list",
+          "decline"
+        ],
+        "title": "EdgeAction",
+        "type": "string"
+      },
+      "EdgeGuard": {
+        "description": "What the domain refuses a move without.",
+        "enum": [
+          "blocking_findings",
+          "ask_customer",
+          "entry_compared",
+          "approval",
+          "maker_checker",
+          "cross_check_not_required",
+          "export_control_hold",
+          "pc_confirmed_date",
+          "request_findings"
+        ],
+        "title": "EdgeGuard",
+        "type": "string"
       },
       "EvidenceView": {
         "description": "What Sales weighs for one line (step 7). Only for `sales.price.read`;\nother customers' rows and the reference price only for\n`sales.price.other_customers.read` too.",
@@ -4184,6 +4666,44 @@
         "title": "LabelledAnchor",
         "type": "object"
       },
+      "LatencyView": {
+        "description": "The step's time per message, nearest-rank percentiles.",
+        "properties": {
+          "p50_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50 Ms"
+          },
+          "p95_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Ms"
+          },
+          "samples": {
+            "title": "Samples",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "p50_ms",
+          "p95_ms",
+          "samples"
+        ],
+        "title": "LatencyView",
+        "type": "object"
+      },
       "LayoutBody": {
         "additionalProperties": false,
         "description": "A mapping of the form one message's attachment prints (ticket 30).",
@@ -4936,6 +5456,59 @@
         "title": "LineDate",
         "type": "object"
       },
+      "LinkedCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/ActivityFilter"
+          }
+        },
+        "required": [
+          "count",
+          "filter"
+        ],
+        "title": "LinkedCount",
+        "type": "object"
+      },
+      "LiveShareView": {
+        "description": "What the step handled in the workspace over the last ``window_days``\ndays, and how much of it DW1 carried (`StepTally`).",
+        "properties": {
+          "automatic": {
+            "title": "Automatic",
+            "type": "integer"
+          },
+          "handled": {
+            "title": "Handled",
+            "type": "integer"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "handled",
+          "automatic",
+          "share",
+          "window_days"
+        ],
+        "title": "LiveShareView",
+        "type": "object"
+      },
       "LmeBand": {
         "additionalProperties": false,
         "description": "The price holds while LME copper is in ``[low, high)`` USD per tonne.",
@@ -5035,7 +5608,7 @@
       "LockReason": {
         "description": "Why the page shows a field without editing it: served with the field,\nworded by the web (`rule-labels.ts`, keyed by these values, so a reason\nadded here fails its typecheck until it has words).",
         "enum": [
-          "model_bar_unchecked",
+          "model_bar",
           "bound_at_build",
           "trust",
           "two_owners"
@@ -5363,6 +5936,40 @@
           "feature_flags"
         ],
         "title": "MeResponse",
+        "type": "object"
+      },
+      "MeasurementView": {
+        "properties": {
+          "measured_at": {
+            "format": "date-time",
+            "title": "Measured At",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "passed",
+          "model",
+          "prompt",
+          "measured_at"
+        ],
+        "title": "MeasurementView",
         "type": "object"
       },
       "MemberMembershipsView": {
@@ -5812,6 +6419,19 @@
         ],
         "title": "MessagesView",
         "type": "object"
+      },
+      "ModelStep": {
+        "description": "The DW1 steps a model may take part in: each a switch of `ModelAssist`\nby the same name (a test holds the two together), and each with the bar\nits live eval must meet before the switch does anything\n(`application.model_readiness.BARS`).",
+        "enum": [
+          "description_attributes",
+          "message_intent",
+          "rfq_extraction",
+          "reply_intent",
+          "request_handoff",
+          "layout_proposal"
+        ],
+        "title": "ModelStep",
+        "type": "string"
       },
       "MySupportGrantModel": {
         "description": "A grant assigned to the caller: enough to open it, nothing the customer\nwrote (no reason).",
@@ -8050,9 +8670,30 @@
       },
       "ProcessEdgeView": {
         "properties": {
+          "action": {
+            "$ref": "#/components/schemas/EdgeAction"
+          },
+          "actor": {
+            "enum": [
+              "dw",
+              "sales",
+              "design",
+              "approver",
+              "customer"
+            ],
+            "title": "Actor",
+            "type": "string"
+          },
           "from": {
             "title": "From",
             "type": "string"
+          },
+          "guards": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeGuard"
+            },
+            "title": "Guards",
+            "type": "array"
           },
           "to": {
             "title": "To",
@@ -8061,7 +8702,10 @@
         },
         "required": [
           "from",
-          "to"
+          "to",
+          "action",
+          "actor",
+          "guards"
         ],
         "title": "ProcessEdgeView",
         "type": "object"
@@ -8190,8 +8834,22 @@
       },
       "ProcessStepView": {
         "properties": {
+          "actors": {
+            "items": {
+              "$ref": "#/components/schemas/ActorView"
+            },
+            "title": "Actors",
+            "type": "array"
+          },
           "coverage": {
             "$ref": "#/components/schemas/Coverage"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/StepModelView"
+            },
+            "title": "Models",
+            "type": "array"
           },
           "settings": {
             "items": {
@@ -8203,12 +8861,18 @@
           "step_id": {
             "title": "Step Id",
             "type": "string"
+          },
+          "uses": {
+            "$ref": "#/components/schemas/UsesView"
           }
         },
         "required": [
           "step_id",
           "coverage",
-          "settings"
+          "settings",
+          "models",
+          "uses",
+          "actors"
         ],
         "title": "ProcessStepView",
         "type": "object"
@@ -8293,6 +8957,47 @@
           "jobs"
         ],
         "title": "ProcessingQueuedView",
+        "type": "object"
+      },
+      "ProducedValue": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnchorRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "value",
+          "line_no",
+          "anchor"
+        ],
+        "title": "ProducedValue",
         "type": "object"
       },
       "QuotationBasisView": {
@@ -9264,6 +9969,28 @@
           "checks"
         ],
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "ReasonCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/ActivityFilter"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason_code",
+          "count",
+          "filter"
+        ],
+        "title": "ReasonCount",
         "type": "object"
       },
       "RegionFlag": {
@@ -10968,6 +11695,161 @@
         "title": "StepCount",
         "type": "object"
       },
+      "StepId": {
+        "description": "The surveyed steps' ids as a closed set: what a value kept per step (the\nKPI's manual baseline) is keyed by, so a version written before a step was\nsurveyed reads that step as the platform has it (`rules.read_over`). Held\nto `WIV_STEPS`, which owns the steps themselves, by a test.",
+        "enum": [
+          "O1",
+          "O2",
+          "O3",
+          "O4",
+          "O5",
+          "O6",
+          "O7",
+          "O8",
+          "O9",
+          "O10",
+          "O11",
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4",
+          "Q5",
+          "Q6",
+          "Q7",
+          "Q8",
+          "Q9",
+          "Q10",
+          "Q11",
+          "Q12"
+        ],
+        "title": "StepId",
+        "type": "string"
+      },
+      "StepModelView": {
+        "description": "One model step of a process step, read-only.",
+        "properties": {
+          "bar": {
+            "title": "Bar",
+            "type": "number"
+          },
+          "effective": {
+            "title": "Effective",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeasurementView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "live_share": {
+            "$ref": "#/components/schemas/LiveShareView"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "step": {
+            "$ref": "#/components/schemas/ModelStep"
+          }
+        },
+        "required": [
+          "step",
+          "enabled",
+          "bar",
+          "metric",
+          "model",
+          "prompt",
+          "latest",
+          "effective",
+          "live_share"
+        ],
+        "title": "StepModelView",
+        "type": "object"
+      },
+      "StepSummaryView": {
+        "properties": {
+          "automatic": {
+            "$ref": "#/components/schemas/LinkedCount"
+          },
+          "automatic_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automatic Share"
+          },
+          "handled": {
+            "$ref": "#/components/schemas/LinkedCount"
+          },
+          "latency": {
+            "$ref": "#/components/schemas/LatencyView"
+          },
+          "model_unavailable": {
+            "$ref": "#/components/schemas/LinkedCount"
+          },
+          "process_steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepId"
+            },
+            "title": "Process Steps",
+            "type": "array"
+          },
+          "step": {
+            "$ref": "#/components/schemas/ModelStep"
+          },
+          "to_person": {
+            "$ref": "#/components/schemas/LinkedCount"
+          },
+          "top_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonCount"
+            },
+            "title": "Top Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "step",
+          "process_steps",
+          "handled",
+          "automatic",
+          "to_person",
+          "automatic_share",
+          "model_unavailable",
+          "top_reasons",
+          "latency"
+        ],
+        "title": "StepSummaryView",
+        "type": "object"
+      },
       "SubmissionView": {
         "properties": {
           "document_sha256": {
@@ -11979,6 +12861,27 @@
           "display_name"
         ],
         "title": "UserRefView",
+        "type": "object"
+      },
+      "UsesView": {
+        "properties": {
+          "layouts": {
+            "title": "Layouts",
+            "type": "boolean"
+          },
+          "lists": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogList"
+            },
+            "title": "Lists",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lists",
+          "layouts"
+        ],
+        "title": "UsesView",
         "type": "object"
       },
       "ValidationError": {
@@ -15316,6 +16219,89 @@
         ]
       }
     },
+    "/api/v1/sales/activity": {
+      "get": {
+        "operationId": "activity_summary_api_v1_sales_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lane",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CaseKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivitySummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Activity Summary",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/inbox": {
       "get": {
         "operationId": "inbox_api_v1_sales_inbox_get",
@@ -16092,6 +17078,132 @@
     "/api/v1/sales/orders": {
       "get": {
         "operationId": "orders_api_v1_sales_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "step",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ModelStep"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Step"
+            }
+          },
+          {
+            "in": "query",
+            "name": "handled_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "dw1",
+                    "person"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Handled By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "accepted",
+                    "refused",
+                    "unavailable"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Result"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reason_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z_]{1,40}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lane",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CaseKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -16106,6 +17218,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Orders",
@@ -16152,6 +17274,49 @@
           }
         },
         "summary": "Order",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/activity": {
+      "get": {
+        "operationId": "order_activity_api_v1_sales_orders__case_id__activity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseActivityView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Activity",
         "tags": [
           "sales"
         ]
@@ -17439,6 +18604,132 @@
     "/api/v1/sales/quotes": {
       "get": {
         "operationId": "quotes_api_v1_sales_quotes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "step",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ModelStep"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Step"
+            }
+          },
+          {
+            "in": "query",
+            "name": "handled_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "dw1",
+                    "person"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Handled By"
+            }
+          },
+          {
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "accepted",
+                    "refused",
+                    "unavailable"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Result"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reason_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z_]{1,40}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lane",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CaseKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -17453,6 +18744,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Quotes",
@@ -17594,6 +18895,49 @@
           }
         },
         "summary": "Quote",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/activity": {
+      "get": {
+        "operationId": "quote_activity_api_v1_sales_quotes__case_id__activity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseActivityView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Activity",
         "tags": [
           "sales"
         ]

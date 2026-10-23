@@ -22,9 +22,14 @@ import { label, QUOTE_STATE } from "../_lib/labels";
 import { quoteTitle } from "../_lib/quote-actions";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
-import { useListView, useStatusFilter } from "../_lib/use-status-filter";
+import {
+  useActivityFilter,
+  useListView,
+  useStatusFilter,
+} from "../_lib/use-status-filter";
 import { salesCrumbs } from "../_components/crumbs";
 import {
+  ActivityFilterChip,
   Assignee,
   DueText,
   ListToolbar,
@@ -81,9 +86,12 @@ function Quotes() {
   const name = usePeople();
   const customerName = useCustomerName();
   const view = useListView(TABS, "open", SORTS, "due");
+  // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
+  // server narrows it, by the filter the count was served with.
+  const [activity, clearActivity] = useActivityFilter();
   const quotes = useResource(
-    "sales/quotes",
-    useCallback(() => salesApi().quotes(), []),
+    `sales/quotes:${JSON.stringify(activity)}`,
+    useCallback(() => salesApi().quotes(activity ?? undefined), [activity]),
   );
   const [status, setStatus] = useStatusFilter();
   const all = useMemo(() => quotes.data ?? [], [quotes.data]);
@@ -122,6 +130,7 @@ function Quotes() {
   const clear = () => {
     setStatus([]);
     view.setQuery("");
+    if (activity) clearActivity();
   };
 
   const priority: PriorityItem[] = [];
@@ -173,7 +182,7 @@ function Quotes() {
       />
       {quotes.error ? (
         <LoadError error={quotes.error} onRetry={quotes.reload} />
-      ) : !quotes.loading && all.length === 0 ? (
+      ) : !quotes.loading && all.length === 0 && !activity ? (
         <Empty description="Chưa có yêu cầu báo giá. Hồ sơ được tạo khi DW1 xử lý thư có RFQ trong Hộp thư.">
           <Link href="/sales/inbox">Mở Hộp thư</Link>
         </Empty>
@@ -224,6 +233,9 @@ function Quotes() {
             sort={view.sort}
             onSort={view.setSort}
           />
+          {activity ? (
+            <ActivityFilterChip filter={activity} onClear={clearActivity} />
+          ) : null}
           {status.length ? (
             <Space wrap>
               {status.map((s) => (
@@ -258,7 +270,9 @@ function Quotes() {
                   description={
                     status.length
                       ? `Không có báo giá ở trạng thái ${status.map((s) => label(QUOTE_STATE, s)).join(", ")} trong nhóm này.`
-                      : "Không có báo giá nào khớp bộ lọc."
+                      : activity && !all.length
+                        ? "Không có báo giá nào khớp hoạt động DW1 này."
+                        : "Không có báo giá nào khớp bộ lọc."
                   }
                 >
                   <Button onClick={clear}>Xóa bộ lọc</Button>

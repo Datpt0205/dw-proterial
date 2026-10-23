@@ -32,10 +32,11 @@ import { valueLabel } from "../../_lib/rule-labels";
 import type { RuleKey } from "../../_lib/rules";
 import { useResource } from "../../_lib/use-resource";
 import { salesCrumbs } from "../../_components/crumbs";
+import { aiState } from "../../_lib/activity";
+import { ProcessFlow } from "../../_components/process-flow";
 import {
   ProcessList,
-  ProcessMap,
-  StepTags,
+  type AiSummary,
   type StatusCard,
 } from "../../_components/process-map";
 import {
@@ -49,6 +50,8 @@ type View = SalesSchemas["ProcessSettingsView"];
 type Kind = Lane["kind"];
 type Step = SalesSchemas["ProcessStepView"];
 type Setting = SalesSchemas["SettingView"];
+type StepModel = SalesSchemas["StepModelView"];
+type Actor = SalesSchemas["ActorView"];
 
 /**
  * Quy trình DW1 (2026-10-22, slice 1): the order and quote lanes as their
@@ -64,6 +67,14 @@ type Setting = SalesSchemas["SettingView"];
  * without `sales.price.read` the server leaves the price-bearing keys out,
  * so the page never asks for them. Who may open it is the same as
  * `/sales/rules`: a holder of `sales.rules.propose`.
+ *
+ * Slices 2 and 3 (2026-10-23): on a wide screen the lane is a React Flow
+ * canvas (`process-flow.tsx`) with every move labelled and the ways back
+ * drawn; each status says whether its model steps run ("AI bật · đạt"), and
+ * its drawer adds what the model steps measured and did, the data the steps
+ * read, and who acts on them. The model steps come only to a caller who may
+ * read the order rules that switch them; for anyone else the server sends
+ * none and the page draws none.
  */
 export default function ProcessPage() {
   return (
@@ -108,7 +119,7 @@ function useOpenItem() {
     node: params.get("node"),
     edit: params.get("edit"),
     lane: params.get("lane"),
-    hrefOf: (id: string) => href({ node: id, edit: null }),
+    hrefOf: useCallback((id: string) => href({ node: id, edit: null }), [href]),
     open: (id: string) => opening("node", { node: id, edit: null }),
     close: () => closing("node", { node: null, edit: null }),
     openEdit: (key: string) => opening("edit", { edit: key }),
@@ -135,6 +146,51 @@ function distinct(settings: Setting[]): Setting[] {
     seen.add(id);
     return true;
   });
+}
+
+/** Each model step once, in the order first met. */
+function distinctModels(steps: Step[]): StepModel[] {
+  const seen = new Map<string, StepModel>();
+  for (const m of steps.flatMap((s) => s.models))
+    if (!seen.has(m.step)) seen.set(m.step, m);
+  return [...seen.values()];
+}
+
+/** The lists the steps read, each once, and whether any reads PO layouts. */
+function joinedUses(steps: Step[]): Step["uses"] {
+  return {
+    lists: [...new Set(steps.flatMap((s) => s.uses.lists))],
+    layouts: steps.some((s) => s.uses.layouts),
+  };
+}
+
+/** Each role and permission set once, with every scope it holds here. */
+function joinedActors(steps: Step[]): Actor[] {
+  const found = new Map<string, Actor>();
+  for (const actor of steps.flatMap((s) => s.actors)) {
+    const id = `${actor.kind}:${actor.key}`;
+    const before = found.get(id);
+    found.set(
+      id,
+      before
+        ? {
+            ...before,
+            scopes: [...new Set([...before.scopes, ...actor.scopes])],
+          }
+        : actor,
+    );
+  }
+  return [...found.values()];
+}
+
+/** A status's AI state, one entry per state its model steps are in. */
+function aiSummary(models: StepModel[]): AiSummary[] {
+  const counts = new Map<AiSummary["state"], number>();
+  for (const m of models) {
+    const state = aiState(m);
+    counts.set(state, (counts.get(state) ?? 0) + 1);
+  }
+  return [...counts].map(([state, count]) => ({ state, count }));
 }
 
 /** What an item of the URL (`order.in_review`, `quote.Q8`, `order`, `process`) opens. */
@@ -199,6 +255,9 @@ function resolve(
     back: node ? words(layout.back[rest]) : [],
     exitsFrom: node ? words(layout.exitsFrom[rest]) : [],
     settings: distinct(own.flatMap((s) => s.settings)),
+    models: distinctModels(own),
+    uses: joinedUses(own),
+    actors: joinedActors(own),
   };
 }
 
@@ -364,55 +423,48 @@ function LaneView({
 }) {
   const count = (ids: string[]) =>
     distinct(ids.flatMap((id) => steps.get(id)?.settings ?? [])).length;
-  const tags = (ids: string[]) =>
-    ids
-      .map((id) => steps.get(id))
-      .filter((s): s is Step => Boolean(s))
-      .map((s) => ({
-        step_id: s.step_id,
-        coverage: label(STEP_COVERAGE, s.coverage),
-      }));
-  const words = (list: string[] | undefined) =>
-    (list ?? []).map((s) => statusLabel(lane.kind, s)).join(", ");
-  const cards: Record<string, StatusCard> = Object.fromEntries(
-    lane.nodes.map((node) => {
-      const back = words(layout.back[node.status]);
-      const exits = words(layout.exitsFrom[node.status]);
-      const settings = count(node.steps);
-      const item = `${lane.kind}.${node.status}`;
-      return [
-        node.status,
-        {
-          status: node.status,
-          item,
-          href: hrefOf(item),
-          label: statusLabel(lane.kind, node.status),
-          facts: (
-            <>
-              <StepTags steps={tags(node.steps)} />
-              <span>
-                Đến lượt:{" "}
-                {node.holder ? label(TIME_BUCKET, node.holder) : NO_HOLDER}
-              </span>
-              <span>
-                {settings ? `${settings} thiết lập` : "Không có thiết lập"}
-              </span>
-              {back ? (
-                <span className="line-clamp-2">Có thể quay lại: {back}</span>
-              ) : null}
-              {exits ? (
-                <span className="line-clamp-2">Có thể đóng từ: {exits}</span>
-              ) : null}
-            </>
-          ),
-        },
-      ];
-    }),
-  );
+  const cards = useMemo<Record<string, StatusCard>>(() => {
+    const settingsOf = (ids: string[]) =>
+      distinct(ids.flatMap((id) => steps.get(id)?.settings ?? [])).length;
+    const words = (list: string[] | undefined) =>
+      (list ?? []).map((s) => statusLabel(lane.kind, s)).join(", ");
+    return Object.fromEntries(
+      lane.nodes.map((node) => {
+        const own = node.steps
+          .map((id) => steps.get(id))
+          .filter((s): s is Step => Boolean(s));
+        const item = `${lane.kind}.${node.status}`;
+        return [
+          node.status,
+          {
+            status: node.status,
+            item,
+            href: hrefOf(item),
+            label: statusLabel(lane.kind, node.status),
+            steps: own.map((s) => ({
+              step_id: s.step_id,
+              coverage: label(STEP_COVERAGE, s.coverage),
+            })),
+            holder: node.holder ? label(TIME_BUCKET, node.holder) : NO_HOLDER,
+            settings: settingsOf(node.steps),
+            ai: aiSummary(distinctModels(own)),
+            back: words(layout.back[node.status]),
+            exits: words(layout.exitsFrom[node.status]),
+          },
+        ];
+      }),
+    );
+  }, [lane, layout, steps, hrefOf]);
   return (
     <div className="space-y-4">
       {wide ? (
-        <ProcessMap layout={layout} cards={cards} onOpen={onOpen} />
+        <ProcessFlow
+          id={`process-${lane.kind}`}
+          name={CASE_KIND[lane.kind]}
+          layout={layout}
+          cards={cards}
+          onOpen={onOpen}
+        />
       ) : (
         <ProcessList layout={layout} cards={cards} onOpen={onOpen} />
       )}

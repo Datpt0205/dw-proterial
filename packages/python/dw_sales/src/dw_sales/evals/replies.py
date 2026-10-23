@@ -42,6 +42,7 @@ from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import ConflictError
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
+from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.application.reply_intent import REPLY_INTENT, ReplyReader
 from dw_sales.application.runs import subject_of
@@ -50,6 +51,7 @@ from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.mail_parts import newest_part
 from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import DispositionKind as FindingDisposition
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import QuoteStatus
@@ -58,10 +60,6 @@ from dw_sales.evals.intents import _demo_rules
 from dw_sales.evals.recorded import Recorded, latency, load_answers
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, SampleWith, World, open_world
 
-# The proposed bar (ticket 32; Đạt sets the final one): at least this share of
-# the golden replies other than conditional ones and non-answers read as their
-# kind, and none of those two read as `accepts_spec`. Reported, not enforced.
-PROPOSED_BAR = 0.85
 RECORDED = "evals/fixtures/cases/sales_reply_recorded.json"
 RULES = "sales_order_rules@1.5.2"
 _RUN = RunContext(
@@ -213,12 +211,12 @@ def grade_golden(
         },
         "conditional_or_non_answer": scores([r for r in reads if r.tags & set(_SCOPED)]),
         "false_accepts": _false_accepts(reads),
-        "proposed_bar": PROPOSED_BAR,
-        "meets_proposed_bar": scores(plain)["kind_accuracy"] >= PROPOSED_BAR
-        and not _false_accepts(reads),
         "latency": latency(model, REPLY_INTENT.prompt_id),
         "missed": sorted(f"{r.reply_id}:{r.gold}->{r.kind}" for r in reads if not r.right),
     }
+    # The bar the step must meet before a tenant's switch does anything
+    # (`model_readiness.BARS`): reported here, enforced from a live run.
+    details["bar"] = bar_verdict(ModelStep.REPLY_INTENT, details, holds=not _false_accepts(reads))
     floor = float(expected.get("min_kind_accuracy", 0.0))
     if ctx.live_model is None and overall["kind_accuracy"] < floor:
         # The replay is deterministic: below the recorded score means the

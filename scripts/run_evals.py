@@ -11,13 +11,24 @@ Usage:
     uv run python scripts/run_evals.py --live onprem --record
         --dataset evals/datasets/sales_descriptions@1.0.0.json
 
+    # The live lane, attested for one tenant (dw_sales ADR 0005, addendum of
+    # 2026-10-23): the dataset's model step measured on the profile's model and
+    # recorded for the tenant as the lane `sales_model_attest`, as dw_app
+    # (DW_WORKER_DATABASE_URL) under the tenant's RLS, audited. A tenant turns
+    # a step on, and DW1 uses it, only once its latest such measurement passed.
+    uv run python scripts/run_evals.py --live onprem --attest
+        --tenant <uuid> --workspace <uuid>
+        --dataset evals/datasets/sales_intent@1.0.0.json
+
 Exit code is non-zero when any case fails or a dataset lacks full security
 coverage (prompt injection, cross-tenant attack, missing evidence). A live
 run also fails when the model read nothing (no call gave a usable answer,
 `live_shortfalls`): its cases grade the guards, which hold just as well when
 every call times out. So `--live` is for a dataset with a model step: one
-without reads nothing and fails as such. A golden case's bar is reported in
-its summary line, not enforced here.
+without reads nothing and fails as such. A golden case's bar
+(`dw_sales.application.model_readiness.BARS`) is reported in its summary
+line; it is enforced where a step is turned on and used, from what `--attest`
+records, never from a report file.
 
 This script is the eval composition root: `grader_table` is the one place the
 grader table is built, from the platform's graders plus each bounded context's,
@@ -30,8 +41,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from dw_evals.graders import Grader
@@ -74,11 +86,24 @@ def main() -> int:
         action="store_true",
         help="with --live: write the answers the smoke replays",
     )
+    parser.add_argument(
+        "--attest",
+        action="store_true",
+        help="with --live: record the step's measurement for --tenant, in --workspace",
+    )
+    parser.add_argument("--tenant", type=uuid.UUID, help="with --attest: the tenant measured")
+    parser.add_argument(
+        "--workspace", type=uuid.UUID, help="with --attest: the workspace it is recorded in"
+    )
     args = parser.parse_args()
     if args.live and not args.dataset:
         parser.error("--live runs one dataset: pass --dataset <file>")
     if args.record and not args.live:
         parser.error("--record needs --live")
+    if args.attest and not (args.live and args.tenant and args.workspace):
+        parser.error("--attest needs --live, --tenant and --workspace")
+    if (args.tenant or args.workspace) and not args.attest:
+        parser.error("--tenant and --workspace go with --attest")
 
     from dw_evals.runner import load_dataset, run_dataset, write_report
 
@@ -119,6 +144,12 @@ def main() -> int:
         if live_model is not None:
             for result in report.results:
                 print(f"    {result.case_id}: {_summary(result.details)}")
+        if args.attest:
+            if shortfalls:
+                # A run that read nothing measured nothing: no row either way.
+                print("    ✗ attest: nothing was read, so nothing is recorded")
+                continue
+            print(f"    {attest(report, args.live, args.tenant, args.workspace)}")
     if args.record and live_model is not None:
         print(f"recorded {record_answers(live_model)} answers")
     return exit_code
@@ -217,14 +248,75 @@ def record_answers(model: object) -> int:
     return count + len(answers)
 
 
+def attest(report: Any, profile: str, tenant: uuid.UUID, workspace: uuid.UUID) -> str:
+    """Records the live run's measurement of its dataset's step for one
+    tenant: the golden case's verdict on the bar (`model_readiness.BARS`),
+    passing only where every case of the run passed too, on the model
+    ``profile`` routed the run to (the platform layer the eval gateway
+    loads). Written as the lane `sales_model_attest`, as dw_app under the
+    tenant's RLS, with its audit event; refused for a role that bypasses RLS."""
+    import asyncio
+    import os
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from dw_kernel.ids import TenantId, WorkspaceId
+    from dw_kernel.ports import SystemClock, Uuid7Generator
+    from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+    from dw_sales.adapters.assembly import step_model
+    from dw_sales.adapters.persistence.measurements import SqlMeasurementLog
+    from dw_sales.application.model_readiness import BARS, ModelAttestation, step_measured_by
+    from dw_sales.application.ports import SalesScope
+
+    step = step_measured_by(report.dataset_id)
+    if step is None:
+        raise SystemExit(f"--attest: {report.dataset_id} measures no model step")
+    golden = next(r for r in report.results if r.grader == BARS[step].grader)
+    verdict = golden.details["bar"]
+    database_url = os.environ.get("DW_WORKER_DATABASE_URL")
+    if not database_url:
+        raise SystemExit("--attest: DW_WORKER_DATABASE_URL is not set (source .env)")
+    # What the run was routed to: the platform layer, as `live_model_for` loads it.
+    model = step_model(REPO_ROOT / "configs", profile).model_for(tenant)
+
+    async def record() -> object:
+        engine = create_async_engine(database_url, poolclass=NullPool)
+        sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        try:
+            async with sessions() as session:
+                bypasses = await session.scalar(
+                    text("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
+                )
+            if bypasses is not False:
+                raise SystemExit("--attest: refusing a database role that bypasses RLS")
+            attestation = ModelAttestation(
+                SqlMeasurementLog(sessions, audit=SqlAuditRepository),
+                SystemClock(),
+                Uuid7Generator(),
+            )
+            return await attestation.attest(
+                SalesScope(TenantId(tenant), WorkspaceId(workspace)),
+                step,
+                model=model,
+                value=float(verdict["value"]),
+                held=bool(verdict["passed"]) and report.ok,
+                dataset=f"{report.dataset_id}@{report.dataset_version}",
+            )
+        finally:
+            await engine.dispose()
+
+    return f"attested: {asyncio.run(record())!r}"
+
+
 def _summary(details: dict[str, object]) -> str:
     keys = (
         "all",
         "vi_en",
         "by_language",
         "latency",
-        "meets_proposed_bar",
-        "meets_proposed_bar_vi_en",
+        "bar",
         "seen",
         "reason",
     )

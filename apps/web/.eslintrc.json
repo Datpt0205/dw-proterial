@@ -25,12 +25,20 @@
             "name": "antd",
             "importNames": ["message", "notification"],
             "message": "The static API does not read the theme; use App.useApp()."
+          },
+          {
+            "name": "@xyflow/react",
+            "message": "React Flow draws the DW1 process map only (CLAUDE.md \"Web UI\", 2026-10-23): import it in app/sales/_components/process-flow.tsx."
           }
         ],
         "patterns": [
           {
             "group": ["@radix-ui/*"],
             "message": "antd is the one component system (CLAUDE.md, Web UI)."
+          },
+          {
+            "group": ["@xyflow/*", "reactflow", "react-flow-renderer"],
+            "message": "React Flow draws the DW1 process map only (CLAUDE.md \"Web UI\", 2026-10-23): import it in app/sales/_components/process-flow.tsx."
           }
         ]
       }
@@ -80,6 +88,55 @@
       "files": ["lib/money.ts", "lib/dates.ts"],
       "rules": {
         "no-restricted-syntax": "off"
+      }
+    },
+    {
+      "files": ["app/sales/_components/process-flow.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "sonner",
+                "message": "Notices go through antd: const { message, notification } = App.useApp()."
+              },
+              {
+                "name": "radix-ui",
+                "message": "antd is the one component system (CLAUDE.md, Web UI)."
+              },
+              {
+                "name": "lucide-react",
+                "message": "Icons come from @ant-design/icons."
+              },
+              {
+                "name": "class-variance-authority",
+                "message": "antd is the one component system (CLAUDE.md, Web UI)."
+              },
+              {
+                "name": "antd",
+                "importNames": ["message", "notification"],
+                "message": "The static API does not read the theme; use App.useApp()."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@radix-ui/*"],
+                "message": "antd is the one component system (CLAUDE.md, Web UI)."
+              },
+              {
+                "group": [
+                  "@xyflow/*",
+                  "!@xyflow/react",
+                  "!@xyflow/react/**",
+                  "reactflow",
+                  "react-flow-renderer"
+                ],
+                "message": "Only @xyflow/react itself, never its engine or its older names."
+              }
+            ]
+          }
+        ]
       }
     }
   ]

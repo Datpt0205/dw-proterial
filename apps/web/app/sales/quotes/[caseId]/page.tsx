@@ -54,6 +54,7 @@ import {
 } from "../../_components/artifacts-panel";
 import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
+import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -371,6 +372,13 @@ function QuoteDetail() {
         caseId={data.case_id}
         status={data.status}
         version={data.case_version}
+      />
+
+      <CaseActivity
+        kind="quote"
+        caseId={data.case_id}
+        version={data.case_version}
+        onOpenSource={openField}
       />
 
       <CaseReplies replies={data.replies} />

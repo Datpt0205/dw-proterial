@@ -20,9 +20,14 @@ import { useCustomerName } from "../_lib/customers";
 import { label, ORDER_STATE } from "../_lib/labels";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
-import { useListView, useStatusFilter } from "../_lib/use-status-filter";
+import {
+  useActivityFilter,
+  useListView,
+  useStatusFilter,
+} from "../_lib/use-status-filter";
 import { salesCrumbs } from "../_components/crumbs";
 import {
+  ActivityFilterChip,
   Assignee,
   ListToolbar,
   listFooter,
@@ -73,9 +78,12 @@ function Orders() {
   const name = usePeople();
   const customerName = useCustomerName();
   const view = useListView(TABS, "open", SORTS, "newest");
+  // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
+  // server narrows it, by the filter the count was served with.
+  const [activity, clearActivity] = useActivityFilter();
   const orders = useResource(
-    "sales/orders",
-    useCallback(() => salesApi().orders(), []),
+    `sales/orders:${JSON.stringify(activity)}`,
+    useCallback(() => salesApi().orders(activity ?? undefined), [activity]),
   );
   const [status, setStatus] = useStatusFilter();
   const all = useMemo(() => orders.data ?? [], [orders.data]);
@@ -109,10 +117,15 @@ function Orders() {
       );
     return [...rows].sort((a, b) => at(b) - at(a));
   })();
-  const filtered = view.tab !== "all" || view.query !== "" || status.length > 0;
+  const filtered =
+    view.tab !== "all" ||
+    view.query !== "" ||
+    status.length > 0 ||
+    activity !== null;
   const clear = () => {
     setStatus([]);
     view.setQuery("");
+    if (activity) clearActivity();
   };
 
   const blocked = all.filter(
@@ -225,6 +238,9 @@ function Orders() {
             sort={view.sort}
             onSort={view.setSort}
           />
+          {activity ? (
+            <ActivityFilterChip filter={activity} onClear={clearActivity} />
+          ) : null}
           {status.length ? (
             <Space wrap>
               {status.map((s) => (
@@ -254,12 +270,14 @@ function Orders() {
             locale={{
               emptyText: orders.loading ? (
                 " "
-              ) : filtered && all.length ? (
+              ) : filtered && (all.length || activity) ? (
                 <Empty
                   description={
                     status.length
                       ? `Không có đơn ở trạng thái ${status.map((s) => label(ORDER_STATE, s)).join(", ")} trong nhóm này.`
-                      : "Không có đơn nào khớp bộ lọc."
+                      : activity && !all.length
+                        ? "Không có đơn nào khớp hoạt động DW1 này."
+                        : "Không có đơn nào khớp bộ lọc."
                   }
                 >
                   <Button onClick={clear}>Xóa bộ lọc</Button>

@@ -16,7 +16,7 @@ from dw_sales.application.threads import ThreadedCase
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.layouts import LayoutMapping, PoLayout
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
-from dw_sales.domain.order_checks import IntakeCaps, OrderRules
+from dw_sales.domain.order_checks import IntakeCaps, ModelStep, OrderRules
 from dw_sales.domain.orders import OrderCase, PoDocument, PrintedBuyer, Unreadable
 
 # What a file is by its bytes: read (``pdf``, ``xlsx``), read once the reader
@@ -85,6 +85,16 @@ class QuoteFormPort(Protocol):
     """
 
     async def form(self, content: AttachmentContent) -> QuoteForm | None: ...
+
+
+class ModelStepGatePort(Protocol):
+    """Whether a model step may run for ``scope``'s tenant under ``rules``:
+    the rules turn it on AND its live eval met the bar for the model and the
+    prompt the step runs on now (dw_sales ADR 0005, addendum of 2026-10-23).
+    False otherwise, and then the step does what it does when it is off.
+    Asked by every place that would call a model; fails closed."""
+
+    async def allows(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool: ...
 
 
 class OrderRulesPort(Protocol):

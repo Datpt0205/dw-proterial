@@ -229,6 +229,36 @@ async def test_m10_is_read_with_every_value_and_the_quote_due_date_anchored() ->
     assert {a.attachment_sha256 for a in document.anchors()} == {request.attachment.sha256}
 
 
+async def test_a_printed_target_price_reaches_no_viewer_without_prices_even_by_its_anchor() -> None:
+    """M10's form prints a target price. Its anchor quotes the printed words
+    (`SourceAnchor.quote`), so for a caller without `sales.price.read` the
+    anchor is absent, not only the amount marked hidden (ui-quality §6)."""
+    from dw_sales.application.access import PriceView
+    from dw_sales.application.views import HIDDEN, quote_case
+
+    case = await _service().open_case(SCOPE, "M10", uuid.uuid4())
+
+    def view(amounts: bool) -> Any:
+        return quote_case(
+            case,
+            assigned_to=None,
+            release_manifest_ref=None,
+            today=ISSUED,
+            prices=PriceView(amounts=amounts, other_customers=False),
+            evidence_rows=None,
+        )
+
+    hidden, shown = view(False), view(True)
+    (line,) = hidden.lines
+    assert line.target_price == HIDDEN
+    assert "target_price" not in line.anchors
+    printed = shown.lines[0].anchors["target_price"]
+    assert shown.lines[0].target_price == Decimal("0.6500") and printed.cell_ref is not None
+    text = hidden.model_dump_json()
+    assert printed.model_dump_json() not in text
+    assert "0.6500" not in text and "0,6500" not in text
+
+
 async def test_every_quote_request_in_the_mailbox_reads_back_as_its_fixture_says() -> None:
     service = _service()
     for fixture in load_quote_requests():

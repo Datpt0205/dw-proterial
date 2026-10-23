@@ -182,3 +182,73 @@ Three more steps follow the decision unchanged; what they add is recorded here.
   worker carries out the `sales.layout.decided` event (CLAUDE.md, "An
   approval with no run announces its decision"). The domain and a CHECK
   refuse the maker again. No Sales route decides it.
+
+## Addendum 2026-10-23: the bar is enforced, not reported (approved by Đạt)
+
+Decision 9 said a step is measured before it is trusted, and the config said a
+tenant turns a step on "once that step's live eval meets its bar". Nothing
+enforced that (failure-modes #1): the bars were constants in the eval modules
+and the live results gitignored files on whoever ran the lane, so the running
+process could read neither, and a tenant's version could turn on a step no
+live eval had passed. Đạt approved the design below on 2026-10-23.
+
+- **One owner for the bars.** `dw_sales.application.model_readiness.BARS`
+  maps each `ModelStep` (the six `model_assist` switches: a test holds the two
+  together) to its bar, the path of its metric in its golden grader's details,
+  the prompt the step pins, and the dataset and grader that measure it. The
+  eval modules read their bar from it (`bar_verdict`); `PROPOSED_BAR` is gone.
+- **A store of live measurements.** `sales.model_step_measurements`
+  (`2d97d03c937a`): tenant, step, model (the profile route's model), prompt
+  `id@version`, metric, value, the bar at the time, passed, dataset
+  `id@version`, measured_at, recorded_by. Narrowed by tenant only, like the
+  rules it backs; RLS ENABLEd and FORCEd; append-only for `dw_app` (SELECT,
+  INSERT; UPDATE and DELETE revoked); a CHECK that a pass meets its bar; not
+  partitioned (a row per attested step, not per message). Written only by
+  `run_evals.py --live <profile> --attest --tenant <uuid> --workspace <uuid>`:
+  the lane `sales_model_attest` (ADR 0011: `recorded_by` and the audit actor
+  read `system:sales_model_attest`), as `dw_app` under the tenant's RLS, the
+  audit event in the same transaction; a role that bypasses RLS is refused,
+  and a run that read nothing records nothing. A row passes only where the
+  golden verdict passed AND every case of the run passed. The workspace is
+  asked for because every tenant row and every audit event names one.
+- **Ready** means: the latest measurement for the step, on the model the
+  tenant's profile routes it to now and the prompt version it pins now, passed
+  at today's bar on today's metric. A newer model, a new prompt version, a
+  raised bar or a later failing run each take readiness away until measured
+  again. Anything unreadable is not ready.
+- **Enforced where the effect happens.** Every place that would call a model
+  (`OrderIntake`: message intent, reply intent, hand-off, layout pre-fill,
+  description reading; the quotation flow's request reading) asks
+  `ModelStepGatePort.allows`: on AND ready, else the step does exactly what it
+  does when it is off, and the log says which step and why. A version of the
+  order rules that **turns a step on** (on in it, off in the version in force)
+  is refused when it is proposed and when it is decided (409,
+  `model_bar_unmet`, naming the step, its bar, the model and prompt, and the
+  latest measurement or "chưa đo"); a settlement that finds a step no longer
+  ready records the approved version as not applied, with why, as it does for
+  a number the platform shipped since, so the key is never held. Turning a
+  step off is never refused, and neither is keeping one on (that turns nothing
+  on; the gate still keeps it with a person until it is measured).
+- **The demo tenant.** `make demo-reset` installs `sales_order_rules@1.5.3`:
+  the sample set's 1.5.2 with all six steps off, every other rule the same
+  (held so by `test_order_rules.py`). The mock data path needs no model (none
+  is composed without `DW_ONPREM_MODEL_BASE_URL`), and a measurement is what
+  a live run says, so the demo seed records none and turns nothing on; the
+  tenant's own rules (the NOC/ESF hold among them) stay in force. A developer
+  with a local model attests the steps and proposes a version that turns them
+  on, through the gate. 1.5.2 (all six on) is kept for what runs the steps:
+  the API's integration suite, which no live run reaches, records stand-ins
+  through the lane's own write path (`seed_test_measurements`) and seeds it;
+  unit tests and evals seed an in-memory store that holds the SQL store's
+  contract. Nothing goes around the gate.
+- **Shown.** `GET /sales/rules/process` serves, per step, its model steps
+  (switch, bar, metric, model, prompt, latest measurement, in effect, and the
+  live share of the last 7 days from `sales.step_outcomes`), absent for a
+  caller who may not read the order rules; the process page's lock on
+  `model_assist` now says the bar is enforced.
+
+Known limits: a tenant's own wording of a prompt under the same version is
+not told apart (the measurement names `id@version`); the RFQ step's
+measurement names its own prompt, not the description prompt it also calls;
+`sales.bravo_template_mapping` (a one-call draft, not a `model_assist`
+switch) is outside this gate.

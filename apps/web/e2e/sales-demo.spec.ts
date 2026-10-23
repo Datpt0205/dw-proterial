@@ -499,11 +499,13 @@ test("2b. With a model server, M37 is a quote case a model read; Diệu confirms
     disposition: { kind: string; case_id: string | null };
   }[] = await (await an.get("/inbox")).json();
   const m37 = inbox.find((m) => m.message_id === "M37")!.disposition;
-  // Without a model server (CI), M37 is routed to Sales as before: the step
-  // a model takes is the API's and the evals' to hold there (ticket 29).
+  // Without a model server (CI), or with the reset's rules (1.5.3, every
+  // model step off until a developer attests one and turns it on), M37 is
+  // routed to Sales as before: the step a model takes is the API's and the
+  // evals' to hold there (ticket 29).
   test.skip(
     m37.kind !== "case_created",
-    "no model server: M37 is routed to Sales as before",
+    "no model step on: M37 is routed to Sales as before",
   );
   await signIn(page, request, DIEU);
   await page.goto(`/sales/quotes/${m37.case_id}`);
@@ -1146,7 +1148,7 @@ test("11. An proposes a version of the order rules on the rules page; Giang deci
 }) => {
   // Last on purpose: an approved version changes the rules the demo tenant
   // checks orders under, and a case checked under the old ones is not checked
-  // again under the new (ticket 19). The next run's reset puts 1.5.2 back.
+  // again under the new (ticket 19). The next run's reset puts 1.5.3 back.
   const an = await persona(request, AN);
   const giang = await persona(request, GIANG);
   const VERSION = "1.5.99";

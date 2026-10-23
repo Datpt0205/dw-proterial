@@ -53,6 +53,7 @@ from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.message_intent import MESSAGE_INTENT, IntentReader
+from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.application.order_intake import (
     INTENT_ROUTES,
@@ -71,13 +72,11 @@ from dw_sales.domain.messages import (
     InboundMessage,
     MailAuthentication,
 )
+from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded, latency, load_answers
-from dw_sales.evals.world import ALPHA, BETA, SampleWith, open_world
+from dw_sales.evals.world import ALPHA, BETA, SampleWith, measured_gate, open_world
 
-# The proposed bar (ticket 31; Đạt sets the final one): at least this share of
-# the golden residue read as its kind. Reported, not enforced.
-PROPOSED_BAR = 0.90
 RECORDED = "evals/fixtures/cases/sales_intent_recorded.json"
 _RECEIVED = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 _RUN = RunContext(
@@ -222,6 +221,9 @@ def _intake(
         cases=_NoCases(),
         new_case_id=uuid.uuid4,
         intents=intents,
+        # The demo tenant's steps measured at their bar, as the API's gate
+        # would find them after a live run (ADR 0005, addendum of 2026-10-23).
+        model_steps=measured_gate(Path(__file__).resolve().parents[6], ALPHA)[0],
     )
 
 
@@ -263,17 +265,18 @@ def grade_golden(
     reads = _run(read_messages(model, golden))
     by_lang = {lang: scores([r for r in reads if r.lang == lang]) for lang in ("vi", "en", "ja")}
     regex_misses = {str(m["id"]) for m in golden if m.get("regex_miss")}
-    details = {
+    details: dict[str, Any] = {
         "live": ctx.live_model is not None,
         "all": scores(reads),
         "vi_en": scores([r for r in reads if r.lang in ("vi", "en")]),
         "by_language": by_lang,
         "regex_misses": scores([r for r in reads if r.message_id in regex_misses]),
-        "proposed_bar": PROPOSED_BAR,
-        "meets_proposed_bar": scores(reads)["kind_accuracy"] >= PROPOSED_BAR,
         "latency": latency(model, MESSAGE_INTENT.prompt_id),
         "missed": sorted(f"{r.message_id}:{r.gold}->{r.kind}" for r in reads if not r.right),
     }
+    # The bar the step must meet before a tenant's switch does anything
+    # (`model_readiness.BARS`): reported here, enforced from a live run.
+    details["bar"] = bar_verdict(ModelStep.MESSAGE_INTENT, details)
     floor = float(expected.get("min_kind_accuracy", 0.0))
     if ctx.live_model is None and details["all"]["kind_accuracy"] < floor:
         # The replay is deterministic: below the recorded score means the

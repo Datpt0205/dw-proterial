@@ -44,23 +44,33 @@ kịch bản này viết cho `make dev`. Profile compose `scan` chỉ dựng ri�
 `clamav`, cho bộ test tích hợp cùng `docker-compose.scan-test.yml`, không cho
 buổi demo. `clamav` giữ khoảng 944 MiB RAM (đo 2026-10-13).
 
-**Các bước có mô hình (tickets 28–33, ADR 0005 của dw_sales).** Bộ quy tắc
-riêng của tenant-alpha (`sales_order_rules@1.5.2`, `make demo-reset` cài) bật
-sáu bước có mô hình: đọc mô tả hàng, phân loại thư không đọc được, đọc yêu cầu
-báo giá, đọc trả lời trong luồng hồ sơ, soạn sẵn thư chuyển, gợi ý mẫu PO. Mô
-hình là máy chủ của chính triển khai (`configs/models/onprem.yaml`), không có
-mô hình dự phòng bên ngoài:
+**Các bước có mô hình (tickets 28–33, ADR 0005 của dw_sales).** Có sáu bước
+mô hình có thể tham gia: đọc mô tả hàng, phân loại thư không đọc được, đọc yêu
+cầu báo giá, đọc trả lời trong luồng hồ sơ, soạn sẵn thư chuyển, gợi ý mẫu PO.
+Bộ quy tắc riêng của tenant-alpha mà `make demo-reset` cài
+(`sales_order_rules@1.5.3`) **tắt cả sáu**: buổi demo theo mock không có máy
+chủ mô hình, và từ 2026-10-23 (ADR 0005 của dw_sales, phụ lục) một bước chỉ
+bật được khi lần đo thực tế của nó đạt ngưỡng trên mô hình đang dùng; seed
+không ghi lần đo nào. Ngoài sáu công tắc đó, 1.5.3 giống hệt 1.5.2 (giữ đơn
+thiếu NOC/ESF, dung sai giá, ...). Mô hình là máy chủ của chính triển khai
+(`configs/models/onprem.yaml`), không có mô hình dự phòng bên ngoài:
 
 - không đặt `DW_ONPREM_MODEL_BASE_URL` (mặc định): không bước nào gọi mô hình,
-  DW1 làm bằng code như trước. Kịch bản dưới viết cho trường hợp này, và phần
-  tự động (`sales-demo.spec.ts`) chạy trong CI như vậy.
-- `DW_ONPREM_MODEL_BASE_URL=http://localhost:11434/v1` trong `.env`, Ollama
-  phục vụ model `qwen3.5-9b-dw` (qwen3.5:9b, num_ctx 8192): API và worker gọi
-  mô hình; mọi giá trị mô hình đọc bị gắn cờ cho Sales xác nhận, và "DW xử lý
-  tất cả" lâu hơn. Phần 3.2 và 3.10 nói chỗ nào khác.
-- đặt biến mà Ollama không chạy: thư không tệp nào DW1 đọc được (M11, M15, M16,
-  M17, M31, M37–M40, M43) sang "Chuyển Sales xử lý" với lý do "Khác" (DW1 không
-  hiểu thư), không phải lý do ở 3.2. Bỏ biến, hoặc bật Ollama trước buổi demo.
+  DW1 làm bằng code. Kịch bản dưới viết cho trường hợp này, và phần tự động
+  (`sales-demo.spec.ts`) chạy trong CI như vậy.
+- muốn demo có mô hình: đặt `DW_ONPREM_MODEL_BASE_URL=http://localhost:11434/v1`
+  trong `.env`, Ollama phục vụ model `qwen3.5-9b-dw` (qwen3.5:9b, num_ctx
+  8192); đo từng bước bằng
+  `run_evals.py --live onprem --attest --tenant <alpha> --workspace <alpha:main>`
+  cho từng bộ dữ liệu có mô hình; rồi An đề xuất ở trang **Quy tắc** một phiên
+  bản `sales_order_rules` bật các bước đã đạt ngưỡng (trang **Quy trình DW1**
+  chỉ hiện công tắc, khóa), Giang duyệt. Phiên bản bật một bước chưa đo đạt ngưỡng bị từ chối (409
+  `model_bar_unmet`). Khi đó mọi giá trị mô hình đọc bị gắn cờ cho Sales xác
+  nhận, và "DW xử lý tất cả" lâu hơn; phần 3.2 và 3.10 nói chỗ nào khác.
+- bước đã bật mà Ollama không chạy: thư không tệp nào DW1 đọc được (M11, M15,
+  M16, M17, M31, M37–M40, M43) sang "Chuyển Sales xử lý" với lý do "Khác" (DW1
+  không hiểu thư), không phải lý do ở 3.2. Bật Ollama trước buổi demo, hoặc
+  `make demo-reset` lại (về 1.5.3).
 
 **Vì sao tắt làn hộp thư.** Từ ticket 16, worker có làn `sales_inbox`: mỗi
 phút DW1 tự xử lý mọi thư mới (cũ nhất trước), bằng tài khoản dịch vụ DW1 của
@@ -88,13 +98,17 @@ như nhau:
   tenant-alpha (vai `sales_dw1`: chỉ `sales.inbox.process`; không đăng nhập
   được, không có trong danh sách persona);
 - đề xuất và duyệt bộ quy tắc riêng của tenant-alpha,
-  `sales_order_rules@1.5.2` (`dw_sales.testing.seed_rules`): An đề xuất, Giang
-  duyệt trên yêu cầu duyệt `sales.rules`, như mọi phiên bản của tenant;
+  `sales_order_rules@1.5.3` (`dw_sales.testing.seed_rules.DEMO_POLICIES`): An
+  đề xuất, Giang duyệt trên yêu cầu duyệt `sales.rules`, như mọi phiên bản của
+  tenant. 1.5.3 tắt cả sáu bước có mô hình (xem trên), nên không bước nào cần
+  lần đo và seed không bị từ chối; bộ test tích hợp của API dùng 1.5.2 (bật
+  cả sáu) trên lần đo giả lập (`seed_test_measurements`), không phải demo;
 - cho mỗi persona một tài khoản Keycloak, mật khẩu là `DW_DEV_USER_PASSWORD`
   trong `.env` (không commit).
 
 Sau đó: hộp thư 45 thư (M01–M45) đều "Chưa xử lý", không có hồ sơ nào, không
-có mẫu PO nào, bộ quy tắc 1.5.2 đang dùng, DW1 đang chạy (với làn hộp thư tắt;
+có mẫu PO nào, bộ quy tắc 1.5.3 đang dùng (mọi bước có mô hình tắt), DW1
+đang chạy (với làn hộp thư tắt;
 bật thì DW1 xử lý hết trong vài phút). Chỉ chạy được ở profile `local`/`test`.
 
 Đăng nhập ở `http://localhost:3300` bằng email persona và mật khẩu trên. Đổi
@@ -331,7 +345,7 @@ Chưa có trong `sales-demo.spec.ts`; chưa đi thử trên trình duyệt (Dock
 2026-10-15).
 
 Chưa có trang quy tắc trên cổng; `make demo-reset` đã đi đường này cho bản
-1.5.2. Muốn cho khán giả thấy:
+1.5.3. Muốn cho khán giả thấy:
 
 1. **An** đề xuất qua API: `POST /api/v1/sales/rules/{key}/versions` (ví dụ
    `sales_order_rules`) với thân `{"document": …}` là cả tài liệu, trong đó

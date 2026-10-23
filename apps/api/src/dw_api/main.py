@@ -187,6 +187,7 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     if container.sales is not None:
         from dw_api.dependencies.auth import get_access_context, get_access_context_or_support
         from dw_api.dependencies.idempotency import get_idempotent_operation
+        from dw_sales.presentation.activity_routes import build_activity_router
         from dw_sales.presentation.routes import SalesMount
         from dw_sales.presentation.routes import build_router as build_sales_router
 
@@ -199,6 +200,10 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
                 # Its five support reads (SUPPORT_ALLOWED_ROUTES, ticket 22).
                 support_access_context=get_access_context_or_support,
             )
+        )
+        # What DW1's model steps did (slice 3): a member's own reads.
+        app.include_router(
+            build_activity_router(container.sales.activity, access_context=get_access_context)
         )
 
     # Guard each on the dependency it needs, as the platform routers above do:

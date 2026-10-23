@@ -2,9 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Alert, Button, Card, Drawer, Empty, Tooltip, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Drawer,
+  Empty,
+  Grid,
+  Tooltip,
+  Typography,
+} from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { LoadError } from "../../../components/load-error";
+import { useAuth } from "../../../lib/auth/auth-context";
+import { formatDateTime } from "../../../lib/dates";
+import { formatShare } from "../../../lib/money";
+import { aiState, modelStepLabel } from "../_lib/activity";
+import { LIST_NAME, TAB_OF } from "../_lib/catalog";
 import { usePeople } from "../_lib/people";
 import {
   RULE_KEY,
@@ -16,6 +31,7 @@ import { lockReason } from "../_lib/rule-labels";
 import { parseLoc } from "../_lib/rule-schema";
 import type { Resource } from "../_lib/use-resource";
 import { StepTags } from "./process-map";
+import { AiStateTag } from "./tags";
 import {
   ProposeDrawer,
   useConfirmDiscard,
@@ -24,6 +40,12 @@ import {
 
 type Setting = SalesSchemas["SettingView"];
 type RulesView = SalesSchemas["RulesInForceView"];
+type StepModel = SalesSchemas["StepModelView"];
+type Uses = SalesSchemas["UsesView"];
+type Actor = SalesSchemas["ActorView"];
+
+/** Who may change who holds a role: the tenant's members page (`/admin`). */
+const MEMBERS_WRITE = "platform.members.write";
 
 /** What a status, a step, a lane or the whole process opens, in words. */
 export interface SettingsTarget {
@@ -37,6 +59,12 @@ export interface SettingsTarget {
   back?: string[];
   exitsFrom?: string[];
   settings: Setting[];
+  /** The model steps of its steps; empty when the server sent none. */
+  models?: StepModel[];
+  /** What its steps read besides rules; absent where no step is open. */
+  uses?: Uses;
+  /** Who performs or approves its steps' actions. */
+  actors?: Actor[];
 }
 
 /**
@@ -148,6 +176,7 @@ export function ProcessSettingsDrawer({
           {line("Có thể quay lại", target.back)}
           {line("Có thể đóng từ", target.exitsFrom)}
         </div>
+        {target.models?.length ? <ModelSection models={target.models} /> : null}
         <Alert
           type="info"
           showIcon
@@ -217,6 +246,10 @@ export function ProcessSettingsDrawer({
             }
           />
         )}
+        {target.uses ? <UsesSection uses={target.uses} /> : null}
+        {target.actors && target.steps.length ? (
+          <ActorsSection actors={target.actors} />
+        ) : null}
       </div>
       {open && held && rules.data ? (
         <ProposeDrawer
@@ -233,5 +266,167 @@ export function ProcessSettingsDrawer({
         />
       ) : null}
     </Drawer>
+  );
+}
+
+/**
+ * "AI ở bước này": each model step's switch, its bar, its latest
+ * measurement on the model and prompt it runs on now, whether the model is
+ * used, and how much DW1 carried over the last week. Read-only: a version
+ * that turns a step on is proposed on /sales/rules and refused unless the
+ * latest measurement passes. Drawn only when the server sent model steps,
+ * which it does only to someone who may read the order rules.
+ */
+function ModelSection({ models }: { models: StepModel[] }) {
+  // Below sm the label goes above its value: beside it, a prompt id such as
+  // sales.description_attributes@1.0.0 broke inside its version at 390 px.
+  const screens = Grid.useBreakpoint();
+  return (
+    <Card size="small" title="AI ở bước này">
+      <Typography.Paragraph>
+        Chỉ xem. Một bước chỉ bật được khi lần đo gần nhất trên mô hình và lời
+        nhắc đang dùng đạt điểm; khi đổi mô hình, FPT đo lại trước khi bật.
+      </Typography.Paragraph>
+      <div className="space-y-4">
+        {models.map((m) => (
+          <section key={m.step} aria-label={modelStepLabel(m.step)}>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Typography.Text strong>{modelStepLabel(m.step)}</Typography.Text>
+              <AiStateTag state={aiState(m)} />
+            </div>
+            <Descriptions
+              size="small"
+              column={1}
+              layout={screens.sm ? "horizontal" : "vertical"}
+              items={[
+                {
+                  key: "switch",
+                  label: "Công tắc",
+                  children: m.enabled ? "Bật" : "Tắt",
+                },
+                {
+                  key: "bar",
+                  label: "Điểm đạt",
+                  children: (
+                    <span className="flex flex-col">
+                      <span>
+                        {formatShare(m.bar)} · Tự động{" "}
+                        {m.live_share.window_days} ngày qua:{" "}
+                        {m.live_share.share === null
+                          ? "chưa có dữ liệu"
+                          : `${formatShare(m.live_share.share)} (${m.live_share.automatic}/${m.live_share.handled})`}
+                      </span>
+                      <Typography.Text type="secondary">
+                        Chỉ số đo: {m.metric}
+                      </Typography.Text>
+                    </span>
+                  ),
+                },
+                {
+                  key: "latest",
+                  label: "Lần đo gần nhất",
+                  children: m.latest ? (
+                    <span className="flex flex-col">
+                      <span>
+                        {formatShare(m.latest.value)} ·{" "}
+                        {m.latest.passed ? "đạt" : "chưa đạt"}
+                      </span>
+                      <Typography.Text type="secondary">
+                        {m.latest.model} · {m.latest.prompt} ·{" "}
+                        {formatDateTime(m.latest.measured_at)}
+                      </Typography.Text>
+                    </span>
+                  ) : (
+                    "Chưa đo"
+                  ),
+                },
+                {
+                  key: "effective",
+                  label: "Hiệu lực",
+                  children: m.effective
+                    ? "Đang dùng mô hình"
+                    : m.enabled
+                      ? "Chưa dùng mô hình: lần đo chưa đạt, người làm bước này"
+                      : "Tắt: người làm bước này",
+                },
+                {
+                  key: "running",
+                  label: "Đang chạy trên",
+                  children: `${m.model ?? "Chưa xác định được mô hình"} · ${m.prompt}`,
+                },
+              ]}
+            />
+          </section>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** "Dữ liệu bước này dùng": the master-data lists and the PO layouts. */
+function UsesSection({ uses }: { uses: Uses }) {
+  const none = !uses.lists.length && !uses.layouts;
+  return (
+    <Card size="small" title="Dữ liệu bước này dùng">
+      {none ? (
+        <Typography.Text>
+          Bước ở đây không đọc danh mục hay mẫu PO nào.
+        </Typography.Text>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {uses.lists.map((list) => (
+            <li key={list}>
+              <Link href={`/sales/master-data?tab=${TAB_OF[list]}`}>
+                {LIST_NAME[list] ?? list}
+              </Link>
+            </li>
+          ))}
+          {uses.layouts ? (
+            <li>
+              <Link href="/sales/layouts">Mẫu PO</Link>
+            </li>
+          ) : null}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+const ACTOR_KIND: Record<Actor["kind"], string> = {
+  role: "Vai trò",
+  permission_set: "Bộ quyền",
+};
+
+/** "Ai làm, ai duyệt": the roles and permission sets holding the steps' scopes. */
+function ActorsSection({ actors }: { actors: Actor[] }) {
+  const { hasScope } = useAuth();
+  return (
+    <Card size="small" title="Ai làm, ai duyệt">
+      {actors.length ? (
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          {actors.map((a) => (
+            <li key={`${a.kind}:${a.key}`} className="flex flex-col">
+              <span>
+                {ACTOR_KIND[a.kind]}: {a.name}
+              </span>
+              <Typography.Text type="secondary">
+                Quyền: {a.scopes.join(", ")}
+              </Typography.Text>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Typography.Text>
+          Chưa vai trò hay bộ quyền nào giữ quyền của bước này.
+        </Typography.Text>
+      )}
+      {hasScope(MEMBERS_WRITE) ? (
+        <Typography.Paragraph className="mt-2 mb-0!">
+          <Link href="/admin">
+            Đổi người giữ vai trò ở trang Vai trò và quyền
+          </Link>
+        </Typography.Paragraph>
+      ) : null}
+    </Card>
   );
 }
