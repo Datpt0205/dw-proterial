@@ -19,6 +19,7 @@ import { StatusTag, type StatusTone } from "@dw/ui";
 import {
   ACTIVITY_RESULT,
   AI_STATE,
+  AI_STATE_SHORT,
   FINDING_DISPOSITION,
   label,
   MAPPING_STATUS,
@@ -218,15 +219,19 @@ const AI_LOOK: Record<keyof typeof AI_STATE, Look> = {
 /**
  * A model step's state on the process page: on and passing, on and not
  * passing (a person does the step), or off. `count`: how many of a status's
- * model steps are in it, said when more than one.
+ * model steps are in it, said when more than one. `short`: the one-line
+ * words of a process-map tile, without the count.
  */
 export function AiStateTag({
   state,
   count = 1,
+  short = false,
 }: {
   state: keyof typeof AI_STATE;
   count?: number;
+  short?: boolean;
 }) {
+  if (short) return <Chip look={AI_LOOK[state]}>{AI_STATE_SHORT[state]}</Chip>;
   return (
     <Chip look={AI_LOOK[state]}>
       {AI_STATE[state]}

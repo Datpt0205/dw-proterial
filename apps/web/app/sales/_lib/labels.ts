@@ -476,6 +476,17 @@ export const AI_STATE = {
   off: "AI tắt",
 } as const;
 
+/**
+ * The same states in the few words a process-map tile has room for on one
+ * line (2026-10-24, Đạt); the tile's details and the drawer say the whole
+ * `AI_STATE` words.
+ */
+export const AI_STATE_SHORT: Record<keyof typeof AI_STATE, string> = {
+  on: "AI bật · đạt",
+  failing: "AI bật · chưa đạt",
+  off: "AI tắt",
+};
+
 /** What one entry of "DW1 đã làm gì" was (`ActivityEntry.kind`). */
 export const ACTIVITY_KIND: Record<
   SalesSchemas["ActivityEntry"]["kind"],

@@ -238,6 +238,80 @@ the theme, the shell and the shared composites, not primitive wrappers.
       the geometry (one lane for all, neighbour words over the card, back
       moves under the band, neighbour words not stacked).
 
+- 2026-10-24, the DW1 process map in n8n's look (Đạt approved; `sales.md`
+  "Quy trình DW1"). Uncommitted.
+    - **Canvas** (`process-flow.tsx`, still the one `@xyflow/react` file):
+      React Flow's `Background` (dots), `MiniMap` (pannable, not zoomable,
+      so the wheel still scrolls the page) and horizontal `Controls`, both in
+      a strip the frame adds under the lane, so neither covers a tile; the
+      attribution sits bottom-centre. Every colour is an antd token through
+      `--xy-*` or a prop; no CSP change (React Flow still only writes styles).
+    - **Tiles:** an antd `Card` in the real `Link` (Tab, Enter, new tab as
+      before): turn icon (aria-hidden, its meaning in a legend line of words
+      above the canvas), name first in the DOM so the link's name starts with
+      it, step codes as tags, `AiStateTag short`. Details are an antd
+      `Popover` (`trigger` hover + focus, controlled, closed on click so it
+      never floats over the drawer; antd sets `aria-describedby` while open;
+      Esc closes). Handles render only on sides a drawn line meets, above the
+      tile (`zIndex`), not connectable.
+    - **Geometry:** `CARD_W` 168, `CARD_MIN_H` 88 (below the shortest
+      measured tile, so lines meet handles), `GAP` 148; label size estimated
+      inside the pill (`PILL_PAD`, owned by the geometry and read by the
+      canvas); `roundedPath` rounds each bend on the same route.
+    - **Checked:** `tsc --noEmit`, `next lint`, prettier on changed files;
+      web vitest 77 files / 592 tests with `--maxWorkers=3` (one earlier run
+      had the known rules-editor `findBy` timeout while a Docker build ran;
+      the file alone and the full rerun passed). e2e `enduser-nav` 13/13 on
+      a rebuilt `dw-web:e2e`; test 10 now also checks no tile or label sits
+      under the controls or minimap, and the details open on keyboard focus
+      and close on Esc. Mutations, each red then restored: neighbour words
+      over the source card; all channel lanes on one line; details on hover
+      only; handles on every side; whole AI words on the tile; bends not
+      rounded. Seen at 1440 (order, quote, focused tile, drawer) and 390
+      (list): the first build hid the handles under the tile (4 px, painted
+      over) and the minimap tiles were too faint; both fixed and re-shot.
+      A full-page screenshot blurs the focused tile (its viewport resize),
+      so that shot uses a viewport as tall as the page.
+    - **Calm re-cut (same day, Đạt: too busy):** the bands, channel lanes
+      and guard tags are gone. `process-geometry.ts` places the main path
+      (`layoutLane().main`) in one row and every other status on a row
+      below on the same columns, so the gaps stay free in both rows; every
+      line is a chain of cubic Béziers (`Curve`, `pathOf`, sampled by
+      `pointsOf` in the test). Neighbours: straight; skips and ways back on
+      the row: arches over it, stacked shorter-under-longer, the outer foot
+      outside, words slid along the arch off any other arch; between the
+      rows: upright curves (never into a tile), words on corridor tracks
+      (a track is added until every pill has a spot no other line crosses;
+      wide pills, else gap-width, slid sideways while still on the line);
+      exits: down the gap after their tile onto a rail, one bus per final
+      status. `GAP` 160, `CHAR_W` 7 (measured ~5.5 px). Pills: action only,
+      `text-wrap: balance`, one lock `Button` + `Tooltip` for guards.
+      Handles: both always present (React Flow draws no edge without
+      them), visible only where a side line meets (`data-shown`). Switch
+      "Hiện đường quay lại" is an antd `Switch` in a `label`, its state
+      `?back=1` via the page's `useOpenItem`. Opens at zoom 0.85 from the
+      row's start (pans; minimap shows all); "Xem cả quy trình" fits the
+      whole lane, centred above the controls' strip. Phone list, lazy
+      load, popover, drawer, `?node=`, Back and focus return unchanged; no
+      CSP change.
+    - **Checked (re-cut):** `tsc --noEmit`, `next lint`, prettier on the
+      changed files; vitest geometry (both lanes × default/ways back × three
+      tile heights: no label over a tile or a label, no line through a tile
+      or another move's words), graph (main path, detour, tie), page (row
+      and forward moves only, switch toggles and URL, `?back=1` link, lock
+      tooltip on focus and hover, a served extra status below the row with
+      its way back only when asked). Full web vitest 77 files / 602 tests
+      with `--maxWorkers=3`: two runs each had one `findBy` timeout in an
+      untouched test under load (rule-drafts, then the proposal test); both
+      files pass alone. Mutations, each red then restored: a detour may end
+      the row; a tie to the last status; arch feet in the corridor order;
+      corridor words never slide or change track; gap words wider than the
+      gap; arch words always at the top. e2e `enduser-nav`: 13/13 on the final `dw-web:e2e`;
+      test 10 now fits the lane with "Xem cả quy trình" before checking
+      tiles and labels inside the frame, and toggles the switch (URL, a
+      way back drawn, then gone). Shots at 1440 in the session scratchpad
+      (`n8n-look2/`).
+
 ## Theme from the E-HSDT v3 prototype (2026-10-05, committed in `92b155a`)
 
 Đạt: "chỉnh giao diện cho giống bản design". The prototype's light palette

@@ -152,7 +152,10 @@ async function decide(page: Page, name: string, reason: string) {
   await expect(card.getByText("Bỏ quyết định")).toBeVisible();
 }
 
-/** Every status card and move label of a process canvas lies inside it. */
+/**
+ * Every status tile and move label of a process canvas lies inside it, and
+ * none under its controls or its minimap.
+ */
 async function expectLaneInside(canvas: Locator): Promise<void> {
   await expect(canvas).toBeVisible();
   await expect
@@ -164,6 +167,12 @@ async function expectLaneInside(canvas: Locator): Promise<void> {
         ];
         if (!drawn.some((e) => e.matches(".react-flow__node")))
           return ["no card drawn"];
+        const panels = [
+          ...frame.querySelectorAll(
+            ".react-flow__controls, .react-flow__minimap",
+          ),
+        ].map((p) => p.getBoundingClientRect());
+        if (panels.length !== 2) return ["no controls or minimap"];
         return drawn
           .filter((element) => {
             const box = element.getBoundingClientRect();
@@ -171,7 +180,14 @@ async function expectLaneInside(canvas: Locator): Promise<void> {
               box.top < outer.top - 1 ||
               box.bottom > outer.bottom + 1 ||
               box.left < outer.left - 1 ||
-              box.right > outer.right + 1
+              box.right > outer.right + 1 ||
+              panels.some(
+                (p) =>
+                  box.left < p.right &&
+                  p.left < box.right &&
+                  box.top < p.bottom &&
+                  p.top < box.bottom,
+              )
             );
           })
           .map((element) => (element.textContent ?? "").slice(0, 40));
@@ -680,17 +696,46 @@ test("10. Quy trình DW1 draws on its canvas and Hoạt động DW1 opens, with 
   await expect(canvas).toBeVisible();
   await expect(canvas.getByText("DW1 đọc và kiểm tra")).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("process-map.png") });
-  await canvas.getByRole("link", { name: /^Chờ PIC tự kiểm/ }).click();
+  // A tile's details open on keyboard focus, not only on hover.
+  const review = canvas.getByRole("link", { name: /^Chờ PIC tự kiểm/ });
+  await review.focus();
+  await expect(page.getByRole("tooltip")).toContainText(
+    "Đến lượt: Sales quyết định",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await review.click();
   await expect(page).toHaveURL(/node=order\.in_review/);
   await page.goBack();
   await expect(page).not.toHaveURL(/node=/);
-  // "Cả N trạng thái vừa khung" holds on both lanes: the quote lane's last
-  // row, then a stack of move labels under it, were drawn below the frame.
+  // The row opens from its start and pans; "Xem cả quy trình" brings every
+  // tile and label inside the frame, none under its controls or minimap.
+  const fit = (lane: Locator) =>
+    lane.getByRole("button", { name: "Xem cả quy trình" }).click();
+  await fit(canvas);
   await expectLaneInside(canvas);
+  // The ways back and the exits: drawn while the switch is on, kept in the
+  // URL, and gone again when it is off.
+  const back = page
+    .getByRole("tabpanel")
+    .getByRole("switch", { name: /Hiện đường quay lại/ });
+  const wayBack = canvas.locator('[data-move="in_review->checked"]');
+  await expect(wayBack).toHaveCount(0);
+  await back.click();
+  await expect(page).toHaveURL(/back=1/);
+  await expect(wayBack).toBeVisible();
+  await fit(canvas);
+  await expectLaneInside(canvas);
+  await back.click();
+  await expect(page).not.toHaveURL(/back=1/);
+  await expect(wayBack).toHaveCount(0);
   await page.getByRole("tab", { name: "Báo giá", exact: true }).click();
-  await expectLaneInside(
-    page.getByRole("application", { name: "Sơ đồ quy trình Báo giá" }),
-  );
+  const quotes = page.getByRole("application", {
+    name: "Sơ đồ quy trình Báo giá",
+  });
+  await expect(quotes).toBeVisible();
+  await fit(quotes);
+  await expectLaneInside(quotes);
 
   await page.goto("/sales/activity?lane=order");
   await expect(

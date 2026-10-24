@@ -37,7 +37,7 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 2026-10-20: pipeline board as the Sales home, a history per case, denser
   theme (`sales.md` State).
-- **Next:** the full e2e run for defects A–E, audit gaps 1–5 and the re-laid process map (built 10-24, uncommitted; `sales.md` State), then commit; the rest of the screenshot review;
+- **Next:** the full e2e run for defects A–E, audit gaps 1–5 and the calm process map (main path in one row, ways back behind a switch; built 10-24, uncommitted; `sales.md` State), then commit; the rest of the screenshot review;
   `onprem-up` in `uat` behind Caddy; DW2 (Mua hàng) when its survey arrives, after the reuse decisions in `sales.md`.
 
 ## Decisions Đạt owes

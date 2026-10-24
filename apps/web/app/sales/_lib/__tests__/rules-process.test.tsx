@@ -16,7 +16,7 @@ import { AN, GIANG } from "./fixtures";
 import { PROCESS } from "./process-fixture";
 import { EDGE_ACTION, EDGE_GUARD } from "../labels";
 import { layoutLane, type Lane } from "../process-graph";
-import { laneGeometry } from "../process-geometry";
+import { laneGeometry, pathOf } from "../process-geometry";
 import type { PlatformDocument, RuleVersion } from "../rules";
 
 type View = SalesSchemas["ProcessSettingsView"];
@@ -220,6 +220,14 @@ afterEach(() => {
   });
 });
 
+/** As on a screen from `lg` up: the canvas, not the list. */
+function wide() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: media(true),
+  });
+}
+
 /** A `matchMedia` for a wide screen (every antd `min-width` up to xl) or a phone. */
 function media(wide: boolean) {
   return (query: string) => {
@@ -334,44 +342,152 @@ describe("the DW1 process page (2026-10-22)", () => {
   );
 
   it(
-    "on a wide screen, draws the statuses on a canvas, every move but the exits labelled",
+    "on a wide screen, draws the main path in one row with its forward moves, each labelled by its action alone",
     async () => {
-      Object.defineProperty(window, "matchMedia", {
-        writable: true,
-        value: media(true),
-      });
+      wide();
       renderPage();
       const card = await status("Chờ PIC tự kiểm");
-      expect(card.textContent).toContain("O6 · DW1 làm");
       // Loaded when drawn (next/dynamic).
       expect(flow.loaded).toHaveBeenCalled();
-      expect(card.textContent).toContain("Đến lượt: Sales quyết định");
-      // The ways back are drawn, so the card does not write them too.
-      expect(card.textContent).not.toContain("Có thể quay lại");
-      // The order lane draws 18 of its 23 moves: 11 forward, 7 back; the
-      // 5 closing ones stay words on "Đã đóng".
+      // By default the order lane draws its 11 forward moves; the 7 ways
+      // back and the 5 exits wait for "Hiện đường quay lại".
       const canvas = screen.getByRole("application", {
         name: "Sơ đồ quy trình Đơn hàng",
       });
+      expect(canvas.contains(card)).toBe(true);
+      const layout = layoutLane(PROCESS.lanes[0] as Lane);
       const moves = [...canvas.querySelectorAll("[data-move]")];
       expect(moves.map((m) => m.getAttribute("data-move")).sort()).toEqual(
-        [
-          ...PROCESS.lanes[0]!.edges.filter((e) => e.to !== "closed").map(
-            (e) => `${e.from}->${e.to}`,
-          ),
-        ].sort(),
+        layout.forward.map((e) => `${e.from}->${e.to}`).sort(),
       );
-      expect(moves.length).toBe(18);
+      expect(moves.length).toBe(11);
       const move = (id: string) =>
         moves.find((m) => m.getAttribute("data-move") === id)!;
-      // Each move says its action, and its guards as tags.
+      // Each move says its action; a guarded one adds one lock, no tags.
       expect(move("received->checked").textContent).toBe("DW1 đọc và kiểm tra");
       const prepare = move("in_review->prepared");
-      expect(prepare.textContent).toContain("Tự kiểm xong");
+      expect(prepare.textContent).toBe("Tự kiểm xong");
+      expect(prepare.querySelectorAll(".ant-tag").length).toBe(0);
       expect(
-        [...prepare.querySelectorAll(".ant-tag")].map((t) => t.textContent),
-      ).toEqual(["Không còn cờ chặn"]);
-      // A move back is said as one, to a screen reader too.
+        prepare.querySelector(
+          'button[aria-label="Điều kiện: Không còn cờ chặn"]',
+        ),
+      ).not.toBeNull();
+      expect(move("received->checked").querySelector("button")).toBeNull();
+      // Each line is the placement's own curve (process-geometry.ts), solid,
+      // with an arrowhead.
+      const geometry = laneGeometry(layout, (m) => ({
+        action: EDGE_ACTION[m.action],
+        guards: m.guards.map((g) => EDGE_GUARD[g]),
+      }));
+      const drawn = (id: string) =>
+        canvas.querySelector(`[data-testid="rf__edge-${id}"] path`)!;
+      for (const m of geometry.moves) {
+        expect(drawn(m.id).getAttribute("d"), m.id).toBe(pathOf(m.curve));
+        expect(drawn(m.id).getAttribute("marker-end"), m.id).toMatch(
+          /^url\(.+\)$/,
+        );
+        expect(
+          (drawn(m.id) as SVGPathElement).style.strokeDasharray,
+          m.id,
+        ).toBe("");
+      }
+      // The main path in one row, the rest below it.
+      expect(layout.main).toEqual([
+        "received",
+        "checked",
+        "in_review",
+        "prepared",
+        "uploaded_to_bravo",
+        "cross_checked",
+        "confirmed",
+      ]);
+      for (const s of ["correction_requested", "change_review", "closed"])
+        expect(geometry.rows[s], s).toBe(1);
+      // A visible handle on each side a line meets there, and none where a
+      // line meets a top or a bottom, or nothing does.
+      for (const n of PROCESS.lanes[0]!.nodes) {
+        const node = canvas.querySelector(
+          `[data-testid="rf__node-${n.status}"]`,
+        )!;
+        const shown = [...node.querySelectorAll(".react-flow__handle")]
+          .filter((h) => h.getAttribute("data-shown") === "true")
+          .map((h) => h.getAttribute("data-handlepos"));
+        const side = (r: string) => r === "next" || r === "rail";
+        const expected = [
+          ...(geometry.moves.some(
+            (m) => m.move.to === n.status && side(m.route),
+          )
+            ? ["left"]
+            : []),
+          ...(geometry.moves.some(
+            (m) => m.move.from === n.status && side(m.route),
+          )
+            ? ["right"]
+            : []),
+        ];
+        expect(shown, n.status).toEqual(expected);
+      }
+      expect(
+        canvas.querySelectorAll(
+          '[data-testid="rf__node-closed"] .react-flow__handle[data-shown="true"]',
+        ).length,
+      ).toBe(0);
+      // n8n's canvas: a dotted background and a minimap of every status.
+      expect(
+        canvas.querySelector(".react-flow__background pattern circle"),
+      ).not.toBeNull();
+      expect(
+        canvas.querySelector(".react-flow__minimap svg title")?.textContent,
+      ).toBe("Bản đồ thu nhỏ của quy trình");
+      expect(canvas.querySelectorAll(".react-flow__minimap-node").length).toBe(
+        PROCESS.lanes[0]!.nodes.length,
+      );
+      // The controls speak Vietnamese.
+      for (const name of ["Phóng to", "Thu nhỏ", "Xem cả quy trình"])
+        expect(
+          canvas.querySelector(`button[aria-label="${name}"]`),
+          name,
+        ).not.toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "draws the ways back and the exits, dashed, while 'Hiện đường quay lại' is on, and keeps it in the URL",
+    async () => {
+      wide();
+      renderPage();
+      await status("Chờ PIC tự kiểm");
+      const canvas = screen.getByRole("application", {
+        name: "Sơ đồ quy trình Đơn hàng",
+      });
+      const drawnIds = () =>
+        [...canvas.querySelectorAll("[data-testid^='rf__edge-']")].map((e) =>
+          e.getAttribute("data-testid")!.slice("rf__edge-".length),
+        );
+      const toggle = screen.getAllByRole("switch", {
+        name: /Hiện đường quay lại/,
+      })[0]!;
+      expect(toggle.getAttribute("aria-checked")).toBe("false");
+      expect(drawnIds()).not.toContain("in_review->checked");
+      fireEvent.click(toggle);
+      expect(nav.replace).toHaveBeenCalledWith("/sales/rules/process?back=1", {
+        scroll: false,
+      });
+      await waitFor(() => expect(drawnIds()).toContain("in_review->checked"));
+      const layout = layoutLane(PROCESS.lanes[0] as Lane);
+      expect(drawnIds().length).toBe(
+        layout.forward.length + layout.backward.length + layout.exits.length,
+      );
+      const line = (id: string) =>
+        canvas.querySelector(
+          `[data-testid="rf__edge-${id}"] path`,
+        ) as SVGPathElement;
+      expect(line("in_review->checked").style.strokeDasharray).toBe("6 4");
+      expect(line("received->closed").style.strokeDasharray).toBe("6 4");
+      expect(line("received->checked").style.strokeDasharray).toBe("");
+      // A way back is said as one, to a screen reader too.
       expect(
         canvas
           .querySelector('[aria-label^="Chờ PIC tự kiểm → Đã kiểm tra"]')
@@ -379,34 +495,133 @@ describe("the DW1 process page (2026-10-22)", () => {
       ).toBe(
         "Chờ PIC tự kiểm → Đã kiểm tra; Khách gửi PO sửa đổi (Khách hàng); quay lại",
       );
-      // Each line is the placement's own (process-geometry.ts): a move back
-      // dashed on a lane over its band, every run horizontal or vertical.
-      const geometry = laneGeometry(
-        layoutLane(PROCESS.lanes[0] as Lane),
-        (m) => ({
-          action: EDGE_ACTION[m.action],
-          guards: m.guards.map((g) => EDGE_GUARD[g]),
+      // The five exits into "Đã đóng" share one bus and say "Đóng hồ sơ" once.
+      expect(
+        [...canvas.querySelectorAll("[data-move]")].filter(
+          (m) => m.textContent === "Đóng hồ sơ",
+        ).length,
+      ).toBe(1);
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      fireEvent.click(toggle);
+      expect(nav.replace).toHaveBeenLastCalledWith("/sales/rules/process", {
+        scroll: false,
+      });
+      await waitFor(() =>
+        expect(drawnIds()).not.toContain("in_review->checked"),
+      );
+      cleanup();
+
+      // A link with ?back=1 opens with them drawn, the switch on.
+      wide();
+      renderPage("back=1");
+      await status("Chờ PIC tự kiểm");
+      expect(
+        screen
+          .getAllByRole("switch", { name: /Hiện đường quay lại/ })[0]!
+          .getAttribute("aria-checked"),
+      ).toBe("true");
+      expect(
+        document.querySelector('[data-testid="rf__edge-in_review->checked"]'),
+      ).not.toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "lists a move's guards in Vietnamese in its lock's tooltip, on hover and on keyboard focus",
+    async () => {
+      wide();
+      renderPage();
+      await status("Chờ PIC tự kiểm");
+      const lock = screen.getByRole("button", {
+        name: "Điều kiện: Cần duyệt; Người làm không tự duyệt",
+      });
+      expect(screen.queryByRole("tooltip")).toBeNull();
+      act(() => lock.focus());
+      const tip = await screen.findByRole("tooltip");
+      expect(tip.textContent).toBe(
+        "Điều kiện:• Cần duyệt• Người làm không tự duyệt",
+      );
+      act(() => lock.blur());
+      fireEvent.mouseEnter(
+        screen.getByRole("button", {
+          name: "Điều kiện: Không còn cờ chặn",
         }),
       );
-      const drawn = (id: string) =>
-        canvas.querySelector(`[data-testid="rf__edge-${id}"] path`)!;
-      for (const m of geometry.moves) {
-        expect(drawn(m.id).getAttribute("d"), m.id).toBe(
-          m.points.map(([x, y], i) => `${i ? "L" : "M"} ${x} ${y}`).join(" "),
-        );
+      await waitFor(() =>
         expect(
-          (drawn(m.id) as SVGPathElement).style.strokeDasharray,
-          m.id,
-        ).toBe(m.back ? "6 4" : "");
-      }
+          screen
+            .getAllByRole("tooltip")
+            .some((t) => t.textContent === "Điều kiện:• Không còn cờ chặn"),
+        ).toBe(true),
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "draws each status as a tile: an icon for whose turn, its name, step codes and one AI line; the rest in its details",
+    async () => {
+      wide();
+      renderPage();
+      const review = await status("Chờ PIC tự kiểm");
+      expect(review.getAttribute("data-turn")).toBe("person");
+      expect(review.textContent).toBe("Chờ PIC tự kiểmO6");
+      const received = await status("Đã nhận");
+      expect(received.getAttribute("data-turn")).toBe("dw");
+      expect(received.textContent).toBe("Đã nhậnO1AI bật · đạt");
+      expect((await status("Đã đóng")).getAttribute("data-turn")).toBe("done");
+      expect((await status("Đã nhập Bravo")).textContent).toBe(
+        "Đã nhập BravoO3O7AI bật · đạt",
+      );
+      // The icons' meaning is said once, in words, above the canvas.
+      for (const words of ["DW1 xử lý", "Đến lượt người làm", "Đã xong"])
+        expect(screen.getByText(words)).toBeTruthy();
+      // Nothing of the details is drawn until it is asked for.
+      expect(screen.queryByRole("tooltip")).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "opens a tile's details on keyboard focus, says them to a screen reader, and closes them on Esc",
+    async () => {
+      wide();
+      renderPage();
+      const review = await status("Chờ PIC tự kiểm");
+      act(() => review.focus());
+      const details = await screen.findByRole("tooltip");
+      expect(details.textContent).toContain("O6 · DW1 làm");
+      expect(details.textContent).toContain("Đến lượt: Sales quyết định");
+      expect(details.textContent).toContain("Có thể quay lại: Đã kiểm tra");
+      expect(details.textContent).toMatch(/\d+ thiết lập|Không có thiết lập/);
       expect(
-        screen.getByText(
-          "Có thể đóng từ: Đã nhận, Đã kiểm tra, Chờ PIC tự kiểm, Chờ khách sửa PO, PIC đã tự kiểm",
-        ),
-      ).toBeTruthy();
-      // The controls speak Vietnamese.
-      for (const name of ["Phóng to", "Thu nhỏ", "Xem cả quy trình"])
-        expect(screen.getByRole("button", { name })).toBeTruthy();
+        (review.getAttribute("aria-describedby") ?? "").split(" "),
+      ).toContain(details.id);
+      fireEvent.keyDown(window, { key: "Escape" });
+      await waitFor(() =>
+        expect(review.getAttribute("aria-describedby")).toBeNull(),
+      );
+
+      // A final status reached from many: where from, in its details.
+      act(() => review.blur());
+      const closed = await status("Đã đóng");
+      act(() => closed.focus());
+      // (rc-util gives every popup one id under NODE_ENV=test, so the
+      // popup is found by its words, not by that id.)
+      await waitFor(() => {
+        expect(closed.getAttribute("aria-describedby")).toBeTruthy();
+        expect(
+          screen
+            .getAllByRole("tooltip")
+            .map((t) => t.textContent)
+            .filter((t) => t?.startsWith("Đã đóng")),
+        ).toEqual([
+          expect.stringContaining(
+            "Có thể đóng từ: Đã nhận, Đã kiểm tra, Chờ PIC tự kiểm, Chờ khách sửa PO, PIC đã tự kiểm",
+          ),
+        ]);
+      });
     },
     SLOW,
   );
@@ -446,6 +661,99 @@ describe("the DW1 process page (2026-10-22)", () => {
       expect((await status("Đã nhập Bravo")).textContent).toContain("AI tắt");
       // A status none of whose steps has a model step says nothing of AI.
       expect((await status("Đã đóng")).textContent).not.toContain("AI");
+      cleanup();
+
+      // On the canvas: one short line per state on the tile, the whole
+      // words and the count in its details.
+      wide();
+      api.rulesProcess.mockResolvedValueOnce({ ...PROCESS, steps });
+      renderPage();
+      const received = await status("Đã nhận");
+      expect(received.textContent).toContain("AI bật · đạt");
+      expect(received.textContent).not.toContain("bước");
+      const checked = await status("Đã kiểm tra");
+      expect(checked.textContent).toContain("AI bật · chưa đạt");
+      expect(checked.textContent).not.toContain("người làm");
+      expect((await status("Đã nhập Bravo")).textContent).toContain("AI tắt");
+      expect((await status("Đã đóng")).textContent).not.toContain("AI");
+      act(() => received.focus());
+      expect((await screen.findByRole("tooltip")).textContent).toContain(
+        "AI bật · đạt (3 bước)",
+      );
+    },
+    SLOW,
+  );
+
+  it(
+    "draws a status the server adds as one more tile below the row, its way back only when asked",
+    async () => {
+      wide();
+      const order = PROCESS.lanes[0]!;
+      api.rulesProcess.mockResolvedValueOnce({
+        ...PROCESS,
+        lanes: [
+          {
+            ...order,
+            nodes: [
+              ...order.nodes,
+              { status: "on_hold", steps: [], holder: "sales" },
+            ],
+            edges: [
+              ...order.edges,
+              {
+                from: "in_review",
+                to: "on_hold",
+                action: "edit",
+                actor: "sales",
+                guards: [],
+              },
+              {
+                from: "on_hold",
+                to: "in_review",
+                action: "edit",
+                actor: "sales",
+                guards: [],
+              },
+            ],
+          },
+          PROCESS.lanes[1]!,
+        ],
+      });
+      renderPage();
+      const extra = await status("on_hold");
+      const canvas = screen.getByRole("application", {
+        name: "Sơ đồ quy trình Đơn hàng",
+      });
+      expect(canvas.contains(extra)).toBe(true);
+      expect(extra.getAttribute("data-turn")).toBe("person");
+      expect(canvas.querySelectorAll(".react-flow__node").length).toBe(
+        order.nodes.length + 1,
+      );
+      const onHold = () =>
+        [...canvas.querySelectorAll("[data-move]")]
+          .map((m) => m.getAttribute("data-move"))
+          .filter((id) => id?.includes("on_hold"))
+          .sort();
+      // A detour (its only way on goes back): below the row, entered from
+      // the status it starts from.
+      const y = (s: string) =>
+        Number(
+          /translate\(\s*[-\d.]+px,\s*([-\d.]+)px\)/.exec(
+            (
+              canvas.querySelector(
+                `[data-testid="rf__node-${s}"]`,
+              ) as HTMLElement
+            ).style.transform,
+          )?.[1],
+        );
+      expect(y("on_hold")).toBeGreaterThan(y("in_review"));
+      expect(onHold()).toEqual(["in_review->on_hold"]);
+      fireEvent.click(
+        screen.getAllByRole("switch", { name: /Hiện đường quay lại/ })[0]!,
+      );
+      await waitFor(() =>
+        expect(onHold()).toEqual(["in_review->on_hold", "on_hold->in_review"]),
+      );
     },
     SLOW,
   );
