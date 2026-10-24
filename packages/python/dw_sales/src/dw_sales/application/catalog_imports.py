@@ -740,7 +740,8 @@ class CatalogParsing:
         """Reads one queued import; what it did, for the log. Idempotent: an
         import no longer queued (read already, or discarded) is left alone.
         Raises `InfrastructureError` when the scanner or the reader did not
-        answer, so the outbox delivers it again."""
+        answer, so the outbox delivers it again; a reader that answered with
+        a refusal (one of another version included) fails the import."""
         async with self.uow(scope) as work:
             snapshot = await work.snapshots.get(snapshot_id)
             content = None if snapshot is None else await work.snapshots.content(snapshot_id)
@@ -787,6 +788,10 @@ class CatalogParsing:
             table = await self.tables.read(content, snapshot.file_name or "")
         except TableUnreadableError as unreadable:
             return _failed(snapshot, unreadable.reason)
+        except DomainError as refused:
+            # A refusal is not an outage: asked again, the reader answers the
+            # same (Sales defect B), so the import settles, it is not retried.
+            return _failed(snapshot, _unread(refused))
         try:
             parsed = parse_rows(snapshot.catalog_list, table)
         except ValueError as refused:
@@ -840,6 +845,15 @@ class CatalogParsing:
             else:
                 refused.append(RejectedRow(row=parsed.row, column=reason[0], reason=reason[1]))
         return kept, refused
+
+
+def _unread(refused: DomainError) -> str:
+    """Why the file could not be read. A reader of another version than this
+    process says so in its own words, since the fix is the reader's, not the
+    file's (as `rule_drafts._unopened`); any other refusal is the file's."""
+    if refused.details.get("reason_code") == "reader_version_mismatch":
+        return f"không đọc được tệp: {refused.message}"
+    return "không đọc được tệp"
 
 
 def _failed(

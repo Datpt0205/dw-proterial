@@ -7,7 +7,7 @@ import base64
 
 import pytest
 from sales_api_harness import AN, DIEU, HA, Api
-from sales_flow import order_of, process, quote, typed_as_read
+from sales_flow import decide, order, order_of, process, quote, typed_as_read
 
 pytestmark = pytest.mark.integration
 
@@ -96,3 +96,58 @@ async def test_a_replayed_key_never_answers_a_caller_without_the_scope(api: Api)
     # The scope is checked before the key is claimed: no stored answer
     # reaches someone who may not make the request.
     assert replay.status_code == 403
+
+
+async def test_a_value_nobody_opened_is_not_labelled_checked_and_the_checker_is_told(
+    api: Api,
+) -> None:
+    """Audit gaps 1 and 5 over HTTP: M02 reads lines from four sheets and only
+    the PO number's sheet is asked for before prepare."""
+    an, dieu = api.as_(AN), api.as_(DIEU)
+    case = await order_of(an, "M02")
+    for finding in case["findings"]:
+        case = await decide(
+            an,
+            case,
+            f"findings/{finding['key']}/disposition",
+            {"disposition": "accepted", "reason": "đã hỏi trưởng phòng"},
+        )
+    po_sheet = case["header_anchors"]["po_no"]["cell_ref"].rsplit("!", 1)[0]
+    opened = await an.get(
+        f"/orders/{case['case_id']}/source/{case['attachment_id']}", sheet=po_sheet
+    )
+    assert opened.status_code == 200, opened.text
+
+    ready = await decide(an, case, "prepare")
+
+    def sheet(line: dict[str, object]) -> str:
+        anchors = line["anchors"]
+        assert isinstance(anchors, dict)
+        return str(anchors["quantity"]["cell_ref"]).rsplit("!", 1)[0]
+
+    for line in ready["lines"]:
+        expected = "confirmed" if sheet(line) == po_sheet else "not_opened"
+        assert set(line["value_states"].values()) == {expected}
+    checker = await order(dieu, case["case_id"])
+    unopened = {v["line_no"] for v in checker["unopened_values"] if v["line_no"] is not None}
+    assert unopened == {line["line_no"] for line in ready["lines"] if sheet(line) != po_sheet}
+    # A reader without `sales.order.cross_check` is not told: support's read,
+    # `test_sales_api_support.py`; no seeded role reads cases without it.
+
+
+async def test_a_quote_carries_its_coverage_statement(api: Api) -> None:
+    dieu = api.as_(DIEU)
+    case = await quote(dieu, (await process(dieu, "M10"))["case_id"])
+    sheets = {
+        anchor["cell_ref"].rsplit("!", 1)[0]
+        for line in case["lines"]
+        for anchor in line["anchors"].values()
+        if anchor.get("cell_ref")
+    }
+
+    coverage = case["coverage"]
+
+    assert coverage["lines_read"] == len(case["lines"])
+    assert set(coverage["regions"]) == sheets
+    assert coverage["findings"] == len(case["findings"])
+    assert all(f["source_not_served"] == [] for f in case["findings"])

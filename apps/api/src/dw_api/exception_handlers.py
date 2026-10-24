@@ -58,10 +58,16 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
-        # Never leak internals; taxonomy code only.
-        body = ErrorResponse(
-            code=ErrorCode.INTERNAL.value,
-            message="internal error",
-            request_id=getattr(request.state, "request_id", None),
-        )
-        return JSONResponse(status_code=500, content=body.model_dump())
+        # Reached only by an error a middleware raised: a route's error is
+        # caught inside CORS by `UnexpectedErrorMiddleware` (Sales defect A).
+        return internal_error_response(request)
+
+
+def internal_error_response(request: Request) -> JSONResponse:
+    """The one 500 body: taxonomy code only, never internals."""
+    body = ErrorResponse(
+        code=ErrorCode.INTERNAL.value,
+        message="internal error",
+        request_id=getattr(request.state, "request_id", None),
+    )
+    return JSONResponse(status_code=500, content=body.model_dump())

@@ -2,6 +2,7 @@ import type { SalesSchemas } from "@dw/api-client";
 import { formatDate, formatDayMonth, formatMonth } from "../../../lib/dates";
 
 type Order = SalesSchemas["OrderCaseView"];
+type Quote = SalesSchemas["QuoteCaseView"];
 type Basis = SalesSchemas["LineBasisView"];
 
 /**
@@ -27,6 +28,31 @@ export function coverageStatement(order: Order): string {
         ? `tổng KHÔNG khớp ô TOTAL${totalCell ? ` (${totalCell})` : ""}`
         : `tổng khớp ô TOTAL${totalCell ? ` (${totalCell})` : ""}`;
   return `Đã đọc ${c.lines_read}/${c.lines_printed} dòng trên ${where}; ${total}; ${c.checks_run} lượt kiểm tra × ${c.lines_read} dòng; ${c.findings} cờ`;
+}
+
+/** "page 2" → "trang 2", "message_text" → "nội dung thư", else a sheet. */
+function quoteRegion(region: string): string {
+  if (region === "message_text") return "nội dung thư";
+  const page = /^page (\d+)$/.exec(region);
+  return page ? `trang ${page[1]}` : `sheet ${region}`;
+}
+
+/**
+ * The request's coverage statement (`QuoteCaseView.coverage`), the quote's
+ * counterpart of the order's: what was read, how many values a model read and
+ * how many a person confirmed, and the findings. Never "N/N": the request's
+ * reader counts no printed rows, so there is nothing to divide by.
+ * "Đã đọc 3 dòng từ sheet RFQ; 4 giá trị mô hình đọc, 1 đã xác nhận; 1 cờ".
+ */
+export function quoteCoverageStatement(quote: Quote): string {
+  const c = quote.coverage;
+  const where = c.regions.length
+    ? `từ ${c.regions.map(quoteRegion).join(", ")}`
+    : "(không rõ vùng nào)";
+  const model = c.model_read
+    ? `${c.model_read} giá trị mô hình đọc, ${c.model_read_confirmed} đã xác nhận`
+    : "không giá trị nào do mô hình đọc";
+  return `Đã đọc ${c.lines_read} dòng ${where}; ${model}; ${c.findings} cờ`;
 }
 
 /**

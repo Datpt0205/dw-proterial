@@ -15,6 +15,7 @@ type Message = SalesSchemas["InboxMessageView"];
 type Job = SalesSchemas["ProcessingJobView"];
 
 const SCOPES = ["sales.case.read", "sales.inbox.process"];
+const OVERVIEW = "sales.overview.read";
 vi.mock("../../../../lib/auth/auth-context", () => ({
   useAuth: () => ({
     principalId: AN,
@@ -66,6 +67,9 @@ const api = {
   inbox: vi.fn(async () => inbox),
   processMessage: vi.fn(async (id: string) => job(id)),
   processAll: vi.fn(async () => ({ jobs: [] })),
+  overview: vi.fn(async () => ({
+    worker: { paused: false, changed_by: null, changed_at: null, reason: null },
+  })),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
 
@@ -90,6 +94,7 @@ const SLOW = 20_000;
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  if (SCOPES.includes(OVERVIEW)) SCOPES.pop();
 });
 
 describe('"DW xử lý" queues and the inbox shows where it stands (ticket 25)', () => {
@@ -204,6 +209,40 @@ describe('"DW xử lý" queues and the inbox shows where it stands (ticket 25)',
       expect(
         screen.getByText(
           "DW1 đang xử lý các thư đã xếp, chờ xong rồi xem kết quả.",
+        ),
+      ).toBeTruthy();
+    },
+    SLOW,
+  );
+});
+
+describe("the DW1 bar follows a press without a reload (defect D)", () => {
+  it(
+    "after 'DW xử lý tất cả' the bar reads the mailbox again at once",
+    async () => {
+      SCOPES.push(OVERVIEW);
+      inbox = [message("M01"), message("M02")];
+      page();
+      expect(
+        await screen.findByText("DW1 đang chờ: còn 2 thư chưa xử lý"),
+      ).toBeTruthy();
+
+      // The API queued both; nothing was queued when the bar last read, so
+      // only the press can tell it to read again.
+      inbox = [
+        message("M01", { processing: job("M01") }),
+        message("M02", { processing: job("M02") }),
+      ];
+      fireEvent.click(
+        screen.getByRole("button", { name: /DW xử lý tất cả \(2\)/ }),
+      );
+      await waitFor(() => expect(api.processAll).toHaveBeenCalledTimes(1));
+      // Well inside both polls (3 s, 5 s): the press itself refreshed it.
+      expect(
+        await screen.findByText(
+          "DW1 sắp đọc 2 thư đang chờ",
+          {},
+          { timeout: 1_500 },
         ),
       ).toBeTruthy();
     },

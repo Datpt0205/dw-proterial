@@ -230,6 +230,32 @@ describe("DW1 đã làm gì on a case (slice 3)", () => {
     ).toBeTruthy();
   });
 
+  it("says a step's calls and time once per mail, not on each of its lines", async () => {
+    // The server repeats the mail's timing on every row of the step.
+    const timed = { calls: 3, duration_ms: 4_200 };
+    api.caseActivity.mockResolvedValueOnce({
+      case_kind: "order",
+      case_id: CASE,
+      entries: [
+        entry({ ...timed, line_no: 1 }),
+        entry({ ...timed, line_no: 2 }),
+        entry({ ...timed, line_no: 3 }),
+        entry({ ...timed, message_id: "M08", line_no: 1 }),
+      ],
+    });
+    renderSection();
+    await screen.findAllByText("Đọc mô tả hàng chưa có trong convert list");
+    const texts = (items() as HTMLElement[]).map((i) => i.textContent ?? "");
+    expect(texts[0]).toContain(
+      "3 lần gọi, 4,2 giây cho cả thư (3 mục của bước này)",
+    );
+    expect(texts[1]).not.toContain("lần gọi");
+    expect(texts[2]).not.toContain("lần gọi");
+    // Another mail's step is timed on its own.
+    expect(texts[3]).toContain("3 lần gọi, 4,2 giây");
+    expect(texts[3]).not.toContain("cho cả thư");
+  });
+
   it("says when DW1 has done nothing on the case", async () => {
     api.caseActivity.mockResolvedValueOnce({
       case_kind: "order",

@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UiProvider } from "@dw/ui";
@@ -41,6 +42,7 @@ vi.mock("../api", () => ({ salesApi: () => api }));
 import {
   MessageTextDrawer,
   ModelReadFinding,
+  SOURCE_FIRST_REASON,
 } from "../../quotes/[caseId]/model-read";
 import { quoteTitle } from "../quote-actions";
 
@@ -97,6 +99,7 @@ function uncertain(): Finding {
     line_no: 1,
     missing: [],
     flagged: ["description", "needed_by", "quantity", "uom"],
+    source_not_served: [],
     confirmed: [
       {
         field: "description",
@@ -155,6 +158,39 @@ describe("a value a model read, confirmed one by one (ticket 29)", () => {
       { case_version: 2, field: "uom", value: "m" },
     ]);
     await waitFor(() => expect(onDone).toHaveBeenCalled());
+  }, 20_000);
+
+  it("keeps 'Xác nhận' disabled, with the reason in words, for a value whose source is not opened (audit gap 2)", () => {
+    render(
+      <UiProvider>
+        <ModelReadFinding
+          quote={m37()}
+          finding={{ ...uncertain(), source_not_served: ["quantity"] }}
+          viewer={{ principalId: AN, hasScope: () => true } as never}
+          onDone={vi.fn()}
+          onSource={vi.fn()}
+          name={() => "An"}
+        />
+      </UiProvider>,
+    );
+    const quantity = screen.getByRole("group", { name: "Số lượng dòng 1" });
+    expect(
+      within(quantity)
+        .getByRole("button", { name: "Xác nhận" })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    expect(within(quantity).getByRole("note").textContent).toBe(
+      SOURCE_FIRST_REASON,
+    );
+    expect(SOURCE_FIRST_REASON).toMatch(/^Mở nguồn trước khi xác nhận/);
+    // A value whose source was opened can still be confirmed.
+    const uom = screen.getByRole("group", { name: "Đơn vị tính dòng 1" });
+    expect(
+      within(uom)
+        .getByRole("button", { name: "Xác nhận" })
+        .hasAttribute("disabled"),
+    ).toBe(false);
+    expect(within(uom).queryByRole("note")).toBeNull();
   }, 20_000);
 
   it("asks the server for the mail when opened, and highlights the value's words", async () => {

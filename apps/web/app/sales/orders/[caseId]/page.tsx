@@ -66,6 +66,7 @@ import { CandidatePicker } from "./candidate-picker";
 import { FindingsPanel } from "./findings";
 import { LinesTable } from "./lines";
 import { PrintCopyNotice } from "./print-copy";
+import { UnopenedValues } from "./unopened-values";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Anchor = SalesSchemas["SourceAnchor"];
@@ -403,22 +404,6 @@ function OrderDetail() {
         </Space>
       </Card>
 
-      <CaseHistory
-        kind="order"
-        caseId={data.case_id}
-        status={data.status}
-        version={data.case_version}
-      />
-
-      <CaseActivity
-        kind="order"
-        caseId={data.case_id}
-        version={data.case_version}
-        onOpenSource={openSource}
-      />
-
-      <CaseReplies replies={data.replies} />
-
       <Alert
         type={data.coverage.unchecked_regions.length ? "warning" : "info"}
         showIcon
@@ -429,6 +414,14 @@ function OrderDetail() {
             : undefined
         }
       />
+
+      {data.unopened_values ? (
+        <UnopenedValues
+          order={data}
+          values={data.unopened_values}
+          onOpenSource={openSource}
+        />
+      ) : null}
 
       <PrintCopyNotice order={data} onOpenSource={openSource} />
 
@@ -500,6 +493,22 @@ function OrderDetail() {
           />
         </Card>
       ) : null}
+
+      <CaseHistory
+        kind="order"
+        caseId={data.case_id}
+        status={data.status}
+        version={data.case_version}
+      />
+
+      <CaseActivity
+        kind="order"
+        caseId={data.case_id}
+        version={data.case_version}
+        onOpenSource={openSource}
+      />
+
+      <CaseReplies replies={data.replies} />
 
       <Collapse
         items={[

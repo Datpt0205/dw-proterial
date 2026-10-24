@@ -7309,6 +7309,20 @@
                 "type": "null"
               }
             ]
+          },
+          "unopened_values": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/UnopenedValue"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unopened Values"
           }
         },
         "required": [
@@ -9241,6 +9255,9 @@
             "title": "Catalog As Of",
             "type": "string"
           },
+          "coverage": {
+            "$ref": "#/components/schemas/QuoteCoverageView"
+          },
           "currency": {
             "enum": [
               "USD",
@@ -9532,6 +9549,7 @@
           "parser_version",
           "catalog_as_of",
           "release_manifest_ref",
+          "coverage",
           "lines",
           "findings",
           "ycbg_no",
@@ -9550,6 +9568,43 @@
           "evidence"
         ],
         "title": "QuoteCaseView",
+        "type": "object"
+      },
+      "QuoteCoverageView": {
+        "description": "The request's coverage statement (`QuoteCase.coverage`).",
+        "properties": {
+          "findings": {
+            "title": "Findings",
+            "type": "integer"
+          },
+          "lines_read": {
+            "title": "Lines Read",
+            "type": "integer"
+          },
+          "model_read": {
+            "title": "Model Read",
+            "type": "integer"
+          },
+          "model_read_confirmed": {
+            "title": "Model Read Confirmed",
+            "type": "integer"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Regions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines_read",
+          "regions",
+          "model_read",
+          "model_read_confirmed",
+          "findings"
+        ],
+        "title": "QuoteCoverageView",
         "type": "object"
       },
       "QuoteDispositionView": {
@@ -9722,6 +9777,14 @@
               "type": "string"
             },
             "title": "Rule Versions",
+            "type": "array"
+          },
+          "source_not_served": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Not Served",
             "type": "array"
           }
         },
@@ -12764,6 +12827,31 @@
         "title": "UnappliedDecisionView",
         "type": "object"
       },
+      "UnopenedValue": {
+        "description": "A value of the order nobody was served the page or sheet of.",
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "UnopenedValue",
+        "type": "object"
+      },
       "UpdateTenantBody": {
         "properties": {
           "locale": {
@@ -12996,6 +13084,7 @@
           "dw",
           "uncertain",
           "confirmed",
+          "not_opened",
           "hand_entered",
           "superseded"
         ],

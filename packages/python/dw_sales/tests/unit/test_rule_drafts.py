@@ -19,6 +19,8 @@ from dw_kernel.errors import (
     NotFoundError,
     PermissionDeniedError,
 )
+from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
+from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.artifact_content import BravoUploadLayout, UploadField
 from dw_sales.application.malware import ScanVerdict
 from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
@@ -469,6 +471,47 @@ def test_a_file_that_is_no_workbook_fails_with_its_reason() -> None:
     asyncio.run(bench.drafting().draft(ALPHA, requested.draft_id))
     view = asyncio.run(bench.service().get(AN.context(), requested.draft_id))
     assert (view.status, view.error) == ("failed", "tệp không phải bảng tính Excel")
+
+
+class _OlderReader:
+    """The reader image of before `SheetCell.text_unseen`: the same answers,
+    without that field (the e2e run of 2026-10-21 met one)."""
+
+    async def call(self, request: ReaderRequest) -> ReaderReply:
+        reply = await InProcessReaderTransport().call(request)
+        if request.operation is ReaderOp.SOURCE_SHEET_GRID and isinstance(reply.result, dict):
+            cells = reply.result["cells"]
+            assert isinstance(cells, list)
+            older = [
+                {k: v for k, v in cell.items() if k != "text_unseen"}
+                for cell in cells
+                if isinstance(cell, dict)
+            ]
+            return reply.model_copy(update={"result": {**reply.result, "cells": older}})
+        return reply
+
+
+def test_a_reader_of_another_version_fails_the_draft_with_why_and_is_not_retried() -> None:
+    """Sales defect B: the reply's ValidationError escaped, the outbox
+    delivered the event again, and the editor said "Đang đọc tệp"."""
+    from dataclasses import replace
+
+    from dw_sales.adapters.reader_client import ClientSourceView
+
+    bench = Bench.of(REPO, Recorded(raw=gold(GOLDEN)), (AN,))
+    requested = asyncio.run(
+        bench.service().request(AN.context(), RuleKey.BRAVO_UPLOAD, "m.xlsx", template_xlsx(GOLDEN))
+    )
+    sheets = ClientSourceView(_OlderReader(), bench.drafting().sheets.caps)  # type: ignore[attr-defined]
+    drafting = replace(bench.drafting(), sheets=sheets)
+
+    assert asyncio.run(drafting.draft(ALPHA, requested.draft_id)) == "draft failed"
+
+    view = asyncio.run(bench.service().get(AN.context(), requested.draft_id))
+    assert view.status == "failed"
+    assert view.error is not None
+    assert view.error.startswith("không mở được tệp mẫu: trình đọc tệp trả lời không khớp")
+    assert view.document is None
 
 
 def test_another_tenant_or_workspace_does_not_find_a_draft() -> None:

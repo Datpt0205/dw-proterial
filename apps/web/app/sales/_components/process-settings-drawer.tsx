@@ -101,6 +101,9 @@ export function ProcessSettingsDrawer({
 }) {
   const name = usePeople();
   const discard = useConfirmDiscard();
+  // A bottom sheet on a phone (ui-quality §9); from the right from md up,
+  // and while the breakpoint is not known yet.
+  const phone = Grid.useBreakpoint().md === false;
   const byKey = new Map<RuleKey, Setting[]>();
   for (const s of target.settings)
     byKey.set(s.key, [...(byKey.get(s.key) ?? []), s]);
@@ -160,7 +163,8 @@ export function ProcessSettingsDrawer({
       afterOpenChange={(opened) => {
         if (!opened) afterClose();
       }}
-      size="min(720px, 100vw)"
+      placement={phone ? "bottom" : "right"}
+      size={phone ? "88vh" : "min(720px, 100vw)"}
       title={target.title}
     >
       <div className="space-y-4">
@@ -304,20 +308,33 @@ function ModelSection({ models }: { models: StepModel[] }) {
                   label: "Công tắc",
                   children: m.enabled ? "Bật" : "Tắt",
                 },
+                // Two numbers on two scales, kept apart so neither reads as
+                // the other's target (browser look, 2026-10-24): the bar is
+                // measured on the golden set, the share on real work.
                 {
                   key: "bar",
-                  label: "Điểm đạt",
+                  label: "Điểm đạt đo trên bộ thử",
+                  children: (
+                    <span className="flex flex-col">
+                      <span>{formatShare(m.bar)}</span>
+                      <Typography.Text type="secondary">
+                        Chỉ số đo: {m.metric}
+                      </Typography.Text>
+                    </span>
+                  ),
+                },
+                {
+                  key: "live",
+                  label: `Thực tế ${m.live_share.window_days} ngày`,
                   children: (
                     <span className="flex flex-col">
                       <span>
-                        {formatShare(m.bar)} · Tự động{" "}
-                        {m.live_share.window_days} ngày qua:{" "}
                         {m.live_share.share === null
                           ? "chưa có dữ liệu"
-                          : `${formatShare(m.live_share.share)} (${m.live_share.automatic}/${m.live_share.handled})`}
+                          : `DW1 tự xử lý ${formatShare(m.live_share.share)} số mục (${m.live_share.automatic}/${m.live_share.handled})`}
                       </span>
                       <Typography.Text type="secondary">
-                        Chỉ số đo: {m.metric}
+                        Đếm trên việc thật, không cùng thước với điểm đạt.
                       </Typography.Text>
                     </span>
                   ),

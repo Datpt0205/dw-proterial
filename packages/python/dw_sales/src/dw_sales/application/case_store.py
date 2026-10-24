@@ -468,6 +468,11 @@ class SourceServedPort(Protocol):
         """The regions ``principal_id`` was served of this case version."""
         ...
 
+    async def servings(self, case_kind: CaseKind, case_id: uuid.UUID) -> Sequence[ServedSource]:
+        """Every region served of this case, to anyone, at any version: what
+        a case view tells a value nobody opened from one a person checked."""
+        ...
+
 
 class ArtifactLogPort(Protocol):
     async def add(self, artifact: ArtifactRecord) -> bool:

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Alert, Button, Grid, Skeleton, Tabs, Typography } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
@@ -33,7 +34,6 @@ import type { RuleKey } from "../../_lib/rules";
 import { useResource } from "../../_lib/use-resource";
 import { salesCrumbs } from "../../_components/crumbs";
 import { aiState } from "../../_lib/activity";
-import { ProcessFlow } from "../../_components/process-flow";
 import {
   ProcessList,
   type AiSummary,
@@ -45,6 +45,15 @@ import {
 } from "../../_components/process-settings-drawer";
 import { SCOPE } from "../../_components/sales-frame";
 import { ScopeGate } from "../../_components/scope-gate";
+
+/**
+ * The canvas, loaded only where it is drawn (on `lg` and up): a phone draws
+ * the list and never downloads React Flow (~56 kB gzipped).
+ */
+const ProcessFlow = dynamic(
+  () => import("../../_components/process-flow").then((m) => m.ProcessFlow),
+  { ssr: false, loading: () => <Skeleton active paragraph={{ rows: 8 }} /> },
+);
 
 type View = SalesSchemas["ProcessSettingsView"];
 type Kind = Lane["kind"];

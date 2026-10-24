@@ -163,6 +163,9 @@ class QuoteQueries:
         async with self.uow(scope) as work:
             stored = await stored_quote(work, case_id)
             logged = await work.messages.list_all()
+            served = await work.served.served(
+                context.principal_id, CaseKind.QUOTE, case_id, stored.case.case_version
+            )
         prices = self.gate.prices(context)
         today = local_day(self.clock.now())
         case = stored.case
@@ -187,6 +190,7 @@ class QuoteQueries:
             evidence_rows=evidence,
             decision=decision,
             replies=logged,
+            served=served,
         )
 
     async def screening(self, context: AccessContext, as_of: date | None) -> list[ScreeningRow]:

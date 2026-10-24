@@ -381,6 +381,16 @@ def _failed(draft: RuleDraft, reason: str) -> RuleDraft:
     return draft.model_copy(update={"status": "failed", "error": reason[:500]})
 
 
+def _unopened(refused: DomainError) -> str:
+    """Why the template could not be opened. A reader of another version
+    than this process says so in its own words, since the fix is the
+    reader's, not the file's (Sales defect B: it was retried until the
+    sweep); any other refusal is the file's."""
+    if refused.details.get("reason_code") == "reader_version_mismatch":
+        return f"không mở được tệp mẫu: {refused.message}"
+    return "không mở được tệp mẫu"
+
+
 @dataclass(frozen=True)
 class RuleDrafting:
     """The worker's side of a request: `RULE_DRAFT_REQUESTED`, carried out.
@@ -450,8 +460,8 @@ class RuleDrafting:
             return _failed(draft, "tệp không phải bảng tính Excel")
         try:
             row = await self._header_row(content)
-        except DomainError:
-            return _failed(draft, "không mở được tệp mẫu")
+        except DomainError as refused:
+            return _failed(draft, _unopened(refused))
         if row is None:
             return _failed(
                 draft, "không tìm thấy hàng tiêu đề: cần một hàng có ít nhất 4 ô tiêu đề hiện"

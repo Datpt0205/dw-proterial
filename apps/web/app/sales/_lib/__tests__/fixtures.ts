@@ -219,6 +219,13 @@ export function pendingQuote(): Quote {
     parser_version: "excel_rfq_reader@1.0.0",
     catalog_as_of: "2026-10-02T18:00:00+07:00",
     release_manifest_ref: null,
+    coverage: {
+      lines_read: 0,
+      regions: [],
+      model_read: 0,
+      model_read_confirmed: 0,
+      findings: 0,
+    },
     findings: [],
     lines: [],
     ycbg_no: "YCBG-2609-030",

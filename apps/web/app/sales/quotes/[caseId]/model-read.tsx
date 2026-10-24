@@ -37,6 +37,14 @@ export type OpenSource = (field: string, lineNo: number | null) => void;
 
 const DATES = new Set(["quote_due", "needed_by"]);
 
+/**
+ * Why "Xác nhận" waits on a value whose source this person has not opened at
+ * this case version (`QuoteFindingView.source_not_served`, audit gap 2): the
+ * server refuses it (409 `source_not_served`) whatever the button shows.
+ */
+export const SOURCE_FIRST_REASON =
+  "Mở nguồn trước khi xác nhận: bấm “Nguồn” để xem chỗ giá trị này được đọc.";
+
 /** A value of the request as the case holds it now, as text for the field. */
 export function currentValue(
   quote: Quote,
@@ -95,6 +103,7 @@ export function ModelReadFinding({
       : viewer.hasScope("sales.quote.prepare")
         ? null
         : "Bạn không có quyền xác nhận giá trị của yêu cầu báo giá.";
+  const unserved = new Set(finding.source_not_served);
   return (
     <div
       className="space-y-2"
@@ -132,7 +141,9 @@ export function ModelReadFinding({
                 quote={quote}
                 finding={finding}
                 field={field}
-                reason={reason}
+                reason={
+                  reason ?? (unserved.has(field) ? SOURCE_FIRST_REASON : null)
+                }
                 onDone={onDone}
               />
             )}

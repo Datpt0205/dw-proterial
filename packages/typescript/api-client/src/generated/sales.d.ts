@@ -3053,6 +3053,8 @@ export interface components {
             total: components["schemas"]["Amount"] | null;
             total_anchor: components["schemas"]["SourceAnchor"] | null;
             unapplied_decision: components["schemas"]["UnappliedDecisionView"] | null;
+            /** Unopened Values */
+            unopened_values?: components["schemas"]["UnopenedValue"][] | null;
         };
         /** OrderFindingView */
         OrderFindingView: {
@@ -3657,6 +3659,7 @@ export interface components {
              * Format: date-time
              */
             catalog_as_of: string;
+            coverage: components["schemas"]["QuoteCoverageView"];
             /**
              * Currency
              * @enum {string}
@@ -3728,6 +3731,22 @@ export interface components {
             /** Ycbg Recorded By */
             ycbg_recorded_by: string | null;
         };
+        /**
+         * QuoteCoverageView
+         * @description The request's coverage statement (`QuoteCase.coverage`).
+         */
+        QuoteCoverageView: {
+            /** Findings */
+            findings: number;
+            /** Lines Read */
+            lines_read: number;
+            /** Model Read */
+            model_read: number;
+            /** Model Read Confirmed */
+            model_read_confirmed: number;
+            /** Regions */
+            regions: string[];
+        };
         /** QuoteDispositionView */
         QuoteDispositionView: {
             /** At */
@@ -3774,6 +3793,11 @@ export interface components {
             missing: string[];
             /** Rule Versions */
             rule_versions: string[];
+            /**
+             * Source Not Served
+             * @default []
+             */
+            source_not_served: string[];
         };
         /** QuoteLineView */
         QuoteLineView: {
@@ -4587,6 +4611,16 @@ export interface components {
              */
             run_id: string;
         };
+        /**
+         * UnopenedValue
+         * @description A value of the order nobody was served the page or sheet of.
+         */
+        UnopenedValue: {
+            /** Field */
+            field: string;
+            /** Line No */
+            line_no?: number | null;
+        };
         /** UsesView */
         UsesView: {
             /** Layouts */
@@ -4654,7 +4688,7 @@ export interface components {
          * @description How sure a value on a case is (CONTEXT.md "Value states").
          * @enum {string}
          */
-        ValueState: "dw" | "uncertain" | "confirmed" | "hand_entered" | "superseded";
+        ValueState: "dw" | "uncertain" | "confirmed" | "not_opened" | "hand_entered" | "superseded";
         /**
          * VersionBody
          * @description The case version the decision was made on.

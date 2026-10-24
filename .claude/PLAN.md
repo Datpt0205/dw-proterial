@@ -37,7 +37,7 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 2026-10-20: pipeline board as the Sales home, a history per case, denser
   theme (`sales.md` State).
-- **Next:** the Docker-off integration and e2e runs owed for "Quy trình DW1" slices 2–3 (web half built 10-23, React Flow map; `sales.md` State), a browser look at the map, defects A–E, the screenshot review;
+- **Next:** the full e2e run for defects A–E, audit gaps 1–5 and the re-laid process map (built 10-24, uncommitted; `sales.md` State), then commit; the rest of the screenshot review;
   `onprem-up` in `uat` behind Caddy; DW2 (Mua hàng) when its survey arrives, after the reuse decisions in `sales.md`.
 
 ## Decisions Đạt owes

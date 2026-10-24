@@ -25,6 +25,14 @@ logged: a failure is logged by its kind.
 (503, "chưa đọc được tệp đính kèm, thử lại"), so nothing is recorded and the
 processing is tried again, as when the malware scanner cannot answer.
 
+**A reader whose answer does not fit is a refusal**: `ReaderMismatchError`
+(422, reason code ``reader_version_mismatch``). A reply, or its result, that
+fails this process's wire models comes from a reader image older or newer
+than this one (the e2e run of 2026-10-21 met one built before
+`SheetCell.text_unseen`). Asking again gets the same answer until the reader
+is rebuilt, so nothing is retried and nothing is read: the mismatch is logged
+by where it failed, never by a value.
+
 Only `sniff` (and so `SourceViewPort.kind`) stays in the calling process:
 magic numbers and a zip's table of contents (`dw_sales.adapters.formats`).
 """
@@ -60,6 +68,11 @@ logger = logging.getLogger("dw_sales.reader")
 
 # What a caller is told when the reader cannot answer; the button shows it.
 READER_UNAVAILABLE: Final = "chưa đọc được tệp đính kèm, thử lại"
+# What a caller is told when the reader's answer does not fit this version.
+READER_MISMATCH: Final = (
+    "trình đọc tệp trả lời không khớp phiên bản hệ thống, nên chưa đọc được tệp; "
+    "cần cập nhật trình đọc"
+)
 
 # Why a read the reader gave up on is unreadable, when it says no more.
 _CRASHED: Final = "the reader failed on this file"
@@ -78,9 +91,46 @@ class ReaderUnavailableError(InfrastructureError):
         )
 
 
+class ReaderMismatchError(DomainError):
+    """The reader answered in a shape this process does not read: refused,
+    not retried (module docstring)."""
+
+    def __init__(self, operation: ReaderOp, mismatch: ValidationError) -> None:
+        # Where it failed and why, by field name and index: a loc segment that
+        # is not a name (a key a file could have supplied) is not logged.
+        where = [
+            ".".join(
+                str(part) if isinstance(part, int) or part.isidentifier() else "?"
+                for part in error["loc"]
+            )
+            + f":{error['type']}"
+            for error in mismatch.errors(include_url=False, include_input=False)[:5]
+        ]
+        logger.error(
+            "reader operation %s: the answer does not fit this version (%d errors: %s)",
+            operation,
+            mismatch.error_count(),
+            ", ".join(where),
+        )
+        super().__init__(
+            READER_MISMATCH,
+            details={"reason_code": "reader_version_mismatch", "operation": operation.value},
+        )
+
+
+def _value(operation: ReaderOp, reply: ReaderReply) -> Any:
+    """The reply's result as its operation's type; `ReaderMismatchError` when
+    it is not one."""
+    try:
+        return reply.value(operation)
+    except ValidationError as mismatch:
+        raise ReaderMismatchError(operation, mismatch) from mismatch
+
+
 class ReaderTransport(Protocol):
     """Runs one reader operation. Raises `ReaderUnavailableError` when no
-    reply comes; a reply always comes for a file the reader could not read."""
+    reply comes, `ReaderMismatchError` when the reply is not one this version
+    reads; a reply always comes for a file the reader could not read."""
 
     async def call(self, request: ReaderRequest) -> ReaderReply: ...
 
@@ -144,7 +194,7 @@ class ClientPoReaders:
             return None
         operation = ReaderOp.PO_BUYER
         reply = await _ask(self.transport, operation, content=document, args=ReaderArgs(caps=caps))
-        found: PrintedBuyer | None = None if _failed(operation, reply) else reply.value(operation)
+        found: PrintedBuyer | None = None if _failed(operation, reply) else _value(operation, reply)
         if found is not None and not _points_into(found.anchor, document):
             logger.error("reader operation %s: the answer names another file", operation)
             return None
@@ -172,7 +222,9 @@ class ClientPoReaders:
     ) -> LayoutSource | None:
         operation = ReaderOp.PO_LABEL_SOURCE
         reply = await _ask(self.transport, operation, content=document, args=ReaderArgs(caps=caps))
-        source: LayoutSource | None = None if _failed(operation, reply) else reply.value(operation)
+        if _failed(operation, reply):
+            return None
+        source: LayoutSource | None = _value(operation, reply)
         return source
 
     async def has_layout(self, customer_code: str, file_type: FileType) -> bool:
@@ -188,7 +240,7 @@ class ClientPoReaders:
             if reply.failure is not None:
                 # No file is read here: a failure is the reader's own.
                 raise ReaderUnavailableError(f"{operation}: {reply.failure}")
-            self._layouts = dict(reply.value(operation))
+            self._layouts = dict(_value(operation, reply))
         return self._layouts
 
     async def _document(
@@ -197,7 +249,7 @@ class ClientPoReaders:
         reply = await _ask(self.transport, operation, content=document, args=args)
         if _failed(operation, reply):
             return Unreadable(reason=_reason(reply)[:500])
-        read: PoDocument | Unreadable = reply.value(operation)
+        read: PoDocument | Unreadable = _value(operation, reply)
         if isinstance(read, PoDocument) and (read.attachment_id, read.attachment_sha256) != (
             document.attachment.attachment_id,
             document.attachment.sha256,
@@ -218,7 +270,7 @@ class ClientQuoteForms:
     async def form(self, content: AttachmentContent) -> QuoteForm | None:
         operation = ReaderOp.QUOTE_FORM
         reply = await _ask(self.transport, operation, content=content)
-        found: QuoteForm | None = None if _failed(operation, reply) else reply.value(operation)
+        found: QuoteForm | None = None if _failed(operation, reply) else _value(operation, reply)
         return found
 
 
@@ -233,7 +285,7 @@ async def _quote_file[T](
         raise QuoteFileUnreadableError(reply.detail or "unreadable", at=reply.at)
     if _failed(operation, reply):
         return None
-    document: T | None = reply.value(operation)
+    document: T | None = _value(operation, reply)
     return document
 
 
@@ -271,7 +323,7 @@ class ClientTexts:
         reply = await _ask(self.transport, operation, content=content, args=ReaderArgs(caps=caps))
         if _failed(operation, reply):
             return ()
-        parts: list[TextPart] = reply.value(operation)
+        parts: list[TextPart] = _value(operation, reply)
         return tuple(parts)
 
 
@@ -314,7 +366,7 @@ class ClientSourceView:
                 "tệp này không mở được để xem",
                 details={"reason_code": "source_unreadable", "failure": reply.failure},
             )
-        return reply.value(operation)
+        return _value(operation, reply)
 
 
 # Why a table could not be read, by the reader's failure kind, when it says no
@@ -342,7 +394,7 @@ class ClientTableReader:
             raise TableUnreadableError(
                 refused or _TABLE_FAILURES.get(failure, "không đọc được tệp")
             )
-        table: ImportedTable = reply.value(operation)
+        table: ImportedTable = _value(operation, reply)
         return table
 
 
@@ -409,5 +461,7 @@ class HttpReaderTransport:
             raise ReaderUnavailableError(f"status {response.status_code}")
         try:
             return ReaderReply.model_validate_json(response.content)
-        except ValidationError as nonsense:
-            raise ReaderUnavailableError("the reader's answer is not a reply") from nonsense
+        except ValidationError as mismatch:
+            # An answer came, in a shape this version does not read: asking
+            # again gets the same one.
+            raise ReaderMismatchError(request.operation, mismatch) from mismatch

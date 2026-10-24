@@ -437,6 +437,9 @@ class _Served:
             == (principal_id, case_kind, case_id, case_version)
         )
 
+    async def servings(self, case_kind: CaseKind, case_id: uuid.UUID) -> Sequence[ServedSource]:
+        return [s for s in self._held if (s.case_kind, s.case_id) == (case_kind, case_id)]
+
 
 def _render_key(r: ArtifactRecord) -> tuple[object, ...]:
     """One file of a kind and content type per case version (ticket 06)."""

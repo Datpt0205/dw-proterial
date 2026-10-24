@@ -83,3 +83,38 @@ async def test_the_web_may_read_the_servers_clock() -> None:
 async def test_another_origin_is_still_not_allowed() -> None:
     response = await simple_get("https://elsewhere.example")
     assert "access-control-allow-origin" not in response.headers
+
+
+async def failing_get(origin: str) -> httpx.Response:
+    app = create_app(make_container())
+
+    @app.get("/api/v1/test-boom")
+    async def boom() -> None:
+        raise RuntimeError("secret internals")
+
+    async with LifespanManager(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get(
+                "/api/v1/test-boom", headers={"Origin": origin, "X-Request-ID": "req-500"}
+            )
+
+
+async def test_a_server_error_reaches_the_web_as_a_server_error() -> None:
+    # Sales defect A: a 500 rendered outside CORS reached the browser without
+    # Access-Control-Allow-Origin, so the web said "Mất kết nối mạng".
+    response = await failing_get(WEB_ORIGIN)
+    assert response.status_code == 500
+    assert response.headers["access-control-allow-origin"] == WEB_ORIGIN
+    assert response.headers["x-request-id"] == "req-500"
+    body = response.json()
+    assert body["code"] == "internal"
+    assert body["message"] == "internal error"
+    assert body["request_id"] == "req-500"
+    assert "secret internals" not in response.text
+
+
+async def test_a_server_error_is_not_opened_to_another_origin() -> None:
+    response = await failing_get("https://elsewhere.example")
+    assert response.status_code == 500
+    assert "access-control-allow-origin" not in response.headers

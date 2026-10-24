@@ -1137,7 +1137,7 @@ test("10. An pauses DW1 and may not resume it; Giang resumes it with a reason", 
     .click();
   await expect(again).toBeHidden();
   await expect(
-    page.getByText(/^DW1 (đang đọc|sắp đọc|đã xử lý hết thư)/),
+    page.getByText(/^DW1 (đang đọc|sắp đọc|đang chờ: còn|đã xử lý hết thư)/),
   ).toBeVisible();
   expect((await (await an.get("/overview")).json()).worker.paused).toBe(false);
 });

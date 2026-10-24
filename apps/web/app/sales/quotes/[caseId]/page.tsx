@@ -47,6 +47,7 @@ import { usePeople } from "../../_lib/people";
 import { INTAKE_CODES, quoteTitle } from "../../_lib/quote-actions";
 import { anchorRegion } from "../../_lib/served";
 import { useResource } from "../../_lib/use-resource";
+import { quoteCoverageStatement } from "../../_lib/statements";
 import { useSalesViewer } from "../../_lib/viewer";
 import {
   ArtifactsPanel,
@@ -188,6 +189,15 @@ function QuoteDetail() {
       });
   };
   const openLine = (field: string, lineNo: number) => openField(field, lineNo);
+  // Opening a source is what the server records; while a value still waits on
+  // one, read the case again on close so its "Xác nhận" follows the server's
+  // `source_not_served`, the one owner of that fact.
+  const waitsOnSource = data.findings.some((f) => f.source_not_served.length);
+  const closeSource = () => {
+    setSource(null);
+    setMailSource(null);
+    if (waitsOnSource) reload();
+  };
 
   return (
     <div className="space-y-4">
@@ -367,22 +377,6 @@ function QuoteDetail() {
         />
       </Card>
 
-      <CaseHistory
-        kind="quote"
-        caseId={data.case_id}
-        status={data.status}
-        version={data.case_version}
-      />
-
-      <CaseActivity
-        kind="quote"
-        caseId={data.case_id}
-        version={data.case_version}
-        onOpenSource={openField}
-      />
-
-      <CaseReplies replies={data.replies} />
-
       {data.status === "pending_approval" ? (
         <ApprovalPanel
           quote={data}
@@ -390,6 +384,60 @@ function QuoteDetail() {
           artifacts={artifacts.data?.artifacts ?? []}
           onDone={reload}
         />
+      ) : null}
+
+      <Alert
+        type={
+          data.coverage.model_read_confirmed < data.coverage.model_read
+            ? "warning"
+            : "info"
+        }
+        showIcon
+        title={`Phạm vi đã đọc: ${quoteCoverageStatement(data)}.`}
+        description={
+          data.coverage.model_read_confirmed < data.coverage.model_read
+            ? `Còn ${data.coverage.model_read - data.coverage.model_read_confirmed} giá trị mô hình đọc chưa xác nhận: phần này chưa được kiểm, không phải đã đạt.`
+            : undefined
+        }
+      />
+
+      {otherFindings.length ? (
+        <Card size="small" title="Cờ của báo giá">
+          <div className="space-y-2">
+            {otherFindings.map((f) => (
+              <Card key={f.key} size="small" type="inner">
+                <Space wrap>
+                  <Typography.Text strong>
+                    {label(FINDING_CODE, f.code)}
+                    {f.line_no ? ` · dòng ${f.line_no}` : ""}
+                  </Typography.Text>
+                  <SeverityTag blocking={f.blocking} />
+                  <StatusTag tone="gray">
+                    {f.disposition.kind === "open"
+                      ? "Chưa quyết định"
+                      : "Đã ghi nhận khi duyệt"}
+                  </StatusTag>
+                </Space>
+                <Descriptions
+                  size="small"
+                  column={{ xs: 1, md: 2 }}
+                  items={[
+                    {
+                      key: "e",
+                      label: "Mong đợi",
+                      children: <FindingWords value={f.expected} />,
+                    },
+                    {
+                      key: "a",
+                      label: "Thực tế",
+                      children: <FindingWords value={f.actual} />,
+                    },
+                  ]}
+                />
+              </Card>
+            ))}
+          </div>
+        </Card>
       ) : null}
 
       <Card size="small" title="Yêu cầu của khách">
@@ -552,45 +600,6 @@ function QuoteDetail() {
         )}
       </Card>
 
-      {otherFindings.length ? (
-        <Card size="small" title="Cờ của báo giá">
-          <div className="space-y-2">
-            {otherFindings.map((f) => (
-              <Card key={f.key} size="small" type="inner">
-                <Space wrap>
-                  <Typography.Text strong>
-                    {label(FINDING_CODE, f.code)}
-                    {f.line_no ? ` · dòng ${f.line_no}` : ""}
-                  </Typography.Text>
-                  <SeverityTag blocking={f.blocking} />
-                  <StatusTag tone="gray">
-                    {f.disposition.kind === "open"
-                      ? "Chưa quyết định"
-                      : "Đã ghi nhận khi duyệt"}
-                  </StatusTag>
-                </Space>
-                <Descriptions
-                  size="small"
-                  column={{ xs: 1, md: 2 }}
-                  items={[
-                    {
-                      key: "e",
-                      label: "Mong đợi",
-                      children: <FindingWords value={f.expected} />,
-                    },
-                    {
-                      key: "a",
-                      label: "Thực tế",
-                      children: <FindingWords value={f.actual} />,
-                    },
-                  ]}
-                />
-              </Card>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
       <Card size="small" title="Căn cứ giá">
         <EvidencePanel quote={data} />
       </Card>
@@ -662,6 +671,22 @@ function QuoteDetail() {
         language={customer?.language}
         list={artifacts}
       />
+
+      <CaseHistory
+        kind="quote"
+        caseId={data.case_id}
+        status={data.status}
+        version={data.case_version}
+      />
+
+      <CaseActivity
+        kind="quote"
+        caseId={data.case_id}
+        version={data.case_version}
+        onOpenSource={openField}
+      />
+
+      <CaseReplies replies={data.replies} />
 
       <Collapse
         items={[
@@ -747,13 +772,13 @@ function QuoteDetail() {
         caseVersion={data.case_version}
         attachmentId={source?.attachmentId ?? data.attachment_id ?? ""}
         target={source}
-        onClose={() => setSource(null)}
+        onClose={closeSource}
       />
       <MessageTextDrawer
         quote={data}
         target={mailSource}
         mayRead={viewer.hasScope("sales.price.read")}
-        onClose={() => setMailSource(null)}
+        onClose={closeSource}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   Flex,
+  Grid,
   Spin,
   theme,
   Typography,
@@ -131,6 +132,9 @@ export function AppFrame({ children }: { children: ReactNode }) {
   // A grant open in this tab: its pages are reached through it.
   const grant = useSupportGrant();
   const { token } = theme.useToken();
+  // Below md the feedback button joins the bar's actions instead of floating
+  // over the page; while the width is not known yet, it floats as before.
+  const phone = Grid.useBreakpoint().md === false;
 
   // The nav the user can actually reach, and the bar drawn from it: a
   // context's own pages for someone whose work is that context alone.
@@ -262,6 +266,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
         }
         actions={
           <>
+            {phone ? <FeedbackLauncher placement="bar" /> : null}
             <NotificationBell />
             <SessionChip
               contextPrefix={bar.context?.context?.roleKeyPrefix ?? null}
@@ -269,11 +274,15 @@ export function AppFrame({ children }: { children: ReactNode }) {
           </>
         }
       >
-        {children}
+        {/* Room under the page for the floating feedback button (md and up),
+            so the end of a page scrolls clear of it. */}
+        <div data-feedback-room className="md:pb-20">
+          {children}
+        </div>
       </AppShell>
       {/* Feedback is a utility beside the app, pinned to the bottom-left
-          corner of every page rather than a line in the nav. */}
-      <FeedbackLauncher />
+          corner of every page from md up rather than a line in the nav. */}
+      {phone ? null : <FeedbackLauncher placement="float" />}
     </>
   );
 }

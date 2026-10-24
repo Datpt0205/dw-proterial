@@ -36,7 +36,16 @@ from dw_sales.application.case_store import (
     JobStatus,
     LoggedMessage,
     ProcessingJob,
+    ServedSource,
+    SourceRegion,
     WorkerState,
+)
+from dw_sales.application.source import (
+    NOTHING_OPENED,
+    OpenedSources,
+    UnopenedValue,
+    unopened_values,
+    value_unserved,
 )
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import (
@@ -232,6 +241,9 @@ class ValueState(StrEnum):
     DW = "dw"
     UNCERTAIN = "uncertain"
     CONFIRMED = "confirmed"
+    # Prepared, but the preparer was never served the page or sheet it was
+    # read from (audit gap 1): nobody checked it, whatever the step says.
+    NOT_OPENED = "not_opened"
     HAND_ENTERED = "hand_entered"
     SUPERSEDED = "superseded"
 
@@ -484,10 +496,13 @@ class OrderLineView(BaseModel):
     pc_confirmed_at: datetime | None
 
 
-def _line_states(case: OrderCase, line: OrderLine) -> dict[str, ValueState]:
+def _line_states(case: OrderCase, line: OrderLine, checked: OpenedSources) -> dict[str, ValueState]:
     """Each printed value's state: hand-entered once Sales typed it, uncertain
-    while its region is flagged and nothing is typed for it, confirmed once
-    the PIC prepared the case against the source, otherwise as DW1 read it."""
+    while its region is flagged and nothing is typed for it, otherwise as DW1
+    read it until the PIC prepared the case. Once prepared, confirmed only
+    where the preparer had been served the page or sheet the value was read
+    from (``checked``), and not opened where they had not: the step alone
+    is no evidence that anyone looked (audit gap 1)."""
     flagged = line.po_line.flagged
     typed = {c.field for c in line.corrections}
     # A preparer is stamped exactly while the self-check stands.
@@ -498,11 +513,21 @@ def _line_states(case: OrderCase, line: OrderLine) -> dict[str, ValueState]:
             states[field] = ValueState.HAND_ENTERED
         elif field in flagged:
             states[field] = ValueState.UNCERTAIN
-        elif prepared:
+        elif not prepared:
+            states[field] = ValueState.DW
+        elif checked.holds(getattr(line.po_line.anchors, field)):
             states[field] = ValueState.CONFIRMED
         else:
-            states[field] = ValueState.DW
+            states[field] = ValueState.NOT_OPENED
     return states
+
+
+def preparer_checked(case: OrderCase, servings: Iterable[ServedSource]) -> OpenedSources:
+    """What the preparer was served of the case's files before preparing it:
+    the regions a prepared value counts as checked in. Nothing before then."""
+    if case.prepared_by is None or case.prepared_at is None:
+        return NOTHING_OPENED
+    return OpenedSources.of(servings, by=case.prepared_by, until=case.prepared_at)
 
 
 def _basis(line: OrderLine, prices: PriceView) -> LineBasisView:
@@ -564,7 +589,15 @@ def _reading(reading: DescriptionReading | None) -> DescriptionReadingView | Non
     )
 
 
-def order_line(case: OrderCase, line: OrderLine, prices: PriceView) -> OrderLineView:
+def order_line(
+    case: OrderCase,
+    line: OrderLine,
+    prices: PriceView,
+    *,
+    checked: OpenedSources = NOTHING_OPENED,
+) -> OrderLineView:
+    """One line; ``checked`` is what its preparer opened (`preparer_checked`),
+    nothing by default, so a prepared value reads as not opened."""
     po = line.po_line
     mapping = line.mapping
     confirmed = {index: day for index, (_, day) in enumerate(line.confirmed_schedules())}
@@ -591,7 +624,7 @@ def order_line(case: OrderCase, line: OrderLine, prices: PriceView) -> OrderLine
         anchors=_seen_anchors(po.anchors, prices),
         flags=list(po.flags),
         corrections=_corrections(line.corrections, prices),
-        value_states=_line_states(case, line),
+        value_states=_line_states(case, line, checked),
         mapping=MappingView(
             status=mapping.status.value,
             prv_code=mapping.prv_code,
@@ -748,6 +781,11 @@ class OrderCaseView(BaseModel):
     unapplied_decision: UnappliedDecisionView | None
     # The customer's replies its thread headers attached to the case (ticket 32).
     replies: list[CaseReplyView] = []
+    # The values whose page or sheet no person was served before the
+    # cross-check step began (Bravo recorded), for the cross-checker to open
+    # first (audit gap 5). Only for a holder of `sales.order.cross_check`;
+    # None for anyone else, since it tells how colleagues read the case.
+    unopened_values: list[UnopenedValue] | None = None
 
 
 class CaseReplyView(BaseModel):
@@ -884,8 +922,15 @@ def order_case(
     decision: PendingDecisionView | None = None,
     stalled: bool = False,
     replies: Sequence[LoggedMessage] = (),
+    servings: Sequence[ServedSource] = (),
+    cross_checker: bool = False,
 ) -> OrderCaseView:
+    """The case for one caller. ``servings`` are every region served of it
+    (`SourceServedPort.servings`): none by default, so no prepared value
+    reads as checked. ``cross_checker``: the caller holds the cross-check
+    scope, and is told which values nobody opened."""
     document = case.document
+    checked = preparer_checked(case, servings)
     unapplied = case.unapplied_decision
     total = document.total
     coverage = case.coverage()
@@ -920,7 +965,7 @@ def order_case(
             checks_run=coverage.checks_run,
             findings=coverage.findings,
         ),
-        lines=[order_line(case, line, prices) for line in case.lines],
+        lines=[order_line(case, line, prices, checked=checked) for line in case.lines],
         findings=[order_finding(case, f, prices) for f in case.findings],
         changes=[_change(change, prices) for change in case.changes],
         superseded=[
@@ -976,6 +1021,11 @@ def order_case(
             else None
         ),
         replies=case_replies(CaseKind.ORDER, case.case_id, case.status.value, replies),
+        unopened_values=(
+            unopened_values(case, OpenedSources.of(servings, until=case.bravo_recorded_at))
+            if cross_checker
+            else None
+        ),
     )
 
 
@@ -1018,6 +1068,10 @@ class QuoteFindingView(BaseModel):
     # `value_uncertain`: the values a model read, and those Sales confirmed.
     flagged: list[str] = []
     confirmed: list[ValueConfirmationView] = []
+    # Of the flagged values still to confirm, those whose source this caller
+    # has not been served at this case version: confirming one is refused
+    # 409 `source_not_served` until they open it (audit gap 2).
+    source_not_served: list[str] = []
     # Every quotation code compares amounts or a copper basis: price-bearing.
     expected: Words | None
     actual: Words | None
@@ -1030,7 +1084,22 @@ def quote_finding_key(finding: QuoteFinding) -> str:
     return f"{finding.code.value}:{finding.line_no or '-'}"
 
 
-def quote_finding(finding: QuoteFinding, prices: PriceView) -> QuoteFindingView:
+def _source_not_served(
+    case: QuoteCase, finding: QuoteFinding, served: frozenset[SourceRegion]
+) -> list[str]:
+    """The finding's values still to confirm that `require_value_served`
+    would refuse for a caller ``served`` these regions (`value_unserved`)."""
+    done = {c.field for c in finding.confirmed}
+    return [
+        field
+        for field in finding.flagged
+        if field not in done and value_unserved(case, finding.line_no, field, served) is not None
+    ]
+
+
+def quote_finding(
+    finding: QuoteFinding, prices: PriceView, *, source_not_served: Sequence[str]
+) -> QuoteFindingView:
     disposition = finding.disposition
     if isinstance(disposition, FindingCorrected):
         decided = QuoteDispositionView(
@@ -1056,6 +1125,7 @@ def quote_finding(finding: QuoteFinding, prices: PriceView) -> QuoteFindingView:
         missing=list(finding.missing),
         flagged=list(finding.flagged),
         confirmed=[ValueConfirmationView(**c.model_dump()) for c in finding.confirmed],
+        source_not_served=list(source_not_served),
         expected=_words(finding.expected, prices.amounts),
         actual=_words(finding.actual, prices.amounts),
         rule_versions=list(finding.rule_versions),
@@ -1301,6 +1371,19 @@ class QuoteSummaryView(BaseModel):
     open_findings: int
 
 
+class QuoteCoverageView(BaseModel):
+    """The request's coverage statement (`QuoteCase.coverage`)."""
+
+    model_config = _VIEW
+
+    lines_read: int
+    # "page N", a sheet's name, or "message_text" (lines read from the mail).
+    regions: list[str]
+    model_read: int
+    model_read_confirmed: int
+    findings: int
+
+
 class QuoteCaseView(BaseModel):
     model_config = _VIEW
 
@@ -1335,6 +1418,7 @@ class QuoteCaseView(BaseModel):
     parser_version: str
     catalog_as_of: datetime
     release_manifest_ref: str | None
+    coverage: QuoteCoverageView
     lines: list[QuoteLineView]
     findings: list[QuoteFindingView]
     ycbg_no: str | None
@@ -1388,8 +1472,13 @@ def quote_case(
     evidence_rows: Sequence[PriceEvidence] | None,
     decision: PendingDecisionView | None = None,
     replies: Sequence[LoggedMessage] = (),
+    served: frozenset[SourceRegion] = frozenset(),
 ) -> QuoteCaseView:
+    """The case for one caller. ``served``: the regions of this case version
+    the caller was served (`SourceServedPort.served`); none by default, so
+    every value still to confirm reads as needing its source opened."""
     request = case.request
+    coverage = case.coverage()
     document = request.document
     reply = case.design_reply
     pricing = case.pricing
@@ -1423,6 +1512,13 @@ def quote_case(
         parser_version=case.parser_version,
         catalog_as_of=case.catalog_as_of,
         release_manifest_ref=release_manifest_ref,
+        coverage=QuoteCoverageView(
+            lines_read=coverage.lines_read,
+            regions=list(coverage.regions),
+            model_read=coverage.model_read,
+            model_read_confirmed=coverage.model_read_confirmed,
+            findings=coverage.findings,
+        ),
         lines=[
             QuoteLineView(
                 line_no=item.line_no,
@@ -1466,7 +1562,10 @@ def quote_case(
             )
             for item in document.items
         ],
-        findings=[quote_finding(f, prices) for f in case.findings],
+        findings=[
+            quote_finding(f, prices, source_not_served=_source_not_served(case, f, served))
+            for f in case.findings
+        ],
         ycbg_no=case.ycbg.ycbg_no if case.ycbg else None,
         ycbg_recorded_by=case.ycbg.recorded_by if case.ycbg else None,
         ycbg_recorded_at=case.ycbg.recorded_at if case.ycbg else None,
