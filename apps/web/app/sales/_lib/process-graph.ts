@@ -8,15 +8,21 @@ import type { SalesSchemas } from "@dw/api-client";
  * without a change here. Nothing below names a status.
  *
  * - A **back move** (to a status already on the way from the start, found by
- *   walking the moves depth first) is drawn dashed on a lane over its band
- *   on a wide screen (`process-geometry.ts`, 2026-10-24); below `lg` the list
- *   writes it on its node ("Có thể quay lại: …").
+ *   walking the moves depth first) is written on its status ("Có thể quay
+ *   lại: …"); on a wide screen it is also drawn, dashed, when "Hiện đường
+ *   quay lại" is on (`process-geometry.ts`, 2026-10-24).
  * - A **many-to-one exit** (a move into a final status that more than one
- *   status reaches, like closing or declining a case) is not drawn: the final
- *   status lists where it is reached from ("Có thể đóng từ: …").
+ *   status reaches, like closing or declining a case) is written on the final
+ *   status ("Có thể đóng từ: …"), and drawn only with the ways back.
  * - Every other move goes forward: a status's column is the longest run of
  *   forward moves from the start, and final statuses share the last column,
  *   so every arrow points right.
+ * - The **main path** (2026-10-24, the canvas's one row) is the longest run
+ *   of forward moves from the start that never enters a **detour**: a status
+ *   with ways on, every one of them back or out (asking the customer to fix
+ *   a PO, reviewing a change). On a tie the API's order of statuses decides.
+ *   A detour has no forward move on, so it can only end a run; leaving it out
+ *   keeps the row on the way a case goes when nothing needs redoing.
  */
 
 export type Lane = SalesSchemas["ProcessLaneView"];
@@ -42,8 +48,12 @@ export interface LaneLayout {
   back: Record<string, string[]>;
   /** Per final status reached from more than one, where from. */
   exitsFrom: Record<string, string[]>;
+  /** Those moves, in the API's order. */
+  exits: Move[];
   /** Per status, every status it may move to. */
   next: Record<string, string[]>;
+  /** The main path, from the start: the canvas's row. */
+  main: string[];
 }
 
 export function layoutLane(lane: Lane): LaneLayout {
@@ -121,14 +131,48 @@ export function layoutLane(lane: Lane): LaneLayout {
   );
   return {
     columns: statuses.length ? last + 1 : 0,
+    main: mainPath(statuses, forward, next),
     rows: Math.max(0, ...Object.values(perColumn)),
     nodes,
     forward,
     backward: moves.filter((m) => backMoves.has(m)),
     back,
     exitsFrom,
+    exits: moves.filter(exit),
     next,
   };
+}
+
+/**
+ * The longest run of forward moves from the first status through no detour
+ * (a status whose every way on goes back or out); the API's order of
+ * statuses breaks a tie. The forward moves are acyclic (`layoutLane`).
+ */
+function mainPath(
+  statuses: string[],
+  forward: Move[],
+  next: Record<string, string[]>,
+): string[] {
+  const order = new Map(statuses.map((s, i) => [s, i]));
+  const onward = (s: string) =>
+    forward
+      .filter((m) => m.from === s)
+      .map((m) => m.to)
+      .filter((t) => !(next[t]!.length && !forward.some((m) => m.from === t)))
+      .sort((a, b) => order.get(a)! - order.get(b)!);
+  const runs = new Map<string, number>();
+  const run = (s: string): number => {
+    if (!runs.has(s))
+      runs.set(s, 1 + Math.max(0, ...onward(s).map((t) => run(t))));
+    return runs.get(s)!;
+  };
+  const path: string[] = [];
+  for (let at = statuses[0]; at !== undefined;) {
+    path.push(at);
+    const ways = onward(at);
+    at = ways.find((t) => run(t) === Math.max(...ways.map(run)));
+  }
+  return path;
 }
 
 /** The statuses in drawing order: column by column, then down each. */

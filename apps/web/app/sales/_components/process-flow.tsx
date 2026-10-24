@@ -10,12 +10,22 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import Link from "next/link";
 import {
+  FlagOutlined,
+  LockOutlined,
+  RobotOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
+import {
+  Background,
+  BackgroundVariant,
   BaseEdge,
   Controls,
   EdgeLabelRenderer,
   Handle,
   MarkerType,
+  MiniMap,
   Position,
   ReactFlow,
   useReactFlow,
@@ -29,20 +39,42 @@ import {
   type NodeProps,
   type NodeTypes,
 } from "@xyflow/react";
-import { Tag, theme, Typography } from "antd";
-import { EDGE_ACTION, EDGE_GUARD, MOVE_ACTOR } from "../_lib/labels";
 import {
-  inColumnOrder,
-  type LaneLayout,
-  type Move,
-} from "../_lib/process-graph";
+  Button,
+  Card,
+  Popover,
+  Switch,
+  Tag,
+  theme,
+  Tooltip,
+  Typography,
+} from "antd";
+import {
+  EDGE_ACTION,
+  EDGE_GUARD,
+  MOVE_ACTOR,
+  NO_HOLDER,
+  TIME_BUCKET,
+} from "../_lib/labels";
+import type { LaneLayout, Move } from "../_lib/process-graph";
 import {
   CARD_W,
   laneGeometry,
+  LOCK,
+  pathOf,
+  PILL_PAD,
   type Box,
+  type Curve,
+  type MoveKind,
   type MoveWords,
 } from "../_lib/process-geometry";
-import { StatusLink, type StatusCard } from "./process-map";
+import {
+  openHere,
+  StatusFacts,
+  StepTags,
+  type StatusCard,
+} from "./process-map";
+import { AiStateTag } from "./tags";
 
 /**
  * A lane of the DW1 process on a wide screen, drawn with React Flow
@@ -52,44 +84,210 @@ import { StatusLink, type StatusCard } from "./process-map";
  * file lazily (`next/dynamic`), so a phone, which draws the list, never
  * downloads it.
  *
- * The canvas only draws: what is a status, a move, a way back is
- * `process-graph.ts`'s placement of the API's lane, and where each card,
- * line and label sits is `process-geometry.ts` (bands of at most five
- * columns, moves between neighbours through the gap, the rest on lanes over
- * and under each band, labels that never cover a card or each other). Every
- * card is the same `StatusLink` the phone list draws; its measured height
- * feeds the geometry again. The whole lane is in view on load and whenever
- * the geometry or the frame changes size (`LaneViewport`). Exits into a final status reached from many stay
- * words on that status, as on the phone.
+ * The canvas only draws: what is a status, a move, a way back and the main
+ * path is `process-graph.ts`'s reading of the API's lane, and where each
+ * tile, line and label sits is `process-geometry.ts` (the main path in one
+ * row, every other status below it, skips arched over the row, labels that
+ * never cover a tile or each other and lines that cross neither). Each
+ * tile's measured height feeds the geometry again.
  *
- * Nothing on the canvas is dragged, selected or connected. The card's link is
+ * The look is n8n's canvas (Đạt, 2026-10-24, made calm the same day): a
+ * dotted background, a minimap, each status a compact tile (an icon for
+ * whose turn it is, its name, its step codes, one line of AI state), moves
+ * as curves with arrowheads and only their action in a small pill; a guarded
+ * move's pill carries one lock whose tooltip lists the guards. The ways back
+ * and the exits are drawn, dashed, only when "Hiện đường quay lại" is on
+ * (`?back=1`, so a link keeps it); off, the tiles' details say them. What the
+ * list card writes besides (whose turn, settings, the ways back, where a
+ * final status is reached from) is the tile's details: a popover on hover
+ * and on keyboard focus (ui-quality §3: hover is a bonus), and the drawer on
+ * a click or Enter. The row opens at a readable zoom from its start and pans
+ * where it is wider than the frame; "Xem cả quy trình" fits all of it.
+ *
+ * Nothing on the canvas is dragged, selected or connected. The tile's link is
  * the focus stop (Tab, Enter opens the drawer, a middle click a new tab);
  * zoom is the controls, Ctrl + wheel or a pinch, so the wheel still scrolls
  * the page.
  */
 
 const PAD = 16;
-/** The least zoom the fit goes to: below it, cards' words stop being legible. */
-const MIN_FIT_ZOOM = 0.6;
+/**
+ * The least zoom the lane opens at: below it, tiles' words stop being
+ * legible, so a wider row opens at it, from its start, and pans.
+ */
+const MIN_FIT_ZOOM = 0.85;
+/** The minimap's size; the strip under the lane holds it and the controls. */
+const MINIMAP = { width: 160, height: 80 } as const;
+/** React Flow's own margin round a panel (its stylesheet's `.react-flow__panel`). */
+const PANEL_MARGIN = 15;
+const FOOTER = MINIMAP.height + 2 * PANEL_MARGIN;
+/** The tile's details: wide enough for a status's ways back on few lines. */
+const DETAILS_W = 300;
 
 interface StatusData extends Record<string, unknown> {
   card: StatusCard;
   onOpen: (item: string) => void;
+  /** Whether a drawn line enters the tile's left side, and leaves its right. */
+  entered: boolean;
+  left: boolean;
 }
 interface MoveData extends Record<string, unknown> {
-  back: boolean;
-  points: [number, number][];
-  label: Box;
+  kind: MoveKind;
+  curve: Curve;
+  label: Box | null;
   action: string;
   guards: string[];
 }
 type StatusNode = Node<StatusData, "status">;
 type MoveEdge = Edge<MoveData, "move">;
 
-const hidden: CSSProperties = { opacity: 0, pointerEvents: "none" };
+/** Whose turn a case in the status is, as the tile draws it. */
+type Turn = "dw" | "person" | "done";
+const turnOf = (holder: StatusCard["holderKey"]): Turn =>
+  holder === null ? "done" : holder === "dw" ? "dw" : "person";
+const TURN_ICON = {
+  dw: RobotOutlined,
+  person: UserOutlined,
+  done: FlagOutlined,
+} as const;
+/** The icons' meaning, said once above the canvas. */
+const TURN_LEGEND: Record<Turn, string> = {
+  dw: TIME_BUCKET.dw,
+  person: "Đến lượt người làm",
+  done: NO_HOLDER,
+};
 
-/** The card, with a handle on each side; the geometry routes every line. */
+/** An icon's look per turn: the theme's colours, never colour alone. */
+function useTurnLook(): Record<Turn, CSSProperties> {
+  const { token } = theme.useToken();
+  return {
+    dw: { color: token.colorPrimary, background: token.colorPrimaryBg },
+    person: { color: token.colorText, background: token.colorFillTertiary },
+    done: {
+      color: token.colorTextSecondary,
+      background: token.colorFillQuaternary,
+    },
+  };
+}
+
+/**
+ * A status as an n8n-like tile, in the real link to its drawer. The icon says
+ * whose turn it is (its meaning is the legend's words, so the icon is hidden
+ * from a screen reader); the details open on hover and focus, and close on
+ * Esc, on leaving, and when the tile opens its drawer, so they never float
+ * over it. While open they describe the link (`aria-describedby`).
+ */
+function StatusTile({
+  card,
+  onOpen,
+}: {
+  card: StatusCard;
+  onOpen: (item: string) => void;
+}) {
+  const { token } = theme.useToken();
+  const look = useTurnLook();
+  const [details, setDetails] = useState(false);
+  const turn = turnOf(card.holderKey);
+  const Icon = TURN_ICON[turn];
+  return (
+    <Popover
+      open={details}
+      onOpenChange={setDetails}
+      trigger={["hover", "focus"]}
+      placement="bottom"
+      title={card.label}
+      content={
+        <div
+          data-details={card.item}
+          className="flex flex-col items-start gap-1"
+          style={{ maxWidth: DETAILS_W }}
+        >
+          <StepTags steps={card.steps} />
+          <StatusFacts card={card} />
+          <span>Bấm hoặc nhấn Enter để mở thiết lập.</span>
+        </div>
+      }
+    >
+      <Link
+        href={card.href}
+        scroll={false}
+        data-node={card.item}
+        data-status={card.status}
+        data-turn={turn}
+        className="block"
+        style={{ color: token.colorText }}
+        onClick={(event) => {
+          setDetails(false);
+          openHere(event, () => onOpen(card.item));
+        }}
+      >
+        <Card
+          size="small"
+          hoverable
+          style={turn === "dw" ? { borderColor: token.colorPrimaryBorder } : {}}
+        >
+          {/* The name comes first in the link's name; the icon row is drawn
+              above it. */}
+          <span className="flex flex-col items-start gap-2">
+            <Typography.Text strong className="order-2">
+              {card.label}
+            </Typography.Text>
+            <span className="order-1 flex w-full items-start justify-between gap-2">
+              <span
+                aria-hidden
+                className="flex shrink-0 items-center justify-center"
+                style={{
+                  ...look[turn],
+                  width: token.controlHeightLG,
+                  height: token.controlHeightLG,
+                  borderRadius: token.borderRadiusLG,
+                  fontSize: token.fontSizeHeading3,
+                }}
+              >
+                <Icon />
+              </span>
+              {card.steps.length ? (
+                <span className="flex flex-wrap justify-end gap-1">
+                  {card.steps.map((s) => (
+                    <Tag key={s.step_id} className="me-0">
+                      {s.step_id}
+                    </Tag>
+                  ))}
+                </span>
+              ) : null}
+            </span>
+            {card.ai.length ? (
+              <span className="order-3 flex flex-wrap gap-1">
+                {card.ai.map((a) => (
+                  <AiStateTag key={a.state} state={a.state} short />
+                ))}
+              </span>
+            ) : null}
+          </span>
+        </Card>
+      </Link>
+    </Popover>
+  );
+}
+
+/**
+ * The tile, with a visible handle on each side a drawn line meets there (a
+ * line meeting its top or bottom has none, as in n8n). Every tile has both
+ * handles, since React Flow draws no edge without them; an unused one is
+ * hidden (`data-shown`), and every line is the geometry's own curve.
+ */
 function StatusNodeView({ data }: NodeProps<StatusNode>) {
+  const { token } = theme.useToken();
+  // Above the tile, which comes after it and would paint over it.
+  const handle = (shown: boolean): CSSProperties => ({
+    zIndex: 1,
+    width: token.sizeSM,
+    height: token.sizeSM,
+    background: token.colorBgContainer,
+    border: `${token.lineWidthBold}px solid ${token.colorTextTertiary}`,
+    pointerEvents: "none",
+    visibility: shown ? "visible" : "hidden",
+  });
   return (
     <div style={{ width: CARD_W }}>
       <Handle
@@ -97,16 +295,18 @@ function StatusNodeView({ data }: NodeProps<StatusNode>) {
         type="target"
         position={Position.Left}
         isConnectable={false}
-        style={hidden}
+        data-shown={data.entered}
+        style={handle(data.entered)}
       />
       <Handle
         id="out"
         type="source"
         position={Position.Right}
         isConnectable={false}
-        style={hidden}
+        data-shown={data.left}
+        style={handle(data.left)}
       />
-      <StatusLink card={data.card} onOpen={data.onOpen} drawn />
+      <StatusTile card={data.card} onOpen={data.onOpen} />
     </div>
   );
 }
@@ -125,59 +325,89 @@ function handlesFor(height: number): NonNullable<StatusNode["handles"]> {
   ];
 }
 
-/** A move: the geometry's polyline, and its words in the box placed for them. */
+/**
+ * A guarded move's one lock: its accessible name and its tooltip list the
+ * guards in words; the drawer says the whole move.
+ */
+function GuardLock({ guards }: { guards: string[] }) {
+  return (
+    <Tooltip
+      trigger={["hover", "focus"]}
+      title={
+        <span className="flex flex-col">
+          <span>Điều kiện:</span>
+          {guards.map((guard) => (
+            <span key={guard}>• {guard}</span>
+          ))}
+        </span>
+      }
+    >
+      <Button
+        type="text"
+        size="small"
+        icon={<LockOutlined />}
+        aria-label={`Điều kiện: ${guards.join("; ")}`}
+        className="nodrag nopan shrink-0"
+        style={{ width: LOCK.size, minWidth: LOCK.size, pointerEvents: "all" }}
+      />
+    </Tooltip>
+  );
+}
+
+/**
+ * A move: the geometry's curve, dashed for a way back or an exit, and its
+ * action in a pill inside the box placed for it, with the lock of a guarded
+ * move.
+ */
 function MoveEdgeView({ id, markerEnd, data }: EdgeProps<MoveEdge>) {
   const { token } = theme.useToken();
   if (!data) return null;
-  const path = data.points
-    .map(([x, y], i) => `${i ? "L" : "M"} ${x} ${y}`)
-    .join(" ");
   const { label } = data;
   return (
     <>
       <BaseEdge
         id={id}
-        path={path}
+        path={pathOf(data.curve)}
         markerEnd={markerEnd}
         style={{
           stroke: token.colorTextTertiary,
           strokeWidth: 1.5,
-          strokeDasharray: data.back ? "6 4" : undefined,
+          strokeDasharray: data.kind === "forward" ? undefined : "6 4",
         }}
       />
-      <EdgeLabelRenderer>
-        <div
-          className="nodrag nopan flex items-center justify-center"
-          style={{
-            position: "absolute",
-            transform: `translate(${label.x}px, ${label.y}px)`,
-            width: label.w,
-            height: label.h,
-            pointerEvents: "none",
-          }}
-        >
+      {label ? (
+        <EdgeLabelRenderer>
           <div
-            data-move={id}
-            className="flex flex-col items-center gap-1 text-center"
+            className="nodrag nopan flex items-center justify-center"
             style={{
-              width: "100%",
-              padding: 4,
-              background: token.colorBgContainer,
-              borderRadius: token.borderRadiusSM,
-              color: token.colorText,
-              fontSize: token.fontSizeSM,
-              lineHeight: token.lineHeightSM,
+              position: "absolute",
+              transform: `translate(${label.x}px, ${label.y}px)`,
+              width: label.w,
+              height: label.h,
+              pointerEvents: "none",
             }}
           >
-            <span>{data.action}</span>
-            {data.guards.map((guard) => (
-              <Tag key={guard} className="me-0 whitespace-normal">
-                {guard}
-              </Tag>
-            ))}
+            <div
+              data-move={id}
+              className="flex items-center text-center"
+              style={{
+                maxWidth: "100%",
+                gap: LOCK.gap,
+                padding: `${PILL_PAD.y}px ${PILL_PAD.x}px`,
+                background: token.colorBgContainer,
+                border: `${token.lineWidth}px solid ${token.colorBorderSecondary}`,
+                borderRadius: token.borderRadiusLG,
+                color: token.colorText,
+                fontSize: token.fontSizeSM,
+                lineHeight: token.lineHeightSM,
+              }}
+            >
+              <span style={{ textWrap: "balance" }}>{data.action}</span>
+              {data.guards.length ? <GuardLock guards={data.guards} /> : null}
+            </div>
           </div>
-        </div>
-      </EdgeLabelRenderer>
+        </EdgeLabelRenderer>
+      ) : null}
     </>
   );
 }
@@ -191,31 +421,39 @@ const ARIA_LABELS = {
   "controls.zoomIn.ariaLabel": "Phóng to",
   "controls.zoomOut.ariaLabel": "Thu nhỏ",
   "controls.fitView.ariaLabel": "Xem cả quy trình",
+  "minimap.ariaLabel": "Bản đồ thu nhỏ của quy trình",
 };
 
+/** Where the canvas looks: its pan and its zoom. */
+interface View {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
 /**
- * The whole lane in view, and the controls that bring it back. The frame is
- * as tall as the lane at the zoom its width allows (`ProcessFlow`), so that
- * zoom, centred across and `PAD` from the top, shows every card, move and
- * label. React Flow's own fit frames the cards alone, which left a stack of
- * words under the last row and the controls over a card (quote lane,
- * 2026-10-24). Set again whenever the lane or the frame changes size, and by
- * "Xem cả quy trình".
+ * The lane in view, and the controls. The frame is as tall as the lane at the
+ * zoom it opens at, plus a strip under it for the controls and the minimap
+ * (`ProcessFlow`), so no tile or label is ever under a panel. The lane opens
+ * at `start` (the whole row when it fits at a readable zoom, else its start
+ * at `MIN_FIT_ZOOM`, to pan from), set again whenever the lane or the frame
+ * changes size; "Xem cả quy trình" shows `whole`, all of it at whatever zoom
+ * that takes. React Flow's own fit frames the tiles alone, which left words
+ * under the controls (quote lane, 2026-10-24).
  */
-function LaneViewport({ x, zoom }: { x: number; zoom: number }) {
+function LaneViewport({ start, whole }: { start: View; whole: View }) {
   const { setViewport } = useReactFlow();
   const ready = useStore((state) => state.panZoom !== null);
-  const show = useCallback(() => {
-    void setViewport({ x, y: PAD, zoom });
-  }, [setViewport, x, zoom]);
+  const { x, y, zoom } = start;
   useEffect(() => {
-    if (ready) show();
-  }, [ready, show]);
+    if (ready) void setViewport({ x, y, zoom });
+  }, [ready, setViewport, x, y, zoom]);
   return (
     <Controls
       showInteractive={false}
-      position="bottom-right"
-      onFitView={show}
+      position="bottom-left"
+      orientation="horizontal"
+      onFitView={() => void setViewport(whole)}
     />
   );
 }
@@ -228,12 +466,32 @@ function wordsOf(move: Move): MoveWords {
   };
 }
 
+/** What the tiles' icons mean, in words. */
+function TurnLegend() {
+  const look = useTurnLook();
+  return (
+    <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {(Object.keys(TURN_ICON) as Turn[]).map((turn) => {
+        const Icon = TURN_ICON[turn];
+        return (
+          <span key={turn} className="flex items-center gap-1">
+            <Icon aria-hidden style={{ color: look[turn].color }} />
+            {TURN_LEGEND[turn]}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 export function ProcessFlow({
   id,
   name,
   layout,
   cards,
   onOpen,
+  showBack,
+  onShowBack,
 }: {
   /** Unique on the page: React Flow keys its markers by it. */
   id: string;
@@ -242,6 +500,9 @@ export function ProcessFlow({
   layout: LaneLayout;
   cards: Record<string, StatusCard>;
   onOpen: (item: string) => void;
+  /** Whether the ways back and the exits are drawn (the page's `?back=1`). */
+  showBack: boolean;
+  onShowBack: (show: boolean) => void;
 }) {
   const { token } = theme.useToken();
   // Each card's size once React Flow has measured it. The nodes are
@@ -273,11 +534,12 @@ export function ProcessFlow({
         Object.fromEntries(
           Object.entries(sizes).map(([id, size]) => [id, size.height]),
         ),
+        showBack,
       ),
-    [layout, sizes],
+    [layout, sizes, showBack],
   );
 
-  // The canvas is as tall as the fitted lane at the frame's width.
+  // The canvas is as tall as the lane at the zoom it opens at.
   const frame = useRef<HTMLDivElement>(null);
   const [frameWidth, setFrameWidth] = useState(0);
   useLayoutEffect(() => {
@@ -289,44 +551,60 @@ export function ProcessFlow({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const zoom = frameWidth
-    ? Math.min(
-        1,
-        Math.max(MIN_FIT_ZOOM, (frameWidth - 2 * PAD) / geometry.width),
-      )
-    : 1;
-
-  // In drawing order, column by column, so Tab follows what is drawn.
-  const nodes = useMemo<StatusNode[]>(
-    () =>
-      inColumnOrder(layout).map((n) => {
-        const box = geometry.cards[n.status]!;
-        return {
-          id: n.status,
-          type: "status",
-          position: { x: box.x, y: box.y },
-          data: { card: cards[n.status]!, onOpen },
-          initialWidth: CARD_W,
-          initialHeight: box.h,
-          measured: sizes[n.status],
-          handles: handlesFor(box.h),
-          draggable: false,
-          selectable: false,
-          connectable: false,
-          focusable: false,
-          // Not selectable or draggable, React Flow would let clicks through
-          // to the canvas; the card's link takes them. A drag from a card does
-          // not pan: the card is for opening.
-          className: "nopan",
-          style: { pointerEvents: "all" },
-        };
-      }),
-    [layout, cards, onOpen, geometry, sizes],
+  const across = frameWidth ? (frameWidth - 2 * PAD) / geometry.width : 1;
+  const zoom = Math.min(1, Math.max(MIN_FIT_ZOOM, across));
+  const frameHeight = Math.ceil(geometry.height * zoom) + PAD + FOOTER;
+  const centred = (z: number) =>
+    Math.max(PAD, (frameWidth - geometry.width * z) / 2);
+  const wholeZoom = Math.min(
+    1,
+    across,
+    (frameHeight - PAD - FOOTER) / geometry.height,
   );
+
+  // The row left to right, then the statuses below it, so Tab follows what
+  // is drawn.
+  const nodes = useMemo<StatusNode[]>(() => {
+    const side = (route: string) => route === "next" || route === "rail";
+    const entered = new Set(
+      geometry.moves.filter((m) => side(m.route)).map((m) => m.move.to),
+    );
+    const left = new Set(
+      geometry.moves.filter((m) => side(m.route)).map((m) => m.move.from),
+    );
+    return Object.entries(geometry.cards)
+      .sort(
+        ([a, p], [b, q]) => geometry.rows[a]! - geometry.rows[b]! || p.x - q.x,
+      )
+      .map(([status, box]) => ({
+        id: status,
+        type: "status",
+        position: { x: box.x, y: box.y },
+        data: {
+          card: cards[status]!,
+          onOpen,
+          entered: entered.has(status),
+          left: left.has(status),
+        },
+        initialWidth: CARD_W,
+        initialHeight: box.h,
+        measured: sizes[status],
+        handles: handlesFor(box.h),
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        focusable: false,
+        // Not selectable or draggable, React Flow would let clicks through
+        // to the canvas; the tile's link takes them. A drag from a tile does
+        // not pan: the tile is for opening.
+        className: "nopan",
+        style: { pointerEvents: "all" },
+      }));
+  }, [cards, onOpen, geometry, sizes]);
 
   const edges = useMemo<MoveEdge[]>(
     () =>
-      geometry.moves.map(({ id: moveId, move, back, points, label }) => {
+      geometry.moves.map(({ id: moveId, move, kind, curve, label }) => {
         const words = wordsOf(move);
         return {
           id: moveId,
@@ -339,14 +617,14 @@ export function ProcessFlow({
             type: MarkerType.ArrowClosed,
             color: token.colorTextTertiary,
           },
-          data: { back, points, label, ...words },
+          data: { kind, curve, label, ...words },
           ariaLabel: [
             `${cards[move.from]?.label ?? move.from} → ${cards[move.to]?.label ?? move.to}`,
             `${words.action} (${MOVE_ACTOR[move.actor] ?? move.actor})`,
             ...(words.guards.length
               ? [`điều kiện: ${words.guards.join(", ")}`]
               : []),
-            ...(back ? ["quay lại"] : []),
+            ...(kind === "back" ? ["quay lại"] : []),
           ].join("; "),
           selectable: false,
           focusable: false,
@@ -358,14 +636,24 @@ export function ProcessFlow({
   return (
     <div className="space-y-2">
       <Typography.Paragraph className="mb-0!">
-        Cả {layout.nodes.length} trạng thái vừa khung, đọc từ trái sang phải,
-        hết hàng thì xuống hàng dưới; phóng to, thu nhỏ hoặc xem cả quy trình
-        bằng các nút ở góc. Mũi tên nét đứt là đường quay lại.
+        Đường chính của hồ sơ đọc từ trái sang phải; các trạng thái rẽ nhánh nằm
+        ở hàng dưới. Kéo để xem tiếp, hoặc bấm “Xem cả quy trình” ở góc dưới.
+        Đưa chuột hoặc dùng Tab tới một trạng thái để xem đến lượt ai, số thiết
+        lập và đường quay lại; bấm hoặc nhấn Enter để mở thiết lập. Biểu tượng
+        khóa trên một bước chuyển là điều kiện của bước đó.
       </Typography.Paragraph>
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <TurnLegend />
+        <label className="flex items-center gap-2">
+          <Switch checked={showBack} onChange={onShowBack} />
+          <span>Hiện đường quay lại</span>
+          {showBack ? <span>(nét đứt: quay lại và đóng hồ sơ)</span> : null}
+        </label>
+      </div>
       <div
         ref={frame}
         style={{
-          height: Math.ceil(geometry.height * zoom) + 2 * PAD,
+          height: frameHeight,
           border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: token.borderRadiusLG,
           overflow: "hidden",
@@ -379,7 +667,7 @@ export function ProcessFlow({
           nodeTypes={NODE_TYPES}
           edgeTypes={EDGE_TYPES}
           onNodesChange={onNodesChange}
-          minZoom={0.4}
+          minZoom={0.3}
           maxZoom={1.5}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -391,6 +679,7 @@ export function ProcessFlow({
           preventScrolling={false}
           disableKeyboardA11y
           ariaLabelConfig={ARIA_LABELS}
+          attributionPosition="bottom-center"
           style={
             {
               "--xy-edge-stroke": token.colorTextTertiary,
@@ -402,13 +691,47 @@ export function ProcessFlow({
               "--xy-controls-button-color-hover": token.colorText,
               "--xy-controls-button-border-color": token.colorBorderSecondary,
               "--xy-controls-box-shadow": token.boxShadowTertiary,
+              "--xy-minimap-background-color": token.colorBgContainer,
+              "--xy-minimap-mask-background-color": token.colorFillTertiary,
+              "--xy-minimap-mask-stroke-color": token.colorBorder,
+              "--xy-minimap-node-background-color": token.colorBorder,
+              "--xy-minimap-node-stroke-color": token.colorBorder,
               "--xy-attribution-background-color": token.colorBgContainer,
             } as CSSProperties
           }
         >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={token.sizeLG}
+            size={token.lineWidthBold}
+            color={token.colorBorder}
+          />
+          <MiniMap
+            position="bottom-right"
+            pannable
+            nodeBorderRadius={token.borderRadiusSM}
+            style={{
+              width: MINIMAP.width,
+              height: MINIMAP.height,
+              borderRadius: token.borderRadius,
+              border: `1px solid ${token.colorBorderSecondary}`,
+            }}
+          />
           <LaneViewport
-            x={Math.max(0, (frameWidth - geometry.width * zoom) / 2)}
-            zoom={zoom}
+            start={{
+              x: across >= MIN_FIT_ZOOM ? centred(zoom) : PAD,
+              y: PAD,
+              zoom,
+            }}
+            whole={{
+              x: centred(wholeZoom),
+              // In the middle of the frame above the controls' strip.
+              y: Math.max(
+                PAD,
+                (frameHeight - FOOTER - geometry.height * wholeZoom) / 2,
+              ),
+              zoom: wholeZoom,
+            }}
           />
         </ReactFlow>
       </div>

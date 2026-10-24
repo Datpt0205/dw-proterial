@@ -78,8 +78,9 @@ type Actor = SalesSchemas["ActorView"];
  * `/sales/rules`: a holder of `sales.rules.propose`.
  *
  * Slices 2 and 3 (2026-10-23): on a wide screen the lane is a React Flow
- * canvas (`process-flow.tsx`) with every move labelled and the ways back
- * drawn; each status says whether its model steps run ("AI bật · đạt"), and
+ * canvas (`process-flow.tsx`): the main path in one row, each move labelled
+ * by its action, the ways back and exits drawn when "Hiện đường quay lại" is
+ * on (`?back=1`, re-cut 2026-10-24); each status says whether its model steps run ("AI bật · đạt"), and
  * its drawer adds what the model steps measured and did, the data the steps
  * read, and who acts on them. The model steps come only to a caller who may
  * read the order rules that switch them; for anyone else the server sends
@@ -128,6 +129,11 @@ function useOpenItem() {
     node: params.get("node"),
     edit: params.get("edit"),
     lane: params.get("lane"),
+    // Whether the canvas draws the ways back and the exits: in the URL, so a
+    // link keeps it; replaced, not pushed, like the lane.
+    back: params.get("back") === "1",
+    setBack: (show: boolean) =>
+      router.replace(href({ back: show ? "1" : null }), { scroll: false }),
     hrefOf: useCallback((id: string) => href({ node: id, edit: null }), [href]),
     open: (id: string) => opening("node", { node: id, edit: null }),
     close: () => closing("node", { node: null, edit: null }),
@@ -381,6 +387,8 @@ function Process() {
               wide={Boolean(screens.lg)}
               hrefOf={item.hrefOf}
               onOpen={item.open}
+              showBack={item.back}
+              onShowBack={item.setBack}
             />
           ),
         }))}
@@ -421,6 +429,8 @@ function LaneView({
   wide,
   hrefOf,
   onOpen,
+  showBack,
+  onShowBack,
 }: {
   lane: Lane;
   layout: LaneLayout;
@@ -429,6 +439,8 @@ function LaneView({
   wide: boolean;
   hrefOf: (id: string) => string;
   onOpen: (id: string) => void;
+  showBack: boolean;
+  onShowBack: (show: boolean) => void;
 }) {
   const count = (ids: string[]) =>
     distinct(ids.flatMap((id) => steps.get(id)?.settings ?? [])).length;
@@ -455,6 +467,7 @@ function LaneView({
               coverage: label(STEP_COVERAGE, s.coverage),
             })),
             holder: node.holder ? label(TIME_BUCKET, node.holder) : NO_HOLDER,
+            holderKey: node.holder ?? null,
             settings: settingsOf(node.steps),
             ai: aiSummary(distinctModels(own)),
             back: words(layout.back[node.status]),
@@ -473,6 +486,8 @@ function LaneView({
           layout={layout}
           cards={cards}
           onOpen={onOpen}
+          showBack={showBack}
+          onShowBack={onShowBack}
         />
       ) : (
         <ProcessList layout={layout} cards={cards} onOpen={onOpen} />

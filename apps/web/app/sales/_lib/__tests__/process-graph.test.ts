@@ -115,3 +115,80 @@ describe("placing a lane's statuses from the served moves (2026-10-22)", () => {
     expect(layout.next.received).toEqual(["checked", "closed"]);
   });
 });
+
+describe("the main path: the canvas's one row (2026-10-24)", () => {
+  const move = (from: string, to: string) => ({
+    from,
+    to,
+    action: "edit" as const,
+    actor: "sales" as const,
+    guards: [],
+  });
+  const lane = (statuses: string[], edges: [string, string][]): Lane => ({
+    ...ORDERS,
+    nodes: statuses.map((status) => ({ status, steps: [], holder: "sales" })),
+    edges: edges.map(([from, to]) => move(from, to)),
+  });
+
+  it("is the longest run of forward moves from the start that enters no detour", () => {
+    // Asking the customer to fix a PO, and reviewing a change, only lead
+    // back: the row ends where a confirmed order rests.
+    expect(layoutLane(ORDERS).main).toEqual([
+      "received",
+      "checked",
+      "in_review",
+      "prepared",
+      "uploaded_to_bravo",
+      "cross_checked",
+      "confirmed",
+    ]);
+    expect(layoutLane(QUOTES).main).toEqual([
+      "received",
+      "ycbg_drafted",
+      "ycbg_recorded",
+      "sent_to_design",
+      "design_replied",
+      "priced",
+      "pending_approval",
+      "approved",
+      "sent",
+      "master_list_recorded",
+    ]);
+  });
+
+  it("leaves out a detour even where it makes the longer run", () => {
+    // b -> d is a detour (its only way on goes back), listed before c:
+    // without the rule the tie would go to d, and the row run a, b, d.
+    const layout = layoutLane(
+      lane(
+        ["a", "b", "d", "c"],
+        [
+          ["a", "b"],
+          ["b", "c"],
+          ["b", "d"],
+          ["d", "a"],
+        ],
+      ),
+    );
+    expect(layout.main).toEqual(["a", "b", "c"]);
+    // Two runs of one length: the API's order of statuses decides.
+    const tie = layoutLane(
+      lane(
+        ["a", "x", "y", "z", "end"],
+        [
+          ["a", "y"],
+          ["a", "x"],
+          ["x", "z"],
+          ["y", "z"],
+          ["z", "end"],
+        ],
+      ),
+    );
+    expect(tie.main).toEqual(["a", "x", "z", "end"]);
+  });
+
+  it("is the first status alone when nothing leads on from it", () => {
+    expect(layoutLane(lane(["a"], [])).main).toEqual(["a"]);
+    expect(layoutLane(lane([], [])).main).toEqual([]);
+  });
+});
