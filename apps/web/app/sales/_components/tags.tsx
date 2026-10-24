@@ -7,6 +7,7 @@ import {
   CloseCircleOutlined,
   EditOutlined,
   ExclamationCircleOutlined,
+  EyeInvisibleOutlined,
   HistoryOutlined,
   MinusCircleOutlined,
   QuestionCircleOutlined,
@@ -52,6 +53,7 @@ const i = {
   robot: <RobotOutlined key="i" aria-hidden />,
   history: <HistoryOutlined key="i" aria-hidden />,
   minus: <MinusCircleOutlined key="i" aria-hidden />,
+  unseen: <EyeInvisibleOutlined key="i" aria-hidden />,
 };
 
 function Chip({
@@ -106,17 +108,26 @@ export function QuoteStateTag({ status }: { status: string }) {
   return <Chip look={QUOTE_LOOK[status]}>{label(QUOTE_STATE, status)}</Chip>;
 }
 
-const VALUE_LOOK: Record<string, Look> = {
+// Keyed by every state the glossary names, so one added there without a look
+// fails the typecheck instead of drawing as a grey chip.
+const VALUE_LOOK: Record<keyof typeof VALUE_STATE, Look> = {
   dw: ["outline", i.robot],
   uncertain: ["unk", i.question],
   confirmed: ["ok", i.check],
+  // Prepared, but its page or sheet was never opened: it must not pass for
+  // "Đã kiểm" (audit gap 1). Its own icon, and words, never colour alone.
+  not_opened: ["warn", i.unseen],
   hand_entered: ["gray", i.edit],
   superseded: ["gray", i.history],
 };
 
 /** How sure a value is (CONTEXT.md "Value states"); every state is drawn. */
 export function ValueStateTag({ state }: { state: string }) {
-  return <Chip look={VALUE_LOOK[state]}>{label(VALUE_STATE, state)}</Chip>;
+  return (
+    <Chip look={VALUE_LOOK[state as keyof typeof VALUE_STATE]}>
+      {label(VALUE_STATE, state)}
+    </Chip>
+  );
 }
 
 const MAPPING_LOOK: Record<string, Look> = {

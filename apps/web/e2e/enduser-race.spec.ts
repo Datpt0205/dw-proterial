@@ -107,7 +107,7 @@ function dialog(page: Page, title: string): Locator {
 
 /**
  * The DW1 bar on top of every Sales page (role=status). Found by its pause /
- * resume button, not by its headline: defect C's fix rewords the headline.
+ * resume button, not by its headline, which changes with DW1's progress.
  */
 function bar(page: Page): Locator {
   return page
@@ -309,7 +309,7 @@ test("1. Diệu and Giang price the same quote at once: the second sees the conf
   expect(after.pricing?.lines[0]?.unit_price).toMatch(/^0\.689/);
   // The alert names that someone else changed the case (not only "refused").
   await expect(conflict).toContainText(/thay đổi|người khác|phiên bản mới/i);
-  // Showing Diệu's saved price beside Giang's is known defect E, its own test.
+  // Diệu's saved price shown beside Giang's typed one is test E.
   await giang.screenshot({
     path: test.info().outputPath("giang-conflict.png"),
     fullPage: true,
@@ -500,7 +500,6 @@ test("4. The DW1 bar follows 'DW xử lý tất cả' to the end of the mailbox"
   await page.goto("/sales/inbox");
   const status = bar(page);
   await expect(status).toContainText(/đã xử lý 0\/\d+ thư/);
-  // The headline at 0 processed is known defect C, its own test.
   const total = Number(
     /đã xử lý 0\/(\d+) thư/.exec((await status.textContent()) ?? "")![1],
   );
@@ -510,9 +509,7 @@ test("4. The DW1 bar follows 'DW xử lý tất cả' to the end of the mailbox"
   await expect(
     page.getByText(/^\d+ thư · \d+ chưa xử lý \(\d+ DW1 đang xử lý\)/),
   ).toBeVisible({ timeout: 30_000 });
-  // The bar following the press without a reload is known defect D, its own
-  // test. Reload (what a user would do) to follow the run.
-  await page.reload();
+  // The bar follows the press without a reload (test D).
   await expect(status).toContainText(/DW1 (đang đọc|sắp đọc \d+ thư)/);
 
   // The count rises.
@@ -527,7 +524,7 @@ test("4. The DW1 bar follows 'DW xử lý tất cả' to the end of the mailbox"
   await expect.poll(done, { timeout: 300_000 }).toBeGreaterThan(first);
 
   // It ends with every message processed. The long wait is on the count, the
-  // real end condition: the headline alone can claim "hết thư" early (defect C).
+  // real end condition.
   await expect(status).toContainText(`đã xử lý ${total}/${total} thư`, {
     timeout: 600_000,
   });
@@ -535,35 +532,30 @@ test("4. The DW1 bar follows 'DW xử lý tất cả' to the end of the mailbox"
   await expect(status).toContainText("DW1 đã xử lý hết thư, đang chờ thư mới");
 });
 
-// ------------------------------------------------------- known defects --
-// Each asserts the correct behaviour and is marked test.fail: it reports as
-// an expected failure until the defect is fixed, then as an unexpected pass.
+// -------------------------------------------- defects C, D, E (fixed) --
+// Found 2026-10-21 and kept as tests of the correct behaviour.
 
 test("C. Right after a reset the DW1 bar does not claim every message is processed at 0 processed", async ({
   page,
   request,
 }) => {
-  test.fail(
-    true,
-    "known defect C: at 0/45 after a reset the bar says 'DW1 đã xử lý hết thư, đang chờ thư mới' (sales-frame.tsx headline())",
-  );
   await signIn(page, request, AN);
   await page.goto("/sales/inbox");
   const status = bar(page);
-  await expect(status).toContainText(/đã xử lý 0\/\d+ thư/);
-  await expect(status).not.toContainText("DW1 đã xử lý hết thư", {
-    timeout: 10_000,
-  });
+  await expect(status).toContainText(/đã xử lý 0\/(\d+) thư/);
+  const total = /đã xử lý 0\/(\d+) thư/.exec(
+    (await status.textContent()) ?? "",
+  )![1];
+  await expect(status).toContainText(
+    `DW1 đang chờ: còn ${total} thư chưa xử lý`,
+  );
+  await expect(status).not.toContainText("hết thư");
 });
 
 test("D. The DW1 bar follows 'DW xử lý tất cả' without a reload", async ({
   page,
   request,
 }) => {
-  test.fail(
-    true,
-    "known defect D: after 'DW xử lý tất cả' the bar does not refresh until reload (useWorkerProgress polls only once its own fetch saw work)",
-  );
   await signIn(page, request, AN);
   await page.goto("/sales/inbox");
   const status = bar(page);
@@ -580,8 +572,8 @@ test("D. The DW1 bar follows 'DW xử lý tất cả' without a reload", async (
   } finally {
     // Do not leave the mailbox running into the next test's reset: pause DW1
     // (queued jobs then settle as "paused") and wait until none is left. A
-    // cleanup failure is logged, never thrown: under test.fail it would read
-    // as the expected failure and hide the day defect D is fixed.
+    // cleanup failure is logged, never thrown, so it cannot hide what the
+    // assertions above found.
     await settleMailbox(page, request).catch((error: unknown) =>
       console.warn(`D cleanup did not settle the mailbox: ${String(error)}`),
     );
@@ -618,14 +610,19 @@ test("E. On a pricing conflict the second person is shown the price the first on
   request,
   browser,
 }) => {
-  test.fail(
-    true,
-    "known defect E: the conflict notice says the case changed but not Diệu's saved 0,689 (_lib/errors.tsx ActionError for conflict)",
-  );
   const { giang, conflict } = await pricingConflict(page, request, browser);
   try {
-    // ui-quality §4 "conflict": both values, Diệu's beside Giang's typed one.
-    await expect(conflict).toContainText(/0,689/, { timeout: 5_000 });
+    // ui-quality §4 "conflict": both values, Diệu's beside Giang's typed one,
+    // Giang's kept in the field, and the choice of which stands.
+    await expect(conflict).toContainText(/0,689/);
+    await expect(conflict).toContainText(/bạn đang nhập: 0,74/);
+    await expect(giang.getByLabel("Đơn giá dòng 1")).toHaveValue(/0[.,]74/);
+    await expect(
+      conflict.getByRole("button", { name: "Dùng giá của tôi" }),
+    ).toBeVisible();
+    await expect(
+      conflict.getByRole("button", { name: "Giữ giá hiện có" }),
+    ).toBeVisible();
   } finally {
     await giang.context().close();
   }

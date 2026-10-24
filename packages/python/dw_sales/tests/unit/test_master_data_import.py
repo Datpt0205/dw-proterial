@@ -6,6 +6,7 @@ import csv
 import io
 import uuid
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -18,6 +19,7 @@ from dw_kernel.errors import ConflictError, DomainError, NotFoundError, Permissi
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.reader_client import ClientTableReader
+from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.catalog_imports import (
     CATALOG_APPROVAL,
@@ -425,6 +427,47 @@ async def test_a_bad_file_fails_with_a_reason_and_a_waiting_import_blocks_anothe
         await world.services.catalog_imports.upload(
             AN.context(), CatalogList.CUSTOMERS, "kh.xlsx", _xlsx(CatalogList.CUSTOMERS, rows)
         )
+
+
+class _OlderTableReader:
+    """A reader image whose table answer this process does not read (a field
+    renamed): `ClientTableReader` refuses it as `ReaderMismatchError`."""
+
+    async def call(self, request: ReaderRequest) -> ReaderReply:
+        reply = await InProcessReaderTransport().call(request)
+        if request.operation is ReaderOp.TABLE_ROWS and isinstance(reply.result, dict):
+            older = {("lines" if k == "rows" else k): v for k, v in reply.result.items()}
+            return reply.model_copy(update={"result": older})
+        return reply
+
+
+async def test_a_reader_of_another_version_fails_the_import_with_why_audited_not_retried() -> None:
+    """Like defect B for templates: the mismatch escaped `parse`, so the
+    outbox delivered the import again until `max_attempts`."""
+    world = _world()
+    tables = ClientTableReader(_OlderTableReader(), world.catalog_parsing.tables.caps)  # type: ignore[attr-defined]
+    world.catalog_parsing = replace(world.catalog_parsing, tables=tables)
+    rows = _cells(CatalogList.CUSTOMERS, _customers())
+    view = await world.services.catalog_imports.upload(
+        AN.context(), CatalogList.CUSTOMERS, "kh.xlsx", _xlsx(CatalogList.CUSTOMERS, rows)
+    )
+
+    # Settled on the first delivery: no exception for the outbox to retry.
+    assert await world.read_imports() == ["import failed"]
+
+    snapshot = world.catalog_store.state(ALPHA).snapshots[view.snapshot_id]
+    assert snapshot.status == "failed"
+    assert snapshot.error is not None
+    assert snapshot.error.startswith("không đọc được tệp: trình đọc tệp trả lời không khớp")
+    assert snapshot.row_count == 0
+    audit = world.catalog_store.audit.events[-1]
+    assert (audit.action, audit.resource_id, audit.details["actor"]) == (
+        "sales.catalog.failed",
+        str(view.snapshot_id),
+        "system:sales_catalog_import",
+    )
+    # Delivered again, it is no longer queued: nothing is read twice.
+    assert await world.catalog_parsing.parse(ALPHA, view.snapshot_id) == "import not queued"
 
 
 async def test_a_convert_entry_naming_an_unknown_customer_or_item_is_rejected() -> None:

@@ -65,6 +65,12 @@ interface SalesFrame {
   /** The overview: DW1's paused state and the WIV steps (one owner: the API). */
   overview: Resource<Overview>;
   paused: boolean;
+  /**
+   * The mailbox as the DW1 bar reads it. A page that queues work for DW1
+   * reloads it after the press, so the bar follows at once instead of only
+   * once its own read happens to see work (defect D, 2026-10-21).
+   */
+  progress: Resource<Message[]>;
 }
 
 /**
@@ -97,9 +103,15 @@ export function SalesFrameProvider({ children }: { children: ReactNode }) {
     { enabled: hasScope(SCOPE.overview) },
   );
   const paused = overview.data?.worker.paused ?? false;
+  const progress = useResource<Message[]>(
+    "sales/worker-progress",
+    useCallback(() => salesApi().inbox(), []),
+    // Only once DW1's own state is known: the bar is drawn from both.
+    { enabled: Boolean(overview.data?.worker) && hasScope(SCOPE.caseRead) },
+  );
   return (
-    <SalesFrameContext.Provider value={{ overview, paused }}>
-      <WorkerBar overview={overview} />
+    <SalesFrameContext.Provider value={{ overview, paused, progress }}>
+      <WorkerBar overview={overview} mailbox={progress} />
       {children}
     </SalesFrameContext.Provider>
   );
@@ -107,7 +119,13 @@ export function SalesFrameProvider({ children }: { children: ReactNode }) {
 
 const RESUME_REASON = `Chỉ ${label(SALES_ROLE, "sales_head")} cho DW1 chạy lại.`;
 
-function WorkerBar({ overview }: { overview: Resource<Overview> }) {
+function WorkerBar({
+  overview,
+  mailbox,
+}: {
+  overview: Resource<Overview>;
+  mailbox: Resource<Message[]>;
+}) {
   const { hasScope } = useAuth();
   const name = usePeople();
   const { run, pending } = useAction();
@@ -116,7 +134,7 @@ function WorkerBar({ overview }: { overview: Resource<Overview> }) {
   const [form] = Form.useForm<{ reason?: string }>();
   const { token } = theme.useToken();
   const worker = overview.data?.worker;
-  const progress = useWorkerProgress(Boolean(worker));
+  const progress = useWorkerProgress(mailbox);
   if (!worker) return null;
 
   const submit = async ({ reason }: { reason?: string }) => {
@@ -287,14 +305,7 @@ interface Progress {
  * (`InboxMessageView.processing`), again every few seconds while anything is
  * queued or running. Null for a viewer who may not read the mailbox.
  */
-function useWorkerProgress(workerKnown: boolean): Progress | null {
-  const { hasScope } = useAuth();
-  const inbox = useResource<Message[]>(
-    "sales/worker-progress",
-    useCallback(() => salesApi().inbox(), []),
-    // Only once DW1's own state is known: the bar is drawn from both.
-    { enabled: workerKnown && hasScope(SCOPE.caseRead) },
-  );
+function useWorkerProgress(inbox: Resource<Message[]>): Progress | null {
   const messages = inbox.data ?? [];
   const state = (m: Message) => m.processing?.status ?? null;
   const reading = messages.filter((m) => state(m) === "running");
@@ -330,6 +341,10 @@ function headline(progress: Progress | null): string {
       .map((m) => `“${m.subject}”`)
       .join(", ")}`;
   if (progress.queued) return `DW1 sắp đọc ${progress.queued} thư đang chờ`;
+  // "hết thư" only when it is true: at 0/45 after a reset nothing is queued,
+  // and the mail is waiting for someone to press "DW xử lý" (defect C).
+  const left = progress.total - progress.done;
+  if (left > 0) return `DW1 đang chờ: còn ${left} thư chưa xử lý`;
   return "DW1 đã xử lý hết thư, đang chờ thư mới";
 }
 

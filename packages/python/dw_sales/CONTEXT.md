@@ -28,7 +28,9 @@ API and the plan use the English terms. The spec is
 - **Check basis** (Căn cứ kiểm tra): what a check compared against, stamped
   on the case when the check ran. It is never re-read from master data.
 - **Coverage statement** (Phạm vi đã kiểm): what was read and checked on one
-  order ("Đã đọc N/N dòng …").
+  order ("Đã đọc N/N dòng …"); on a quote, as far as its reading records it
+  (lines read, where, values a model read and how many are confirmed): a
+  request's reader counts no printed rows, so no "N/N" is claimed.
 - **Value correction** (Giá trị Sales sửa): the value Sales typed for one
   field a `value_uncertain` flagged, with who and when. It is kept beside the
   value as read, which stays the evidence; the order is entered, uploaded and
@@ -200,6 +202,7 @@ How sure a value on a case is (ui-quality.md §7). Every one of them is drawn.
 | `dw`           | Máy đọc            | Read by DW1 from the source anchor; not yet seen by a person                   |
 | `uncertain`    | Chưa chắc chắn     | DW1 could not read it unambiguously (`value_uncertain`); blocks like a failure |
 | `confirmed`    | Đã kiểm            | A person checked it against the source                                         |
+| `not_opened`   | Chưa mở nguồn      | Prepared, but the preparer was never served the page or sheet it was read from |
 | `hand_entered` | Sales nhập tay     | Typed by a person, who is named; the cross-checker must be someone else        |
 | `superseded`   | Đã có bản thay thế | From a revision a later revision replaced                                      |
 

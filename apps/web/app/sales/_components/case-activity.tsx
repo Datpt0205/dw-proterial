@@ -73,6 +73,23 @@ export function CaseActivity({
       </Card>
     );
   const entries = activity.data?.entries ?? [];
+  // A step's calls and time are for the whole mail: the server repeats them
+  // on each of its entries (one per line), so they are said once, on the
+  // first entry of each (message, step), with how many entries they cover.
+  const groupSize = new Map<string, number>();
+  for (const e of entries)
+    groupSize.set(timingKey(e), (groupSize.get(timingKey(e)) ?? 0) + 1);
+  const timed = new Set<string>();
+  const timingOf = (entry: Entry): Timing | null => {
+    const key = timingKey(entry);
+    if (timed.has(key) || !entry.calls) return null;
+    timed.add(key);
+    return {
+      calls: entry.calls,
+      durationMs: entry.duration_ms,
+      entries: groupSize.get(key) ?? 1,
+    };
+  };
   return (
     <Card
       size="small"
@@ -92,12 +109,38 @@ export function CaseActivity({
         <Timeline
           items={entries.map((entry, i) => ({
             key: `${entry.occurred_at}-${entry.step}-${entry.line_no ?? 0}-${i}`,
-            content: <EntryView entry={entry} onOpenSource={onOpenSource} />,
+            content: (
+              <EntryView
+                entry={entry}
+                timing={timingOf(entry)}
+                onOpenSource={onOpenSource}
+              />
+            ),
           }))}
         />
       )}
     </Card>
   );
+}
+
+/** The model calls of one step on one mail, said on its first entry. */
+interface Timing {
+  calls: number;
+  durationMs: number | null;
+  /** How many entries of this mail and step the calls covered. */
+  entries: number;
+}
+
+function timingKey(entry: Entry): string {
+  return `${entry.message_id}|${entry.step}`;
+}
+
+/** "3 lần gọi, 4,2 giây", and for whom when it covered several entries. */
+export function timingWords(timing: Timing): string {
+  const head = `${timing.calls} lần gọi, ${formatLatency(timing.durationMs)}`;
+  return timing.entries > 1
+    ? `${head} cho cả thư (${timing.entries} mục của bước này)`
+    : head;
 }
 
 function anchorName(anchor: Anchor): string {
@@ -107,9 +150,11 @@ function anchorName(anchor: Anchor): string {
 
 function EntryView({
   entry,
+  timing,
   onOpenSource,
 }: {
   entry: Entry;
+  timing: Timing | null;
   onOpenSource: (field: string, lineNo: number | null) => void;
 }) {
   const { token } = theme.useToken();
@@ -185,9 +230,7 @@ function EntryView({
       <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
         {formatDateTime(entry.occurred_at, { zoneLabel: false })} · mô hình{" "}
         {entry.model ?? "không rõ"} · {entry.prompt}
-        {entry.calls
-          ? ` · ${entry.calls} lần gọi, ${formatLatency(entry.duration_ms)}`
-          : ""}
+        {timing ? ` · ${timingWords(timing)}` : ""}
       </Typography.Text>
     </div>
   );

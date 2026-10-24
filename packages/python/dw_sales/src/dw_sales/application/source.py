@@ -29,9 +29,10 @@ from __future__ import annotations
 
 import base64
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Protocol
+from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -346,6 +347,17 @@ def value_region(case: QuoteCase, line_no: int | None, field: str) -> SourceRegi
     return _region(held.source)
 
 
+def value_unserved(
+    case: QuoteCase, line_no: int | None, field: str, served: frozenset[SourceRegion]
+) -> SourceRegion | None:
+    """The place a value must still be opened at before it is confirmed, by
+    whoever was ``served`` these regions of the case's current version; None
+    when nothing is asked. What `require_value_served` refuses on, and what
+    the case view tells the confirm button (audit gap 2): one answer."""
+    region = value_region(case, line_no, field)
+    return None if region is None or region in served else region
+
+
 async def require_value_served(
     work: SalesUnitOfWork,
     principal_id: uuid.UUID,
@@ -354,12 +366,12 @@ async def require_value_served(
     field: str,
 ) -> None:
     """409 "chưa mở nguồn" until ``principal_id`` was served, for the case's
-    current version, the place the value was read (`value_region`)."""
-    region = value_region(case, line_no, field)
-    if region is None:
+    current version, the place the value was read (`value_unserved`)."""
+    if value_region(case, line_no, field) is None:
         return
     served = await work.served.served(principal_id, CaseKind.QUOTE, case.case_id, case.case_version)
-    if region in served:
+    region = value_unserved(case, line_no, field, served)
+    if region is None:
         return
     raise ConflictError(
         "chưa mở nguồn: mở nơi giá trị được đọc, ở phiên bản hồ sơ này, trước khi xác nhận",
@@ -375,6 +387,68 @@ async def require_value_served(
             ],
         },
     )
+
+
+@dataclass(frozen=True)
+class OpenedSources:
+    """The pages and sheets of a case's files that were served, each by its
+    file's id and sha256: what tells a value someone opened from one nobody
+    did (audit gaps 1 and 5). A page of a revision the case no longer reads
+    has another sha256, so it never stands for the current file's."""
+
+    regions: frozenset[tuple[str, str, int | None, str | None]]
+
+    @classmethod
+    def of(
+        cls,
+        servings: Iterable[ServedSource],
+        *,
+        by: uuid.UUID | None = None,
+        until: datetime | None = None,
+    ) -> OpenedSources:
+        """The regions served to ``by`` (anyone when None), no later than
+        ``until`` (ever when None). The message's text is no file region."""
+        return cls(
+            frozenset(
+                (s.attachment_id, s.attachment_sha256, s.page, s.sheet)
+                for s in servings
+                if s.attachment_id is not None
+                and (by is None or s.principal_id == by)
+                and (until is None or s.served_at <= until)
+            )
+        )
+
+    def holds(self, anchor: SourceAnchor) -> bool:
+        """Whether the page or sheet ``anchor`` points into was served. An
+        anchor that names neither cannot have been."""
+        region = _region(anchor)
+        if region is None or region.attachment_id is None:
+            return False
+        key = (region.attachment_id, anchor.attachment_sha256, region.page, region.sheet)
+        return key in self.regions
+
+
+NOTHING_OPENED: Final = OpenedSources(frozenset())
+
+
+class UnopenedValue(BaseModel):
+    """A value of the order nobody was served the page or sheet of."""
+
+    model_config = _VIEW
+
+    field: str
+    # None: a value of the PO as a whole (the header, the buyer, the total).
+    line_no: int | None = None
+
+
+def unopened_values(case: OrderCase, opened: OpenedSources) -> list[UnopenedValue]:
+    """Every value the order reads whose page or sheet ``opened`` does not
+    hold, in the order the source view labels them (`_order_anchors`)."""
+    return [
+        UnopenedValue(field=labelled.field, line_no=labelled.line_no)
+        for labelled in _order_anchors(case.document)
+        if not opened.holds(labelled.anchor)
+    ]
 
 
 # ------------------------------------------------------------------ service --

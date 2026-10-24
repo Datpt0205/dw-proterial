@@ -216,6 +216,18 @@ async def test_support_reads_the_overview_and_the_cases_without_a_price(
     assert any(leaks(r.json()) for r in await _reads(api.as_(AN), world))
 
 
+async def test_support_is_not_told_which_values_nobody_opened(api: Api, staff: Staff) -> None:
+    """Audit gap 5: who opened what is the cross-checker's to see."""
+    case = await order_of(api.as_(AN), "M01")
+
+    response = await staff.get(f"/orders/{case['case_id']}")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["unopened_values"] is None
+    # The PIC holds the scope: nobody opened M01's sheet yet, so all of it.
+    assert (await api.as_(AN).get(f"/orders/{case['case_id']}")).json()["unopened_values"]
+
+
 async def test_support_is_served_no_printed_target_price_nor_its_anchor(
     api: Api, staff: Staff
 ) -> None:

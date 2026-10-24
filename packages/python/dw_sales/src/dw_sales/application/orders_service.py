@@ -109,6 +109,7 @@ class OrderQueries:
         async with self.uow(sales_scope(context)) as work:
             stored = await stored_order(work, case_id)
             logged = await work.messages.list_all()
+            servings = await work.served.servings(CaseKind.ORDER, case_id)
         wait = await awaited(self.decisions, context, stored.case)
         waits_on = awaiting(stored.case)
         decision = None
@@ -122,6 +123,8 @@ class OrderQueries:
             decision=decision,
             stalled=wait is not None and wait.stalled,
             replies=logged,
+            servings=servings,
+            cross_checker=self.gate.allows(context, SalesScopes.ORDER_CROSS_CHECK),
         )
 
 

@@ -606,3 +606,95 @@ async def test_a_request_not_read_from_the_mail_has_no_message_text_to_serve() -
     assert isinstance(quote, QuoteCase) and quote.request.body is None
     with pytest.raises(NotFoundError):
         await world.services.sources.quote_message_text(AN.context(), quote.case_id)
+
+
+# ------------------------------ what the quote view says before confirming --
+
+
+def _uncertain(view: Any, line_no: int | None) -> Any:
+    key = f"value_uncertain:{'-' if line_no is None else line_no}"
+    return next(f for f in view.findings if f.key == key)
+
+
+async def test_the_view_names_each_value_whose_source_this_person_has_not_opened() -> None:
+    """Audit gap 2: the confirm button can be disabled with its reason, from
+    the fact the 409 is decided on (`value_unserved`), never a second copy."""
+    m38 = await _open("M38", M38)
+    world, case_id = _world_with(m38)
+    item = m38.request.document.item(1)
+    attachment = item.quantity.source.attachment_id
+    assert attachment is not None
+
+    before = _uncertain(await world.services.quotes.get(AN.context(), case_id), 1)
+    assert before.source_not_served == before.flagged != []
+    with pytest.raises(ConflictError):
+        await _confirm(world, AN, case_id, 1, "quantity", "2000")
+
+    # Another person's opening is theirs: An's view is unchanged, Diệu's is not.
+    await world.services.sources.quote_source(
+        DIEU.context(), case_id, attachment, page=1, sheet=None
+    )
+    assert _uncertain(await world.services.quotes.get(AN.context(), case_id), 1) == before
+    assert (
+        _uncertain(await world.services.quotes.get(DIEU.context(), case_id), 1).source_not_served
+        == []
+    )
+
+    await world.services.sources.quote_source(AN.context(), case_id, attachment, page=1, sheet=None)
+    opened = _uncertain(await world.services.quotes.get(AN.context(), case_id), 1)
+    assert opened.source_not_served == []
+    await _confirm(world, AN, case_id, 1, "quantity", "2000")
+
+    # Confirming moved the case to a new version: the page is opened again.
+    after = _uncertain(await world.services.quotes.get(AN.context(), case_id), 1)
+    assert "quantity" not in after.source_not_served
+    assert after.source_not_served == [f for f in after.flagged if f != "quantity"]
+
+
+async def test_a_value_read_from_the_mail_names_the_mail_until_its_text_is_opened() -> None:
+    world, case_id = _world_with(await _open("M37", M37))
+
+    before = _uncertain(await world.services.quotes.get(AN.context(), case_id), 1)
+    assert before.source_not_served == before.flagged != []
+
+    await world.services.sources.quote_message_text(AN.context(), case_id)
+    after = _uncertain(await world.services.quotes.get(AN.context(), case_id), 1)
+    assert after.source_not_served == []
+
+
+async def test_a_quote_states_its_coverage_from_what_its_reading_records() -> None:
+    """Audit gap 4: the order's "Phạm vi đã kiểm", as far as a request's
+    reading records it (no printed-row count, so no "N/N")."""
+    m38 = await _open("M38", M38)
+    world, case_id = _world_with(m38)
+    flagged = sum(
+        len(f.flagged) for f in m38.findings if f.code is QuoteFindingCode.VALUE_UNCERTAIN
+    )
+    assert flagged > 0
+
+    coverage = (await world.services.quotes.get(AN.context(), case_id)).coverage
+    assert (coverage.lines_read, coverage.regions) == (1, ["page 1"])
+    assert (coverage.model_read, coverage.model_read_confirmed) == (flagged, 0)
+    assert coverage.findings == len(m38.findings)
+    assert "lines_printed" not in type(coverage).model_fields
+
+    attachment = m38.request.document.item(1).quantity.source.attachment_id
+    assert attachment is not None
+    await world.services.sources.quote_source(AN.context(), case_id, attachment, page=1, sheet=None)
+    await _confirm(world, AN, case_id, 1, "quantity", "2000")
+    confirmed = (await world.services.quotes.get(AN.context(), case_id)).coverage
+    assert confirmed.model_read_confirmed == 1
+
+
+async def test_a_request_read_from_the_mail_or_a_form_names_where_its_lines_came_from() -> None:
+    mail_world, mail_id = _world_with(await _open("M37", M37))
+    mail = (await mail_world.services.quotes.get(AN.context(), mail_id)).coverage
+    assert (mail.lines_read, mail.regions) == (2, ["message_text"])
+
+    world = open_world(REPO, SampleSet.of(REPO, None), CALLERS)
+    (_, form), *_ = (await world.process_each(AN, ["M10"])).values()
+    assert isinstance(form, QuoteCase)
+    coverage = (await world.services.quotes.get(AN.context(), form.case_id)).coverage
+    sheets = {a.sheet for item in form.request.document.items for a in item.anchors()}
+    assert set(coverage.regions) == sheets
+    assert (coverage.lines_read, coverage.model_read) == (len(form.request.document.items), 0)

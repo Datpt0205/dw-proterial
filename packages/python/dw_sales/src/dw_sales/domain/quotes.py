@@ -1535,6 +1535,40 @@ _MAY_HOLD: Final[Mapping[QuoteStatus, frozenset[str]]] = {
 _HISTORY: Final = frozenset({"return"})
 
 
+# Where a request's line read from the message's own text was read.
+MESSAGE_TEXT_REGION: Final = "message_text"
+
+
+def _region_name(anchor: SourceAnchor) -> str | None:
+    """A page or sheet named as a PO's `regions` name it ("page 2", or the
+    sheet's name), or the message's text; None for an anchor naming neither."""
+    if anchor.in_message:
+        return MESSAGE_TEXT_REGION
+    if anchor.page is not None:
+        return f"page {anchor.page}"
+    return anchor.sheet
+
+
+class QuoteCoverage(BaseModel):
+    """What was read and checked on one request: its coverage statement
+    (Phạm vi đã kiểm, audit gap 4), from what the reading records. It
+    mirrors the order's `Coverage` where the reading holds the same fact; a
+    request's reader counts no printed rows and stamps no checks per line,
+    so no "N/N dòng" and no "lượt kiểm tra" are claimed."""
+
+    model_config = _FROZEN
+
+    lines_read: int
+    # The pages or sheets the lines were read from, in reading order, and
+    # `MESSAGE_TEXT_REGION` for lines read from the mail.
+    regions: tuple[str, ...]
+    # The values a model read, each confirmed by Sales before the YCBG, and
+    # how many of them are confirmed so far (`value_uncertain`).
+    model_read: int
+    model_read_confirmed: int
+    findings: int
+
+
 class QuoteCase(BaseModel):
     """One request for quotation on its way to a quotation or a decline.
 
@@ -1705,6 +1739,18 @@ class QuoteCase(BaseModel):
     def parser_version(self) -> str:
         """The reader the request was read with."""
         return self.request.document.parser_version
+
+    def coverage(self) -> QuoteCoverage:
+        items = self.request.document.items
+        named = (_region_name(anchor) for item in items for anchor in item.anchors())
+        uncertain = [f for f in self.findings if f.code is QuoteFindingCode.VALUE_UNCERTAIN]
+        return QuoteCoverage(
+            lines_read=len(items),
+            regions=tuple(dict.fromkeys(name for name in named if name is not None)),
+            model_read=sum(len(f.flagged) for f in uncertain),
+            model_read_confirmed=sum(len(f.confirmed) for f in uncertain),
+            findings=len(self.findings),
+        )
 
     @property
     def design_reply(self) -> DesignReply | None:

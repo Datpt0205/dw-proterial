@@ -110,7 +110,7 @@ export default function InboxPage() {
 function Inbox() {
   const now = useNow();
   const { hasScope } = useAuth();
-  const { paused, overview } = useSalesFrame();
+  const { paused, overview, progress } = useSalesFrame();
   const focus = useSearchParams().get("message");
   const name = usePeople();
   const view = useListView(TABS, "all", SORTS, "newest");
@@ -189,6 +189,8 @@ function Inbox() {
       setError(null);
       inbox.reload();
       overview.reload();
+      // The DW1 bar reads the mailbox on its own: tell it the press queued work.
+      progress.reload();
     } else setError(result.error);
   };
 

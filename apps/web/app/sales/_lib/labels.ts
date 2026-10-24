@@ -22,6 +22,7 @@ export const VALUE_STATE = {
   dw: "Máy đọc",
   uncertain: "Chưa chắc chắn",
   confirmed: "Đã kiểm",
+  not_opened: "Chưa mở nguồn",
   hand_entered: "Sales nhập tay",
   superseded: "Đã có bản thay thế",
 } as const;

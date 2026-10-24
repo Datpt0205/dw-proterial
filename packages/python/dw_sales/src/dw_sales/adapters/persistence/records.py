@@ -186,6 +186,36 @@ class SqlSourceServed:
         )
         return frozenset(SourceRegion(r.attachment_id, r.page, r.sheet) for r in rows)
 
+    async def servings(self, case_kind: CaseKind, case_id: uuid.UUID) -> Sequence[ServedSource]:
+        # By the case column alone: the leading column of
+        # `ix_source_served_<kind>_case_id_case_version_principal_id`.
+        column = _S.c.order_case_id if case_kind is CaseKind.ORDER else _S.c.quote_case_id
+        rows = await self.session.execute(
+            sa.select(
+                _S.c.principal_id,
+                _S.c.case_version,
+                _S.c.attachment_id,
+                _S.c.attachment_sha256,
+                _S.c.page,
+                _S.c.sheet,
+                _S.c.served_at,
+            ).where(column == case_id)
+        )
+        return [
+            ServedSource(
+                principal_id=r.principal_id,
+                case_kind=case_kind,
+                case_id=case_id,
+                case_version=r.case_version,
+                attachment_id=r.attachment_id,
+                attachment_sha256=r.attachment_sha256,
+                page=r.page,
+                sheet=r.sheet,
+                served_at=r.served_at,
+            )
+            for r in rows
+        ]
+
 
 @dataclass(frozen=True)
 class SqlArtifactLog:

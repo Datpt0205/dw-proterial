@@ -152,6 +152,34 @@ async function decide(page: Page, name: string, reason: string) {
   await expect(card.getByText("Bỏ quyết định")).toBeVisible();
 }
 
+/** Every status card and move label of a process canvas lies inside it. */
+async function expectLaneInside(canvas: Locator): Promise<void> {
+  await expect(canvas).toBeVisible();
+  await expect
+    .poll(() =>
+      canvas.evaluate((frame) => {
+        const outer = frame.getBoundingClientRect();
+        const drawn = [
+          ...frame.querySelectorAll(".react-flow__node, [data-move]"),
+        ];
+        if (!drawn.some((e) => e.matches(".react-flow__node")))
+          return ["no card drawn"];
+        return drawn
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            return (
+              box.top < outer.top - 1 ||
+              box.bottom > outer.bottom + 1 ||
+              box.left < outer.left - 1 ||
+              box.right > outer.right + 1
+            );
+          })
+          .map((element) => (element.textContent ?? "").slice(0, 40));
+      }),
+    )
+    .toEqual([]);
+}
+
 /** An orders-list row by the PO it shows (its link is named by customer). */
 function orderRow(page: Page, po: string): Locator {
   return page.getByRole("row").filter({ hasText: po });
@@ -656,6 +684,13 @@ test("10. Quy trình DW1 draws on its canvas and Hoạt động DW1 opens, with 
   await expect(page).toHaveURL(/node=order\.in_review/);
   await page.goBack();
   await expect(page).not.toHaveURL(/node=/);
+  // "Cả N trạng thái vừa khung" holds on both lanes: the quote lane's last
+  // row, then a stack of move labels under it, were drawn below the frame.
+  await expectLaneInside(canvas);
+  await page.getByRole("tab", { name: "Báo giá", exact: true }).click();
+  await expectLaneInside(
+    page.getByRole("application", { name: "Sơ đồ quy trình Báo giá" }),
+  );
 
   await page.goto("/sales/activity?lane=order");
   await expect(

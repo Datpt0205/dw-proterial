@@ -207,6 +207,36 @@ the theme, the shell and the shared composites, not primitive wrappers.
   dropped reason label; a count link without `tab=all`; the order list
   ignoring the URL's filter; the AI section drawn for an empty `models`; the
   arch direction swapped.
+- 2026-10-24, shell and Sales web half of defects C–E, audit gaps 1–5 and the
+  browser look (`sales.md` State 2026-10-24). Uncommitted.
+    - **Shell, feedback button:** below `md` it is an icon button among the
+      top bar's actions (`FeedbackLauncher placement="bar"`), because a fixed
+      button covers whatever scrolls under it, padding or not; from `md` up it
+      floats bottom-left as spec 003 US5 says, and `AppFrame` keeps
+      `md:pb-20` under the page so its end scrolls clear. While antd's
+      breakpoint is unknown it floats, as before. `feedback.spec.ts` (desktop)
+      still holds.
+    - **React Flow is lazy-loaded** (`next/dynamic`, `ssr: false`, a Skeleton
+      while it loads): a phone below `lg` draws the list and never downloads
+      the ~56 kB gz. `antd-only.test.ts` unchanged and green (the page imports
+      `process-flow.tsx`, not `@xyflow/react`).
+    - **Checked:** `tsc --noEmit`, `next lint` (whole app), prettier on every
+      changed file, the full web vitest suite: 77 files, 584 tests, all
+      passed with `--maxWorkers=3`. At default parallelism two runs failed
+      6–7 rules-editor tests (`rule-drafts`, once `rules` and one editor test
+      in `rules-process`) on `findBy` timeouts, the flake noted 2026-10-21;
+      those three files pass together (45/45) and alone. Owed: make the
+      editor tests' waits load-proof, or cap workers in `vitest.config.mts`.
+      Mutations, each red then restored: the press not reloading the bar
+      (D); the "còn N thư" branch removed (C); the conflict not reading the
+      quote again, and re-submitting on the old version (E); the `not_opened`
+      look removed; the `source_not_served` reason dropped; no reload on
+      closing a source; the unopened list never drawn; the quote coverage
+      title replaced; the history moved back above the flags; the drawer
+      always on the right; the timing said on every entry; the feedback
+      button always floating; React Flow imported statically; and four in
+      the geometry (one lane for all, neighbour words over the card, back
+      moves under the band, neighbour words not stacked).
 
 ## Theme from the E-HSDT v3 prototype (2026-10-05, committed in `92b155a`)
 

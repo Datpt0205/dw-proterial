@@ -14,6 +14,9 @@ import { UiProvider } from "@dw/ui";
 import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { AN, GIANG } from "./fixtures";
 import { PROCESS } from "./process-fixture";
+import { EDGE_ACTION, EDGE_GUARD } from "../labels";
+import { layoutLane, type Lane } from "../process-graph";
+import { laneGeometry } from "../process-geometry";
 import type { PlatformDocument, RuleVersion } from "../rules";
 
 type View = SalesSchemas["ProcessSettingsView"];
@@ -194,6 +197,12 @@ const api = {
   proposeRule: vi.fn(async (...args: unknown[]) => (void args, KPI_VERSION)),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
+// Whether the canvas's module was ever loaded: a narrow screen must not.
+const flow = vi.hoisted(() => ({ loaded: vi.fn() }));
+vi.mock("../../_components/process-flow", async (original) => {
+  flow.loaded();
+  return original();
+});
 
 import ProcessPage from "../../rules/process/page";
 import RulesPage from "../../rules/page";
@@ -318,6 +327,8 @@ describe("the DW1 process page (2026-10-22)", () => {
       expect(
         screen.getByRole("button", { name: /^Đơn hàng, bước 4 \(O4\)/ }),
       ).toBeTruthy();
+      // The list alone: React Flow is never downloaded below lg.
+      expect(flow.loaded).not.toHaveBeenCalled();
     },
     SLOW,
   );
@@ -332,6 +343,8 @@ describe("the DW1 process page (2026-10-22)", () => {
       renderPage();
       const card = await status("Chờ PIC tự kiểm");
       expect(card.textContent).toContain("O6 · DW1 làm");
+      // Loaded when drawn (next/dynamic).
+      expect(flow.loaded).toHaveBeenCalled();
       expect(card.textContent).toContain("Đến lượt: Sales quyết định");
       // The ways back are drawn, so the card does not write them too.
       expect(card.textContent).not.toContain("Có thể quay lại");
@@ -366,24 +379,26 @@ describe("the DW1 process page (2026-10-22)", () => {
       ).toBe(
         "Chờ PIC tự kiểm → Đã kiểm tra; Khách gửi PO sửa đổi (Khách hàng); quay lại",
       );
-      // A move back arches: over the first row between two of its cards,
-      // under the cards from a lower row, never a flat line along their tops.
-      const curve = (id: string) => {
-        const d = canvas
-          .querySelector(`[data-testid="rf__edge-${id}"] path`)!
-          .getAttribute("d")!;
-        const [, y1, , c1, , c2, , y2] = d
-          .replace(/[MC,]/g, " ")
-          .trim()
-          .split(/\s+/)
-          .map(Number);
-        // Each control point's lift from its own end: up is negative.
-        return [c1! - y1!, c2! - y2!];
-      };
-      for (const lift of curve("in_review->checked"))
-        expect(lift).toBeLessThan(0);
-      for (const lift of curve("prepared->in_review"))
-        expect(lift).toBeGreaterThan(0);
+      // Each line is the placement's own (process-geometry.ts): a move back
+      // dashed on a lane over its band, every run horizontal or vertical.
+      const geometry = laneGeometry(
+        layoutLane(PROCESS.lanes[0] as Lane),
+        (m) => ({
+          action: EDGE_ACTION[m.action],
+          guards: m.guards.map((g) => EDGE_GUARD[g]),
+        }),
+      );
+      const drawn = (id: string) =>
+        canvas.querySelector(`[data-testid="rf__edge-${id}"] path`)!;
+      for (const m of geometry.moves) {
+        expect(drawn(m.id).getAttribute("d"), m.id).toBe(
+          m.points.map(([x, y], i) => `${i ? "L" : "M"} ${x} ${y}`).join(" "),
+        );
+        expect(
+          (drawn(m.id) as SVGPathElement).style.strokeDasharray,
+          m.id,
+        ).toBe(m.back ? "6 4" : "");
+      }
       expect(
         screen.getByText(
           "Có thể đóng từ: Đã nhận, Đã kiểm tra, Chờ PIC tự kiểm, Chờ khách sửa PO, PIC đã tự kiểm",
@@ -569,10 +584,11 @@ describe("the DW1 process page (2026-10-22)", () => {
       const minutes = screen.getByRole("spinbutton", {
         name: "Số phút: Đơn hàng, bước 1 (O1)",
       });
+      // antd draws a field's error after its motion starts, so it is awaited.
       expect(
-        within(minutes.closest(".ant-form-item") as HTMLElement).getByText(
-          /Máy chủ không nhận giá trị này/,
-        ),
+        await within(
+          minutes.closest(".ant-form-item") as HTMLElement,
+        ).findByText(/Máy chủ không nhận giá trị này/),
       ).toBeTruthy();
     },
     SLOW,
@@ -798,6 +814,26 @@ describe("a step's drawer: its AI, the data it reads, who acts (2026-10-23)", ()
     within(open).getByText(title).closest(".ant-card") as HTMLElement;
 
   it(
+    "opens as a bottom sheet on a phone, from the right on a wider screen (ui-quality §9)",
+    async () => {
+      const phone = await openReceived();
+      expect(
+        phone.closest(".ant-drawer")?.classList.contains("ant-drawer-bottom"),
+      ).toBe(true);
+      cleanup();
+      Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        value: media(true),
+      });
+      const wide = await openReceived();
+      expect(
+        wide.closest(".ant-drawer")?.classList.contains("ant-drawer-right"),
+      ).toBe(true);
+    },
+    SLOW,
+  );
+
+  it(
     "shows each model step's switch, bar, latest measurement and use, read-only",
     async () => {
       const open = await openReceived();
@@ -809,9 +845,10 @@ describe("a step's drawer: its AI, the data it reads, who acts (2026-10-23)", ()
         name: "Phân loại thư không có tài liệu đọc được",
       });
       expect(intent.textContent).toContain("AI bật · đạt");
-      expect(intent.textContent).toContain(
-        "90% · Tự động 7 ngày qua: chưa có dữ liệu",
-      );
+      // The bar and the week's share are two numbers on two scales.
+      expect(intent.textContent).toContain("Điểm đạt đo trên bộ thử90%");
+      expect(intent.textContent).toContain("Thực tế 7 ngàychưa có dữ liệu");
+      expect(intent.textContent).not.toContain("Tự động 7 ngày qua");
       expect(intent.textContent).toContain("90% · đạt");
       expect(intent.textContent).toContain(
         "qwen3.5-9b-dw · sales.message_intent@1.0.0 · 10:00 05/10/2026 (giờ Việt Nam)",
@@ -854,7 +891,9 @@ describe("a step's drawer: its AI, the data it reads, who acts (2026-10-23)", ()
       const region = (name: string) => within(ai).getByRole("region", { name });
       expect(
         region("Phân loại thư không có tài liệu đọc được").textContent,
-      ).toContain("90% · Tự động 7 ngày qua: 60% (6/10)");
+      ).toContain(
+        "Thực tế 7 ngàyDW1 tự xử lý 60% số mục (6/10)Đếm trên việc thật, không cùng thước với điểm đạt.",
+      );
       const reply = region("Đọc thư trả lời của khách trong hồ sơ");
       expect(reply.textContent).toContain("Chưa đo");
       expect(reply.textContent).toContain("AI bật · chưa đạt — người làm");

@@ -80,6 +80,31 @@ describe("the DW1 bar", () => {
     expect(screen.queryByText(/DW1 đang chạy/)).toBeNull();
   }, 20_000);
 
+  it("at 0 processed with nothing queued, says how many wait, never 'hết thư' (defect C)", async () => {
+    inbox = [
+      message("M01", "Đơn đặt hàng 1", null, null),
+      message("M02", "Đơn đặt hàng 2", null, null),
+    ];
+    bar();
+    expect(
+      await screen.findByText("DW1 đang chờ: còn 2 thư chưa xử lý"),
+    ).toBeTruthy();
+    expect(screen.getByText(/đã xử lý 0\/2 thư/)).toBeTruthy();
+    expect(screen.queryByText(/hết thư/)).toBeNull();
+  }, 20_000);
+
+  it("counts a message DW1 could not process as still waiting", async () => {
+    inbox = [
+      message("M01", "Đơn đặt hàng 1", "done", "2026-10-20T02:00:00Z"),
+      message("M02", "Đơn đặt hàng 2", "failed", null),
+    ];
+    bar();
+    expect(
+      await screen.findByText("DW1 đang chờ: còn 1 thư chưa xử lý"),
+    ).toBeTruthy();
+    expect(screen.getByText(/1 thư chưa xử lý được/)).toBeTruthy();
+  }, 20_000);
+
   it("says it waits for new mail once the mailbox is done", async () => {
     inbox = [message("M01", "Đơn đặt hàng 1", "done", "2026-10-20T02:00:00Z")];
     bar();

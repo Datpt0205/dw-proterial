@@ -32,6 +32,7 @@ type Line = SalesSchemas["OrderLineView"];
 /** The least sure state among a line's values: what the row shows. */
 const STATE_ORDER = [
   "uncertain",
+  "not_opened",
   "hand_entered",
   "dw",
   "superseded",

@@ -8,8 +8,8 @@ import type { SalesSchemas } from "@dw/api-client";
  * without a change here. Nothing below names a status.
  *
  * - A **back move** (to a status already on the way from the start, found by
- *   walking the moves depth first) is drawn as a dashed curve under the cards
- *   on a wide screen (`process-flow.tsx`, 2026-10-23); below `lg` the list
+ *   walking the moves depth first) is drawn dashed on a lane over its band
+ *   on a wide screen (`process-geometry.ts`, 2026-10-24); below `lg` the list
  *   writes it on its node ("Có thể quay lại: …").
  * - A **many-to-one exit** (a move into a final status that more than one
  *   status reaches, like closing or declining a case) is not drawn: the final

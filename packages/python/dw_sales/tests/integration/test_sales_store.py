@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-from sales_harness import DW1, T0, OrderRun, QuoteRun, user
+from sales_harness import DW1, T0, OrderRun, QuoteRun, World, user
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
@@ -35,7 +35,7 @@ from dw_sales.application.case_store import (
 )
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.domain.dispositions import CaseKind, DispositionKind
-from dw_sales.domain.orders import Accepted, Actor, OrderStatus
+from dw_sales.domain.orders import Accepted, Actor, OrderCase, OrderStatus
 
 pytestmark = pytest.mark.integration
 
@@ -298,6 +298,45 @@ async def test_records_the_flows_keep_besides_cases(
         assert not await work.served.served(AN_ID, CaseKind.ORDER, case.case_id, case.case_version)
         assert await work.artifacts.get(artifact.artifact_id) == artifact
         assert await work.worker.state() == paused
+
+
+async def test_every_serving_of_a_case_is_read_back_by_case_and_only_in_its_workspace(
+    order_run: OrderRun, uow: SqlSalesUnitOfWorkFactory, world: World
+) -> None:
+    """`SourceServedPort.servings`: every person and version of one case,
+    which a case view tells an opened value from one nobody opened by
+    (audit gaps 1 and 5). Another case's servings, and another workspace's
+    or tenant's reading of this case, are not in it."""
+    case = order_run.outcomes["M01"].case
+    other = order_run.outcomes["M03"].case
+    assert case is not None and other is not None
+
+    def served(principal: uuid.UUID, version: int, of: OrderCase) -> ServedSource:
+        return ServedSource(
+            principal_id=principal,
+            case_kind=CaseKind.ORDER,
+            case_id=of.case_id,
+            case_version=version,
+            attachment_id=of.attachment_id,
+            attachment_sha256=of.document.attachment_sha256,
+            page=1 if of is other else None,
+            sheet=None if of is other else "PO",
+            served_at=T0 + timedelta(minutes=version),
+        )
+
+    mine = [served(DIEU_ID, case.case_version, case), served(AN_ID, case.case_version + 1, case)]
+    async with uow(order_run.scope) as work:
+        for record in [*mine, served(AN_ID, other.case_version, other)]:
+            await work.served.record(record)
+        await work.commit()
+
+    async with uow(order_run.scope) as work:
+        read = await work.served.servings(CaseKind.ORDER, case.case_id)
+        assert sorted(read, key=lambda s: s.case_version) == mine
+        assert not await work.served.servings(CaseKind.QUOTE, case.case_id)
+    for elsewhere in (world.alpha_other, world.beta):
+        async with uow(elsewhere) as work:
+            assert not await work.served.servings(CaseKind.ORDER, case.case_id)
 
 
 async def test_a_kind_is_recorded_once_per_version_even_by_two_renders_at_once(

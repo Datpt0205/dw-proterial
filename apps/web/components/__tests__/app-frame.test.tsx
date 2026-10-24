@@ -293,3 +293,62 @@ describe("the shell's navbar", () => {
     ).toBe("/approvals");
   });
 });
+
+describe("the feedback button (spec 003 US5, browser look 2026-10-24)", () => {
+  /** antd's breakpoints for a screen `width` px wide. */
+  function screenOf(width: number) {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: (query: string) => {
+        const min = /min-width:\s*(\d+)px/.exec(query);
+        return {
+          matches: min !== null && width >= Number(min[1]),
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        };
+      },
+    });
+  }
+  const original = window.matchMedia;
+  afterEach(() => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: original,
+    });
+  });
+
+  function shell() {
+    signIn(["sales.case.read"]);
+    render(
+      <UiProvider>
+        <AppFrame>
+          <p>Nội dung trang</p>
+        </AppFrame>
+      </UiProvider>,
+    );
+    return screen.getByRole("button", { name: "Gửi phản hồi" });
+  }
+
+  it("on a phone sits among the bar's actions, floating over nothing", () => {
+    screenOf(390);
+    const button = shell();
+    expect(button.closest(".ant-float-btn")).toBeNull();
+    expect(button.closest("header")).not.toBeNull();
+  });
+
+  it("from md up floats bottom-left, with room kept under the page", () => {
+    screenOf(1440);
+    const button = shell();
+    expect(button.closest(".ant-float-btn")).not.toBeNull();
+    expect(button.closest("header")).toBeNull();
+    const room = screen
+      .getByText("Nội dung trang")
+      .closest("[data-feedback-room]");
+    expect(room?.className).toContain("md:pb-20");
+  });
+});

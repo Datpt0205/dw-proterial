@@ -28,6 +28,7 @@ from dw_sales.adapters.reader_client import (
     ClientSourceView,
     ClientTexts,
     HttpReaderTransport,
+    ReaderMismatchError,
     ReaderUnavailableError,
 )
 from dw_sales.adapters.reader_wire import RESULTS, ReaderArgs, ReaderOp, ReaderReply, ReaderRequest
@@ -250,8 +251,8 @@ async def test_a_file_too_large_for_the_reader_is_refused_not_an_outage() -> Non
 
 @pytest.mark.parametrize(
     "response",
-    [httpx.Response(503), httpx.Response(500), httpx.Response(200, content=b"not a reply")],
-    ids=["unavailable", "error", "nonsense"],
+    [httpx.Response(503), httpx.Response(500)],
+    ids=["unavailable", "error"],
 )
 async def test_a_reader_answering_anything_but_a_reply_is_an_outage(
     response: httpx.Response,
@@ -260,6 +261,16 @@ async def test_a_reader_answering_anything_but_a_reply_is_an_outage(
 
     with pytest.raises(ReaderUnavailableError):
         await transport.call(ReaderRequest.of(ReaderOp.PO_LAYOUTS))
+
+
+async def test_an_answer_that_is_not_a_reply_is_refused_not_retried() -> None:
+    # Sales defect B: an answer came, so asking again gets the same one.
+    transport = _http(httpx.MockTransport(lambda _: httpx.Response(200, content=b"not a reply")))
+
+    with pytest.raises(ReaderMismatchError) as refused:
+        await transport.call(ReaderRequest.of(ReaderOp.PO_LAYOUTS))
+
+    assert refused.value.details["reason_code"] == "reader_version_mismatch"
 
 
 async def test_an_unreachable_reader_is_an_outage() -> None:
@@ -295,3 +306,41 @@ async def test_a_buyer_anchored_in_another_file_is_not_a_buyer() -> None:
 
     assert await ClientPoReaders(transport).buyer(other, CAPS) is None
     assert await ClientPoReaders(transport).buyer(_content(m13), CAPS) == real
+
+
+# ------------------------------------------ an answer of another version --
+
+
+def _older_grid() -> ReaderReply:
+    """A sheet as a reader image built before `SheetCell.text_unseen` sends it."""
+    cell = {"ref": "A1", "row": 1, "column": 1, "text": "SECRET-PRICE 123"}
+    grid = {"sheet": "PO", "hidden_sheet": False, "rows": 1, "columns": 1}
+    return ReaderReply(result={**grid, "truncated": False, "cells": [cell]})
+
+
+async def test_a_result_of_another_version_is_a_worded_refusal(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Sales defect B: it was a ValidationError, so a 500 and a retried draft."""
+    view = ClientSourceView(_Replying(_older_grid()), CAPS)
+
+    with caplog.at_level("ERROR", logger="dw_sales.reader"):
+        with pytest.raises(ReaderMismatchError) as refused:
+            await view.sheet_grid(_content(M01).data, "PO")
+
+    assert isinstance(refused.value, DomainError)
+    assert refused.value.details == {
+        "reason_code": "reader_version_mismatch",
+        "operation": "source.sheet_grid",
+    }
+    assert "cập nhật trình đọc" in refused.value.message
+    assert "cells.0.text_unseen:missing" in caplog.text
+    assert "SECRET-PRICE" not in caplog.text
+
+
+async def test_a_po_result_of_another_version_is_refused_not_unreadable() -> None:
+    # Not the file's outcome: every file would read so until the reader is rebuilt.
+    transport = _Replying(ReaderReply(result={"attachment_id": "A1"}))
+
+    with pytest.raises(ReaderMismatchError):
+        await ClientPoReaders(transport).read(_content(M01), "VLX", CAPS)

@@ -13,15 +13,21 @@ import {
   Table,
   Typography,
 } from "antd";
-import type { SalesSchemas } from "@dw/api-client";
-import { formatMonth } from "../../../../lib/dates";
-import type { Currency } from "../../../../lib/money";
+import { ApiError, type SalesSchemas } from "@dw/api-client";
+import { formatDateTime, formatMonth } from "../../../../lib/dates";
+import { errorCode } from "../../../../lib/error-message";
+import {
+  formatMoney,
+  formatQuantity,
+  type Currency,
+} from "../../../../lib/money";
 import { salesApi } from "../../_lib/api";
-import { ActionError } from "../../_lib/errors";
+import { ActionError, refusalSentences } from "../../_lib/errors";
+import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { AmountInput } from "../../_components/amount-input";
-import { Quantity } from "../../_components/money";
+import { Money, Quantity } from "../../_components/money";
 
 type Quote = SalesSchemas["QuoteCaseView"];
 
@@ -70,6 +76,15 @@ function initial(quote: Quote): Values {
   };
 }
 
+/** Refused because someone saved the case first (`stale_case_version`). */
+function isStaleVersion(error: unknown): boolean {
+  return (
+    errorCode(error) === "conflict" &&
+    error instanceof ApiError &&
+    error.body.details?.rule === "stale_case_version"
+  );
+}
+
 /**
  * Sales decides the price (Q7): per line the unit price, MOQ, lead time and
  * how the price follows copper, against the LME month master data holds. The
@@ -89,6 +104,11 @@ export function PricingForm({
   const { run, pending } = useAction();
   const [error, setError] = useState<unknown>(null);
   const [failed, setFailed] = useState(0);
+  // The case as saved by whoever recorded first, read after a refusal for a
+  // stale version (ui-quality §4 "conflict"): shown beside what this person
+  // typed, which the form keeps, until they choose which price stands.
+  const [theirs, setTheirs] = useState<Quote | null>(null);
+  const typedLines = Form.useWatch("lines", form);
   const lme = useResource(
     "sales/master-data/lme",
     useCallback(() => salesApi().lme(), []),
@@ -106,7 +126,8 @@ export function PricingForm({
   const submit = async (values: Values) => {
     setFailed(0);
     const body = {
-      case_version: quote.case_version,
+      // After a conflict, "Dùng giá của tôi" records on the version now saved.
+      case_version: theirs?.case_version ?? quote.case_version,
       lme_month: values.lme_month ?? null,
       management_guidance: values.management_guidance?.trim() || null,
       lines: quote.lines.map((line) => {
@@ -135,8 +156,26 @@ export function PricingForm({
     );
     if (result.ok) {
       setError(null);
+      setTheirs(null);
       onDone();
-    } else setError(result.error);
+      return;
+    }
+    setError(result.error);
+    if (!isStaleVersion(result.error)) return;
+    try {
+      setTheirs(await salesApi().quote(quote.case_id));
+    } catch {
+      // Unreadable now: the refusal itself is still drawn, the typed values kept.
+      setTheirs(null);
+    }
+  };
+
+  /** "Giữ giá hiện có": take the saved price into the form, drop what was typed. */
+  const keepSaved = (saved: Quote) => {
+    form.setFieldsValue(initial(saved));
+    setTheirs(null);
+    setError(null);
+    onDone();
   };
 
   const required = (message: string) => [
@@ -352,8 +391,122 @@ export function PricingForm({
         </Space>
       </Form>
       <div className="mt-3">
-        <ActionError error={error} />
+        {theirs ? (
+          <PricingConflict
+            error={error}
+            saved={theirs}
+            currency={currency}
+            pending={pending === "price"}
+            onMine={() => form.submit()}
+            onKeep={() => keepSaved(theirs)}
+            typed={(lineNo) => typedLines?.[`l${lineNo}`]}
+          />
+        ) : (
+          <ActionError error={error} />
+        )}
       </div>
     </Card>
+  );
+}
+
+/** "0,74 USD · MOQ 3.000 · 45 ngày", or what is still missing. */
+function lineTerms(
+  price: string | null,
+  moq: string,
+  leadTime: string,
+  currency: Currency,
+): string {
+  return [
+    price ? formatMoney(price, currency) : "chưa nhập đơn giá",
+    moq ? `MOQ ${formatQuantity(moq)}` : null,
+    leadTime ? `${leadTime} ngày` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * Someone recorded first (ui-quality §4 "conflict"): the price now saved, by
+ * whom and when, beside what this person typed (kept in the form), and the
+ * two ways on. Never a silent overwrite: "Dùng giá của tôi" records again on
+ * the saved version, knowingly; "Giữ giá hiện có" takes the saved price.
+ */
+function PricingConflict({
+  error,
+  saved,
+  currency,
+  pending,
+  onMine,
+  onKeep,
+  typed,
+}: {
+  error: unknown;
+  saved: Quote;
+  currency: Currency;
+  pending: boolean;
+  onMine: () => void;
+  onKeep: () => void;
+  typed: (lineNo: number) => LineValues | undefined;
+}) {
+  const name = usePeople();
+  const pricing = saved.pricing;
+  const savedLines = new Map((pricing?.lines ?? []).map((l) => [l.line_no, l]));
+  return (
+    <Alert
+      type="warning"
+      showIcon
+      role="alert"
+      title={
+        pricing
+          ? `Người khác vừa ghi giá: ${name(pricing.decided_by)} lúc ${formatDateTime(pricing.decided_at)}`
+          : "Người khác vừa thay đổi hồ sơ này"
+      }
+      description={
+        <Space orientation="vertical" size={4} className="w-full">
+          <Typography.Text>{refusalSentences(error)[0]}</Typography.Text>
+          <ul className="m-0 list-none p-0">
+            {saved.lines.map((line) => {
+              const mine = typed(line.line_no);
+              const theirsLine = savedLines.get(line.line_no);
+              return (
+                <li key={line.line_no}>
+                  <Typography.Text strong>Dòng {line.line_no}</Typography.Text>
+                  {" · đang lưu: "}
+                  {theirsLine ? (
+                    <>
+                      <Money
+                        value={theirsLine.unit_price}
+                        currency={currency}
+                      />
+                      {` · MOQ ${formatQuantity(theirsLine.moq)} · ${theirsLine.lead_time_days} ngày`}
+                    </>
+                  ) : (
+                    "chưa có giá"
+                  )}
+                  {" · bạn đang nhập: "}
+                  {lineTerms(
+                    mine?.unit_price || null,
+                    mine?.moq ?? "",
+                    mine?.lead_time_days ?? "",
+                    currency,
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <Typography.Text>
+            Giá bạn nhập vẫn giữ trong các ô bên trên. Chọn giá nào được ghi:
+          </Typography.Text>
+          <Space wrap>
+            <Button loading={pending} onClick={onMine}>
+              Dùng giá của tôi
+            </Button>
+            <Button disabled={pending} onClick={onKeep}>
+              Giữ giá hiện có
+            </Button>
+          </Space>
+        </Space>
+      }
+    />
   );
 }

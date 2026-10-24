@@ -26,6 +26,7 @@ from dw_api.bootstrap import ApiContainer, build_container
 from dw_api.exception_handlers import register_exception_handlers
 from dw_api.middleware.rate_limit import RateLimitMiddleware
 from dw_api.middleware.request_id import RequestIdMiddleware
+from dw_api.middleware.unexpected_error import UnexpectedErrorMiddleware
 from dw_api.routes.v1.admin_console import router as admin_console_router
 from dw_api.routes.v1.admin_members import invitations_router as admin_invitations_router
 from dw_api.routes.v1.admin_members import router as admin_members_router
@@ -111,7 +112,10 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     )
     app.state.container = container
 
-    # Middleware runs in reverse registration order: request-id first, then limit.
+    # Middleware runs in reverse registration order: CORS (below) first, then
+    # request-id, then limit. The unexpected-error layer is innermost, so a
+    # route's 500 still passes back through CORS and request-id (defect A).
+    app.add_middleware(UnexpectedErrorMiddleware)
     app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_per_minute)
     app.add_middleware(RequestIdMiddleware)
 
