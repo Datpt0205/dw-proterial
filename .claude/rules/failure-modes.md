@@ -99,7 +99,7 @@ move on.
 
 A new guard ships with a demonstration that removing the guard turns a test red.
 
-## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 7×)
+## 4. Trusting a library instead of measuring it — NOT THINKABLE (found 8×)
 
 MinIO withdrew both its images from Docker Hub; the error read as a credentials
 problem. The move to quay.io held until MinIO withdrew them there too: twelve
@@ -114,7 +114,11 @@ GPU discovery timed out and it served on CPU behind a passing healthcheck
 (2026-10-19, `infra/onprem/README.md`). PostgreSQL's regex engine refuses a
 repetition count above 255, so a CHECK written `^[!-~]{1,512}$` fails every
 insert at run time while the migration applies cleanly: twice, `0a78ca5e96d3` and
-`4bca401bcb3a` (2026-10-24). Bound the length with `char_length`, not `{n,m}`.
+`4bca401bcb3a` (2026-10-24). Bound the length with `char_length`, not `{n,m}`. Keycloak's realm import
+leaves an unset `${VAR}` as the literal text, so a client secret written
+`"${DW_ACCOUNTS_CLIENT_SECRET}"` imported without the variable is a secret
+anyone reading the repository knows (measured on 26.7.2, 2026-10-25, before
+it shipped); compose now refuses to start without it.
 
 No amount of care catches these. The habit that does:
 

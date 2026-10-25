@@ -315,12 +315,19 @@ jobs:
         run: >-
           docker compose --env-file .env -f infra/compose/docker-compose.yml
           -f infra/compose/docker-compose.scan-test.yml --profile scan up -d --wait clamav
+      - name: Keycloak admin for the sign-in accounts suite
+        # From .env, their one owner. The suite builds a throwaway realm from
+        # infra/keycloak/dw-realm.json with it (test_keycloak_accounts.py).
+        run: grep -E '^KEYCLOAK_ADMIN(_PASSWORD)?=' .env >> "$GITHUB_ENV"
       - name: Integration tests
         env:
           DW_TEST_CLAMD: 127.0.0.1:3310
           # The reader sandbox through its loopback gateway (ticket 25): its
           # image suite fails, rather than skips, when this is missing on CI.
           DW_TEST_READER: http://127.0.0.1:8120
+          # Keycloak as compose publishes it; the accounts suite fails, rather
+          # than skips, when this is missing on CI.
+          DW_TEST_KEYCLOAK: http://127.0.0.1:8686
         run: uv run pytest -m integration
       - name: E2E tests
         # Its own marker, so `-m integration` never collected it and the step

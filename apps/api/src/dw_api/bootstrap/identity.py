@@ -1,4 +1,4 @@
-"""Who the caller is: token verification.
+"""Who the caller is: token verification; and the sign-in accounts an admin creates.
 
 Two verifiers, chosen by ``auth_mode`` rather than by what happens to be
 configured, so a deployment cannot fall back to the development issuer by
@@ -12,7 +12,9 @@ from __future__ import annotations
 from dw_api.settings import ApiSettings
 from dw_platform.adapters.identity.dev_token import DevTokenVerifier
 from dw_platform.adapters.identity.keycloak import KeycloakTokenVerifier
+from dw_platform.adapters.identity.keycloak_accounts import KeycloakLoginAccounts
 from dw_platform.application.identity import ServiceSubjectsRefused
+from dw_platform.application.member_accounts import LoginAccountsPort
 from dw_platform.application.ports import TokenVerifierPort
 
 
@@ -29,3 +31,17 @@ def build_token_verifier(settings: ApiSettings) -> TokenVerifierPort | None:
     # Auth stays off until a secret is configured. Only reachable in `local`:
     # every other profile requires oidc.
     return None
+
+
+def build_login_accounts(settings: ApiSettings) -> LoginAccountsPort | None:
+    """The accounts an Org Admin creates (`member_accounts.py`): only beside
+    Keycloak sign-in, and only once its `dw-accounts` client is configured."""
+    secret = settings.accounts_client_secret.get_secret_value()
+    if settings.auth_mode != "oidc" or not settings.accounts_admin_url or not secret:
+        return None
+    return KeycloakLoginAccounts(
+        base_url=settings.accounts_admin_url,
+        realm=settings.accounts_realm,
+        client_id=settings.accounts_client_id,
+        client_secret=secret,
+    )

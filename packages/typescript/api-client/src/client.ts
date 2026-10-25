@@ -19,6 +19,12 @@ import {
   adminTenantSchema,
   adminRoleSchema,
   adminPermissionSetSchema,
+  loginAccountSchema,
+  createdLoginAccountSchema,
+  temporaryPasswordSchema,
+  type LoginAccount,
+  type CreatedLoginAccount,
+  type TemporaryPassword,
   adminSodRuleSchema,
   inboxSchema,
   hierarchyMemberSchema,
@@ -453,6 +459,73 @@ export class ApiClient {
       "DELETE",
       `/api/v1/admin/members/${userId}?workspace_id=${workspaceId}`,
       { idempotencyKey },
+    );
+  }
+
+  // ---- admin: sign-in accounts ----------------------------------------------
+  // 503 `login_accounts_not_configured` on a deployment without Keycloak's
+  // `dw-accounts` client. A temporary password is in the answer once; a replay
+  // of the same key answers null.
+
+  /** The sign-in accounts this tenant created, and whether each may sign in. */
+  listLoginAccounts(): Promise<LoginAccount[]> {
+    return this.request(
+      "GET",
+      "/api/v1/admin/accounts",
+      z.array(loginAccountSchema),
+    );
+  }
+
+  /** Create a person, their role in one workspace and their sign-in account. */
+  createMemberAccount(
+    input: {
+      displayName: string;
+      email: string;
+      workspaceId: string;
+      roleKeys: string[];
+    },
+    idempotencyKey?: string,
+  ): Promise<CreatedLoginAccount> {
+    return this.request(
+      "POST",
+      "/api/v1/admin/accounts",
+      createdLoginAccountSchema,
+      {
+        body: {
+          display_name: input.displayName,
+          email: input.email,
+          memberships: [
+            { workspace_id: input.workspaceId, role_keys: input.roleKeys },
+          ],
+        },
+        idempotencyKey,
+      },
+    );
+  }
+
+  /** A new temporary password for a person's sign-in. */
+  resetMemberPassword(
+    userId: string,
+    idempotencyKey?: string,
+  ): Promise<TemporaryPassword> {
+    return this.request(
+      "POST",
+      `/api/v1/admin/accounts/${userId}/password-reset`,
+      temporaryPasswordSchema,
+      { idempotencyKey },
+    );
+  }
+
+  /** Lock (ending open sessions) or unlock a person's sign-in. */
+  setMemberSignIn(
+    userId: string,
+    enabled: boolean,
+    idempotencyKey?: string,
+  ): Promise<void> {
+    return this.requestNoContent(
+      "PUT",
+      `/api/v1/admin/accounts/${userId}/enabled`,
+      { body: { enabled }, idempotencyKey },
     );
   }
 

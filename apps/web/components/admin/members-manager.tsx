@@ -20,7 +20,7 @@ import {
   UserAddOutlined,
 } from "@ant-design/icons";
 import type { PlatformUserRef, WorkspaceMember } from "@dw/api-client";
-import type { AdminPermissionSet } from "@dw/contracts";
+import type { AdminPermissionSet, AdminRole } from "@dw/contracts";
 import { RegionState } from "@dw/ui";
 import { apiClient } from "../../lib/session";
 import { useAuth } from "../../lib/auth/auth-context";
@@ -28,19 +28,28 @@ import { errorMessage } from "../../lib/error-message";
 import { useIdempotencyKeys } from "../../lib/idempotency";
 import { roleLabel } from "../../lib/nav/roles";
 import { EmailPicker } from "../email-picker";
+import {
+  AddPersonButton,
+  SignInActions,
+  TemporaryPasswordDialog,
+  useLoginAccounts,
+  type ShownPassword,
+} from "./sign-in-accounts";
 
-// Business roles anyone who manages members can hand out. PLUG-IN POINT: a
-// bounded context's own tiers join this list once they are in the tenant role
-// catalog — the API refuses a key the catalog does not carry.
+// Until the tenant's role catalog has loaded (or when it cannot be read): the
+// platform's own business roles, and its administrative ones for a platform
+// admin. Once it loads, every role it carries is offered, a context's tiers
+// included (Đạt, 2026-10-25: IT grants every business role, never an
+// administrative one); which roles are administrative is the catalog's
+// `administrative`, the rule the API enforces.
 const BASE_GRANTABLE_ROLES = ["member", "approver"];
-// Administrative roles: the API refuses them from a non-platform-admin, so they
-// are offered only to a platform admin (see `grantableRoles`). Listing them also
-// lets an existing admin member's row show its real role instead of falling
-// back to the first business role.
 const ADMIN_GRANTABLE_ROLES = ["org_admin", "platform_admin"];
+const ADMIN_SIGN_IN =
+  "Chỉ Quản trị toàn quyền mới đổi được đăng nhập của một quản trị viên.";
+const OWN_SIGN_IN = "Bạn không tự khóa đăng nhập của chính mình được.";
 
 export function MembersManager() {
-  const { active, roles } = useAuth();
+  const { active, roles, principalId } = useAuth();
   const { message, modal } = App.useApp();
   const keys = useIdempotencyKeys();
   const { token } = theme.useToken();
@@ -49,13 +58,29 @@ export function MembersManager() {
   // _forbid_escalation lets exactly that role through and refuses everyone else,
   // so the UI offers the admin options to the same set and no one it would 403.
   const canGrantAdmin = roles.includes("platform_admin");
+  const [roleCatalog, setRoleCatalog] = useState<AdminRole[] | null>(null);
   const grantableRoles = useMemo(
     () =>
-      [
-        ...BASE_GRANTABLE_ROLES,
-        ...(canGrantAdmin ? ADMIN_GRANTABLE_ROLES : []),
-      ].map((key) => ({ value: key, label: roleLabel(key) })),
-    [canGrantAdmin],
+      roleCatalog
+        ? roleCatalog
+            .filter((r) => canGrantAdmin || !r.administrative)
+            .map((r) => ({ value: r.key, label: roleLabel(r.key, r.name) }))
+        : [
+            ...BASE_GRANTABLE_ROLES,
+            ...(canGrantAdmin ? ADMIN_GRANTABLE_ROLES : []),
+          ].map((key) => ({ value: key, label: roleLabel(key) })),
+    [canGrantAdmin, roleCatalog],
+  );
+  const administrativeRoles = useMemo(
+    () =>
+      new Set(
+        (roleCatalog ?? []).filter((r) => r.administrative).map((r) => r.key),
+      ),
+    [roleCatalog],
+  );
+  const accounts = useLoginAccounts();
+  const [shownPassword, setShownPassword] = useState<ShownPassword | null>(
+    null,
   );
 
   const [members, setMembers] = useState<WorkspaceMember[] | null>(null);
@@ -106,6 +131,13 @@ export function MembersManager() {
         setPermissionSets(await apiClient().listPermissionSets());
       } catch {
         setPermissionSets([]);
+      }
+      // So is the role catalog: without it the base roles are offered and the
+      // API still refuses what the caller may not grant.
+      try {
+        setRoleCatalog(await apiClient().listAdminRoles());
+      } catch {
+        setRoleCatalog(null);
       }
     } catch (e) {
       setMembers([]);
@@ -216,8 +248,8 @@ export function MembersManager() {
     <Card title="Thành viên">
       <Flex vertical gap="middle">
         <Typography.Text type="secondary">
-          Cấp quyền cho người đã đăng nhập ít nhất một lần. Người mới phải tự
-          đăng nhập trước khi được giao vai.
+          Cấp quyền cho người đã đăng nhập ít nhất một lần. Người chưa có tài
+          khoản: bấm “Thêm người” để tạo tài khoản đăng nhập kèm vai.
         </Typography.Text>
         <Flex wrap align="end" gap="small">
           <Flex vertical gap={4} className="min-w-[12rem] flex-1">
@@ -258,7 +290,25 @@ export function MembersManager() {
           >
             Cấp quyền
           </Button>
+          <AddPersonButton
+            workspaceId={workspaceId}
+            roles={grantableRoles}
+            disabledReason={
+              accounts.state.kind === "unavailable"
+                ? accounts.state.reason
+                : null
+            }
+            onCreated={(shown) => {
+              setShownPassword(shown);
+              void refresh();
+              void accounts.reload();
+            }}
+          />
         </Flex>
+        <TemporaryPasswordDialog
+          shown={shownPassword}
+          onClose={() => setShownPassword(null)}
+        />
 
         {error && <Alert type="error" showIcon title={error} />}
 
@@ -323,6 +373,27 @@ export function MembersManager() {
                       />
                     </Flex>
                   </Flex>
+
+                  <div className="mt-1.5">
+                    <SignInActions
+                      userId={m.user_id}
+                      name={m.display_name}
+                      email={m.email}
+                      accounts={accounts.state}
+                      blockedReason={
+                        !canGrantAdmin &&
+                        m.role_keys.some((k) => administrativeRoles.has(k))
+                          ? ADMIN_SIGN_IN
+                          : null
+                      }
+                      lockBlockedReason={
+                        m.user_id === principalId ? OWN_SIGN_IN : null
+                      }
+                      onChanged={accounts.reload}
+                      onPassword={setShownPassword}
+                      onError={setError}
+                    />
+                  </div>
 
                   {permissionSets.length > 0 && (
                     <div className="mt-1.5">

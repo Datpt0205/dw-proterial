@@ -121,6 +121,9 @@ export const adminRoleSchema = z.object({
   key: z.string(),
   name: z.string(),
   scopes: z.array(z.string()),
+  // Only a Platform Admin grants it, or acts on the sign-in of its holder;
+  // decided by the server's own rule, never by a list kept here.
+  administrative: z.boolean(),
 });
 export type AdminRole = z.infer<typeof adminRoleSchema>;
 
@@ -133,6 +136,30 @@ export const adminPermissionSetSchema = z.object({
   scopes: z.array(z.string()),
 });
 export type AdminPermissionSet = z.infer<typeof adminPermissionSetSchema>;
+
+// A sign-in account this tenant created from the members screen
+// (/admin/accounts), matched to a member by email.
+export const loginAccountSchema = z.object({
+  email: z.string(),
+  enabled: z.boolean(),
+});
+export type LoginAccount = z.infer<typeof loginAccountSchema>;
+
+// The temporary password is in the answer once; a replay of the same
+// Idempotency-Key answers null, because the server never stores it.
+export const createdLoginAccountSchema = z.object({
+  user_id: z.string(),
+  email: z.string().nullable(),
+  display_name: z.string(),
+  temporary_password: z.string().nullable(),
+});
+export type CreatedLoginAccount = z.infer<typeof createdLoginAccountSchema>;
+
+export const temporaryPasswordSchema = z.object({
+  user_id: z.string(),
+  temporary_password: z.string().nullable(),
+});
+export type TemporaryPassword = z.infer<typeof temporaryPasswordSchema>;
 
 // A separation-of-duty rule: no membership may hold a scope from each side.
 // `waivable` false means no tenant can lift it. `waiver` is this tenant's open

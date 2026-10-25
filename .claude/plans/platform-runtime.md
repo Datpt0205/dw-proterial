@@ -51,6 +51,15 @@ Mốc 6 (running many customers) is half done:
 
 ## Open
 
+- **2026-10-25, sign-in accounts an Org Admin creates** (Đạt; spec
+  `platform-runtime/member-sign-in-accounts/spec.md`): "Thêm người" on the
+  members screen makes the person, the role and a Keycloak account with a
+  one-time temporary password; reset and lock per row, only on accounts this
+  tenant created (`dw_tenant_id`), an administrator's only by a Platform Admin.
+  Realm client `dw-accounts`; `DW_API_ACCOUNTS_CLIENT_SECRET` required by
+  compose; an existing realm gets it from `scripts/keycloak_accounts_client.py`.
+  Also: an unverified email in a token is treated as absent.
+
 - **2026-10-18, the platform stamps its own approval types** (Đạt; closes
   `sales.md` "Sales roles decide unstamped approvals"; `89e33d6`).
   `memory.review` carries `required_scope = 'memory.review'`

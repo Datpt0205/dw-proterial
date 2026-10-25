@@ -59,6 +59,7 @@ from dw_platform.application.entitlement import PlanEntitlementService
 from dw_platform.application.hierarchy import HierarchyService
 from dw_platform.application.idempotency import HttpIdempotency
 from dw_platform.application.identity_bootstrap import IdentityBootstrapPort
+from dw_platform.application.member_accounts import MemberAccountsService
 from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
     RevokeMembershipHandler,
@@ -160,6 +161,9 @@ class ApiContainer:
     grant_membership: GrantMembershipHandler | None = None
     revoke_membership: RevokeMembershipHandler | None = None
     tenant_members: TenantMembersService | None = None
+    # Sign-in accounts from the members screen; None until Keycloak's
+    # `dw-accounts` client is configured (the routes answer 503).
+    member_accounts: MemberAccountsService | None = None
     admin_console: AdminConsoleService | None = None
     hierarchy: HierarchyService | None = None
     separation_of_duties: SeparationOfDutiesService | None = None

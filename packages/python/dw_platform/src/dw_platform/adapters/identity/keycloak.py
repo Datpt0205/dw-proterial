@@ -62,7 +62,11 @@ class KeycloakTokenVerifier:
             ) from exc
         return VerifiedClaims(
             subject=str(claims["sub"]),
-            email=claims.get("email"),
+            # An address the IdP has not verified is not an identity: the first
+            # sign-in links to an existing person by email
+            # (`identity_provisioning.py`), so an unverified one could land on
+            # someone else's account. Absent, the sign-in resolves by subject.
+            email=claims.get("email") if claims.get("email_verified") is True else None,
             issuer=str(claims["iss"]),
             name=claims.get("name") or claims.get("preferred_username"),
             auth_methods=auth_methods(claims.get("amr")),

@@ -35,10 +35,11 @@ own file and a row here.
   package; two defects fixed (`89bcd0d49ea6`, route walks); six live evals
   PASS on Qwen3.5-9B; on-prem compose ran (README); scope vs Proterial's
   process in `sales/dw1-scope.md`; deny-list secret set.
-- 2026-10-20: pipeline board as the Sales home, a history per case, denser
-  theme (`sales.md` State).
-- **Next:** the full e2e run for defects A–E, audit gaps 1–5 and the calm process map (main path in one row, ways back behind a switch; built 10-24, uncommitted; `sales.md` State), then commit; the rest of the screenshot review;
-  `onprem-up` in `uat` behind Caddy; DW2 (Mua hàng) when its survey arrives, after the reuse decisions in `sales.md`.
+- 2026-10-20..24: pipeline board, case history, defects A–E, the process map
+  (`sales.md` State). 2026-10-25: IT creates sign-in accounts, no AD needed.
+- **Next:** the rest of the screenshot review; `onprem-up` in `uat` behind
+  Caddy (`scripts/keycloak_accounts_client.py` on its realm); DW2 when its
+  survey arrives, after the reuse decisions in `sales.md`.
 
 ## Decisions Đạt owes
 
@@ -53,8 +54,7 @@ own file and a row here.
   on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
   not only by configuration).
 - **DW1 scope** (`sales/dw1-scope.md`): the agent-proposed bars of
-  t29–t33 (t31 at 89.8% of 90%). Whether tenant IT may grant `sales_*`
-  sets in the admin console at all (`sales.md` State, 2026-10-21).
+  t29–t33 (t31 at 89.8% of 90%).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   the retention term of `sales.step_outcomes` (365 days proposed, 10-23).
