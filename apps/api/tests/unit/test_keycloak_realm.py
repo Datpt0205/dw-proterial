@@ -40,3 +40,11 @@ def test_an_access_token_outlives_a_sign_out_by_minutes_not_a_shift(
 
 def test_a_password_has_a_floor(realm: dict[str, object]) -> None:
     assert "length(10)" in str(realm["passwordPolicy"])
+
+
+def test_sign_in_and_password_pages_speak_vietnamese(realm: dict[str, object]) -> None:
+    # Keycloak 26.7.2 ships messages_vi for the login and account themes
+    # (checked in its themes jar, 2026-10-26): the realm only has to ask.
+    assert realm["internationalizationEnabled"] is True
+    assert realm["defaultLocale"] == "vi"
+    assert "vi" in realm["supportedLocales"]  # type: ignore[operator]

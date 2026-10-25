@@ -74,7 +74,7 @@ The portal signs people in through **Keycloak, on the same host**. On premises i
 
 - **Recommended: Proterial's Active Directory, through Keycloak's LDAP user federation.** People sign in with their Windows account. Disabling someone in AD stops their next sign-in. No password is stored in this stack, and no internet is needed.
 - **Microsoft Entra ID (OIDC brokering) also works,** but every sign-in then goes through Microsoft's cloud. This fits only if the plant keeps internet access for M365 anyway.
-- **No directory at all: IT creates the accounts in the portal.** Admin → Thành viên → "Thêm người" makes the person, their role and a Keycloak account with a temporary password shown once, which the person changes at first sign-in. The same screen resets a password or locks a sign-in. The cost of having no directory: when someone leaves, IT must lock them here, because nothing else does.
+- **No directory at all: IT creates the accounts in the portal.** Admin → Thành viên → "Thêm người" makes the person, their role and a Keycloak account with a temporary password shown once, which the person changes at first sign-in. The same screen resets a password or locks a sign-in. The person changes their own password later from "Đổi mật khẩu" in the account menu; a forgotten one is reset by IT, because the realm has no mail server. The cost of having no directory: when someone leaves, IT must lock them here, because nothing else does.
   - It needs the realm's `dw-accounts` client and `DW_API_ACCOUNTS_CLIENT_SECRET` (32+ random characters) in `.env`. Compose refuses to start Keycloak or the API without it.
   - A realm created before this client existed gets it from `uv run python scripts/keycloak_accounts_client.py` (reads `.env`; idempotent).
 - **With LDAP federation, turn on "Trust Email".** The API links a first sign-in to a person by email only when Keycloak says the address is verified. Without it, a person IT added beforehand does not land on their own account (the safe failure, but a confusing one).
@@ -88,6 +88,7 @@ The portal signs people in through **Keycloak, on the same host**. On premises i
 - **Lockout:** after 10 wrong passwords the account is locked for a growing wait, up to 15 minutes, and then unlocks on its own.
 - **Passwords:** at least 10 characters, not the username or the email. This also applies to the demo accounts: `DW_DEV_USER_PASSWORD` must be 10 characters or more.
 - **Sign out:** "Đăng xuất" ends the Keycloak session (`keycloak.logout`), not just the tab.
+- **Language:** the sign-in and password pages are in Vietnamese (`defaultLocale: vi`; Keycloak ships the translation).
 
 **The realm file is read only when Keycloak's database is empty.** An existing installation does not pick these settings up by itself. Apply them in the admin console (Realm settings: Sessions, Tokens, Security defenses; Authentication: Policies), or re-import on a fresh volume.
 

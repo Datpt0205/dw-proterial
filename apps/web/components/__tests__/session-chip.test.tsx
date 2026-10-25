@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // so a member holding only the inbox's `approvals.read` must not be offered it
 // here either.
 let scopes: string[] = [];
+// Keycloak sign-in hands the menu a password action; dev mode hands it null.
+let changePassword: (() => void) | null = null;
 vi.mock("../../lib/auth/auth-context", () => ({
   useAuth: () => ({
     status: "ready",
@@ -14,12 +16,16 @@ vi.mock("../../lib/auth/auth-context", () => ({
     isPlatformOperator: false,
     logout: vi.fn(),
     hasScope: (scope: string) => scopes.includes(scope),
+    changePassword,
   }),
 }));
 
 import { SessionChip } from "../session-chip";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  changePassword = null;
+});
 
 function openMenu(): void {
   render(<SessionChip />);
@@ -46,5 +52,23 @@ describe("session menu", () => {
 
     expect(await screen.findByText("Đăng xuất")).toBeTruthy();
     expect(auditLinkShown()).toBe(true);
+  });
+
+  it("offers “Đổi mật khẩu” where the sign-in is Keycloak's, and it opens Keycloak's page", async () => {
+    scopes = [];
+    const opened = vi.fn();
+    changePassword = opened;
+    openMenu();
+
+    fireEvent.click(await screen.findByText("Đổi mật khẩu"));
+    expect(opened).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no password to change in dev mode", async () => {
+    scopes = [];
+    openMenu();
+
+    expect(await screen.findByText("Đăng xuất")).toBeTruthy();
+    expect(screen.queryByText("Đổi mật khẩu")).toBeNull();
   });
 });

@@ -73,6 +73,9 @@ interface AuthContextValue {
   extendSession: () => Promise<boolean>;
   /** Sign in again and come back to this page. Navigates: the person presses it. */
   reauthenticate: () => void;
+  /** Keycloak's own password page, then back to this page; null when there
+   * is no Keycloak (dev mode) and so no password to change. */
+  changePassword: (() => void) | null;
 }
 
 interface BootstrapMembership {
@@ -294,6 +297,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void getKeycloak().login({ redirectUri: window.location.origin });
   }, []);
 
+  // keycloak-js 26 `action`: Keycloak runs its UPDATE_PASSWORD required action
+  // (asking for the password again when the sign-in is old) and comes back.
+  const changePassword = useCallback(() => {
+    void getKeycloak().login({
+      action: "UPDATE_PASSWORD",
+      redirectUri: window.location.href,
+    });
+  }, []);
+
   const register = useCallback(() => {
     if (AUTH_MODE === "dev") {
       window.location.href = "/dev-login";
@@ -353,6 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionExpiresAt,
       extendSession,
       reauthenticate,
+      changePassword: AUTH_MODE === "dev" ? null : changePassword,
     };
   }, [
     status,
@@ -374,6 +387,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionExpiresAt,
     extendSession,
     reauthenticate,
+    changePassword,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

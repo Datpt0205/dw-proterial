@@ -11,7 +11,9 @@ three pieces from the file itself, so the file stays their one owner:
 - the `dw-accounts` client, with its secret from
   `DW_API_ACCOUNTS_CLIENT_SECRET` (the value compose hands the API);
 - its service account's `realm-management` roles;
-- the realm's user profile (only an admin writes `dw_tenant_id` or an email).
+- the realm's user profile (only an admin writes `dw_tenant_id` or an email);
+- the realm's languages (Vietnamese first), so the first sign-in and the
+  password pages a new person meets read in Vietnamese.
 
 Idempotent: a second run updates the secret and re-applies the rest. Prints
 what it did, never a secret.
@@ -29,6 +31,7 @@ import httpx
 
 REALM_FILE = Path(__file__).resolve().parents[1] / "infra" / "keycloak" / "dw-realm.json"
 CLIENT_ID = "dw-accounts"
+LANGUAGE_KEYS = ("internationalizationEnabled", "supportedLocales", "defaultLocale")
 PROFILE_PROVIDER = "org.keycloak.userprofile.UserProfileProvider"
 
 
@@ -100,6 +103,9 @@ def main() -> None:
 
         http.put(f"{admin}/users/profile", json=json.loads(profile)).raise_for_status()
         print("user profile: only an admin writes dw_tenant_id or an email")
+
+        http.put(admin, json={key: spec[key] for key in LANGUAGE_KEYS}).raise_for_status()
+        print(f"languages: {', '.join(spec['supportedLocales'])}, default {spec['defaultLocale']}")
 
 
 if __name__ == "__main__":

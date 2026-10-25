@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { LogoutOutlined, ProfileOutlined } from "@ant-design/icons";
+import {
+  KeyOutlined,
+  LogoutOutlined,
+  ProfileOutlined,
+} from "@ant-design/icons";
 import { Avatar, Button, Dropdown, theme, Typography } from "antd";
 import { useAuth } from "../lib/auth/auth-context";
 import { initials } from "../lib/initials";
@@ -17,7 +21,8 @@ const AUDIT_LOG = NAV_ITEMS.find((item) => item.href === "/audit");
 /**
  * The account at the end of the navbar: initials, and on a wide screen the
  * name and the role the person works as; the menu repeats them with the
- * email, the activity log where the person may read it, and sign-out. The
+ * email, the activity log where the person may read it, "Đổi mật khẩu" where
+ * the sign-in is Keycloak's, and sign-out. The
  * role comes from `displayRole`, which names a context's role from the role
  * catalogue.
  */
@@ -36,6 +41,7 @@ export function SessionChip({
     isPlatformOperator,
     logout,
     hasScope,
+    changePassword,
   } = useAuth();
   const { token } = theme.useToken();
   if (status !== "ready") return null;
@@ -79,6 +85,16 @@ export function SessionChip({
                   key: "audit",
                   icon: <ProfileOutlined aria-hidden />,
                   label: <Link href="/audit">Nhật ký hoạt động</Link>,
+                },
+              ]
+            : []),
+          ...(changePassword
+            ? [
+                {
+                  key: "password",
+                  icon: <KeyOutlined aria-hidden />,
+                  label: "Đổi mật khẩu",
+                  onClick: changePassword,
                 },
               ]
             : []),
