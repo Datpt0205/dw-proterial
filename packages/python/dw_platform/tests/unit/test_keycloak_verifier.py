@@ -66,6 +66,7 @@ def _claims(**overrides: Any) -> dict[str, Any]:
         "iat": now,
         "exp": now + 300,
         "email": "an@alpha.local",
+        "email_verified": True,
         "name": "An Nguyen",
         "amr": ["pwd", "otp"],
         "acr": "2",
@@ -108,6 +109,18 @@ async def test_valid_token_yields_verified_claims(fetched: list[str]) -> None:
     assert claims.auth_methods == frozenset({"pwd", "otp"})
     assert claims.acr == "2"
     assert fetched == [f"{ISSUER}/protocol/openid-connect/certs"]
+
+
+@pytest.mark.parametrize("verified", [False, None, "true"])
+async def test_an_email_the_idp_has_not_verified_is_absent(
+    fetched: list[str], verified: object
+) -> None:
+    # A person who changes their address in Keycloak's account console holds
+    # a token with email_verified false; the first sign-in links by email, so
+    # that address would land them on whoever owns it. Only a literal true counts.
+    claims = await _verifier().verify(_token(_claims(email_verified=verified)))
+    assert claims.email is None
+    assert claims.subject == "kc|an.nguyen"
 
 
 async def test_name_falls_back_to_preferred_username(fetched: list[str]) -> None:

@@ -31,13 +31,14 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, Protocol
 
-from dw_kernel.errors import DomainError, NotFoundError
+from dw_kernel.errors import DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.authorization import PLATFORM_ADMIN_ROLE
 from dw_platform.application.membership_admin import (
     MEMBERS_READ,
     MEMBERS_WRITE,
@@ -90,6 +91,9 @@ class InviteMember:
     display_name: str
     email: str
     memberships: tuple[WorkspaceRoles, ...]
+    # True when `member_accounts` created the person's sign-in account with
+    # the invitation; the audit event says so.
+    login_account: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,29 +190,45 @@ class TenantMembersService:
 
     async def invite(self, context: AccessContext, command: InviteMember) -> UserRef:
         await self.authz.require(context=context, action=MEMBERS_WRITE, resource_type=_RESOURCE)
-        display_name = command.display_name.strip()
-        if not 4 <= len(display_name) <= 120:
-            raise DomainError("a display name of 4 to 120 characters is required")
-        email = command.email.strip().lower()
-        if not _EMAIL.fullmatch(email):
-            raise DomainError("a valid email is required")
+        command = checked_invitation(command)
         desired = {ws: roles for ws, roles in _by_workspace(command.memberships).items() if roles}
-        if not desired:
-            raise DomainError("an invitation needs at least one workspace with a role")
         await self._checked_roles(context, desired)
+        details: dict[str, object] = {"login_account": True} if command.login_account else {}
         return await self.repo.invite(
             context,
-            display_name=display_name,
-            email=email,
+            display_name=command.display_name,
+            email=command.email,
             memberships=desired,
             audit=lambda user_id, ws, roles: self._event(
                 context,
                 _ACTION_INVITED,
                 user_id,
                 ws,
-                {"user_id": str(user_id), "roles": sorted(roles)},
+                {"user_id": str(user_id), "roles": sorted(roles), **details},
             ),
         )
+
+    async def manageable_member(self, context: AccessContext, user_id: uuid.UUID) -> TenantMember:
+        """The person of this tenant an admin may act on the sign-in of.
+
+        NotFoundError for anyone outside the tenant; 403 for a person holding an
+        administrative role anywhere in it, unless the caller is a Platform
+        Admin: resetting an administrator's password is signing in as them."""
+        await self.authz.require(context=context, action=MEMBERS_WRITE, resource_type=_RESOURCE)
+        member = next(
+            (m for m in await self.repo.list_members(context) if m.user_id == user_id), None
+        )
+        if member is None:
+            raise NotFoundError("Không tìm thấy người này trong công ty.")
+        if PLATFORM_ADMIN_ROLE not in context.roles:
+            catalog = await self.repo.role_catalog()
+            held = {role for m in member.memberships for role in m.role_keys}
+            if any(is_administrative(catalog.get(role, frozenset())) for role in held):
+                raise PermissionDeniedError(
+                    "Chỉ Quản trị toàn quyền mới đổi được đăng nhập của một quản trị viên.",
+                    details={"reason_code": "administrator_sign_in"},
+                )
+        return member
 
     async def _checked_roles(self, context: AccessContext, desired: Roles) -> frozenset[str]:
         """Refuse unknown roles (404) and administrative ones from a
@@ -253,6 +273,20 @@ class TenantMembersService:
             occurred_at=self.clock.now(),
             details=details,
         )
+
+
+def checked_invitation(command: InviteMember) -> InviteMember:
+    """The invitation with its name trimmed and its email lower-cased; a
+    DomainError for a name, an email or a role list no invitation may carry."""
+    display_name = command.display_name.strip()
+    if not 4 <= len(display_name) <= 120:
+        raise DomainError("a display name of 4 to 120 characters is required")
+    email = command.email.strip().lower()
+    if not _EMAIL.fullmatch(email):
+        raise DomainError("a valid email is required")
+    if not any(row.role_keys for row in command.memberships):
+        raise DomainError("an invitation needs at least one workspace with a role")
+    return replace(command, display_name=display_name, email=email)
 
 
 def _by_workspace(rows: tuple[WorkspaceRoles, ...]) -> dict[uuid.UUID, frozenset[str]]:

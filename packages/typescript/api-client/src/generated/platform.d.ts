@@ -3,6 +3,71 @@
  * Regenerate with `make generate-contracts`.
  */
 export interface paths {
+    "/api/v1/admin/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Accounts
+         * @description The sign-in accounts this tenant created, and whether each may sign in.
+         */
+        get: operations["list_accounts_api_v1_admin_accounts_get"];
+        put?: never;
+        /**
+         * Create Account
+         * @description Create the person, their roles and their sign-in account, with a
+         *     temporary password they must change at their first sign-in.
+         */
+        post: operations["create_account_api_v1_admin_accounts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/accounts/{user_id}/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Enabled
+         * @description Lock (and end the open sessions of) or unlock a person's sign-in.
+         */
+        put: operations["set_enabled_api_v1_admin_accounts__user_id__enabled_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/accounts/{user_id}/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description A new temporary password; the old one stops working at once.
+         */
+        post: operations["reset_password_api_v1_admin_accounts__user_id__password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/hierarchy": {
         parameters: {
             query?: never;
@@ -1501,6 +1566,15 @@ export interface components {
          * @enum {string}
          */
         CodeUnavailable: "not_pending" | "cannot_decide" | "requester" | "web_only" | "not_linked" | "comment_required" | "channel_off";
+        /** CreateAccountRequest */
+        CreateAccountRequest: {
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Memberships */
+            memberships: components["schemas"]["WorkspaceRolesBody"][];
+        };
         /** CreateTenantRequest */
         CreateTenantRequest: {
             /** Name */
@@ -1516,6 +1590,20 @@ export interface components {
             name: string;
             /** Slug */
             slug: string;
+        };
+        /** CreatedAccountView */
+        CreatedAccountView: {
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string | null;
+            /** Temporary Password */
+            temporary_password: string | null;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** DecisionRequest */
         DecisionRequest: {
@@ -1791,6 +1879,13 @@ export interface components {
             source_version: string;
             /** Title */
             title: string;
+        };
+        /** LoginAccountView */
+        LoginAccountView: {
+            /** Email */
+            email: string;
+            /** Enabled */
+            enabled: boolean;
         };
         /** MeResponse */
         MeResponse: {
@@ -2188,6 +2283,8 @@ export interface components {
         };
         /** RoleView */
         RoleView: {
+            /** Administrative */
+            administrative: boolean;
             /** Key */
             key: string;
             /** Name */
@@ -2222,6 +2319,11 @@ export interface components {
             worker_id: string;
             /** Worker Version */
             worker_version: string;
+        };
+        /** SetEnabledRequest */
+        SetEnabledRequest: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** SetManagerBody */
         SetManagerBody: {
@@ -2396,6 +2498,16 @@ export interface components {
             email: string | null;
             /** Note */
             note: string | null;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** TemporaryPasswordView */
+        TemporaryPasswordView: {
+            /** Temporary Password */
+            temporary_password: string | null;
             /**
              * User Id
              * Format: uuid
@@ -2677,6 +2789,132 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_accounts_api_v1_admin_accounts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginAccountView"][];
+                };
+            };
+        };
+    };
+    create_account_api_v1_admin_accounts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedAccountView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_enabled_api_v1_admin_accounts__user_id__enabled_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_password_api_v1_admin_accounts__user_id__password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporaryPasswordView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_hierarchy_api_v1_admin_hierarchy_get: {
         parameters: {
             query?: never;

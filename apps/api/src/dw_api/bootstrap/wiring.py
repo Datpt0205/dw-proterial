@@ -48,7 +48,7 @@ from dw_agent_runtime.model.run_policy import load_worker_run_policy
 from dw_agent_runtime.ports import ModelGateway
 from dw_agent_runtime.registry import GraphRegistry, WorkerRegistry
 from dw_api.bootstrap.container import ApiContainer
-from dw_api.bootstrap.identity import build_token_verifier
+from dw_api.bootstrap.identity import build_login_accounts, build_token_verifier
 from dw_api.bootstrap.paths import (
     CONFIGS,
     WORKER_RUN_POLICY,
@@ -99,6 +99,7 @@ from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementSe
 from dw_platform.application.hierarchy import HierarchyService
 from dw_platform.application.idempotency import HttpIdempotency
 from dw_platform.application.identity import DbAccessContextFactory
+from dw_platform.application.member_accounts import MemberAccountsService
 from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
     RevokeMembershipHandler,
@@ -241,6 +242,16 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     container.tenant_members = TenantMembersService(
         SqlTenantMembersRepository(session_factory), authorization, clock, ids
     )
+    login_accounts = build_login_accounts(settings)
+    if login_accounts is not None:
+        container.member_accounts = MemberAccountsService(
+            members=container.tenant_members,
+            accounts=login_accounts,
+            uow=uow_factory,
+            authz=authorization,
+            clock=clock,
+            ids=ids,
+        )
     container.admin_console = AdminConsoleService(
         SqlAdminConsoleRepository(session_factory), authorization, clock, ids
     )

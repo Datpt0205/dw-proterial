@@ -203,6 +203,11 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${POSTGRES_USER:?}
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # Read by the realm import (dw-realm.json, client dw-accounts). Required:
+      # an unset placeholder is imported as its own literal text
+      # (measured on 26.7.2), a secret anyone reading this repository knows, for
+      # a client that can reset every password in the realm.
+      DW_ACCOUNTS_CLIENT_SECRET: ${DW_API_ACCOUNTS_CLIENT_SECRET:?set DW_API_ACCOUNTS_CLIENT_SECRET (32+ random characters)}
       KC_HTTP_ENABLED: "true"
       # Behind a reverse proxy (nginx on the servers), trust X-Forwarded-* so
       # Keycloak emits https:// links (login/redirect/issuer) instead of the
@@ -304,6 +309,11 @@ services:
       DW_API_AUTH_MODE: ${DW_API_AUTH_MODE:-oidc}
       DW_API_OIDC_ISSUER_URL: ${DW_API_OIDC_ISSUER_URL:-http://localhost:8686/realms/dw}
       DW_API_OIDC_JWKS_URL: ${DW_API_OIDC_JWKS_URL:-http://keycloak:8080/realms/dw/protocol/openid-connect/certs}
+      # Sign-in accounts an Org Admin creates (member_accounts.py), through the
+      # realm's dw-accounts client. The same secret is imported into the realm
+      # below, so both sides read the one value.
+      DW_API_ACCOUNTS_ADMIN_URL: ${DW_API_ACCOUNTS_ADMIN_URL:-http://keycloak:8080}
+      DW_API_ACCOUNTS_CLIENT_SECRET: ${DW_API_ACCOUNTS_CLIENT_SECRET:?set DW_API_ACCOUNTS_CLIENT_SECRET (32+ random characters)}
       # RAG embeddings. Default `hash` (offline, no extra service). Set
       # `openai_compatible` to embed via the gateway (the `embedding` route of
       # DW_API_MODEL_PROFILE).

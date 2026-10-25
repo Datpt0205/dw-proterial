@@ -86,6 +86,22 @@ class ApiSettings(BaseSettings):
     oidc_jwks_url: str | None = Field(
         default=None, validation_alias=AliasChoices("DW_API_OIDC_JWKS_URL", "OIDC_JWKS_URL")
     )
+    # Sign-in accounts an Org Admin creates from the members screen
+    # (`member_accounts.py`): Keycloak as the API reaches it, and the realm's
+    # `dw-accounts` client. Without a secret the feature answers 503 and the
+    # screen says why; it never falls back to anything else.
+    accounts_admin_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_API_ACCOUNTS_ADMIN_URL")
+    )
+    accounts_realm: str = Field(
+        default="dw", validation_alias=AliasChoices("DW_API_ACCOUNTS_REALM")
+    )
+    accounts_client_id: str = Field(
+        default="dw-accounts", validation_alias=AliasChoices("DW_API_ACCOUNTS_CLIENT_ID")
+    )
+    accounts_client_secret: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("DW_API_ACCOUNTS_CLIENT_SECRET")
+    )
 
     # --- first-login provisioning ---
     default_tenant_id: str = Field(
@@ -477,6 +493,15 @@ class ApiSettings(BaseSettings):
                 raise RuntimeError(
                     "ZALO_UPDATES_MODE=webhook needs a ZALO_WEBHOOK_SECRET of at least "
                     f"32 characters in the {self.profile} profile"
+                )
+            # The client it unlocks can reset any password in the realm, and
+            # Keycloak's token endpoint is on the internet behind Caddy. Compose
+            # hands Keycloak the same value, so refusing it here refuses both.
+            secret = self.accounts_client_secret.get_secret_value()
+            if secret and (len(secret) < 32 or secret.startswith("change-me")):
+                raise RuntimeError(
+                    "DW_API_ACCOUNTS_CLIENT_SECRET must be 32+ random characters, not the "
+                    f".env.example value, in the {self.profile} profile"
                 )
         # Fails at startup, not on the first Sales request.
         self.sales_demo_scope()

@@ -30,6 +30,7 @@ from dw_platform.application.admin_console import (
 )
 from dw_platform.application.cache import membership_cache_pattern, tenant_cache_pattern
 from dw_platform.application.hierarchy import HierarchyService, SetManager
+from dw_platform.application.membership_admin import is_administrative
 from dw_platform.application.separation_of_duties import (
     ConfirmWaiver,
     RevokeWaiver,
@@ -68,6 +69,10 @@ class RoleView(BaseModel):
     key: str
     name: str
     scopes: list[str]
+    # Only a Platform Admin hands it out, or acts on the sign-in of whoever
+    # holds it: `is_administrative`, the rule the grant itself enforces, so a
+    # screen never keeps a second list of which roles are administrative.
+    administrative: bool
 
 
 class PermissionSetView(BaseModel):
@@ -242,7 +247,15 @@ async def archive_workspace(
 @router.get("/roles", response_model=list[RoleView])
 async def list_roles(context: RequireAccessContext, container: RequireContainer) -> list[RoleView]:
     rows = await _service(container).list_roles(context)
-    return [RoleView(key=r.key, name=r.name, scopes=list(r.scopes)) for r in rows]
+    return [
+        RoleView(
+            key=r.key,
+            name=r.name,
+            scopes=list(r.scopes),
+            administrative=is_administrative(frozenset(r.scopes)),
+        )
+        for r in rows
+    ]
 
 
 @router.get("/permission-sets", response_model=list[PermissionSetView])

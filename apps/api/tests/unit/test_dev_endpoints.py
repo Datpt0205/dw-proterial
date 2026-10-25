@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from dw_api.bootstrap import build_container
 from dw_api.main import create_app
@@ -163,4 +164,27 @@ def test_local_does_not_ask_for_https() -> None:
         oidc_issuer_url="http://localhost:28686/realms/dw",
         cors_origins=["http://localhost:3200"],
         public_base_url="",
+    ).validate_for_profile()
+
+
+@pytest.mark.parametrize("profile", ["uat", "production"])
+@pytest.mark.parametrize(
+    "secret",
+    ["too-short", "change-me-dw-accounts-client-secret-32", "change-me" + "x" * 40],
+)
+def test_a_deployed_profile_refuses_a_guessable_accounts_secret(profile: str, secret: str) -> None:
+    """The dw-accounts client can reset any password in the realm, and compose
+    hands Keycloak the same value: the .env.example one must never reach a
+    deployment, nor anything short."""
+    settings = deployed_settings(profile=profile).model_copy(
+        update={"accounts_client_secret": SecretStr(secret)}
+    )
+    with pytest.raises(RuntimeError, match="DW_API_ACCOUNTS_CLIENT_SECRET"):
+        settings.validate_for_profile()
+
+
+def test_a_deployed_profile_takes_a_random_accounts_secret_or_none() -> None:
+    deployed_settings(profile="production").validate_for_profile()  # unset: feature off
+    deployed_settings(profile="production").model_copy(
+        update={"accounts_client_secret": SecretStr("q" * 8 + "Zx81-random-enough-for-a-test-0")}
     ).validate_for_profile()

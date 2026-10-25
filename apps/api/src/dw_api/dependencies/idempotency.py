@@ -142,15 +142,21 @@ class IdempotentOperation:
             )
         )
 
-    async def record(self, result: ModelT, *, status_code: int = 200) -> ModelT:
+    async def record(
+        self, result: ModelT, *, status_code: int = 200, stored: BaseModel | None = None
+    ) -> ModelT:
         """Store ``result`` as this key's answer and hand it back unchanged.
 
         Returning the argument is what lets a route end with
         ``return await idempotency.record(view)`` instead of growing a branch.
         ``status_code`` mirrors the one declared on the route, because a replay
         has to reproduce the whole answer and 201 is part of it.
+
+        ``stored`` is what a replay answers instead, for a body that carries a
+        one-time secret (a temporary password): the secret is never written to
+        the idempotency table, and the replay says it was shown once already.
         """
-        body = result.model_dump(mode="json")
+        body = (stored if stored is not None else result).model_dump(mode="json")
         await self._store(StoredResponse(status_code=status_code, body=body))
         return result
 
