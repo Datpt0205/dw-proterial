@@ -19,7 +19,7 @@ COMPOSE := docker compose --env-file .env -f infra/compose/docker-compose.yml
 .PHONY: help bootstrap infra-up infra-down dev docker-up docker-down \
         db-migrate migrate lint format typecheck \
         test-unit coverage test-integration test-architecture test-contract test-hooks \
-        test-e2e test-web test-web-sales web-screens demo-reset test-all eval-smoke test-eval-smoke \
+        test-e2e test-web test-web-sales test-web-accounts web-screens demo-reset test-all eval-smoke test-eval-smoke \
         generate-contracts new-context release-manifest release-manifest-check ci \
         onprem-models onprem-up
 
@@ -125,6 +125,14 @@ test-web-sales: ## DW1 demo walk in a browser as each persona (RESETS the demo d
 	# API and web unless ones answer on E2E_API_URL / E2E_WEB_URL. The spec
 	# resets the demo tenants' Sales data first (dw_sales.testing.demo_reset).
 	pnpm --filter @dw/web exec playwright test e2e/sales-demo.spec.ts
+
+test-web-accounts: ## IT adds a person who signs in through Keycloak and changes their password (requires infra + keycloak; local only)
+	# Keycloak's real pages, so not the dev-auth stack: postgres, valkey and
+	# keycloak up, the realm's dw-accounts client, the seeded admin's login.
+	# Starts its own oidc API on 8010 and web on DW_PUBLIC_WEB_URL.
+	uv run python scripts/keycloak_accounts_client.py
+	uv run python scripts/keycloak_dev_users.py
+	pnpm --filter @dw/web exec playwright test -c playwright.oidc.config.ts
 
 web-screens: ## Screenshots of every page for review, per persona and viewport (requires the stack)
 	# Asserts nothing: apps/web/e2e/screens.spec.ts captures every nav page into

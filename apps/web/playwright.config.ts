@@ -20,6 +20,8 @@ const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Specs that sign in through Keycloak run in `playwright.oidc.config.ts`.
+  testIgnore: /\.oidc\.spec\.ts$/,
   // `next dev` on `.next-e2e` rewrites next-env.d.ts; this puts it back.
   globalTeardown: "./e2e/restore-next-env.ts",
   // One worker: the tests share one seeded account and one database, so running

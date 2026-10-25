@@ -30,6 +30,23 @@ cần máy chủ mail); IT gán được mọi vai nghiệp vụ (kể cả quy�
 - **Vá kèm:** `KeycloakTokenVerifier` coi email chưa xác minh (`email_verified` khác `true`)
   là không có, vì lần đăng nhập đầu nối người theo email.
 
+## Người dùng tự đổi mật khẩu (2026-10-26, Đạt: "có làm đi")
+
+- **Lần đầu:** Keycloak buộc đặt mật khẩu riêng trước khi vào DW (mật khẩu tạm mang
+  `UPDATE_PASSWORD`).
+- **Về sau:** "Đổi mật khẩu" trong menu tài khoản (`session-chip.tsx`) gọi
+  `keycloak.login({ action: "UPDATE_PASSWORD" })`, đổi xong quay về đúng trang. Không có ở dev
+  mode (không có Keycloak).
+- **Tiếng Việt:** realm bật `internationalizationEnabled`, `defaultLocale: vi`; Keycloak 26.7.2
+  có sẵn `messages_vi` cho login và account (đã mở jar theme để kiểm), không cần dịch thêm.
+  `scripts/keycloak_accounts_client.py` áp cả ngôn ngữ cho realm có sẵn.
+- **Quên mật khẩu:** vẫn nhờ IT "Đặt lại mật khẩu" (realm tắt quên mật khẩu, không có SMTP).
+- **E2E qua trang Keycloak thật:** `make test-web-accounts`
+  (`apps/web/e2e/sign-in-accounts.oidc.spec.ts`, `playwright.oidc.config.ts`): IT tạo người →
+  đăng nhập bằng mật khẩu tạm → buộc đổi (tiếng Việt) → vào DW → "Đổi mật khẩu" → chỉ mật khẩu
+  mới nhất đăng nhập được → IT gỡ người. Xanh 2026-10-26 (1,1 phút); bỏ `action` thì đỏ ở
+  bước đổi mật khẩu. Chưa chạy trong CI: bộ e2e của CI chạy dev auth, không có Keycloak.
+
 ## Đo trên Keycloak 26.7.2 (2026-10-25)
 
 - Thuộc tính không khai báo (`dw_tenant_id`) bị bỏ im lặng nếu realm không có `ADMIN_EDIT`.
