@@ -8,6 +8,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-26, **user guide for Proterial** (Đạt): `docs/user-guide/Huong-dan-su-dung_Proterial_DW1.docx`, 22 pages, every role (Sales PIC, Sales head, leadership, IT), built from `docs/user-guide/huong-dan-su-dung-dw1.md` with the fdx-word-doc skill (TOC page numbers from Word over COM: no LibreOffice on this machine). Screenshots are the demo tenant's fictional data, taken as each persona through the dev-auth stack; every button label in the text was checked against the code. No screenshot of Thêm người (dev auth has no Keycloak) or of an empty Duyệt page. Rebuild after a UI change: edit the `.md` and rerun the build; the recipe is in this commit's message.
+
 - 2026-10-26, layout from Đạt's look at the running portal:
     - **Home → "Việc cần làm".** Someone with `sales.case.read` landing on `/` is sent to `/sales`, the bar's first page; reverses 2026-10-20 (the board at `/`), because no menu item led back to it. The board stays under Hồ sơ → Pipeline hồ sơ.
     - **Board, one lane at a time** (`?lane=quote`, orders by default, the switch counts each lane); columns as tall as the window, each scrolling its own cards; a long tag wraps inside its card (`StatusTag`, `@dw/ui`).

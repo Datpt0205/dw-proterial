@@ -78,6 +78,11 @@ the theme, the shell and the shared composites, not primitive wrappers.
 
 ## Open
 
+- **2026-10-26, found while taking the user guide's screenshots (not fixed):**
+    - The order list's row link has no accessible name (Playwright sees `link` with no name), so `getByRole("link", { name })` cannot find a case; ui-quality §12 asks every control to be named.
+    - Admin → Thành viên shows ONE role per person (`currentRole` picks the first role the list offers). Someone holding `member` and `sales_pic` reads "Nhân viên", and pressing **Lưu** on that row re-grants `member` alone, dropping `sales_pic`. Visible since the role list reads the catalog (2026-10-26); a multi-role select, or no save on an untouched row, is owed.
+    - `/approvals` subtitle reads "Chưa việc nào ở trang này đã xảy ra." (broken Vietnamese).
+
 - **2026-10-26, a long list scrolls inside its region, not the page** (Đạt). `lib/use-fill-height.ts` sizes a region (antd `Table` through `ref={tableRef}` and `scroll.y`) from its top to the window's bottom, from `md` (the theme's `screenMD`) up; below it the page scrolls as before. The hook's `tableRef` must stay stable (`useCallback`): a new ref per render re-attached the table on every render, which an inbox test caught. List pages that adopt it: `sales.md` State 2026-10-26.
 
 - 2026-10-03: the first slice landed (Sales ticket 07): antd 6.6.5, icons,
