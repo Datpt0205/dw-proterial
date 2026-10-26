@@ -28,6 +28,7 @@ import { ScopeGate } from "../_components/scope-gate";
 import { LIST_NAME, type CatalogList } from "../_lib/catalog";
 import type { Resource } from "../_lib/use-resource";
 import { ImportPanel } from "./import-panel";
+import { useFillHeight } from "../../../lib/use-fill-height";
 
 type S = SalesSchemas;
 
@@ -186,6 +187,7 @@ function Snapshot<T extends object>({
   columns: TableColumnsType<T>;
   empty: ReactNode;
 }) {
+  const fill = useFillHeight();
   const data = useResource(cacheKey, load);
   if (data.error) return <LoadError error={data.error} onRetry={data.reload} />;
   return (
@@ -196,7 +198,8 @@ function Snapshot<T extends object>({
       dataSource={data.data?.items ?? []}
       pagination={false}
       sticky
-      scroll={{ x: "max-content" }}
+      ref={fill.tableRef}
+      scroll={{ x: "max-content", y: fill.y }}
       locale={{ emptyText: data.loading ? " " : empty }}
       footer={() =>
         data.data

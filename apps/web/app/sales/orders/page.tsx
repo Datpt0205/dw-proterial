@@ -38,6 +38,7 @@ import {
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 import { OrderStateTag } from "../_components/tags";
+import { useFillHeight } from "../../../lib/use-fill-height";
 
 type Order = SalesSchemas["OrderSummaryView"];
 
@@ -74,6 +75,7 @@ export default function OrdersPage() {
 }
 
 function Orders() {
+  const fill = useFillHeight();
   const now = useNow();
   const name = usePeople();
   const customerName = useCustomerName();
@@ -266,7 +268,8 @@ function Orders() {
             dataSource={shown}
             pagination={false}
             sticky
-            scroll={{ x: "max-content" }}
+            ref={fill.tableRef}
+            scroll={{ x: "max-content", y: fill.y }}
             locale={{
               emptyText: orders.loading ? (
                 " "

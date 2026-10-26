@@ -14,7 +14,8 @@ import { signIn } from "./dev-login";
 const SUBJECT = "dev|chi.le";
 
 const PAGES: [string, string][] = [
-  ["/", "Xin chào"],
+  // chi.le passes every scope, so home sends them to Sales' work list.
+  ["/", "Việc cần làm"],
   ["/approvals", "Duyệt"],
   ["/knowledge", "Tri thức"],
   ["/memory", "Bộ nhớ dài hạn"],

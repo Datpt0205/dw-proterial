@@ -251,16 +251,23 @@ test("0. setup: An has DW1 process M01, M03, M04, M10 and M14 from the inbox", a
 // ----------------------------------------------------------- scenarios --
 
 async function pipelineFilterAndBack(page: Page): Promise<void> {
+  // Home sends someone who works Sales to their work list (2026-10-26).
   await page.goto("/");
+  await page.waitForURL(/\/sales$/);
+  await page.goto("/sales/pipeline");
+  // One lane at a time, orders first; the quotes behind their switch.
   await expect(page.getByRole("region", { name: "Đơn hàng" })).toBeVisible();
+  await expect(card(page, "PO NRV-PO-26-0457")).toBeVisible();
+  await page.getByText(/^Báo giá \(\d+\)$/).click();
+  await page.waitForURL(/[?&]lane=quote/);
   await expect(page.getByRole("region", { name: "Báo giá" })).toBeVisible();
   // Everything, mine or not: Diệu's KMH request is on the board.
   await expect(card(page, "RFQ KMH-RFQ-260930-02")).toBeVisible();
+  await page.getByText(/^Đơn hàng \(\d+\)$/).click();
   await expect(card(page, "PO NRV-PO-26-0457")).toBeVisible();
 
   await page.getByText(/^Việc của tôi \(\d+\)$/).click();
   await page.waitForURL(/[?&]tab=mine/);
-  await expect(card(page, "RFQ KMH-RFQ-260930-02")).toHaveCount(0);
   await expect(card(page, "PO NRV-PO-26-0457")).toBeVisible();
 
   const search = page.getByLabel("Tìm theo số PO, RFQ hoặc khách");
@@ -270,7 +277,6 @@ async function pipelineFilterAndBack(page: Page): Promise<void> {
   await expect(card(page, "PO NRV-PO-26-0457")).toHaveCount(0);
   const vlx = card(page, "PO VLX-PO-2609-0118");
   await expect(vlx).toBeVisible();
-  await expect(card(page, "RFQ VLX-RFQ-2609-07")).toBeVisible();
 
   const before = page.url();
   await vlx.click();
@@ -284,7 +290,6 @@ async function pipelineFilterAndBack(page: Page): Promise<void> {
   await expect(search).toHaveValue("VLX");
   await expect(card(page, "PO VLX-PO-2609-0118")).toBeVisible();
   await expect(card(page, "PO NRV-PO-26-0457")).toHaveCount(0);
-  await expect(card(page, "RFQ KMH-RFQ-260930-02")).toHaveCount(0);
 }
 
 test("1. Home pipeline as An: lanes, Việc của tôi + search filter cards, a card opens its case, Back restores the view", async ({
@@ -420,7 +425,7 @@ test.describe("5. Phone width 320 px", () => {
     request,
   }) => {
     await signIn(page, request, AN);
-    await page.goto("/");
+    await page.goto("/sales/pipeline");
     await expect(page.getByRole("region", { name: "Đơn hàng" })).toBeVisible();
     await noHorizontalScroll(page);
     await pipelineFilterAndBack(page);

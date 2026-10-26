@@ -27,6 +27,7 @@ import { salesCrumbs } from "../_components/crumbs";
 import { GuardedButton } from "../_components/guarded-button";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
+import { useFillHeight } from "../../../lib/use-fill-height";
 
 type Layout = SalesSchemas["LayoutView"];
 
@@ -58,6 +59,7 @@ export default function LayoutsPage() {
 }
 
 function Layouts() {
+  const fill = useFillHeight();
   const { principalId, hasScope } = useAuth();
   const name = usePeople();
   const layouts = useResource(
@@ -118,7 +120,8 @@ function Layouts() {
           loading={layouts.loading}
           dataSource={rows}
           pagination={false}
-          scroll={{ x: "max-content" }}
+          ref={fill.tableRef}
+          scroll={{ x: "max-content", y: fill.y }}
           locale={{
             emptyText: layouts.loading
               ? " "

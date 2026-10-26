@@ -78,6 +78,8 @@ the theme, the shell and the shared composites, not primitive wrappers.
 
 ## Open
 
+- **2026-10-26, a long list scrolls inside its region, not the page** (Đạt). `lib/use-fill-height.ts` sizes a region (antd `Table` through `ref={tableRef}` and `scroll.y`) from its top to the window's bottom, from `md` (the theme's `screenMD`) up; below it the page scrolls as before. The hook's `tableRef` must stay stable (`useCallback`): a new ref per render re-attached the table on every render, which an inbox test caught. List pages that adopt it: `sales.md` State 2026-10-26.
+
 - 2026-10-03: the first slice landed (Sales ticket 07): antd 6.6.5, icons,
   nextjs-registry and dayjs pinned; `AntdRegistry` on the `antd` layer with a
   layer-order test that goes red without either half; the antd theme owns

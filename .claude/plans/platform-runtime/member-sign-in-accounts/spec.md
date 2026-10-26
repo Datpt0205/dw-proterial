@@ -37,7 +37,8 @@ cần máy chủ mail); IT gán được mọi vai nghiệp vụ (kể cả quy�
 - **Về sau:** "Đổi mật khẩu" trong menu tài khoản (`session-chip.tsx`) gọi
   `keycloak.login({ action: "UPDATE_PASSWORD" })`, đổi xong quay về đúng trang. Không có ở dev
   mode (không có Keycloak).
-- **Tiếng Việt:** realm bật `internationalizationEnabled`, `defaultLocale: vi`; Keycloak 26.7.2
+- **Tiếng Việt:** realm bật `internationalizationEnabled`, `defaultLocale: vi`, chỉ một ngôn ngữ
+  `supportedLocales: [vi]` để trang đăng nhập không có ô đổi ngôn ngữ (Đạt, 2026-10-26); Keycloak 26.7.2
   có sẵn `messages_vi` cho login và account (đã mở jar theme để kiểm), không cần dịch thêm.
   `scripts/keycloak_accounts_client.py` áp cả ngôn ngữ cho realm có sẵn.
 - **Quên mật khẩu:** vẫn nhờ IT "Đặt lại mật khẩu" (realm tắt quên mật khẩu, không có SMTP).

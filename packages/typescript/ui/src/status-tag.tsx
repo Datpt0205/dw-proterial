@@ -42,6 +42,10 @@ export function StatusTag({ tone, icon, mono, tip, children }: StatusTagProps) {
           : STATUS_TAG_SHAPE.weight,
         fontFamily: mono ? "var(--ant-font-family-code)" : undefined,
         paddingInline: STATUS_TAG_SHAPE.paddingInline,
+        // A long tag in a narrow place (a pipeline card) wraps inside it;
+        // antd's own `nowrap` let it run out over the card's edge.
+        maxWidth: "100%",
+        whiteSpace: "normal",
       }}
       tabIndex={tip ? 0 : undefined}
     >

@@ -21,6 +21,7 @@ import { LoadMore } from "../../components/load-more";
 import { formatDateTime } from "../../lib/dates";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
+import { useFillHeight } from "../../lib/use-fill-height";
 
 const ACTIONS: Record<string, { label: string; color: string }> = {
   "run.started": { label: "Bắt đầu lượt chạy", color: "processing" },
@@ -62,6 +63,7 @@ export default function AuditPage() {
 }
 
 function AuditTrail() {
+  const fill = useFillHeight();
   // One grant's trail has its own URL, so it can be sent to a colleague.
   const grantId = useSearchParams().get(GRANT_DETAIL);
   const [filter, setFilter] = useState("");
@@ -146,7 +148,8 @@ function AuditTrail() {
               }
               size="small"
               pagination={false}
-              scroll={{ x: "max-content" }}
+              ref={fill.tableRef}
+              scroll={{ x: "max-content", y: fill.y }}
               dataSource={visible}
               columns={[
                 {

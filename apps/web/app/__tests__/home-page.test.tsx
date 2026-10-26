@@ -16,9 +16,15 @@ vi.mock("../../lib/auth/auth-context", () => ({
   }),
 }));
 
+const replace = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
+
 import HomePage from "../page";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  replace.mockReset();
+});
 
 function offered(label: string): boolean {
   return screen.queryByRole("link", { name: new RegExp(label) }) !== null;
@@ -39,5 +45,19 @@ describe("home page destinations", () => {
 
     expect(offered("Duyệt")).toBe(true);
     expect(offered("Nhật ký kiểm toán")).toBe(true);
+  });
+
+  it("sends someone who works Sales to their work list, the bar's first page", () => {
+    scopes = ["sales.case.read"];
+    render(<HomePage />);
+
+    expect(replace).toHaveBeenCalledWith("/sales");
+  });
+
+  it("keeps everyone else on the landing page", () => {
+    scopes = ["approvals.read"];
+    render(<HomePage />);
+
+    expect(replace).not.toHaveBeenCalled();
   });
 });

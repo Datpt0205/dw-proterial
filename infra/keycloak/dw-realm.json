@@ -3,7 +3,7 @@
   "displayName": "Digital Worker",
   "enabled": true,
   "internationalizationEnabled": true,
-  "supportedLocales": ["vi", "en"],
+  "supportedLocales": ["vi"],
   "defaultLocale": "vi",
   "registrationAllowed": false,
   "registrationEmailAsUsername": false,

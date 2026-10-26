@@ -88,7 +88,7 @@ The portal signs people in through **Keycloak, on the same host**. On premises i
 - **Lockout:** after 10 wrong passwords the account is locked for a growing wait, up to 15 minutes, and then unlocks on its own.
 - **Passwords:** at least 10 characters, not the username or the email. This also applies to the demo accounts: `DW_DEV_USER_PASSWORD` must be 10 characters or more.
 - **Sign out:** "Đăng xuất" ends the Keycloak session (`keycloak.logout`), not just the tab.
-- **Language:** the sign-in and password pages are in Vietnamese (`defaultLocale: vi`; Keycloak ships the translation).
+- **Language:** the sign-in and password pages are in Vietnamese only (`supportedLocales: [vi]`, so no language switch; Keycloak ships the translation).
 
 **The realm file is read only when Keycloak's database is empty.** An existing installation does not pick these settings up by itself. Apply them in the admin console (Realm settings: Sessions, Tokens, Security defenses; Authentication: Policies), or re-import on a fresh volume.
 

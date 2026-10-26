@@ -122,6 +122,15 @@ describe('"DW xử lý" queues and the inbox shows where it stands (ticket 25)',
     "pressing queues the message, then the page reads the inbox until the job is done",
     async () => {
       inbox = [message("M02")];
+      // As the server does: once the job is queued, the inbox shows it, and
+      // the worker has it by the next read. Set inside the call, so the page's
+      // own reload after the press can never read the inbox from before it.
+      api.processMessage.mockImplementationOnce(async (id: string) => {
+        inbox = [
+          message("M02", { processing: job("M02", { status: "running" }) }),
+        ];
+        return job(id);
+      });
       page();
 
       fireEvent.click(
@@ -129,15 +138,13 @@ describe('"DW xử lý" queues and the inbox shows where it stands (ticket 25)',
       );
       await waitFor(() => expect(api.processMessage).toHaveBeenCalledTimes(1));
       expect(api.processMessage.mock.calls[0]![0]).toBe("M02");
-
-      // The API answered with the job; the worker has it now.
-      inbox = [
-        message("M02", { processing: job("M02", { status: "running" }) }),
-      ];
-      await waitFor(() =>
-        expect(within(row("M02")).getByRole("status").textContent).toContain(
-          "DW1 đang xử lý",
-        ),
+      // The page reads the inbox every 3 s (POLL_MS): wait one read, not 1 s.
+      await waitFor(
+        () =>
+          expect(within(row("M02")).getByRole("status").textContent).toContain(
+            "DW1 đang xử lý",
+          ),
+        { timeout: 5_000 },
       );
 
       // Done: the next read shows the case, and the page stops reading.

@@ -47,4 +47,6 @@ def test_sign_in_and_password_pages_speak_vietnamese(realm: dict[str, object]) -
     # (checked in its themes jar, 2026-10-26): the realm only has to ask.
     assert realm["internationalizationEnabled"] is True
     assert realm["defaultLocale"] == "vi"
-    assert "vi" in realm["supportedLocales"]  # type: ignore[operator]
+    # Vietnamese only: with a second locale the login page grows a language
+    # switch, which Đạt asked to remove (2026-10-26).
+    assert realm["supportedLocales"] == ["vi"]

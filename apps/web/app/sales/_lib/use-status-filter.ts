@@ -9,7 +9,7 @@ import { ACTIVITY_PARAMS, activityFromUrl } from "./activity";
  * view is a link a colleague can open and Back restores (ui-quality §11).
  * A value equal to its default is left out of the URL.
  */
-function useParam(
+export function useUrlParam(
   name: string,
 ): [string | null, (next: string | null) => void] {
   const params = useSearchParams();
@@ -32,7 +32,7 @@ function useParam(
 
 /** The status filter (`?status=a,b`). */
 export function useStatusFilter() {
-  const [raw, setRaw] = useParam("status");
+  const [raw, setRaw] = useUrlParam("status");
   const selected = useMemo(() => (raw ?? "").split(",").filter(Boolean), [raw]);
   const set = useCallback(
     (next: string[]) => setRaw(next.length ? next.join(",") : null),
@@ -48,9 +48,9 @@ export function useListView<Tab extends string, Sort extends string>(
   sorts: readonly Sort[],
   defaultSort: Sort,
 ) {
-  const [rawTab, setRawTab] = useParam("tab");
-  const [rawSort, setRawSort] = useParam("sort");
-  const [rawQuery, setRawQuery] = useParam("q");
+  const [rawTab, setRawTab] = useUrlParam("tab");
+  const [rawSort, setRawSort] = useUrlParam("sort");
+  const [rawQuery, setRawQuery] = useUrlParam("q");
   const tab = tabs.find((t) => t === rawTab) ?? defaultTab;
   const sort = sorts.find((s) => s === rawSort) ?? defaultSort;
   return {
