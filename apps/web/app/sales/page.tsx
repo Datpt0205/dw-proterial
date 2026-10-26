@@ -44,6 +44,7 @@ import {
   OrderStateTag,
   QuoteStateTag,
 } from "./_components/tags";
+import { useFillHeight } from "../../lib/use-fill-height";
 
 type WorkItem = SalesSchemas["WorkItem"];
 
@@ -70,6 +71,7 @@ export default function MyWorkPage() {
 }
 
 function MyWork() {
+  const fill = useFillHeight();
   const now = useNow();
   const { hasScope } = useAuth();
   const person = usePeople();
@@ -311,7 +313,8 @@ function MyWork() {
             dataSource={shown}
             pagination={false}
             sticky
-            scroll={{ x: "max-content" }}
+            ref={fill.tableRef}
+            scroll={{ x: "max-content", y: fill.y }}
             locale={{
               emptyText: work.loading ? (
                 " "

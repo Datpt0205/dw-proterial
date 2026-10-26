@@ -37,8 +37,10 @@ import { errorMessage } from "../../lib/error-message";
 import { useIdempotencyKeys } from "../../lib/idempotency";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
+import { useFillHeight } from "../../lib/use-fill-height";
 
 export default function ApprovalsPage() {
+  const fill = useFillHeight();
   const { hasScope } = useAuth();
   const [comments, setComments] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -278,7 +280,8 @@ export default function ApprovalsPage() {
               rowKey="id"
               size="small"
               pagination={false}
-              scroll={{ x: "max-content" }}
+              ref={fill.tableRef}
+              scroll={{ x: "max-content", y: fill.y }}
               dataSource={decided}
               columns={[
                 {

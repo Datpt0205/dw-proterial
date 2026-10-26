@@ -36,7 +36,8 @@ import {
 } from "../_lib/labels";
 import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
-import { useListView } from "../_lib/use-status-filter";
+import { useListView, useUrlParam } from "../_lib/use-status-filter";
+import { useFillHeight } from "../../../lib/use-fill-height";
 
 type Board = SalesSchemas["PipelineView"];
 type Column = SalesSchemas["PipelineColumn"];
@@ -68,6 +69,10 @@ const caseHref = (card: CaseCard) =>
  * the same board highlights the cross-checks for a checker and the approvals
  * for an approver, and "Việc của tôi" keeps only those. The step's own page
  * still decides whether the press is allowed.
+ *
+ * One lane at a time (`?lane=quote`; orders by default), its columns as tall
+ * as the window and each column scrolling its own cards (Đạt, 2026-10-26): a
+ * board that grows the page is a board nobody reads to the end.
  */
 export function PipelineBoard() {
   const board = useResource<Board>(
@@ -75,6 +80,8 @@ export function PipelineBoard() {
     useCallback(() => salesApi().pipeline(), []),
   );
   const view = useListView(VIEWS, "all", SORTS, "age");
+  const [rawLane, setRawLane] = useUrlParam("lane");
+  const lane = LANES.find((l) => l.kind === rawLane) ?? LANES[0]!;
   const customer = useCustomerName();
   const data = board.data;
 
@@ -101,15 +108,28 @@ export function PipelineBoard() {
   return (
     <div className="space-y-3">
       <Flex wrap gap={8} align="center" justify="space-between">
-        <Segmented
-          aria-label="Hồ sơ hiển thị"
-          value={view.tab}
-          onChange={(next) => view.setTab(next as (typeof VIEWS)[number])}
-          options={[
-            { value: "all", label: `Tất cả (${data.cards.length})` },
-            { value: "mine", label: `Việc của tôi (${mine})` },
-          ]}
-        />
+        <Flex wrap gap={8} align="center">
+          <Segmented
+            aria-label="Quy trình"
+            value={lane.kind}
+            onChange={(next) =>
+              setRawLane(next === LANES[0]!.kind ? null : String(next))
+            }
+            options={LANES.map((l) => ({
+              value: l.kind,
+              label: `${l.title} (${shown.filter((c) => c.kind === l.kind).length})`,
+            }))}
+          />
+          <Segmented
+            aria-label="Hồ sơ hiển thị"
+            value={view.tab}
+            onChange={(next) => view.setTab(next as (typeof VIEWS)[number])}
+            options={[
+              { value: "all", label: `Tất cả (${data.cards.length})` },
+              { value: "mine", label: `Việc của tôi (${mine})` },
+            ]}
+          />
+        </Flex>
         <Input.Search
           allowClear
           aria-label="Tìm theo số PO, RFQ hoặc khách"
@@ -127,15 +147,13 @@ export function PipelineBoard() {
           description="Hồ sơ nào đến lượt bạn sẽ hiện ở đây và được tô sáng trong Tất cả."
         />
       )}
-      {LANES.map((lane) => (
-        <Lane
-          key={lane.kind}
-          title={lane.title}
-          procedure={lane.procedure}
-          columns={data.columns.filter((c) => c.kind === lane.kind)}
-          cards={shown.filter((c) => c.kind === lane.kind)}
-        />
-      ))}
+      <Lane
+        key={lane.kind}
+        title={lane.title}
+        procedure={lane.procedure}
+        columns={data.columns.filter((c) => c.kind === lane.kind)}
+        cards={shown.filter((c) => c.kind === lane.kind)}
+      />
     </div>
   );
 }
@@ -152,6 +170,7 @@ function Lane({
   cards: CaseCard[];
 }) {
   const open = columns.reduce((n, c) => n + (c.holder ? c.cases : 0), 0);
+  const fill = useFillHeight(360);
   return (
     <section aria-label={title}>
       <Flex gap={8} align="baseline" className="mb-1.5">
@@ -162,8 +181,12 @@ function Lane({
           {procedure} · {open} hồ sơ đang mở
         </Typography.Text>
       </Flex>
-      <div className="overflow-x-auto pb-2">
-        <div className="flex gap-2">
+      <div
+        ref={fill.ref}
+        className="overflow-x-auto pb-2"
+        style={fill.y ? { height: fill.y } : undefined}
+      >
+        <div className="flex h-full gap-2">
           {columns.map((column) => (
             <ColumnView
               key={column.status}
@@ -186,7 +209,7 @@ function ColumnView({ column, cards }: { column: Column; cards: CaseCard[] }) {
     <div
       role="group"
       aria-label={`${name}: ${column.cases} hồ sơ`}
-      className="flex shrink-0 flex-col gap-1.5 p-1.5"
+      className="flex max-h-full shrink-0 flex-col gap-1.5 p-1.5"
       style={{
         width,
         background: token.colorFillTertiary,
@@ -205,14 +228,17 @@ function ColumnView({ column, cards }: { column: Column; cards: CaseCard[] }) {
           {column.steps.length ? ` · ${column.steps.join(", ")}` : ""}
         </Typography.Text>
       </div>
-      {cards.map((card) => (
-        <CaseCardView key={card.case_id} card={card} />
-      ))}
-      {column.hidden > 0 && (
-        <Typography.Text type="secondary" className="px-1" style={small}>
-          và {column.hidden} hồ sơ xong trước đó
-        </Typography.Text>
-      )}
+      {/* The cards scroll here; the column's name stays in view above them. */}
+      <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto">
+        {cards.map((card) => (
+          <CaseCardView key={card.case_id} card={card} />
+        ))}
+        {column.hidden > 0 && (
+          <Typography.Text type="secondary" className="px-1" style={small}>
+            và {column.hidden} hồ sơ xong trước đó
+          </Typography.Text>
+        )}
+      </div>
     </div>
   );
 }

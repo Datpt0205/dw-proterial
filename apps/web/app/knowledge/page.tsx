@@ -30,6 +30,7 @@ import { formatDateTime } from "../../lib/dates";
 import { errorMessage } from "../../lib/error-message";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
+import { useFillHeight } from "../../lib/use-fill-height";
 
 // The ingest job is polled rather than pushed: the worker picks it off a queue
 // and a parse takes seconds, not milliseconds. Five minutes at this interval is
@@ -50,6 +51,7 @@ const SCOPE: Record<string, { label: string; color: string }> = {
 };
 
 export default function KnowledgePage() {
+  const fill = useFillHeight();
   const { hasScope, hasRole } = useAuth();
   const { modal } = App.useApp();
   // Jobs this browser started. The API exposes a job by id, not a list, so the
@@ -190,7 +192,8 @@ export default function KnowledgePage() {
               rowKey="document_id"
               size="small"
               pagination={false}
-              scroll={{ x: "max-content" }}
+              ref={fill.tableRef}
+              scroll={{ x: "max-content", y: fill.y }}
               dataSource={documents}
               columns={[
                 { title: "Tiêu đề", dataIndex: "title" },

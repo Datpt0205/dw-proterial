@@ -62,6 +62,7 @@ import {
 import { ScopeGate } from "../_components/scope-gate";
 import { MessageDispositionTag, ProcessingTag } from "../_components/tags";
 import { HandoffDraft } from "./handoff-draft";
+import { useFillHeight } from "../../../lib/use-fill-height";
 
 type Message = SalesSchemas["InboxMessageView"];
 
@@ -108,6 +109,7 @@ export default function InboxPage() {
 }
 
 function Inbox() {
+  const fill = useFillHeight();
   const now = useNow();
   const { hasScope } = useAuth();
   const { paused, overview, progress } = useSalesFrame();
@@ -328,7 +330,8 @@ function Inbox() {
             dataSource={shown}
             pagination={false}
             sticky
-            scroll={{ x: "max-content" }}
+            ref={fill.tableRef}
+            scroll={{ x: "max-content", y: fill.y }}
             rowClassName={(m) =>
               m.message_id === focus ? "ant-table-row-selected" : ""
             }

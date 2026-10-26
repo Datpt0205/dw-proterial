@@ -312,7 +312,7 @@ services:
       # Sign-in accounts an Org Admin creates (member_accounts.py), through the
       # realm's dw-accounts client. The same secret is imported into the realm
       # below, so both sides read the one value.
-      DW_API_ACCOUNTS_ADMIN_URL: ${DW_API_ACCOUNTS_ADMIN_URL:-http://keycloak:8080}
+      DW_API_ACCOUNTS_ADMIN_URL: http://keycloak:8080
       DW_API_ACCOUNTS_CLIENT_SECRET: ${DW_API_ACCOUNTS_CLIENT_SECRET:?set DW_API_ACCOUNTS_CLIENT_SECRET (32+ random characters)}
       # RAG embeddings. Default `hash` (offline, no extra service). Set
       # `openai_compatible` to embed via the gateway (the `embedding` route of

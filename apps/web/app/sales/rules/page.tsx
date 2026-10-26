@@ -22,6 +22,7 @@ import { salesCrumbs } from "../_components/crumbs";
 import { ProposeDrawer } from "../_components/rule-editor";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
+import { useFillHeight } from "../../../lib/use-fill-height";
 
 const TONE: Record<RuleVersion["status"], "ok" | "warn" | "err" | "unk"> = {
   proposed: "warn",
@@ -61,6 +62,7 @@ interface Proposing {
 }
 
 function Rules() {
+  const fill = useFillHeight();
   const name = usePeople();
   const rules = useResource(
     "sales/rules",
@@ -151,7 +153,8 @@ function Rules() {
             loading={rules.loading}
             dataSource={versions}
             pagination={false}
-            scroll={{ x: "max-content" }}
+            ref={fill.tableRef}
+            scroll={{ x: "max-content", y: fill.y }}
             locale={{
               emptyText: rules.loading
                 ? " "

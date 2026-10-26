@@ -127,15 +127,32 @@ describe("the pipeline board", () => {
     expect(within(review).getByText("1 cờ cần xem")).toBeTruthy();
     // Whose turn the column is, and the surveyed steps it stands for.
     expect(within(review).getByText("Sales quyết định · O6")).toBeTruthy();
-    const approval = screen.getByRole("group", { name: "Chờ duyệt: 1 hồ sơ" });
-    expect(
-      within(approval).getByRole("link", { name: "RFQ RFQ-ALPHA-009" }),
-    ).toBeTruthy();
-    expect(within(approval).getByText(/Quá hạn/)).toBeTruthy();
     // An empty column is still drawn, so the pipeline keeps its shape.
     expect(
       screen.getByRole("group", { name: "Đã xác nhận: 0 hồ sơ" }),
     ).toBeTruthy();
+    // One lane at a time: the quotes wait behind their switch, counted on it.
+    expect(
+      screen.queryByRole("group", { name: "Chờ duyệt: 1 hồ sơ" }),
+    ).toBeNull();
+    expect(screen.getByText("Báo giá (1)")).toBeTruthy();
+  });
+
+  it("shows the quote lane when the link says ?lane=quote", async () => {
+    shown = board();
+    search = new URLSearchParams("lane=quote");
+    show();
+
+    const approval = await screen.findByRole("group", {
+      name: "Chờ duyệt: 1 hồ sơ",
+    });
+    expect(
+      within(approval).getByRole("link", { name: "RFQ RFQ-ALPHA-009" }),
+    ).toBeTruthy();
+    expect(within(approval).getByText(/Quá hạn/)).toBeTruthy();
+    expect(
+      screen.queryByRole("group", { name: "Đã nhập Bravo: 1 hồ sơ" }),
+    ).toBeNull();
   });
 
   it("names the viewer's own step on the cards that are theirs", async () => {
