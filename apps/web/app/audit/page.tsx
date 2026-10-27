@@ -30,8 +30,81 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
   "run.completed": { label: "Xong lượt chạy", color: "success" },
   "approval.decided": { label: "Đã quyết yêu cầu", color: "success" },
   "tool.executed": { label: "Đã chạy công cụ", color: "default" },
+  "run.failed": { label: "Lượt chạy lỗi", color: "error" },
   // PLUG-IN POINT: a bounded context adds its own actions here. An unmapped
   // action still shows, as "Hoạt động hệ thống" — a row is never dropped.
+  // Sales (DW1): every action its services and lanes audit (2026-10-27).
+  "sales.mail.stored": { label: "Nhận thư vào hộp thư", color: "default" },
+  "sales.message.queued": { label: "Xếp thư chờ xử lý", color: "default" },
+  "sales.message.queued_by_lane": {
+    label: "DW1 xếp thư chờ xử lý",
+    color: "default",
+  },
+  "sales.message.processed": { label: "Xử lý thư", color: "default" },
+  "sales.message.processing_done": {
+    label: "Xử lý thư xong",
+    color: "success",
+  },
+  "sales.message.processing_failed": { label: "Xử lý thư lỗi", color: "error" },
+  "sales.order.checked": { label: "Kiểm tra đơn", color: "default" },
+  "sales.order.review_started": {
+    label: "Bắt đầu tự kiểm đơn",
+    color: "processing",
+  },
+  "sales.order.finding_disposed": {
+    label: "Xử lý cờ của đơn",
+    color: "default",
+  },
+  "sales.order.prepared": { label: "Chuẩn bị đơn xong", color: "processing" },
+  "sales.order.bravo_recorded": {
+    label: "Ghi số đơn Bravo",
+    color: "processing",
+  },
+  "sales.order.cross_checked": { label: "Kiểm chéo đơn", color: "success" },
+  "sales.order.confirmed": { label: "Xác nhận đơn", color: "success" },
+  "sales.order.correction_requested": {
+    label: "Yêu cầu khách sửa PO",
+    color: "warning",
+  },
+  "sales.order.revised": { label: "PO sửa đổi", color: "default" },
+  "sales.order.reassigned": { label: "Giao lại đơn", color: "default" },
+  "sales.order.closed": { label: "Đóng đơn", color: "default" },
+  "sales.quote.received": { label: "Nhận yêu cầu báo giá", color: "default" },
+  "sales.quote.ycbg_drafted": { label: "Soạn YCBG", color: "default" },
+  "sales.quote.ycbg_recorded": {
+    label: "Ghi YCBG trên Bravo",
+    color: "processing",
+  },
+  "sales.quote.sent_to_design": { label: "Gửi Design", color: "processing" },
+  "sales.quote.design_replied": {
+    label: "Design phản hồi",
+    color: "processing",
+  },
+  "sales.quote.finding_answered": {
+    label: "Trả lời cờ báo giá",
+    color: "default",
+  },
+  "sales.quote.priced": { label: "Định giá", color: "processing" },
+  "sales.quote.submitted": { label: "Gửi duyệt báo giá", color: "processing" },
+  "sales.quote.approved": { label: "Duyệt báo giá", color: "success" },
+  "sales.quote.returned": { label: "Trả lại định giá", color: "warning" },
+  "sales.artifact.rendered": { label: "Tạo tệp", color: "default" },
+  "sales.artifact.downloaded": { label: "Tải tệp", color: "default" },
+  "sales.rules.proposed": { label: "Đề xuất quy tắc", color: "processing" },
+  "sales.rules.approved": { label: "Duyệt quy tắc", color: "success" },
+  "sales.followup.sent": { label: "Gửi nhắc việc", color: "default" },
+  "sales.worker.paused": { label: "Tạm dừng DW1", color: "warning" },
+  "sales.worker.resumed": { label: "Chạy lại DW1", color: "processing" },
+};
+
+/** The background lanes that audit as themselves (ADR 0011), by worker
+ * registry name, as `details.actor` names them: `system:<lane>`. */
+const LANES: Record<string, string> = {
+  sales_mail_drop: "DW1 · đọc thư mục thư",
+  sales_inbox: "DW1 · nhận thư mới",
+  sales_processing: "DW1 · xử lý thư",
+  sales_followups: "DW1 · nhắc việc",
+  sales_rule_drafts: "DW1 · nháp quy tắc",
 };
 const OTHER_ACTION = { label: "Hoạt động hệ thống", color: "default" };
 
@@ -43,10 +116,35 @@ function detailText(event: AuditEvent, key: string): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/** Who did it, as the server names them today; an actor that is no user
- * (a background lane) has no name and shows its short id. */
+/** Who did it, as the server names them today; a background lane by what
+ * it does (its `system:<lane>` actor), and anyone else with no name by a
+ * short id. */
 function actorName(event: AuditEvent): string {
-  return event.actor_display_name ?? `${event.actor_id.slice(0, 8)}…`;
+  if (event.actor_display_name) return event.actor_display_name;
+  const actor = detailText(event, "actor");
+  if (actor?.startsWith("system:")) {
+    const lane = actor.slice("system:".length);
+    return LANES[lane] ?? `Tác vụ nền (${lane})`;
+  }
+  return `${event.actor_id.slice(0, 8)}…`;
+}
+
+/** A long record id (a stored mail's 68-character hash) shortened for the
+ * row; the whole id stays copyable and searchable. */
+function shortId(id: string): string {
+  return id.length > 24 ? `${id.slice(0, 16)}…` : id;
+}
+
+/** The details as "key: value", without what the row already shows (the
+ * actor) and without empty values. */
+function detailsText(details: AuditEvent["details"]): string {
+  const parts = Object.entries(details)
+    .filter(([key, value]) => key !== "actor" && value !== null && value !== "")
+    .map(
+      ([key, value]) =>
+        `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
+    );
+  return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
 function grantHref(grantId: string): string {
@@ -187,8 +285,12 @@ function AuditTrail() {
                         <Typography.Text type="secondary" className="text-xs">
                           {event.resource_type}
                         </Typography.Text>
-                        <Typography.Text code className="text-xs">
-                          {event.resource_id}
+                        <Typography.Text
+                          code
+                          copyable={{ text: event.resource_id }}
+                          title={event.resource_id}
+                        >
+                          {shortId(event.resource_id)}
                         </Typography.Text>
                         {grantId == null && grant != null && (
                           <Link href={grantHref(grant)}>
@@ -219,8 +321,7 @@ function AuditTrail() {
                   dataIndex: "details",
                   ellipsis: true,
                   width: 260,
-                  render: (value: AuditEvent["details"]) =>
-                    Object.keys(value).length > 0 ? JSON.stringify(value) : "—",
+                  render: (value: AuditEvent["details"]) => detailsText(value),
                 },
               ]}
             />

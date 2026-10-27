@@ -85,6 +85,9 @@ function Onboarding() {
       () => salesApi().layoutSource(messageId, attachmentId),
       [messageId, attachmentId],
     ),
+    // Opened without a message, the page says where to start; asking the
+    // API with empty ids only earns a 422.
+    { enabled: messageId !== "" && attachmentId !== "" },
   );
   return (
     <div className="space-y-4">
