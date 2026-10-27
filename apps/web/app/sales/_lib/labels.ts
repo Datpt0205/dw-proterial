@@ -338,7 +338,7 @@ export const CASE_EVENT = {
 
 /** How far this slice takes a surveyed step (`dw_sales.domain.process.Coverage`). */
 export const STEP_COVERAGE = {
-  yes: "DW1 làm",
+  yes: "Trong phạm vi DW1",
   suggestion: "DW1 gợi ý",
   mock: "Trên dữ liệu giả lập",
   out: "Ngoài phạm vi (DW2)",

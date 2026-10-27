@@ -25,11 +25,13 @@ export function ScopeGate({
   return (
     <RegionState
       kind="forbidden"
-      description="Quyền của bạn trong không gian làm việc này không gồm trang này. Máy chủ cũng từ chối nếu mở thẳng bằng liên kết."
+      description="Vai của bạn trong không gian làm việc này không gồm trang này. Nếu bạn cần, nhờ quản trị hệ thống cấp quyền."
       action={
         hasScope(SCOPE.overview) ? (
           <Link href="/sales/overview">Mở Tổng quan quy trình</Link>
-        ) : null
+        ) : (
+          <Link href="/">Về trang chính</Link>
+        )
       }
     />
   );

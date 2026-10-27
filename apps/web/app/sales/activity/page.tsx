@@ -28,6 +28,7 @@ import { useResource } from "../_lib/use-resource";
 import { salesCrumbs } from "../_components/crumbs";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
+import { useAuth } from "../../../lib/auth/auth-context";
 
 type Summary = SalesSchemas["ActivitySummaryView"];
 type StepSummary = SalesSchemas["StepSummaryView"];
@@ -88,6 +89,7 @@ function useChoices() {
 
 function Activity() {
   const choices = useChoices();
+  const opensCases = useAuth().hasScope(SCOPE.caseRead);
   const now = useNow();
   const { from, to } = lastDays(Number(choices.range), now);
   const lane = choices.lane === "all" ? null : choices.lane;
@@ -110,7 +112,7 @@ function Activity() {
       <PageHeader
         breadcrumb={salesCrumbs("Hoạt động DW1")}
         title="Hoạt động DW1"
-        subtitle="Mỗi bước có mô hình: DW1 tự làm bao nhiêu, chuyển cho người bao nhiêu và vì sao. Mỗi số mở danh sách hồ sơ nó đếm."
+        subtitle={`Mỗi bước có mô hình: DW1 tự làm bao nhiêu, chuyển cho người bao nhiêu và vì sao.${opensCases ? " Mỗi số mở danh sách hồ sơ nó đếm." : ""}`}
       />
       <div className="flex flex-wrap items-center gap-3">
         <Segmented<Range>
@@ -137,7 +139,7 @@ function Activity() {
         Từ {formatDate(data?.from ?? from)} đến hết {formatDate(data?.to ?? to)}{" "}
         ({TIME_ZONE_LABEL})
         {data ? ` · số liệu lúc ${formatDateTime(data.as_of)}` : ""}.
-        {lane
+        {lane || !opensCases
           ? ""
           : " Chọn Đơn hàng hoặc Báo giá để mở danh sách hồ sơ sau mỗi số."}
       </Typography.Paragraph>
@@ -267,7 +269,10 @@ function Count({
   linked: { count: number; filter: Filter };
   lane: Lane | null;
 }) {
-  if (!lane || linked.count === 0) return <span>{linked.count}</span>;
+  // A count opens the case list it counts, for someone who may open it.
+  const opensCases = useAuth().hasScope(SCOPE.caseRead);
+  if (!lane || linked.count === 0 || !opensCases)
+    return <span>{linked.count}</span>;
   return (
     <Link
       href={activityHref(lane, linked.filter)}

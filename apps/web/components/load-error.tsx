@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "antd";
 import { RegionState, stateForError } from "@dw/ui";
 import { toRegionError } from "../lib/error-message";
@@ -26,11 +27,18 @@ export function LoadError({
     </Button>
   ) : state.kind === "error" || state.kind === "offline" ? (
     <Button onClick={onRetry}>Thử lại</Button>
+  ) : state.kind === "forbidden" ? (
+    // Why, then where to go: the home page lists what the viewer can open.
+    <Link href="/">Về trang chính</Link>
   ) : undefined;
   return (
     <RegionState
       kind={state.kind}
-      description={state.message}
+      description={
+        state.kind === "forbidden"
+          ? `${state.message} Nếu bạn cần mục này, nhờ quản trị hệ thống cấp quyền.`
+          : state.message
+      }
       requestId={state.requestId}
       action={retry}
       compact={compact}

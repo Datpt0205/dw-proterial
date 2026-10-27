@@ -21,10 +21,12 @@ export function WorkspaceSwitcher() {
     <span className="flex min-w-0 flex-col items-start leading-tight">
       <Typography.Text
         type="secondary"
-        className="uppercase leading-tight"
+        className="leading-tight"
         style={{ fontSize: token.fontSizeSM }}
       >
-        Workspace
+        {/* The Sales screens' word for it; uppercase diacritics at this
+            size were hard to read. */}
+        Không gian làm việc
       </Typography.Text>
       <Typography.Text
         strong

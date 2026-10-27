@@ -33,7 +33,7 @@ const SCHEMAS = JSON.parse(
   ),
 ) as Record<string, Record<string, unknown>>;
 
-let scopes = ["sales.case.read", "sales.rules.propose"];
+let scopes = ["sales.case.read", "sales.rules.propose", "approvals.read"];
 vi.mock("../../../../lib/auth/auth-context", () => ({
   useAuth: () => ({
     principalId: AN,
@@ -144,7 +144,7 @@ const SLOW = 30_000;
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  scopes = ["sales.case.read", "sales.rules.propose"];
+  scopes = ["sales.case.read", "sales.rules.propose", "approvals.read"];
 });
 
 function renderPage() {
@@ -249,6 +249,23 @@ describe("the rules page (tickets 38, 40)", () => {
           .getAttribute("href"),
       ).toBe(`/approvals/${WAITING.approval_id}`);
       expect(screen.queryByRole("button", { name: /^Duyệt/ })).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "offers no approval link to IT, who may propose but not open approvals (2026-10-27)",
+    async () => {
+      scopes = ["sales.rules.propose"];
+      renderPage();
+      const waiting = (
+        await screen.findByText("sales_order_rules@1.5.2")
+      ).closest("tr")!;
+      expect(within(waiting).getByText("Chờ duyệt")).toBeTruthy();
+      expect(
+        within(waiting).queryByRole("link", { name: "Mở yêu cầu duyệt" }),
+      ).toBeNull();
+      expect(screen.queryByText(/trên trang Duyệt/)).toBeNull();
     },
     SLOW,
   );
@@ -474,7 +491,7 @@ describe("the rules page (tickets 38, 40)", () => {
     scopes = ["sales.case.read"];
     renderPage();
     expect(
-      screen.getByText(/Quyền của bạn trong không gian làm việc này/),
+      screen.getByText(/Vai của bạn trong không gian làm việc này/),
     ).toBeTruthy();
     expect(api.rules).not.toHaveBeenCalled();
   });

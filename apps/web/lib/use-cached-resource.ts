@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { App } from "antd";
 import { useAuth } from "./auth/auth-context";
-import { errorMessage } from "./error-message";
+import { stateForError } from "@dw/ui";
+import { errorMessage, toRegionError } from "./error-message";
 
 /**
  * A tiny in-memory cache for a page's data, shared across the app.
@@ -62,8 +63,12 @@ export function useCachedResource<T>(
       })
       .catch((failure: unknown) => {
         if (!cancelled) setError(failure);
-        // The server's sentence, never "permission_denied: …".
-        if (!cancelled) message.error(errorMessage(failure));
+        // The server's sentence, never "permission_denied: …". A refusal or
+        // a missing record is drawn by the region itself (`LoadError`); a
+        // toast of the same sentence beside it only says it twice.
+        const kind = stateForError(toRegionError(failure)).kind;
+        if (!cancelled && kind !== "forbidden" && kind !== "notfound")
+          message.error(errorMessage(failure));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

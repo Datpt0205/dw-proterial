@@ -22,6 +22,7 @@ import { salesCrumbs } from "../_components/crumbs";
 import { ProposeDrawer } from "../_components/rule-editor";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
+import { useAuth } from "../../../lib/auth/auth-context";
 import { useFillHeight } from "../../../lib/use-fill-height";
 
 const TONE: Record<RuleVersion["status"], "ok" | "warn" | "err" | "unk"> = {
@@ -63,6 +64,7 @@ interface Proposing {
 
 function Rules() {
   const fill = useFillHeight();
+  const seesApprovals = useAuth().hasScope("approvals.read");
   const name = usePeople();
   const rules = useResource(
     "sales/rules",
@@ -79,7 +81,7 @@ function Rules() {
       <PageHeader
         breadcrumb={salesCrumbs("Quy tắc")}
         title="Quy tắc của công ty"
-        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt. Người đề xuất không tự duyệt; phiên bản được quyết trên trang Duyệt, mở từ liên kết ở mỗi phiên bản.`}
+        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt. Người đề xuất không tự duyệt; ${seesApprovals ? "phiên bản được quyết trên trang Duyệt, mở từ liên kết ở mỗi phiên bản." : "người giữ quyền duyệt quy tắc quyết từng phiên bản."}`}
       />
       {rules.error ? (
         <LoadError error={rules.error} onRetry={rules.reload} />
@@ -225,7 +227,7 @@ function Rules() {
                 fixed: "right",
                 render: (_, v) => (
                   <Space orientation="vertical" size={2}>
-                    {v.approval_id ? (
+                    {v.approval_id && seesApprovals ? (
                       <Link href={`/approvals/${v.approval_id}`}>
                         Mở yêu cầu duyệt
                       </Link>

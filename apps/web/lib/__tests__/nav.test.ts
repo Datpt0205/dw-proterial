@@ -382,3 +382,26 @@ describe("barNav", () => {
     );
   });
 });
+
+describe("a platform page kept on a context's bar", () => {
+  const SALES_HEAD = ["sales.case.read", "approvals.read", "approvals.decide"];
+  const SALES_PIC = ["sales.case.read", "approvals.read"];
+
+  it("adds Duyệt to the Sales bar for whoever decides approvals", () => {
+    const viewing = viewer(SALES_HEAD);
+    expect(labels(barNav(visibleNav(NAV, viewing), viewing).entries)).toContain(
+      "Duyệt",
+    );
+  });
+
+  it("leaves it off for someone who only reads approvals, and off a bar built without the viewer", () => {
+    const pic = viewer(SALES_PIC);
+    expect(labels(barNav(visibleNav(NAV, pic), pic).entries)).not.toContain(
+      "Duyệt",
+    );
+    const head = viewer(SALES_HEAD);
+    expect(labels(barNav(visibleNav(NAV, head)).entries)).not.toContain(
+      "Duyệt",
+    );
+  });
+});
