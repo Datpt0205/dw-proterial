@@ -37,6 +37,7 @@ import {
   PriorityPanel,
   RowTitle,
   type PriorityItem,
+  usePhoneColumns,
 } from "../_components/list-parts";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -86,6 +87,7 @@ function Quotes() {
   const fill = useFillHeight();
   const now = useNow();
   const name = usePeople();
+  const phone = usePhoneColumns();
   const customerName = useCustomerName();
   const view = useListView(TABS, "open", SORTS, "due");
   // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
@@ -292,7 +294,7 @@ function Quotes() {
                 view.query !== "" || status.length > 0,
               )
             }
-            columns={[
+            columns={phone([
               {
                 title: "Yêu cầu báo giá",
                 key: "rfq",
@@ -305,6 +307,25 @@ function Quotes() {
                     }
                     code={quoteTitle(q)}
                     sub={q.ycbg_no ? `YCBG ${q.ycbg_no}` : "YCBG chưa lập"}
+                    phone={
+                      <>
+                        <QuoteStateTag status={q.status} />
+                        {!q.quote_due ? (
+                          <StatusTag
+                            tone="unk"
+                            icon={<ExclamationCircleOutlined aria-hidden />}
+                          >
+                            Chưa rõ hạn
+                          </StatusTag>
+                        ) : (
+                          <DueText
+                            day={q.quote_due}
+                            now={now}
+                            done={DONE.includes(q.status)}
+                          />
+                        )}
+                      </>
+                    }
                   />
                 ),
               },
@@ -374,7 +395,7 @@ function Quotes() {
                   />
                 ),
               },
-            ]}
+            ])}
           />
         </>
       )}

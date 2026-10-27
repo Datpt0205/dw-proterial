@@ -38,6 +38,7 @@ import { usePeople } from "../_lib/people";
 import { useResource } from "../_lib/use-resource";
 import { useListView, useUrlParam } from "../_lib/use-status-filter";
 import { useFillHeight } from "../../../lib/use-fill-height";
+import { useIsPhone } from "./list-parts";
 
 type Board = SalesSchemas["PipelineView"];
 type Column = SalesSchemas["PipelineColumn"];
@@ -171,6 +172,10 @@ function Lane({
 }) {
   const open = columns.reduce((n, c) => n + (c.holder ? c.cases : 0), 0);
   const fill = useFillHeight(360);
+  // A phone has room for a column or two: it skips the statuses no case is
+  // in, and says how many (2026-10-27: two empty columns filled the screen).
+  const shown = useIsPhone() ? columns.filter((c) => c.cases > 0) : columns;
+  const skipped = columns.length - shown.length;
   return (
     <section aria-label={title}>
       <Flex gap={8} align="baseline" className="mb-1.5">
@@ -179,6 +184,7 @@ function Lane({
         </Typography.Title>
         <Typography.Text type="secondary">
           {procedure} · {open} hồ sơ đang mở
+          {skipped ? ` · ẩn ${skipped} trạng thái chưa có hồ sơ` : ""}
         </Typography.Text>
       </Flex>
       <div
@@ -187,7 +193,7 @@ function Lane({
         style={fill.y ? { height: fill.y } : undefined}
       >
         <div className="flex h-full gap-2">
-          {columns.map((column) => (
+          {shown.map((column) => (
             <ColumnView
               key={column.status}
               column={column}
