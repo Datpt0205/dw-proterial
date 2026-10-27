@@ -530,6 +530,7 @@ export const ACTIVITY_REASON: Record<string, string> = {
   price_out_of_quoted_range: "Đơn giá ngoài khoảng đã báo",
   requested_before_po_date: "Ngày yêu cầu trước ngày PO",
   requested_is_po_date: "Ngày yêu cầu trùng ngày PO",
+  requested_date_empty: "Cột ngày giao không có ngày nào",
   no_item_known: "Không mã hàng nào của khách được biết",
   part_unknown: "Mô hình chỉ tới phần không có trong thư",
   line_unanchored: "Không xác định được vị trí dòng trong tệp",

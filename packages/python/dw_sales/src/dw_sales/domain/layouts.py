@@ -321,6 +321,7 @@ LayoutProblem = Literal[
     "price_out_of_quoted_range",
     "requested_before_po_date",
     "requested_is_po_date",
+    "requested_date_empty",
     "no_item_known",
 ]
 
@@ -405,7 +406,12 @@ def plausible(
             problems.append(Problem(problem="price_out_of_quoted_range", field="unit_price"))
     po_date = document.header.po_date
     days = [line.requested_date for line in lines if line.requested_date is not None]
-    if any(day < po_date for day in days):
+    if lines and not days:
+        # The delivery column is always mapped; one that reads no date on any
+        # line is the wrong column (a remarks or a code column), not a PO
+        # without dates (2026-10-27, the edge-case sets).
+        problems.append(Problem(problem="requested_date_empty", field="requested_date"))
+    elif any(day < po_date for day in days):
         problems.append(Problem(problem="requested_before_po_date", field="requested_date"))
     elif days and all(day == po_date for day in days):
         problems.append(Problem(problem="requested_is_po_date", field="requested_date"))
