@@ -110,6 +110,13 @@ describe("an order whose cross-check decision was not applied (ticket 14)", () =
       expect(
         screen.queryByRole("button", { name: "Gửi kiểm chéo lại" }),
       ).toBeNull();
+      // Not An's step: the page says whom it waits on, not only that it is
+      // not his (2026-10-27).
+      expect(
+        screen.getAllByText(
+          "Đang chờ kiểm chéo: người kiểm chéo không phải người đã làm hồ sơ.",
+        ).length,
+      ).toBeGreaterThan(0);
     },
     SLOW,
   );

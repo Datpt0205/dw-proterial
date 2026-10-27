@@ -13342,6 +13342,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
           "received_at": {
             "format": "date-time",
             "title": "Received At",

@@ -301,7 +301,7 @@ function MyWork() {
             placeholder="Số PO, số RFQ, khách hàng"
             sorts={[
               { value: "api", label: "Theo hạn" },
-              { value: "age", label: "Chờ lâu nhất" },
+              { value: "age", label: "Nhận sớm nhất" },
               { value: "customer", label: "Khách hàng (A–Z)" },
             ]}
             sort={view.sort}
@@ -377,13 +377,15 @@ function MyWork() {
                 },
               },
               {
-                title: `Đã chờ (${TIME_ZONE_LABEL})`,
+                // Since the mail arrived, not since the case reached this step
+                // (2026-10-27: "Đã chờ" read as time at the step).
+                title: `Từ khi nhận (${TIME_ZONE_LABEL})`,
                 key: "age",
                 render: (_, item) => (
                   <span className="flex flex-col">
                     <span>{formatAge(item.received_at, now)}</span>
                     <Typography.Text type="secondary">
-                      từ{" "}
+                      nhận lúc{" "}
                       {formatDateTime(item.received_at, { zoneLabel: false })}
                     </Typography.Text>
                   </span>
@@ -399,11 +401,19 @@ function MyWork() {
                 title: "Phụ trách",
                 key: "assigned",
                 align: "center",
-                render: (_, item) => (
-                  <Assignee
-                    name={item.assigned_to ? person(item.assigned_to) : null}
-                  />
-                ),
+                // A mail's owner as the inbox names it (a person, or a team as
+                // `role:<key>`); a case's, the person it is assigned to.
+                render: (_, item) =>
+                  item.kind === "message" && item.owner ? (
+                    <Assignee
+                      name={person(item.owner)}
+                      group={item.owner.startsWith("role:")}
+                    />
+                  ) : (
+                    <Assignee
+                      name={item.assigned_to ? person(item.assigned_to) : null}
+                    />
+                  ),
               },
             ]}
           />

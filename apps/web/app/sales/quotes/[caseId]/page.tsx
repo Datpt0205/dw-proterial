@@ -147,7 +147,13 @@ function QuoteDetail() {
       ? "Báo giá đã bị từ chối."
       : data.status === "sent_to_design"
         ? "Đang chờ Design phản hồi theo số YCBG."
-        : "Không có việc của bạn ở bước này.";
+        : data.status === "pending_approval"
+          ? "Đang chờ người duyệt báo giá (không phải người định giá)."
+          : data.status === "master_list_recorded"
+            ? "Báo giá đã xong."
+            : data.assigned_to
+              ? `Đến lượt ${name(data.assigned_to)}.`
+              : "Hồ sơ chưa giao cho ai.";
   const firstAnchor = data.lines[0]
     ? Object.values(data.lines[0].anchors)[0]
     : null;

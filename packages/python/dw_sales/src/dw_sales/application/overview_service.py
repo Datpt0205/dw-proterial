@@ -204,6 +204,11 @@ class WorkItem(BaseModel):
     received_at: datetime
     due: date | None
     assigned_to: uuid.UUID | None
+    # A routed message's owner as its disposition names it: a user id, or
+    # `role:<key>` for a team (the inbox draws the same). A case's owner is
+    # `assigned_to`; this is None on a case (2026-10-27: every mail read
+    # "Chưa giao" on Việc cần làm while the inbox named its owner).
+    owner: str | None = None
 
 
 # The next step on an open case, and the scope that takes it. A status not
@@ -509,6 +514,7 @@ def _message_item(logged: LoggedMessage, wanted: WorkFilter) -> WorkItem | None:
         received_at=logged.processed_at,
         due=None,
         assigned_to=None,
+        owner=d.owner,
     )
 
 
