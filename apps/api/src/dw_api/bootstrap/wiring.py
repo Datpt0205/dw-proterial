@@ -518,6 +518,9 @@ def build_sales(
                 socket_path=settings.sales_reader_socket, base_url=settings.sales_reader_url
             )
         ),
+        # The mock, or the mail the worker stores from the drop folder
+        # (ticket 43); the API reads it, never the folder.
+        mailbox=settings.sales_mailbox,
     )
     return SalesMount(services=mount.services, activity=mount.activity)
 

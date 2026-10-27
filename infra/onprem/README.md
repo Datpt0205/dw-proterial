@@ -75,8 +75,8 @@ The portal signs people in through **Keycloak, on the same host**. On premises i
 - **Recommended: Proterial's Active Directory, through Keycloak's LDAP user federation.** People sign in with their Windows account. Disabling someone in AD stops their next sign-in. No password is stored in this stack, and no internet is needed.
 - **Microsoft Entra ID (OIDC brokering) also works,** but every sign-in then goes through Microsoft's cloud. This fits only if the plant keeps internet access for M365 anyway.
 - **No directory at all: IT creates the accounts in the portal.** Admin → Thành viên → "Thêm người" makes the person, their role and a Keycloak account with a temporary password shown once, which the person changes at first sign-in. The same screen resets a password or locks a sign-in. The person changes their own password later from "Đổi mật khẩu" in the account menu; a forgotten one is reset by IT, because the realm has no mail server. The cost of having no directory: when someone leaves, IT must lock them here, because nothing else does.
-  - It needs the realm's `dw-accounts` client and `DW_API_ACCOUNTS_CLIENT_SECRET` (32+ random characters) in `.env`. Compose refuses to start Keycloak or the API without it.
-  - A realm created before this client existed gets it from `uv run python scripts/keycloak_accounts_client.py` (reads `.env`; idempotent).
+    - It needs the realm's `dw-accounts` client and `DW_API_ACCOUNTS_CLIENT_SECRET` (32+ random characters) in `.env`. Compose refuses to start Keycloak or the API without it.
+    - A realm created before this client existed gets it from `uv run python scripts/keycloak_accounts_client.py` (reads `.env`; idempotent).
 - **With LDAP federation, turn on "Trust Email".** The API links a first sign-in to a person by email only when Keycloak says the address is verified. Without it, a person IT added beforehand does not land on their own account (the safe failure, but a confusing one).
 - **Before customer SSO is brokered,** close ADR 0024's open item 2 (email-based account linking).
 
@@ -123,4 +123,15 @@ and for that it gives nothing a Sales or Purchasing user needs.
 - **Antivirus signatures.** The ClamAV image carries its signatures as of its build (sales ticket 25: the weekly bump workflow). Without internet they age, so rebuild or reload the image on each scheduled update.
 - **Building images.** `pnpm`, `uv`, base images and fonts are fetched at build time. Build on a connected machine and ship the images.
 - **Support access** (ADR 0024). Open item 3, how FPT staff reach a stack inside the plant, is unchanged. Use the plant's VPN with the customer-granted support grant; never a port opened to the internet.
-- **Mail.** DW1 reads mail through its mailbox port, and it needs a mail server it can reach. For on-premises Exchange that is inside the plant; Exchange Online is not.
+- **Mail.** DW1 reads no mail server at all. Proterial's mail is Exchange Online and DW1 holds no access to it; the mail reaches the host as files (next section).
+
+## Mail without access to Microsoft 365
+
+Decided 2026-10-27 (Sales ticket 43): Proterial gives DW1 no Microsoft 365 access and its administrators are abroad, so nothing here needs one.
+
+- **Each Sales PIC** runs a Power Automate flow of their own (standard connectors): every mail reaching their Inbox is exported as an `.eml` file into a OneDrive folder `DW1-inbox-<name>`, shared read-only with one account.
+- **A Windows PC in the plant** signs in to OneDrive as that account, gathers the PICs' folders under `DW1-mail` (shortcuts, "Always keep on this device") and shares it over SMB, read-only, to one local user, firewalled to this host.
+- **This host** mounts the share at `/srv/dw/mail-drop` (`cifs`, `ro`, `_netdev`; Docker ordered after `remote-fs.target`). With `DW_SALES_MAILBOX=stored` in `.env`, the onprem overlay mounts it read-only into the worker alone, whose `sales_mail_drop` lane stores each new file in PostgreSQL every minute. The API reads the stored mailbox, never the folder.
+- **Internal mail** is left out by the tenant's order rules (`ignored_sender_domains`, on the rules page under step O1), not by the flows; empty takes everything, and a Design mailbox's mail is always taken.
+
+The step-by-step guides (the PICs', and the PC's and this host's) are Word documents kept outside the repository. Not yet run end to end on a plant host: measured so far are one export from Đạt's own Microsoft 365 account (2026-10-27) and the lane over a local folder in the integration tests.

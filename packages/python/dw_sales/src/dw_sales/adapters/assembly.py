@@ -9,7 +9,8 @@ process already built (sessions, the platform's ports, the runtime) and calls
 `build_dw1`.
 
 DW1's mailbox is a fictional mock bound to one (tenant, workspace),
-``scope``; every other scope reads it empty. So is its master data, list by
+``scope``; every other scope reads it empty. Or, given ``mailbox="stored"``,
+the real mail the worker stores from the drop folder (ticket 43). So is its master data, list by
 list, until a workspace imports and approves its own (ticket 41,
 `SnapshotSalesCatalog`): then that list is the workspace's approved snapshot. So is that
 tenant's own version of the order rules, where the sample set holds one
@@ -28,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -44,6 +45,7 @@ from dw_agent_runtime.registry import (
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
+from dw_sales.adapters.mail_folder import LocalDropFolder
 from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
@@ -56,6 +58,7 @@ from dw_sales.adapters.persistence.catalog import (
 )
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
+from dw_sales.adapters.persistence.mailbox import SqlMailbox
 from dw_sales.adapters.persistence.measurements import SqlModelMeasurements
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
@@ -77,6 +80,7 @@ from dw_sales.application.followups import FollowupLane
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
+from dw_sales.application.mail_drop import MailDrop, RulesMailIntake
 from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_calls import TimedInterpretation
@@ -148,6 +152,14 @@ class Dw1Mount:
     # What DW1's model steps did, per case and over time (slice 3), for the
     # activity routes (`dw_sales.presentation.activity_routes`).
     activity: ActivityService | None = None
+    # What stores the mail dropped as `.eml` files (ticket 43): built only
+    # for a process given the folder, over the stored mailbox.
+    mail_drop: MailDrop | None = None
+
+
+# Which mailbox DW1 reads: the fictional mock, or the mail stored from the
+# drop folder (ticket 43). One value both processes are given.
+Mailbox = Literal["mock", "stored"]
 
 
 def build_dw1(
@@ -175,6 +187,8 @@ def build_dw1(
     requester_access: RequesterAccessPort | None = None,
     model: ModelGateway | None = None,
     one_call_model: ModelGateway | None = None,
+    mailbox: Mailbox = "mock",
+    mail_drop: Path | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
@@ -194,7 +208,11 @@ def build_dw1(
     (`dw_sales.adapters.reader_client`). A model step runs only where the
     tenant's rules turn it on and its live eval met the bar for the model and
     prompt it runs on (`model_readiness`, read from the database); the process
-    page names who acts on each step from ``roles``, the platform's catalog."""
+    page names who acts on each step from ``roles``, the platform's catalog.
+
+    The mailbox is ``mailbox``: the mock bound to ``scope``, or the mail
+    stored from the drop folder (ticket 43), which ``mail_drop`` names for the
+    one process that reads it into the store."""
     # The lists Sales maintains by hand from each workspace's approved import,
     # the mock where none is approved yet (ticket 41); the ERP's records from
     # the mock until Bravo is connected.
@@ -204,10 +222,22 @@ def build_dw1(
     )
     policies = load_sales_policies(configs / "policies", configs / "copy")
     readers = client_readers(reader, policies.order_rules.intake)
-    inbox = ScannedInbox(MockInbox.load(scope), scanner, readers.po)
+    stored = SqlMailbox(session_factory, audit)
+    if mail_drop is not None and mailbox != "stored":
+        raise ValueError("a drop folder is read into the stored mailbox only")
+    inbox = ScannedInbox(
+        stored if mailbox == "stored" else MockInbox.load(scope), scanner, readers.po
+    )
     # The platform's rules, with a tenant's own approved version where it has
     # one (ticket 19): stored, proposed and approved through `/sales/rules`.
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
+    dropped = (
+        None
+        if mail_drop is None
+        else MailDrop(
+            LocalDropFolder(mail_drop), readers.mail, stored, RulesMailIntake(book), clock, ids
+        )
+    )
     tenant_rules = RuleBookOrderRules(book)
     worker_file = configs / "workers" / "sales.yaml"
     worker, _ = parse_worker_file(worker_file)
@@ -323,6 +353,7 @@ def build_dw1(
             lane=lane,
             catalog_parsing=catalog_parsing,
             activity=activity,
+            mail_drop=dropped,
         )
     queue = SqlProcessingQueue(session_factory)
     drain = ProcessingDrain(
@@ -355,6 +386,7 @@ def build_dw1(
             catalog_uow, SqlRuleDraftScopes(session_factory), clock, ids
         ),
         activity=activity,
+        mail_drop=dropped,
     )
 
 

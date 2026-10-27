@@ -1,0 +1,271 @@
+"""DW1 reads real mail from a folder of `.eml` files: the `sales_mail_drop` lane
+(ticket 43).
+
+Proterial gives DW1 no access to Microsoft 365. Each Sales PIC's own Power
+Automate flow exports every mail that reaches their Inbox as an `.eml` file
+into a folder of their OneDrive, shared with the account a PC in the plant
+syncs; that PC gathers the PICs' folders under one folder shared with DW1's
+host. **The folder is a drop box, not the mailbox**: each tick, this lane
+reads the files it has not handled before and stores each message, with its
+attachments, in the stored mailbox (`MailStorePort`, PostgreSQL). Everything
+else reads the stored mailbox, through `InboxPort`, like the mock.
+
+**One tick:**
+
+1. The names already handled are read once per process (`handled_sources`):
+   a restart does not read the folders' whole history again, and mail left
+   out on purpose is not parsed again either.
+2. Each `.eml` file not seen yet, in the folder or one level below it (a
+   folder per PIC), oldest name first (the flow names a file by when it wrote
+   it). A file modified less than `SETTLE` ago, or still empty, may be
+   arriving (OneDrive writes it in place): it waits for a later tick.
+3. A file over the size limit, or one the reader refuses (`MailRefused`), is
+   logged by name and reason and not read again until the process restarts.
+   Its content is never logged.
+4. A mail from a sender domain the tenant's order rules leave out
+   (`ignored_sender_domains`, `MailIntake`) is not stored: its file is
+   recorded as handled, nothing of the mail is kept. A reply from a Design
+   mailbox is taken whatever the list holds.
+5. Every other mail is stored with one audit event, in one transaction
+   (`MailStorePort.store`). The same mail in a second file is stored once,
+   audited once: a copy of the file has the same id (its hash), and one mail
+   exported from two PICs' mailboxes (To and Cc) carries the same Message-ID
+   from the same sender.
+
+**It audits as itself**: `lane_audit_event` from `system_actor(MAIL_DROP_LANE)`,
+action `sales.mail.stored`, naming the file it came from.
+
+A reader that does not answer (`ReaderUnavailableError`) ends the tick: no
+file is marked, and the next tick tries again.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Final, Literal, Protocol
+
+from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.domain.audit import AuditEvent, lane_audit_event
+from dw_sales.application.ports import SalesScope
+from dw_sales.application.quotation import QuoteRules
+from dw_sales.domain.messages import EmailAddress, InboundMessage
+from dw_sales.domain.order_checks import OrderRules
+
+logger = logging.getLogger("dw_sales.mail_drop")
+
+MAIL_DROP_LANE: Final = "sales_mail_drop"
+MAIL_STORED: Final = "sales.mail.stored"
+# A file modified this recently may still be being written.
+SETTLE: Final = timedelta(seconds=30)
+# The largest file read: its base64 must fit the reader sandbox's request.
+MAX_MAIL_BYTES: Final = 20 * 1024 * 1024
+_SUFFIX: Final = ".eml"
+
+
+@dataclass(frozen=True)
+class MailFile:
+    """A mail as the reader read it: the message, and each attachment's bytes
+    by attachment id, every one held to its description."""
+
+    message: InboundMessage
+    contents: Mapping[str, bytes]
+
+
+@dataclass(frozen=True)
+class MailRefused:
+    """A file the reader would not read, and why, in words code wrote."""
+
+    reason: str
+
+
+class MailFileReaderPort(Protocol):
+    """Reads one `.eml` file. Raises when the reader cannot answer at all."""
+
+    async def read_mail(self, data: bytes) -> MailFile | MailRefused: ...
+
+
+@dataclass(frozen=True)
+class DroppedFile:
+    """A file in the drop folder: its name, the subfolder it sits in ("" for
+    the folder itself), its size and when it last changed. The flow names a
+    file by the time and a fresh guid, so a name is the file's identity
+    across the PICs' folders."""
+
+    name: str
+    size: int
+    modified_at: datetime
+    folder: str = ""
+
+
+class DropFolderPort(Protocol):
+    """The folder the flows' files arrive in, read only."""
+
+    async def files(self) -> Sequence[DroppedFile]:
+        """Every regular file in the folder or one level below it."""
+        ...
+
+    async def read(self, dropped: DroppedFile, limit: int) -> bytes:
+        """At most ``limit`` + 1 bytes of the file: one more than the limit
+        says it is over."""
+        ...
+
+
+@dataclass(frozen=True)
+class MailIntake:
+    """Which senders' mail DW1 takes: every one but the ignored domains (a
+    subdomain included), and always a Design mailbox."""
+
+    ignored_domains: tuple[str, ...] = ()
+    always_from: frozenset[str] = frozenset()
+
+    def takes(self, sender: EmailAddress) -> bool:
+        if sender.address.lower() in self.always_from:
+            return True
+        domain = sender.domain
+        return not any(domain == d or domain.endswith("." + d) for d in self.ignored_domains)
+
+
+class MailIntakePort(Protocol):
+    async def intake(self, scope: SalesScope) -> MailIntake: ...
+
+
+class _IntakeRules(Protocol):
+    async def order_rules(self, scope: SalesScope) -> OrderRules: ...
+
+    async def quote_rules(self, scope: SalesScope) -> QuoteRules: ...
+
+
+@dataclass(frozen=True)
+class RulesMailIntake:
+    """`MailIntakePort` over the tenant's rules in force: the order rules'
+    ignored domains, the quote rules' Design mailboxes."""
+
+    rules: _IntakeRules
+
+    async def intake(self, scope: SalesScope) -> MailIntake:
+        design = (await self.rules.quote_rules(scope)).design_mailboxes
+        return MailIntake(
+            ignored_domains=(await self.rules.order_rules(scope)).ignored_sender_domains,
+            always_from=frozenset(address.lower() for address in design),
+        )
+
+
+class MailStorePort(Protocol):
+    """The stored mailbox, as the lane writes it."""
+
+    async def handled_sources(self, scope: SalesScope) -> frozenset[str]:
+        """The file names already handled: stored, or left out on purpose."""
+        ...
+
+    async def leave_out(self, scope: SalesScope, *, source: str) -> None:
+        """Record that ``source`` held mail the rules leave out, and nothing
+        else of it."""
+        ...
+
+    async def store(
+        self, scope: SalesScope, mail: MailFile, *, source: str, event: AuditEvent
+    ) -> bool:
+        """The message, its attachments and ``event`` in one transaction.
+        False, and nothing written, when the message is already stored: by
+        its id, or by its Message-ID from the same sender address."""
+        ...
+
+
+@dataclass(frozen=True)
+class DropTick:
+    """What one tick did, by file name."""
+
+    stored: tuple[str, ...] = ()
+    already_stored: tuple[str, ...] = ()
+    left_out: tuple[str, ...] = ()
+    refused: tuple[tuple[str, str], ...] = ()
+    waiting: int = 0
+
+
+_Outcome = Literal["stored", "already_stored", "left_out"]
+_Taken = _Outcome | Literal["waiting"] | MailRefused
+
+
+@dataclass
+class MailDrop:
+    """One drop folder, read into one workspace's stored mailbox."""
+
+    folder: DropFolderPort
+    reader: MailFileReaderPort
+    store: MailStorePort
+    intake: MailIntakePort
+    clock: UtcClock
+    ids: IdGenerator
+    max_bytes: int = MAX_MAIL_BYTES
+    # The names handled, or refused by this process; None until the first tick.
+    _seen: set[str] | None = field(default=None, init=False, repr=False)
+
+    async def tick(self, scope: SalesScope) -> DropTick:
+        if self._seen is None:
+            self._seen = set(await self.store.handled_sources(scope))
+        seen = self._seen
+        now = self.clock.now()
+        intake = await self.intake.intake(scope)
+        done: dict[_Outcome, list[str]] = {"stored": [], "already_stored": [], "left_out": []}
+        refused: list[tuple[str, str]] = []
+        waiting = 0
+        for dropped in sorted(await self.folder.files(), key=lambda f: f.name):
+            if dropped.name in seen or not dropped.name.lower().endswith(_SUFFIX):
+                continue
+            taken = (
+                "waiting"
+                if dropped.size == 0 or now - dropped.modified_at < SETTLE
+                else await self._take(scope, dropped, intake)
+            )
+            if taken == "waiting":
+                waiting += 1
+                continue
+            seen.add(dropped.name)
+            if isinstance(taken, MailRefused):
+                logger.warning("sales_mail_drop: %s not stored: %s", dropped.name, taken.reason)
+                refused.append((dropped.name, taken.reason))
+            else:
+                done[taken].append(dropped.name)
+        return DropTick(
+            stored=tuple(done["stored"]),
+            already_stored=tuple(done["already_stored"]),
+            left_out=tuple(done["left_out"]),
+            refused=tuple(refused),
+            waiting=waiting,
+        )
+
+    async def _take(self, scope: SalesScope, dropped: DroppedFile, intake: MailIntake) -> _Taken:
+        if dropped.size > self.max_bytes:
+            return _over(self.max_bytes)
+        data = await self.folder.read(dropped, self.max_bytes)
+        if not data:
+            return "waiting"
+        if len(data) > self.max_bytes:
+            return _over(self.max_bytes)
+        read = await self.reader.read_mail(data)
+        if isinstance(read, MailRefused):
+            return read
+        if not intake.takes(read.message.sender):
+            await self.store.leave_out(scope, source=dropped.name)
+            return "left_out"
+        event = lane_audit_event(
+            lane=MAIL_DROP_LANE,
+            event_id=self.ids.new_uuid(),
+            tenant_id=scope.tenant_id,
+            workspace_id=scope.workspace_id,
+            action=MAIL_STORED,
+            resource_type="sales.message",
+            resource_id=read.message.message_id,
+            occurred_at=self.clock.now(),
+            details={"source": dropped.name, "attachments": len(read.message.attachments)},
+        )
+        if await self.store.store(scope, read, source=dropped.name, event=event):
+            return "stored"
+        return "already_stored"
+
+
+def _over(limit: int) -> MailRefused:
+    return MailRefused(f"the file is over {limit // (1024 * 1024)} MB")

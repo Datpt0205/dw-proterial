@@ -87,6 +87,11 @@ _SALES_TABLES = (
     # Migration 2d97d03c937a (dw_sales ADR 0005, addendum of 2026-10-23): each
     # live measurement of a model step.
     "sales.model_step_measurements",
+    # Migration e544ff20fad6 (ticket 43): the stored mailbox, and the files
+    # the drop lane has handled.
+    "sales.mailbox_messages",
+    "sales.mailbox_attachments",
+    "sales.mailbox_files",
 )
 
 
@@ -142,6 +147,13 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "SELECT",
         "INSERT",
     }
+    # Stored mail and the files it came from (ticket 43), every partition:
+    # what arrived is never rewritten or removed by the application.
+    for prefix in ("mailbox_messages", "mailbox_attachments", "mailbox_files"):
+        tables = {tbl for tbl, _ in held if tbl.startswith(prefix)}
+        assert {prefix, f"{prefix}_default"} <= tables, prefix
+        for table in tables:
+            assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
     event_tables = {tbl for tbl, _ in held if tbl.startswith("case_events")}
     assert {"case_events", "case_events_default"} <= event_tables
     for table in event_tables:

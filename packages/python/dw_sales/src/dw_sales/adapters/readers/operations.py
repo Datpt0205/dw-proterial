@@ -58,6 +58,7 @@ from dw_sales.adapters.readers.legacy import (
     Legacy,
     LibreOfficeConverter,
 )
+from dw_sales.adapters.readers.mail import read_mail
 from dw_sales.adapters.readers.ocr import PageOcrPort, TesseractOcr
 from dw_sales.adapters.readers.pdf import PdfPoReader
 from dw_sales.adapters.readers.tables import read_table
@@ -283,6 +284,10 @@ async def _table_rows(request: ReaderRequest, tools: ReaderTools) -> Any:
     return await asyncio.to_thread(read_table, data, _caps(request))
 
 
+async def _mail(request: ReaderRequest, tools: ReaderTools) -> Any:
+    return await asyncio.to_thread(read_mail, request.data())
+
+
 def _caps(request: ReaderRequest) -> IntakeCaps:
     return request.args.required(request.args.caps, "caps")
 
@@ -304,6 +309,7 @@ OPERATIONS: Final[Mapping[ReaderOp, _Operation]] = MappingProxyType(
         ReaderOp.SOURCE_SHEET_NAMES: _sheet_names,
         ReaderOp.SOURCE_SHEET_GRID: _sheet_grid,
         ReaderOp.TABLE_ROWS: _table_rows,
+        ReaderOp.MAIL_READ: _mail,
     }
 )
 

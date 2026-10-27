@@ -138,6 +138,16 @@ class ApiSettings(BaseSettings):
         validation_alias=AliasChoices("DW_API_SALES_DEMO_WORKSPACE_ID", "SALES_DEMO_WORKSPACE_ID"),
     )
 
+    # --- Sales: which mailbox DW1 reads (ticket 43) ---
+    # `mock`: the fictional mailbox bound to the scope above (the demo).
+    # `stored`: the real mail the worker's `sales_mail_drop` lane stores from
+    # the drop folder. One variable both processes read, so the API never
+    # shows one mailbox while the worker's lanes work another
+    # (`test_worker_sales_settings.py`).
+    sales_mailbox: Literal["mock", "stored"] = Field(
+        default="mock", validation_alias=AliasChoices("DW_SALES_MAILBOX")
+    )
+
     # --- Sales: the malware scanner (ticket 25) ---
     # `clamd`: every attachment is scanned by the `clamav` compose service
     # before anything reads it. `skip`: files are handed over unscanned, for a

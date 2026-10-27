@@ -8,6 +8,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-27, **real mail without Microsoft 365 access** (ticket 43, `issues/43-mail-drop-folder.md`): Proterial refuses DW1 any M365 access and its admins are in Japan. Each PIC's Power Automate flow exports every Inbox mail as `.eml` to their OneDrive; a plant PC syncs the PICs' shared folders and shares them over SMB; the worker's `sales_mail_drop` lane parses each file in the reader sandbox (`mail.read`) and stores it (`sales.mailbox_messages`/`_attachments`/`_files`, migration `e544ff20fad6`, append-only, partitioned, RLS). `DW_SALES_MAILBOX=mock|stored` in both processes; `sales_order_rules@1.7.0` adds `ignored_sender_domains` (empty takes all; Design always taken), placed on step O1. Guides for the PICs and for the plant PC/host are Word files outside git. Checked: unit (mail read 12, lane 18), integration 16 on Docker, mutation check 10/10 red. **Owed:** retention of stored mail (must follow the cases'); the plant PC steps (OneDrive shortcuts moved into one folder, SMB over a OneDrive folder) are written from knowledge, not yet measured; a real Exchange export read by `mail.read` (Đạt's test file, not yet in hand).
+
 - 2026-10-26, **user guide for Proterial** (Đạt): `docs/user-guide/Huong-dan-su-dung_Proterial_DW1.docx`, 22 pages, every role (Sales PIC, Sales head, leadership, IT), built from `docs/user-guide/huong-dan-su-dung-dw1.md` with the fdx-word-doc skill (TOC page numbers from Word over COM: no LibreOffice on this machine). Screenshots are the demo tenant's fictional data, taken as each persona through the dev-auth stack; every button label in the text was checked against the code. No screenshot of Thêm người (dev auth has no Keycloak) or of an empty Duyệt page. Rebuild after a UI change: edit the `.md` and rerun the build; the recipe is in this commit's message.
 
 - 2026-10-26, layout from Đạt's look at the running portal:
@@ -1001,6 +1003,7 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 | 41     | `035d5a7` | Master data imported from a file, previewed, approved on `sales.catalog`; mock until approved (`ed78006`) |
 | 40     | `6659d14` | Rules edited in a form drawn from each key's schema; diff before sending and on the approval (look owed)  |
 | 42     | `4235dde` | Follow-ups and the 07:30 brief, every timing in `sales_followups`; integration owed on Docker             |
+| 43     | State     | Real mail from a drop folder of `.eml` files, stored in PostgreSQL; ignored sender domains in the rules   |
 
 ## Open
 

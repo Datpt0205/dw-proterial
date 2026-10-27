@@ -440,3 +440,45 @@ model_step_measurements = sa.Table(
     sa.Column("recorded_by", sa.Text, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
 )
+
+# The stored mailbox (ticket 43, migration e544ff20fad6): each message whole in
+# `message`, the keys the queries need beside it, and each attachment's bytes.
+# Both append-only and partitioned by month on `received_at`.
+mailbox_messages = sa.Table(
+    "mailbox_messages",
+    metadata,
+    sa.Column("tenant_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("workspace_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("message_id", sa.Text, primary_key=True),
+    sa.Column("received_at", _TS, primary_key=True),
+    sa.Column("sender_address", sa.Text, nullable=False),
+    sa.Column("internet_message_id", sa.Text),
+    sa.Column("source_name", sa.Text, nullable=False),
+    sa.Column("message", JSONB, nullable=False),
+    sa.Column("stored_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+mailbox_attachments = sa.Table(
+    "mailbox_attachments",
+    metadata,
+    sa.Column("tenant_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("workspace_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("message_id", sa.Text, primary_key=True),
+    sa.Column("received_at", _TS, primary_key=True),
+    sa.Column("attachment_id", sa.Text, primary_key=True),
+    sa.Column("content", sa.LargeBinary, nullable=False),
+    sa.Column("stored_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
+# Every file the drop lane handled and what became of it, so a restart does
+# not parse the folders' history again (ticket 43).
+mailbox_files = sa.Table(
+    "mailbox_files",
+    metadata,
+    sa.Column("tenant_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("workspace_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("source_name", sa.Text, primary_key=True),
+    sa.Column("handled_at", _TS, primary_key=True, server_default=sa.func.now()),
+    sa.Column("outcome", sa.Text, nullable=False),
+    sa.Column("message_id", sa.Text),
+)

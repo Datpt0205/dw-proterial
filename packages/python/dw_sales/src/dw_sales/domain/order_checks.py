@@ -21,7 +21,7 @@ from enum import StrEnum
 from typing import Final, Literal, NamedTuple, Self, assert_never, get_args
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -37,7 +37,7 @@ from dw_sales.domain.catalog import (
 )
 from dw_sales.domain.description_reading import DescriptionReading, Verified
 from dw_sales.domain.descriptions import StatedAttributes, candidates, read_description
-from dw_sales.domain.messages import MailAuthentication
+from dw_sales.domain.messages import MailAuthentication, is_domain
 from dw_sales.domain.orders import (
     CheckName,
     ExportControlMode,
@@ -209,6 +209,22 @@ class OrderRules(BaseModel):
     model_assist: ModelAssist
     layout_onboarding: LayoutOnboarding
     findings: Mapping[FindingCode, Severity]
+    # Mail from these sender domains, or any subdomain of one, is not taken
+    # into DW1's mailbox at all (ticket 43): a PIC's flow exports every mail
+    # that reaches the Inbox, and the company's own is mostly not DW1's.
+    # Empty takes every mail. Mail from a Design mailbox (`sales_quote_rules`)
+    # is taken whatever this holds: a reply from Design is internal mail.
+    ignored_sender_domains: tuple[str, ...] = Field(default=(), max_length=100)
+
+    @field_validator("ignored_sender_domains")
+    @classmethod
+    def _domains(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        for index, domain in enumerate(value):
+            if not is_domain(domain):
+                raise ValueError(f"ignored_sender_domains[{index}] is not a lowercase domain")
+        if len(value) != len(set(value)):
+            raise ValueError("a domain is listed twice in ignored_sender_domains")
+        return value
 
     @model_validator(mode="after")
     def _every_finding_has_a_severity(self) -> Self:
