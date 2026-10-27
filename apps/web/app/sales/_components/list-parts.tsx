@@ -13,6 +13,7 @@ import {
   Avatar,
   Button,
   Card,
+  Grid,
   Input,
   Segmented,
   Select,
@@ -20,6 +21,7 @@ import {
   Tooltip,
   Typography,
 } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import type { CaseListActivity } from "@dw/api-client";
 import { STATUS_TONES, type StatusTone } from "@dw/ui";
 import { dayDeadline, UNKNOWN_TIME } from "../../../lib/dates";
@@ -210,23 +212,56 @@ export function ListToolbar<Tab extends string, Sort extends string>({
 
 // ------------------------------------------------------------ the rows --
 
+/** Below antd's `md` (768 px), where a Sales list draws its phone layout:
+ * measured, `xs` or `sm` matching. Until antd has measured (and wherever no
+ * width matches at all) it is a desk: nothing is hidden on a guess. */
+export function useIsPhone(): boolean {
+  const screens = Grid.useBreakpoint();
+  return screens.md === false && (screens.xs === true || screens.sm === true);
+}
+
+/**
+ * A list's columns as a phone draws them: below `md` only the first column,
+ * whose `RowTitle` carries a `phone` line with what the hidden columns say
+ * that matters there, and any column `keep` names because it holds the row's
+ * action. A column pinned right is pinned only from `md`, where there is room
+ * for it. 2026-10-27, at 390 px: each list showed its first column and the
+ * deadline, state and owner sat off-screen to the right.
+ */
+export function usePhoneColumns() {
+  const isPhone = useIsPhone();
+  return function phone<T>(
+    columns: ColumnsType<T>,
+    keep: readonly string[] = [],
+  ): ColumnsType<T> {
+    if (!isPhone) return columns;
+    return columns
+      .filter((column, i) => i === 0 || keep.includes(String(column.key)))
+      .map((column) => ({ ...column, fixed: undefined }));
+  };
+}
+
 /**
  * The row's two lines: its name, which is the link (opens in a new tab,
  * truncated with the whole on hover), over its identifier in monospace and
- * whatever else identifies it. An identifier is never truncated.
+ * whatever else identifies it. An identifier is never truncated. `phone` is
+ * a third line drawn on a phone only (`usePhoneColumns`).
  */
 export function RowTitle({
   href,
   title,
   code,
   sub,
+  phone,
 }: {
   href: string;
   title: string;
   code?: string | null;
   sub?: ReactNode;
+  phone?: ReactNode;
 }) {
   const { token } = theme.useToken();
+  const isPhone = useIsPhone();
   return (
     <span className="flex min-w-0 max-w-md flex-col">
       <Link href={href} className="min-w-0 text-foreground hover:underline">
@@ -255,6 +290,11 @@ export function RowTitle({
           </Typography.Text>
         ) : null}
       </span>
+      {phone && isPhone ? (
+        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          {phone}
+        </span>
+      ) : null}
     </span>
   );
 }

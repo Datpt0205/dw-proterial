@@ -36,6 +36,7 @@ import {
   PriorityPanel,
   RowTitle,
   type PriorityItem,
+  usePhoneColumns,
 } from "./_components/list-parts";
 import { SCOPE } from "./_components/sales-frame";
 import { ScopeGate } from "./_components/scope-gate";
@@ -75,6 +76,7 @@ function MyWork() {
   const now = useNow();
   const { hasScope } = useAuth();
   const person = usePeople();
+  const phone = usePhoneColumns();
   const customerName = useCustomerName();
   const view = useListView(TABS, "all", SORTS, "api");
   const work = useResource(
@@ -336,7 +338,7 @@ function MyWork() {
             footer={() =>
               `${listFooter(shown.length, inTab(view.tab).length, items.length, "việc", view.query !== "")} · cập nhật lúc ${formatInstant(now)}`
             }
-            columns={[
+            columns={phone([
               {
                 title: "Việc",
                 key: "action",
@@ -352,20 +354,19 @@ function MyWork() {
                         .join(" · ") ||
                         UNKNOWN_TIME)
                     }
+                    phone={
+                      <>
+                        <ItemState item={item} />
+                        <DueCell item={item} now={now} />
+                      </>
+                    }
                   />
                 ),
               },
               {
                 title: "Trạng thái",
                 key: "status",
-                render: (_, item) =>
-                  item.kind === "order" ? (
-                    <OrderStateTag status={item.status} />
-                  ) : item.kind === "quote" ? (
-                    <QuoteStateTag status={item.status} />
-                  ) : (
-                    <MessageDispositionTag kind={item.status} />
-                  ),
+                render: (_, item) => <ItemState item={item} />,
               },
               {
                 title: "Cờ chưa quyết định",
@@ -415,7 +416,7 @@ function MyWork() {
                     />
                   ),
               },
-            ]}
+            ])}
           />
         </>
       )}
@@ -468,6 +469,16 @@ function MyWork() {
         )}
       </Card>
     </div>
+  );
+}
+
+function ItemState({ item }: { item: WorkItem }) {
+  return item.kind === "order" ? (
+    <OrderStateTag status={item.status} />
+  ) : item.kind === "quote" ? (
+    <QuoteStateTag status={item.status} />
+  ) : (
+    <MessageDispositionTag kind={item.status} />
   );
 }
 

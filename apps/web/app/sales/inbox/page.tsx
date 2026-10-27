@@ -54,6 +54,7 @@ import {
   PriorityPanel,
   RowTitle,
   type PriorityItem,
+  usePhoneColumns,
 } from "../_components/list-parts";
 import {
   PAUSED_REASON,
@@ -116,6 +117,7 @@ function Inbox() {
   const { paused, overview, progress } = useSalesFrame();
   const focus = useSearchParams().get("message");
   const name = usePeople();
+  const phone = usePhoneColumns();
   const view = useListView(TABS, "all", SORTS, "newest");
   const inbox = useResource(
     "sales/inbox",
@@ -409,178 +411,200 @@ function Inbox() {
             footer={() =>
               `${listFooter(shown.length, messages.filter((m) => inTab(view.tab, m)).length, messages.length, "thư", view.query !== "")} · ${waiting} chưa xử lý`
             }
-            columns={[
-              {
-                title: "Thư",
-                key: "subject",
-                render: (_, m) => (
-                  <RowTitle
-                    href={`/sales/inbox?message=${encodeURIComponent(m.message_id)}`}
-                    title={m.subject}
-                    code={messageRef(m.message_id)}
-                    sub={
-                      <>
-                        {m.sender_name} &lt;{m.sender}&gt;
-                        {m.attachments.length ? (
-                          <>
-                            {" · "}
-                            <PaperClipOutlined aria-hidden />{" "}
-                            {m.attachments.length} tệp
-                          </>
-                        ) : null}
-                      </>
-                    }
-                  />
-                ),
-              },
-              {
-                title: "Người gửi",
-                key: "verified",
-                render: (_, m) =>
-                  m.sender_verified ? (
-                    <StatusTag
-                      tone="ok"
-                      icon={<SafetyCertificateOutlined aria-hidden />}
-                    >
-                      Đã xác thực người gửi
-                    </StatusTag>
-                  ) : (
-                    <StatusTag
-                      tone="warn"
-                      icon={<WarningOutlined aria-hidden />}
-                    >
-                      Chưa xác thực người gửi
-                    </StatusTag>
-                  ),
-              },
-              {
-                title: "Hướng xử lý",
-                key: "disposition",
-                render: (_, m) => (
-                  <span className="flex flex-col items-start gap-1">
-                    <MessageDispositionTag kind={m.disposition.kind} />
-                    {m.disposition.reason ? (
-                      <Typography.Text type="secondary">
-                        Lý do: {label(ROUTING_REASON, m.disposition.reason)}
-                      </Typography.Text>
-                    ) : null}
-                    {m.disposition.reading ? (
-                      <IntentTag reading={m.disposition.reading} />
-                    ) : null}
-                    {m.disposition.reply ? (
-                      <ReplyTag reply={m.disposition.reply} />
-                    ) : null}
-                    {m.handoff_draft ? (
-                      <Typography.Text>
-                        Có bản chuyển{" "}
-                        {m.handoff_draft.to === "qa" ? "QA" : "PC"} soạn sẵn: mở
-                        thư để xem
-                      </Typography.Text>
-                    ) : null}
-                    {m.disposition.case_id ? (
-                      <Link
-                        href={`/sales/${m.disposition.case_kind === "quote" ? "quotes" : "orders"}/${m.disposition.case_id}`}
-                      >
-                        {m.disposition.case_kind === "quote"
-                          ? "Mở báo giá"
-                          : "Mở đơn hàng"}
-                      </Link>
-                    ) : null}
-                  </span>
-                ),
-              },
-              {
-                title: "Người phụ trách",
-                key: "owner",
-                align: "center",
-                render: (_, m) =>
-                  m.disposition.kind === "routed_to_sales" ? (
-                    m.disposition.owner ? (
-                      <Assignee
-                        name={name(m.disposition.owner)}
-                        group={m.disposition.owner.startsWith("role:")}
-                      />
-                    ) : (
-                      <StatusTag tone="err" icon={<StopOutlined aria-hidden />}>
-                        Chưa có người phụ trách
-                      </StatusTag>
-                    )
-                  ) : (
-                    ""
-                  ),
-              },
-              {
-                title: `Nhận lúc (${TIME_ZONE_LABEL})`,
-                key: "received",
-                align: "right",
-                render: (_, m) => (
-                  <span className="flex flex-col items-end">
-                    <span>{formatAge(m.received_at, now)} trước</span>
-                    <Typography.Text type="secondary">
-                      {formatDateTime(m.received_at, { zoneLabel: false })}
-                    </Typography.Text>
-                  </span>
-                ),
-              },
-              {
-                title: "DW1",
-                key: "process",
-                fixed: "right",
-                render: (_, m) =>
-                  m.processing && working(m) ? (
-                    <span role="status">
-                      <ProcessingTag status={m.processing.status} />
-                    </span>
-                  ) : m.disposition.kind === "not_yet_processed" ? (
-                    <span className="flex flex-col items-start gap-1">
-                      {m.processing?.status === "failed" ? (
+            columns={phone(
+              [
+                {
+                  title: "Thư",
+                  key: "subject",
+                  render: (_, m) => (
+                    <RowTitle
+                      href={`/sales/inbox?message=${encodeURIComponent(m.message_id)}`}
+                      title={m.subject}
+                      code={messageRef(m.message_id)}
+                      sub={
                         <>
-                          <ProcessingTag status="failed" />
-                          <Typography.Text>
-                            {label(PROCESSING_ERROR, m.processing.error)}
+                          {m.sender_name} &lt;{m.sender}&gt;
+                          {m.attachments.length ? (
+                            <>
+                              {" · "}
+                              <PaperClipOutlined aria-hidden />{" "}
+                              {m.attachments.length} tệp
+                            </>
+                          ) : null}
+                        </>
+                      }
+                      phone={
+                        <>
+                          <MessageDispositionTag kind={m.disposition.kind} />
+                          {m.sender_verified ? null : (
+                            <StatusTag
+                              tone="warn"
+                              icon={<WarningOutlined aria-hidden />}
+                            >
+                              Chưa xác thực người gửi
+                            </StatusTag>
+                          )}
+                          <Typography.Text type="secondary">
+                            {formatAge(m.received_at, now)} trước
                           </Typography.Text>
                         </>
-                      ) : null}
-                      <GuardedButton
-                        size="small"
-                        inlineReason={false}
-                        reason={processReason}
-                        loading={pending === `inbox/${m.message_id}`}
-                        onClick={() => processOne(m)}
-                        aria-label={`DW xử lý thư ${messageRef(m.message_id)}`}
+                      }
+                    />
+                  ),
+                },
+                {
+                  title: "Người gửi",
+                  key: "verified",
+                  render: (_, m) =>
+                    m.sender_verified ? (
+                      <StatusTag
+                        tone="ok"
+                        icon={<SafetyCertificateOutlined aria-hidden />}
                       >
-                        DW xử lý
-                      </GuardedButton>
+                        Đã xác thực người gửi
+                      </StatusTag>
+                    ) : (
+                      <StatusTag
+                        tone="warn"
+                        icon={<WarningOutlined aria-hidden />}
+                      >
+                        Chưa xác thực người gửi
+                      </StatusTag>
+                    ),
+                },
+                {
+                  title: "Hướng xử lý",
+                  key: "disposition",
+                  render: (_, m) => (
+                    <span className="flex flex-col items-start gap-1">
+                      <MessageDispositionTag kind={m.disposition.kind} />
+                      {m.disposition.reason ? (
+                        <Typography.Text type="secondary">
+                          Lý do: {label(ROUTING_REASON, m.disposition.reason)}
+                        </Typography.Text>
+                      ) : null}
+                      {m.disposition.reading ? (
+                        <IntentTag reading={m.disposition.reading} />
+                      ) : null}
+                      {m.disposition.reply ? (
+                        <ReplyTag reply={m.disposition.reply} />
+                      ) : null}
+                      {m.handoff_draft ? (
+                        <Typography.Text>
+                          Có bản chuyển{" "}
+                          {m.handoff_draft.to === "qa" ? "QA" : "PC"} soạn sẵn:
+                          mở thư để xem
+                        </Typography.Text>
+                      ) : null}
+                      {m.disposition.case_id ? (
+                        <Link
+                          href={`/sales/${m.disposition.case_kind === "quote" ? "quotes" : "orders"}/${m.disposition.case_id}`}
+                        >
+                          {m.disposition.case_kind === "quote"
+                            ? "Mở báo giá"
+                            : "Mở đơn hàng"}
+                        </Link>
+                      ) : null}
                     </span>
-                  ) : m.disposition.processed_at ? (
-                    <span className="flex flex-col items-start">
+                  ),
+                },
+                {
+                  title: "Người phụ trách",
+                  key: "owner",
+                  align: "center",
+                  render: (_, m) =>
+                    m.disposition.kind === "routed_to_sales" ? (
+                      m.disposition.owner ? (
+                        <Assignee
+                          name={name(m.disposition.owner)}
+                          group={m.disposition.owner.startsWith("role:")}
+                        />
+                      ) : (
+                        <StatusTag
+                          tone="err"
+                          icon={<StopOutlined aria-hidden />}
+                        >
+                          Chưa có người phụ trách
+                        </StatusTag>
+                      )
+                    ) : (
+                      ""
+                    ),
+                },
+                {
+                  title: `Nhận lúc (${TIME_ZONE_LABEL})`,
+                  key: "received",
+                  align: "right",
+                  render: (_, m) => (
+                    <span className="flex flex-col items-end">
+                      <span>{formatAge(m.received_at, now)} trước</span>
                       <Typography.Text type="secondary">
-                        đã xử lý
+                        {formatDateTime(m.received_at, { zoneLabel: false })}
                       </Typography.Text>
-                      <Typography.Text type="secondary">
-                        {formatDateTime(m.disposition.processed_at, {
-                          zoneLabel: false,
-                        })}
-                      </Typography.Text>
-                      {/* A Design reply processed before its YCBG went to
-                          Design is matched once it has: the API takes a
-                          routed message again (InboxService.process). */}
-                      {m.disposition.reason === "design_reply_unmatched" ? (
+                    </span>
+                  ),
+                },
+                {
+                  title: "DW1",
+                  key: "process",
+                  fixed: "right",
+                  render: (_, m) =>
+                    m.processing && working(m) ? (
+                      <span role="status">
+                        <ProcessingTag status={m.processing.status} />
+                      </span>
+                    ) : m.disposition.kind === "not_yet_processed" ? (
+                      <span className="flex flex-col items-start gap-1">
+                        {m.processing?.status === "failed" ? (
+                          <>
+                            <ProcessingTag status="failed" />
+                            <Typography.Text>
+                              {label(PROCESSING_ERROR, m.processing.error)}
+                            </Typography.Text>
+                          </>
+                        ) : null}
                         <GuardedButton
                           size="small"
                           inlineReason={false}
                           reason={processReason}
                           loading={pending === `inbox/${m.message_id}`}
                           onClick={() => processOne(m)}
-                          aria-label={`DW xử lý lại thư ${messageRef(m.message_id)}`}
+                          aria-label={`DW xử lý thư ${messageRef(m.message_id)}`}
                         >
-                          DW xử lý lại
+                          DW xử lý
                         </GuardedButton>
-                      ) : null}
-                    </span>
-                  ) : null,
-              },
-            ]}
+                      </span>
+                    ) : m.disposition.processed_at ? (
+                      <span className="flex flex-col items-start">
+                        <Typography.Text type="secondary">
+                          đã xử lý
+                        </Typography.Text>
+                        <Typography.Text type="secondary">
+                          {formatDateTime(m.disposition.processed_at, {
+                            zoneLabel: false,
+                          })}
+                        </Typography.Text>
+                        {/* A Design reply processed before its YCBG went to
+                          Design is matched once it has: the API takes a
+                          routed message again (InboxService.process). */}
+                        {m.disposition.reason === "design_reply_unmatched" ? (
+                          <GuardedButton
+                            size="small"
+                            inlineReason={false}
+                            reason={processReason}
+                            loading={pending === `inbox/${m.message_id}`}
+                            onClick={() => processOne(m)}
+                            aria-label={`DW xử lý lại thư ${messageRef(m.message_id)}`}
+                          >
+                            DW xử lý lại
+                          </GuardedButton>
+                        ) : null}
+                      </span>
+                    ) : null,
+                },
+              ],
+              ["process"],
+            )}
           />
         </>
       )}

@@ -27,7 +27,7 @@ vi.mock("next/navigation", () => ({
 const mail = (id: string, owner: string): WorkItem => ({
   kind: "message",
   id,
-  status: "routed",
+  status: "routed_to_sales",
   action: "triage",
   customer_code: null,
   received_at: "2026-10-27T01:00:00Z",
@@ -49,31 +49,62 @@ vi.mock("../api", () => ({ salesApi: () => api }));
 import MyWorkPage from "../../page";
 import { SalesFrameProvider } from "../../_components/sales-frame";
 
+const desk = window.matchMedia;
 afterEach(() => {
   cleanup();
   items = [];
+  window.matchMedia = desk;
 });
 
-describe("a routed mail on Việc cần làm (2026-10-27)", () => {
-  it(
-    "names its owner as the inbox does: a person, or the team",
-    async () => {
-      items = [mail("m-1", AN), mail("m-2", "role:sales_admin")];
-      render(
-        <UiProvider>
-          <SalesFrameProvider>
-            <MyWorkPage />
-          </SalesFrameProvider>
-        </UiProvider>,
-      );
-      expect(
-        await screen.findByRole("img", { name: "Phụ trách: An (bạn)" }),
-      ).toBeTruthy();
-      expect(
-        screen.getByRole("img", { name: /^Phụ trách: Cả nhóm / }),
-      ).toBeTruthy();
-      expect(screen.queryByText("Chưa giao")).toBeNull();
-    },
-    20_000,
+/** A 390 px phone: antd's `xs` query matches, every `min-width` does not. */
+function phoneWidth() {
+  window.matchMedia = ((query: string) => ({
+    matches: /max-width:\s*575/.test(query),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+}
+
+function page() {
+  return render(
+    <UiProvider>
+      <SalesFrameProvider>
+        <MyWorkPage />
+      </SalesFrameProvider>
+    </UiProvider>,
   );
+}
+
+describe("a routed mail on Việc cần làm (2026-10-27)", () => {
+  it("names its owner as the inbox does: a person, or the team", async () => {
+    items = [mail("m-1", AN), mail("m-2", "role:sales_admin")];
+    page();
+    expect(
+      await screen.findByRole("img", { name: "Phụ trách: An (bạn)" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", { name: /^Phụ trách: Cả nhóm / }),
+    ).toBeTruthy();
+    expect(screen.queryByText("Chưa giao")).toBeNull();
+  }, 20_000);
+
+  it("on a phone, draws the work column alone with the state and deadline under it", async () => {
+    phoneWidth();
+    items = [mail("m-1", AN)];
+    page();
+    expect(await screen.findByText("Không đặt hạn")).toBeTruthy();
+    // The work list's other columns are gone (the YCBG list below keeps its).
+    const headers = screen
+      .getAllByRole("columnheader")
+      .map((h) => h.textContent);
+    expect(headers).toContain("Việc");
+    for (const gone of ["Trạng thái", "Hạn (giờ Việt Nam)", "Phụ trách"])
+      expect(headers).not.toContain(gone);
+    expect(screen.getByText("Chuyển Sales xử lý")).toBeTruthy();
+  }, 20_000);
 });

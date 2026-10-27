@@ -19,6 +19,7 @@ import {
 } from "../_lib/rules";
 import { useResource } from "../_lib/use-resource";
 import { salesCrumbs } from "../_components/crumbs";
+import { useIsPhone, usePhoneColumns } from "../_components/list-parts";
 import { ProposeDrawer } from "../_components/rule-editor";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -66,6 +67,8 @@ function Rules() {
   const fill = useFillHeight();
   const seesApprovals = useAuth().hasScope("approvals.read");
   const name = usePeople();
+  const phone = usePhoneColumns();
+  const isPhone = useIsPhone();
   const rules = useResource(
     "sales/rules",
     useCallback(() => salesApi().rules(), []),
@@ -95,57 +98,76 @@ function Rules() {
             scroll={{ x: "max-content" }}
             locale={{ emptyText: rules.loading ? " " : "Không có quy tắc." }}
             footer={() => `${keys.length} quy tắc`}
-            columns={[
-              {
-                title: "Quy tắc",
-                key: "key",
-                render: (_, k) => (
-                  <span className="flex flex-col">
-                    <Typography.Text strong>{RULE_KEY[k.key]}</Typography.Text>
-                    <Typography.Text code>{k.key}</Typography.Text>
-                  </span>
-                ),
-              },
-              {
-                title: "Đang áp dụng",
-                key: "in_force",
-                render: (_, k) => (
-                  <Space orientation="vertical" size={2}>
-                    <Typography.Text code>{k.inForce}</Typography.Text>
-                    <StatusTag tone={k.layer === "tenant" ? "ok" : "gray"}>
-                      {RULE_LAYER[k.layer]}
-                    </StatusTag>
-                  </Space>
-                ),
-              },
-              {
-                title: "Bản của nền tảng",
-                key: "platform",
-                render: (_, k) => (
-                  <Typography.Text code>{k.platform}</Typography.Text>
-                ),
-              },
-              {
-                title: "Chờ duyệt",
-                key: "waiting",
-                align: "right",
-                render: (_, k) => k.waiting,
-              },
-              {
-                title: "Đề xuất",
-                key: "propose",
-                fixed: "right",
-                render: (_, k) => (
-                  <Button
-                    size="small"
-                    onClick={() => setProposing({ key: k.key })}
-                    aria-label={`Đề xuất phiên bản mới: ${RULE_KEY[k.key]}`}
-                  >
-                    Đề xuất phiên bản mới
-                  </Button>
-                ),
-              },
-            ]}
+            columns={phone(
+              [
+                {
+                  title: "Quy tắc",
+                  key: "key",
+                  render: (_, k) => (
+                    <span className="flex flex-col">
+                      <Typography.Text strong>
+                        {RULE_KEY[k.key]}
+                      </Typography.Text>
+                      <Typography.Text code>{k.key}</Typography.Text>
+                      {isPhone ? (
+                        <span className="mt-1 flex flex-wrap items-center gap-2">
+                          <StatusTag
+                            tone={k.layer === "tenant" ? "ok" : "gray"}
+                          >
+                            {RULE_LAYER[k.layer]}
+                          </StatusTag>
+                          {k.waiting ? (
+                            <Typography.Text>
+                              {k.waiting} chờ duyệt
+                            </Typography.Text>
+                          ) : null}
+                        </span>
+                      ) : null}
+                    </span>
+                  ),
+                },
+                {
+                  title: "Đang áp dụng",
+                  key: "in_force",
+                  render: (_, k) => (
+                    <Space orientation="vertical" size={2}>
+                      <Typography.Text code>{k.inForce}</Typography.Text>
+                      <StatusTag tone={k.layer === "tenant" ? "ok" : "gray"}>
+                        {RULE_LAYER[k.layer]}
+                      </StatusTag>
+                    </Space>
+                  ),
+                },
+                {
+                  title: "Bản của nền tảng",
+                  key: "platform",
+                  render: (_, k) => (
+                    <Typography.Text code>{k.platform}</Typography.Text>
+                  ),
+                },
+                {
+                  title: "Chờ duyệt",
+                  key: "waiting",
+                  align: "right",
+                  render: (_, k) => k.waiting,
+                },
+                {
+                  title: "Đề xuất",
+                  key: "propose",
+                  fixed: "right",
+                  render: (_, k) => (
+                    <Button
+                      size="small"
+                      onClick={() => setProposing({ key: k.key })}
+                      aria-label={`Đề xuất phiên bản mới: ${RULE_KEY[k.key]}`}
+                    >
+                      Đề xuất bản mới
+                    </Button>
+                  ),
+                },
+              ],
+              ["propose"],
+            )}
           />
           <Typography.Title level={4} className="mb-0!">
             Các phiên bản của công ty

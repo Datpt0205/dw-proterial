@@ -34,6 +34,7 @@ import {
   PriorityPanel,
   RowTitle,
   type PriorityItem,
+  usePhoneColumns,
 } from "../_components/list-parts";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -78,6 +79,7 @@ function Orders() {
   const fill = useFillHeight();
   const now = useNow();
   const name = usePeople();
+  const phone = usePhoneColumns();
   const customerName = useCustomerName();
   const view = useListView(TABS, "open", SORTS, "newest");
   // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
@@ -300,7 +302,7 @@ function Orders() {
                 view.query !== "" || status.length > 0,
               )
             }
-            columns={[
+            columns={phone([
               {
                 title: "Đơn hàng",
                 key: "po",
@@ -314,6 +316,24 @@ function Orders() {
                     }
                     code={`PO ${o.po_no}${o.revision ? ` · Rev.${o.revision}` : ""}`}
                     sub={o.customer_code}
+                    phone={
+                      <>
+                        <OrderStateTag status={o.status} />
+                        {o.open_blocking_findings ? (
+                          <StatusTag
+                            tone="err"
+                            icon={<StopOutlined aria-hidden />}
+                          >
+                            {o.open_blocking_findings} chặn
+                          </StatusTag>
+                        ) : null}
+                        {o.open_findings ? (
+                          <Typography.Text>
+                            {o.open_findings} cờ
+                          </Typography.Text>
+                        ) : null}
+                      </>
+                    }
                   />
                 ),
               },
@@ -370,7 +390,7 @@ function Orders() {
                   />
                 ),
               },
-            ]}
+            ])}
           />
         </>
       )}

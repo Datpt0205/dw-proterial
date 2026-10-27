@@ -18,7 +18,7 @@ import type { AuditEvent } from "@dw/contracts";
 import { PageHeader, RegionState } from "@dw/ui";
 import { LoadError } from "../../components/load-error";
 import { LoadMore } from "../../components/load-more";
-import { formatDateTime } from "../../lib/dates";
+import { formatDateTime, TIME_ZONE_LABEL } from "../../lib/dates";
 import { apiClient } from "../../lib/session";
 import { useCachedPages } from "../../lib/use-cached-pages";
 import { useFillHeight } from "../../lib/use-fill-height";
@@ -251,9 +251,10 @@ function AuditTrail() {
               dataSource={visible}
               columns={[
                 {
-                  title: "Lúc",
+                  title: `Lúc (${TIME_ZONE_LABEL})`,
                   dataIndex: "occurred_at",
-                  render: (value: string) => formatDateTime(value),
+                  render: (value: string) =>
+                    formatDateTime(value, { zoneLabel: false }),
                 },
                 {
                   title: "Ai",
