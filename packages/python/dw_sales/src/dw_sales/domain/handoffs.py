@@ -220,15 +220,64 @@ def locate_identifier(part: str, span: str | None) -> Located | None:
 _NUMBER = re.compile(r"\d[\d.,  ]*\d|\d")
 
 
+# The word right after a quantity's number, its unit when it has one.
+_UNIT_AFTER = re.compile(r"\s*([^\W\d_]+)")
+# Units a customer writes that are not metres, the unit a hand-off line's
+# quantity is read in (the line says "số lượng mới {quantity}", no unit of its
+# own). A quantity in one of them is not copied: "3 km" would reach PC as 3
+# (found 2026-10-27 by the edge-case sets), and turning reels or feet into
+# metres is not copying.
+_OTHER_UNITS: Final = frozenset(
+    {
+        "km",
+        "ft",
+        "feet",
+        "foot",
+        "kg",
+        "cuộn",
+        "cuon",
+        "reel",
+        "reels",
+        "drum",
+        "drums",
+        "roll",
+        "rolls",
+        "coil",
+        "coils",
+        "bobbin",
+        "bobbins",
+        "pcs",
+        "pc",
+        "cái",
+        "cai",
+        "chiếc",
+        "chiec",
+        "bộ",
+        "bo",
+        "巻",
+        "本",
+        "個",
+        "ドラム",
+        "リール",
+        "キロ",
+    }
+)
+
+
 def quantity_of(span: str) -> Decimal | None:
     """The one number a quantity span holds, as a customer groups it
-    (`rfq_reading.parse_number`), whatever words or unit stand around it
-    ("2.000 m", "4,000m", "各50m"); None for a span with no number or with
-    two, which says more than one quantity."""
-    numbers = _NUMBER.findall(unicodedata.normalize("NFKC", span))
+    (`rfq_reading.parse_number`), whatever words stand around it ("2.000 m",
+    "thêm 500", "各50m"); None for a span with no number or with two, which
+    says more than one quantity, and None for a number in another unit than
+    metres ("3 km", "4 cuộn", "2巻"), which Sales fills instead."""
+    text = unicodedata.normalize("NFKC", span)
+    numbers = list(_NUMBER.finditer(text))
     if len(numbers) != 1:
         return None
-    value = parse_number(numbers[0])
+    unit = _UNIT_AFTER.match(text, numbers[0].end())
+    if unit is not None and unit.group(1).lower() in _OTHER_UNITS:
+        return None
+    value = parse_number(numbers[0].group(0))
     return value if value is not None and value > 0 else None
 
 

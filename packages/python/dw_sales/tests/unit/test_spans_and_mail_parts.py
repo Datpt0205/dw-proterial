@@ -77,6 +77,10 @@ def _message(body: str, *, html: str | None = None, subject: str = "RFQ") -> Inb
         "-----Original Message-----\nOld offer 5,000 m.",
         "---------- Forwarded message ---------\nOld offer 5,000 m.",
         "From: Sales\nSent: 21/09/2026\nSubject: offer\nOld offer 5,000 m.",
+        # Outlook in Vietnamese prints "Đã gửi" for Sent (found 2026-10-27 by
+        # the edge-case sets: the cut missed it and a quoted offer reached the
+        # reading).
+        "Từ: Sales\nĐã gửi: Thứ Hai, 21 tháng 9, 2026 10:00\nChủ đề: báo giá\nBáo giá cũ 5.000 m.",
         "> Old offer 5,000 m.\n> Sales",
     ],
     ids=[
@@ -86,6 +90,7 @@ def _message(body: str, *, html: str | None = None, subject: str = "RFQ") -> Inb
         "outlook_original",
         "forward",
         "outlook_header",
+        "outlook_header_vi",
         "quoted",
     ],
 )
