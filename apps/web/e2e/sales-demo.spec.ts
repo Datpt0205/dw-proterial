@@ -351,7 +351,7 @@ test("1. An sends M04 back to the customer; prepare is refused while a blocking 
   await signIn(page, request, AN);
   await page.goto("/sales/inbox");
   await expect(
-    page.getByRole("heading", { name: "Hộp thư (giả lập)" }),
+    page.getByRole("heading", { name: "Hộp thư" }),
   ).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "M04" });
   await row
@@ -1092,7 +1092,7 @@ test("9. Who sees what: Hà the overview only, Bình nothing, Tâm the rules alo
   await page.goto("/sales/inbox");
   await expect(
     page.getByText(
-      "Hộp thư giả lập không có thư nào cho không gian làm việc này.",
+      "Hộp thư chưa có thư nào cho không gian làm việc này.",
     ),
   ).toBeVisible();
   await page.goto(`/sales/orders/${ids.m03}`);

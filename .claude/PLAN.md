@@ -35,11 +35,10 @@ own file and a row here.
   package; two defects fixed (`89bcd0d49ea6`, route walks); six live evals
   PASS on Qwen3.5-9B; on-prem compose ran (README); scope vs Proterial's
   process in `sales/dw1-scope.md`; deny-list secret set.
-- 2026-10-20..24: pipeline board, case history, defects A–E, the process map
-  (`sales.md` State). 2026-10-25: IT creates sign-in accounts, no AD needed.
-- **Next:** the rest of the screenshot review; `onprem-up` in `uat` behind
-  Caddy (`scripts/keycloak_accounts_client.py` on its realm); DW2 when its
-  survey arrives, after the reuse decisions in `sales.md`.
+- 2026-10-20..25: board, history, defects A–E, process map, IT accounts.
+  2026-10-27: real mail from a drop folder of `.eml` files (ticket 43).
+- **Next:** fix the two defects 10-27 found (`sales.md` State); the plant
+  PC run of the mail drop; `onprem-up` in `uat` behind Caddy; DW2.
 
 ## Decisions Đạt owes
 
@@ -57,7 +56,7 @@ own file and a row here.
   t29–t33 (t31 at 89.8% of 90%).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
-  the retention term of `sales.step_outcomes` (365 days proposed, 10-23).
+  retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail.
 
 ## How a feature is checked here
 
