@@ -1,11 +1,11 @@
 """DW1 reads real mail from a folder of `.eml` files: the `sales_mail_drop` lane
 (ticket 43).
 
-Proterial gives DW1 no access to Microsoft 365. Each Sales PIC's own Power
-Automate flow exports every mail that reaches their Inbox as an `.eml` file
-into a folder of their OneDrive, shared with the account a PC in the plant
-syncs; that PC gathers the PICs' folders under one folder shared with DW1's
-host. **The folder is a drop box, not the mailbox**: each tick, this lane
+Proterial gives DW1 no access to Microsoft 365. A DW1 account owns one
+OneDrive folder per Sales PIC; each PIC runs a copy of one Power Automate
+flow that exports every mail reaching their Inbox as an `.eml` file into
+their folder, and a PC in the plant syncs the folders and shares them with
+DW1's host. **The folder is a drop box, not the mailbox**: each tick, this lane
 reads the files it has not handled before and stores each message, with its
 attachments, in the stored mailbox (`MailStorePort`, PostgreSQL). Everything
 else reads the stored mailbox, through `InboxPort`, like the mock.

@@ -158,11 +158,12 @@ API and the plan use the English terms. The spec is
   whom; counts only, never an amount (ticket 42).
 
 - **Drop folder** (Thư mục thư): where real mail reaches DW1 without any
-  access to Microsoft 365: each Sales PIC's own Power Automate flow exports
-  every mail that reaches their Inbox as an `.eml` file into a OneDrive
-  folder of theirs, shared only with the account a PC in the plant syncs;
-  that PC shares the PICs' folders with DW1's host, read-only. The worker's
-  `sales_mail_drop` lane reads each new file once (ticket 43).
+  access to Microsoft 365: a DW1 account owns one OneDrive folder per Sales
+  PIC, shared with that PIC alone; each PIC runs a copy of one Power
+  Automate flow that exports every mail reaching their Inbox as an `.eml`
+  file into their folder; a PC in the plant syncs the folders and shares
+  them with DW1's host, read-only. The worker's `sales_mail_drop` lane
+  reads each new file once (ticket 43).
 - **Stored mailbox** (Hộp thư DW1): the mail the lane stored, each message
   whole with its attachments' bytes, in PostgreSQL; what every screen and
   lane reads when `DW_SALES_MAILBOX=stored`. A message's id is its file's
