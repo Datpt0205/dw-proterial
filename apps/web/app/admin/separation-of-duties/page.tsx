@@ -126,9 +126,7 @@ function RuleCard({
       }
     >
       <Flex vertical gap="middle">
-        <Typography.Text code className="text-xs">
-          {rule.key}
-        </Typography.Text>
+        <Typography.Text code>{rule.key}</Typography.Text>
         <div className="grid gap-2 sm:grid-cols-2">
           <ScopeList title="Một bên" scopes={rule.left_scopes} />
           <ScopeList title="Bên kia" scopes={rule.right_scopes} />

@@ -148,3 +148,38 @@ describe("the /audit page", () => {
     ).toBeNull();
   });
 });
+
+describe("the /audit page reads background lanes and long ids", () => {
+  it("names a lane by what it does, labels Sales actions, shortens a long id and drops empty details", async () => {
+    const id = `eml-${"4e77a96d".repeat(8)}`;
+    listAuditEvents.mockResolvedValue({
+      items: [
+        event({
+          actor_id: "12b9c363-0000-5000-8000-000000000003",
+          actor_display_name: null,
+          actor_kind: "user",
+          action: "sales.mail.stored",
+          resource_type: "sales.message",
+          resource_id: id,
+          details: { actor: "system:sales_mail_drop", source: "a.eml", model: null },
+        }),
+        event({
+          actor_id: "99999999-0000-5000-8000-000000000009",
+          actor_display_name: null,
+          actor_kind: "user",
+          details: { actor: "system:some_new_lane" },
+        }),
+      ],
+      next_cursor: null,
+    });
+    renderPage();
+
+    expect(await screen.findByText("DW1 · đọc thư mục thư")).toBeTruthy();
+    expect(screen.getByText("Tác vụ nền (some_new_lane)")).toBeTruthy();
+    expect(screen.getByText("Nhận thư vào hộp thư")).toBeTruthy();
+    expect(screen.getByText(`${id.slice(0, 16)}…`)).toBeTruthy();
+    expect(screen.queryByText(id)).toBeNull();
+    expect(screen.getByText("source: a.eml")).toBeTruthy();
+    expect(screen.queryByText(/null/)).toBeNull();
+  });
+});
