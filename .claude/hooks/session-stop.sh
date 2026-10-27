@@ -48,6 +48,9 @@ if [ -n "$mark" ] && [ -f "$mark" ]; then
   # since the session began.
   ours=$(printf '%s\n' "$current" | grep -vxF -f <(sed 1d "$mark") | grep . | cut -f2-)
   [ -n "$current" ] && already=$(printf '%s\n' "$current" | grep -cxF -f <(sed 1d "$mark"))
+  # GNU grep 3.0 (Git for Windows) prints no count at all for an empty
+  # pattern list, which is every session that began on a clean tree.
+  already=${already:-0}
   baseline="known"
 else
   ours=$(worktree_state | cut -f2-)
