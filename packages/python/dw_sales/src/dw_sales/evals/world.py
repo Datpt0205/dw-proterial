@@ -27,6 +27,7 @@ another directory, so the graders run on it unchanged.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import shutil
 import tempfile
@@ -70,6 +71,7 @@ from dw_sales.application.case_store import (
     CaseOrigin,
     LoggedEvent,
     LoggedMessage,
+    MessageHandled,
     ProcessingJob,
     SalesUnitOfWork,
     ServedSource,
@@ -365,8 +367,18 @@ class _Messages:
         logged = self._held.get(message_id)
         return None if logged is None else logged.disposition
 
+    async def logged(self, message_id: str) -> LoggedMessage | None:
+        return self._held.get(message_id)
+
     async def list_all(self) -> Sequence[LoggedMessage]:
         return list(reversed(self._held.values()))
+
+    async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:
+        logged = self._held.get(message_id)
+        if logged is None or logged.disposition.kind is not DispositionKind.ROUTED_TO_SALES:
+            return False
+        self._held[message_id] = dataclasses.replace(logged, handled=handled)
+        return True
 
 
 class _Jobs:

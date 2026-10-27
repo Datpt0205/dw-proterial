@@ -3744,6 +3744,78 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HandledRequest": {
+        "additionalProperties": false,
+        "description": "The note a person may leave when they mark a message handled.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "HandledRequest",
+        "type": "object"
+      },
+      "HandledView": {
+        "description": "Where a routed message stands after a mark or a reopen.",
+        "properties": {
+          "handled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled At"
+          },
+          "handled_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled By"
+          },
+          "handled_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled Note"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "handled_at",
+          "handled_by",
+          "handled_note"
+        ],
+        "title": "HandledView",
+        "type": "object"
+      },
       "Handoff": {
         "additionalProperties": false,
         "description": "The pre-filled hand-off stamped on a routed message's disposition.\n\n``read``: some value was located. ``nothing_located``: the model answered\nand code kept nothing of it. ``unavailable``: no usable answer. Either of\nthe last two is an empty form Sales fills by hand, as before.",
@@ -6351,6 +6423,41 @@
               }
             ],
             "title": "Detail"
+          },
+          "handled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled At"
+          },
+          "handled_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled By"
+          },
+          "handled_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handled Note"
           },
           "handoff": {
             "anyOf": [
@@ -16829,6 +16936,77 @@
         ]
       }
     },
+    "/api/v1/sales/inbox/{message_id}/handled": {
+      "post": {
+        "operationId": "handled_api_v1_sales_inbox__message_id__handled_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandledView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Handled",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/inbox/{message_id}/process": {
       "post": {
         "operationId": "process_api_v1_sales_inbox__message_id__process_post",
@@ -16885,6 +17063,67 @@
           }
         },
         "summary": "Process",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/{message_id}/reopen": {
+      "post": {
+        "operationId": "reopen_api_v1_sales_inbox__message_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandledView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen",
         "tags": [
           "sales"
         ]

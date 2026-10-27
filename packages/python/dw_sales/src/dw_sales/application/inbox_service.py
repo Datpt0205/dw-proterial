@@ -121,7 +121,7 @@ class InboxQueries:
         for message in await self.inbox.list_messages(scope):
             seen = logged.get(message.message_id)
             disposition = (
-                message_disposition(seen.disposition, seen.processed_at)
+                message_disposition(seen.disposition, seen.processed_at, seen.handled)
                 if seen is not None
                 else message_disposition(MessageDisposition.pending(message.message_id), None)
             )

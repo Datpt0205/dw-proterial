@@ -34,8 +34,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dw_kernel.pagination import CursorPosition, Page, PageRequest, build_page
 from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence.quotes import stored_quote
-from dw_sales.adapters.persistence.records import disposition_of
-from dw_sales.application.case_store import LoggedEvent, LoggedMessage
+from dw_sales.adapters.persistence.records import logged_message
+from dw_sales.application.case_store import LoggedEvent
 from dw_sales.application.overview_ports import (
     BUCKETS,
     NO_DUE,
@@ -190,7 +190,12 @@ class SqlOverviewReader:
         return frozenset(rows.scalars())
 
     async def _routed(self) -> tuple[int, int]:
-        routed = _M.c.disposition == DispositionKind.ROUTED_TO_SALES.value
+        """Messages routed to Sales still waiting on someone, and those of
+        them no one owns: a handled message is counted by neither."""
+        routed = sa.and_(
+            _M.c.disposition == DispositionKind.ROUTED_TO_SALES.value,
+            _M.c.handled_at.is_(None),
+        )
         row = (
             await self.session.execute(
                 sa.select(
@@ -519,6 +524,8 @@ class SqlOverviewReader:
             .where(
                 _M.c.workspace_id == workspace,
                 sa.text(f"messages.disposition = '{DispositionKind.ROUTED_TO_SALES.value}'"),
+                # The partial index's other half: a handled message is no one's work.
+                sa.text("messages.handled_at IS NULL"),
                 sa.func.lower(sa.func.coalesce(_M.c.owner, "")).in_(sorted(wanted.message_owners)),
                 *_after_constant_group(NO_DUE, _M.c.processed_at, _M.c.id, after),
             )
@@ -584,9 +591,7 @@ class SqlOverviewReader:
             for message in (
                 await self.session.execute(sa.select(_M).where(_M.c.id.in_(ids["message"])))
             ).mappings():
-                found[message["id"]] = LoggedMessage(
-                    disposition_of(message), message["processed_at"]
-                )
+                found[message["id"]] = logged_message(message)
         return found
 
 

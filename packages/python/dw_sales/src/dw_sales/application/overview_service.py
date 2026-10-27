@@ -56,9 +56,10 @@ from dw_sales.application.overview_ports import (
     WorkFilter,
 )
 from dw_sales.application.ports import InboxPort, MemberDirectoryPort, SalesScope
+from dw_sales.application.routed_mail import message_owners
 from dw_sales.application.runs import PendingDecisionsPort, awaited, awaiting
 from dw_sales.application.views import WorkerStateView, worker_state
-from dw_sales.domain.dispositions import SALES_PIC_POOL, CaseKind, DispositionKind
+from dw_sales.domain.dispositions import CaseKind, DispositionKind
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.process import WIV_STEPS, Procedure, StepId
@@ -393,14 +394,7 @@ class OverviewService:
     async def _wanted(self, context: AccessContext) -> WorkFilter:
         """The narrowing the store applies, read from the same tables the
         rows are decided by below."""
-        owners: frozenset[str] = frozenset()
-        if self.gate.allows(context, SalesScopes.INBOX_PROCESS):
-            mine = {
-                m.email.lower()
-                for m in await self.directory.list_members(context)
-                if m.user_id == context.principal_id and m.email
-            }
-            owners = frozenset({SALES_PIC_POOL, *mine})
+        owners = await message_owners(self.gate, self.directory, context)
         return WorkFilter(
             principal_id=context.principal_id,
             order_statuses=frozenset(

@@ -210,6 +210,25 @@ export class SalesApi {
     );
   }
 
+  /** A routed message marked handled, with an optional note: it leaves
+   * Việc cần làm and stays in the inbox (2026-10-27). */
+  markHandled(messageId: string, note: string | null, key: string) {
+    return this.post<"/api/v1/sales/inbox/{message_id}/handled">(
+      `/api/v1/sales/inbox/${enc(messageId)}/handled`,
+      { note },
+      key,
+    );
+  }
+
+  /** A handled message open again, back on its owner's Việc cần làm. */
+  reopenMessage(messageId: string, key: string) {
+    return this.post<"/api/v1/sales/inbox/{message_id}/reopen">(
+      `/api/v1/sales/inbox/${enc(messageId)}/reopen`,
+      {},
+      key,
+    );
+  }
+
   /** "DW xử lý tất cả": one job per message still without a disposition. */
   processAll(key: string) {
     return this.postAccepted<"/api/v1/sales/inbox/process-all">(

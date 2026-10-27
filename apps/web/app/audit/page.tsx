@@ -50,6 +50,8 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
     color: "success",
   },
   "sales.message.processing_failed": { label: "Xử lý thư lỗi", color: "error" },
+  "sales.message.handled": { label: "Sales xử lý xong thư", color: "success" },
+  "sales.message.reopened": { label: "Mở lại thư", color: "default" },
   "sales.order.checked": { label: "Kiểm tra đơn", color: "default" },
   "sales.order.review_started": {
     label: "Bắt đầu tự kiểm đơn",

@@ -57,7 +57,8 @@ own file and a row here.
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
-  a done state for routed mail; the DW1 account on Thành viên (bin live).
+  10-27 decided (doing, in order): routed mail done (done), revoke rail,
+  DW1 account locked on Thành viên, tenant zone/language read-only.
 
 ## How a feature is checked here
 

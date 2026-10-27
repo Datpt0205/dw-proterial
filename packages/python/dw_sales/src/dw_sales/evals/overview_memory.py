@@ -57,7 +57,11 @@ class PythonOverviewReader:
         quotes = [s.case for s in self.quotes]
         lines = Counter(line.mapping.status for o in orders for line in o.lines)
         export, months = _export(self.events, basis)
-        routed = [m for m in self.messages if m.disposition.kind is DispositionKind.ROUTED_TO_SALES]
+        routed = [
+            m
+            for m in self.messages
+            if m.disposition.kind is DispositionKind.ROUTED_TO_SALES and m.handled is None
+        ]
         return OverviewFigures(
             statuses={
                 CaseKind.ORDER: dict(Counter(o.status.value for o in orders)),
@@ -143,6 +147,7 @@ class PythonOverviewReader:
             d = logged.disposition
             if (
                 d.kind is DispositionKind.ROUTED_TO_SALES
+                and logged.handled is None
                 and (d.owner or "").lower() in wanted.message_owners
             ):
                 row_id = message_row_id(d.message_id)

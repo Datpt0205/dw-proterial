@@ -35,6 +35,7 @@ from dw_sales.application.case_store import (
     JobError,
     JobStatus,
     LoggedMessage,
+    MessageHandled,
     ProcessingJob,
     ServedSource,
     SourceRegion,
@@ -1681,10 +1682,17 @@ class MessageDispositionView(BaseModel):
     # A model's pre-fill of the mapping of a PO form no layout reads (ticket
     # 30), for the onboarding screen.
     layout_prefill: LayoutPrefill | None = None
+    # A routed message a person marked handled (`routed_mail.py`): who, when,
+    # and the note they left; all None while it waits on someone.
+    handled_at: datetime | None = None
+    handled_by: uuid.UUID | None = None
+    handled_note: str | None = None
 
 
 def message_disposition(
-    disposition: MessageDisposition, processed_at: datetime | None
+    disposition: MessageDisposition,
+    processed_at: datetime | None,
+    handled: MessageHandled | None = None,
 ) -> MessageDispositionView:
     return MessageDispositionView(
         kind=disposition.kind.value,
@@ -1699,6 +1707,9 @@ def message_disposition(
         reply=disposition.reply,
         handoff=disposition.handoff,
         layout_prefill=disposition.layout_prefill,
+        handled_at=handled.at if handled else None,
+        handled_by=handled.by if handled else None,
+        handled_note=handled.note if handled else None,
     )
 
 
