@@ -37,26 +37,27 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 2026-10-20..25: board, history, defects A–E, process map, IT accounts.
   2026-10-27: real mail from a drop folder of `.eml` files (ticket 43).
-- **Next:** fix the two defects 10-27 found (`sales.md` State); the plant
-  PC run of the mail drop; `onprem-up` in `uat` behind Caddy; DW2.
+- **Next:** the 10-27 defects (`sales.md` State; UI sweep A–E done,
+  `web-ui.md`); the plant PC mail drop; `onprem-up` in `uat`; DW2.
 
 ## Decisions Đạt owes
 
 - **Platform:** upstream `953086f`, `5452299`+`26d97dd` and this batch to
   `Datpt0205/codebase`; 46 citations of ADR-001..003 point at documents this
-  repo never had; renumbering duplicate ADRs (left as they are).
+  repo never had; renumbering duplicate ADRs. 10-27 (`web-ui.md`): may an
+  org admin revoke an admin? Tenant "Múi giờ"/"Ngôn ngữ" are read by nothing.
 - **Runtime:** a plan quota on direct model calls (the runner's only).
-- **Ops:** the ClamAV bump is disabled on GitHub and nothing is pushed
-  until Đạt says so (ticket 25); the deny-list grows once real data arrives.
+- **Ops:** ClamAV bump disabled on GitHub, nothing pushed until Đạt says so
+  (ticket 25); the deny-list grows once real data arrives.
 - **On premises:** Proterial's AD details for LDAP federation, and whether
   the plant keeps internet (M365, Exchange Online) or none; whether the
   on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
   not only by configuration).
-- **DW1 scope** (`sales/dw1-scope.md`): the agent-proposed bars of
-  t29–t33 (t31 at 89.8% of 90%).
+- **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33.
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
-  retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail.
+  retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
+  a done state for routed mail; the DW1 account on Thành viên (bin live).
 
 ## How a feature is checked here
 

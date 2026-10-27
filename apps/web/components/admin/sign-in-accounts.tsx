@@ -278,7 +278,8 @@ export function SignInActions({
   name: string;
   email: string | null;
   accounts: AccountsState;
-  /** Why neither action is this admin's to take (an administrator's row). */
+  /** Why neither action is this admin's to take (an administrator's row).
+   * The row writes it out; these actions carry it in their tooltips. */
   blockedReason: string | null;
   /** Why locking is not (the admin's own row). */
   lockBlockedReason: string | null;
@@ -303,6 +304,11 @@ export function SignInActions({
           ? "Tài khoản đăng nhập của người này không do DW tạo (ví dụ đăng nhập qua AD), nên đổi ở nơi quản lý tài khoản đó."
           : blockedReason;
   const lockReason = reason ?? (enabled ? lockBlockedReason : null);
+  // Written out under the buttons: a reason of these actions' own, not the
+  // row's (`blockedReason`), which the row writes once.
+  const written = [reason, lockReason].find(
+    (why) => why !== null && why !== blockedReason,
+  );
 
   function reset() {
     modal.confirm({
@@ -419,6 +425,9 @@ export function SignInActions({
           </Button>
         ),
       )}
+      {/* A disabled button takes no tap and no focus: the reason is also
+          written out, or a phone never shows it (2026-10-27). */}
+      {written ? <Typography.Text>{written}</Typography.Text> : null}
     </Flex>
   );
 }
