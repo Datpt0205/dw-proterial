@@ -47,8 +47,7 @@ own file and a row here.
   repo never had; renumbering duplicate ADRs. 10-27 (`web-ui.md`): may an
   org admin revoke an admin? Tenant "Múi giờ"/"Ngôn ngữ" are read by nothing.
 - **Runtime:** a plan quota on direct model calls (the runner's only).
-- **Ops:** ClamAV bump disabled on GitHub, nothing pushed until Đạt says so
-  (ticket 25); the deny-list grows once real data arrives.
+- **Ops:** nothing pushed until Đạt says so (ClamAV bump off, ticket 25).
 - **On premises:** Proterial's AD details for LDAP federation, and whether
   the plant keeps internet (M365, Exchange Online) or none; whether the
   on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
