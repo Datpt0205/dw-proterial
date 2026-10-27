@@ -39,7 +39,7 @@
   "env": {
     "MCP_TIMEOUT": "90000"
   },
-  "enabledMcpjsonServers": ["context-mode"],
+  "enabledMcpjsonServers": ["context-mode", "playwright"],
   "enabledPlugins": {
     "mattpocock-skills@claude-plugins-official": true
   }
