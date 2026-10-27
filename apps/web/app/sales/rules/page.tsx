@@ -184,7 +184,8 @@ function Rules() {
             dataSource={versions}
             pagination={false}
             ref={fill.tableRef}
-            scroll={{ x: "max-content", y: fill.y }}
+            scroll={table.scroll(fill.y)}
+            tableLayout={table.tableLayout}
             locale={{
               emptyText: rules.loading
                 ? " "
@@ -201,81 +202,86 @@ function Rules() {
                 </pre>
               ),
             }}
-            columns={[
-              {
-                title: "Phiên bản",
-                key: "ref",
-                render: (_, v) => (
-                  <span className="flex flex-col">
-                    <Typography.Text strong>{RULE_KEY[v.key]}</Typography.Text>
-                    <Typography.Text code>{v.ref}</Typography.Text>
-                  </span>
-                ),
-              },
-              {
-                title: "Trạng thái",
-                key: "status",
-                render: (_, v) => (
-                  <StatusTag tone={TONE[v.status]}>
-                    {RULE_STATUS[v.status]}
-                  </StatusTag>
-                ),
-              },
-              {
-                title: `Người đề xuất (${TIME_ZONE_LABEL})`,
-                key: "proposed",
-                render: (_, v) => (
-                  <span className="flex flex-col">
-                    <span>{name(v.proposed_by)}</span>
-                    <span>
-                      {formatDateTime(v.proposed_at, { zoneLabel: false })}
-                    </span>
-                  </span>
-                ),
-              },
-              {
-                title: `Người quyết định (${TIME_ZONE_LABEL})`,
-                key: "decided",
-                render: (_, v) =>
-                  v.decided_by ? (
+            columns={phone(
+              [
+                {
+                  title: "Phiên bản",
+                  key: "ref",
+                  render: (_, v) => (
                     <span className="flex flex-col">
-                      <span>{name(v.decided_by)}</span>
-                      <span>
-                        {formatDateTime(v.decided_at, { zoneLabel: false })}
-                      </span>
-                      {v.comment ? <span>{v.comment}</span> : null}
+                      <Typography.Text strong>
+                        {RULE_KEY[v.key]}
+                      </Typography.Text>
+                      <Typography.Text code>{v.ref}</Typography.Text>
                     </span>
-                  ) : (
-                    ""
                   ),
-              },
-              {
-                title: "Thao tác",
-                key: "actions",
-                fixed: "right",
-                render: (_, v) => (
-                  <Space orientation="vertical" size={2}>
-                    {v.approval_id && seesApprovals ? (
-                      <Link href={`/approvals/${v.approval_id}`}>
-                        Mở yêu cầu duyệt
-                      </Link>
-                    ) : null}
-                    <Button
-                      size="small"
-                      onClick={() =>
-                        setProposing({
-                          key: v.key,
-                          start: `tenant:${v.version_id}`,
-                        })
-                      }
-                      aria-label={`Dùng lại phiên bản này: ${v.ref}`}
-                    >
-                      Dùng lại phiên bản này
-                    </Button>
-                  </Space>
-                ),
-              },
-            ]}
+                },
+                {
+                  title: "Trạng thái",
+                  key: "status",
+                  render: (_, v) => (
+                    <StatusTag tone={TONE[v.status]}>
+                      {RULE_STATUS[v.status]}
+                    </StatusTag>
+                  ),
+                },
+                {
+                  title: `Người đề xuất (${TIME_ZONE_LABEL})`,
+                  key: "proposed",
+                  render: (_, v) => (
+                    <span className="flex flex-col">
+                      <span>{name(v.proposed_by)}</span>
+                      <span>
+                        {formatDateTime(v.proposed_at, { zoneLabel: false })}
+                      </span>
+                    </span>
+                  ),
+                },
+                {
+                  title: `Người quyết định (${TIME_ZONE_LABEL})`,
+                  key: "decided",
+                  render: (_, v) =>
+                    v.decided_by ? (
+                      <span className="flex flex-col">
+                        <span>{name(v.decided_by)}</span>
+                        <span>
+                          {formatDateTime(v.decided_at, { zoneLabel: false })}
+                        </span>
+                        {v.comment ? <span>{v.comment}</span> : null}
+                      </span>
+                    ) : (
+                      ""
+                    ),
+                },
+                {
+                  title: "Thao tác",
+                  key: "actions",
+                  fixed: "right",
+                  render: (_, v) => (
+                    <Space orientation="vertical" size={2}>
+                      {v.approval_id && seesApprovals ? (
+                        <Link href={`/approvals/${v.approval_id}`}>
+                          Mở yêu cầu duyệt
+                        </Link>
+                      ) : null}
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          setProposing({
+                            key: v.key,
+                            start: `tenant:${v.version_id}`,
+                          })
+                        }
+                        aria-label={`Dùng lại phiên bản này: ${v.ref}`}
+                      >
+                        Dùng lại phiên bản này
+                      </Button>
+                    </Space>
+                  ),
+                },
+              ],
+              ["status", "actions"],
+            )}
           />
         </>
       )}

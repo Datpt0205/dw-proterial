@@ -457,7 +457,8 @@ function MyWork() {
             loading={ycbg.loading}
             dataSource={waiting}
             pagination={false}
-            scroll={{ x: "max-content" }}
+            scroll={table.scroll()}
+            tableLayout={table.tableLayout}
             locale={{
               emptyText: ycbg.loading
                 ? " "
@@ -468,29 +469,32 @@ function MyWork() {
                 ? `${waiting.length} YCBG, chờ lâu nhất trước · danh sách xuất từ Bravo (giả lập) ngày ${formatDate(ycbg.data.as_of)}`
                 : ""
             }
-            columns={[
-              { title: "Số YCBG", dataIndex: "ycbg_no" },
-              { title: "Số RFQ", dataIndex: "rfq_no" },
-              {
-                title: "Khách",
-                dataIndex: "customer_code",
-                render: (c: string) =>
-                  [c, customerName(c)].filter(Boolean).join(" · "),
-              },
-              {
-                title: "Ngày lập",
-                dataIndex: "issued_on",
-                render: (d: string) => formatDate(d),
-              },
-              {
-                title: "Đã chờ",
-                key: "days",
-                render: (_, row) => {
-                  const days = daysSince(row.issued_on, now);
-                  return days === null ? UNKNOWN_TIME : `${days} ngày`;
+            columns={phone<(typeof waiting)[number]>(
+              [
+                { title: "Số YCBG", dataIndex: "ycbg_no" },
+                { title: "Số RFQ", dataIndex: "rfq_no" },
+                {
+                  title: "Khách",
+                  dataIndex: "customer_code",
+                  render: (c: string) =>
+                    [c, customerName(c)].filter(Boolean).join(" · "),
                 },
-              },
-            ]}
+                {
+                  title: "Ngày lập",
+                  dataIndex: "issued_on",
+                  render: (d: string) => formatDate(d),
+                },
+                {
+                  title: "Đã chờ",
+                  key: "days",
+                  render: (_, row) => {
+                    const days = daysSince(row.issued_on, now);
+                    return days === null ? UNKNOWN_TIME : `${days} ngày`;
+                  },
+                },
+              ],
+              ["days"],
+            )}
           />
         )}
       </Card>
