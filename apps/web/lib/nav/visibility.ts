@@ -100,17 +100,28 @@ export interface Bar {
  * The bar for what a person can see (`visibleNav`'s output). Someone who
  * reaches exactly one bounded context and administers nothing works in that
  * context: its pages are the bar and the platform's own pages (an
- * operational person never uses them) are left off. Anyone who administers
- * the tenant or the platform keeps every entry. Navigation, never
- * authorization: a page left off still answers its URL with the server's
- * decision.
+ * operational person never uses them) are left off, but for a platform page
+ * whose `contextBarScope` the viewer holds (Duyệt, for whoever decides).
+ * Anyone who administers the tenant or the platform keeps every entry.
+ * Navigation, never authorization: a page left off still answers its URL
+ * with the server's decision.
  */
-export function barNav(visible: readonly NavEntry[]): Bar {
+export function barNav(
+  visible: readonly NavEntry[],
+  viewer?: Pick<NavViewer, "hasScope">,
+): Bar {
   const contexts = visible.filter(
     (entry): entry is NavGroup => isNavGroup(entry) && !!entry.context,
   );
   const administers = visible.some((entry) => entry.administration);
-  if (contexts.length === 1 && !administers)
-    return { entries: contexts[0]!.items, context: contexts[0]! };
+  if (contexts.length === 1 && !administers) {
+    const kept = visible.filter(
+      (entry) =>
+        !isNavGroup(entry) &&
+        !!entry.contextBarScope &&
+        !!viewer?.hasScope(entry.contextBarScope),
+    );
+    return { entries: [...contexts[0]!.items, ...kept], context: contexts[0]! };
+  }
   return { entries: [...visible], context: null };
 }

@@ -138,7 +138,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
   // The nav the user can actually reach, and the bar drawn from it: a
   // context's own pages for someone whose work is that context alone.
-  const bar = useMemo(() => barNav(visibleNav(NAV, auth)), [auth]);
+  const bar = useMemo(() => barNav(visibleNav(NAV, auth), auth), [auth]);
   const nav = bar.entries;
   const pages = useMemo(() => navPages(nav), [nav]);
   // Where the logo points; the old /feedback page is gone (spec 003 US5).
@@ -275,7 +275,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
         }
       >
         {/* Room under the page for the floating feedback button (md and up),
-            so the end of a page scrolls clear of it. */}
+            so the end of a page scrolls clear of it. A region sized to the
+            window keeps the same 80 px (`use-fill-height.ts` BOTTOM_GAP). */}
         <div data-feedback-room className="md:pb-20">
           {children}
         </div>

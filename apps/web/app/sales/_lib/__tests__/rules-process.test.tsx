@@ -591,7 +591,7 @@ describe("the DW1 process page (2026-10-22)", () => {
       const review = await status("Chờ PIC tự kiểm");
       act(() => review.focus());
       const details = await screen.findByRole("tooltip");
-      expect(details.textContent).toContain("O6 · DW1 làm");
+      expect(details.textContent).toContain("O6 · Trong phạm vi DW1");
       expect(details.textContent).toContain("Đến lượt: Sales quyết định");
       expect(details.textContent).toContain("Có thể quay lại: Đã kiểm tra");
       expect(details.textContent).toMatch(/\d+ thiết lập|Không có thiết lập/);
@@ -1080,7 +1080,7 @@ describe("the DW1 process page (2026-10-22)", () => {
     scopes = ["sales.case.read", "sales.price.read"];
     renderPage();
     expect(
-      screen.getByText(/Quyền của bạn trong không gian làm việc này/),
+      screen.getByText(/Vai của bạn trong không gian làm việc này/),
     ).toBeTruthy();
     expect(api.rulesProcess).not.toHaveBeenCalled();
   });

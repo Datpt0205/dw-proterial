@@ -41,6 +41,13 @@ export interface NavItem {
   supportStaffOnly?: boolean;
   /** Administers the tenant or the platform (see `barNav`). */
   administration?: boolean;
+  /**
+   * A platform page kept on a single context's bar (`barNav`) for a holder
+   * of this scope: "Duyệt" for whoever decides approvals, whose rule
+   * versions and master data wait there and nowhere on the context's own bar
+   * (2026-10-27).
+   */
+  contextBarScope?: string;
 }
 
 /**

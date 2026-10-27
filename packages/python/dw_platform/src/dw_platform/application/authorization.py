@@ -32,9 +32,12 @@ def holds_stamped_scope(context: AccessContext, required_scope: str | None) -> b
 def permission_denied(
     *, action: str, resource_type: str, resource_id: str | None = None
 ) -> PermissionDeniedError:
-    """The refusal every scope check here raises, so a caller sees one shape."""
+    """The refusal every scope check here raises, so a caller sees one shape.
+    Its sentence is shown to people as it is (a screen's 403 state), so it is
+    Vietnamese, like the product (2026-10-27: "action not permitted" reached
+    Sales staff twice on one page)."""
     return PermissionDeniedError(
-        "action not permitted",
+        "Tài khoản của bạn chưa được cấp quyền cho việc này.",
         details={
             "action": action,
             "resource_type": resource_type,

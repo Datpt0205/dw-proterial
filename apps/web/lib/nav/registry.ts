@@ -41,6 +41,7 @@ const platformNav: NavEntry[] = [
     hint: "Thao tác đang chờ người quyết",
     icon: CheckSquareOutlined,
     scope: "approvals.read",
+    contextBarScope: "approvals.decide",
   },
   {
     href: "/knowledge",

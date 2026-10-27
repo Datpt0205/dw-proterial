@@ -664,7 +664,7 @@ async def test_platform_admin_does_not_pass_the_stamp_on_their_own_request() -> 
     with pytest.raises(PermissionDeniedError) as refused:
         await _decide_as(service, platform_admin(REQUESTER), approve=True)
 
-    assert refused.value.message == "action not permitted"
+    assert refused.value.message == "Tài khoản của bạn chưa được cấp quyền cho việc này."
     assert refused.value.details == {
         "action": BOARD_SCOPE,
         "resource_type": "approval_request",

@@ -3,8 +3,11 @@
 import { useCallback, useLayoutEffect, useState } from "react";
 import { theme } from "antd";
 
-/** Room kept under the region, so its edge never sits on the window's. */
-const BOTTOM_GAP = 24;
+/** Room kept under the region: the frame's room for the floating feedback
+ * button (`md:pb-20`, 80 px, `components/app-frame.tsx`), which floats from
+ * `md` up exactly where this hook sizes a region. 24 px put the button over
+ * every list's footer ("Đã hiện đủ …", 2026-10-27). */
+const BOTTOM_GAP = 80;
 
 /**
  * The height that lets a long list scroll inside its own region instead of

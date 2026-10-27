@@ -16,7 +16,7 @@ type StepSummary = SalesSchemas["StepSummaryView"];
 type ModelStep = SalesSchemas["ModelStep"];
 type Lane = SalesSchemas["CaseKind"] | null;
 
-let scopes = ["sales.overview.read"];
+let scopes = ["sales.overview.read", "sales.case.read"];
 vi.mock("../../../../lib/auth/auth-context", () => ({
   useAuth: () => ({
     principalId: AN,
@@ -161,7 +161,7 @@ const SLOW = 30_000;
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  scopes = ["sales.overview.read"];
+  scopes = ["sales.overview.read", "sales.case.read"];
 });
 
 function renderAt(url: string, page = <ActivityPage />) {
@@ -234,6 +234,20 @@ describe("Hoạt động DW1 (slice 3)", () => {
       expect(
         within(row("Đọc yêu cầu báo giá không theo mẫu")).queryByRole("link"),
       ).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
+    "shows a viewer who cannot open cases the counts, with no link and no promise of one (2026-10-27)",
+    async () => {
+      scopes = ["sales.overview.read"];
+      renderAt("/sales/activity?lane=order");
+      await screen.findByText("Đọc mô tả hàng chưa có trong convert list");
+      const read = row("Đọc mô tả hàng chưa có trong convert list");
+      expect(cell(read, 4).textContent).toBe("4");
+      expect(within(read).queryByRole("link")).toBeNull();
+      expect(screen.queryByText(/mở danh sách hồ sơ/)).toBeNull();
     },
     SLOW,
   );
@@ -334,7 +348,7 @@ describe("Hoạt động DW1 (slice 3)", () => {
     scopes = ["sales.case.read"];
     renderAt("/sales/activity");
     expect(
-      screen.getByText(/Quyền của bạn trong không gian làm việc này/),
+      screen.getByText(/Vai của bạn trong không gian làm việc này/),
     ).toBeTruthy();
     expect(api.activity).not.toHaveBeenCalled();
   });
