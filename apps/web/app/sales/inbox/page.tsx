@@ -38,6 +38,7 @@ import {
   label,
   PROCESSING_ERROR,
   REPLY_KIND,
+  ROUTING_ADVICE,
   ROUTING_REASON,
 } from "../_lib/labels";
 import { messageRef } from "../_lib/messages";
@@ -436,12 +437,19 @@ function Inbox() {
                         : "Mô hình không gợi ý được cách gán mẫu PO này: lập tay ở “Thiết lập mẫu PO”."}
                     </Typography.Paragraph>
                   ) : null}
+                  {/* What to do, in words; DW1's own note is a diagnostic in
+                      English, kept for IT (2026-10-27). */}
+                  {m.disposition.reason ? (
+                    <Typography.Paragraph className="!mb-0">
+                      <Typography.Text strong>Cần làm: </Typography.Text>
+                      {label(ROUTING_ADVICE, m.disposition.reason)}
+                    </Typography.Paragraph>
+                  ) : null}
                   {m.disposition.detail ? (
                     <Typography.Paragraph className="!mb-0">
-                      <Typography.Text strong>
-                        Ghi chú của DW1:{" "}
+                      <Typography.Text type="secondary">
+                        Chi tiết kỹ thuật (cho IT): {m.disposition.detail}
                       </Typography.Text>
-                      {m.disposition.detail}
                     </Typography.Paragraph>
                   ) : null}
                   {m.disposition.kind === "routed_to_sales" ? (
