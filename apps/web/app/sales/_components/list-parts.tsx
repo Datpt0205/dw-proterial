@@ -242,6 +242,19 @@ export function usePhoneColumns() {
 }
 
 /**
+ * How a Sales list's table sits on a phone: laid out to the screen's width,
+ * never scrolled sideways, so a long title ends in "…" instead of running off
+ * the edge (2026-10-27). On a desk, as wide as its content.
+ */
+export function usePhoneTable() {
+  const isPhone = useIsPhone();
+  return {
+    scroll: (y?: number) => ({ x: isPhone ? undefined : "max-content", y }),
+    tableLayout: isPhone ? ("fixed" as const) : undefined,
+  };
+}
+
+/**
  * The row's two lines: its name, which is the link (opens in a new tab,
  * truncated with the whole on hover), over its identifier in monospace and
  * whatever else identifies it. An identifier is never truncated. `phone` is

@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
+  Button,
   Card,
   Flex,
   Input,
@@ -11,7 +12,7 @@ import {
   theme,
   Typography,
 } from "antd";
-import { RobotOutlined, UserOutlined } from "@ant-design/icons";
+import { RobotOutlined, SearchOutlined, UserOutlined } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
 import { RegionState, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
@@ -137,6 +138,9 @@ export function PipelineBoard() {
           placeholder="Tìm số PO, RFQ, khách"
           defaultValue={view.query}
           onSearch={view.setQuery}
+          enterButton={
+            <Button icon={<SearchOutlined aria-hidden />} aria-label="Tìm" />
+          }
           className="w-full sm:w-72"
         />
       </Flex>

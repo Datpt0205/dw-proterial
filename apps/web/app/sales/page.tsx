@@ -39,6 +39,7 @@ import {
   RowTitle,
   type PriorityItem,
   usePhoneColumns,
+  usePhoneTable,
 } from "./_components/list-parts";
 import { SCOPE } from "./_components/sales-frame";
 import { ScopeGate } from "./_components/scope-gate";
@@ -79,6 +80,7 @@ function MyWork() {
   const { hasScope } = useAuth();
   const person = usePeople();
   const phone = usePhoneColumns();
+  const table = usePhoneTable();
   const customerName = useCustomerName();
   const view = useListView(TABS, "all", SORTS, "api");
   const work = useResource(
@@ -339,7 +341,8 @@ function MyWork() {
             pagination={false}
             sticky
             ref={fill.tableRef}
-            scroll={{ x: "max-content", y: fill.y }}
+            scroll={table.scroll(fill.y)}
+            tableLayout={table.tableLayout}
             locale={{
               emptyText: work.loading ? (
                 " "

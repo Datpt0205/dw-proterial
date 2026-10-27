@@ -19,7 +19,11 @@ import {
 } from "../_lib/rules";
 import { useResource } from "../_lib/use-resource";
 import { salesCrumbs } from "../_components/crumbs";
-import { useIsPhone, usePhoneColumns } from "../_components/list-parts";
+import {
+  useIsPhone,
+  usePhoneColumns,
+  usePhoneTable,
+} from "../_components/list-parts";
 import { ProposeDrawer } from "../_components/rule-editor";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -68,6 +72,7 @@ function Rules() {
   const seesApprovals = useAuth().hasScope("approvals.read");
   const name = usePeople();
   const phone = usePhoneColumns();
+  const table = usePhoneTable();
   const isPhone = useIsPhone();
   const rules = useResource(
     "sales/rules",
@@ -95,8 +100,9 @@ function Rules() {
             loading={rules.loading}
             dataSource={keys}
             pagination={false}
-            scroll={{ x: "max-content" }}
+            scroll={table.scroll()}
             locale={{ emptyText: rules.loading ? " " : "Không có quy tắc." }}
+            tableLayout={table.tableLayout}
             footer={() => `${keys.length} quy tắc`}
             columns={phone(
               [

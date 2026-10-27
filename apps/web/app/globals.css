@@ -219,3 +219,14 @@
     }
   }
 }
+
+/* Above antd's layer, so it wins over antd's own rule without !important. */
+@layer components {
+  /* antd draws inline code at 85% of the 13 px body: 11.05 px on every rule
+     key, item code and version (2026-10-27 sweep). No text below the theme's
+     small size (ui-quality.md §8: stacked diacritics stop being legible). */
+  .ant-typography code,
+  .ant-typography kbd {
+    font-size: max(var(--ant-font-size-sm), 85%);
+  }
+}

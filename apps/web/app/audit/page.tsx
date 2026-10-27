@@ -13,7 +13,11 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { AuditOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  AuditOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import type { AuditEvent } from "@dw/contracts";
 import { PageHeader, RegionState } from "@dw/ui";
 import { LoadError } from "../../components/load-error";
@@ -202,8 +206,9 @@ function AuditTrail() {
         subtitle="Lịch sử được ghi liên tục và không ai sửa được, kể cả quản trị viên."
         actions={
           <>
-            <Input.Search
+            <Input
               allowClear
+              prefix={<SearchOutlined aria-hidden />}
               className="w-56"
               aria-label="Tìm trong nhật ký"
               value={filter}

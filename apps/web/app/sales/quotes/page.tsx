@@ -38,6 +38,7 @@ import {
   RowTitle,
   type PriorityItem,
   usePhoneColumns,
+  usePhoneTable,
 } from "../_components/list-parts";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
@@ -88,6 +89,7 @@ function Quotes() {
   const now = useNow();
   const name = usePeople();
   const phone = usePhoneColumns();
+  const table = usePhoneTable();
   const customerName = useCustomerName();
   const view = useListView(TABS, "open", SORTS, "due");
   // A count on "Hoạt động DW1" opens this list narrowed to its cases: the
@@ -266,7 +268,8 @@ function Quotes() {
             pagination={false}
             sticky
             ref={fill.tableRef}
-            scroll={{ x: "max-content", y: fill.y }}
+            scroll={table.scroll(fill.y)}
+            tableLayout={table.tableLayout}
             locale={{
               emptyText: quotes.loading ? (
                 " "
