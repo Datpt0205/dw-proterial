@@ -298,6 +298,10 @@ _MONTHS: Final = {
 _ISO = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")
 _DAY_FIRST = re.compile(r"(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2}|\d{4}))?")
 _JA = re.compile(r"(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日")
+# Reiwa, as a Japanese customer's form prints it: 令和8年11月15日, R8.11.15,
+# 令和元年 for its first year (2019). Lower-cased with the rest, so `r`.
+_REIWA = re.compile(r"(?:令和|r)\s*(\d{1,2}|元)\s*[年./]\s*(\d{1,2})\s*[月./]\s*(\d{1,2})\s*日?")
+_REIWA_ZERO: Final = 2018
 _VI = re.compile(r"(?:ngày\s*)?(\d{1,2})\s*tháng\s*(\d{1,2})(?:\s*năm\s*(\d{4}))?")
 _EN_DAY_MONTH = re.compile(r"(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3,9})\.?,?(?:\s+(\d{4}))?")
 _EN_MONTH_DAY = re.compile(r"([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?(?:\s+(\d{4}))?")
@@ -307,14 +311,22 @@ _DATE_PREFIX = re.compile(r"^(?:ngày|by|before|on|trước)\s+", re.IGNORECASE)
 def parse_date(span: str, received_on: date) -> date | None:
     """A date as a customer writes it: ``2026-11-15``, ``15/11/2026``,
     ``15/11``, ``15 Nov 2026``, ``Nov 15``, ``2026年11月15日``, ``11月15日``,
-    ``15 tháng 11``. Day first where the order is not stated (Vietnam's
-    custom, and the customers' own forms); the other order when only it
+    ``令和8年11月15日`` or ``R8.11.15`` (Reiwa), ``15 tháng 11``. Day first
+    where the order is not stated (Vietnam's custom, and the customers' own
+    forms); the other order when only it
     makes a date. Without a year, the one that puts it on or after the day
     the mail arrived less a month."""
     text = _DATE_PREFIX.sub("", " ".join(normalised(span).lower().split()))
     found: tuple[int | None, int, int] | None = None
     if match := _ISO.fullmatch(text):
         found = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    elif match := _REIWA.fullmatch(text):
+        era = match.group(1)
+        found = (
+            _REIWA_ZERO + (1 if era == "元" else int(era)),
+            int(match.group(2)),
+            int(match.group(3)),
+        )
     elif match := _JA.fullmatch(text):
         year = match.group(1)
         found = (int(year) if year else None, int(match.group(2)), int(match.group(3)))

@@ -58,6 +58,8 @@ export const LAYOUT_PROBLEM: Record<string, string> = {
   requested_before_po_date: "ngày giao đọc ra trước ngày PO",
   requested_is_po_date:
     "ngày giao trùng ngày PO ở mọi dòng: có thể là ngày đặt hàng",
+  requested_date_empty:
+    "cột ngày giao không đọc ra ngày nào ở mọi dòng: kiểm tra cột ngày giao",
   no_item_known:
     "không mã hàng nào đọc ra có trong bảng quy đổi hay danh mục: kiểm tra cột mã hàng",
   incomplete_proposal: "mô hình gợi ý thiếu nhãn bắt buộc",

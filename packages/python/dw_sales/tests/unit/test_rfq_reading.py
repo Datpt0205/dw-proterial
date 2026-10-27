@@ -99,6 +99,11 @@ def test_only_metres_is_a_unit_dw1_quotes_in(span: str, uom: str | None) -> None
         ("2026年12月4日", date(2026, 12, 4)),
         ("11月20日", date(2026, 11, 20)),
         ("15 tháng 11", date(2026, 11, 15)),
+        # Reiwa, as a Japanese customer's form prints it (2026 is Reiwa 8).
+        ("令和8年11月15日", date(2026, 11, 15)),
+        ("R8.11.15", date(2026, 11, 15)),
+        ("r8/12/1", date(2026, 12, 1)),
+        ("令和元年5月1日", date(2019, 5, 1)),
         # Only the other order makes a date.
         ("11/25/2026", date(2026, 11, 25)),
         # Without a year: the next one that is not long past.

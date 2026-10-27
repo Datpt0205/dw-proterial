@@ -448,6 +448,16 @@ def test_plausibility_refuses_the_order_date_read_as_the_delivery_date() -> None
     }
 
 
+def test_plausibility_refuses_a_delivery_column_that_reads_no_date() -> None:
+    """The delivery column is always mapped: one that reads no date on any
+    line is the wrong column (2026-10-27, the edge-case sets)."""
+    document = _document(requested=None, po_date=date(2026, 10, 1))
+
+    problems = {str(p) for p in plausible(document, quoted_prices=(), known_codes=("NV-1",))}
+
+    assert problems == {"requested_date_empty:requested_date"}
+
+
 def test_a_layout_is_decided_once_and_never_by_its_maker() -> None:
     at = datetime(2026, 10, 3, tzinfo=UTC)
     layout = PoLayout(
@@ -531,7 +541,7 @@ def _counting(count: int) -> Any:
     return read_count
 
 
-def _document(*, requested: date, po_date: date) -> PoDocument:
+def _document(*, requested: date | None, po_date: date) -> PoDocument:
     anchor = {"attachment_id": "X-A1", "attachment_sha256": "0" * 64, "cell_ref": "PO!A1"}
     line = {
         "line_no": 1,
