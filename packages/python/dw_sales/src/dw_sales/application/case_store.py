@@ -228,12 +228,30 @@ class WorkerState:
     reason: str | None = None
 
 
+# The longest note a person leaves when they mark a routed message handled,
+# held by the table's CHECK too.
+HANDLED_NOTE_MAX: Final = 500
+
+
+@dataclass(frozen=True, slots=True)
+class MessageHandled:
+    """A routed message a person marked handled: who, when, and an optional
+    note in their words. It leaves Việc cần làm and stays in the inbox; a
+    reopen clears it, and processing the message again does too."""
+
+    by: uuid.UUID
+    at: datetime
+    note: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class LoggedMessage:
     """A message's disposition and when DW1 processed it (its ingest)."""
 
     disposition: MessageDisposition
     processed_at: datetime
+    # Set on a routed message a person marked handled; None while it is open.
+    handled: MessageHandled | None = None
 
 
 # Where a message's processing stands (ticket 25): `sales.processing_jobs`.
@@ -425,8 +443,18 @@ class MessageLogPort(Protocol):
 
     async def get(self, message_id: str) -> MessageDisposition | None: ...
 
+    async def logged(self, message_id: str) -> LoggedMessage | None:
+        """The message's disposition with when it was processed and its mark."""
+        ...
+
     async def list_all(self) -> Sequence[LoggedMessage]:
         """Every message with a disposition, newest processed first."""
+        ...
+
+    async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:
+        """Marks a routed message handled, or open again with None. False when
+        no message routed to Sales has that id: a message on a case is never
+        handled this way. Recording a disposition again clears the mark."""
         ...
 
 

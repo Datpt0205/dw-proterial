@@ -437,6 +437,6 @@ class Dw1Runs:
         async with self.uow(sales_scope(context)) as work:
             logged = await work.messages.list_all()
         return {
-            m.disposition.message_id: message_disposition(m.disposition, m.processed_at)
+            m.disposition.message_id: message_disposition(m.disposition, m.processed_at, m.handled)
             for m in logged
         }

@@ -50,6 +50,7 @@ from dw_sales.application.process_settings import ProcessSettingsService, RoleCa
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
+from dw_sales.application.routed_mail import RoutedMailService
 from dw_sales.application.rule_drafts import RuleDraftService, RuleDraftUnitOfWorkFactory
 from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
@@ -76,6 +77,8 @@ class SalesServices:
     master_data: MasterDataService
     worker: WorkerService
     assignment: AssignmentService
+    # A routed message marked handled, or open again (2026-10-27).
+    routed_mail: RoutedMailService
     layouts: LayoutService
     # A tenant's own rule versions, proposed and approved (ticket 19).
     rules: SalesRulesService
@@ -171,6 +174,7 @@ def assemble(
         master_data=MasterDataService(gate, catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
+        routed_mail=RoutedMailService(uow, gate, directory, clock, ids),
         layouts=LayoutService(uow, gate, clock, ids, inbox, catalog, intake.rules, layout_checks),
         rules=SalesRulesService(uow, gate, book, clock, ids, directory, readiness),
         process_settings=ProcessSettingsService(

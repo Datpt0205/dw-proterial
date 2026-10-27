@@ -179,6 +179,11 @@ messages = sa.Table(
     sa.Column("handoff", JSONB(none_as_null=True)),
     sa.Column("layout_prefill", JSONB(none_as_null=True)),
     sa.Column("processed_at", _TS, nullable=False),
+    # A routed message a person marked handled (migration `handled`): all
+    # three null while it is open.
+    sa.Column("handled_at", _TS),
+    sa.Column("handled_by", UUID(as_uuid=True)),
+    sa.Column("handled_note", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

@@ -20,6 +20,7 @@ from dw_sales.adapters.persistence._rows import refusals_named, scope_values
 from dw_sales.application.case_store import (
     ArtifactRecord,
     LoggedMessage,
+    MessageHandled,
     ServedSource,
     SourceRegion,
     WorkerState,
@@ -81,6 +82,11 @@ class SqlMessageLog:
                 else None
             ),
             "processed_at": processed_at,
+            # Processed again, the message is open again: a mark made on the
+            # disposition it replaces does not carry over.
+            "handled_at": None,
+            "handled_by": None,
+            "handled_note": None,
         }
         statement = pg_insert(_M).values(
             id=uuid.uuid4(),
@@ -117,13 +123,47 @@ class SqlMessageLog:
         )
         return None if row is None else disposition_of(row)
 
+    async def logged(self, message_id: str) -> LoggedMessage | None:
+        row = (
+            (await self.session.execute(sa.select(_M).where(_M.c.message_id == message_id)))
+            .mappings()
+            .first()
+        )
+        return None if row is None else logged_message(row)
+
     async def list_all(self) -> Sequence[LoggedMessage]:
         rows = (
             await self.session.execute(
                 sa.select(_M).order_by(_M.c.processed_at.desc(), _M.c.id.desc())
             )
         ).mappings()
-        return [LoggedMessage(disposition_of(row), row["processed_at"]) for row in rows]
+        return [logged_message(row) for row in rows]
+
+    async def set_handled(self, message_id: str, handled: MessageHandled | None) -> bool:
+        written = await self.session.execute(
+            sa.update(_M)
+            .where(
+                _M.c.message_id == message_id,
+                _M.c.disposition == DispositionKind.ROUTED_TO_SALES.value,
+            )
+            .values(
+                handled_at=handled.at if handled else None,
+                handled_by=handled.by if handled else None,
+                handled_note=handled.note if handled else None,
+            )
+            .returning(_M.c.id)
+        )
+        return written.first() is not None
+
+
+def logged_message(row: RowMapping) -> LoggedMessage:
+    """A `sales.messages` row as the log's reader sees it."""
+    handled = (
+        MessageHandled(by=row["handled_by"], at=row["handled_at"], note=row["handled_note"])
+        if row["handled_at"] is not None
+        else None
+    )
+    return LoggedMessage(disposition_of(row), row["processed_at"], handled)
 
 
 def disposition_of(row: RowMapping) -> MessageDisposition:

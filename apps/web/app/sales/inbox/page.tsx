@@ -64,23 +64,32 @@ import {
 } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 import { MessageDispositionTag, ProcessingTag } from "../_components/tags";
+import { HandledPanel } from "./handled-panel";
 import { HandoffDraft } from "./handoff-draft";
 import { useFillHeight } from "../../../lib/use-fill-height";
 
 type Message = SalesSchemas["InboxMessageView"];
 
-/** The tabs: the disposition a message ended in (CONTEXT.md). */
+/** The tabs: the disposition a message ended in (CONTEXT.md); a message
+ * routed to Sales is waiting on Sales until a person marks it handled. */
 const GROUP: Record<string, readonly string[]> = {
   waiting: ["not_yet_processed"],
   routed: ["routed_to_sales"],
+  handled: ["routed_to_sales"],
   cased: ["case_created", "attached_to_case"],
 };
-const TABS = ["all", "waiting", "routed", "cased"] as const;
+const TABS = ["all", "waiting", "routed", "handled", "cased"] as const;
 type Tab = (typeof TABS)[number];
 const SORTS = ["newest", "oldest", "sender"] as const;
 
 const inTab = (tab: Tab, m: Message) =>
-  tab === "all" || GROUP[tab]!.includes(m.disposition.kind);
+  tab === "all" ||
+  (GROUP[tab]!.includes(m.disposition.kind) &&
+    (tab === "routed"
+      ? !m.disposition.handled_at
+      : tab === "handled"
+        ? Boolean(m.disposition.handled_at)
+        : true));
 
 /** Queued or running: DW1 has the message (ticket 25), nothing to press. */
 const working = (m: Message) =>
@@ -159,9 +168,9 @@ function Inbox() {
     if (wasBusy.current && !busy) reloadOverview();
     wasBusy.current = busy > 0;
   }, [busy, reloadOverview]);
-  const routed = messages.filter(
-    (m) => m.disposition.kind === "routed_to_sales",
-  );
+  // Routed to Sales and still waiting on someone: a handled one is done.
+  const routed = messages.filter((m) => inTab("routed", m));
+  const handled = messages.filter((m) => inTab("handled", m)).length;
   const ownerless = routed.filter((m) => !m.disposition.owner);
   const unverified = messages.filter((m) => !m.sender_verified);
 
@@ -326,7 +335,7 @@ function Inbox() {
         title="Hộp thư"
         subtitle={
           inbox.data
-            ? `${messages.length} thư · ${waiting} chưa xử lý${busy ? ` (${busy} DW1 đang xử lý)` : ""} · ${routed.length} chuyển Sales. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách.`
+            ? `${messages.length} thư · ${waiting} chưa xử lý${busy ? ` (${busy} DW1 đang xử lý)` : ""} · ${routed.length} chuyển Sales chờ xử lý. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách.`
             : "Thư khách hàng gửi về: PO, yêu cầu báo giá, thư trả lời và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
         }
         actions={
@@ -364,6 +373,7 @@ function Inbox() {
               { value: "all", label: "Tất cả", count: messages.length },
               { value: "waiting", label: "Chưa xử lý", count: waiting },
               { value: "routed", label: "Chuyển Sales", count: routed.length },
+              { value: "handled", label: "Sales đã xử lý", count: handled },
               {
                 value: "cased",
                 label: "Đã vào hồ sơ",
@@ -434,6 +444,15 @@ function Inbox() {
                       {m.disposition.detail}
                     </Typography.Paragraph>
                   ) : null}
+                  {m.disposition.kind === "routed_to_sales" ? (
+                    <HandledPanel
+                      message={m}
+                      onChanged={() => {
+                        inbox.reload();
+                        overview.reload();
+                      }}
+                    />
+                  ) : null}
                   <Typography.Paragraph className="!mb-0 whitespace-pre-wrap">
                     {m.body_text}
                   </Typography.Paragraph>
@@ -492,6 +511,9 @@ function Inbox() {
                     phone={
                       <>
                         <MessageDispositionTag kind={m.disposition.kind} />
+                        {m.disposition.handled_at ? (
+                          <StatusTag tone="ok">Sales đã xử lý</StatusTag>
+                        ) : null}
                         {m.sender_verified ? null : (
                           <StatusTag
                             tone="warn"
@@ -539,6 +561,9 @@ function Inbox() {
                 render: (_, m) => (
                   <span className="flex flex-col items-start gap-1">
                     <MessageDispositionTag kind={m.disposition.kind} />
+                    {m.disposition.handled_at ? (
+                      <StatusTag tone="ok">Sales đã xử lý</StatusTag>
+                    ) : null}
                     {m.disposition.reason ? (
                       <Typography.Text type="secondary">
                         Lý do: {label(ROUTING_REASON, m.disposition.reason)}

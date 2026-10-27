@@ -54,6 +54,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/inbox/{message_id}/handled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Handled */
+        post: operations["handled_api_v1_sales_inbox__message_id__handled_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox/{message_id}/process": {
         parameters: {
             query?: never;
@@ -65,6 +82,23 @@ export interface paths {
         put?: never;
         /** Process */
         post: operations["process_api_v1_sales_inbox__message_id__process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/inbox/{message_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen */
+        post: operations["reopen_api_v1_sales_inbox__message_id__reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2191,6 +2225,28 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * HandledRequest
+         * @description The note a person may leave when they mark a message handled.
+         */
+        HandledRequest: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * HandledView
+         * @description Where a routed message stands after a mark or a reopen.
+         */
+        HandledView: {
+            /** Handled At */
+            handled_at: string | null;
+            /** Handled By */
+            handled_by: string | null;
+            /** Handled Note */
+            handled_note: string | null;
+            /** Message Id */
+            message_id: string;
+        };
+        /**
          * Handoff
          * @description The pre-filled hand-off stamped on a routed message's disposition.
          *
@@ -2853,6 +2909,12 @@ export interface components {
             customer_code?: string | null;
             /** Detail */
             detail?: string | null;
+            /** Handled At */
+            handled_at?: string | null;
+            /** Handled By */
+            handled_by?: string | null;
+            /** Handled Note */
+            handled_note?: string | null;
             handoff?: components["schemas"]["Handoff"] | null;
             /** Kind */
             kind: string;
@@ -4837,6 +4899,44 @@ export interface operations {
             };
         };
     };
+    handled_api_v1_sales_inbox__message_id__handled_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandledRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandledView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     process_api_v1_sales_inbox__message_id__process_post: {
         parameters: {
             query?: never;
@@ -4858,6 +4958,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessingJobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_api_v1_sales_inbox__message_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandledView"];
                 };
             };
             /** @description Validation Error */
