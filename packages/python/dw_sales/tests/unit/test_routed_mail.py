@@ -15,7 +15,7 @@ import pytest
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_sales.domain.dispositions import SALES_PIC_POOL, DispositionKind
 from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, READER
-from dw_sales.evals.world import ALPHA, SampleSet, World, open_world
+from dw_sales.evals.world import ALPHA, Caller, SampleSet, World, open_world
 
 pytestmark = pytest.mark.unit
 
@@ -43,7 +43,7 @@ async def _routed(world: World) -> tuple[World, str, str, str]:
     )
 
 
-async def _work_ids(world: World, caller) -> set[str]:  # type: ignore[no-untyped-def]
+async def _work_ids(world: World, caller: Caller) -> set[str]:
     items = (await world.services.overview.my_work(caller.context())).items
     return {i.id for i in items if i.kind == "message"}
 
