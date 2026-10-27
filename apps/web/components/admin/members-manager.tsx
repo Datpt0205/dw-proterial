@@ -45,11 +45,11 @@ import {
 // `administrative`, the rule the API enforces.
 const BASE_GRANTABLE_ROLES = ["member", "approver"];
 const ADMIN_GRANTABLE_ROLES = ["org_admin", "platform_admin"];
-const ADMIN_SIGN_IN =
-  "Chỉ Quản trị toàn quyền mới đổi được đăng nhập của một quản trị viên.";
+// One sentence for an administrator's row: its roles and its sign-in are
+// both locked, and the row writes it out once.
+const ADMIN_ROW =
+  "Chỉ Quản trị toàn quyền mới đổi vai và đăng nhập của một quản trị viên.";
 const OWN_SIGN_IN = "Bạn không tự khóa đăng nhập của chính mình được.";
-const ADMIN_ROLES =
-  "Chỉ Quản trị toàn quyền mới đổi vai của một quản trị viên.";
 
 export function MembersManager() {
   const { active, roles, principalId } = useAuth();
@@ -192,7 +192,7 @@ export function MembersManager() {
    * to anyone but a platform admin: the grant would be refused). */
   function roleLock(m: WorkspaceMember): string | null {
     return !canGrantAdmin && m.role_keys.some((k) => administrativeRoles.has(k))
-      ? ADMIN_ROLES
+      ? ADMIN_ROW
       : null;
   }
 
@@ -396,6 +396,14 @@ export function MembersManager() {
                           options={grantableRoles}
                         />
                       </Tooltip>
+                      {/* Roles this admin cannot offer are kept on a save;
+                          shown, or an administrator reads as "Nhân viên"
+                          (2026-10-27). */}
+                      {keptRoles(m).map((k) => (
+                        <Tag key={k} title={roleLock(m) ?? undefined}>
+                          {roleLabel(k)}
+                        </Tag>
+                      ))}
                       <Tooltip title={saveBlocked(m)}>
                         <span className="inline-block">
                           <Button
@@ -418,6 +426,11 @@ export function MembersManager() {
                     </Flex>
                   </Flex>
 
+                  {roleLock(m) ? (
+                    <Typography.Text className="mt-1 block">
+                      {roleLock(m)}
+                    </Typography.Text>
+                  ) : null}
                   <div className="mt-1.5">
                     <SignInActions
                       userId={m.user_id}
@@ -427,7 +440,7 @@ export function MembersManager() {
                       blockedReason={
                         !canGrantAdmin &&
                         m.role_keys.some((k) => administrativeRoles.has(k))
-                          ? ADMIN_SIGN_IN
+                          ? ADMIN_ROW
                           : null
                       }
                       lockBlockedReason={

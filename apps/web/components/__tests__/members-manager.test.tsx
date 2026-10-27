@@ -128,14 +128,18 @@ describe("member roles on the members screen", () => {
   it("shows every role a person holds, not the first one", async () => {
     show();
     const an = await row("An Nguyễn");
-    await waitFor(() => expect(within(an).getByText("Sales phụ trách (PIC)")).toBeTruthy());
+    await waitFor(() =>
+      expect(within(an).getByText("Sales phụ trách (PIC)")).toBeTruthy(),
+    );
     expect(within(an).getByText("Nhân viên")).toBeTruthy();
   });
 
   it("keeps Lưu off until a role changes", async () => {
     show();
     const an = await row("An Nguyễn");
-    await waitFor(() => expect(within(an).getByText("Sales phụ trách (PIC)")).toBeTruthy());
+    await waitFor(() =>
+      expect(within(an).getByText("Sales phụ trách (PIC)")).toBeTruthy(),
+    );
     expect(isDisabled(saveButton(an))).toBe(true);
   });
 
@@ -147,7 +151,9 @@ describe("member roles on the members screen", () => {
     });
     show();
     const an = await row("An Nguyễn");
-    await waitFor(() => expect(within(an).getByText("Sales phụ trách (PIC)")).toBeTruthy());
+    await waitFor(() =>
+      expect(within(an).getByText("Sales phụ trách (PIC)")).toBeTruthy(),
+    );
     await addRole("An Nguyễn", "Người duyệt");
     await waitFor(() => expect(isDisabled(saveButton(an))).toBe(false));
     fireEvent.click(saveButton(an));
@@ -190,6 +196,14 @@ describe("member roles on the members screen", () => {
       ).not.toBeNull(),
     );
     expect(isDisabled(saveButton(hung))).toBe(true);
+    // The role it cannot offer is shown, not dropped: an administrator does
+    // not read as "Nhân viên" (2026-10-27), and why it is locked is written.
+    expect(within(hung).getByText("Quản trị hệ thống")).toBeTruthy();
+    expect(
+      await within(hung).findByText(
+        "Chỉ Quản trị toàn quyền mới đổi vai và đăng nhập của một quản trị viên.",
+      ),
+    ).toBeTruthy();
   });
 });
 
