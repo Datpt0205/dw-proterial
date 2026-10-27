@@ -40,6 +40,7 @@ magic numbers and a zip's table of contents (`dw_sales.adapters.formats`).
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -50,8 +51,16 @@ from pydantic import ValidationError
 
 from dw_kernel.errors import DomainError, InfrastructureError
 from dw_sales.adapters.formats import refusal, sniff
-from dw_sales.adapters.reader_wire import PdfPage, ReaderArgs, ReaderOp, ReaderReply, ReaderRequest
+from dw_sales.adapters.reader_wire import (
+    MailRead,
+    PdfPage,
+    ReaderArgs,
+    ReaderOp,
+    ReaderReply,
+    ReaderRequest,
+)
 from dw_sales.application.catalog_imports import TableUnreadableError
+from dw_sales.application.mail_drop import MailFile, MailRefused
 from dw_sales.application.order_ports import READ_AS, FileType, QuoteForm
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.application.source import SheetGrid
@@ -78,6 +87,8 @@ READER_MISMATCH: Final = (
 _CRASHED: Final = "the reader failed on this file"
 # Why a reading that names another file than the one sent is refused.
 _ANOTHER_FILE: Final = "the reader's answer names another file than the one sent"
+# Why a mail whose attachments and their bytes disagree is refused.
+_UNMATCHED_ATTACHMENTS: Final = "the reader's answer does not hold each attachment to its bytes"
 
 
 class ReaderUnavailableError(InfrastructureError):
@@ -399,6 +410,39 @@ class ClientTableReader:
 
 
 @dataclass(frozen=True)
+class ClientMailReader:
+    """`MailFileReaderPort` over the reader (ticket 43): an `.eml` file as the
+    mailbox holds it. The answer is held to the file sent: its message id is
+    the hash of those bytes, and every attachment it describes has its bytes."""
+
+    transport: ReaderTransport
+
+    async def read_mail(self, data: bytes) -> MailFile | MailRefused:
+        operation = ReaderOp.MAIL_READ
+        reply = await _ask(self.transport, operation, data=data)
+        if _failed(operation, reply):
+            refused = reply.detail if reply.failure == "refused" and reply.detail else None
+            return MailRefused(refused or _CRASHED)
+        read: MailRead = _value(operation, reply)
+        message = read.message
+        if message.message_id != "eml-" + hashlib.sha256(data).hexdigest():
+            logger.error("reader operation %s: %s", operation, _ANOTHER_FILE)
+            return MailRefused(_ANOTHER_FILE)
+        described = {a.attachment_id for a in message.attachments}
+        if described != set(read.contents):
+            return MailRefused(_UNMATCHED_ATTACHMENTS)
+        contents: dict[str, bytes] = {}
+        for attachment in message.attachments:
+            try:
+                data_of = base64.b64decode(read.contents[attachment.attachment_id], validate=True)
+                AttachmentContent(attachment=attachment, data=data_of)
+            except ValueError:
+                return MailRefused(_UNMATCHED_ATTACHMENTS)
+            contents[attachment.attachment_id] = data_of
+        return MailFile(message=message, contents=contents)
+
+
+@dataclass(frozen=True)
 class Dw1Readers:
     """Every reader port DW1's services take, over one transport."""
 
@@ -409,6 +453,7 @@ class Dw1Readers:
     texts: ClientTexts
     source: ClientSourceView
     tables: ClientTableReader
+    mail: ClientMailReader
 
 
 def client_readers(transport: ReaderTransport, caps: IntakeCaps) -> Dw1Readers:
@@ -422,6 +467,7 @@ def client_readers(transport: ReaderTransport, caps: IntakeCaps) -> Dw1Readers:
         texts=ClientTexts(transport),
         source=ClientSourceView(transport, caps),
         tables=ClientTableReader(transport, caps),
+        mail=ClientMailReader(transport),
     )
 
 

@@ -157,6 +157,23 @@ API and the plan use the English terms. The spec is
   brief and whose turn it is, what is due soon or overdue, what waits on
   whom; counts only, never an amount (ticket 42).
 
+- **Drop folder** (Thư mục thư): where real mail reaches DW1 without any
+  access to Microsoft 365: each Sales PIC's own Power Automate flow exports
+  every mail that reaches their Inbox as an `.eml` file into a OneDrive
+  folder of theirs, shared only with the account a PC in the plant syncs;
+  that PC shares the PICs' folders with DW1's host, read-only. The worker's
+  `sales_mail_drop` lane reads each new file once (ticket 43).
+- **Stored mailbox** (Hộp thư DW1): the mail the lane stored, each message
+  whole with its attachments' bytes, in PostgreSQL; what every screen and
+  lane reads when `DW_SALES_MAILBOX=stored`. A message's id is its file's
+  hash, so a copy of one file, or one mail exported from two PICs'
+  mailboxes, is stored once.
+- **Ignored sender domains** (Tên miền không đưa vào DW1): sender domains,
+  each with its subdomains, whose mail the lane does not store at all
+  (`sales_order_rules.ignored_sender_domains`, from 1.7.0). Usually the
+  company's own. Empty takes every mail. A Design mailbox's mail is taken
+  whatever it lists.
+
 ## Roles and permission sets
 
 | Key                    | Kind           | Vietnamese name               |

@@ -133,6 +133,13 @@ services:
       DW_WORKER_OUTBOUND_ALLOWED_HOSTS: '["model"]'
       QDRANT_COLLECTION: dw_knowledge_bge_m3
       ZALO_BOT_TOKEN: ""
+      # The drop folder (ticket 43): the plant's share of the PICs' `.eml`
+      # files, mounted read-only into this container alone. Read only with
+      # DW_SALES_MAILBOX=stored in .env; `infra/onprem/README.md` says how the
+      # share reaches this host.
+      DW_SALES_MAIL_DROP_DIR: /mail-drop
+    volumes:
+      - ${DW_SALES_MAIL_DROP_HOST_DIR:-/srv/dw/mail-drop}:/mail-drop:ro
     depends_on:
       model:
         condition: service_healthy

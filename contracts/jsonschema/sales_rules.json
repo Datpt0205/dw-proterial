@@ -1153,6 +1153,15 @@
         "title": "Fiscal Year Start Month",
         "type": "integer"
       },
+      "ignored_sender_domains": {
+        "default": [],
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 100,
+        "title": "Ignored Sender Domains",
+        "type": "array"
+      },
       "intake": {
         "$ref": "#/$defs/IntakeCaps"
       },

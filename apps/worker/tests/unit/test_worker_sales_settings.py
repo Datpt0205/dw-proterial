@@ -32,6 +32,7 @@ _ENV = (
     "DW_WORKER_DEFAULT_WORKSPACE_ID",
     "DW_API_PROFILE",
     "DW_WORKER_PROFILE",
+    "DW_SALES_MAILBOX",
 )
 
 
@@ -62,3 +63,13 @@ def test_named_both_bind_it_to_the_pair_named(monkeypatch: pytest.MonkeyPatch) -
 
 def test_both_hold_runs_to_the_same_run_policy() -> None:
     assert composition.WORKER_RUN_POLICY.name == api_paths.WORKER_RUN_POLICY.name
+
+
+@pytest.mark.parametrize("named", [None, "mock", "stored"])
+def test_both_read_the_same_mailbox(monkeypatch: pytest.MonkeyPatch, named: str | None) -> None:
+    """Ticket 43: the API shows the mailbox the worker's lanes work."""
+    if named is not None:
+        monkeypatch.setenv("DW_SALES_MAILBOX", named)
+    worker = WorkerSettings()  # type: ignore[call-arg]
+    api = ApiSettings()  # type: ignore[call-arg]
+    assert worker.sales_mailbox == api.sales_mailbox == (named or "mock")

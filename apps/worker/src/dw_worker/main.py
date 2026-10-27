@@ -24,6 +24,7 @@ import logging
 import signal
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -111,6 +112,7 @@ from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORT
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
+from dw_sales.application.mail_drop import MAIL_DROP_LANE
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
@@ -147,6 +149,8 @@ from dw_worker.consumers.sales_followups import (
 from dw_worker.consumers.sales_followups import build_sales_followups_consumer
 from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTERVAL_SECONDS
 from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
+from dw_worker.consumers.sales_mail_drop import INTERVAL_SECONDS as SALES_MAIL_DROP_INTERVAL_SECONDS
+from dw_worker.consumers.sales_mail_drop import build_sales_mail_drop_consumer
 from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
@@ -392,8 +396,23 @@ def build_sales(
         # The same rule for a template drafted outside a run, through the
         # one-call door: the plan's daily allowance checked before the call.
         one_call_model=runtime.one_call if Provider.ONPREM in runtime.gateway.adapters else None,
+        # The mailbox the API reads too (ticket 43), and, for the stored one,
+        # the folder this process alone reads into it.
+        mailbox=settings.sales_mailbox,
+        mail_drop=_mail_drop_dir(settings),
     )
     return mount, scope
+
+
+def _mail_drop_dir(settings: WorkerSettings) -> Path | None:
+    """The drop folder the `sales_mail_drop` lane reads, or None: only for
+    the stored mailbox, and refused at startup when it is not a directory."""
+    if settings.sales_mailbox != "stored" or settings.sales_mail_drop_dir is None:
+        return None
+    folder = Path(settings.sales_mail_drop_dir)
+    if not folder.is_dir():
+        raise RuntimeError(f"DW_SALES_MAIL_DROP_DIR is not a directory: {folder}")
+    return folder
 
 
 def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
@@ -468,6 +487,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # services are built whole, files included), a bound mailbox, and the
     # host's switch on.
     sales_inbox_consumer: Callable[[], Awaitable[None]] | None = None
+    sales_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
     # DW1's processing queue (Sales ticket 25): the same, switch or no switch:
     # "DW xử lý" queues a job whether or not the lane runs.
     sales_processing_consumer: Callable[[], Awaitable[None]] | None = None
@@ -650,6 +670,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 )
                 if mount.lane is not None:
                     sales_inbox_consumer = build_sales_inbox_consumer(mount.lane, [mailbox])
+                if mount.mail_drop is not None:
+                    sales_mail_drop_consumer = build_sales_mail_drop_consumer(
+                        mount.mail_drop, mailbox
+                    )
                 followups, followup_scopes = build_followup_lane(
                     configs=REPO_ROOT / "configs",
                     session_factory=sessions,
@@ -719,6 +743,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     if sales_inbox_consumer is not None:
         registry.register(
             SALES_INBOX_LANE, sales_inbox_consumer, interval_seconds=SALES_INBOX_INTERVAL_SECONDS
+        )
+    # And the drop folder (ticket 43), which stores the mail the inbox lane
+    # then queues; it owns no job queue, so no ReapTarget.
+    if sales_mail_drop_consumer is not None:
+        registry.register(
+            MAIL_DROP_LANE,
+            sales_mail_drop_consumer,
+            interval_seconds=SALES_MAIL_DROP_INTERVAL_SECONDS,
         )
     # And its follow-ups and morning brief (ticket 42), which only notify, so
     # no ReapTarget either.

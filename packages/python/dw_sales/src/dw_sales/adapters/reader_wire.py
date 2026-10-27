@@ -40,7 +40,7 @@ from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
 from dw_sales.domain.master_data import ImportedTable
-from dw_sales.domain.messages import Attachment, AttachmentContent
+from dw_sales.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument
@@ -67,6 +67,8 @@ class ReaderOp(StrEnum):
     SOURCE_SHEET_GRID = "source.sheet_grid"
     # A master-data file as rows of cells (ticket 41).
     TABLE_ROWS = "table.rows"
+    # An `.eml` file as the mailbox holds it (ticket 43).
+    MAIL_READ = "mail.read"
 
 
 class ReaderArgs(BaseModel):
@@ -172,6 +174,17 @@ class PdfPage(BaseModel):
     pages: int = Field(ge=1)
 
 
+class MailRead(BaseModel):
+    """An `.eml` file read (ticket 43): the message, and each attachment's
+    bytes, base64, by attachment id. The caller holds every attachment to its
+    bytes (`AttachmentContent`) and the message id to the file it sent."""
+
+    model_config = _WIRE
+
+    message: InboundMessage
+    contents: dict[str, str]
+
+
 # What each operation returns: the one table both sides validate against.
 RESULTS: Final[Mapping[ReaderOp, TypeAdapter[Any]]] = MappingProxyType(
     {
@@ -189,5 +202,6 @@ RESULTS: Final[Mapping[ReaderOp, TypeAdapter[Any]]] = MappingProxyType(
         ReaderOp.SOURCE_SHEET_NAMES: TypeAdapter(list[str]),
         ReaderOp.SOURCE_SHEET_GRID: TypeAdapter(SheetGrid | None),
         ReaderOp.TABLE_ROWS: TypeAdapter(ImportedTable),
+        ReaderOp.MAIL_READ: TypeAdapter(MailRead),
     }
 )

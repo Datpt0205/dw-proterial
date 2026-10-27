@@ -322,6 +322,22 @@ class WorkerSettings(BaseSettings):
         default=True, validation_alias=AliasChoices("DW_WORKER_SALES_INBOX_LANE")
     )
 
+    # --- Sales: which mailbox DW1 reads (ticket 43) ---
+    # `mock`: the fictional mailbox bound to the scope above (the demo).
+    # `stored`: the real mail the worker's `sales_mail_drop` lane stores from
+    # the drop folder. One variable both processes read, so the API never
+    # shows one mailbox while the worker's lanes work another
+    # (`test_worker_sales_settings.py`).
+    sales_mailbox: Literal["mock", "stored"] = Field(
+        default="mock", validation_alias=AliasChoices("DW_SALES_MAILBOX")
+    )
+    # The folder the `.eml` files arrive in, mounted read-only into this
+    # container alone. Named, with `DW_SALES_MAILBOX=stored`, it turns the
+    # `sales_mail_drop` lane on; unnamed, nothing reads a folder.
+    sales_mail_drop_dir: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_SALES_MAIL_DROP_DIR")
+    )
+
     # --- Sales: the malware scanner (ticket 25) ---
     # `clamd`: every attachment is scanned by the `clamav` compose service
     # before anything reads it. `skip`: files are handed over unscanned, for a
