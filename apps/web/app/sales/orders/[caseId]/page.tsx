@@ -178,7 +178,15 @@ function OrderDetail() {
     ? `Việc của bạn: ${label(ACTION, mine.action)}`
     : data.status === "closed"
       ? `Hồ sơ đã đóng${data.close_reason ? `: ${label(CLOSE_REASON, data.close_reason)}` : ""}.`
-      : "Không có việc của bạn ở bước này.";
+      : data.status === "confirmed"
+        ? "Đơn đã xác nhận."
+        : data.status === "correction_requested"
+          ? "Đang chờ khách gửi PO đã sửa."
+          : data.status === "uploaded_to_bravo"
+            ? "Đang chờ kiểm chéo: người kiểm chéo không phải người đã làm hồ sơ."
+            : data.assigned_to
+              ? `Đến lượt ${name(data.assigned_to)}.`
+              : "Hồ sơ chưa giao cho ai.";
 
   const openSource = (field: string, lineNo: number | null) => {
     const anchor = anchorOf(data, field, lineNo);

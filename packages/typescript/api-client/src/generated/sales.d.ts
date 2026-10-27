@@ -4715,6 +4715,8 @@ export interface components {
              * @enum {string}
              */
             kind: "order" | "quote" | "message";
+            /** Owner */
+            owner?: string | null;
             /**
              * Received At
              * Format: date-time

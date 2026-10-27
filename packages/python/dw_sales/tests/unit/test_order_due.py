@@ -98,3 +98,18 @@ async def test_the_store_pages_an_order_in_its_due_dates_group() -> None:
     }
     assert groups[ids["M35"]] == ("2026-10-06", date(2026, 10, 6))
     assert groups[ids["M01"]] == (NO_DUE, None)
+
+
+async def test_my_work_names_a_routed_messages_owner_as_the_inbox_does() -> None:
+    """2026-10-27: Việc cần làm read "Chưa giao" for every mail while the
+    inbox named its owner; one fact, now on both."""
+    world = _world()
+    await world.process_each(AN)
+    held = world.store.state(ALPHA).messages
+    items = (await world.services.overview.my_work(AN.context())).items
+    messages = [i for i in items if i.kind == "message"]
+    assert messages, "the mock mailbox routes some mail to Sales"
+    for item in messages:
+        assert item.owner is not None
+        assert item.owner == held[item.id].disposition.owner
+    assert all(i.owner is None for i in items if i.kind != "message")

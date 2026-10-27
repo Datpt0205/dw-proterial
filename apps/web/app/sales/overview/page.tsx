@@ -37,13 +37,18 @@ type Overview = SalesSchemas["OverviewView"];
 type Step = SalesSchemas["StepCount"];
 type TimeStat = SalesSchemas["TimeStat"];
 
-/** Every figure here is counted on the fictional mock set, and says so. */
-const MOCK_SET = "trên bộ mẫu giả lập";
+const NOT_YET = "Chưa có hồ sơ";
 
 const seconds = (value: number | null | undefined) =>
   value === null || value === undefined
     ? UNKNOWN_TIME
     : formatDuration(value * 1000);
+
+/** A measured median and how many cases it is over; none yet says so. */
+const measured = (stat: TimeStat, unit: string) =>
+  stat.cases === 0
+    ? NOT_YET
+    : `${seconds(stat.median_seconds)} (${stat.cases} ${unit})`;
 
 /**
  * Tổng quan quy trình (V3Exec, re-cut): counts and times only, never an
@@ -67,7 +72,7 @@ function OverviewBody() {
       <PageHeader
         breadcrumb={salesCrumbs("Tổng quan quy trình")}
         title="Tổng quan quy trình"
-        subtitle={`Số hồ sơ ở mỗi bước của hai quy trình, và thời gian DW1 và Sales bỏ ra, ${MOCK_SET}. Không có số tiền nào ở trang này.`}
+        subtitle="Số hồ sơ ở mỗi bước của hai quy trình, và thời gian DW1 và Sales bỏ ra. Không có số tiền nào ở trang này."
         tags={
           data ? (
             <StatusTag tone="gray">{`Cập nhật ${formatDateTime(data.as_of)}`}</StatusTag>
@@ -106,7 +111,7 @@ function OverviewContent({ data }: { data: Overview }) {
   const m = data.messages;
   const kpis = [
     {
-      title: "Email chưa có hướng xử lý",
+      title: "Thư chưa có hướng xử lý",
       value: m.without_disposition,
       note:
         m.oldest_waiting_seconds !== null
@@ -122,10 +127,12 @@ function OverviewContent({ data }: { data: Overview }) {
       title: "Dòng PO đã đọc / dòng in trên PO",
       value: `${data.lines_read}/${data.lines_printed}`,
     },
+    { title: "Mã PRV khớp convert list", value: data.mapping.convert_list },
     {
-      title: "Mã PRV: khớp convert list · Sales xác nhận · chưa giải quyết",
-      value: `${data.mapping.convert_list} · ${data.mapping.confirmed_candidate} · ${data.mapping.unresolved}`,
+      title: "Mã PRV Sales xác nhận",
+      value: data.mapping.confirmed_candidate,
     },
+    { title: "Mã PRV chưa giải quyết", value: data.mapping.unresolved },
     {
       title: "Đơn tự kiểm xong không phải sửa giá trị",
       value: data.orders_prepared_without_correction,
@@ -155,12 +162,12 @@ function OverviewContent({ data }: { data: Overview }) {
     <div className="space-y-4">
       <section aria-labelledby="kpi-title" className="space-y-2">
         <Typography.Title level={4} id="kpi-title">
-          Chỉ số {MOCK_SET}
+          Chỉ số
         </Typography.Title>
         <Alert
           type="info"
           showIcon
-          title={`Số đếm ${MOCK_SET}: bộ mẫu quá nhỏ để tính tỷ lệ, nên không có tỷ lệ hay kết luận đạt/không đạt.`}
+          title="Chỉ đếm số hồ sơ: chưa đủ hồ sơ để tính tỷ lệ, nên chưa có tỷ lệ hay kết luận đạt/không đạt."
         />
         <Row gutter={[12, 12]}>
           {kpis.map((kpi) => (
@@ -171,7 +178,10 @@ function OverviewContent({ data }: { data: Overview }) {
         </Row>
       </section>
 
-      <Card title={`Thời gian (trung vị · lâu nhất), ${MOCK_SET}`} size="small">
+      <Card
+        title="Thời gian mỗi bên giữ hồ sơ (trung vị · lâu nhất)"
+        size="small"
+      >
         <Table
           rowKey={(row) => row[0]}
           size="small"
@@ -181,17 +191,21 @@ function OverviewContent({ data }: { data: Overview }) {
           columns={[
             { title: "Ai giữ hồ sơ", render: (_, row) => row[0] },
             {
-              title: "Số hồ sơ",
+              title: "Số hồ sơ đã qua",
               align: "right",
               render: (_, row) => row[1].cases,
             },
+            // No case has been through a holder yet: nothing measured, not
+            // a time nobody could read.
             {
               title: "Trung vị",
-              render: (_, row) => seconds(row[1].median_seconds),
+              render: (_, row) =>
+                row[1].cases === 0 ? NOT_YET : seconds(row[1].median_seconds),
             },
             {
               title: "Lâu nhất",
-              render: (_, row) => seconds(row[1].max_seconds),
+              render: (_, row) =>
+                row[1].cases === 0 ? NOT_YET : seconds(row[1].max_seconds),
             },
           ]}
           footer={() =>
@@ -206,12 +220,12 @@ function OverviewContent({ data }: { data: Overview }) {
             {
               key: "order",
               label: "Xác nhận đơn: mục tiêu · đo được (trung vị)",
-              children: `${seconds(data.order_confirmation.target_seconds)} · ${seconds(data.order_confirmation.measured.median_seconds)} (${data.order_confirmation.measured.cases} đơn)`,
+              children: `${seconds(data.order_confirmation.target_seconds)} · ${measured(data.order_confirmation.measured, "đơn")}`,
             },
             {
               key: "quote",
               label: "Báo giá: mục tiêu · đo được (trung vị)",
-              children: `${seconds(data.quotation_time.target_seconds)} · ${seconds(data.quotation_time.measured.median_seconds)} (${data.quotation_time.measured.cases} báo giá)`,
+              children: `${seconds(data.quotation_time.target_seconds)} · ${measured(data.quotation_time.measured, "báo giá")}`,
             },
             {
               key: "policy",
@@ -266,7 +280,7 @@ function OverviewContent({ data }: { data: Overview }) {
         </Card>
       ))}
 
-      <Card title={`Cờ theo loại, ${MOCK_SET}`} size="small">
+      <Card title="Cờ theo loại" size="small">
         <Table
           rowKey={(row) => row[0]}
           size="small"
@@ -284,7 +298,7 @@ function OverviewContent({ data }: { data: Overview }) {
       </Card>
 
       <Card
-        title={`Số lần DW1 đi qua mỗi bước theo tháng (${TIME_ZONE_LABEL}), ${MOCK_SET}`}
+        title={`Số lần DW1 đi qua mỗi bước theo tháng (${TIME_ZONE_LABEL})`}
         size="small"
       >
         <Table

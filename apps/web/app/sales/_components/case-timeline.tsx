@@ -19,7 +19,9 @@ import {
  * as done: DW1 runs its checks before the Bravo entry (the spec's deviation),
  * so the WIV order is not the order a case passes through, and a step drawn
  * as passed because it sits to the left would be a claim nobody made. A step
- * outside this slice says so. Under the steps, who acts next.
+ * outside this slice says so. A step is titled by the states it holds, its WIV
+ * code beside: nobody at the desk reads "O7" (2026-10-27). Under the steps,
+ * who acts next.
  */
 export function CaseTimeline({
   procedure,
@@ -54,15 +56,18 @@ export function CaseTimeline({
             size="small"
             aria-label="Các bước của quy trình"
             items={steps.map((step) => ({
-              title: step.step_id,
+              title: step.states.length
+                ? step.states.map((s) => label(states, s)).join(" · ")
+                : label(STEP_COVERAGE, step.coverage),
+              subTitle: step.step_id,
               status: !step.states.includes(status)
                 ? "wait"
                 : status === "closed" || status === "declined"
                   ? "error"
                   : "process",
               content: step.states.includes(status)
-                ? label(states, status)
-                : step.coverage === "yes"
+                ? "Hồ sơ đang ở bước này"
+                : step.coverage === "yes" || !step.states.length
                   ? undefined
                   : label(STEP_COVERAGE, step.coverage),
             }))}
