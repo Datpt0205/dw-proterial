@@ -59,7 +59,7 @@ _WROTE = re.compile(
 # A colon, ASCII or full-width (U+FF1A) as Japanese clients print it.
 _HEADER_FROM = re.compile(r"^\s*(?:from|từ|差出人)\s*[:\uff1a]", re.IGNORECASE)
 _HEADER_NEXT = re.compile(
-    r"^\s*(?:sent|date|gửi|ngày gửi|送信日時|日付)\s*[:\uff1a]", re.IGNORECASE
+    r"^\s*(?:sent|date|gửi|đã gửi|ngày gửi|送信日時|日付)\s*[:\uff1a]", re.IGNORECASE
 )
 _SPACES = re.compile(r"[ \t\u00a0\u2000-\u200b\u3000]+")
 

@@ -456,3 +456,31 @@ async def test_a_long_body_is_cut_to_the_routes_room_before_it_is_sent() -> None
 
     ((_, _, inputs),) = model.calls
     assert estimated_tokens(inputs["body"]) <= model.max_input_tokens - PROMPT_TOKENS
+
+
+@pytest.mark.parametrize(
+    ("span", "value"),
+    [
+        ("2.000 m", Decimal("2000")),
+        ("thêm 500", Decimal("500")),
+        ("500 mét", Decimal("500")),
+        ("1,200 metres", Decimal("1200")),
+        ("各50m", Decimal("50")),
+        # Another unit than the line's metres: the hand-off says "số lượng mới"
+        # with no unit, so "3 km" would reach PC as 3 (found 2026-10-27 by the
+        # edge-case sets). Sales fills it instead.
+        ("3 km", None),
+        ("3km", None),
+        ("4 cuộn", None),
+        ("4 cuon", None),
+        ("2 reels", None),
+        ("1 drum", None),
+        ("1000 ft", None),
+        ("２巻", None),
+        ("5 cái", None),
+    ],
+)
+def test_a_quantity_in_another_unit_than_metres_is_not_copied(
+    span: str, value: Decimal | None
+) -> None:
+    assert quantity_of(span) == value
