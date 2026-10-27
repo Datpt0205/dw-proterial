@@ -37,8 +37,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 2026-10-20..25: board, history, defects A–E, process map, IT accounts.
   2026-10-27: real mail from a drop folder of `.eml` files (ticket 43).
-- **Next:** the 10-27 defects (`sales.md` State; UI sweep A–E done,
-  `web-ui.md`); the plant PC mail drop; `onprem-up` in `uat`; DW2.
+- **Next:** 10-27 sweep and owed fixes done and checked on the stack
+  (`sales.md` State); the plant PC mail drop; `onprem-up` in `uat`; DW2.
 
 ## Decisions Đạt owes
 
