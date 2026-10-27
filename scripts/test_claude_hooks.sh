@@ -230,5 +230,13 @@ check "one whose session is still stopping turns is kept" yes "$([ -f "$s/.claud
 start 'ab/../cd' startup
 check "a session id with path characters names one plain file" yes "$([ -f "$s/.claude/.session-head.abcd" ] && echo yes || echo no)"
 
+# A session that began on a clean tree: its baseline lists no file.
+s="$work/clean"
+new_repo "$s"
+start D startup
+printf 'n\n' > "$s/n.txt"
+check "a clean start, then a new file: asked" 2 "$(stop D)"
+check "...without a shell error in the message" no "$(said "integer expected")"
+
 echo "hooks: $passed passed, $failed failed"
 [ "$failed" -eq 0 ]
