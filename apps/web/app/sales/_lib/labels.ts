@@ -587,6 +587,24 @@ export const LANGUAGE = {
   ja: "tiếng Nhật",
 } as const;
 
+/** A customer's standing in the master data (`Customer.status`). */
+export const CUSTOMER_STATUS = {
+  official: "Chính thức",
+  temporary: "Mã tạm thời",
+} as const;
+
+/** Where a customer's order confirmation goes (`ConfirmationChannel`). */
+export const CONFIRMATION_CHANNEL = {
+  email: "Thư",
+  portal: "Cổng khách hàng",
+} as const;
+
+/** An item's cable family (`Item.family`). */
+export const CABLE_FAMILY = {
+  hook_up_wire: "Dây đơn",
+  multi_core_cable: "Cáp nhiều lõi",
+} as const;
+
 /** A label for `code` from `table`; an unknown code shows as itself. */
 export function label<T extends Record<string, string>>(
   table: T,

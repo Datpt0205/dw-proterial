@@ -132,9 +132,13 @@ function Orders() {
     if (activity) clearActivity();
   };
 
-  const blocked = all.filter(
-    (o) => o.open_blocking_findings > 0 && inGroup("open", o),
-  );
+  // Oldest first: the panel names the one waiting longest, and says so.
+  const blocked = all
+    .filter((o) => o.open_blocking_findings > 0 && inGroup("open", o))
+    .sort(
+      (a, b) =>
+        (instantMs(a.received_at) ?? 0) - (instantMs(b.received_at) ?? 0),
+    );
   const waitingCustomer = all.filter((o) => inGroup("customer", o));
   const unassigned = all.filter((o) => !o.assigned_to && inGroup("open", o));
   const priority: PriorityItem[] = [];
@@ -143,12 +147,13 @@ function Orders() {
       key: "blocked",
       tone: "err",
       lead: `${blocked.length} đơn còn cờ chặn`,
-      text: `PO ${blocked[0].po_no} · ${blocked[0].open_blocking_findings} chặn`,
+      text: `Chờ lâu nhất: PO ${blocked[0].po_no} · ${blocked[0].open_blocking_findings} cờ chặn`,
       sub: `nhận ${formatDateTime(blocked[0].received_at)} · ${formatAge(blocked[0].received_at, now)} trước`,
       href: `/sales/orders/${blocked[0].case_id}`,
       extra: (
         <StatusTag tone="err" icon={<StopOutlined aria-hidden />}>
-          {blocked.reduce((n, o) => n + o.open_blocking_findings, 0)} chặn
+          tổng {blocked.reduce((n, o) => n + o.open_blocking_findings, 0)} cờ
+          chặn
         </StatusTag>
       ),
     });
@@ -168,7 +173,7 @@ function Orders() {
       key: "unassigned",
       tone: "warn",
       lead: `${unassigned.length} đơn chưa giao`,
-      text: "mọi PIC nhận được",
+      text: "Chưa có người phụ trách: PIC nào cũng nhận được.",
       href: "/sales/orders?sort=oldest",
     });
 

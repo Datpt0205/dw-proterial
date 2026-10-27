@@ -16,6 +16,14 @@ import { LoadError } from "../../../components/load-error";
 import { formatDate, formatDateTime, formatMonth } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { useResource } from "../_lib/use-resource";
+import { usePeople } from "../_lib/people";
+import {
+  CABLE_FAMILY,
+  CONFIRMATION_CHANNEL,
+  CUSTOMER_STATUS,
+  label,
+  LANGUAGE,
+} from "../_lib/labels";
 import {
   Money,
   OTHER_CUSTOMERS_SENTENCE,
@@ -212,6 +220,7 @@ function Snapshot<T extends object>({
 }
 
 function Customers() {
+  const name = usePeople();
   return (
     <Snapshot<S["CustomerView"]>
       cacheKey="sales/master-data/customers"
@@ -226,13 +235,21 @@ function Customers() {
           dataIndex: "status",
           render: (s: string) =>
             s === "temporary" ? (
-              <StatusTag tone="warn">Mã tạm thời</StatusTag>
+              <StatusTag tone="warn">{label(CUSTOMER_STATUS, s)}</StatusTag>
             ) : (
-              s
+              label(CUSTOMER_STATUS, s)
             ),
         },
-        { title: "Ngôn ngữ", dataIndex: "language" },
-        { title: "Kênh xác nhận", dataIndex: "confirmation_channel" },
+        {
+          title: "Ngôn ngữ",
+          dataIndex: "language",
+          render: (l: string) => label(LANGUAGE, l),
+        },
+        {
+          title: "Kênh xác nhận",
+          dataIndex: "confirmation_channel",
+          render: (c: string) => label(CONFIRMATION_CHANNEL, c),
+        },
         {
           title: "NOC",
           dataIndex: "noc_confirmed",
@@ -257,7 +274,7 @@ function Customers() {
         {
           title: "Sales phụ trách",
           dataIndex: "sales_pic",
-          render: (v: string | null) => v ?? "Chưa giao",
+          render: (v: string | null) => (v ? name(v) : "Chưa giao"),
         },
       ]}
     />
@@ -281,7 +298,8 @@ function Items() {
         {
           title: "Họ cáp",
           dataIndex: "family",
-          render: (f: string | null) => f ?? "Không rõ",
+          render: (f: string | null) =>
+            f ? label(CABLE_FAMILY, f) : "Không rõ",
         },
         { title: "Số lõi", dataIndex: "cores", align: "right" },
         { title: "Tiết diện", dataIndex: "gauge" },

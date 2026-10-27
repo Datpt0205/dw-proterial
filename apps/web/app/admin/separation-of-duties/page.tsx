@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, Flex, Input, Tag, Typography } from "antd";
+import { scopeLabel } from "../../../lib/nav/scopes";
 import { SplitCellsOutlined } from "@ant-design/icons";
 import type { AdminSodRule } from "@dw/contracts";
 import { PageHeader, RegionState } from "@dw/ui";
@@ -112,7 +113,8 @@ function RuleCard({
   const reasonId = `sod-reason-${rule.key}`;
   return (
     <Card
-      title={rule.description}
+      // The rule's sentence wraps: antd cuts a card title to one line.
+      title={<span className="whitespace-normal">{rule.description}</span>}
       extra={
         pending ? (
           <Tag color="processing">Chờ xác nhận</Tag>
@@ -206,13 +208,11 @@ function RuleCard({
 function ScopeList({ title, scopes }: { title: string; scopes: string[] }) {
   return (
     <Flex vertical gap={4}>
-      <Typography.Text type="secondary" className="text-xs">
-        {title}
-      </Typography.Text>
+      <Typography.Text type="secondary">{title}</Typography.Text>
       <Flex wrap gap={4}>
         {scopes.map((scope) => (
-          <Tag key={scope} className="font-mono">
-            {scope}
+          <Tag key={scope} title={scope}>
+            {scopeLabel(scope)}
           </Tag>
         ))}
       </Flex>

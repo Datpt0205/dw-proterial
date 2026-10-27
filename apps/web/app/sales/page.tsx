@@ -20,6 +20,8 @@ import {
 } from "../../lib/dates";
 import { compareVi, matches } from "../../lib/search";
 import { useNow } from "../../lib/use-now";
+import { approvalInbox } from "../../lib/approvals/registry";
+import { apiClient } from "../../lib/session";
 import { salesApi } from "./_lib/api";
 import { useCustomerName } from "./_lib/customers";
 import { ACTION, label, ROUTING_REASON } from "./_lib/labels";
@@ -101,6 +103,14 @@ function MyWork() {
   const ycbg = useResource(
     "sales/open-ycbg",
     useCallback(() => salesApi().openYcbg(), []),
+  );
+  // A version of the rules, a PO layout or master data waiting on this
+  // person is decided outside the case lists, so my-work never carries it
+  // (2026-10-27: a head saw quotes to approve here and none of these).
+  const approvals = useResource(
+    "approvals/first-page",
+    useCallback(() => apiClient().listApprovals(), []),
+    { enabled: hasScope("approvals.read") && hasScope("approvals.decide") },
   );
 
   const orderById = useMemo(
@@ -241,6 +251,19 @@ function MyWork() {
       text: "DW1 không đọc được hạn báo giá trên yêu cầu; hạn chưa rõ, không phải không có hạn.",
       href: "/sales?tab=quote",
     });
+  const toDecide = (approvals.data?.items ?? []).filter(
+    (a) => a.status === "pending" && a.can_decide,
+  );
+  if (toDecide[0]) {
+    const inbox = approvalInbox(toDecide[0]);
+    priority.push({
+      key: "approvals",
+      tone: "pri",
+      lead: `${toDecide.length}${approvals.data?.next_cursor ? "+" : ""} yêu cầu chờ bạn duyệt`,
+      text: "Phiên bản quy tắc, mẫu PO hoặc dữ liệu chủ",
+      href: inbox?.kind === "link" ? inbox.href : "/approvals",
+    });
+  }
   if (waiting.length) {
     const days = daysSince(waiting[0]!.issued_on, now);
     priority.push({

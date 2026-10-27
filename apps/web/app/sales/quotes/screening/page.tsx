@@ -6,6 +6,7 @@ import { Alert, Table, Typography } from "antd";
 import { PageHeader } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { salesApi } from "../../_lib/api";
+import { useCustomerName } from "../../_lib/customers";
 import { useResource } from "../../_lib/use-resource";
 import { SCOPE } from "../../_components/sales-frame";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -25,6 +26,7 @@ export default function ScreeningPage() {
 }
 
 function Screening() {
+  const customerName = useCustomerName();
   const report = useResource(
     "sales/screening",
     useCallback(() => salesApi().screening(), []),
@@ -38,13 +40,13 @@ function Screening() {
           "Rà soát báo giá năm",
         )}
         title="Rà soát báo giá năm"
-        subtitle="Mã đã báo cho khách nhưng 12 tháng không có đơn nào, trên dữ liệu giả lập. Sales quyết định giữ hay bỏ từng báo giá."
+        subtitle="Mã đã báo giá cho khách nhưng 12 tháng chưa có đơn nào, để Sales xem lại."
         actions={<Link href="/sales/quotes">Về danh sách báo giá</Link>}
       />
       <Alert
         type="info"
         showIcon
-        title="Báo cáo chỉ liệt kê; không xóa hay đổi báo giá nào."
+        title="Trang này chỉ liệt kê: DW1 không xóa hay đổi báo giá nào. Sales quyết định giữ hay bỏ từng báo giá ngoài DW1."
       />
       {report.error ? (
         <LoadError error={report.error} onRetry={report.reload} />
@@ -63,7 +65,12 @@ function Screening() {
           }}
           footer={() => `${rows.length} cặp khách và mã`}
           columns={[
-            { title: "Khách", dataIndex: "customer_code" },
+            {
+              title: "Khách",
+              dataIndex: "customer_code",
+              render: (c: string) =>
+                customerName(c) ? `${c} · ${customerName(c)}` : c,
+            },
             {
               title: "Mã PRV",
               dataIndex: "prv_code",

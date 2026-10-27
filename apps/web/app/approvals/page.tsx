@@ -32,6 +32,7 @@ import { approvalClient, approvalInbox } from "../../lib/approvals/registry";
 import { ApprovalHostDetail } from "../../components/approval-host-detail";
 import { APPROVAL_STATUS } from "../../lib/approvals/status";
 import { useAuth } from "../../lib/auth/auth-context";
+import { scopeLabel } from "../../lib/nav/scopes";
 import { formatDateTime } from "../../lib/dates";
 import { errorMessage } from "../../lib/error-message";
 import { useIdempotencyKeys } from "../../lib/idempotency";
@@ -117,7 +118,7 @@ export default function ApprovalsPage() {
       <PageHeader
         icon={<CheckSquareOutlined />}
         title="Duyệt"
-        subtitle="Một lượt chạy muốn thay đổi thứ gì ngoài hệ thống sẽ dừng ở đây tới khi có người quyết. Các việc trên trang này đều chưa được thực hiện."
+        subtitle="Những việc cần người quyết trước khi thực hiện: một phiên bản quy tắc, một báo giá, một thao tác DW1 không được tự làm. Việc đang chờ quyết chưa được thực hiện."
         actions={
           <Button
             icon={<ReloadOutlined aria-hidden />}
@@ -134,7 +135,7 @@ export default function ApprovalsPage() {
           <RegionState
             kind="empty"
             title="Không có yêu cầu nào chờ quyết"
-            description="Yêu cầu hiện ở đây ngay khi một worker tới thao tác mà chính sách không cho nó tự làm."
+            description="Yêu cầu hiện ở đây khi có người đề xuất một thay đổi cần duyệt, hoặc khi DW1 tới một thao tác nó không được tự làm."
           />
         )}
 
@@ -145,7 +146,7 @@ export default function ApprovalsPage() {
           const scopeReason =
             lacking === null
               ? null
-              : `Chỉ người có quyền ${lacking} được quyết yêu cầu này`;
+              : `Chỉ người có quyền "${scopeLabel(lacking)}" được quyết yêu cầu này`;
           // Withdrawing your own request is not deciding it: the server lets
           // the requester reject without the stamped scope, so the page does too.
           const approveLocked = lacking !== null || !online;
