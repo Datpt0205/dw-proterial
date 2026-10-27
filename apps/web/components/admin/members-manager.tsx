@@ -10,6 +10,7 @@ import {
   Flex,
   Select,
   Tag,
+  Tooltip,
   Typography,
   theme,
 } from "antd";
@@ -47,6 +48,8 @@ const ADMIN_GRANTABLE_ROLES = ["org_admin", "platform_admin"];
 const ADMIN_SIGN_IN =
   "Chỉ Quản trị toàn quyền mới đổi được đăng nhập của một quản trị viên.";
 const OWN_SIGN_IN = "Bạn không tự khóa đăng nhập của chính mình được.";
+const ADMIN_ROLES =
+  "Chỉ Quản trị toàn quyền mới đổi vai của một quản trị viên.";
 
 export function MembersManager() {
   const { active, roles, principalId } = useAuth();
@@ -71,10 +74,13 @@ export function MembersManager() {
           ].map((key) => ({ value: key, label: roleLabel(key) })),
     [canGrantAdmin, roleCatalog],
   );
+  // Until the catalog loads, the platform's own administrative roles.
   const administrativeRoles = useMemo(
     () =>
       new Set(
-        (roleCatalog ?? []).filter((r) => r.administrative).map((r) => r.key),
+        roleCatalog
+          ? roleCatalog.filter((r) => r.administrative).map((r) => r.key)
+          : ADMIN_GRANTABLE_ROLES,
       ),
     [roleCatalog],
   );
@@ -97,7 +103,7 @@ export function MembersManager() {
   const [error, setError] = useState<string | null>(null);
   // Per-row role edits, keyed by user id; a row falls back to its stored role
   // until it is touched.
-  const [roleEdits, setRoleEdits] = useState<Record<string, string>>({});
+  const [roleEdits, setRoleEdits] = useState<Record<string, string[]>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   // Per-row permission-set edits, keyed by user id.
   const [setEdits, setSetEdits] = useState<Record<string, string[]>>({});
@@ -167,25 +173,55 @@ export function MembersManager() {
     }
   }
 
-  function currentRole(m: WorkspaceMember): string {
-    const edited = roleEdits[m.user_id];
-    if (edited !== undefined) return edited;
-    const known = m.role_keys.find((k) =>
-      grantableRoles.some((r) => r.value === k),
-    );
-    return known ?? grantableRoles[0]!.value;
+  // A grant replaces the person's roles in this workspace with exactly the
+  // keys sent. So a row edits every role it can offer, and a save sends back,
+  // untouched, every role the select does not show (one the catalog could not
+  // offer): a person holding "Nhân viên" and "Sales PIC" keeps both.
+  const grantableKeys = useMemo(
+    () => new Set(grantableRoles.map((r) => r.value)),
+    [grantableRoles],
+  );
+  const storedRoles = (m: WorkspaceMember) =>
+    m.role_keys.filter((k) => grantableKeys.has(k));
+  const keptRoles = (m: WorkspaceMember) =>
+    m.role_keys.filter((k) => !grantableKeys.has(k));
+  const shownRoles = (m: WorkspaceMember) =>
+    roleEdits[m.user_id] ?? storedRoles(m);
+
+  /** Why this row's roles are not this admin's to change (an administrator's,
+   * to anyone but a platform admin: the grant would be refused). */
+  function roleLock(m: WorkspaceMember): string | null {
+    return !canGrantAdmin && m.role_keys.some((k) => administrativeRoles.has(k))
+      ? ADMIN_ROLES
+      : null;
   }
 
-  // grant is an upsert, so re-granting with a single role replaces the member's
-  // role. Department is passed back so a role change does not reset it.
+  function saveBlocked(m: WorkspaceMember): string | null {
+    if (!m.email) return "Người này chưa có email.";
+    const lock = roleLock(m);
+    if (lock) return lock;
+    const edited = roleEdits[m.user_id];
+    const stored = storedRoles(m);
+    if (
+      edited === undefined ||
+      (edited.length === stored.length &&
+        edited.every((k) => stored.includes(k)))
+    )
+      return "Chưa đổi vai nào.";
+    if (edited.length + keptRoles(m).length === 0)
+      return "Chọn ít nhất một vai; muốn gỡ người này khỏi workspace thì bấm Gỡ.";
+    return null;
+  }
+
+  // Department is passed back so a role change does not reset it.
   async function saveRole(m: WorkspaceMember) {
-    if (!workspaceId || !m.email) return;
+    if (!workspaceId || !m.email || saveBlocked(m)) return;
     setSavingId(m.user_id);
     setError(null);
     const input = {
       email: m.email,
       workspaceId,
-      roleKeys: [currentRole(m)],
+      roleKeys: [...new Set([...shownRoles(m), ...keptRoles(m)])],
       department: m.department,
     };
     const action = `role/${m.user_id}`;
@@ -343,27 +379,35 @@ export function MembersManager() {
                       wrap
                       className="max-w-full"
                     >
-                      <Select
-                        id={roleId}
-                        aria-label={`Vai của ${m.display_name}`}
-                        className="w-40"
-                        value={currentRole(m)}
-                        onChange={(value: string) =>
-                          setRoleEdits((prev) => ({
-                            ...prev,
-                            [m.user_id]: value,
-                          }))
-                        }
-                        options={grantableRoles}
-                      />
-                      <Button
-                        icon={<SaveOutlined aria-hidden />}
-                        loading={savingId === m.user_id}
-                        disabled={!m.email}
-                        onClick={() => void saveRole(m)}
-                      >
-                        Lưu
-                      </Button>
+                      <Tooltip title={roleLock(m)}>
+                        <Select
+                          id={roleId}
+                          mode="multiple"
+                          aria-label={`Vai của ${m.display_name}`}
+                          className="min-w-56"
+                          value={shownRoles(m)}
+                          disabled={roleLock(m) !== null}
+                          onChange={(value: string[]) =>
+                            setRoleEdits((prev) => ({
+                              ...prev,
+                              [m.user_id]: value,
+                            }))
+                          }
+                          options={grantableRoles}
+                        />
+                      </Tooltip>
+                      <Tooltip title={saveBlocked(m)}>
+                        <span className="inline-block">
+                          <Button
+                            icon={<SaveOutlined aria-hidden />}
+                            loading={savingId === m.user_id}
+                            disabled={saveBlocked(m) !== null}
+                            onClick={() => void saveRole(m)}
+                          >
+                            Lưu
+                          </Button>
+                        </span>
+                      </Tooltip>
                       <Button
                         type="text"
                         danger

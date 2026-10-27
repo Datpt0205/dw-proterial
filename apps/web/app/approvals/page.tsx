@@ -117,7 +117,7 @@ export default function ApprovalsPage() {
       <PageHeader
         icon={<CheckSquareOutlined />}
         title="Duyệt"
-        subtitle="Một lượt chạy muốn thay đổi thứ gì ngoài hệ thống sẽ dừng ở đây tới khi có người quyết. Chưa việc nào ở trang này đã xảy ra."
+        subtitle="Một lượt chạy muốn thay đổi thứ gì ngoài hệ thống sẽ dừng ở đây tới khi có người quyết. Các việc trên trang này đều chưa được thực hiện."
         actions={
           <Button
             icon={<ReloadOutlined aria-hidden />}

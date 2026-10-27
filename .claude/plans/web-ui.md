@@ -78,10 +78,11 @@ the theme, the shell and the shared composites, not primitive wrappers.
 
 ## Open
 
-- **2026-10-26, found while taking the user guide's screenshots (not fixed):**
-    - The order list's row link has no accessible name (Playwright sees `link` with no name), so `getByRole("link", { name })` cannot find a case; ui-quality §12 asks every control to be named.
-    - Admin → Thành viên shows ONE role per person (`currentRole` picks the first role the list offers). Someone holding `member` and `sales_pic` reads "Nhân viên", and pressing **Lưu** on that row re-grants `member` alone, dropping `sales_pic`. Visible since the role list reads the catalog (2026-10-26); a multi-role select, or no save on an untouched row, is owed.
-    - `/approvals` subtitle reads "Chưa việc nào ở trang này đã xảy ra." (broken Vietnamese).
+- **2026-10-26, found while taking the user guide's screenshots; 2026-10-27 resolved:**
+    - ~~The order list's row link has no accessible name~~: wrong. The link names the customer and line count; the PO number sits outside it, which is why a search for "PO …" found nothing. Checked on the rendered page 2026-10-27: 23 of 23 links named.
+    - Admin → Thành viên: **fixed.** Each row is a multi-select of every role the admin may grant; a save sends the selected roles plus every role the select does not show, so nothing is dropped; an administrator's row is locked for a non-platform-admin with the reason; **Lưu** stays off until a role changes (`members-manager.test.tsx`, 6 tests; a mutation dropping the kept roles goes red; seen on the rendered page).
+    - `/approvals` subtitle: **fixed** ("Các việc trên trang này đều chưa được thực hiện.").
+    - **Owed to Đạt:** the role list offers "DW1 (tài khoản dịch vụ)" (`sales_dw1`, the service account's role), so IT could give a person the service account's role. Hide service roles from the members screen, or keep it visible?
 
 - **2026-10-26, a long list scrolls inside its region, not the page** (Đạt). `lib/use-fill-height.ts` sizes a region (antd `Table` through `ref={tableRef}` and `scroll.y`) from its top to the window's bottom, from `md` (the theme's `screenMD`) up; below it the page scrolls as before. The hook's `tableRef` must stay stable (`useCallback`): a new ref per render re-attached the table on every render, which an inbox test caught. List pages that adopt it: `sales.md` State 2026-10-26.
 
