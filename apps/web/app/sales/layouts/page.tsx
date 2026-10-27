@@ -28,6 +28,7 @@ import { GuardedButton } from "../_components/guarded-button";
 import { SCOPE } from "../_components/sales-frame";
 import { ScopeGate } from "../_components/scope-gate";
 import { useFillHeight } from "../../../lib/use-fill-height";
+import { messageRef } from "../_lib/messages";
 
 type Layout = SalesSchemas["LayoutView"];
 
@@ -161,7 +162,7 @@ function Layouts() {
                   <Link
                     href={`/sales/inbox?message=${encodeURIComponent(l.sample.message_id)}`}
                   >
-                    Thư {l.sample.message_id}
+                    Thư {messageRef(l.sample.message_id)}
                   </Link>
                   {l.prefill?.outcome === "proposed" ? (
                     <StatusTag tone="warn">

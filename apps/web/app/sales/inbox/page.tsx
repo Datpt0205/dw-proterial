@@ -40,6 +40,7 @@ import {
   REPLY_KIND,
   ROUTING_REASON,
 } from "../_lib/labels";
+import { messageRef } from "../_lib/messages";
 import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
@@ -220,7 +221,7 @@ function Inbox() {
         `inbox/${message.message_id}`,
         null,
         (key) => salesApi().processMessage(message.message_id, key),
-        `Đã xếp thư ${message.message_id} cho DW1 xử lý`,
+        `Đã xếp thư ${messageRef(message.message_id)} cho DW1 xử lý`,
       ),
     );
 
@@ -264,11 +265,11 @@ function Inbox() {
     <div className="space-y-4">
       <PageHeader
         breadcrumb={salesCrumbs("Hộp thư")}
-        title="Hộp thư (giả lập)"
+        title="Hộp thư"
         subtitle={
           inbox.data
             ? `${messages.length} thư · ${waiting} chưa xử lý${busy ? ` (${busy} DW1 đang xử lý)` : ""} · ${routed.length} chuyển Sales. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách.`
-            : "Thư mẫu kèm PO, yêu cầu báo giá và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
+            : "Thư khách hàng gửi về: PO, yêu cầu báo giá, thư trả lời và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
         }
         actions={
           <GuardedButton
@@ -402,7 +403,7 @@ function Inbox() {
                   </Button>
                 </Empty>
               ) : (
-                "Hộp thư giả lập không có thư nào cho không gian làm việc này."
+                "Hộp thư chưa có thư nào cho không gian làm việc này."
               ),
             }}
             footer={() =>
@@ -416,7 +417,7 @@ function Inbox() {
                   <RowTitle
                     href={`/sales/inbox?message=${encodeURIComponent(m.message_id)}`}
                     title={m.subject}
-                    code={m.message_id}
+                    code={messageRef(m.message_id)}
                     sub={
                       <>
                         {m.sender_name} &lt;{m.sender}&gt;
@@ -546,7 +547,7 @@ function Inbox() {
                         reason={processReason}
                         loading={pending === `inbox/${m.message_id}`}
                         onClick={() => processOne(m)}
-                        aria-label={`DW xử lý thư ${m.message_id}`}
+                        aria-label={`DW xử lý thư ${messageRef(m.message_id)}`}
                       >
                         DW xử lý
                       </GuardedButton>
@@ -571,7 +572,7 @@ function Inbox() {
                           reason={processReason}
                           loading={pending === `inbox/${m.message_id}`}
                           onClick={() => processOne(m)}
-                          aria-label={`DW xử lý lại thư ${m.message_id}`}
+                          aria-label={`DW xử lý lại thư ${messageRef(m.message_id)}`}
                         >
                           DW xử lý lại
                         </GuardedButton>

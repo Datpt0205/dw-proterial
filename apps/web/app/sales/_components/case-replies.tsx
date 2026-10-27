@@ -7,6 +7,7 @@ import type { SalesSchemas } from "@dw/api-client";
 import { StatusTag } from "@dw/ui";
 import { formatDateTime } from "../../../lib/dates";
 import { label, REPLY_KIND, REPLY_STEP } from "../_lib/labels";
+import { messageRef } from "../_lib/messages";
 
 type Reply = SalesSchemas["CaseReplyView"];
 
@@ -44,7 +45,7 @@ function ReplyRow({ reply }: { reply: Reply }) {
         <Link
           href={`/sales/inbox?message=${encodeURIComponent(reply.message_id)}`}
         >
-          Thư {reply.message_id}
+          Thư {messageRef(reply.message_id)}
         </Link>
         <Typography.Text type="secondary">
           DW1 nhận lúc {formatDateTime(reply.processed_at)} · trả lời thư{" "}
