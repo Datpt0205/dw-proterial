@@ -274,7 +274,7 @@ function Rules() {
                         }
                         aria-label={`Dùng lại phiên bản này: ${v.ref}`}
                       >
-                        Dùng lại phiên bản này
+                        Dùng lại
                       </Button>
                     </Space>
                   ),

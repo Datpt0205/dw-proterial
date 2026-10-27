@@ -114,6 +114,29 @@ export const ROUTING_REASON = {
   other: "Khác",
 } as const;
 
+/** What Sales does with a message routed to them, by its reason: the note
+ * DW1 keeps beside it is a technical diagnostic in English, for IT. */
+export const ROUTING_ADVICE = {
+  delivery_change:
+    "Khách xin đổi lịch giao: chuyển cho PC từ hộp thư của bạn (DW1 soạn sẵn bản chuyển bên dưới khi đọc được thư).",
+  complaint:
+    "Khách khiếu nại: chuyển cho QA từ hộp thư của bạn (DW1 soạn sẵn bản chuyển bên dưới khi đọc được thư).",
+  design_reply_unmatched:
+    "Thư giống phản hồi của Design nhưng không khớp YCBG nào đang chờ: kiểm tra số YCBG, rồi bấm “DW xử lý lại” khi YCBG đã gửi Design.",
+  sample_request:
+    "Khách xin hàng mẫu: xem tình trạng kiểm soát xuất khẩu của khách rồi xử lý theo quy trình hàng mẫu.",
+  customer_unknown:
+    "DW1 không xác định được khách hàng từ địa chỉ gửi và tài liệu: kiểm tra người gửi, thêm khách vào Dữ liệu chủ nếu là khách mới.",
+  attachment_unreadable:
+    "DW1 không đọc được tệp đính kèm: mở tệp gốc để xử lý tay, hoặc thiết lập mẫu PO nếu đây là PO của khách.",
+  malware_detected:
+    "Tệp đính kèm có mã độc nên DW1 không mở: đừng mở tệp, báo IT.",
+  reply_to_case:
+    "Thư trả lời về một hồ sơ đang xử lý: mở hồ sơ để xem và trả lời khách.",
+  other:
+    "Thư không phải PO hay yêu cầu báo giá: đọc thư và xử lý nếu cần, rồi đánh dấu đã xử lý.",
+} as const;
+
 /** "Processing jobs": where a message's "DW xử lý" stands (ticket 25). */
 export const PROCESSING_STATE = {
   queued: "Đang chờ DW1",
