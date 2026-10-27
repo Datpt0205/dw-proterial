@@ -31,6 +31,9 @@ class WorkspaceMember:
     department: str
     # `invited` until the first sign-in links an identity, then `active`.
     status: str = "active"
+    # A service account (a ``service|`` subject): an automated lane acts as
+    # it and nobody signs in as it. Only a platform admin removes one.
+    service: bool = False
 
 
 @dataclass(frozen=True, slots=True)

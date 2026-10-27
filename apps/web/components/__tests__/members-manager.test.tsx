@@ -10,7 +10,11 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "antd";
 
 vi.mock("../../lib/auth/auth-context", () => ({
-  useAuth: () => ({ active: { workspaceId: "ws-1" }, roles: ["org_admin"] }),
+  useAuth: () => ({
+    active: { workspaceId: "ws-1" },
+    roles: ["org_admin"],
+    principalId: "u-1",
+  }),
 }));
 
 const grantMember = vi.fn();
@@ -24,6 +28,12 @@ vi.mock("../../lib/session", () => ({
       // A role the catalog does not offer this admin: kept as it is on save.
       member("u-3", "Diệu Hoàng", "dieu@x.vn", ["sales_pic", "legacy_role"]),
       member("u-4", "Hùng IT", "hung@x.vn", ["org_admin"]),
+      // An account an automated lane acts as: no email, nobody signs in.
+      {
+        ...member("u-5", "DW1 (tài khoản dịch vụ)", "", ["member"]),
+        email: null,
+        service: true,
+      },
     ],
     listGrantCandidates: async () => [],
     listPermissionSets: async () => [],
@@ -239,5 +249,35 @@ describe("the members manager sends one Idempotency-Key per press", () => {
     expect(first).toMatch(/^[0-9a-f-]{36}$/);
     expect(retry).toBe(first);
     expect(next).not.toBe(first);
+  });
+});
+
+describe("removing a member (the revoke rail, 2026-10-27)", () => {
+  const bin = (r: HTMLElement, name: string) =>
+    within(r).getByRole("button", { name: `Gỡ ${name}` }) as HTMLButtonElement;
+
+  it("locks the bin on the admin's own row, an administrator's and a service account's, and says why", async () => {
+    show();
+    const lan = await row("Lan Phạm");
+    await waitFor(() => expect(bin(lan, "Lan Phạm").disabled).toBe(true));
+    expect(
+      within(lan).getByText("Bạn không tự gỡ mình khỏi workspace được."),
+    ).toBeTruthy();
+    expect(bin(await row("Hùng IT"), "Hùng IT").disabled).toBe(true);
+
+    const dw1 = await row("DW1 (tài khoản dịch vụ)");
+    expect(bin(dw1, "DW1 (tài khoản dịch vụ)").disabled).toBe(true);
+    expect(within(dw1).getByText("Tài khoản dịch vụ")).toBeTruthy();
+    expect(within(dw1).getByText(/gỡ ra là việc đó dừng/)).toBeTruthy();
+    // Nobody signs in as it: no password to reset, no sign-in to lock.
+    expect(
+      within(dw1).queryByRole("button", { name: /Đặt lại mật khẩu/ }),
+    ).toBeNull();
+  });
+
+  it("leaves the bin live on a plain member's row", async () => {
+    show();
+    const an = await row("An Nguyễn");
+    await waitFor(() => expect(bin(an, "An Nguyễn").disabled).toBe(false));
   });
 });

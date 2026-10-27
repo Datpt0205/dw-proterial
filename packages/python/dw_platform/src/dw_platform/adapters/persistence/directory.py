@@ -22,6 +22,7 @@ from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.directory import IdentityRef, WorkspaceMember
+from dw_platform.application.identity import SERVICE_SUBJECT_PREFIX
 
 
 def member_status() -> sa.ColumnElement[str]:
@@ -55,6 +56,7 @@ class SqlWorkspaceDirectory:
                 tables.memberships.c.permission_set_keys,
                 tables.memberships.c.department,
                 member_status().label("status"),
+                tables.users.c.subject,
             )
             .select_from(
                 tables.memberships.join(
@@ -76,6 +78,7 @@ class SqlWorkspaceDirectory:
                 permission_set_keys=tuple(row.permission_set_keys),
                 department=row.department,
                 status=row.status,
+                service=row.subject.startswith(SERVICE_SUBJECT_PREFIX),
             )
             for row in rows
         ]

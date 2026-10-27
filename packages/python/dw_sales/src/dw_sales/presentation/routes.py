@@ -462,17 +462,26 @@ def build_router(
         job = await svc.processing.enqueue(context, message_id)
         return await idem.record(job, status_code=202)
 
-    # A routed message marked handled, or open again (2026-10-27). Who may is
-    # decided in `RoutedMailService`: whoever Việc cần làm shows it to, and the
-    # head; the route names no scope of its own so the two cannot disagree.
-    @router.post("/inbox/{message_id}/handled", response_model=HandledView)
+    # A routed message marked handled, or open again (2026-10-27). The route
+    # asks the coarse scope before the key is claimed; whose message it is
+    # (whoever Việc cần làm shows it to, and the head) is decided in
+    # `RoutedMailService`, the one place that answers it.
+    @router.post(
+        "/inbox/{message_id}/handled",
+        response_model=HandledView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
     async def handled(
         message_id: _MessageId, body: HandledRequest, context: Ctx, svc: Svc, idem: Idem
     ) -> HandledView:
         view = await svc.routed_mail.handle(context, message_id, body.note)
         return await idem.record(view)
 
-    @router.post("/inbox/{message_id}/reopen", response_model=HandledView)
+    @router.post(
+        "/inbox/{message_id}/reopen",
+        response_model=HandledView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
     async def reopen(message_id: _MessageId, context: Ctx, svc: Svc, idem: Idem) -> HandledView:
         view = await svc.routed_mail.reopen(context, message_id)
         return await idem.record(view)

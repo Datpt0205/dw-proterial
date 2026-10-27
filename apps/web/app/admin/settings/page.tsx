@@ -63,6 +63,9 @@ const AUTONOMY_OPTIONS: ReadonlyArray<{ level: AutonomyLevel; label: string }> =
 function TenantSettingsForm() {
   const [tenant, setTenant] = useState<AdminTenant | null>(null);
   const [name, setName] = useState("");
+  // Sent back as stored: nothing reads either (2026-10-27), and every time on
+  // the portal is shown in giờ Việt Nam (lib/dates.ts), so the page offers no
+  // field that would change nothing.
   const [timezone, setTimezone] = useState("");
   const [locale, setLocale] = useState("");
   const [recordVisibility, setRecordVisibility] =
@@ -135,8 +138,8 @@ function TenantSettingsForm() {
           >
             <Flex vertical gap="middle">
               <Typography.Text type="secondary">
-                Mã và trạng thái cố định; chỉ đổi được tên, múi giờ, ngôn ngữ và
-                các giới hạn dưới đây.
+                Mã và trạng thái cố định; chỉ đổi được tên và các giới hạn dưới
+                đây.
               </Typography.Text>
               <Field id="tenant-name" label="Tên">
                 <Input
@@ -146,20 +149,13 @@ function TenantSettingsForm() {
                 />
               </Field>
               <Field id="tenant-timezone" label="Múi giờ">
-                <Input
-                  id="tenant-timezone"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  placeholder="Asia/Ho_Chi_Minh"
-                />
+                <Typography.Text id="tenant-timezone">
+                  Giờ Việt Nam (UTC+7): mọi giờ trên cổng hiển thị theo giờ Việt
+                  Nam.
+                </Typography.Text>
               </Field>
               <Field id="tenant-locale" label="Ngôn ngữ">
-                <Input
-                  id="tenant-locale"
-                  value={locale}
-                  onChange={(e) => setLocale(e.target.value)}
-                  placeholder="vi-VN"
-                />
+                <Typography.Text id="tenant-locale">Tiếng Việt</Typography.Text>
               </Field>
               <Field
                 id="tenant-visibility"

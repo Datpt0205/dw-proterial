@@ -50,6 +50,10 @@ const ADMIN_GRANTABLE_ROLES = ["org_admin", "platform_admin"];
 const ADMIN_ROW =
   "Chỉ Quản trị toàn quyền mới đổi vai và đăng nhập của một quản trị viên.";
 const OWN_SIGN_IN = "Bạn không tự khóa đăng nhập của chính mình được.";
+// The revoke rail (2026-10-27): the server refuses each of these the same way.
+const OWN_REMOVAL = "Bạn không tự gỡ mình khỏi workspace được.";
+const SERVICE_ROW =
+  "Tài khoản dịch vụ: việc tự động (như DW1 đọc thư) chạy bằng tài khoản này, gỡ ra là việc đó dừng. Chỉ Quản trị toàn quyền gỡ hoặc đổi vai được; muốn tạm dừng DW1, dùng nút Tạm dừng DW1.";
 
 export function MembersManager() {
   const { active, roles, principalId } = useAuth();
@@ -188,12 +192,20 @@ export function MembersManager() {
   const shownRoles = (m: WorkspaceMember) =>
     roleEdits[m.user_id] ?? storedRoles(m);
 
-  /** Why this row's roles are not this admin's to change (an administrator's,
-   * to anyone but a platform admin: the grant would be refused). */
+  /** Why this row's roles are not this admin's to change (an administrator's
+   * or a service account's, to anyone but a platform admin: the server
+   * refuses both). */
   function roleLock(m: WorkspaceMember): string | null {
-    return !canGrantAdmin && m.role_keys.some((k) => administrativeRoles.has(k))
+    if (canGrantAdmin) return null;
+    if (m.service) return SERVICE_ROW;
+    return m.role_keys.some((k) => administrativeRoles.has(k))
       ? ADMIN_ROW
       : null;
+  }
+
+  /** Why this row is not this admin's to remove from the workspace. */
+  function removeLock(m: WorkspaceMember): string | null {
+    return m.user_id === principalId ? OWN_REMOVAL : roleLock(m);
   }
 
   function saveBlocked(m: WorkspaceMember): string | null {
@@ -368,6 +380,9 @@ export function MembersManager() {
                     <div className="min-w-0">
                       <Typography.Text strong ellipsis className="block">
                         {m.display_name}
+                        {m.service ? (
+                          <Tag className="ms-2">Tài khoản dịch vụ</Tag>
+                        ) : null}
                       </Typography.Text>
                       <Typography.Text type="secondary" className="text-xs">
                         {m.email ?? "—"} · {m.department}
@@ -416,41 +431,49 @@ export function MembersManager() {
                           </Button>
                         </span>
                       </Tooltip>
-                      <Button
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined aria-hidden />}
-                        aria-label={`Gỡ ${m.display_name}`}
-                        onClick={() => revoke(m)}
-                      />
+                      <Tooltip title={removeLock(m)}>
+                        <span className="inline-block">
+                          <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined aria-hidden />}
+                            aria-label={`Gỡ ${m.display_name}`}
+                            disabled={removeLock(m) !== null}
+                            onClick={() => revoke(m)}
+                          />
+                        </span>
+                      </Tooltip>
                     </Flex>
                   </Flex>
 
-                  {roleLock(m) ? (
+                  {removeLock(m) ? (
                     <Typography.Text className="mt-1 block">
-                      {roleLock(m)}
+                      {removeLock(m)}
                     </Typography.Text>
                   ) : null}
-                  <div className="mt-1.5">
-                    <SignInActions
-                      userId={m.user_id}
-                      name={m.display_name}
-                      email={m.email}
-                      accounts={accounts.state}
-                      blockedReason={
-                        !canGrantAdmin &&
-                        m.role_keys.some((k) => administrativeRoles.has(k))
-                          ? ADMIN_ROW
-                          : null
-                      }
-                      lockBlockedReason={
-                        m.user_id === principalId ? OWN_SIGN_IN : null
-                      }
-                      onChanged={accounts.reload}
-                      onPassword={setShownPassword}
-                      onError={setError}
-                    />
-                  </div>
+                  {/* Nobody signs in as a service account: nothing to reset or lock. */}
+                  {m.service ? null : (
+                    <div className="mt-1.5">
+                      <SignInActions
+                        userId={m.user_id}
+                        name={m.display_name}
+                        email={m.email}
+                        accounts={accounts.state}
+                        blockedReason={
+                          !canGrantAdmin &&
+                          m.role_keys.some((k) => administrativeRoles.has(k))
+                            ? ADMIN_ROW
+                            : null
+                        }
+                        lockBlockedReason={
+                          m.user_id === principalId ? OWN_SIGN_IN : null
+                        }
+                        onChanged={accounts.reload}
+                        onPassword={setShownPassword}
+                        onError={setError}
+                      />
+                    </div>
+                  )}
 
                   {permissionSets.length > 0 && (
                     <div className="mt-1.5">
