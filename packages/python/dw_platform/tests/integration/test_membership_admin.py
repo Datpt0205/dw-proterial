@@ -233,3 +233,107 @@ async def test_revoke_removes_access(app_engine: AsyncEngine) -> None:
         "platform.membership.grant",
         "platform.membership.revoke",
     ]
+
+
+def _platform_admin_context() -> AccessContext:
+    return AccessContext(
+        tenant_id=ALPHA,
+        workspace_id=ALPHA_WS,
+        principal_id=uuid.uuid4(),
+        roles=frozenset({"platform_admin"}),
+        scopes=ORG_ADMIN_SCOPES,
+        plan_id="professional",
+    )
+
+
+async def test_org_admin_removes_no_other_admin_and_a_platform_admin_does(
+    app_engine: AsyncEngine,
+) -> None:
+    """The revoke rail (2026-10-27), read from the database: the target's own
+    membership in this workspace says it is an administrator."""
+    user_id = await _sign_in(app_engine, "colleague-admin@fpt.com")
+    grant, revoke = _handlers(app_engine)
+    await grant.handle(
+        _platform_admin_context(),
+        GrantMembership(
+            email="colleague-admin@fpt.com",
+            workspace_id=ALPHA_WS,
+            role_keys=frozenset({"org_admin"}),
+        ),
+    )
+
+    with pytest.raises(PermissionDeniedError, match="administrator"):
+        await revoke.handle(
+            _admin_context(), RevokeMembership(user_id=user_id, workspace_id=ALPHA_WS)
+        )
+    assert await _memberships_of(app_engine, user_id) != []
+
+    await revoke.handle(
+        _platform_admin_context(), RevokeMembership(user_id=user_id, workspace_id=ALPHA_WS)
+    )
+    assert await _memberships_of(app_engine, user_id) == []
+
+
+async def test_a_service_account_is_removed_by_a_platform_admin_only(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine
+) -> None:
+    """An account an automated lane acts as (`service|` subject) holds a
+    business role, and still only a platform admin removes it."""
+    user_id = uuid.uuid4()
+    async with migrator_engine.begin() as conn:
+        await conn.execute(
+            sa.insert(tables.users).values(
+                id=user_id, subject=f"service|test-lane|{ALPHA}", display_name="Lane"
+            )
+        )
+        await conn.execute(
+            sa.insert(tables.memberships).values(
+                id=uuid.uuid4(),
+                tenant_id=ALPHA,
+                workspace_id=ALPHA_WS,
+                user_id=user_id,
+                role_keys=["member"],
+                department="",
+            )
+        )
+    _grant, revoke = _handlers(app_engine)
+
+    with pytest.raises(PermissionDeniedError, match="service account"):
+        await revoke.handle(
+            _admin_context(), RevokeMembership(user_id=user_id, workspace_id=ALPHA_WS)
+        )
+    await revoke.handle(
+        _platform_admin_context(), RevokeMembership(user_id=user_id, workspace_id=ALPHA_WS)
+    )
+    assert await _memberships_of(app_engine, user_id) == []
+
+
+async def test_a_membership_in_another_tenant_reads_as_none(
+    app_engine: AsyncEngine, migrator_engine: AsyncEngine
+) -> None:
+    """Tenant rail on the read the revoke checks first: an admin of another
+    tenant finds no membership of alpha's, and removes nothing."""
+    user_id = await _sign_in(app_engine, "alpha-only@fpt.com")
+    grant, revoke = _handlers(app_engine)
+    await grant.handle(
+        _admin_context(),
+        GrantMembership(
+            email="alpha-only@fpt.com", workspace_id=ALPHA_WS, role_keys=frozenset({"member"})
+        ),
+    )
+    beta, beta_ws = uuid.uuid4(), uuid.uuid4()
+    async with migrator_engine.begin() as conn:
+        await conn.execute(
+            sa.insert(tables.tenants).values(id=beta, slug=f"beta-{beta.hex[:8]}", name="BETA")
+        )
+        await conn.execute(
+            sa.insert(tables.workspaces).values(
+                id=beta_ws, tenant_id=beta, slug="beta-sales", name="Sales"
+            )
+        )
+
+    with pytest.raises(NotFoundError):
+        await revoke.handle(
+            _admin_context(beta, beta_ws), RevokeMembership(user_id=user_id, workspace_id=ALPHA_WS)
+        )
+    assert await _memberships_of(app_engine, user_id) != []

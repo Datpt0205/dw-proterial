@@ -13569,6 +13569,10 @@
             "title": "Role Keys",
             "type": "array"
           },
+          "service": {
+            "title": "Service",
+            "type": "boolean"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -13586,7 +13590,8 @@
           "role_keys",
           "permission_set_keys",
           "department",
-          "status"
+          "status",
+          "service"
         ],
         "title": "WorkspaceMemberView",
         "type": "object"

@@ -26,6 +26,9 @@ class WorkspaceMemberView(BaseModel):
     department: str
     # `invited` until the first sign-in, then `active`.
     status: str
+    # An account an automated lane acts as: nobody signs in as it, and only a
+    # platform admin removes it.
+    service: bool
 
 
 class IdentityRefView(BaseModel):
@@ -57,6 +60,7 @@ async def list_members(
             permission_set_keys=list(member.permission_set_keys),
             department=member.department,
             status=member.status,
+            service=member.service,
         )
         for member in members
     ]

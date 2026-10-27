@@ -70,6 +70,10 @@ export const workspaceMemberSchema = z.object({
   department: z.string(),
   // Extra permission sets granted to this member on top of their role scopes.
   permission_set_keys: z.array(z.string()),
+  // An account an automated lane acts as (a `service|` subject): nobody signs
+  // in as it, and only a platform admin removes it. Absent from an older API:
+  // read as a person, which the server still refuses to remove if it is not.
+  service: z.boolean().optional(),
 });
 export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
 

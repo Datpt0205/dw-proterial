@@ -15,6 +15,12 @@ tenant but cannot mint another admin; without this, ``platform.members.write``
 would be a route to platform_admin. The test is the role's own scopes, so a new
 admin role added to the catalog is covered without touching this code.
 
+The same rail holds a revoke (2026-10-27, Đạt): only a Platform Admin removes
+an administrator or a service account (a ``service|`` subject, the account an
+automated lane acts as), and nobody removes themselves. Before it, an Org
+Admin could not mint an admin but could remove every other one, themselves
+included, and a click on the service account's row stopped its lane.
+
 The grant/revoke and its audit record land in one transaction: the repository
 writes both under the caller's tenant, so there is never a change without its
 audit trail.
@@ -63,6 +69,15 @@ def forbid_escalation(context: AccessContext, granted_scopes: frozenset[str]) ->
             "only a platform admin may grant an administrative role",
             details={"scopes": sorted(administrative)},
         )
+
+
+@dataclass(frozen=True, slots=True)
+class HeldMembership:
+    """What a member holds in one workspace, as a revoke checks it."""
+
+    role_keys: frozenset[str]
+    # A ``service|`` subject: an account an automated lane acts as.
+    service: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +135,13 @@ class MembershipAdminRepositoryPort(Protocol):
         """Insert-or-update the membership and record ``audit`` in the same
         transaction. Verifies the workspace is in the caller's tenant; RLS keeps
         the write there."""
+        ...
+
+    async def held(
+        self, context: AccessContext, *, user_id: uuid.UUID, workspace_id: uuid.UUID
+    ) -> HeldMembership | None:
+        """The member's roles in the workspace and whether they are a service
+        account, under the caller's tenant; None when there is no membership."""
         ...
 
     async def revoke(
@@ -211,6 +233,30 @@ class RevokeMembershipHandler:
 
     async def handle(self, context: AccessContext, command: RevokeMembership) -> None:
         await self.authz.require(context=context, action=MEMBERS_WRITE, resource_type=_RESOURCE)
+        if command.user_id == context.principal_id:
+            raise PermissionDeniedError(
+                "nobody removes themselves from a workspace",
+                details={"rule": "revoke_self"},
+            )
+        held = await self.repo.held(
+            context, user_id=command.user_id, workspace_id=command.workspace_id
+        )
+        if held is None:
+            raise NotFoundError(
+                "no such membership in this tenant",
+                details={"user_id": str(command.user_id)},
+            )
+        if PLATFORM_ADMIN_ROLE not in context.roles:
+            if held.service:
+                raise PermissionDeniedError(
+                    "only a platform admin removes a service account",
+                    details={"rule": "revoke_service_account"},
+                )
+            if is_administrative(await self.repo.scopes_for_roles(held.role_keys)):
+                raise PermissionDeniedError(
+                    "only a platform admin removes an administrator",
+                    details={"rule": "revoke_administrator"},
+                )
         removed = await self.repo.revoke(
             context,
             user_id=command.user_id,

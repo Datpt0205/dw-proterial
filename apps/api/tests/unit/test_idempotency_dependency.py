@@ -41,6 +41,7 @@ from dw_platform.application.idempotency import (
 from dw_platform.application.identity import DbAccessContextFactory, MembershipAccess
 from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
+    HeldMembership,
     RevokeMembershipHandler,
     UserRef,
 )
@@ -105,6 +106,11 @@ class CountingRepo:
     ) -> bool:
         self.revokes += 1
         return True
+
+    async def held(
+        self, context: AccessContext, *, user_id: uuid.UUID, workspace_id: uuid.UUID
+    ) -> HeldMembership | None:
+        return HeldMembership(role_keys=frozenset({"sales"}), service=False)
 
 
 class MemoryStore:

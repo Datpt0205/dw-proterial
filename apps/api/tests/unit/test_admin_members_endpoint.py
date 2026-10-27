@@ -22,6 +22,7 @@ from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementSe
 from dw_platform.application.identity import DbAccessContextFactory, MembershipAccess
 from dw_platform.application.membership_admin import (
     GrantMembershipHandler,
+    HeldMembership,
     RevokeMembershipHandler,
     UserRef,
 )
@@ -34,11 +35,14 @@ TENANT = uuid.uuid4()
 WORKSPACE = uuid.uuid4()
 PRINCIPAL = uuid.uuid4()
 TARGET = uuid.uuid4()
+ADMIN = uuid.uuid4()  # holds org_admin in the workspace
+SERVICE = uuid.uuid4()  # a `service|` account an automated lane acts as
 
 
 class FakeMembershipLookup:
-    def __init__(self, scopes: frozenset[str]) -> None:
+    def __init__(self, scopes: frozenset[str], roles: frozenset[str]) -> None:
         self._scopes = scopes
+        self._roles = roles
 
     async def find_access(
         self, subject: str, issuer: str, tenant_id: uuid.UUID, workspace_id: uuid.UUID
@@ -49,7 +53,7 @@ class FakeMembershipLookup:
             tenant_id=tenant_id,
             workspace_id=workspace_id,
             principal_id=PRINCIPAL,
-            roles=frozenset({"org_admin"}),
+            roles=self._roles,
             scopes=self._scopes,
             groups=frozenset(),
             clearance="internal",
@@ -80,6 +84,18 @@ class FakeRepo:
     async def grant(self, context: AccessContext, *, audit: AuditEvent, **kw: object) -> None:
         self.granted = {**kw, "tenant": context.tenant_id}
 
+    async def held(
+        self, context: AccessContext, *, user_id: uuid.UUID, workspace_id: uuid.UUID
+    ) -> HeldMembership | None:
+        # As the SQL one reads: what the member holds here, or nothing.
+        members = {
+            TARGET: HeldMembership(frozenset({"sales"}), service=False),
+            ADMIN: HeldMembership(frozenset({"org_admin"}), service=False),
+            SERVICE: HeldMembership(frozenset({"sales"}), service=True),
+            PRINCIPAL: HeldMembership(frozenset({"org_admin"}), service=False),
+        }
+        return members.get(user_id) if workspace_id == WORKSPACE else None
+
     async def revoke(
         self,
         context: AccessContext,
@@ -92,7 +108,11 @@ class FakeRepo:
         return True
 
 
-def make_container(repo: FakeRepo, scopes: frozenset[str]) -> ApiContainer:
+def make_container(
+    repo: FakeRepo,
+    scopes: frozenset[str],
+    roles: frozenset[str] = frozenset({"org_admin"}),
+) -> ApiContainer:
     async def ok_probe() -> CheckState:
         return "ok"
 
@@ -103,7 +123,7 @@ def make_container(repo: FakeRepo, scopes: frozenset[str]) -> ApiContainer:
         engine=None,
         health_service=HealthService(probes={"database": ok_probe}),
         token_verifier=DevTokenVerifier(SECRET),
-        access_context_factory=DbAccessContextFactory(FakeMembershipLookup(scopes)),
+        access_context_factory=DbAccessContextFactory(FakeMembershipLookup(scopes, roles)),
         identity_bootstrap=None,
         uow_factory=None,
         authorization=authz,
@@ -180,3 +200,46 @@ async def test_revoke_removes_a_membership() -> None:
 
     assert response.status_code == 204
     assert repo.revoked == (TARGET, WORKSPACE)
+
+
+# The revoke rail (2026-10-27): the grant's escalation rail, mirrored. Each is
+# refused at the handler, where the membership is removed, whatever the page
+# offered.
+WRITE = frozenset({"platform.members.write"})
+
+
+@pytest.mark.parametrize(
+    ("target", "rule"),
+    [
+        (PRINCIPAL, "revoke_self"),
+        (ADMIN, "revoke_administrator"),
+        (SERVICE, "revoke_service_account"),
+    ],
+)
+async def test_an_org_admin_removes_no_admin_no_service_account_and_not_themselves(
+    target: uuid.UUID, rule: str
+) -> None:
+    repo = FakeRepo()
+    response = await _delete(make_container(repo, WRITE), target)
+
+    assert response.status_code == 403, response.text
+    assert response.json()["details"]["rule"] == rule
+    assert repo.revoked is None
+
+
+async def test_a_platform_admin_removes_an_admin_and_a_service_account() -> None:
+    for target in (ADMIN, SERVICE):
+        repo = FakeRepo()
+        container = make_container(repo, WRITE, frozenset({"platform_admin"}))
+        response = await _delete(container, target)
+
+        assert response.status_code == 204, response.text
+        assert repo.revoked == (target, WORKSPACE)
+
+
+async def test_revoking_no_membership_is_not_found() -> None:
+    repo = FakeRepo()
+    response = await _delete(make_container(repo, WRITE), uuid.uuid4())
+
+    assert response.status_code == 404
+    assert repo.revoked is None

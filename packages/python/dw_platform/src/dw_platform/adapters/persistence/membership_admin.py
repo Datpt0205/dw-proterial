@@ -26,7 +26,8 @@ from dw_platform.adapters.persistence.separation_of_duties import (
 from dw_platform.adapters.persistence.support_grants import support_staff_conflict
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.access_context import AccessContext
-from dw_platform.application.membership_admin import UserRef
+from dw_platform.application.identity import SERVICE_SUBJECT_PREFIX
+from dw_platform.application.membership_admin import HeldMembership, UserRef
 from dw_platform.domain.audit import AuditEvent
 
 
@@ -130,6 +131,32 @@ class SqlMembershipAdminRepository:
                     raise
                 raise conflict from exc
             await SqlAuditRepository(session).append(audit)
+
+    async def held(
+        self, context: AccessContext, *, user_id: uuid.UUID, workspace_id: uuid.UUID
+    ) -> HeldMembership | None:
+        scope = TenantScope.from_access_context(context)
+        async with tenant_session(self.session_factory, scope) as session:
+            row = (
+                await session.execute(
+                    sa.select(tables.memberships.c.role_keys, tables.users.c.subject)
+                    .select_from(
+                        tables.memberships.join(
+                            tables.users, tables.memberships.c.user_id == tables.users.c.id
+                        )
+                    )
+                    .where(
+                        tables.memberships.c.user_id == user_id,
+                        tables.memberships.c.workspace_id == workspace_id,
+                    )
+                )
+            ).first()
+        if row is None:
+            return None
+        return HeldMembership(
+            role_keys=frozenset(row.role_keys),
+            service=row.subject.startswith(SERVICE_SUBJECT_PREFIX),
+        )
 
     async def revoke(
         self,
