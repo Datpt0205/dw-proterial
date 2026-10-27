@@ -5,6 +5,21 @@
       "command": "npx",
       "args": ["-y", "context-mode@1.0.169"],
       "env": {}
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.83",
+        "--headless",
+        "--isolated",
+        "--allowed-origins",
+        "http://localhost:3000;http://127.0.0.1:8000;http://localhost:8000;http://localhost:8010;http://localhost:3300;http://localhost:8300;http://localhost:38686;http://localhost:8686",
+        "--output-dir",
+        ".playwright-mcp"
+      ],
+      "env": {}
     }
   }
 }

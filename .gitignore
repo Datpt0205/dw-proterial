@@ -61,6 +61,7 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+.playwright-mcp/
 # Screenshots for review (make web-screens): looked at, not committed.
 apps/web/screens/
 

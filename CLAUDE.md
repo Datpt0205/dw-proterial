@@ -370,6 +370,19 @@ neither belongs on a customer's on-premises host. Its first start through `npx` 
 25 s on 2026-10-18, against Claude Code's default 30 s connect timeout, so
 `.claude/settings.json` sets `MCP_TIMEOUT` to 90 s.
 
+### Playwright (MCP)
+
+`.mcp.json` registers `@playwright/mcp@0.0.83` (pinned; Đạt, 2026-10-27) so a
+session opens the rendered page itself: a snapshot, a screenshot, a click
+through a persona's flow, the look `ui-quality.md` says no diff review can
+give. It runs headless and `--isolated` (no profile kept between sessions) in
+the installed Chrome, and `--allowed-origins` holds it to the local stacks
+(web 3000/3300, API 8000/8010/8300, Keycloak 38686/8686): it browses this
+product, not the internet. Screenshots land in `.playwright-mcp/`, which git
+ignores. It does not replace `apps/web/e2e`: a check worth keeping is written
+there as a spec. Its `browser_evaluate` and `browser_run_code_unsafe` run
+JavaScript in the page, not a shell, so they stay outside the gate's matcher.
+
 ### Issue tracker
 
 Local markdown in `.claude/plans/`, the plan the session hooks already enforce:
