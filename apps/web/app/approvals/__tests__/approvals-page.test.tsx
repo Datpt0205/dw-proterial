@@ -11,7 +11,8 @@ import type { Approval } from "@dw/contracts";
 import { OFFLINE_REASON } from "@dw/ui";
 
 const BOARD_SCOPE = "demo.approve.board";
-const REASON = `Chỉ người có quyền ${BOARD_SCOPE} được quyết yêu cầu này`;
+// An unlabelled scope reads as its code, in quotes.
+const REASON = `Chỉ người có quyền "${BOARD_SCOPE}" được quyết yêu cầu này`;
 
 // The cache behind the list is keyed by workspace, so each test gets its own.
 let session: { workspaceId: string; scopes: string[]; admin?: boolean } = {

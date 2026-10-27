@@ -314,7 +314,7 @@ describe("Hoạt động DW1 (slice 3)", () => {
       renderAt("/sales/activity");
       expect(
         await screen.findByText(
-          "DW1 chưa xử lý mục nào ở bước có mô hình trong 7 ngày qua.",
+          "Trong 7 ngày qua DW1 chưa dùng mô hình ở bước nào. Số liệu hiện ở đây khi DW1 đọc thư và tệp mới.",
         ),
       ).toBeTruthy();
     },

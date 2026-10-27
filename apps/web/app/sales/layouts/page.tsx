@@ -4,6 +4,7 @@ import { Suspense, useCallback, useState } from "react";
 import Link from "next/link";
 import {
   Descriptions,
+  Empty,
   Form,
   Input,
   Modal,
@@ -124,9 +125,13 @@ function Layouts() {
           ref={fill.tableRef}
           scroll={{ x: "max-content", y: fill.y }}
           locale={{
-            emptyText: layouts.loading
-              ? " "
-              : "Chưa có mẫu PO nào. Lập mẫu từ một thư trong Hộp thư có PO DW1 chưa đọc được.",
+            emptyText: layouts.loading ? (
+              " "
+            ) : (
+              <Empty description="Chưa có mẫu PO nào. Lập mẫu từ một thư trong Hộp thư có PO DW1 chưa đọc được.">
+                <Link href="/sales/inbox">Mở Hộp thư</Link>
+              </Empty>
+            ),
           }}
           footer={() => `${rows.length} mẫu`}
           expandable={{

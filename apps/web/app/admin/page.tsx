@@ -9,6 +9,7 @@ import { LoadError } from "../../components/load-error";
 import { MembersManager } from "../../components/admin/members-manager";
 import { useAuth } from "../../lib/auth/auth-context";
 import { roleLabel } from "../../lib/nav/roles";
+import { scopeLabel } from "../../lib/nav/scopes";
 import { apiClient } from "../../lib/session";
 
 /**
@@ -53,8 +54,8 @@ export default function AdminPage() {
               </Typography.Text>
               {scopes.length > 0
                 ? scopes.map((s) => (
-                    <Tag key={s} className="font-mono">
-                      {s}
+                    <Tag key={s} title={s}>
+                      {scopeLabel(s)}
                     </Tag>
                   ))
                 : "—"}
@@ -96,8 +97,8 @@ function RoleCatalog({ mine }: { mine: string[] }) {
         >
           <Flex wrap gap={4}>
             {role.scopes.map((s) => (
-              <Tag key={s} className="font-mono">
-                {s}
+              <Tag key={s} title={s}>
+                {scopeLabel(s)}
               </Tag>
             ))}
           </Flex>

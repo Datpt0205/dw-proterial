@@ -3,11 +3,14 @@
 import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { Card, Space, Table, Typography } from "antd";
-import { CheckCircleOutlined } from "@ant-design/icons";
+import {
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+} from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
-import { PageHeader } from "@dw/ui";
+import { PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
-import { formatAge, formatDateTime } from "../../../lib/dates";
+import { formatAge, formatDateTime, TIME_ZONE_LABEL } from "../../../lib/dates";
 import { useNow } from "../../../lib/use-now";
 import { salesApi } from "../_lib/api";
 import { label, SALES_ROLE } from "../_lib/labels";
@@ -19,6 +22,7 @@ import { useSalesViewer } from "../_lib/viewer";
 import { SCOPE } from "../_components/sales-frame";
 import { salesCrumbs } from "../_components/crumbs";
 import { ScopeGate } from "../_components/scope-gate";
+import { DueText } from "../_components/list-parts";
 import { OrderStateTag, QuoteStateTag } from "../_components/tags";
 
 type Order = SalesSchemas["OrderSummaryView"];
@@ -193,6 +197,23 @@ function Review() {
                 key: "a",
                 render: (_, q) =>
                   q.assigned_to ? name(q.assigned_to) : "Chưa giao",
+              },
+              // The deadline an approver works against (2026-10-27: the
+              // list of quotes to approve said nothing of when they are due).
+              {
+                title: `Hạn báo giá (${TIME_ZONE_LABEL})`,
+                key: "due",
+                render: (_, q) =>
+                  q.quote_due ? (
+                    <DueText day={q.quote_due} now={now} />
+                  ) : (
+                    <StatusTag
+                      tone="unk"
+                      icon={<ExclamationCircleOutlined aria-hidden />}
+                    >
+                      Chưa rõ hạn
+                    </StatusTag>
+                  ),
               },
               {
                 title: "Bạn duyệt được không",

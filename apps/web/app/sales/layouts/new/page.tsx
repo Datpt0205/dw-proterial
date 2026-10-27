@@ -101,7 +101,9 @@ function Onboarding() {
         }
       />
       {!messageId || !attachmentId ? (
-        <Empty description="Mở trang này từ một thư trong Hộp thư: thư đó cho biết tệp cần lập mẫu." />
+        <Empty description="Mở trang này từ một thư trong Hộp thư: thư đó cho biết tệp cần lập mẫu.">
+          <Link href="/sales/inbox">Mở Hộp thư</Link>
+        </Empty>
       ) : source.error ? (
         <LoadError error={source.error} onRetry={source.reload} />
       ) : source.data ? (

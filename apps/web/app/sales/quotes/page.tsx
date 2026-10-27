@@ -145,7 +145,7 @@ function Quotes() {
       key: "overdue",
       tone: "err",
       lead: `${overdue.length} báo giá quá hạn`,
-      text: `${quoteTitle(firstLate)} · ${label(QUOTE_STATE, firstLate.status)}`,
+      text: `Trễ nhất: ${quoteTitle(firstLate)} · ${label(QUOTE_STATE, firstLate.status)}`,
       sub: d ? `${d.withZone} · ${d.relative}` : undefined,
       href: `/sales/quotes/${firstLate.case_id}`,
     });

@@ -147,7 +147,7 @@ function Activity() {
         <LoadError error={summary.error} onRetry={summary.reload} />
       ) : data && handled === 0 ? (
         <Empty
-          description={`DW1 chưa xử lý mục nào ở bước có mô hình trong ${choices.range} ngày qua${lane ? ` (${CASE_KIND[lane]})` : ""}.`}
+          description={`Trong ${choices.range} ngày qua DW1 chưa dùng mô hình ở bước nào${lane ? ` (${CASE_KIND[lane]})` : ""}. Số liệu hiện ở đây khi DW1 đọc thư và tệp mới.`}
         />
       ) : (
         <Table<StepSummary>

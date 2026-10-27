@@ -6,17 +6,30 @@ import { AN } from "./fixtures";
 
 type WorkItem = SalesSchemas["WorkItem"];
 
-const SCOPES = ["sales.case.read"];
+let scopes = ["sales.case.read"];
 vi.mock("../../../../lib/auth/auth-context", () => ({
   useAuth: () => ({
     principalId: AN,
     displayName: "An",
     active: { workspaceId: "w-1" },
-    hasScope: (scope: string) => SCOPES.includes(scope),
+    hasScope: (scope: string) => scopes.includes(scope),
   }),
 }));
+const approval = (id: string, canDecide: boolean) => ({
+  id,
+  approval_type: "sales.rules",
+  status: "pending",
+  can_decide: canDecide,
+});
+const listApprovals = vi.fn(async () => ({
+  items: [approval("a-1", true), approval("a-2", false)],
+  next_cursor: null,
+}));
 vi.mock("../../../../lib/session", () => ({
-  apiClient: () => ({ listWorkspaceMembers: vi.fn().mockResolvedValue([]) }),
+  apiClient: () => ({
+    listWorkspaceMembers: vi.fn().mockResolvedValue([]),
+    listApprovals,
+  }),
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/sales",
@@ -53,6 +66,7 @@ const desk = window.matchMedia;
 afterEach(() => {
   cleanup();
   items = [];
+  scopes = ["sales.case.read"];
   window.matchMedia = desk;
 });
 
@@ -106,5 +120,20 @@ describe("a routed mail on Việc cần làm (2026-10-27)", () => {
     for (const gone of ["Trạng thái", "Hạn (giờ Việt Nam)", "Phụ trách"])
       expect(headers).not.toContain(gone);
     expect(screen.getByText("Chuyển Sales xử lý")).toBeTruthy();
+  }, 20_000);
+
+  it("names the approvals waiting on a head, which my-work does not carry", async () => {
+    scopes = ["sales.case.read", "approvals.read", "approvals.decide"];
+    page();
+    // One of the two is the head's to decide; the other is not.
+    const line = await screen.findByText("1 yêu cầu chờ bạn duyệt");
+    expect(line.closest("a")?.getAttribute("href")).toBe("/approvals");
+  }, 20_000);
+
+  it("asks for no approvals of someone who may not decide them", async () => {
+    page();
+    await screen.findByText(/Không có việc nào đang chờ bạn/);
+    expect(listApprovals).not.toHaveBeenCalled();
+    expect(screen.queryByText(/yêu cầu chờ bạn duyệt/)).toBeNull();
   }, 20_000);
 });
