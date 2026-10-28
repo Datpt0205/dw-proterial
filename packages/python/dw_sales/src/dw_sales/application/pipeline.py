@@ -43,7 +43,7 @@ from dw_sales.application.overview_service import (
     OverviewService,
 )
 from dw_sales.application.quotes_service import local_day
-from dw_sales.application.support import stored_order, stored_quote
+from dw_sales.application.support import seen_by, stored_order, stored_quote
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.process import WIV_STEPS
@@ -175,8 +175,8 @@ class PipelineService:
         for stored in orders:
             order = stored.case
             w = found.get((CaseKind.ORDER, order.case_id))
-            if w is None:  # written after the read above
-                continue
+            if w is None or not seen_by(context, CaseKind.ORDER, stored):
+                continue  # written after the read above, or not the caller's
             open_findings = [f for f in order.findings if f.is_open]
             due = order.due
             place(
@@ -203,7 +203,7 @@ class PipelineService:
         for held in quotes:
             quote = held.case
             w = found.get((CaseKind.QUOTE, quote.case_id))
-            if w is None:
+            if w is None or not seen_by(context, CaseKind.QUOTE, held):
                 continue
             place(
                 PipelineCard(
@@ -257,9 +257,9 @@ class PipelineService:
         async with self.uow(sales_scope(context)) as work:
             # A case of another workspace is not found, never an empty history.
             if kind is CaseKind.ORDER:
-                await stored_order(work, case_id)
+                await stored_order(work, case_id, viewer=context)
             else:
-                await stored_quote(work, case_id)
+                await stored_quote(work, case_id, viewer=context)
             events = await work.overview.history(kind, case_id)
         entries: list[CaseHistoryEntry] = []
         for e in events:

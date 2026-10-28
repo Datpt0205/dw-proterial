@@ -22,7 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, a
 from dw_platform.adapters.persistence.membership_lookup import SqlMembershipLookup
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.testing.seed_env import seed_test_env, sid
-from dw_sales.testing.seed_personas import Persona, seed_dw1_accounts, seed_sales_personas
+from dw_sales.testing.seed_personas import (
+    Persona,
+    seed_demo_team,
+    seed_dw1_accounts,
+    seed_sales_personas,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -292,3 +297,36 @@ async def test_a_persona_without_a_membership_fails_loudly(
         await seed_sales_personas(
             sales_db.migrator, [Persona("dev|bao.pham", ALPHA, ("sales_pic",))]
         )
+
+
+async def test_the_demo_team_narrows_each_pic_to_their_own_and_the_head_to_the_team(
+    personas: SignedIn,
+    sales_db: DatabaseUrls,
+    app_sessions: async_sessionmaker[AsyncSession],
+    migrator: AsyncEngine,
+) -> None:
+    """2026-10-28: the demo tenant is restricted and its PICs report to the
+    head, so the platform's lookup narrows each PIC to themselves and the
+    head to the team (`dw_sales.application.visibility` reads it). Put back
+    after, as the other tests here sign in to an open tenant."""
+    tenant = sid("tenant", ALPHA)
+    team = ("dev|an.nguyen", "dev|dieu.hoang", "dev|khoa.lam")
+    try:
+        await seed_demo_team(sales_db.migrator)
+        an = await _sign_in(app_sessions, "dev|an.nguyen", ALPHA)
+        head = await _sign_in(app_sessions, "dev|giang.do", ALPHA)
+        assert an is not None and head is not None
+        assert an.visible_owners == {sid("user", "dev|an.nguyen")}
+        assert head.visible_owners == {sid("user", s) for s in ("dev|giang.do", *team)}
+    finally:
+        async with migrator.begin() as conn:
+            await conn.execute(
+                sa.text("UPDATE platform.tenants SET record_visibility = 'open' WHERE id = :t"),
+                {"t": tenant},
+            )
+            await conn.execute(
+                sa.text(
+                    "UPDATE platform.memberships SET manager_user_id = NULL WHERE tenant_id = :t"
+                ),
+                {"t": tenant},
+            )

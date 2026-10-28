@@ -86,7 +86,7 @@ class AssignmentService:
         that works it in the case's workspace."""
         await self._require(context, kind, case_id)
         async with self.uow(sales_scope(context)) as work:
-            await _stored(work, kind, case_id)
+            await _stored(work, kind, case_id, context)
         eligible = set(await self._eligible(context, kind))
         members = await self.directory.list_members(context)
         return sorted(
@@ -111,7 +111,7 @@ class AssignmentService:
         await self._require(context, kind, case_id)
         now = self.clock.now()
         async with self.uow(sales_scope(context)) as work:
-            stored = await _stored(work, kind, case_id)
+            stored = await _stored(work, kind, case_id, context)
             case = stored.case
             same_version(case_id, case.case_version, case_version)
             after = case.reassigned()
@@ -195,11 +195,11 @@ class AssignmentService:
 
 
 async def _stored(
-    work: SalesUnitOfWork, kind: CaseKind, case_id: uuid.UUID
+    work: SalesUnitOfWork, kind: CaseKind, case_id: uuid.UUID, viewer: AccessContext
 ) -> Stored[OrderCase] | Stored[QuoteCase]:
     if kind is CaseKind.ORDER:
-        return await stored_order(work, case_id)
-    return await stored_quote(work, case_id)
+        return await stored_order(work, case_id, viewer=viewer)
+    return await stored_quote(work, case_id, viewer=viewer)
 
 
 def _change(case: OrderCase | QuoteCase) -> CaseChangeView:

@@ -115,3 +115,26 @@ và IT đổi", then "giao hết cho admin cũng như sale trưởng, không c�
   `sales_rules_editor`, as before; the 2026-10-21 rules above stand, so a
   price-bearing key is the head's alone to change.
 - The set may still be given to a PIC by the admin; nothing does by default.
+
+## Addendum, 2026-10-28: a PIC sees their own cases, the head sees the team's
+
+Decided by Đạt ("các sales thấy luôn cả các đơn hàng, báo giá của nhau à,
+đáng lẽ chỉ có trưởng phòng thấy thôi"), choosing: own cases, the pool's, and
+the ones they are asked to check.
+
+- **No new scope.** The platform already owns whose records a person sees
+  (ADR-003 roll-up): a tenant set to `restricted` resolves `visible_owners`
+  (the person and everyone reporting to them, `memberships.manager_user_id`)
+  on the context; an open tenant, an admin and a support context carry no
+  limit. The tenant's admin sets both on the admin pages.
+- `dw_sales.application.visibility.sees_case` applies it to a case, whose
+  owner is its assignee: unassigned (the pool), an assignee among
+  `visible_owners`, or a case waiting on a checker step the caller may take
+  (`next_steps.checker_scope`: a cross-check, a quotation's approval).
+- Enforced where a case is read: `stored_order`/`stored_quote` take a
+  required `viewer` (None only for DW1's lanes and carrying out a decision
+  already taken), so a write is refused the same way; the order and quote
+  lists, the board and the inbox filter on it. Outside it, a case reads as
+  not found, never forbidden.
+- The demo tenant is restricted, its PICs reporting to the head
+  (`seed_personas.seed_demo_team`); the API suite's tenant stays open.

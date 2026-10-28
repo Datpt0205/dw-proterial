@@ -547,7 +547,7 @@ class SourceService:
         await self._authorize(context, "sales_order_case", case_id)
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_order(work, case_id)).case
+            case = (await stored_order(work, case_id, viewer=context)).case
         revisions = [(case.message_id, case.document)] + [
             (old.message_id, old.document) for old in case.superseded
         ]
@@ -576,7 +576,7 @@ class SourceService:
         await self._authorize(context, "sales_quote_case", case_id)
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_quote(work, case_id)).case
+            case = (await stored_quote(work, case_id, viewer=context)).case
         found = next((s for s in _quote_sources(case) if s.attachment_id == attachment_id), None)
         return await self._serve(
             context, CaseKind.QUOTE, case_id, case.case_version, found, attachment_id, page, sheet
@@ -591,7 +591,7 @@ class SourceService:
         await self._authorize(context, "sales_quote_case", case_id)
         scope, now = sales_scope(context), self.clock.now()
         async with self.uow(scope) as work:
-            case = (await stored_quote(work, case_id)).case
+            case = (await stored_quote(work, case_id, viewer=context)).case
             body = case.request.body
             if body is None:
                 raise NotFoundError(

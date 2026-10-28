@@ -521,9 +521,9 @@ class ActivityService:
             # is read.
             case: OrderCase | QuoteCase
             if kind is CaseKind.ORDER:
-                case = (await stored_order(work, case_id)).case
+                case = (await stored_order(work, case_id, viewer=context)).case
             else:
-                case = (await stored_quote(work, case_id)).case
+                case = (await stored_quote(work, case_id, viewer=context)).case
             events = await work.overview.history(kind, case_id)
             rows = await self.reader.for_case(scope, kind, case_id)
             dispositions: dict[str, MessageDisposition] = {}

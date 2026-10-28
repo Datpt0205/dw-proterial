@@ -66,6 +66,7 @@ from dw_sales.application.support import (
     audit_row,
     save_order,
     save_quote,
+    seen_by,
     worker_event,
 )
 from dw_sales.application.telemetry import SalesSpan, SalesSpans, case_attributes
@@ -114,6 +115,24 @@ class InboxQueries:
         async with self.uow(scope) as work:
             logged = {m.disposition.message_id: m for m in await work.messages.list_all()}
             jobs = {job.message_id: job for job in await work.jobs.list_all()}
+            # In a tenant that narrows reads, a message is shown as its case
+            # is, and one routed to a person as that person's (2026-10-28).
+            hidden = (
+                set()
+                if context.visible_owners is None
+                else {
+                    *(
+                        s.case.case_id
+                        for s in await work.orders.list_all()
+                        if not seen_by(context, CaseKind.ORDER, s)
+                    ),
+                    *(
+                        s.case.case_id
+                        for s in await work.quotes.list_all()
+                        if not seen_by(context, CaseKind.QUOTE, s)
+                    ),
+                }
+            )
         copy = (
             await self.handoffs.handoff_copy(scope)
             if any(m.disposition.handoff is not None for m in logged.values())
@@ -122,6 +141,8 @@ class InboxQueries:
         views = []
         for message in await self.inbox.list_messages(scope):
             seen = logged.get(message.message_id)
+            if seen is not None and not _shown(context, seen.disposition, hidden):
+                continue
             disposition = (
                 message_disposition(seen.disposition, seen.processed_at, seen.handled)
                 if seen is not None
@@ -154,6 +175,21 @@ class InboxQueries:
             body=written.body,
             template_ref=written.template_ref,
         )
+
+
+def _shown(context: AccessContext, disposition: MessageDisposition, hidden: set[uuid.UUID]) -> bool:
+    """A message on a case the caller does not see is not shown, nor one
+    routed to a person outside the caller's `visible_owners`; a team's (the
+    pool's, `role:<key>`) is everyone's."""
+    if disposition.case_id is not None:
+        return disposition.case_id not in hidden
+    owners, owner = context.visible_owners, disposition.owner
+    if owners is None or owner is None or owner.startswith("role:"):
+        return True
+    try:
+        return uuid.UUID(owner) in owners
+    except ValueError:
+        return False
 
 
 logger = logging.getLogger(__name__)

@@ -48,6 +48,7 @@ from dw_sales.application.support import (
     person_event,
     same_version,
     save_order,
+    seen_by,
     stored_order,
 )
 from dw_sales.application.views import (
@@ -99,7 +100,7 @@ class OrderQueries:
         return [
             order_summary(s.case, s.origin.assigned_to)
             for s in stored
-            if kept is None or s.case.case_id in kept
+            if (kept is None or s.case.case_id in kept) and seen_by(context, CaseKind.ORDER, s)
         ]
 
     async def get(self, context: AccessContext, case_id: uuid.UUID) -> OrderCaseView:
@@ -107,7 +108,7 @@ class OrderQueries:
             context, SalesScopes.CASE_READ, resource_type=_ORDER, resource_id=str(case_id)
         )
         async with self.uow(sales_scope(context)) as work:
-            stored = await stored_order(work, case_id)
+            stored = await stored_order(work, case_id, viewer=context)
             logged = await work.messages.list_all()
             servings = await work.served.servings(CaseKind.ORDER, case_id)
         wait = await awaited(self.decisions, context, stored.case)
@@ -181,7 +182,7 @@ class OrderCommands:
         await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
         actor, now, scope = order_actor(context, self.gate), self.clock.now(), sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_order(work, case_id)).case
+            case = (await stored_order(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             confirmed = await self.intake.confirm_mapping(
                 scope, case, line_no, prv_code, actor, now
@@ -211,7 +212,7 @@ class OrderCommands:
             await self._require(context, case_id, SalesScopes.PRICE_READ)
         actor, now, scope = order_actor(context, self.gate), self.clock.now(), sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_order(work, case_id)).case
+            case = (await stored_order(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             corrected = await self.intake.correct_value(
                 scope, case, finding_key, field, value, actor, now
@@ -334,7 +335,7 @@ class OrderCommands:
         await self._require(context, case_id, SalesScopes.ORDER_PREPARE)
         actor, now = order_actor(context, self.gate), self.clock.now()
         async with self.uow(sales_scope(context)) as work:
-            case = (await stored_order(work, case_id)).case
+            case = (await stored_order(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             if served_gate:
                 await require_served(work, context.principal_id, case)

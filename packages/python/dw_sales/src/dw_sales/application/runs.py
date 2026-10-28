@@ -355,7 +355,7 @@ class Dw1Runs:
         )
         await self.runs.run(context, task, subject_ref=subject)
         async with self.uow(sales_scope(context)) as work:
-            return quote_change((await stored_quote(work, case_id)).case)
+            return quote_change((await stored_quote(work, case_id, viewer=context)).case)
 
     async def record_bravo_entry(
         self,
@@ -375,7 +375,7 @@ class Dw1Runs:
         # this would cancel the cross-check it waits on, and the run's step
         # would raise it again past `resend_cross_check`'s checks.
         async with self.uow(sales_scope(context)) as work:
-            status = (await stored_order(work, case_id)).case.status
+            status = (await stored_order(work, case_id, viewer=context)).case.status
         if status not in (OrderStatus.PREPARED, OrderStatus.CHANGE_REVIEW):
             raise ConflictError(
                 "a Bravo entry is recorded for a prepared order, or a change under review",
@@ -392,7 +392,7 @@ class Dw1Runs:
         )
         await self.runs.run(context, task, subject_ref=subject)
         async with self.uow(sales_scope(context)) as work:
-            return order_change((await stored_order(work, case_id)).case)
+            return order_change((await stored_order(work, case_id, viewer=context)).case)
 
     async def resend_cross_check(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
@@ -412,7 +412,7 @@ class Dw1Runs:
             context, SalesScopes.ORDER_PREPARE, resource_type=_ORDER, resource_id=str(case_id)
         )
         async with self.uow(sales_scope(context)) as work:
-            case = (await stored_order(work, case_id)).case
+            case = (await stored_order(work, case_id, viewer=context)).case
         same_version(case_id, case.case_version, case_version)
         # The case's own refusal (403, 409), before a run is spent.
         case.resend_cross_check(order_actor(context, self.gate))
@@ -431,7 +431,7 @@ class Dw1Runs:
         task = Dw1Task(kind="order_cross_check", case_id=case_id, case_version=case_version)
         await self.runs.run(context, task, subject_ref=subject_of(CaseKind.ORDER, case_id))
         async with self.uow(sales_scope(context)) as work:
-            return order_change((await stored_order(work, case_id)).case)
+            return order_change((await stored_order(work, case_id, viewer=context)).case)
 
     async def _logged(self, context: AccessContext) -> dict[str, MessageDispositionView]:
         async with self.uow(sales_scope(context)) as work:
