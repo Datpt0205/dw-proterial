@@ -147,7 +147,7 @@ function ExportControl() {
               key: "needs",
               render: (_, row) =>
                 row.needs.length ? (
-                  <Space wrap size={4}>
+                  <Space wrap size={4} className="max-w-96">
                     {row.needs.map((need) => (
                       <StatusTag
                         key={need}
