@@ -21,6 +21,7 @@ import {
   CABLE_FAMILY,
   CONFIRMATION_CHANNEL,
   CUSTOMER_STATUS,
+  EXPORT_CLASSIFICATION,
   label,
   LANGUAGE,
 } from "../_lib/labels";
@@ -324,6 +325,12 @@ function Items() {
           title: "Lead time chuẩn",
           dataIndex: "standard_lead_time_days",
           render: (d: number) => `${d} ngày`,
+        },
+        {
+          title: "Phân loại xuất khẩu",
+          dataIndex: "export_classification",
+          render: (c: string | null) =>
+            c ? label(EXPORT_CLASSIFICATION, c) : "Chưa phân loại",
         },
       ]}
     />

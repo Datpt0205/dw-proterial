@@ -639,3 +639,32 @@ export function label<T extends Record<string, string>>(
   if (!code) return "";
   return (table as Record<string, string>)[code] ?? code;
 }
+
+/** What a person still owes a customer's export control (WIV-03-032, `Need`). */
+export const EXPORT_NEED = {
+  products_unclassified: "Mã hàng chưa phân loại",
+  products_listed: "Có mã thuộc danh mục kiểm soát",
+  denial_match: "Trùng danh sách cấm",
+  denial_due: "Cần kiểm danh sách cấm",
+  red_flag_escalated: "Red flag đã báo lên",
+  red_flag_missing: "Chưa trả lời red flag",
+  noc_missing: "Chưa có NOC",
+  esf_due: "ESF năm nay chưa duyệt",
+} as const;
+
+/** A step's recorded result (`OUTCOMES`), keyed `<step>.<outcome>`. */
+export const SCREENING_OUTCOME = {
+  "denial_list.clear": "Không trùng danh sách cấm",
+  "denial_list.match": "Trùng danh sách cấm",
+  "red_flag.clear": "Không có dấu hiệu",
+  "red_flag.escalated": "Có dấu hiệu, đã báo lên",
+  "noc.requested": "Đã gửi NOEC, chờ NOC",
+  "noc.received": "Đã nhận NOC",
+  "esf.approved": "ESF đã duyệt",
+} as const;
+
+/** How PRV screened an item (`Item.export_classification`). */
+export const EXPORT_CLASSIFICATION = {
+  applicable: "Thuộc danh mục kiểm soát",
+  not_applicable: "Không thuộc",
+} as const;

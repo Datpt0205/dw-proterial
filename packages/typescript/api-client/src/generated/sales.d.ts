@@ -2679,6 +2679,8 @@ export interface components {
         ItemView: {
             /** Cores */
             cores: number;
+            /** Export Classification */
+            export_classification: ("applicable" | "not_applicable") | null;
             /** Family */
             family: string | null;
             /** Gauge */

@@ -1,6 +1,6 @@
 # 45 — Export control, WIV-03-032: each step recorded, the orders it moves
 
-Status: in progress (2026-10-28): backend done; the web page next
+Status: done on sample policy (2026-10-28): backend and the web page
 Blocked by: Proterial's WIV-03-032, red-flag form, ESF form and approvers
 (customer questionnaire, questions 1–13): shipped as a sample until then
 Category: enhancement
@@ -49,7 +49,18 @@ mutations red (the screened catalog, the match hold, the scope, the scan, the
 order hold); integration 5 on PostgreSQL (replace, RLS, no DELETE, CHECKs equal
 to `OUTCOMES`); schema 31 with `ck_rule_versions_key`; eval smoke.
 
+## The page (2026-10-28)
+
+`/sales/export-control` (Quản lý › Kiểm soát xuất khẩu): every customer with
+what it still owes as tags; the customer opens in a drawer at
+`?customer=<code>` with the product screen, then a card per step: its latest
+result (who, when, the document), the form to record the next one, and the
+NOEC draft and ESF form downloads. Red-flag questions are a Radio group, not
+Segmented: Segmented always shows an option selected, so an unanswered
+question looked answered "Không" and that answer could not be pressed. Every
+form is closed, with the reason, to a viewer without `sales.compliance.ack`
+(mutation red). The items list shows "Phân loại xuất khẩu".
+
 ## Open
 
-- The web page (`/sales/export-control`) and the master-data column label.
 - Real forms and approvers: the questionnaire.

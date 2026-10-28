@@ -14,15 +14,13 @@ import { errorMessage } from "../../../../lib/error-message";
 import { saveBlob } from "../../_components/artifacts-panel";
 import { GuardedButton } from "../../_components/guarded-button";
 import { salesApi } from "../../_lib/api";
+import { base64, SCAN_ACCEPT, SCAN_MAX_BYTES } from "../../_lib/files";
 import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
 
 type Quote = SalesSchemas["QuoteCaseView"];
 type Artifact = SalesSchemas["ArtifactView"];
 
-/** The largest signed copy the API keeps (`SIGNED_MAX_BYTES`). */
-const MAX_BYTES = 10 * 1024 * 1024;
-const ACCEPT = ".pdf,.jpg,.jpeg,.png";
 /** The statuses a quotation is signed in (`SIGNABLE`). */
 export const SIGNABLE = new Set(["approved", "sent", "master_list_recorded"]);
 
@@ -93,7 +91,7 @@ export function SendPanel({
   };
 
   const upload = async (file: File) => {
-    if (file.size > MAX_BYTES) {
+    if (file.size > SCAN_MAX_BYTES) {
       setError(new Error("Bản đã ký phải nhỏ hơn 10 MB."));
       return;
     }
@@ -180,7 +178,7 @@ export function SendPanel({
             </Typography.Text>
           )}
           <Upload
-            accept={ACCEPT}
+            accept={SCAN_ACCEPT}
             showUploadList={false}
             disabled={reason !== null}
             beforeUpload={(file) => {
@@ -215,13 +213,4 @@ export function SendPanel({
       </Flex>
     </Card>
   );
-}
-
-/** The file's bytes as base64, the way the API takes an upload. */
-async function base64(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000)
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(binary);
 }

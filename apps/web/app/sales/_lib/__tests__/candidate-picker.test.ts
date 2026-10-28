@@ -16,6 +16,7 @@ const item = (code: string, overrides: Partial<Item> = {}): Item => ({
   moq: "300",
   pack_multiple: "300",
   standard_lead_time_days: 21,
+  export_classification: null,
   ...overrides,
 });
 
