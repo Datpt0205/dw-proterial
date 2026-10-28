@@ -36,6 +36,9 @@ _PARAMS = {
     "snapshot_id": str(uuid.uuid4()),
     # A rule version drafted from a company's template ("Tạo từ tệp mẫu").
     "draft_id": str(uuid.uuid4()),
+    # A customer's export control (ticket 45).
+    "customer_code": "KH001",
+    "step": "noc",
 }
 
 

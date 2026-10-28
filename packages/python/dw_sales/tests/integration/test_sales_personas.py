@@ -307,26 +307,38 @@ async def test_the_demo_team_narrows_each_pic_to_their_own_and_the_head_to_the_t
 ) -> None:
     """2026-10-28: the demo tenant is restricted and its PICs report to the
     head, so the platform's lookup narrows each PIC to themselves and the
-    head to the team (`dw_sales.application.visibility` reads it). Put back
-    after, as the other tests here sign in to an open tenant."""
+    head to the team (`dw_sales.application.visibility` reads it). The head
+    also sees whoever the platform's own seed puts under them (Bình). Put
+    back after, as the other tests here sign in to an open tenant and the
+    platform's hierarchy is theirs."""
     tenant = sid("tenant", ALPHA)
-    team = ("dev|an.nguyen", "dev|dieu.hoang", "dev|khoa.lam")
+    team = {
+        sid("user", s) for s in ("dev|giang.do", "dev|an.nguyen", "dev|dieu.hoang", "dev|khoa.lam")
+    }
+    async with migrator.connect() as conn:
+        managers = (
+            await conn.execute(
+                sa.text(
+                    "SELECT id, manager_user_id FROM platform.memberships WHERE tenant_id = :t"
+                ),
+                {"t": tenant},
+            )
+        ).all()
     try:
         await seed_demo_team(sales_db.migrator)
         an = await _sign_in(app_sessions, "dev|an.nguyen", ALPHA)
         head = await _sign_in(app_sessions, "dev|giang.do", ALPHA)
         assert an is not None and head is not None
         assert an.visible_owners == {sid("user", "dev|an.nguyen")}
-        assert head.visible_owners == {sid("user", s) for s in ("dev|giang.do", *team)}
+        assert head.visible_owners is not None and team <= head.visible_owners
     finally:
         async with migrator.begin() as conn:
             await conn.execute(
                 sa.text("UPDATE platform.tenants SET record_visibility = 'open' WHERE id = :t"),
                 {"t": tenant},
             )
-            await conn.execute(
-                sa.text(
-                    "UPDATE platform.memberships SET manager_user_id = NULL WHERE tenant_id = :t"
-                ),
-                {"t": tenant},
-            )
+            for membership_id, manager in managers:
+                await conn.execute(
+                    sa.text("UPDATE platform.memberships SET manager_user_id = :m WHERE id = :id"),
+                    {"m": manager, "id": membership_id},
+                )

@@ -46,7 +46,7 @@ from dw_sales.application.rule_drafts import (
     RuleDraftView,
 )
 from dw_sales.application.rules import RuleKey
-from dw_sales.evals.graders import AN
+from dw_sales.evals.graders import GIANG
 from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.rule_drafts import gold, template_xlsx
 from dw_sales.evals.world import Directory
@@ -88,7 +88,7 @@ def _drafting(
         sheets=ClientSourceView(InProcessReaderTransport(), policies.order_rules.intake),
         scanner=NoMalware(),
         rules=rule_book(policies, SqlRuleVersionLookup(app_sessions)),
-        access=Directory((AN,)),
+        access=Directory((GIANG,)),
         model=model,
         clock=SystemClock(),
         ids=Uuid4Generator(),
@@ -111,7 +111,7 @@ async def _drafted(
 ) -> RuleDraftView:
     """A template requested in alpha and drafted from its outbox event."""
     requested = await _service(drafts).request(
-        AN.context(world.alpha), RuleKey.BRAVO_UPLOAD, "mau.xlsx", template_xlsx(_TEMPLATE)
+        GIANG.context(world.alpha), RuleKey.BRAVO_UPLOAD, "mau.xlsx", template_xlsx(_TEMPLATE)
     )
     async with migrator.connect() as conn:
         payload = await conn.scalar(
@@ -124,7 +124,7 @@ async def _drafted(
     assert payload == {"draft_id": str(requested.draft_id)}
     drafting = _drafting(drafts, app_sessions, Recorded(raw=gold(_TEMPLATE)))
     assert await drafting.draft(world.alpha, uuid.UUID(payload["draft_id"])) == "draft ready"
-    return await _service(drafts).get(AN.context(world.alpha), requested.draft_id)
+    return await _service(drafts).get(GIANG.context(world.alpha), requested.draft_id)
 
 
 async def test_a_template_is_drafted_from_its_event_and_its_file_dropped(
@@ -162,7 +162,7 @@ async def test_an_outsider_reads_no_draft(
 ) -> None:
     # A queued one keeps its file: both tables hold a row of alpha's.
     queued = await _service(drafts).request(
-        AN.context(world.alpha), RuleKey.BRAVO_UPLOAD, "mau.xlsx", template_xlsx(_TEMPLATE)
+        GIANG.context(world.alpha), RuleKey.BRAVO_UPLOAD, "mau.xlsx", template_xlsx(_TEMPLATE)
     )
     held = await _count(
         migrator,
@@ -172,7 +172,7 @@ async def test_an_outsider_reads_no_draft(
     assert held == 1, "the owner's rows are there: the zeros below are isolation"
     for outsider in (world.beta, world.alpha_other):
         with pytest.raises(NotFoundError):
-            await _service(drafts).get(AN.context(outsider), queued.draft_id)
+            await _service(drafts).get(GIANG.context(outsider), queued.draft_id)
         # Asked of the policy alone: no WHERE names the scope here.
         async with tenant_session(
             app_sessions, TenantScope(outsider.tenant_id.value, outsider.workspace_id.value)
@@ -231,7 +231,7 @@ async def test_a_template_file_is_never_rewritten(
     app_sessions: async_sessionmaker[AsyncSession],
 ) -> None:
     queued = await _service(drafts).request(
-        AN.context(world.alpha), RuleKey.BRAVO_UPLOAD, "mau.xlsx", template_xlsx(_TEMPLATE)
+        GIANG.context(world.alpha), RuleKey.BRAVO_UPLOAD, "mau.xlsx", template_xlsx(_TEMPLATE)
     )
     scope: SalesScope = world.alpha
     with pytest.raises(DBAPIError, match="permission denied"):
@@ -252,8 +252,8 @@ async def test_the_sweep_fails_a_lost_draft_in_its_own_workspace_only(
 ) -> None:
     service = _service(drafts)
     data = template_xlsx(_TEMPLATE)
-    lost = await service.request(AN.context(world.alpha), RuleKey.BRAVO_UPLOAD, "m.xlsx", data)
-    fresh = await service.request(AN.context(world.beta), RuleKey.BRAVO_UPLOAD, "m.xlsx", data)
+    lost = await service.request(GIANG.context(world.alpha), RuleKey.BRAVO_UPLOAD, "m.xlsx", data)
+    fresh = await service.request(GIANG.context(world.beta), RuleKey.BRAVO_UPLOAD, "m.xlsx", data)
     async with migrator.begin() as conn:
         await conn.execute(
             sa.text(
@@ -272,7 +272,7 @@ async def test_the_sweep_fails_a_lost_draft_in_its_own_workspace_only(
     swept = await sweep.sweep(world.alpha)
     assert swept.expired >= 1
 
-    view = await service.get(AN.context(world.alpha), lost.draft_id)
+    view = await service.get(GIANG.context(world.alpha), lost.draft_id)
     assert (view.status, view.error) == (
         "failed",
         "DW1 không đọc xong tệp trong 1 giờ: hãy tải lại tệp mẫu",
@@ -284,7 +284,7 @@ async def test_the_sweep_fails_a_lost_draft_in_its_own_workspace_only(
             id=draft_id,
         )
         assert held == files
-    assert (await service.get(AN.context(world.beta), fresh.draft_id)).status == "queued"
+    assert (await service.get(GIANG.context(world.beta), fresh.draft_id)).status == "queued"
     audited = await _count(
         migrator,
         "SELECT count(*) FROM platform.audit_events WHERE resource_id = :id"
