@@ -147,10 +147,15 @@ demo-reset: ## DW1 demo start state: clear Sales cases, seed personas, Keycloak 
 onprem-models: ## Fetch the on-prem models once, on a host with internet (infra/onprem/README.md)
 	bash infra/onprem/fetch-models.sh
 
+ONPREM := $(COMPOSE) -f infra/compose/docker-compose.uat.yml \
+  -f infra/compose/docker-compose.onprem.yml -f infra/compose/docker-compose.onprem-gpu.yml \
+  -f infra/compose/docker-compose.host.yml --profile full
+
 onprem-up: ## Full stack on premises, uat profile, GPU (infra/onprem/README.md)
-	$(COMPOSE) -f infra/compose/docker-compose.uat.yml \
-	  -f infra/compose/docker-compose.onprem.yml -f infra/compose/docker-compose.onprem-gpu.yml \
-	  -f infra/compose/docker-compose.host.yml --profile full up -d --build
+	$(ONPREM) up -d --build
+
+third-party-notices: ## Licence notices for a hand-over, read from the built on-prem images (internet needed)
+	$(ONPREM) config --images | uv run python scripts/third_party_notices.py
 
 check-model: ## Probe the configured LLM gateway (live call, needs OPENAI_* in .env)
 	uv run python scripts/check_model_gateway.py
