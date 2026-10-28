@@ -353,6 +353,7 @@ export const CASE_EVENT = {
   "quote.submitted": "Trình duyệt",
   "quote.approved": "Duyệt báo giá",
   "quote.returned": "Trả lại định giá",
+  "quote.signed_copy_attached": "Tải lên bản báo giá đã ký",
   "quote.sent": "Gửi báo giá cho khách",
   "quote.master_list_recorded": "Ghi master list",
   "quote.declined": "Từ chối báo giá",
@@ -602,6 +603,7 @@ export const ARTIFACT_KIND = {
   quotation_final: "Tài liệu báo giá (bản đã duyệt)",
   send_draft: "Thư gửi báo giá (nháp)",
   master_list_update: "Cập nhật master list",
+  quote_signed: "Bản báo giá đã ký (tải lên)",
 } as const;
 
 /** The language a draft is written in (`Customer.language`). */

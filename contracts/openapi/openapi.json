@@ -9678,6 +9678,16 @@
               }
             ]
           },
+          "signed_copy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignedCopyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -11425,6 +11435,61 @@
           "sheets"
         ],
         "title": "SheetGrid",
+        "type": "object"
+      },
+      "SignedCopyBody": {
+        "additionalProperties": false,
+        "description": "The printed quotation as signed and scanned (PDF, JPG or PNG), base64.\n10 MiB of bytes (`SIGNED_MAX_BYTES`; the service refuses more).",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "content_b64": {
+            "maxLength": 13981016,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "content_b64"
+        ],
+        "title": "SignedCopyBody",
+        "type": "object"
+      },
+      "SignedCopyView": {
+        "description": "The signed paper copy uploaded to the quotation: its file, who, when.",
+        "properties": {
+          "artifact_id": {
+            "format": "uuid",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          },
+          "uploaded_by": {
+            "format": "uuid",
+            "title": "Uploaded By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "content_type",
+          "uploaded_by",
+          "uploaded_at"
+        ],
+        "title": "SignedCopyView",
         "type": "object"
       },
       "SodRuleView": {
@@ -20443,6 +20508,78 @@
           }
         },
         "summary": "Sent",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/signed-copy": {
+      "post": {
+        "description": "The quotation printed, signed on paper and scanned: kept with the\ncase (no electronic signature, 2026-10-28).",
+        "operationId": "upload_signed_quote_api_v1_sales_quotes__case_id__signed_copy_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignedCopyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Signed Quote",
         "tags": [
           "sales"
         ]

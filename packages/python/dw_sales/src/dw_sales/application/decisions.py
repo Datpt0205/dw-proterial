@@ -48,6 +48,7 @@ from dw_platform.domain.approval import ApprovalRequest
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.inbox_service import InboxProcessing
+from dw_sales.application.ports import NotificationSenderPort
 from dw_sales.application.quotation import QuotationService
 from dw_sales.application.quotes_service import local_day, parse_finding_key
 from dw_sales.application.runs import (
@@ -100,6 +101,8 @@ class CaseDecisions:
     ids: IdGenerator
     quotation: QuotationService
     inbox: InboxProcessing
+    # The pricer is told when their quotation is approved (2026-10-28).
+    notifications: NotificationSenderPort
 
     # ------------------------------------------------------- DW xử lý --
 
@@ -343,6 +346,7 @@ class CaseDecisions:
                 details={"field": "subject_version"},
             )
         decider, now = decision.decider, self.clock.now()
+        quoted: QuoteCase | None = None
         async with self.uow(sales_scope(decider)) as work:
             if asked.case_kind is CaseKind.QUOTE:
                 quote = (await stored_quote(work, asked.case_id)).case
@@ -363,7 +367,32 @@ class CaseDecisions:
                     await save_order(work, decider, self.ids, order, ordered, event, run_id=run_id)
             if write:
                 await work.commit()
+        if write and quoted is not None and action == "quote.approved":
+            await self._approved(decider, quoted)
         return action
+
+    async def _approved(self, decider: AccessContext, quote: QuoteCase) -> None:
+        """Tell who priced and submitted it: print it to sign, or send it. No
+        electronic signature: the signed copy comes back as an upload."""
+        submission = quote.submission
+        if submission is None:
+            return
+        recipients = sorted(
+            {submission.priced_by, submission.submitted_by} - {decider.principal_id}, key=str
+        )
+        if not recipients:
+            return
+        await self.notifications.deliver(
+            decider,
+            recipients=recipients,
+            source_key=f"sales.quote.approved:{quote.case_id}:{quote.case_version}",
+            title=f"Báo giá {quote.request.reference} đã được duyệt",
+            body=(
+                "Tải tài liệu báo giá để in trình ký hoặc gửi khách. "
+                "Bản đã ký có thể tải lên lại hồ sơ để gửi kèm."
+            ),
+            link=f"/sales/quotes/{quote.case_id}",
+        )
 
     @staticmethod
     def _on_quote(

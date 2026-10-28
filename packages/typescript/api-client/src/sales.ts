@@ -220,6 +220,21 @@ export class SalesApi {
     );
   }
 
+  /** The quotation printed, signed on paper and scanned (PDF, JPG, PNG),
+   * kept with the case; no electronic signature (2026-10-28). */
+  uploadSignedQuote(
+    caseId: string,
+    caseVersion: number,
+    contentB64: string,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/quotes/{case_id}/signed-copy">(
+      `/api/v1/sales/quotes/${enc(caseId)}/signed-copy`,
+      { case_version: caseVersion, content_b64: contentB64 },
+      key,
+    );
+  }
+
   /** A handled message open again, back on its owner's Việc cần làm. */
   reopenMessage(messageId: string, key: string) {
     return this.post<"/api/v1/sales/inbox/{message_id}/reopen">(

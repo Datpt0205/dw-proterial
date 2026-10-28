@@ -1230,6 +1230,17 @@ class QuoteApprovalView(BaseModel):
     document_sha256: str
 
 
+class SignedCopyView(BaseModel):
+    """The signed paper copy uploaded to the quotation: its file, who, when."""
+
+    model_config = _VIEW
+
+    artifact_id: uuid.UUID
+    content_type: str
+    uploaded_by: uuid.UUID
+    uploaded_at: datetime
+
+
 class StampView(BaseModel):
     model_config = _VIEW
 
@@ -1435,6 +1446,8 @@ class QuoteCaseView(BaseModel):
     sent: StampView | None
     master_list: StampView | None
     decline: DeclineView | None
+    # The quotation as signed on paper and uploaded (no e-signature).
+    signed_copy: SignedCopyView | None = None
     evidence: list[EvidenceView] | Hidden | None
     # The approval this quotation waits on, while it does.
     decision: PendingDecisionView | None = None
@@ -1640,6 +1653,16 @@ def quote_case(
         ),
         approval=QuoteApprovalView(**case.approval.model_dump()) if case.approval else None,
         sent=StampView(**case.sent.model_dump()) if case.sent else None,
+        signed_copy=(
+            SignedCopyView(
+                artifact_id=case.signed_copy.artifact_id,
+                content_type=case.signed_copy.content_type,
+                uploaded_by=case.signed_copy.uploaded_by,
+                uploaded_at=case.signed_copy.uploaded_at,
+            )
+            if case.signed_copy
+            else None
+        ),
         master_list=StampView(**case.master_list.model_dump()) if case.master_list else None,
         decline=(
             DeclineView(

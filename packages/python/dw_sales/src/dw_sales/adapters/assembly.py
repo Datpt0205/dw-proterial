@@ -334,6 +334,8 @@ def build_dw1(
         readiness=readiness,
         roles=roles,
         step_activity=step_activity,
+        # An uploaded signed quotation is scanned like every attachment.
+        scanner=scanner,
     )
     register(
         graphs=runtime.graphs,

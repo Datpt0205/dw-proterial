@@ -194,6 +194,21 @@ async def test_the_pricer_cannot_approve_and_another_approver_can() -> None:
     assert case.approval is not None and case.approval.approved_by == KHOA.user_id
 
 
+async def test_the_pricer_is_told_the_quotation_was_approved_to_print_or_send_it() -> None:
+    """No electronic signature (2026-10-28): the pricer prints it to sign, or
+    sends it, and is told so once, by the approval."""
+    world = _world()
+    case_id = await _pending_quote(world, GIANG)
+    await _approve(world, KHOA, case_id)
+
+    (told,) = [
+        d for d in world.notifications.sent if d.source_key.startswith("sales.quote.approved")
+    ]
+    assert told.recipients == (GIANG.user_id,)
+    assert told.link == f"/sales/quotes/{case_id}"
+    assert "in trình ký hoặc gửi khách" in told.body
+
+
 async def test_an_order_names_every_maker_across_rounds() -> None:
     world = _world()
     seen = await world.process_each(AN, ["M01"])

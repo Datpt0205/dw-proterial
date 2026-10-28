@@ -1217,9 +1217,10 @@ def open_world(
     # The mailbox every service reads, at the door `build_dw1` puts in front of
     # it (ticket 25): scanned, then held to its names. Nothing is found in the
     # sample set unless ``scanner`` says so.
+    scanning = scanner or NoMalware()
     inbox = ScannedInbox(
         MockInbox.load(bound_to, sample.data_dir, sample.attachments_dir),
-        scanner or NoMalware(),
+        scanning,
         readers.po,
     )
     # The bound tenant's own order rules, where the sample set holds them, as
@@ -1306,6 +1307,7 @@ def open_world(
         readiness=readiness,
         roles=StaticRoleCatalog(),
         step_activity=store,
+        scanner=scanning,
     )
     register(
         graphs=runtime.graphs,
