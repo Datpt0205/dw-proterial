@@ -419,6 +419,13 @@ class InboxProcessing:
                     run_id=run.run_id,
                 )
             )
+            # A complete request has its YCBG drafted by DW1 at once: Sales
+            # only enters it in Bravo and records the number (2026-10-28).
+            if case.ready_for_ycbg:
+                drafted = case.draft_ycbg()
+                event = worker_event("quote.ycbg_drafted", context, self.clock.now())
+                await save_quote(work, context, self.ids, case, drafted, event, run_id=run.run_id)
+                case = drafted
             await self._record(work, context, disposition, ingest, run, case=case)
             await work.commit()
         return disposition, case

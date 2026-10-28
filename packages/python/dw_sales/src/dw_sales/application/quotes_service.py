@@ -241,11 +241,14 @@ class QuoteCommands:
         def step(case: QuoteCase, actor: QuoteActor, at: datetime) -> QuoteCase:
             if uncertain:
                 assert field is not None and value is not None
-                return case.confirm_value(line_no, field, value, by=actor.user_id, at=at)
+                confirmed = case.confirm_value(line_no, field, value, by=actor.user_id, at=at)
+                return confirmed.drafted_when_ready()
+            # The last answer the request lacked drafts its YCBG at once.
             if code is QuoteFindingCode.CUSTOMER_UNKNOWN:
                 if customer_code is None:
                     raise DomainError("the customer is named", details={"field": "customer_code"})
-                return case.confirm_customer(customer_code, by=actor.user_id, at=at)
+                answered = case.confirm_customer(customer_code, by=actor.user_id, at=at)
+                return answered.drafted_when_ready()
             if code is QuoteFindingCode.RFQ_INCOMPLETE and line_no is not None:
                 return case.complete_line(
                     line_no,
@@ -254,7 +257,7 @@ class QuoteCommands:
                     quantity=quantity,
                     needed_by=needed_by,
                     note=note,
-                )
+                ).drafted_when_ready()
             raise ConflictError(
                 "only a request's own findings are answered by Sales",
                 details={"case_id": str(case.case_id), "finding_key": finding_key},
@@ -283,6 +286,10 @@ class QuoteCommands:
 
         def step(case: QuoteCase, actor: QuoteActor, at: datetime) -> QuoteCase:
             if ycbg_no is None:
+                # DW1 drafts it once the request is complete: pressing
+                # "Soạn YCBG" after that changes nothing.
+                if case.status is QuoteStatus.YCBG_DRAFTED:
+                    return case
                 return case.draft_ycbg()
             drafted = case.draft_ycbg() if case.status is QuoteStatus.RECEIVED else case
             return drafted.record_ycbg(ycbg_no, by=actor.user_id, at=at)
@@ -455,6 +462,8 @@ class QuoteCommands:
             if guard is not None:
                 await guard(work, case)
             after = decided(lambda: step(case, actor, now))
+            if after is case:
+                return quote_change(case)
             event = person_event(
                 action,
                 context,
