@@ -94,6 +94,11 @@ export interface Bar {
   entries: NavEntry[];
   /** The bounded context the bar is, when it is one. */
   context: NavGroup | null;
+  /**
+   * Every bounded context the person reaches (DW1, DW2…): more than one,
+   * and the brand becomes the switch between them (2026-10-28).
+   */
+  contexts: readonly NavGroup[];
 }
 
 /**
@@ -103,25 +108,35 @@ export interface Bar {
  * operational person never uses them) are left off, but for a platform page
  * whose `contextBarScope` the viewer holds (Duyệt, for whoever decides).
  * Anyone who administers the tenant or the platform keeps every entry.
+ * Someone who reaches several contexts works in one at a time: the one the
+ * page they are on belongs to (``pathname``), else the first, and switches
+ * from the brand (2026-10-28, Đạt: "đổi thành chỗ swap DW2").
  * Navigation, never authorization: a page left off still answers its URL
  * with the server's decision.
  */
 export function barNav(
   visible: readonly NavEntry[],
   viewer?: Pick<NavViewer, "hasScope">,
+  pathname?: string,
 ): Bar {
   const contexts = visible.filter(
     (entry): entry is NavGroup => isNavGroup(entry) && !!entry.context,
   );
   const administers = visible.some((entry) => entry.administration);
-  if (contexts.length === 1 && !administers) {
+  if (contexts.length && !administers) {
+    const active =
+      contexts.find(
+        (group) =>
+          pathname !== undefined &&
+          currentPage(navPages([group]), pathname) !== undefined,
+      ) ?? contexts[0]!;
     const kept = visible.filter(
       (entry) =>
         !isNavGroup(entry) &&
         !!entry.contextBarScope &&
         !!viewer?.hasScope(entry.contextBarScope),
     );
-    return { entries: [...contexts[0]!.items, ...kept], context: contexts[0]! };
+    return { entries: [...active.items, ...kept], context: active, contexts };
   }
-  return { entries: [...visible], context: null };
+  return { entries: [...visible], context: null, contexts };
 }
