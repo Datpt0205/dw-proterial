@@ -38,7 +38,8 @@ own file and a row here.
 - 2026-10-20..25: board, history, defects A–E, process map, IT accounts.
   2026-10-27: real mail from a drop folder of `.eml` files (ticket 43).
 - 10-28: licence notices (`make third-party-notices`); Keycloak `dw-it`
-  group for the customer's IT; stack run clean (`sales.md` State).
+  group; latency per route (`make latency-report`): source view 9.5 s → 1.2 s,
+  cached 0.1 s; search keeps every key (`sales.md` State).
 - **Next:** the plant PC mail drop; `onprem-up` in `uat`; DW2.
 
 ## Decisions Đạt owes

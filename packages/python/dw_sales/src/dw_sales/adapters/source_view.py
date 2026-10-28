@@ -121,6 +121,7 @@ class FileSourceView:
             columns=columns,
             truncated=sheet.max_row > _MAX_ROWS or sheet.max_column > _MAX_COLUMNS,
             cells=cells,
+            sheets=list(values.sheetnames),
         )
 
 

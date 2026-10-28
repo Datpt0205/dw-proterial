@@ -107,7 +107,7 @@ from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSe
 from dw_sales.application.runs import subject_of
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
-from dw_sales.application.source import required_regions
+from dw_sales.application.source import NoSourceCache, required_regions
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.application.views import MessageDispositionView
 from dw_sales.domain.activity import StepOutcome
@@ -1287,6 +1287,7 @@ def open_world(
         intake=intake,
         quotation=quotation,
         files=readers.source,
+        source_cache=NoSourceCache(),
         book=book,
         directory=directory,
         holders=directory,

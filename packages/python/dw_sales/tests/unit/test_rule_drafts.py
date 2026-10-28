@@ -77,7 +77,13 @@ def _cell(ref: str, row: int, column: int, text: str, **flags: bool) -> SheetCel
 
 def _grid(cells: list[SheetCell], *, hidden_sheet: bool = False) -> SheetGrid:
     return SheetGrid(
-        sheet="Mau", hidden_sheet=hidden_sheet, rows=10, columns=10, truncated=False, cells=cells
+        sheet="Mau",
+        hidden_sheet=hidden_sheet,
+        rows=10,
+        columns=10,
+        truncated=False,
+        cells=cells,
+        sheets=["Mau"],
     )
 
 

@@ -85,6 +85,14 @@ COPY --chown=root:root vendor/brandkit /opt/brandkit
 # `brandkit` on PATH, because that is what the skill teaches the model to type.
 RUN printf '#!/bin/sh\nexec python3 /opt/brandkit/brandkit/cli.py "$@"\n' > /usr/local/bin/brandkit \
     && chmod 0555 /usr/local/bin/brandkit
+# Bytecode compiled here, once (2026-10-28). Every document script runs in a
+# fresh process on a read-only root where PYTHONDONTWRITEBYTECODE holds, so
+# nothing is ever cached at run time: without this each one compiled its
+# imports from source (the reader, same shape: 4.3 s of a 4.6 s read,
+# measured). The stdlib's own tests and lib2to3 hold files that do not compile
+# on purpose, and are not imported.
+RUN python -m compileall -q -j 0 -x '(/tests?/|/lib2to3/)' \
+        /app/.venv/lib/python3.12/site-packages /usr/local/lib/python3.12 /opt/brandkit
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH=/opt/brandkit \

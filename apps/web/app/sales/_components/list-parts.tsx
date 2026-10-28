@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   ClockCircleOutlined,
@@ -189,15 +189,7 @@ export function ListToolbar<Tab extends string, Sort extends string>({
           }))}
         />
       </div>
-      <Input
-        allowClear
-        aria-label="Tìm trong danh sách"
-        prefix={<SearchOutlined aria-hidden />}
-        placeholder={placeholder}
-        value={query}
-        onChange={(event) => onQuery(event.target.value)}
-        className="w-full sm:w-80"
-      />
+      <SearchField query={query} onQuery={onQuery} placeholder={placeholder} />
       {filter}
       <Select<Sort>
         aria-label="Sắp xếp"
@@ -207,6 +199,66 @@ export function ListToolbar<Tab extends string, Sort extends string>({
         className="w-full sm:ml-auto sm:w-56"
       />
     </div>
+  );
+}
+
+/** How long the list waits after the last key before it filters. */
+export const SEARCH_DELAY_MS = 250;
+
+/**
+ * The typed text stays in the field; the list and the URL follow
+ * `SEARCH_DELAY_MS` after the last key, and at once when it is cleared. Bound
+ * to the URL directly, every key replaced the URL and the value still in it
+ * came back into the field before the next key arrived, so fast typing lost
+ * characters ("vlx po 2609" ended as "9", measured 2026-10-28) and the whole
+ * table was filtered and drawn again per key.
+ */
+function SearchField({
+  query,
+  onQuery,
+  placeholder,
+}: {
+  query: string;
+  onQuery: (query: string) => void;
+  placeholder: string;
+}) {
+  const [text, setText] = useState(query);
+  // What this field last handed the list, so a change from elsewhere (Xóa bộ
+  // lọc, Back) can be told from the echo of its own.
+  const sent = useRef(query);
+  const latest = useRef(onQuery);
+  useEffect(() => {
+    latest.current = onQuery;
+  }, [onQuery]);
+  useEffect(() => {
+    if (query !== sent.current) {
+      sent.current = query;
+      setText(query);
+    }
+  }, [query]);
+  useEffect(() => {
+    if (text === sent.current) return;
+    const send = () => {
+      sent.current = text;
+      latest.current(text);
+    };
+    if (text === "") {
+      send();
+      return;
+    }
+    const timer = setTimeout(send, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+  return (
+    <Input
+      allowClear
+      aria-label="Tìm trong danh sách"
+      prefix={<SearchOutlined aria-hidden />}
+      placeholder={placeholder}
+      value={text}
+      onChange={(event) => setText(event.target.value)}
+      className="w-full sm:w-80"
+    />
   );
 }
 

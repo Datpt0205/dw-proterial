@@ -92,6 +92,13 @@ RUN groupadd --gid 1001 dw && useradd --uid 1001 --gid dw --no-create-home dw \
 WORKDIR /app
 # Owned by root: a reading process cannot rewrite the readers it runs.
 COPY --from=builder --chown=root:root /app/.venv /app/.venv
+# Bytecode compiled here, once (2026-10-28). Every file runs in a fresh
+# process on a read-only root where PYTHONDONTWRITEBYTECODE holds, so nothing
+# is ever cached at run time: without this each one compiled its imports from
+# source (the reader: 4.3 s of a 4.6 s read, measured). The stdlib's own tests
+# and lib2to3 hold files that do not compile on purpose, and are not imported.
+RUN python -m compileall -q -j 0 -x '(/tests?/|/lib2to3/)' \
+        /app/.venv/lib/python3.12/site-packages /usr/local/lib/python3.12
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \

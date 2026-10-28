@@ -2668,6 +2668,8 @@ export interface components {
             permission_set_keys: string[];
             /** Role Keys */
             role_keys: string[];
+            /** Service */
+            service: boolean;
             /** Status */
             status: string;
             /**

@@ -22,10 +22,12 @@ so the overview can tell DW1's time from the people's.
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError, NotFoundError
@@ -154,6 +156,17 @@ class InboxQueries:
         )
 
 
+logger = logging.getLogger(__name__)
+
+
+class SourceWarmPort(Protocol):
+    """Reads a case's pages and sheets into the source cache as DW1 opens it
+    (`SourceService.warm`), so the person who opens the source next waits for
+    no file."""
+
+    async def warm(self, scope: SalesScope, case: OrderCase | QuoteCase) -> None: ...
+
+
 @dataclass(frozen=True)
 class InboxProcessing:
     """DW1's processing of the mailbox: the step a DW1 run takes.
@@ -175,6 +188,7 @@ class InboxProcessing:
     decisions: PendingDecisionsPort
     release_manifest_ref: str | None
     spans: SalesSpans
+    sources: SourceWarmPort
 
     async def process(
         self, context: AccessContext, message_id: str, *, run: RunContext
@@ -257,7 +271,20 @@ class InboxProcessing:
                 "sales.duration_ms": (time.perf_counter() - started) * 1000,
             },
         )
+        if case is not None:
+            await self._warm(scope, case)
         return message_disposition(disposition, ingest)
+
+    async def _warm(self, scope: SalesScope, case: OrderCase | QuoteCase) -> None:
+        # A speed-up, never a step: the case is stored and its disposition
+        # recorded before this, and a page that cannot be read ahead is read
+        # when someone opens it, as before.
+        try:
+            await self.sources.warm(scope, case)
+        except Exception as failed:
+            logger.warning(
+                "reading case %s's sources ahead failed: %s", case.case_id, type(failed).__name__
+            )
 
     async def _order(
         self,

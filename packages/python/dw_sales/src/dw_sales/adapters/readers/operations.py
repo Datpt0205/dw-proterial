@@ -41,7 +41,6 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from dw_sales.adapters.formats import sniff
-from dw_sales.adapters.reader_client import Dw1Readers, client_readers
 from dw_sales.adapters.reader_wire import (
     RESULTS,
     PdfPage,
@@ -355,9 +354,3 @@ class InProcessReaderTransport:
             logger.warning("reader operation %s raised %s", sent.operation, type(crashed).__name__)
             reply = ReaderReply.failed("crashed", type(crashed).__name__)
         return ReaderReply.model_validate_json(reply.model_dump_json())
-
-
-def in_process_readers(caps: IntakeCaps, tools: ReaderTools | None = None) -> Dw1Readers:
-    """DW1's readers in this process (`InProcessReaderTransport`): what a
-    test, an eval and a host-run local worker read files with."""
-    return client_readers(InProcessReaderTransport(tools=tools), caps)

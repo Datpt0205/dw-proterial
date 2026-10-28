@@ -53,6 +53,7 @@ from dw_memory.retention import SqlMemoryRetention
 from dw_memory.service import MemoryService
 from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
+from dw_platform.adapters.cache import ValkeyCache
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.approval_codes import (
     SqlApprovalCodeRetention,
@@ -400,6 +401,9 @@ def build_sales(
         # the folder this process alone reads into it.
         mailbox=settings.sales_mailbox,
         mail_drop=_mail_drop_dir(settings),
+        # The API's cache: a case DW1 opens here has its pages read into it
+        # ahead of the person who opens them there.
+        source_cache=ValkeyCache.from_url(settings.redis_url) if settings.redis_url else None,
     )
     return mount, scope
 

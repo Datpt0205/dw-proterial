@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
 from dw_kernel.ports import UtcClock
@@ -47,7 +47,7 @@ from dw_sales.application.case_store import (
     ServedSource,
     SourceRegion,
 )
-from dw_sales.application.ports import InboxPort
+from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.dispositions import CaseKind
@@ -90,6 +90,51 @@ class SheetGrid(BaseModel):
     # Bounded by the reader's caps: True when the sheet holds more than this.
     truncated: bool
     cells: list[SheetCell]
+    # Every sheet of the workbook, in order, so a view needs one reading
+    # process, not a second one for the names (2026-10-28: two per open).
+    sheets: list[str]
+
+
+class SourceCachePort(Protocol):
+    """Where an opened page or grid is kept for a while, so opening it again
+    reads no file (2026-10-28: every open was a fresh sandboxed read, 11 s).
+    The platform's cache satisfies it at the composition root; a value it
+    cannot keep or find is a miss, never an error."""
+
+    async def get(self, key: str) -> str | None: ...
+
+    async def set(self, key: str, value: str, *, ttl_seconds: int) -> None: ...
+
+
+class NoSourceCache:
+    """Implements `SourceCachePort` keeping nothing: a process that serves no
+    source view (the worker), and tests that do not assert on caching."""
+
+    async def get(self, key: str) -> str | None:
+        return None
+
+    async def set(self, key: str, value: str, *, ttl_seconds: int) -> None:
+        return
+
+
+# A file a case was read from never changes (the case is stamped with its
+# sha256), so an entry can only go stale by the reading caps changing; an hour
+# bounds that, and bounds how long a purged mailbox's pages outlive it.
+SOURCE_CACHE_TTL_SECONDS: Final = 3600
+# A page past this is read each time rather than held in memory.
+SOURCE_CACHE_MAX_CHARS: Final = 2_000_000
+
+
+def source_cache_key(scope: SalesScope, sha256: str, *, page: int | None, sheet: str | None) -> str:
+    """Whose, which file, which part. The tenant and workspace lead: the same
+    bytes in two companies' mailboxes are two entries, never one answer."""
+    part = f"page:{page}" if page is not None else f"sheet:{sheet}"
+    return f"sales:source:v1:{scope.tenant_id}:{scope.workspace_id}:{sha256}:{part}"
+
+
+class _CachedPage(BaseModel):
+    pdf_base64: str
+    page_count: int
 
 
 class SourceViewPort(Protocol):
@@ -104,8 +149,6 @@ class SourceViewPort(Protocol):
         """That page as a one-page PDF, and how many pages the file has; None
         when the file has no such page."""
         ...
-
-    async def sheet_names(self, data: bytes) -> list[str]: ...
 
     async def sheet_grid(self, data: bytes, sheet: str) -> SheetGrid | None:
         """The sheet's cells with their flags; None when there is no such sheet."""
@@ -462,6 +505,27 @@ class _Source:
     anchors: list[LabelledAnchor]
 
 
+def _quote_sources(case: QuoteCase) -> list[_Source]:
+    """The files a quote was read from: the request's, and each Design reply's."""
+    request_file = case.request.attachment
+    files = [(case.request.message_id, request_file)] if request_file is not None else []
+    files += [(reply.message_id, reply.attachment) for reply in case.design_replies]
+    return [
+        _Source(
+            message_id,
+            attachment.attachment_id,
+            attachment.sha256,
+            _quote_anchors(case, attachment.attachment_id),
+        )
+        for message_id, attachment in files
+    ]
+
+
+# How many pages or sheets DW1 reads ahead for one case: the ones its values
+# sit on, first come first, so a long workbook does not fill the cache.
+WARM_MAX_REGIONS: Final = 6
+
+
 @dataclass(frozen=True)
 class SourceService:
     uow: SalesUnitOfWorkFactory
@@ -469,6 +533,7 @@ class SourceService:
     clock: UtcClock
     inbox: InboxPort
     files: SourceViewPort
+    cache: SourceCachePort
 
     async def order_source(
         self,
@@ -512,22 +577,7 @@ class SourceService:
         scope = sales_scope(context)
         async with self.uow(scope) as work:
             case = (await stored_quote(work, case_id)).case
-        request_file = case.request.attachment
-        files = [(case.request.message_id, request_file)] if request_file is not None else []
-        files += [(reply.message_id, reply.attachment) for reply in case.design_replies]
-        found = next(
-            (
-                _Source(
-                    message_id,
-                    attachment.attachment_id,
-                    attachment.sha256,
-                    _quote_anchors(case, attachment.attachment_id),
-                )
-                for message_id, attachment in files
-                if attachment.attachment_id == attachment_id
-            ),
-            None,
-        )
+        found = next((s for s in _quote_sources(case) if s.attachment_id == attachment_id), None)
         return await self._serve(
             context, CaseKind.QUOTE, case_id, case.case_version, found, attachment_id, page, sheet
         )
@@ -607,10 +657,10 @@ class SourceService:
         now = self.clock.now()
         view: SourceView
         if kind == "pdf" and page is not None:
-            opened = await self.files.pdf_page(content.data, page)
+            opened = await self._pdf_page(scope, source.sha256, content.data, page)
             if opened is None:
                 raise NotFoundError("the file has no such page", details={**details, "page": page})
-            data, count = opened
+            pdf_base64, count = opened
             view = SourceView(
                 case_kind=case_kind,
                 case_id=case_id,
@@ -620,12 +670,12 @@ class SourceService:
                 kind="pdf",
                 page=page,
                 page_count=count,
-                pdf_base64=base64.b64encode(data).decode("ascii"),
+                pdf_base64=pdf_base64,
                 anchors=[a for a in source.anchors if a.anchor.page == page],
                 served_at=now,
             )
         elif kind == "xlsx" and sheet is not None:
-            grid = await self.files.sheet_grid(content.data, sheet)
+            grid = await self._sheet_grid(scope, source.sha256, content.data, sheet)
             if grid is None:
                 raise NotFoundError(
                     "the file has no such sheet", details={**details, "sheet": sheet}
@@ -638,7 +688,7 @@ class SourceService:
                 attachment_sha256=source.sha256,
                 kind="sheet",
                 sheet=sheet,
-                sheets=await self.files.sheet_names(content.data),
+                sheets=grid.sheets,
                 grid=grid,
                 anchors=[a for a in source.anchors if a.anchor.sheet == sheet],
                 served_at=now,
@@ -664,3 +714,77 @@ class SourceService:
             )
             await work.commit()
         return view
+
+    async def warm(self, scope: SalesScope, case: OrderCase | QuoteCase) -> None:
+        """Reads the pages and sheets the case's values sit on into the cache
+        as DW1 opens or revises it, so whoever opens its source next finds it
+        there (2026-10-28). Nobody is recorded as served: a page read ahead is
+        a kept parse, never evidence that a person looked at it."""
+        sources = (
+            _order_sources(case.message_id, case.document)
+            if isinstance(case, OrderCase)
+            else _quote_sources(case)
+        )
+        left = WARM_MAX_REGIONS
+        for source in sources:
+            regions = list(
+                dict.fromkeys(
+                    (a.anchor.page, a.anchor.sheet)
+                    for a in source.anchors
+                    if a.anchor.page is not None or a.anchor.sheet is not None
+                )
+            )[:left]
+            if not regions:
+                continue
+            content = await self.inbox.read_attachment(
+                scope, source.message_id, source.attachment_id
+            )
+            if content is None or content.attachment.sha256 != source.sha256:
+                continue
+            kind = self.files.kind(content.data)
+            for page, sheet in regions:
+                if kind == "pdf" and page is not None:
+                    await self._pdf_page(scope, source.sha256, content.data, page)
+                elif kind == "xlsx" and sheet is not None:
+                    await self._sheet_grid(scope, source.sha256, content.data, sheet)
+            left -= len(regions)
+            if left <= 0:
+                return
+
+    async def _pdf_page(
+        self, scope: SalesScope, sha256: str, data: bytes, page: int
+    ) -> tuple[str, int] | None:
+        """The page as base64 and the file's page count, from the cache when
+        it holds them; None when the file has no such page."""
+        key = source_cache_key(scope, sha256, page=page, sheet=None)
+        if (held := await self.cache.get(key)) is not None:
+            try:
+                cached = _CachedPage.model_validate_json(held)
+                return cached.pdf_base64, cached.page_count
+            except ValidationError:
+                pass  # an entry from another version: read the file
+        opened = await self.files.pdf_page(data, page)
+        if opened is None:
+            return None
+        pdf, count = opened
+        encoded = base64.b64encode(pdf).decode("ascii")
+        await self._keep(key, _CachedPage(pdf_base64=encoded, page_count=count).model_dump_json())
+        return encoded, count
+
+    async def _sheet_grid(
+        self, scope: SalesScope, sha256: str, data: bytes, sheet: str
+    ) -> SheetGrid | None:
+        key = source_cache_key(scope, sha256, page=None, sheet=sheet)
+        if (held := await self.cache.get(key)) is not None:
+            try:
+                return SheetGrid.model_validate_json(held)
+            except ValidationError:
+                pass
+        grid = await self.files.sheet_grid(data, sheet)
+        if grid is not None:
+            await self._keep(key, grid.model_dump_json())
+        return grid
+
+    async def _keep(self, key: str, value: str) -> None:
+        if len(value) <= SOURCE_CACHE_MAX_CHARS:
+            await self.cache.set(key, value, ttl_seconds=SOURCE_CACHE_TTL_SECONDS)
