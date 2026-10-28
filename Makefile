@@ -154,6 +154,9 @@ ONPREM := $(COMPOSE) -f infra/compose/docker-compose.uat.yml \
 onprem-up: ## Full stack on premises, uat profile, GPU (infra/onprem/README.md)
 	$(ONPREM) up -d --build
 
+latency-report: ## p50/p95/p99 per API route from the compose stack's API log (scripts/route_latency.py)
+	$(COMPOSE) logs --no-log-prefix api | uv run python scripts/route_latency.py
+
 third-party-notices: ## Licence notices for a hand-over, read from the built on-prem images (internet needed)
 	$(ONPREM) config --images | uv run python scripts/third_party_notices.py
 

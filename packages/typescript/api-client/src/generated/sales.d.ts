@@ -4306,6 +4306,8 @@ export interface components {
             rows: number;
             /** Sheet */
             sheet: string;
+            /** Sheets */
+            sheets: string[];
             /** Truncated */
             truncated: boolean;
         };

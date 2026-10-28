@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from dw_reader.reading import REQUEST, RESULT
+from dw_reader.files import REQUEST, RESULT
 from dw_sales.adapters.reader_wire import ReaderRequest
 from dw_sales.adapters.readers.operations import handle
 

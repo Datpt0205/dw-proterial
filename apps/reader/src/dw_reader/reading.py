@@ -26,16 +26,14 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Final
 
 from dw_docgen.runner import LIMITS_UNAVAILABLE_EXIT_CODE, run_command
+from dw_reader.files import REQUEST, RESULT
 from dw_reader.settings import ReaderSettings
 from dw_sales.adapters.reader_wire import Failure, ReaderReply
 
 logger = logging.getLogger("dw_reader")
 
-REQUEST: Final = "request.json"
-RESULT: Final = "result.json"
 
 
 class LimitsUnavailableError(RuntimeError):

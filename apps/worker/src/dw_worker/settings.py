@@ -44,6 +44,14 @@ class WorkerSettings(BaseSettings):
         validation_alias=AliasChoices("DW_WORKER_PROFILE", "DW_API_PROFILE"),
     )
 
+    # The cache the API reads a source page from: DW1 reads a new case's pages
+    # into it ahead of the person who opens them (2026-10-28). Absent → no
+    # reading ahead; the API reads each page when it is opened.
+    redis_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DW_WORKER_REDIS_URL", "REDIS_URL"),
+    )
+
     # Where configs/, evals/fixtures/ and the rest of the repo live. In dev this
     # is the source tree; the image ships them at /app and sets DW_REPO_ROOT.
     repo_root: Path = Field(

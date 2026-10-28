@@ -31,7 +31,7 @@ from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.processing import ProcessingService
 from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.runs import Dw1Runs
-from dw_sales.application.source import SourceService
+from dw_sales.application.source import NoSourceCache, SourceService
 from dw_sales.application.worker_service import WorkerService
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CloseReason
@@ -79,7 +79,7 @@ dw1 = Dw1Runs(STORE, GATE, STORE, STORE, STORE)
 processing = ProcessingService(STORE, GATE, CLOCK, IDS, STORE)
 steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE)
 RUN = uuid.UUID(int=10)
-sources = SourceService(STORE, GATE, CLOCK, STORE, STORE)
+sources = SourceService(STORE, GATE, CLOCK, STORE, STORE, NoSourceCache())
 artifacts = ArtifactService(STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE)
 master = MasterDataService(GATE, STORE)
 overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE)

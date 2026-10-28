@@ -95,6 +95,7 @@ from dw_platform.adapters.persistence.zalo_link_repo import SqlZaloLink
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.approval_codes import ApprovalSubjectVersions, DecisionCodeKey
 from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.cache import CachePort
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.hierarchy import HierarchyService
 from dw_platform.application.idempotency import HttpIdempotency
@@ -397,6 +398,9 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
         # reaches a model server of its own (dw_sales ADR 0005); otherwise no
         # model is called at all.
         model=(wiring.seam.gateway if Provider.ONPREM in wiring.seam.gateway.adapters else None),
+        # An opened page or grid is kept here for an hour (the source drawer,
+        # 2026-10-28); without a cache URL every open reads the file.
+        source_cache=container.cache,
     )
     register_sales_support(container.support_catalog)
     register_sales_service_accounts(service_accounts)
@@ -439,6 +443,7 @@ def build_sales(
     model: ModelGateway | None = None,
     scanner: object | None = None,
     reader: object | None = None,
+    source_cache: CachePort | None = None,
 ) -> object:
     """The Sales context's mount, part of the seam above.
 
@@ -521,6 +526,7 @@ def build_sales(
         # The mock, or the mail the worker stores from the drop folder
         # (ticket 43); the API reads it, never the folder.
         mailbox=settings.sales_mailbox,
+        source_cache=source_cache,
     )
     return SalesMount(services=mount.services, activity=mount.activity)
 

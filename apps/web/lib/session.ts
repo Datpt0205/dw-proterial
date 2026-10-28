@@ -161,7 +161,7 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
           headers.set("X-Workspace-Id", workspaceId);
         }
       }
-      const res = await fetch(input, { ...init, headers });
+      const res = await sharedFetch(input, { ...init, headers });
       // Every answer carries the server's clock; relative labels count by it.
       noteServerDate(res.headers.get("Date"));
       // The grant expired, was revoked or lost its granter, or the sign-in
@@ -186,6 +186,41 @@ export function clientOptions(baseUrl: string): ApiClientOptions {
       return res;
     },
   };
+}
+
+/**
+ * Identical reads in flight at the same moment share one request (2026-10-28).
+ * A page mounts its content, the DW1 bar and the menu's badges in one go, and
+ * each read the same lists on its own: three `sales/inbox` calls and two of
+ * `directory/members` per page load, measured. Only a GET that can not be
+ * cancelled is shared, keyed by everything that makes it a different request
+ * (URL, bearer, tenant, workspace, support grant), and only while it is in
+ * flight: the next read after it answered asks the server again, so a reload
+ * after a change never gets the answer from before it. Each caller gets its
+ * own copy of the response, whose body it reads once.
+ */
+const inFlight = new Map<string, Promise<Response>>();
+
+function sharedFetch(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method !== "GET" || init.signal || init.body) return fetch(input, init);
+  const headers = new Headers(init.headers);
+  const key = [
+    String(input),
+    headers.get("Authorization"),
+    headers.get("X-Tenant-Id"),
+    headers.get("X-Workspace-Id"),
+    headers.get(SUPPORT_GRANT_HEADER),
+  ].join("\n");
+  let running = inFlight.get(key);
+  if (!running) {
+    running = fetch(input, init).finally(() => inFlight.delete(key));
+    inFlight.set(key, running);
+  }
+  return running.then((res) => res.clone());
 }
 
 /** The support refusal a 403 names (`details.reason_code`), if any. */

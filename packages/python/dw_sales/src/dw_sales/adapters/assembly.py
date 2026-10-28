@@ -109,6 +109,7 @@ from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
+from dw_sales.application.source import NoSourceCache, SourceCachePort
 from dw_sales.application.telemetry import SpanPort
 from dw_sales.application.threads import ThreadLinks
 from dw_sales.domain.order_checks import OrderRules
@@ -189,6 +190,7 @@ def build_dw1(
     one_call_model: ModelGateway | None = None,
     mailbox: Mailbox = "mock",
     mail_drop: Path | None = None,
+    source_cache: SourceCachePort | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
@@ -312,6 +314,9 @@ def build_dw1(
         intake=intake,
         quotation=quotation,
         files=readers.source,
+        # The API's cache keeps an opened page or grid for a while; a process
+        # serving no source view keeps nothing.
+        source_cache=source_cache or NoSourceCache(),
         book=book,
         directory=directory,
         holders=holders,

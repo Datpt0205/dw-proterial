@@ -26,6 +26,7 @@ from dw_api.bootstrap import ApiContainer, build_container
 from dw_api.exception_handlers import register_exception_handlers
 from dw_api.middleware.rate_limit import RateLimitMiddleware
 from dw_api.middleware.request_id import RequestIdMiddleware
+from dw_api.middleware.timing import RequestTimingMiddleware
 from dw_api.middleware.unexpected_error import UnexpectedErrorMiddleware
 from dw_api.routes.v1.admin_accounts import router as admin_accounts_router
 from dw_api.routes.v1.admin_console import router as admin_console_router
@@ -119,6 +120,8 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
     app.add_middleware(UnexpectedErrorMiddleware)
     app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_per_minute)
     app.add_middleware(RequestIdMiddleware)
+    # Outermost but CORS: the time it logs covers the limit and the route.
+    app.add_middleware(RequestTimingMiddleware)
 
     # Browser clients are cross-origin; a deployed profile must list origins
     # explicitly, local/test fall back to the dev web origin.

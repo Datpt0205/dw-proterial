@@ -54,7 +54,7 @@ from dw_sales.application.routed_mail import RoutedMailService
 from dw_sales.application.rule_drafts import RuleDraftService, RuleDraftUnitOfWorkFactory
 from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
-from dw_sales.application.source import SourceService, SourceViewPort
+from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.worker_service import WorkerService
 
@@ -114,6 +114,7 @@ def assemble(
     intake: OrderIntake,
     quotation: QuotationService,
     files: SourceViewPort,
+    source_cache: SourceCachePort,
     book: TenantRuleBook,
     directory: MemberDirectoryPort,
     holders: ScopeHoldersPort,
@@ -133,6 +134,7 @@ def assemble(
     step_activity: StepActivityReadPort,
 ) -> SalesAssembly:
     gate = Gate(authorization)
+    sources = SourceService(uow, gate, clock, inbox, files, source_cache)
     processing = InboxProcessing(
         uow,
         gate,
@@ -146,6 +148,7 @@ def assemble(
         pending,
         release_manifest_ref,
         SalesSpans(telemetry),
+        sources,
     )
     overview = OverviewService(uow, gate, clock, inbox, book, directory, pending)
     services = SalesServices(
@@ -158,7 +161,7 @@ def assemble(
         order_commands=OrderCommands(uow, gate, clock, ids, intake, pending),
         quotes=QuoteQueries(uow, gate, clock, quotation, pending, step_activity),
         quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog, pending),
-        sources=SourceService(uow, gate, clock, inbox, files),
+        sources=sources,
         artifacts=ArtifactService(
             uow,
             gate,

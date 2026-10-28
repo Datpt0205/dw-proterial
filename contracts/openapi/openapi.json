@@ -11403,6 +11403,13 @@
             "title": "Sheet",
             "type": "string"
           },
+          "sheets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sheets",
+            "type": "array"
+          },
           "truncated": {
             "title": "Truncated",
             "type": "boolean"
@@ -11414,7 +11421,8 @@
           "rows",
           "columns",
           "truncated",
-          "cells"
+          "cells",
+          "sheets"
         ],
         "title": "SheetGrid",
         "type": "object"
