@@ -38,6 +38,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWork,
     Stored,
 )
+from dw_sales.application.visibility import sees_case
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
@@ -52,20 +53,37 @@ DW1_WORKER_ID = "sales-dw1"
 DW1_WORKER_VERSION = "1.0.0"
 
 
-async def stored_order(work: SalesUnitOfWork, case_id: uuid.UUID) -> Stored[OrderCase]:
+async def stored_order(
+    work: SalesUnitOfWork, case_id: uuid.UUID, *, viewer: AccessContext | None
+) -> Stored[OrderCase]:
     """The case, in the caller's workspace only: another tenant's or another
-    workspace's id reads as not found, never as forbidden."""
+    workspace's id reads as not found, never as forbidden.
+
+    ``viewer``: the person reading, who sees only what `sees_case` lets them
+    (a case outside it reads as not found too); None for DW1's own lanes and
+    a settlement, which act for the whole workspace. Required, so every
+    caller says which it is."""
     stored = await work.orders.get(case_id)
-    if stored is None:
+    if stored is None or not seen_by(viewer, CaseKind.ORDER, stored):
         raise NotFoundError("no such order case", details={"case_id": str(case_id)})
     return stored
 
 
-async def stored_quote(work: SalesUnitOfWork, case_id: uuid.UUID) -> Stored[QuoteCase]:
+async def stored_quote(
+    work: SalesUnitOfWork, case_id: uuid.UUID, *, viewer: AccessContext | None
+) -> Stored[QuoteCase]:
     stored = await work.quotes.get(case_id)
-    if stored is None:
+    if stored is None or not seen_by(viewer, CaseKind.QUOTE, stored):
         raise NotFoundError("no such quote case", details={"case_id": str(case_id)})
     return stored
+
+
+def seen_by(
+    viewer: AccessContext | None, kind: CaseKind, stored: Stored[OrderCase] | Stored[QuoteCase]
+) -> bool:
+    return viewer is None or sees_case(
+        viewer, kind, stored.case.status.value, stored.origin.assigned_to
+    )
 
 
 def same_version(case_id: uuid.UUID, current: int, decided_on: int) -> None:

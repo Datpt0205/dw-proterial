@@ -331,16 +331,20 @@ class _Cases[CaseT: _Case]:
 
     kind: CaseKind
     gates: Mapping[str, ArtifactGate[CaseT]]
-    load: Callable[[SalesUnitOfWork, uuid.UUID], Awaitable[CaseT]]
+    load: Callable[[SalesUnitOfWork, uuid.UUID, AccessContext], Awaitable[CaseT]]
     write_scope: SalesScopes
 
 
-async def _load_order(work: SalesUnitOfWork, case_id: uuid.UUID) -> OrderCase:
-    return (await stored_order(work, case_id)).case
+async def _load_order(
+    work: SalesUnitOfWork, case_id: uuid.UUID, viewer: AccessContext
+) -> OrderCase:
+    return (await stored_order(work, case_id, viewer=viewer)).case
 
 
-async def _load_quote(work: SalesUnitOfWork, case_id: uuid.UUID) -> QuoteCase:
-    return (await stored_quote(work, case_id)).case
+async def _load_quote(
+    work: SalesUnitOfWork, case_id: uuid.UUID, viewer: AccessContext
+) -> QuoteCase:
+    return (await stored_quote(work, case_id, viewer=viewer)).case
 
 
 _ORDERS: Final = _Cases(CaseKind.ORDER, ORDER_GATES, _load_order, SalesScopes.ORDER_PREPARE)
@@ -425,7 +429,7 @@ class ArtifactService:
         stored: list[ArtifactRecord] = []
         try:
             async with self.uow(scope) as work:
-                case = await _load_quote(work, case_id)
+                case = await _load_quote(work, case_id, context)
                 same_version(case_id, case.case_version, case_version)
                 record = ArtifactRecord(
                     artifact_id=self.ids.new_uuid(),
@@ -475,7 +479,7 @@ class ArtifactService:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = await cases.load(work, case_id)
+            case = await cases.load(work, case_id, context)
             records = await work.artifacts.for_case(cases.kind, case_id)
         channel = None
         if any(gate.channel is not None for gate in cases.gates.values()):
@@ -527,7 +531,7 @@ class ArtifactService:
         stored: list[ArtifactRecord] = []
         try:
             async with self.uow(scope) as work:
-                case = await cases.load(work, case_id)
+                case = await cases.load(work, case_id, context)
                 same_version(case_id, case.case_version, case_version)
                 if not gate.open_in(case, context, self.gate):
                     raise _closed(kind, case.status.value)
@@ -632,7 +636,7 @@ class ArtifactService:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            case = await cases.load(work, case_id)
+            case = await cases.load(work, case_id, context)
             record = _belongs(
                 await work.artifacts.get(artifact_id), cases.kind, case_id, artifact_id
             )

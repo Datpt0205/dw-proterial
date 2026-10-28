@@ -144,7 +144,7 @@ class CaseDecisions:
         )
         now, scope = self.clock.now(), sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_quote(work, case_id)).case
+            case = (await stored_quote(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             submitted = await self.quotation.submit(
                 scope,
@@ -196,7 +196,7 @@ class CaseDecisions:
             return recorded, "order.bravo_recorded"
 
         async with self.uow(sales_scope(context)) as work:
-            case = (await stored_order(work, case_id)).case
+            case = (await stored_order(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             after, action = decided(lambda: step(case))
             field = "bravo_so_no" if action == "order.bravo_recorded" else None
@@ -346,17 +346,20 @@ class CaseDecisions:
                 details={"field": "subject_version"},
             )
         decider, now = decision.decider, self.clock.now()
+        # The guard reads as the decider, who must see the case; carrying out
+        # a decision already taken acts for the workspace.
+        seer = None if write else decider
         quoted: QuoteCase | None = None
         async with self.uow(sales_scope(decider)) as work:
             if asked.case_kind is CaseKind.QUOTE:
-                quote = (await stored_quote(work, asked.case_id)).case
+                quote = (await stored_quote(work, asked.case_id, viewer=seer)).case
                 _still_waiting(quote, asked, decision.subject_version)
                 quoted, action = self._on_quote(quote, asked, decision, now)
                 if write:
                     event = person_event(action, decider, now)
                     await save_quote(work, decider, self.ids, quote, quoted, event, run_id=run_id)
             else:
-                order = (await stored_order(work, asked.case_id)).case
+                order = (await stored_order(work, asked.case_id, viewer=seer)).case
                 _still_waiting(order, asked, decision.subject_version)
                 # The cross-checker opened the original at this version
                 # (spec decision 12), whichever way they decide.

@@ -215,10 +215,45 @@ async def seed_dw1_accounts(
         await engine.dispose()
 
 
+# The demo team (Đạt, 2026-10-28: "đáng lẽ chỉ có trưởng phòng thấy"): the
+# demo tenant narrows record reads, and its PICs report to the head, so a PIC
+# sees their own cases, the pool's and what they are asked to check, and the
+# head sees every one (`dw_sales.application.visibility`). A real tenant's
+# admin sets both on the admin pages. Only the demo seed applies it: the API
+# suite's tenant stays open, and its own tests narrow it where they mean to.
+DEMO_TEAM_TENANT = "tenant-alpha"
+DEMO_HEAD = "dev|giang.do"
+DEMO_REPORTS = ("dev|an.nguyen", "dev|dieu.hoang", "dev|khoa.lam")
+
+
+async def seed_demo_team(database_url: str) -> None:
+    tenant = sid("tenant", DEMO_TEAM_TENANT)
+    m = tables.memberships
+    engine = create_async_engine(database_url, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                sa.update(tables.tenants)
+                .where(tables.tenants.c.id == tenant)
+                .values(record_visibility="restricted")
+            )
+            await conn.execute(
+                sa.update(m)
+                .where(
+                    m.c.tenant_id == tenant,
+                    m.c.user_id.in_([sid("user", s) for s in DEMO_REPORTS]),
+                )
+                .values(manager_user_id=sid("user", DEMO_HEAD))
+            )
+    finally:
+        await engine.dispose()
+
+
 async def seed_demo(database_url: str) -> None:
     await seed_test_env(database_url)
     written = await seed_sales_personas(database_url)
     await seed_dw1_accounts(database_url)
+    await seed_demo_team(database_url)
     # Imported here: it builds the Sales services, which this module's other
     # callers (the API's test conftest at import time) do not need.
     from dw_sales.testing.seed_rules import DEMO_POLICIES, seed_demo_rules

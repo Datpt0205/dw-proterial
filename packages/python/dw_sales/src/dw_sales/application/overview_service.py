@@ -46,6 +46,7 @@ from dw_kernel.ports import UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import LoggedMessage, SalesUnitOfWorkFactory, Stored
+from dw_sales.application.next_steps import DECIDED_ON_THE_CASE, ORDER_NEXT, QUOTE_NEXT
 from dw_sales.application.overview_ports import (
     Bucket,
     FigureBasis,
@@ -212,30 +213,6 @@ class WorkItem(BaseModel):
     owner: str | None = None
 
 
-# The next step on an open case, and the scope that takes it. A status not
-# listed waits on someone outside Sales (the customer, Design) or is done.
-_ORDER_NEXT: Final[Mapping[OrderStatus, tuple[str, SalesScopes]]] = {
-    OrderStatus.CHECKED: ("self_check", SalesScopes.ORDER_PREPARE),
-    OrderStatus.IN_REVIEW: ("self_check", SalesScopes.ORDER_PREPARE),
-    OrderStatus.PREPARED: ("bravo_entry", SalesScopes.ORDER_PREPARE),
-    OrderStatus.UPLOADED_TO_BRAVO: ("cross_check", SalesScopes.ORDER_CROSS_CHECK),
-    OrderStatus.CROSS_CHECKED: ("confirm", SalesScopes.ORDER_PREPARE),
-    OrderStatus.CHANGE_REVIEW: ("apply_change", SalesScopes.ORDER_PREPARE),
-}
-_QUOTE_NEXT: Final[Mapping[QuoteStatus, tuple[str, SalesScopes]]] = {
-    QuoteStatus.RECEIVED: ("draft_ycbg", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.YCBG_DRAFTED: ("record_ycbg", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.YCBG_RECORDED: ("send_to_design", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.DESIGN_REPLIED: ("price", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.SPEC_DISCUSSION: ("settle_spec", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.PRICED: ("submit", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.PENDING_APPROVAL: ("approve", SalesScopes.QUOTE_APPROVE),
-    QuoteStatus.RETURNED: ("reprice", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.APPROVED: ("send", SalesScopes.QUOTE_PREPARE),
-    QuoteStatus.SENT: ("record_master_list", SalesScopes.QUOTE_PREPARE),
-}
-
-
 def _stat(spread: Spread) -> TimeStat:
     return TimeStat(
         cases=spread.cases, median_seconds=spread.median_seconds, max_seconds=spread.max_seconds
@@ -266,14 +243,10 @@ def figure_basis(inbox_ids: frozenset[str]) -> FigureBasis:
     )
 
 
-# Steps decided on the whole case rather than on its assignee.
-_DECIDED_ON_THE_CASE: Final = frozenset({"cross_check", "approve"})
-
-
 def _turn(kind: CaseKind, status: str) -> Literal["pic", "head"] | None:
     bucket = STATUS_BUCKETS[kind].get(status)
-    following = (_ORDER_NEXT if kind is CaseKind.ORDER else _QUOTE_NEXT).get(status)  # type: ignore[call-overload]
-    if bucket == "approver" or (following is not None and following[0] in _DECIDED_ON_THE_CASE):
+    following = (ORDER_NEXT if kind is CaseKind.ORDER else QUOTE_NEXT).get(status)  # type: ignore[call-overload]
+    if bucket == "approver" or (following is not None and following[0] in DECIDED_ON_THE_CASE):
         return "head"
     return "pic" if bucket == "sales" else None
 
@@ -418,13 +391,13 @@ class OverviewService:
             principal_id=context.principal_id,
             order_statuses=frozenset(
                 status
-                for status, (action, scope) in _ORDER_NEXT.items()
-                if action not in _DECIDED_ON_THE_CASE and self.gate.allows(context, scope)
+                for status, (action, scope) in ORDER_NEXT.items()
+                if action not in DECIDED_ON_THE_CASE and self.gate.allows(context, scope)
             ),
             quote_statuses=frozenset(
                 status.value
-                for status, (action, scope) in _QUOTE_NEXT.items()
-                if action not in _DECIDED_ON_THE_CASE and self.gate.allows(context, scope)
+                for status, (action, scope) in QUOTE_NEXT.items()
+                if action not in DECIDED_ON_THE_CASE and self.gate.allows(context, scope)
             ),
             cross_checks=self.gate.allows(context, SalesScopes.ORDER_CROSS_CHECK)
             or self.gate.allows(context, SalesScopes.ORDER_PREPARE),
@@ -442,7 +415,7 @@ class OverviewService:
     async def _order_item(
         self, context: AccessContext, row: OpenOrder, stored: Stored[OrderCase] | None
     ) -> WorkItem | None:
-        step = _ORDER_NEXT.get(row.status)
+        step = ORDER_NEXT.get(row.status)
         if step is None:
             return None
         action, scope = step
@@ -487,7 +460,7 @@ class OverviewService:
 
     def _quote_item(self, context: AccessContext, stored: Stored[QuoteCase]) -> WorkItem | None:
         case, assigned = stored.case, stored.origin.assigned_to
-        step = _QUOTE_NEXT.get(case.status)
+        step = QUOTE_NEXT.get(case.status)
         if step is None:
             return None
         action, scope = step

@@ -51,6 +51,7 @@ from dw_sales.application.support import (
     person_event,
     same_version,
     save_quote,
+    seen_by,
     stored_quote,
 )
 from dw_sales.application.views import (
@@ -143,7 +144,7 @@ class QuoteQueries:
         return [
             quote_summary(s.case, s.origin.assigned_to, today)
             for s in stored
-            if kept is None or s.case.case_id in kept
+            if (kept is None or s.case.case_id in kept) and seen_by(context, CaseKind.QUOTE, s)
         ]
 
     async def get(
@@ -161,7 +162,7 @@ class QuoteQueries:
         )
         scope = sales_scope(context)
         async with self.uow(scope) as work:
-            stored = await stored_quote(work, case_id)
+            stored = await stored_quote(work, case_id, viewer=context)
             logged = await work.messages.list_all()
             served = await work.served.served(
                 context.principal_id, CaseKind.QUOTE, case_id, stored.case.case_version
@@ -372,7 +373,7 @@ class QuoteCommands:
             )
         )
         async with self.uow(scope) as work:
-            case = (await stored_quote(work, case_id)).case
+            case = (await stored_quote(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             priced = await self.service.decide_price(scope, case, decision, by=context.principal_id)
             event = person_event("quote.priced", context, now)
@@ -403,7 +404,7 @@ class QuoteCommands:
         await self._require(context, case_id, SalesScopes.QUOTE_PREPARE)
         now, scope = self.clock.now(), sales_scope(context)
         async with self.uow(scope) as work:
-            case = (await stored_quote(work, case_id)).case
+            case = (await stored_quote(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             recorded = await self.service.record_master_list(
                 scope, case, by=context.principal_id, at=now
@@ -457,7 +458,7 @@ class QuoteCommands:
         await self._require(context, case_id, SalesScopes.QUOTE_PREPARE)
         actor, now = quote_actor(context, self.gate), self.clock.now()
         async with self.uow(sales_scope(context)) as work:
-            case = (await stored_quote(work, case_id)).case
+            case = (await stored_quote(work, case_id, viewer=context)).case
             same_version(case_id, case.case_version, case_version)
             if guard is not None:
                 await guard(work, case)
