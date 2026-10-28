@@ -679,7 +679,9 @@ export function ProcessFlow({
           preventScrolling={false}
           disableKeyboardA11y
           ariaLabelConfig={ARIA_LABELS}
-          attributionPosition="bottom-center"
+          // No "React Flow" badge on the canvas (Đạt, 2026-10-28). MIT
+          // allows it; the licence ships in the third-party notices instead.
+          proOptions={{ hideAttribution: true }}
           style={
             {
               "--xy-edge-stroke": token.colorTextTertiary,
@@ -696,7 +698,6 @@ export function ProcessFlow({
               "--xy-minimap-mask-stroke-color": token.colorBorder,
               "--xy-minimap-node-background-color": token.colorBorder,
               "--xy-minimap-node-stroke-color": token.colorBorder,
-              "--xy-attribution-background-color": token.colorBgContainer,
             } as CSSProperties
           }
         >
