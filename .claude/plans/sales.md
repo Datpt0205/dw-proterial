@@ -1011,6 +1011,15 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 
 ## Open
 
+- 2026-10-28, licence check for Proterial's IP-indemnity clause (agent):
+  no AGPL/SSPL/RSAL component ships (153 Python dists, 118 web prod
+  packages, 22 images); copyleft runs only as separate, unmodified programs
+  (ClamAV and poppler GPL-2.0, LibreOffice MPL-2.0, libvips LGPL-3.0 in
+  sharp). Models: Qwen3.5-9B Apache-2.0, bge-m3 MIT, bge-reranker-v2-m3
+  Apache-2.0; no Gemma. **Owed before the on-prem hand-over:** a generated
+  third-party notices file (Apache/MIT/GPL need the notices shipped, and a
+  source offer for the GPL programs); none exists. Contract wording
+  (carve-outs, cap) is FPT legal's call.
 - From tickets 32, 33 and 30 (2026-10-13, agent, Đạt away):
     - ADR 0005's addendum and ADR 0004's amendment (a PO layout decided
       on a run-less `sales.layout` approval the worker carries out):
