@@ -4,8 +4,11 @@ mailbox, DW1 running, and the personas seeded.
 What it removes, in the tenants the personas belong to (and nowhere else):
 every order and quote case with its revisions, lines and findings, the case
 events, the message log, the processing queue, the sources served, the
-artifact records and the pause switch; and DW1's runs, their checkpoints and the `sales.` approvals
-they paused on with their decisions, so the approvals inbox starts empty and
+artifact records and the pause switch; the in-app notices Sales sent (every
+`source_key` starts `sales.`), which would otherwise pile up across
+rehearsals and link to cases that are gone; and DW1's runs, their
+checkpoints and the `sales.` approvals they paused on with their
+decisions, so the approvals inbox starts empty and
 a rehearsal does not spend the next one's daily runs. It writes nothing to
 the audit log, which is append-only: the trail of earlier rehearsals stays,
 as it would in a real tenant.
@@ -46,7 +49,11 @@ from dw_agent_runtime.adapters.runtime_tables import (
     run_checkpoints,
     worker_runs,
 )
-from dw_platform.adapters.persistence.tables import approval_decisions, approval_requests
+from dw_platform.adapters.persistence.tables import (
+    approval_decisions,
+    approval_requests,
+    notifications,
+)
 from dw_platform.testing.seed_env import sid
 from dw_sales.adapters.persistence import tables
 from dw_sales.application.runs import APPROVAL_PREFIX
@@ -86,6 +93,13 @@ async def clear_sales_cases(database_url: str) -> dict[str, int]:
             for table in _CLEARED:
                 result = await conn.execute(sa.delete(table).where(table.c.tenant_id.in_(tenants)))
                 removed[table.name] = result.rowcount
+            notices = await conn.execute(
+                sa.delete(notifications).where(
+                    notifications.c.tenant_id.in_(tenants),
+                    notifications.c.source_key.startswith("sales.", autoescape=True),
+                )
+            )
+            removed["notifications"] = notices.rowcount
             removed |= await _clear_dw1_runs(conn, tenants)
     finally:
         await engine.dispose()
