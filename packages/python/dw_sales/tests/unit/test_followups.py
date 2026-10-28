@@ -18,7 +18,7 @@ import yaml
 from pydantic import ValidationError
 
 from dw_sales.adapters.policy_files import load_sales_policies
-from dw_sales.application.followups import LOADED
+from dw_sales.application.followups import LOADED, reminder_text
 from dw_sales.application.overview_service import WHOSE_TURN
 from dw_sales.application.rules import OVERRIDABLE, RuleKey
 from dw_sales.domain.dispositions import CaseKind
@@ -361,3 +361,22 @@ def test_a_case_waiting_on_a_person_is_owed_at_once_and_once_per_status() -> Non
         for d in owed(PLATFORM, [_case(status="received")], MONDAY_8, turns=WHOSE_TURN)
         if d.followup.value == "your_turn"
     ]
+
+
+@pytest.mark.parametrize(
+    ("status", "step"),
+    [
+        ("ycbg_drafted", "DW1 đã soạn YCBG: nhập vào Bravo rồi ghi số YCBG để gửi Design."),
+        ("design_replied", "Design đã trả lời: quyết định giá, DW1 đã gợi ý giá kèm căn cứ."),
+        ("received", "Mở hồ sơ để xem việc cần làm."),
+    ],
+)
+def test_your_turn_on_a_quote_says_what_to_do_next(status: str, step: str) -> None:
+    """Where DW1 did the step before, the notice names the next one, so the
+    PIC need not open the case to learn it (2026-10-28)."""
+    case = _case(CaseKind.QUOTE, status)
+    (due,) = owed(PLATFORM, [case], MONDAY_8, turns=WHOSE_TURN)
+    assert due.followup is Followup.YOUR_TURN
+    title, body = reminder_text(PLATFORM, due, MONDAY_8)
+    assert title == "Đến lượt bạn: Báo giá PO-1"
+    assert body.endswith(step)

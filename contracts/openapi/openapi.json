@@ -3706,6 +3706,16 @@
             ],
             "title": "Reference Price"
           },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "target_price": {
             "anyOf": [
               {
@@ -12761,6 +12771,78 @@
           "quote_no"
         ],
         "title": "SubmitBody",
+        "type": "object"
+      },
+      "SuggestionView": {
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "copper_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CopperBasisView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lead_time_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Time Days"
+          },
+          "moq": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moq"
+          },
+          "raised_to_floor": {
+            "title": "Raised To Floor",
+            "type": "boolean"
+          },
+          "source_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source No"
+          },
+          "unit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Price",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit_price",
+          "basis",
+          "source_no",
+          "raised_to_floor",
+          "moq",
+          "lead_time_days",
+          "copper_basis"
+        ],
+        "title": "SuggestionView",
         "type": "object"
       },
       "SupersededView": {

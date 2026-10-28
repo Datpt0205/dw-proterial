@@ -27,9 +27,32 @@ import { usePeople } from "../../_lib/people";
 import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { AmountInput } from "../../_components/amount-input";
-import { Money, Quantity } from "../../_components/money";
+import { isHidden, Money, Quantity } from "../../_components/money";
 
 type Quote = SalesSchemas["QuoteCaseView"];
+type Suggestion = SalesSchemas["SuggestionView"];
+
+/** DW1's suggested price per line, from the evidence the caller may see. */
+function suggestions(quote: Quote): Map<number, Suggestion> {
+  const evidence = quote.evidence;
+  if (!evidence || isHidden(evidence)) return new Map();
+  return new Map(
+    evidence.flatMap((line) =>
+      line.suggestion ? [[line.line_no, line.suggestion] as const] : [],
+    ),
+  );
+}
+
+/** "đơn SO25-1120 gần nhất của khách, nâng lên giá sàn" */
+function basisText(suggestion: Suggestion): string {
+  const basis =
+    suggestion.basis === "own_quotation"
+      ? `báo giá ${suggestion.source_no} còn hiệu lực của khách`
+      : suggestion.basis === "last_order"
+        ? `đơn ${suggestion.source_no} gần nhất của khách`
+        : "giá tham chiếu nội bộ";
+  return suggestion.raised_to_floor ? `${basis}, nâng lên giá sàn` : basis;
+}
 
 interface LineValues {
   unit_price: string;
@@ -87,7 +110,10 @@ function isStaleVersion(error: unknown): boolean {
 
 /**
  * Sales decides the price (Q7): per line the unit price, MOQ, lead time and
- * how the price follows copper, against the LME month master data holds. The
+ * how the price follows copper, against the LME month master data holds.
+ * DW1's suggestion for each line, with the row it came from, sits beside the
+ * price and fills only the empty fields when asked: a starting point, never
+ * recorded on its own (2026-10-28, "Sales nhập giá; DW1 chỉ đưa căn cứ"). The
  * figures are read on the server again (the LME value from the month named,
  * never from here), the decision is stamped with the caller as its pricer,
  * and the quotation findings are raised from it. Changing a price after
@@ -122,6 +148,37 @@ export function PricingForm({
       form.setFieldValue("lme_month", latest);
   }, [latest, form]);
   const resubmit = ["pending_approval", "approved"].includes(quote.status);
+  const suggested = suggestions(quote);
+
+  /** "Điền giá DW1 gợi ý": only into the fields still empty; Sales records. */
+  const fillSuggested = () => {
+    const lines = form.getFieldValue("lines") as Values["lines"];
+    for (const [lineNo, suggestion] of suggested) {
+      const key = `l${lineNo}`;
+      const typed = lines[key];
+      const fill: Partial<LineValues> = {};
+      if (!typed?.unit_price) fill.unit_price = suggestion.unit_price;
+      if (!typed?.moq && suggestion.moq) fill.moq = suggestion.moq;
+      if (!typed?.lead_time_days && suggestion.lead_time_days)
+        fill.lead_time_days = String(suggestion.lead_time_days);
+      const copper = suggestion.copper_basis;
+      const [low, high] = [
+        copper?.low_usd_per_tonne,
+        copper?.high_usd_per_tonne,
+      ];
+      if (
+        typeof low === "string" &&
+        typeof high === "string" &&
+        !typed?.low &&
+        !typed?.high
+      ) {
+        fill.copper = "lme_band";
+        fill.low = low;
+        fill.high = high;
+      }
+      form.setFieldValue(["lines", key], { ...typed, ...fill });
+    }
+  };
 
   const submit = async (values: Values) => {
     setFailed(0);
@@ -254,6 +311,25 @@ export function PricingForm({
               ),
             },
             {
+              title: "DW1 gợi ý",
+              key: "suggested",
+              render: (_, line) => {
+                const suggestion = suggested.get(line.line_no);
+                return suggestion ? (
+                  <Space orientation="vertical" size={0} className="max-w-56">
+                    <Money value={suggestion.unit_price} currency={currency} />
+                    <Typography.Text type="secondary">
+                      {basisText(suggestion)}
+                    </Typography.Text>
+                  </Space>
+                ) : (
+                  <Typography.Text type="secondary">
+                    Chưa có căn cứ để gợi ý
+                  </Typography.Text>
+                );
+              },
+            },
+            {
               title: "MOQ",
               key: "moq",
               render: (_, line) => (
@@ -380,7 +456,7 @@ export function PricingForm({
             <Input.TextArea rows={2} maxLength={2000} showCount />
           </Form.Item>
         </Space>
-        <Space>
+        <Space wrap>
           <Button
             type="primary"
             htmlType="submit"
@@ -388,7 +464,16 @@ export function PricingForm({
           >
             {quote.pricing ? "Ghi giá mới" : "Ghi giá"}
           </Button>
+          {suggested.size ? (
+            <Button onClick={fillSuggested}>Điền giá DW1 gợi ý</Button>
+          ) : null}
         </Space>
+        {suggested.size ? (
+          <Typography.Paragraph type="secondary" className="!mt-2 !mb-0">
+            Giá gợi ý chỉ điền vào ô còn trống; bạn sửa tuỳ ý và giá được ghi là
+            quyết định của bạn.
+          </Typography.Paragraph>
+        ) : null}
       </Form>
       <div className="mt-3">
         {theirs ? (

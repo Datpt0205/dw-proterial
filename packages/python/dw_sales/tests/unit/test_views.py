@@ -323,3 +323,30 @@ async def test_a_line_shows_the_attributes_its_candidates_were_computed_from() -
     )
     assert shown.cores is not None and shown.gauge is not None
     assert order_line(case, converted, NONE).basis.stated_attributes is None
+
+
+async def test_a_suggested_price_never_reveals_another_customers_price() -> None:
+    """With nothing of the requester's own to go on, DW1's suggestion is the
+    reference (other customers' prices): shown to a viewer who may see them,
+    and absent, not hidden, for one who may not."""
+    case, service = await _m10_priced()
+    evidence = [
+        row.model_copy(update={"own_history": (), "orders": ()})
+        for row in await service.price_evidence(SCOPE, case, as_of=date(2026, 10, 2))
+    ]
+
+    def suggestion(prices: PriceView) -> object:
+        view = quote_case(
+            case,
+            assigned_to=None,
+            release_manifest_ref=None,
+            today=date(2026, 10, 2),
+            prices=prices,
+            evidence_rows=evidence,
+        ).model_dump(mode="json")
+        return view["evidence"][0]["suggestion"]
+
+    every = suggestion(ALL)
+    assert isinstance(every, dict) and every["basis"] == "reference"
+    assert every["unit_price"] == "0.7050"
+    assert suggestion(OWN) is None

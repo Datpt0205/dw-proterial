@@ -831,6 +831,89 @@ class PriceEvidence(BaseModel):
         return self
 
 
+class SuggestionBasis(StrEnum):
+    """Where a suggested price comes from, strongest first."""
+
+    # The requester's own quotation of the item, valid on the day.
+    OWN_QUOTATION = "own_quotation"
+    # The price the requester last ordered the item at.
+    LAST_ORDER = "last_order"
+    # The policy's reference: other customers' prices, internal.
+    REFERENCE = "reference"
+
+
+class PriceSuggestion(BaseModel):
+    """DW1's starting point for one line's price (Q7, 2026-10-28: "Sales nhập
+    giá; DW1 chỉ đưa căn cứ"): a figure from the evidence, and which row it
+    came from. A different type from `PricingDecision`, so it can never stand
+    in for one: Sales takes it into the form, changes it or not, and records
+    the price as their own decision.
+    """
+
+    model_config = _FROZEN
+
+    line_no: LineNo
+    unit_price: UnitPrice
+    basis: SuggestionBasis
+    # The quotation or order it came from; None for the reference.
+    source_no: DocumentNo | None
+    # Raised to the policy floor because the basis lies under it.
+    raised_to_floor: bool
+    # Carried over from the requester's own quotation; None otherwise.
+    moq: Quantity | None = None
+    lead_time_days: LeadTimeDays | None = None
+    copper_basis: CopperBasis | None = None
+
+
+def suggest_price(evidence: PriceEvidence, *, others: bool) -> PriceSuggestion | None:
+    """The suggested price for one line, or None when nothing supports one.
+
+    The requester's own quotation valid on the day, in the request's currency,
+    whose copper basis still holds; else the price they last ordered
+    the item at, in that currency; else, only for a viewer who may see other
+    customers' prices (``others``), the policy's reference. A basis under the
+    policy floor is raised to the floor, rounded up to the basis' precision:
+    DW1 never suggests a price the quotation checks would hold.
+    """
+    own = next(
+        (
+            q
+            for q in evidence.own_history
+            if q.currency == evidence.currency
+            and q.is_valid_on(evidence.as_of)
+            and _copper_basis_holds(q, evidence.lme)
+        ),
+        None,
+    )
+    order = max(
+        (line for line in evidence.orders if line.currency == evidence.currency),
+        key=lambda line: (line.order_date, line.so_no),
+        default=None,
+    )
+    if own is not None:
+        price, basis, source = own.unit_price, SuggestionBasis.OWN_QUOTATION, own.quote_no
+    elif order is not None:
+        price, basis, source = order.unit_price, SuggestionBasis.LAST_ORDER, order.so_no
+    elif others and evidence.reference is not None:
+        price, basis, source = evidence.reference.price, SuggestionBasis.REFERENCE, None
+    else:
+        return None
+    floor = evidence.floor.price if evidence.floor is not None else None
+    raised = floor is not None and price < floor
+    if raised and floor is not None:
+        price = floor.quantize(Decimal(1).scaleb(_exponent(price)), ROUND_UP)
+    return PriceSuggestion(
+        line_no=evidence.line_no,
+        unit_price=price,
+        basis=basis,
+        source_no=source,
+        raised_to_floor=raised,
+        moq=own.moq if own is not None else None,
+        lead_time_days=own.lead_time_days if own is not None else None,
+        copper_basis=own.copper_basis if own is not None else None,
+    )
+
+
 # ------------------------------------------------------------ the decision --
 
 

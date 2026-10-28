@@ -49,6 +49,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from types import MappingProxyType
 from typing import Final, Literal, Protocol
 
 from dw_kernel.ids import TenantId, WorkspaceId
@@ -72,6 +73,7 @@ from dw_sales.domain.followups import (
     brief_slot,
     owed,
 )
+from dw_sales.domain.quotes import QuoteStatus
 
 logger = logging.getLogger("dw_sales.followups")
 
@@ -388,6 +390,20 @@ def _day(day: date) -> str:
     return day.strftime("%d/%m/%Y")
 
 
+# What the person does next, where DW1 has done the step before it: said in
+# the notice itself, so nobody has to open the case to learn it.
+_NEXT_STEP: Final[Mapping[tuple[CaseKind, str], str]] = MappingProxyType(
+    {
+        (CaseKind.QUOTE, QuoteStatus.YCBG_DRAFTED.value): (
+            "DW1 đã soạn YCBG: nhập vào Bravo rồi ghi số YCBG để gửi Design."
+        ),
+        (CaseKind.QUOTE, QuoteStatus.DESIGN_REPLIED.value): (
+            "Design đã trả lời: quyết định giá, DW1 đã gợi ý giá kèm căn cứ."
+        ),
+    }
+)
+
+
 def reminder_text(policy: SalesFollowups, due: Due, now: datetime) -> tuple[str, str]:
     """A reminder's title and body: the case's number and customer code, when
     the wait began and how long the threshold is. Never an amount."""
@@ -404,10 +420,11 @@ def reminder_text(policy: SalesFollowups, due: Due, now: datetime) -> tuple[str,
                     f"{what} {ref} của khách {customer} chờ {step} từ {since}. "
                     "Mở hồ sơ để giao hoặc tự xử lý.",
                 )
+            step = _NEXT_STEP.get((case.kind, case.status), "Mở hồ sơ để xem việc cần làm.")
             return (
                 f"Đến lượt bạn: {what} {ref}",
                 f"DW1 đã xong phần của mình; {what.lower()} {ref} của khách {customer} "
-                f"chờ bạn từ {since}. Mở hồ sơ để xem việc cần làm.",
+                f"chờ bạn từ {since}. {step}",
             )
         case Followup.ORDER_UNCONFIRMED, Stage.REMIND:
             hours = policy.order_unconfirmed.remind.after_hours
