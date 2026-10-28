@@ -49,10 +49,16 @@ describe("a case's place in its procedure (2026-10-27)", () => {
     expect(
       within(list).getByText("PIC đã tự kiểm · Đã nhập Bravo"),
     ).toBeTruthy();
-    expect(within(list).getByText("O7")).toBeTruthy();
+    // The WIV code opens the line under the title, here the current step's.
+    expect(within(list).getByText("O7 · Hồ sơ đang ở bước này")).toBeTruthy();
+    expect(within(list).getByText("O1")).toBeTruthy();
     // A step that holds no state of its own reads by its coverage.
     expect(within(list).getByText("DW1 gợi ý")).toBeTruthy();
-    expect(within(list).getAllByText("Hồ sơ đang ở bước này")).toHaveLength(1);
+    expect(within(list).getAllByText(/Hồ sơ đang ở bước này/)).toHaveLength(1);
     expect(screen.getByText("Đến lượt Điệu.")).toBeTruthy();
+    // Only the case's own step is drawn active, not the first one.
+    const active = list.querySelectorAll(".ant-steps-item-active");
+    expect(active).toHaveLength(1);
+    expect(active[0]!.textContent).toContain("Đã nhập Bravo");
   });
 });

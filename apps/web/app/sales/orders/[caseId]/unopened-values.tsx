@@ -24,7 +24,11 @@ export function UnopenedValues({
   values: Unopened[];
   onOpenSource: (field: string, lineNo: number | null) => void;
 }) {
-  if (!values.length) return null;
+  // Drawn at the cross-check only (Đạt's open question of 10-24, decided
+  // 10-28): before Bravo the preparer is still opening sources and the page
+  // already says which page they have not opened, so a list of every value
+  // nobody opened yet runs a screen long and tells them nothing new.
+  if (!values.length || order.status !== "uploaded_to_bravo") return null;
   // Grouped as the server ordered them: the PO's own values, then by line.
   const groups = new Map<number | null, string[]>();
   for (const v of values) {

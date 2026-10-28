@@ -256,7 +256,7 @@ describe("DW1 đã làm gì on a case (slice 3)", () => {
     expect(texts[3]).not.toContain("cho cả thư");
   });
 
-  it("says when DW1 has done nothing on the case", async () => {
+  it("says no model step ran, not that DW1 did nothing (the history shows its rule work)", async () => {
     api.caseActivity.mockResolvedValueOnce({
       case_kind: "order",
       case_id: CASE,
@@ -264,8 +264,11 @@ describe("DW1 đã làm gì on a case (slice 3)", () => {
     });
     renderSection();
     expect(
-      await screen.findByText("DW1 chưa làm gì ở hồ sơ này."),
+      await screen.findByText(
+        "Hồ sơ này không có bước nào DW1 dùng AI. Việc DW1 đọc và kiểm tra theo quy tắc nằm ở Hành trình hồ sơ.",
+      ),
     ).toBeTruthy();
+    expect(screen.queryByText(/DW1 chưa làm gì/)).toBeNull();
   });
 
   it("draws a failure with its request id, and a refusal as no access", async () => {

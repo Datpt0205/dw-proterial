@@ -179,6 +179,22 @@ describe("the cross-checker is told which values nobody opened (gap 5)", () => {
   );
 
   it(
+    "draws nothing before Bravo, while the preparer is still checking",
+    async () => {
+      order = {
+        ...orderInBravo(),
+        status: "in_review",
+        bravo_recorded_at: null,
+        unopened_values: [{ field: "unit_price", line_no: 1 }],
+      };
+      show("order");
+      await screen.findByText("Các dòng DW1 đọc");
+      expect(screen.queryByText(/chưa ai mở nguồn/)).toBeNull();
+    },
+    SLOW,
+  );
+
+  it(
     "draws nothing when the server sends no list (not a cross-checker)",
     async () => {
       order = { ...orderInBravo(), unopened_values: null };

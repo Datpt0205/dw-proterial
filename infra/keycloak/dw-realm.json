@@ -378,6 +378,14 @@
       "name": "dw-support",
       "path": "/dw-support",
       "realmRoles": ["support-staff"]
+    },
+    {
+      "name": "dw-it",
+      "path": "/dw-it",
+      "description": "IT của khách: mở khoá, đăng xuất, bật OTP cho người dùng. Trang quản trị chỉ hiện Users và Groups.",
+      "clientRoles": {
+        "realm-management": ["view-users", "manage-users", "query-users", "query-groups"]
+      }
     }
   ]
 }
