@@ -73,7 +73,6 @@ _PIC = frozenset(
         _S.ORDER_CROSS_CHECK,
         _S.QUOTE_PREPARE,
         _S.WORKER_PAUSE,
-        _S.RULES_PROPOSE,
         _S.MASTER_DATA_IMPORT,
     }
 )
@@ -100,6 +99,7 @@ GIANG = Caller(
         _S.ORDER_RESEND_CROSS_CHECK,
         _S.CASE_ASSIGN,
         _S.LAYOUT_APPROVE,
+        _S.RULES_PROPOSE,
         _S.RULES_APPROVE,
         _S.MASTER_DATA_APPROVE,
     },

@@ -116,6 +116,21 @@ class TenantRuleVersions:
             )
         self._held[version.version_id] = version
 
+    async def apply(self, version: RuleVersion, *, superseding: uuid.UUID | None) -> None:
+        if any(v.key == version.key and v.version == version.version for v in self._held.values()):
+            raise ConflictError(
+                "the sales store refused the change",
+                details={
+                    "version_id": str(version.version_id),
+                    "constraint": "uq_rule_versions_tenant_id_key_version",
+                },
+            )
+        if superseding is not None and superseding in self._held:
+            self._held[superseding] = self._held[superseding].model_copy(
+                update={"status": "superseded"}
+            )
+        self._held[version.version_id] = version
+
 
 def platform_book(*policies: Policy) -> TenantRuleBook:
     """A rule book holding ``policies`` as the platform layer and no tenant's

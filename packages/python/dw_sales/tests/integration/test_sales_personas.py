@@ -41,8 +41,6 @@ PIC = frozenset(
         "sales.order.cross_check",
         "sales.quote.prepare",
         "sales.worker.pause",
-        # Proposes a tenant's own rule version (57a241ea182b, ticket 19).
-        "sales.rules.propose",
         # Imports a master-data list (511ef1b71dee, ticket 41).
         "sales.master_data.import",
     }
@@ -55,7 +53,9 @@ HEAD = PIC | {
     "sales.case.assign",
     # Decides a PO layout a PIC mapped (63242ec52c4b, ticket 30).
     "sales.layout.approve",
-    # Decides a rule version a PIC proposed (57a241ea182b, ticket 19).
+    # Proposes a rule version and applies their own at once, and decides
+    # the admin's (57a241ea182b, ticket 19; 40266fbc98bf, 2026-10-28).
+    "sales.rules.propose",
     "sales.rules.approve",
     # Approves a master-data import (511ef1b71dee, ticket 41).
     "sales.master_data.approve",

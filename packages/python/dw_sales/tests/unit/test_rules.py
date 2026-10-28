@@ -36,8 +36,17 @@ from dw_sales.application.rules import (
     TenantRuleBook,
 )
 from dw_sales.domain.order_checks import OrderRules
-from dw_sales.evals.graders import AN, CALLERS, DIEU, GIANG, OUTSIDER, READER
+from dw_sales.evals.graders import AN as _AN
+from dw_sales.evals.graders import CALLERS, GIANG, READER
+from dw_sales.evals.graders import DIEU as _DIEU
+from dw_sales.evals.graders import OUTSIDER as _OUTSIDER
 from dw_sales.evals.world import ALPHA, BETA, Caller, SampleSet, World, open_world
+
+# An (and the others below) given the set `sales_rules_editor` (`sales.rules.propose`): since
+# 2026-10-28 a PIC proposes only when the admin gives them it.
+AN = replace(_AN, scopes=_AN.scopes | {SalesScopes.RULES_PROPOSE})
+DIEU = replace(_DIEU, scopes=_DIEU.scopes | {SalesScopes.RULES_PROPOSE})
+OUTSIDER = replace(_OUTSIDER, scopes=_OUTSIDER.scopes | {SalesScopes.RULES_PROPOSE})
 
 pytestmark = pytest.mark.unit
 
@@ -147,15 +156,60 @@ async def test_an_override_never_resolves_for_another_tenant() -> None:
 
 
 async def test_the_proposer_cannot_approve_their_own_version() -> None:
+    """Given the approval scope after proposing, the proposer still cannot
+    decide their own version: only the head's direct path skips a checker."""
     world = _world()
     before = await world.services.layouts.rules.rules(ALPHA)
     proposed = await world.services.rules.propose(
-        GIANG.context(), RuleKey.ORDER_RULES, _version(world, "9.0.2")
+        AN.context(), RuleKey.ORDER_RULES, _version(world, "9.0.2")
     )
+    promoted = replace(AN, scopes=AN.scopes | {SalesScopes.RULES_APPROVE})
     with pytest.raises(ConflictError) as refused:
-        await world.decide_rules(GIANG, proposed.version_id, approve=True, comment="Tự duyệt")
+        await world.decide_rules(promoted, proposed.version_id, approve=True, comment="Tự duyệt")
     assert refused.value.details["rule"] == "maker_checker"
     assert await world.services.layouts.rules.rules(ALPHA) == before
+
+
+async def test_the_heads_own_version_applies_at_once_and_is_audited_as_theirs() -> None:
+    """2026-10-28, Đạt: "Trưởng bộ phận tự áp dụng luôn". No approval is
+    opened; the version is in force, decided by its proposer, flagged as
+    applied directly, and supersedes the one before it."""
+    world = _world()
+    first = await _approved(world, "9.0.1")
+    applied = await world.services.rules.propose(
+        GIANG.context(), RuleKey.ORDER_RULES, _version(world, "9.0.2", cross_check_required=True)
+    )
+    assert (applied.status, applied.applied_directly) == ("approved", True)
+    assert applied.decided_by == applied.proposed_by == GIANG.user_id
+    assert applied.approval_id is None
+    listed = await world.services.rules.list(GIANG.context())
+    assert listed.in_force[RuleKey.ORDER_RULES] == "sales_order_rules@9.0.2"
+    assert {v.version_id: v.status for v in listed.versions}[first] == "superseded"
+    assert (await world.services.layouts.rules.rules(ALPHA)).cross_check_required
+    actions = [e.action for e in world.audit() if e.resource_id == str(applied.version_id)]
+    assert actions == ["sales.rules.applied"]
+
+
+async def test_a_pic_without_the_editor_set_proposes_nothing() -> None:
+    """Since 2026-10-28 the PIC role carries no `sales.rules.propose`."""
+    world = _world()
+    with pytest.raises(PermissionDeniedError):
+        await world.services.rules.propose(
+            _AN.context(), RuleKey.ORDER_RULES, _version(world, "9.0.3")
+        )
+
+
+async def test_the_head_does_not_overtake_a_proposal_waiting_on_the_key() -> None:
+    world = _world()
+    waiting = await world.services.rules.propose(
+        AN.context(), RuleKey.ORDER_RULES, _version(world, "9.0.4")
+    )
+    with pytest.raises(ConflictError) as refused:
+        await world.services.rules.propose(
+            GIANG.context(), RuleKey.ORDER_RULES, _version(world, "9.0.5")
+        )
+    assert refused.value.details["rule"] == ONE_OPEN_PROPOSAL
+    assert refused.value.details["version_id"] == str(waiting.version_id)
 
 
 async def test_a_pic_cannot_approve_and_a_reader_cannot_propose() -> None:

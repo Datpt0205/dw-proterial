@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -15,12 +16,19 @@ from pydantic import BaseModel
 
 from dw_api.exception_handlers import register_exception_handlers
 from dw_platform.application.access_context import AccessContext
-from dw_sales.evals.graders import AN, CALLERS, OUTSIDER, READER, Caller
+from dw_sales.application.access import SalesScopes
+from dw_sales.evals.graders import CALLERS, GIANG, READER, Caller
+from dw_sales.evals.graders import OUTSIDER as _OUTSIDER
 from dw_sales.evals.rule_drafts import template_xlsx
 from dw_sales.evals.world import BETA, SampleSet, World, open_world
 from dw_sales.presentation.routes import build_router
 
 pytestmark = pytest.mark.unit
+
+# Beta's member holding the proposer's scope, as beta's head would: a refusal
+# for want of a scope would hide whether isolation holds (2026-10-28: a PIC
+# proposes nothing).
+OUTSIDER = replace(_OUTSIDER, scopes=_OUTSIDER.scopes | {SalesScopes.RULES_PROPOSE})
 
 REPO = Path(__file__).resolve().parents[4]
 BASE = "/api/v1/sales/rules"
@@ -62,7 +70,7 @@ def world() -> World:
 
 
 async def test_a_template_is_queued_and_read_back(world: World) -> None:
-    async with _client(_app(world, AN)) as client:
+    async with _client(_app(world, GIANG)) as client:
         queued = await client.post(
             f"{BASE}/sales_bravo_upload/drafts", json=_body(template_xlsx(_TEMPLATE))
         )
@@ -76,7 +84,7 @@ async def test_a_template_is_queued_and_read_back(world: World) -> None:
 async def test_a_key_with_no_drafting_and_a_file_that_is_no_workbook_are_refused(
     world: World,
 ) -> None:
-    async with _client(_app(world, AN)) as client:
+    async with _client(_app(world, GIANG)) as client:
         emails = await client.post(f"{BASE}/sales_emails/drafts", json=_body(b"x"))
         pdf = await client.post(
             f"{BASE}/sales_bravo_upload/drafts", json=_body(b"%PDF-1", "mau.pdf")
@@ -88,7 +96,7 @@ async def test_a_key_with_no_drafting_and_a_file_that_is_no_workbook_are_refused
 
 
 async def test_a_reader_is_refused_and_another_tenant_finds_nothing(world: World) -> None:
-    async with _client(_app(world, AN)) as client:
+    async with _client(_app(world, GIANG)) as client:
         queued = await client.post(
             f"{BASE}/sales_bravo_upload/drafts", json=_body(template_xlsx(_TEMPLATE))
         )

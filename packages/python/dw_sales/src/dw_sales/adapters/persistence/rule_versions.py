@@ -39,6 +39,7 @@ def _version(row: RowMapping) -> RuleVersion:
         decided_at=row["decided_at"],
         comment=row["comment"],
         approval_id=row["approval_id"],
+        applied_directly=row["applied_directly"],
     )
 
 
@@ -101,6 +102,30 @@ class SqlRuleVersionStore:
             )
             if decided.first() is None:
                 raise ConflictError("the version is decided already", details=details)
+
+    async def apply(self, version: RuleVersion, *, superseding: uuid.UUID | None) -> None:
+        async with refusals_named(self.session, version_id=str(version.version_id)):
+            if superseding is not None:
+                await self.session.execute(
+                    sa.update(_V)
+                    .where(_V.c.id == superseding, _V.c.status == "approved")
+                    .values(status="superseded")
+                )
+            await self.session.execute(
+                sa.insert(_V).values(
+                    id=version.version_id,
+                    **scope_values(self.scope),
+                    key=version.key.value,
+                    version=version.version,
+                    document=dict(version.document),
+                    status=version.status,
+                    proposed_by=version.proposed_by,
+                    proposed_at=version.proposed_at,
+                    decided_by=version.decided_by,
+                    decided_at=version.decided_at,
+                    applied_directly=True,
+                )
+            )
 
 
 @dataclass(frozen=True)

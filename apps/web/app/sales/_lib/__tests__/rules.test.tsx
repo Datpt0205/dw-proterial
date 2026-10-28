@@ -62,6 +62,7 @@ const KPI_DOC = kpi("1.0.1", 8);
 function version(overrides: Partial<RuleVersion>): RuleVersion {
   return {
     version_id: "0aa10aa0-c939-7000-8539-31fd3e621700",
+    applied_directly: false,
     key: "sales_kpi",
     version: "1.0.1",
     ref: "sales_kpi@1.0.1",
@@ -320,6 +321,26 @@ describe("the rules page (tickets 38, 40)", () => {
       ]);
       expect(idempotency).toMatch(/^[0-9a-f-]{36}$/);
       await waitFor(() => expect(api.rules).toHaveBeenCalledTimes(2));
+    },
+    SLOW,
+  );
+
+  it(
+    "the head applies their own version at once: the action says so (2026-10-28)",
+    async () => {
+      scopes = [...scopes, "sales.rules.approve"];
+      renderPage();
+      const hours = await openKpi();
+      fireEvent.change(hours, { target: { value: "6" } });
+      fireEvent.blur(hours);
+      fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
+      expect(
+        await screen.findByRole("button", { name: "Áp dụng ngay" }),
+      ).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Gửi duyệt" })).toBeNull();
+      expect(
+        screen.getByText(/áp dụng ngay, không qua bước duyệt/),
+      ).toBeTruthy();
     },
     SLOW,
   );

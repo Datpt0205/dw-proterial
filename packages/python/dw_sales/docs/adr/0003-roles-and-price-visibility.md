@@ -95,3 +95,23 @@ Open: the admin console refuses only `platform.*` scopes on a grant, so a
 tenant IT member can grant a `sales_*` set without a price scope to anyone,
 themselves included (`sales_quote_approver`, for one). Whether IT may hand
 out Sales sets at all is owed by Đạt.
+
+## Addendum, 2026-10-28: the admin and the head change the rules, not a PIC
+
+Decided by Đạt: "các sales PIC chỉ nên theo config chung ... chỉ có role admin
+và IT đổi", then "giao hết cho admin cũng như sale trưởng, không cần IT", and
+"Trưởng bộ phận tự áp dụng luôn".
+
+- `sales_pic` loses `sales.rules.propose` (migration `40266fbc98bf`): a PIC
+  works to the settings, and the rules pages leave their navigation.
+- The head keeps `sales.rules.propose` with `sales.rules.approve`, and a
+  version the head proposes is **applied directly**: no approval is opened,
+  the row is decided by its proposer and marked `applied_directly`
+  (`ck_rule_versions_applied_directly` holds its shape), and the audit trail
+  says `sales.rules.applied`. A proposal already waiting on the key is
+  decided first. The maker-checker rule still holds for every other
+  proposer: the head approves what the admin proposes.
+- The admin (the demo's `dev|tam.ngo`, `org_admin`) proposes through
+  `sales_rules_editor`, as before; the 2026-10-21 rules above stand, so a
+  price-bearing key is the head's alone to change.
+- The set may still be given to a PIC by the admin; nothing does by default.

@@ -56,7 +56,7 @@ from dw_sales.domain.activity import StepOutcome
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.process import WIV_STEPS, Coverage, StepId
-from dw_sales.evals.graders import AN, READER
+from dw_sales.evals.graders import GIANG, READER
 from dw_sales.evals.world import ALPHA, NOW, Caller, measured_gate
 from dw_sales.testing.role_catalog import CatalogRow, StaticRoleCatalog
 
@@ -145,7 +145,7 @@ def _service(*measured: SalesScope, activity: _Activity | None = None) -> Proces
     )
 
 
-async def _view(caller: Caller = AN) -> ProcessSettingsView:
+async def _view(caller: Caller = GIANG) -> ProcessSettingsView:
     return await _service().view(caller.context())
 
 
@@ -411,7 +411,7 @@ async def test_a_caller_without_price_read_is_served_no_price_bearing_key() -> N
         assert path not in dumped, path
     assert [s.step_id for s in hidden.steps] == [s.value for s in StepId]
     # The search can fail: a PIC, who reads prices, is served all three.
-    shown = (await _view(AN)).model_dump_json()
+    shown = (await _view(GIANG)).model_dump_json()
     assert all(key.value in shown for key in PRICE_BEARING)
     assert "price.relative_tolerance" in shown
 
@@ -455,7 +455,7 @@ async def test_the_actors_are_the_catalogs_holders_of_the_steps_scopes() -> None
         _Activity(),
         FixedClock(NOW),
     )
-    assert all(step.actors == [] for step in (await empty.view(AN.context())).steps)
+    assert all(step.actors == [] for step in (await empty.view(GIANG.context())).steps)
 
 
 async def test_uses_are_served_per_step() -> None:
@@ -481,7 +481,7 @@ async def test_a_switched_on_step_with_no_measurement_is_served_not_in_effect() 
 
 
 async def test_a_switched_on_step_measured_at_its_bar_is_served_in_effect() -> None:
-    view = await _service(ALPHA).view(AN.context())
+    view = await _service(ALPHA).view(GIANG.context())
     models = [m for step in view.steps for m in step.models]
     assert len(models) == len(ModelStep)
     for model in models:
@@ -512,7 +512,7 @@ async def test_each_model_step_carries_its_share_of_the_last_7_days() -> None:
         _outcome(step, automatic=True, ago=timedelta(days=7, seconds=1)),
     )
 
-    view = await _service(activity=activity).view(AN.context())
+    view = await _service(activity=activity).view(GIANG.context())
 
     served = {m.step: m.live_share for s in view.steps for m in s.models}
     assert set(served) == set(ModelStep)

@@ -59,6 +59,7 @@ export const SCOPE = {
   assign: "sales.case.assign",
   layoutApprove: "sales.layout.approve",
   rulesPropose: "sales.rules.propose",
+  rulesApprove: "sales.rules.approve",
 } as const;
 
 interface SalesFrame {

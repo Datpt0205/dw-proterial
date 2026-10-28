@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import shutil
 import uuid
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -27,6 +28,7 @@ from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.adapters.policy_files import load_sales_policies
+from dw_sales.application.access import SalesScopes
 from dw_sales.application.handoffs import (
     PROMPT_TOKENS,
     REQUEST_HANDOFF,
@@ -49,9 +51,14 @@ from dw_sales.domain.handoffs import (
 from dw_sales.domain.mail_parts import newest_part
 from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.orders import OrderCase
-from dw_sales.evals.graders import AN, CALLERS, GIANG
+from dw_sales.evals.graders import AN as _AN
+from dw_sales.evals.graders import CALLERS, GIANG
 from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
+
+# An given the set `sales_rules_editor` (`sales.rules.propose`): since
+# 2026-10-28 a PIC proposes only when the admin gives them it.
+AN = replace(_AN, scopes=_AN.scopes | {SalesScopes.RULES_PROPOSE})
 
 pytestmark = pytest.mark.unit
 

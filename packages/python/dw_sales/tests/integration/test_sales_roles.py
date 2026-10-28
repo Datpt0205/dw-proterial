@@ -63,6 +63,8 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
         "sales.layout.approve",
         # Approves or rejects a tenant's own rule version (57a241ea182b, ticket 19).
         "sales.rules.approve",
+        # Proposes a rule version; a PIC no longer does (40266fbc98bf).
+        "sales.rules.propose",
         # Approves or rejects a master-data import (511ef1b71dee, ticket 41).
         "sales.master_data.approve",
     }
@@ -74,8 +76,10 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
     assert "sales.order.resend_cross_check" not in pic
     assert "sales.case.assign" not in pic
     assert "sales.layout.approve" not in pic
-    # Both propose a version of a Sales rule; only the head decides one.
-    assert "sales.rules.propose" in pic and "sales.rules.approve" not in pic
+    # The head proposes a rule version, and applies their own at once; a PIC
+    # proposes nothing (40266fbc98bf, 2026-10-28).
+    assert "sales.rules.propose" not in pic and "sales.rules.approve" not in pic
+    assert {"sales.rules.propose", "sales.rules.approve"} <= head
     # Both import a master-data list; only the head approves one (ticket 41).
     assert "sales.master_data.import" in pic and "sales.master_data.approve" not in pic
     assert roles["sales_viewer"] == {"sales.overview.read"}
@@ -87,7 +91,7 @@ async def test_the_sales_roles_are_the_spec_actor_table(migrator: AsyncEngine) -
     # decider for it besides the request's stamp (docs/adr/0011).
     assert permission_sets["sales_quote_approver"] == {"sales.quote.approve", "approvals.decide"}
     assert permission_sets["sales_export_control"] == {"sales.compliance.ack"}
-    # Tenant IT's: proposing a rule version, nothing else (59cf23d3a859). It
+    # The admin's: proposing a rule version, nothing else (59cf23d3a859). It
     # decides nothing, so not `approvals.decide` either.
     assert permission_sets["sales_rules_editor"] == {"sales.rules.propose"}
     async with migrator.connect() as conn:

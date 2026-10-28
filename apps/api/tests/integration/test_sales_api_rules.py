@@ -56,9 +56,32 @@ _CONFIGS = Path(__file__).resolve().parents[4] / "configs"
 PLATFORM = load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy")
 
 
+# Since 2026-10-28 (migration 40266fbc98bf) the PIC role proposes nothing:
+# the head applies directly, and anyone else proposes only with the set
+# `sales_rules_editor`, which the admin gives. These tests give it to An,
+# Diệu and Bảo (beta's only Sales member), as an admin would, so the path a
+# proposal waits on the head's approval stays exercised with prices in it.
+_EDITORS = (AN, DIEU, BAO)
+_GIVE = (
+    "UPDATE platform.memberships SET permission_set_keys ="
+    " permission_set_keys || '[\"sales_rules_editor\"]'::jsonb"
+    " WHERE user_id = :user AND NOT permission_set_keys ? 'sales_rules_editor'"
+)
+_TAKE = (
+    "UPDATE platform.memberships SET permission_set_keys ="
+    " permission_set_keys - 'sales_rules_editor' WHERE user_id = :user"
+)
+
+
 @pytest.fixture
 async def rules_api(api: Api, migrator: AsyncEngine) -> AsyncIterator[Api]:
+    async with migrator.begin() as conn:
+        for subject in _EDITORS:
+            await conn.execute(sa.text(_GIVE), {"user": user_id(subject)})
     yield api
+    async with migrator.begin() as conn:
+        for subject in _EDITORS:
+            await conn.execute(sa.text(_TAKE), {"user": user_id(subject)})
     # The seeded version back in force; the versions a test made, and the
     # approvals they opened, gone.
     async with migrator.begin() as conn:
@@ -127,7 +150,7 @@ def _document(version: str, **changes: Any) -> dict[str, Any]:
 async def test_the_seeded_version_went_through_the_route_and_is_in_force(
     rules_api: Api, migrator: AsyncEngine
 ) -> None:
-    listed = await rules_api.as_(AN).get("/rules")
+    listed = await rules_api.as_(GIANG).get("/rules")
     assert listed.status_code == 200, listed.text
     body = listed.json()
     assert body["in_force"]["sales_order_rules"] == DEMO.version
@@ -137,10 +160,10 @@ async def test_the_seeded_version_went_through_the_route_and_is_in_force(
     (seeded,) = [v for v in body["versions"] if v["version"] == DEMO.policy_version]
     assert (seeded["status"], seeded["proposed_by"], seeded["decided_by"]) == (
         "approved",
-        str(user_id(AN)),
+        str(user_id(GIANG)),
         str(user_id(GIANG)),
     )
-    assert seeded["approval_id"] is not None
+    assert (seeded["approval_id"], seeded["applied_directly"]) == (None, True)
     async with migrator.connect() as conn:
         actions = (
             (
@@ -155,7 +178,7 @@ async def test_the_seeded_version_went_through_the_route_and_is_in_force(
             .scalars()
             .all()
         )
-    assert list(actions) == ["sales.rules.proposed", "sales.rules.approved"]
+    assert list(actions) == ["sales.rules.applied"]
     # A case DW1 checks is stamped with it.
     case = await order_of(rules_api.as_(AN), "M01")
     assert case["rules_version"] == DEMO.version
@@ -171,15 +194,8 @@ async def test_proposed_by_a_pic_approved_by_the_head_and_stamped_on_the_next_ca
     decision = {"approve": True, "comment": "Đồng ý"}
 
     # Without `sales.rules.approve` the stamped approval is not even visible;
-    # the head may not approve her own (on another key: 9.0.1 holds this
-    # one's single open proposal); a decision says why.
+    # a decision says why.
     assert (await dieu.decide(approval_id, decision)).status_code == 404
-    kpi = PLATFORM.kpi.model_dump(mode="json", by_alias=True)
-    own = await giang.post("/rules/sales_kpi/versions", {"document": _bumped(kpi, "9.0.2")})
-    assert own.status_code == 200, own.text
-    refused = await giang.decide(own.json()["approval_id"], decision)
-    assert refused.status_code == 409
-    assert refused.json()["details"]["rule"] == "maker_checker"
     assert (await giang.decide(approval_id, {"approve": True, "comment": ""})).status_code == 409
 
     approved = await giang.decide(approval_id, decision)
@@ -198,13 +214,26 @@ async def test_proposed_by_a_pic_approved_by_the_head_and_stamped_on_the_next_ca
     assert comments["9.0.1"] == "Đồng ý"
     assert (await order_of(an, "M01"))["rules_version"] == "sales_order_rules@9.0.1"
 
-    # The database refuses a decision by the proposer whatever writes it, and
-    # a proposal that waits on no approval.
+    # The database refuses a decision by the proposer whatever writes it, a
+    # proposal that waits on no approval, and a version "applied directly"
+    # that was proposed for approval.
+    kpi = PLATFORM.kpi.model_dump(mode="json", by_alias=True)
+    own = await an.post("/rules/sales_kpi/versions", {"document": _bumped(kpi, "9.0.2")})
+    assert own.status_code == 200, own.text
     async with migrator.begin() as conn:
         with pytest.raises(sa.exc.IntegrityError, match="ck_rule_versions_checker_not_maker"):
             await conn.execute(
                 sa.text(
                     "UPDATE sales.rule_versions SET status = 'rejected',"
+                    " decided_by = proposed_by, decided_at = now() WHERE id = :id"
+                ),
+                {"id": own.json()["version_id"]},
+            )
+    async with migrator.begin() as conn:
+        with pytest.raises(sa.exc.IntegrityError, match="ck_rule_versions_applied_directly"):
+            await conn.execute(
+                sa.text(
+                    "UPDATE sales.rule_versions SET status = 'approved', applied_directly = true,"
                     " decided_by = proposed_by, decided_at = now() WHERE id = :id"
                 ),
                 {"id": own.json()["version_id"]},
@@ -221,6 +250,42 @@ async def test_proposed_by_a_pic_approved_by_the_head_and_stamped_on_the_next_ca
                 sa.text("UPDATE sales.rule_versions SET approval_id = :other WHERE id = :id"),
                 {"other": uuid.uuid4(), "id": own.json()["version_id"]},
             )
+
+
+async def test_the_heads_own_version_is_in_force_at_once_and_a_pic_proposes_nothing(
+    api: Api, migrator: AsyncEngine
+) -> None:
+    """2026-10-28: the head applies directly, with no approval opened; a PIC
+    without the editor set is refused (this test runs without `rules_api`,
+    so nobody was given it)."""
+    an, giang = api.as_(AN), api.as_(GIANG)
+    refused = await an.post("/rules/sales_order_rules/versions", {"document": _document("9.0.7")})
+    assert refused.status_code == 403, refused.text
+    assert (await an.get("/rules")).status_code == 403
+    waiting = await _open_rule_approvals(migrator)
+
+    applied = await giang.post(
+        "/rules/sales_order_rules/versions", {"document": _document("9.0.7")}
+    )
+
+    assert applied.status_code == 200, applied.text
+    body = applied.json()
+    assert (body["status"], body["applied_directly"], body["approval_id"]) == (
+        "approved",
+        True,
+        None,
+    )
+    assert body["decided_by"] == body["proposed_by"] == str(user_id(GIANG))
+    assert await _open_rule_approvals(migrator) == waiting
+    listed = (await giang.get("/rules")).json()
+    assert listed["in_force"]["sales_order_rules"] == "sales_order_rules@9.0.7"
+    assert (await order_of(an, "M01"))["rules_version"] == "sales_order_rules@9.0.7"
+    async with migrator.begin() as conn:
+        await conn.execute(sa.text("DELETE FROM sales.rule_versions WHERE version = '9.0.7'"))
+        await conn.execute(
+            sa.text("UPDATE sales.rule_versions SET status = 'approved' WHERE version = :v"),
+            {"v": DEMO.policy_version},
+        )
 
 
 async def test_an_override_never_resolves_for_another_tenant(rules_api: Api) -> None:
@@ -447,7 +512,7 @@ async def test_tenant_it_is_shown_no_price_bearing_rule_and_cannot_propose_one(
     for hidden in (*price_keys, floor, "copper_adders"):
         assert hidden not in listed.text, hidden
     # The search can fail: An, who reads prices, is shown all three.
-    shown = (await rules_api.as_(AN).get("/rules")).text
+    shown = (await rules_api.as_(GIANG).get("/rules")).text
     assert all(text in shown for text in (*price_keys, floor))
     for key, document in (
         ("sales_pricing", _bumped(pricing, "9.0.2")),

@@ -7,8 +7,9 @@ runtime, never as an edit to the checkout (`CLAUDE.md`, "Per-tenant
 artifacts"). The platform layer is the file in ``configs/policies``; a
 tenant's layer is a version a person proposed and a second person approved.
 
-- **Proposed** by a holder of `sales.rules.propose` (PIC, head, or tenant IT
-  holding the set `sales_rules_editor`), validated by the key's own schema; a
+- **Proposed** by a holder of `sales.rules.propose`: the Sales head, or the
+  admin through the set `sales_rules_editor` (2026-10-28: a PIC works to the
+  settings and proposes nothing), validated by the key's own schema; a
   key that holds prices or price policy (`PRICE_BEARING`) also asks for
   `sales.price.read`. The proposal opens a run-less platform approval,
   `sales.rules`, in its transaction, stamped with `sales.rules.approve` and
@@ -24,6 +25,10 @@ tenant's layer is a version a person proposed and a second person approved.
   it does not refuse is a proposal started from a version superseded since:
   a proposal records no base, and the head reads its diff against the
   version in force (`rule-approval.tsx`).
+- **Applied directly** when the proposer is the head (holds
+  `sales.rules.approve`; Đạt, 2026-10-28): no approval is opened, the version
+  is in force at once, decided by its proposer, `applied_directly`, audited
+  `sales.rules.applied`. A proposal waiting on the key is decided first.
 - **Approved or rejected** on that approval by a holder of the stamp (the
   head), never by its proposer: `sales.` is strict, `RuleDecisions.check` (the
   decision guard) refuses what the version would refuse before it is
@@ -207,13 +212,21 @@ class RuleVersion(BaseModel):
     # The `sales.rules` approval it is decided on; None on a version decided
     # before ticket 38 moved the decision onto the platform's approvals.
     approval_id: uuid.UUID | None = None
+    # Applied by the head who wrote it, with no approval (2026-10-28: "Trưởng
+    # bộ phận tự áp dụng luôn"): the one version its proposer decides.
+    applied_directly: bool = False
 
     @model_validator(mode="after")
     def _decided_by_another(self) -> Self:
         decided = self.decided_by is not None
         if (self.status == "proposed") == decided or decided != (self.decided_at is not None):
             raise ValueError("a decided version names who decided it and when")
-        if self.decided_by is not None and self.decided_by == self.proposed_by:
+        if self.applied_directly:
+            if self.approval_id is not None or self.decided_by != self.proposed_by:
+                raise ValueError("a version applied directly is decided by its proposer alone")
+            if self.status not in ("approved", "superseded"):
+                raise ValueError("a version applied directly is in force or superseded")
+        elif self.decided_by is not None and self.decided_by == self.proposed_by:
             raise ValueError("the proposer of a version does not decide it")
         return self
 
@@ -300,6 +313,12 @@ class RuleVersionStorePort(Protocol):
     async def decide(self, version: RuleVersion, *, superseding: uuid.UUID | None) -> None:
         """The decision on a proposal (refused with a conflict when it is no
         longer one), and the approved version it replaces, superseded."""
+        ...
+
+    async def apply(self, version: RuleVersion, *, superseding: uuid.UUID | None) -> None:
+        """A version the head applied directly, written in force, and the
+        approved version it replaces, superseded. Refused with a conflict when
+        the key already has the version."""
         ...
 
 
@@ -482,6 +501,8 @@ class RuleVersionView(BaseModel):
     document: Mapping[str, Any]
     # The platform approval it is decided on (`POST /approvals/{id}/decisions`).
     approval_id: uuid.UUID | None
+    # Applied by the head who wrote it, with no approval.
+    applied_directly: bool = False
 
 
 class PlatformRuleView(BaseModel):
@@ -568,6 +589,7 @@ def _view(version: RuleVersion) -> RuleVersionView:
         comment=version.comment,
         document=version.document,
         approval_id=version.approval_id,
+        applied_directly=version.applied_directly,
     )
 
 
@@ -688,6 +710,8 @@ class SalesRulesService:
             self.readiness, self.book, sales_scope(context), policy
         ):
             raise refusal(unready)
+        if self.gate.allows(context, SalesScopes.RULES_APPROVE):
+            return await self._apply_directly(context, key, policy)
         version = RuleVersion(
             version_id=self.ids.new_uuid(),
             key=key,
@@ -730,6 +754,41 @@ class SalesRulesService:
                 raise await self._one_open(context, key, waiting) from None
             await work.audit.append(
                 _audit(self.ids, self.clock, context, "sales.rules.proposed", version)
+            )
+            await work.commit()
+        return _view(version)
+
+    async def _apply_directly(
+        self, context: AccessContext, key: RuleKey, policy: Policy
+    ) -> RuleVersionView:
+        """The head's own version, in force at once (2026-10-28): the head
+        is the one who approves, so an approval they could not decide would
+        hold it forever. A proposal waiting on the key is decided first, so
+        what someone else asked for is never overtaken unseen."""
+        now = self.clock.now()
+        version = RuleVersion(
+            version_id=self.ids.new_uuid(),
+            key=key,
+            version=policy.ref.partition("@")[2],
+            document=policy.model_dump(mode="json", by_alias=True),
+            status="approved",
+            proposed_by=context.principal_id,
+            proposed_at=now,
+            decided_by=context.principal_id,
+            decided_at=now,
+            applied_directly=True,
+        )
+        async with self.uow(sales_scope(context)) as work:
+            versions = await work.rule_versions.list_all()
+            waiting = next((v for v in versions if v.key == key and v.status == "proposed"), None)
+            if waiting is not None:
+                raise await self._one_open(context, key, waiting)
+            current = next((v for v in versions if v.key == key and v.status == "approved"), None)
+            await work.rule_versions.apply(
+                version, superseding=current.version_id if current is not None else None
+            )
+            await work.audit.append(
+                _audit(self.ids, self.clock, context, "sales.rules.applied", version)
             )
             await work.commit()
         return _view(version)

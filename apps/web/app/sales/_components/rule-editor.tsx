@@ -26,6 +26,7 @@ import {
 import { UploadOutlined } from "@ant-design/icons";
 import { ApiError, type SalesSchemas } from "@dw/api-client";
 import { LoadError } from "../../../components/load-error";
+import { useAuth } from "../../../lib/auth/auth-context";
 import { errorCode } from "../../../lib/error-message";
 import { salesApi } from "../_lib/api";
 import { toBase64 } from "../_lib/catalog";
@@ -66,6 +67,7 @@ import {
 } from "../_lib/rule-schema";
 import { useAction } from "../_lib/use-action";
 import { useResource } from "../_lib/use-resource";
+import { SCOPE } from "./sales-frame";
 import { RuleDiffView } from "./rule-diff-view";
 import { RuleFields, type LockedField } from "./rule-form";
 
@@ -269,6 +271,9 @@ function Editor({
   onHeld?: () => void;
 }) {
   const { message } = App.useApp();
+  const { hasScope } = useAuth();
+  // The head's own version applies at once (2026-10-28); the server decides.
+  const appliesAtOnce = hasScope(SCOPE.rulesApprove);
   const discard = useConfirmDiscard();
   const { run, pending } = useAction();
   const [form] = Form.useForm();
@@ -476,7 +481,9 @@ function Editor({
       id,
       { ruleKey, ...body },
       (key) => salesApi().proposeRule(ruleKey, body, key),
-      `Đã gửi duyệt phiên bản mới của "${RULE_KEY[ruleKey]}". Người khác duyệt trên trang Duyệt.`,
+      appliesAtOnce
+        ? `Đã áp dụng phiên bản mới của "${RULE_KEY[ruleKey]}".`
+        : `Đã gửi duyệt phiên bản mới của "${RULE_KEY[ruleKey]}". Trưởng bộ phận duyệt trên trang Duyệt.`,
     );
     if (result.ok) return onProposed();
     setError(result.error);
@@ -521,7 +528,7 @@ function Editor({
                 disabled={blocked !== null}
                 onClick={() => void propose()}
               >
-                Gửi duyệt
+                {appliesAtOnce ? "Áp dụng ngay" : "Gửi duyệt"}
               </Button>
             </Tooltip>
             <Button onClick={() => setStep("edit")}>Quay lại sửa</Button>
@@ -532,8 +539,11 @@ function Editor({
       <div className="space-y-4">
         <Typography.Paragraph>
           Bắt đầu từ một phiên bản, sửa, rồi xem các thay đổi so với bản đang áp
-          dụng trước khi gửi duyệt. Máy chủ kiểm lại toàn bộ tài liệu, và từ
-          chối số phiên bản đã dùng.
+          dụng trước khi {appliesAtOnce ? "áp dụng" : "gửi duyệt"}. Máy chủ kiểm
+          lại toàn bộ tài liệu, và từ chối số phiên bản đã dùng.
+          {appliesAtOnce
+            ? " Bạn là Trưởng bộ phận nên phiên bản áp dụng ngay, không qua bước duyệt; lịch sử vẫn ghi lại."
+            : ""}
         </Typography.Paragraph>
         {scope ? (
           <Alert

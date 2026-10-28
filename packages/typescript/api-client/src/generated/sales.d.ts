@@ -4478,6 +4478,11 @@ export interface components {
          *     to whoever may also read prices.
          */
         RuleVersionView: {
+            /**
+             * Applied Directly
+             * @default false
+             */
+            applied_directly: boolean;
             /** Approval Id */
             approval_id: string | null;
             /** Comment */
