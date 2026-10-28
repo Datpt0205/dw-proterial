@@ -40,7 +40,7 @@ from dw_platform.adapters.persistence.repositories import (
 )
 from dw_platform.testing.seed_env import sid
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
-from dw_sales.application.artifacts_service import ORDER_GATES, QUOTE_GATES
+from dw_sales.application.artifacts_service import ORDER_GATES, QUOTE_GATES, SIGNED_KIND
 from dw_sales.application.case_store import ArtifactRecord
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import CaseKind
@@ -111,11 +111,15 @@ async def test_an_order_artifact_before_its_state_is_refused(api: Api, kind: str
     assert rendering.status_code == 409, rendering.text
 
 
-@pytest.mark.parametrize("kind", sorted(QUOTE_GATES))
+# A complete request has its YCBG drafted at once (2026-10-28), so the YCBG
+# draft is open from the first state the API shows; its gate before that is
+# unit-tested (`test_artifacts.py`).
+@pytest.mark.parametrize("kind", sorted(set(QUOTE_GATES) - {"ycbg_draft"}))
 async def test_a_quote_artifact_before_its_state_is_refused(api: Api, kind: str) -> None:
     dieu = api.as_(DIEU)
-    opened = await process(dieu, "M10")  # received: no artifact's state yet
+    opened = await process(dieu, "M10")  # YCBG drafted: no other artifact's state yet
     case = await quote(dieu, opened["case_id"])
+    assert case["status"] == "ycbg_drafted"
     artifact = await _artifact(api, kind, CaseKind.QUOTE, case)
 
     response = await dieu.get(f"/quotes/{case['case_id']}/artifacts/{artifact}")
@@ -125,7 +129,8 @@ async def test_a_quote_artifact_before_its_state_is_refused(api: Api, kind: str)
     )
 
     assert response.status_code == 409
-    assert rendering.status_code == 409, rendering.text
+    # The signed copy is uploaded, never rendered: there is no such kind to render.
+    assert rendering.status_code == (422 if kind == SIGNED_KIND else 409), rendering.text
 
 
 # ------------------------------------------------------- the upload file --

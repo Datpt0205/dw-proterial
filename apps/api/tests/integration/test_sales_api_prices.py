@@ -5,7 +5,7 @@ without Sales scopes call every Sales route, the platform's audit log and the
 rules each is listed, and no known price string is in anything they get back. The same walk as An,
 who may see prices, does find them: the search can fail. The rules leg can
 fail too: the tenant's own pricing version holds a known price as its floor
-margin, and An's rules list shows it.
+margin, and Giang's rules list shows it.
 """
 
 from __future__ import annotations
@@ -97,20 +97,18 @@ async def _decided_world(api: Api) -> dict[str, Any]:
     m04 = await decide(an, m04, "prepare")
     m10 = await submitted(dieu, await replied(dieu, "M10", "YCBG-2609-030", "M25"))
     assert (await approve(giang, m10)).status_code == 200
-    # A tenant pricing version whose floor margin is a known price, proposed
-    # by An and approved by Giang after both cases were priced (not carried
-    # out, so it prices nothing): GET /rules lists its document to whoever
-    # may see the key, and the rules leg below can find it.
+    # A tenant pricing version whose floor margin is a known price, applied
+    # by the head after both cases were priced (2026-10-28: a PIC proposes no
+    # rule, the head's own version applies at once), so it prices nothing
+    # here: GET /rules lists its document to whoever may see the key, and the
+    # rules leg below can find it.
     document = _PRICING.model_dump(mode="json", by_alias=True)
-    proposed = await an.post(
+    applied = await giang.post(
         "/rules/sales_pricing/versions",
         {"document": {**document, "policy_version": "9.0.1", "floor_margin": DECIDED_PRICE}},
     )
-    assert proposed.status_code == 200, proposed.text
-    decided = await giang.decide(
-        proposed.json()["approval_id"], {"approve": True, "comment": "Đồng ý"}
-    )
-    assert decided.status_code == 200, decided.text
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["applied_directly"] is True
     return {"m04": m04, "m10": m10}
 
 
@@ -183,12 +181,13 @@ async def test_the_same_walk_finds_prices_for_a_pic_who_may_see_them(api: Api) -
 async def test_the_rules_leg_finds_the_tenants_price_rule_for_a_pic_who_may_see_it(
     api: Api,
 ) -> None:
-    """The control for the rules leg: An reads prices, and the floor margin
-    the tenant's pricing version holds is a leak in what he is shown. Tâm's
-    walk above asserting none is therefore a claim that can fail."""
+    """The control for the rules leg: Giang reads prices and edits the
+    rules, and the floor margin the tenant's pricing version holds is a leak
+    in Giang's rules list. Tâm's walk above asserting none is therefore a
+    claim that can fail."""
     await _decided_world(api)
 
-    found = [hit for body in await _rules(api.as_(AN)) for hit in leaks(body)]
+    found = [hit for body in await _rules(api.as_(GIANG)) for hit in leaks(body)]
 
     assert any(re.escape(DECIDED_PRICE) in hit for hit in found), found
 
