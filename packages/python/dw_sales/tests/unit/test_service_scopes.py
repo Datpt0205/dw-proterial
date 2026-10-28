@@ -80,7 +80,9 @@ processing = ProcessingService(STORE, GATE, CLOCK, IDS, STORE)
 steps = CaseDecisions(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)
 RUN = uuid.UUID(int=10)
 sources = SourceService(STORE, GATE, CLOCK, STORE, STORE, NoSourceCache())
-artifacts = ArtifactService(STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE, STORE)
+artifacts = ArtifactService(
+    STORE, GATE, STORE, CLOCK, IDS, STORE, STORE, STORE, STORE, STORE, STORE
+)
 master = MasterDataService(GATE, STORE)
 overview = OverviewService(STORE, GATE, CLOCK, STORE, STORE, STORE, STORE)
 worker = WorkerService(STORE, GATE, CLOCK, IDS, STORE, STORE, STORE)

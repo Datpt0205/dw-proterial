@@ -575,6 +575,8 @@ async def test_a_proposer_without_price_read_is_shown_no_price_bearing_key() -> 
         RuleKey.BRAVO_UPLOAD,
         RuleKey.HANDOFFS,
         RuleKey.FOLLOWUPS,
+        # Questions and approvers' titles: no price (WIV-03-032, 2026-10-28).
+        RuleKey.EXPORT_CONTROL,
     }
     # The search can fail: a PIC, who reads prices, is shown them.
     assert {v.key for v in (await rules.list(AN.context())).versions} >= PRICE_BEARING

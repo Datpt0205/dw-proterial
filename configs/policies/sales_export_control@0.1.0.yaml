@@ -1,0 +1,74 @@
+schema_version: "1.0"
+policy_id: sales_export_control
+policy_version: "0.1.0"
+
+# Export control, WIV-03-032 (Sales, 2026-10-28). Validated by
+# `dw_sales.domain.export_control.SalesExportControl`.
+#
+# A SAMPLE. Proterial's own red-flag form and ESF approval levels have not
+# arrived (customer questionnaire, questions 6 and 9): these questions are
+# the commonly published "know your customer" red flags, and the approvers
+# are a guess at the titles. The page says so while `sample` is true. The
+# tenant replaces both through /sales/rules, never by editing this file.
+#
+# DW1 decides nothing here: a person answers each question and records each
+# result. A "yes" to any question escalates the red-flag step, which holds the
+# customer's orders for the export-control PIC as a missing NOC or ESF does.
+
+sample: true
+
+red_flags:
+  - id: rf01
+    text: "Tên hoặc địa chỉ của khách, hoặc của người nhận hàng, giống với một bên trong Denial list."
+  - id: rf02
+    text: "Khách ngần ngại cho biết mục đích sử dụng cuối cùng của sản phẩm."
+  - id: rf03
+    text: "Tính năng của sản phẩm không phù hợp với ngành nghề kinh doanh của khách."
+  - id: rf04
+    text: "Số lượng hoặc chủng loại đặt hàng không phù hợp với quy mô hay thiết bị của nơi nhận."
+  - id: rf05
+    text: "Khách trả trước hoặc trả tiền mặt cho đơn hàng giá trị lớn, khác cách thanh toán thông thường."
+  - id: rf06
+    text: "Khách ít hiểu biết về sản phẩm, hoặc từ chối hướng dẫn, bảo hành mà sản phẩm thường cần."
+  - id: rf07
+    text: "Ngày giao, địa điểm giao hoặc tuyến vận chuyển bất thường; người nhận cuối là công ty giao nhận."
+  - id: rf08
+    text: "Khách lảng tránh khi được hỏi sản phẩm dùng trong nước hay xuất khẩu lại."
+  - id: rf09
+    text: "Khách yêu cầu giữ kín điểm đến cuối cùng hoặc người sử dụng cuối."
+  - id: rf10
+    text: "Bao bì hoặc ghi nhãn yêu cầu không phù hợp với cách vận chuyển hay điểm đến đã nêu."
+
+# Who signs the ESF, in the order they sign. Printed on the form DW1 drafts.
+esf_approvers:
+  - "PIC kiểm soát xuất khẩu"
+  - "Trưởng bộ phận Sales"
+  - "Tổng giám đốc"
+
+# The NOEC mail asking the customer to confirm their NOC, in the language
+# the customer master records. DW1 drafts it; the PIC sends it from their own
+# mailbox. {customer_name} is filled in. A sample wording until Proterial's.
+noec_email:
+  subject:
+    vi: "Đề nghị xác nhận NOC - {customer_name}"
+    en: "Request for NOC confirmation - {customer_name}"
+    ja: "NOC確認のお願い - {customer_name}"
+  body:
+    vi: |
+      Kính gửi {customer_name},
+
+      Để tiếp tục giao dịch theo quy định kiểm soát xuất khẩu của Proterial, xin Quý công ty vui lòng xác nhận NOC và gửi lại cho chúng tôi.
+
+      Trân trọng.
+    en: |
+      Dear {customer_name},
+
+      To continue our business under Proterial's export control programme, please confirm the NOC and return it to us.
+
+      Best regards.
+    ja: |
+      {customer_name} 御中
+
+      弊社の輸出管理規程に基づき取引を継続するため、NOCのご確認をいただき、ご返送くださいますようお願い申し上げます。
+
+      よろしくお願い申し上げます。

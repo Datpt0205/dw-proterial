@@ -361,6 +361,137 @@
     "title": "SalesEmailCopy",
     "type": "object"
   },
+  "sales_export_control": {
+    "$defs": {
+      "NoecEmail": {
+        "additionalProperties": false,
+        "description": "The NOEC mail asking a customer for their NOC, per language the\ncustomer master records. ``{customer_name}`` is filled in.",
+        "properties": {
+          "body": {
+            "additionalProperties": {
+              "maxLength": 4000,
+              "minLength": 10,
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "vi",
+                "en",
+                "ja"
+              ]
+            },
+            "title": "Body",
+            "type": "object"
+          },
+          "subject": {
+            "additionalProperties": {
+              "maxLength": 200,
+              "minLength": 3,
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "vi",
+                "en",
+                "ja"
+              ]
+            },
+            "title": "Subject",
+            "type": "object"
+          }
+        },
+        "required": [
+          "subject",
+          "body"
+        ],
+        "title": "NoecEmail",
+        "type": "object"
+      },
+      "RedFlagQuestion": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "pattern": "^rf\\d{2}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 300,
+            "minLength": 5,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "RedFlagQuestion",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "The tenant's export-control choices: the red-flag questions and who\napproves an ESF, in order. A sample until Proterial's own arrive.",
+    "properties": {
+      "esf_approvers": {
+        "description": "Các cấp duyệt ESF, theo thứ tự ký.",
+        "items": {
+          "maxLength": 80,
+          "minLength": 2,
+          "type": "string"
+        },
+        "maxItems": 8,
+        "minItems": 1,
+        "title": "Esf Approvers",
+        "type": "array"
+      },
+      "noec_email": {
+        "$ref": "#/$defs/NoecEmail",
+        "description": "Thư NOEC đề nghị khách xác nhận NOC."
+      },
+      "policy_id": {
+        "const": "sales_export_control",
+        "title": "Policy Id",
+        "type": "string"
+      },
+      "policy_version": {
+        "pattern": "^\\d+\\.\\d+\\.\\d+$",
+        "title": "Policy Version",
+        "type": "string"
+      },
+      "red_flags": {
+        "description": "Bộ câu hỏi Red flag Indicator.",
+        "items": {
+          "$ref": "#/$defs/RedFlagQuestion"
+        },
+        "maxItems": 40,
+        "minItems": 1,
+        "title": "Red Flags",
+        "type": "array"
+      },
+      "sample": {
+        "description": "Bản mẫu: câu hỏi và cấp duyệt chưa phải của Proterial. Tắt khi đã thay bằng bộ thật.",
+        "title": "Sample",
+        "type": "boolean"
+      },
+      "schema_version": {
+        "pattern": "^1\\.0$",
+        "title": "Schema Version",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "policy_id",
+      "policy_version",
+      "sample",
+      "red_flags",
+      "esf_approvers",
+      "noec_email"
+    ],
+    "title": "SalesExportControl",
+    "type": "object"
+  },
   "sales_followups": {
     "$defs": {
       "AfterStage": {

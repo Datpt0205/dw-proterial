@@ -55,6 +55,7 @@ from dw_platform.domain.audit import AuditEntry, AuditEvent
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.assembly import model_requests, step_model
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
+from dw_sales.adapters.memory_export_control import MemoryExportControl
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path
@@ -105,6 +106,7 @@ from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSettlement
 from dw_sales.application.runs import subject_of
+from dw_sales.application.screened_catalog import ScreenedCatalog
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, required_regions
@@ -908,6 +910,8 @@ class World:
     # Each tenant's live measurements of the model steps (ADR 0005, addendum
     # of 2026-10-23), which the gate in front of every model call reads.
     measurements: MemoryModelMeasurements
+    # Export-control results (WIV-03-032), every workspace's.
+    export_control: MemoryExportControl
 
     async def decide_layout(
         self,
@@ -1212,7 +1216,10 @@ def open_world(
     # and approved, else the sample's mock; with no import, the mock exactly.
     catalog_store = MemoryCatalogStore(runtime.approvals, outbox=runtime.outbox)
     draft_store = MemoryRuleDraftStore(outbox=runtime.outbox)
-    catalog = SnapshotSalesCatalog(MemoryApprovedLists(catalog_store), mock)
+    master = SnapshotSalesCatalog(MemoryApprovedLists(catalog_store), mock)
+    # Export-control results move a customer's compliance (WIV-03-032).
+    export_control = MemoryExportControl()
+    catalog = ScreenedCatalog(master, export_control)
     readers = client_readers(reader or InProcessReaderTransport(), policies.order_rules.intake)
     # The mailbox every service reads, at the door `build_dw1` puts in front of
     # it (ticket 25): scanned, then held to its names. Nothing is found in the
@@ -1242,7 +1249,7 @@ def open_world(
         rfq_reader=readers.rfq,
         reply_reader=readers.design_reply,
         cases=store,
-        ledger=catalog,
+        ledger=master,
         policies=book,
         requests=(
             None
@@ -1308,6 +1315,8 @@ def open_world(
         roles=StaticRoleCatalog(),
         step_activity=store,
         scanner=scanning,
+        master_catalog=master,
+        export_control_uow=export_control,
     )
     register(
         graphs=runtime.graphs,
@@ -1335,9 +1344,10 @@ def open_world(
         RuleSettlement(store, book, clock, ids, readiness),
         catalog_store,
         CatalogSettlement(catalog_store, clock, ids),
-        CatalogParsing(catalog_store, readers.tables, scanner or NoMalware(), catalog, clock, ids),
+        CatalogParsing(catalog_store, readers.tables, scanner or NoMalware(), master, clock, ids),
         draft_store,
         measurements,
+        export_control,
     )
 
 

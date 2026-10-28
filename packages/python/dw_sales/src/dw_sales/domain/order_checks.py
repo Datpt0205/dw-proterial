@@ -777,19 +777,23 @@ def _compliance_finding(
     max_age = rules.export_control.denial_list_max_age_days
     checked_on = compliance.denial_list_checked_on
     screened = checked_on is not None and (received - checked_on).days <= max_age
-    if compliance.noc_confirmed and compliance.esf_fiscal_year == year and screened:
+    held = compliance.denial_list_match or compliance.red_flag_escalated
+    if compliance.noc_confirmed and compliance.esf_fiscal_year == year and screened and not held:
         return None
     noc = "NOC confirmed" if compliance.noc_confirmed else "no NOC"
     esf = f"ESF FY{compliance.esf_fiscal_year}" if compliance.esf_fiscal_year else "no ESF"
     denial = (
-        f"denial-list check {checked_on.isoformat()}"
+        "denial-list match"
+        if compliance.denial_list_match
+        else f"denial-list check {checked_on.isoformat()}"
         if checked_on is not None
         else "no denial-list check"
     )
+    red_flag = ", red flag escalated" if compliance.red_flag_escalated else ""
     return rules.finding(
         FindingCode.MISSING_NOC_ESF,
         expected=f"NOC confirmed, ESF FY{year}, denial-list check within {max_age} days",
-        actual=f"{noc}, {esf}, {denial}",
+        actual=f"{noc}, {esf}, {denial}{red_flag}",
     )
 
 

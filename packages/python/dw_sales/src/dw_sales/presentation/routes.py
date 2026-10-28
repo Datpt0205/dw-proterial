@@ -61,6 +61,12 @@ from dw_sales.application.catalog_imports import (
     CatalogPreviewView,
     CatalogStateView,
 )
+from dw_sales.application.export_control import (
+    CustomerDetailView,
+    ExportControlOverview,
+    ScreeningView,
+)
+from dw_sales.application.export_control import Download as ScreeningDownload
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
@@ -99,6 +105,7 @@ from dw_sales.application.views import (
 from dw_sales.domain.activity import StepResult
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.export_control import ScreeningStep
 from dw_sales.domain.layouts import LayoutMapping
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
@@ -185,6 +192,43 @@ def _file_bytes(content_b64: str) -> bytes:
         return base64.b64decode(content_b64, validate=True)
     except (binascii.Error, ValueError):
         raise DomainError("nội dung tệp không hợp lệ", details={"rule": "file_encoding"}) from None
+
+
+class ScreeningBody(BaseModel):
+    """One export-control result (WIV-03-032), with its document as base64
+    where the step rests on one (10 MiB of bytes; the service refuses more)."""
+
+    model_config = _BODY
+
+    checked_on: date
+    note: Annotated[str, Field(max_length=500)] | None = None
+    content_b64: Annotated[str, Field(min_length=1, max_length=13_981_016)] | None = None
+
+    def data(self) -> bytes | None:
+        return None if self.content_b64 is None else _file_bytes(self.content_b64)
+
+
+class DenialListBody(ScreeningBody):
+    outcome: Literal["clear", "match"]
+
+
+class NocBody(ScreeningBody):
+    outcome: Literal["requested", "received"]
+
+
+class RedFlagBody(BaseModel):
+    model_config = _BODY
+
+    checked_on: date
+    answers: dict[Annotated[str, Field(pattern=r"^rf\d{2}$")], bool] = Field(
+        min_length=1, max_length=40
+    )
+    note: Annotated[str, Field(max_length=500)] | None = None
+
+
+class EsfBody(ScreeningBody):
+    fiscal_year: int = Field(ge=2000, le=2100)
+    content_b64: Annotated[str, Field(min_length=1, max_length=13_981_016)]
 
 
 class VersionBody(BaseModel):
@@ -1218,7 +1262,144 @@ def build_router(
     async def rule_draft(draft_id: uuid.UUID, context: Ctx, svc: Svc) -> RuleDraftView:
         return await svc.rule_drafts.get(context, draft_id)
 
+    # ----------------------------------- export control, WIV-03-032 (2026-10-28) --
+
+    read_scope = [scopes(SalesScopes.CASE_READ)]
+    screen_scope = [scopes(SalesScopes.CASE_READ, SalesScopes.COMPLIANCE_ACK)]
+
+    @router.get("/export-control", response_model=ExportControlOverview, dependencies=read_scope)
+    async def export_control(context: Ctx, svc: Svc) -> ExportControlOverview:
+        return await svc.export_control.overview(context)
+
+    @router.get(
+        "/export-control/{customer_code}",
+        response_model=CustomerDetailView,
+        dependencies=read_scope,
+    )
+    async def export_control_customer(
+        customer_code: CustomerCode, context: Ctx, svc: Svc
+    ) -> CustomerDetailView:
+        return await svc.export_control.customer(context, customer_code)
+
+    @router.post(
+        "/export-control/{customer_code}/denial-list",
+        response_model=ScreeningView,
+        dependencies=screen_scope,
+    )
+    async def record_denial_list(
+        customer_code: CustomerCode, body: DenialListBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ScreeningView:
+        view = await svc.export_control.record_denial(
+            context,
+            customer_code,
+            outcome=body.outcome,
+            checked_on=body.checked_on,
+            note=body.note,
+            evidence=body.data(),
+        )
+        return await idem.record(view)
+
+    @router.post(
+        "/export-control/{customer_code}/red-flag",
+        response_model=ScreeningView,
+        dependencies=screen_scope,
+    )
+    async def record_red_flag(
+        customer_code: CustomerCode, body: RedFlagBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ScreeningView:
+        view = await svc.export_control.record_red_flag(
+            context,
+            customer_code,
+            answers=body.answers,
+            checked_on=body.checked_on,
+            note=body.note,
+        )
+        return await idem.record(view)
+
+    @router.post(
+        "/export-control/{customer_code}/noc",
+        response_model=ScreeningView,
+        dependencies=screen_scope,
+    )
+    async def record_noc(
+        customer_code: CustomerCode, body: NocBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ScreeningView:
+        view = await svc.export_control.record_noc(
+            context,
+            customer_code,
+            outcome=body.outcome,
+            checked_on=body.checked_on,
+            note=body.note,
+            evidence=body.data(),
+        )
+        return await idem.record(view)
+
+    @router.post(
+        "/export-control/{customer_code}/esf",
+        response_model=ScreeningView,
+        dependencies=screen_scope,
+    )
+    async def record_esf(
+        customer_code: CustomerCode, body: EsfBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ScreeningView:
+        data = body.data()
+        assert data is not None  # required by the body
+        view = await svc.export_control.record_esf(
+            context,
+            customer_code,
+            fiscal_year=body.fiscal_year,
+            approved_on=body.checked_on,
+            note=body.note,
+            evidence=data,
+        )
+        return await idem.record(view)
+
+    @router.get(
+        "/export-control/{customer_code}/noec-draft",
+        response_class=Response,
+        dependencies=screen_scope,
+    )
+    async def noec_draft(customer_code: CustomerCode, context: Ctx, svc: Svc) -> Response:
+        return _file(await svc.export_control.noec_draft(context, customer_code))
+
+    @router.get(
+        "/export-control/{customer_code}/esf-form",
+        response_class=Response,
+        dependencies=read_scope,
+    )
+    async def esf_form(
+        customer_code: CustomerCode,
+        context: Ctx,
+        svc: Svc,
+        format: Annotated[Literal["xlsx", "pdf"], Query()] = "xlsx",
+    ) -> Response:
+        return _file(await svc.export_control.esf_form(context, customer_code, pdf=format == "pdf"))
+
+    @router.get(
+        "/export-control/{customer_code}/evidence/{step}",
+        response_class=Response,
+        dependencies=read_scope,
+    )
+    async def screening_evidence(
+        customer_code: CustomerCode, step: ScreeningStep, context: Ctx, svc: Svc
+    ) -> Response:
+        return _file(await svc.export_control.evidence(context, customer_code, step))
+
     return router
+
+
+def _file(download: ScreeningDownload) -> Response:
+    """An export-control file, as `_download` serves a case's: an attachment,
+    never cached, never sniffed."""
+    return Response(
+        content=download.data,
+        media_type=download.content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{download.file_name}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 def _download(download: Download) -> Response:
