@@ -94,8 +94,13 @@ const ACTIONS: Record<string, { label: string; color: string }> = {
   "sales.quote.submitted": { label: "Gửi duyệt báo giá", color: "processing" },
   "sales.quote.approved": { label: "Duyệt báo giá", color: "success" },
   "sales.quote.returned": { label: "Trả lại định giá", color: "warning" },
+  "sales.quote.signed_copy_attached": {
+    label: "Tải lên bản báo giá đã ký",
+    color: "default",
+  },
   "sales.artifact.rendered": { label: "Tạo tệp", color: "default" },
   "sales.artifact.downloaded": { label: "Tải tệp", color: "default" },
+  "sales.artifact.uploaded": { label: "Tải lên tệp", color: "default" },
   "sales.rules.proposed": { label: "Đề xuất quy tắc", color: "processing" },
   "sales.rules.approved": { label: "Duyệt quy tắc", color: "success" },
   "sales.followup.sent": { label: "Gửi nhắc việc", color: "default" },

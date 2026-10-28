@@ -1496,6 +1496,24 @@ class Stamp(BaseModel):
     at: AwareDatetime
 
 
+# Signed on paper as Proterial does today, scanned, uploaded: DW1 uses no
+# electronic signature (Đạt, 2026-10-28). The quotation is signed once it is
+# approved; the copy may come back after it was sent.
+SIGNABLE: Final = frozenset({"approved", "sent", "master_list_recorded"})
+
+
+class SignedCopy(BaseModel):
+    """The printed quotation as signed, scanned and uploaded to the case."""
+
+    model_config = _FROZEN
+
+    artifact_id: uuid.UUID
+    sha256: Sha256Hex
+    content_type: Literal["application/pdf", "image/jpeg", "image/png"]
+    uploaded_by: uuid.UUID
+    uploaded_at: AwareDatetime
+
+
 class Decline(BaseModel):
     """Sales' decision not to quote (step 5), with the reason the customer is told."""
 
@@ -1605,6 +1623,8 @@ class QuoteCase(BaseModel):
     sent: Stamp | None = None
     master_list: Stamp | None = None
     decline: Decline | None = None
+    # The signed paper copy, when someone uploaded it; a later upload replaces it.
+    signed_copy: SignedCopy | None = None
 
     @classmethod
     def open(
@@ -2124,6 +2144,15 @@ class QuoteCase(BaseModel):
 
     def record_master_list(self, *, by: uuid.UUID, at: AwareDatetime) -> QuoteCase:
         return self._moved(QuoteStatus.MASTER_LIST_RECORDED, master_list=Stamp(by=by, at=at))
+
+    def attach_signed_copy(self, copy: SignedCopy) -> QuoteCase:
+        """The signed copy of the approved quotation; the status stays."""
+        if self.status.value not in SIGNABLE:
+            raise ConflictError(
+                "a quotation is signed once it is approved",
+                details={"case_id": str(self.case_id), "status": self.status.value},
+            )
+        return self._changed(signed_copy=copy)
 
     def decline_request(
         self,

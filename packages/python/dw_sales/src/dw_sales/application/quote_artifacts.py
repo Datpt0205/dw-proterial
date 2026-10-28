@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import replace
-from typing import Protocol
+from typing import Final, Protocol
 
 from dw_kernel.errors import ConflictError
 from dw_sales.application.artifact_content import (
@@ -336,12 +336,23 @@ async def send_draft(d: QuoteDrafting, design: DesignRequestSource) -> tuple[Ren
         "lines": lines,
     }
     stem = _file_stem(document.quote_no)
-    attached = (
-        FileAttachment(f"{stem}.xlsx", xlsx.content_type, xlsx.data),
-        FileAttachment(f"{stem}.pdf", pdf.content_type, pdf.data),
+    signed = d.case.signed_copy
+    # The signed copy, when one was uploaded, goes instead of the unsigned PDF.
+    printed = (
+        FileAttachment(
+            f"{stem}-da-ky{_SIGNED_EXTENSION[signed.content_type]}",
+            signed.content_type,
+            d.signed_copy,
+        )
+        if signed is not None and d.signed_copy is not None
+        else FileAttachment(f"{stem}.pdf", pdf.content_type, pdf.data)
     )
+    attached = (FileAttachment(f"{stem}.xlsx", xlsx.content_type, xlsx.data), printed)
     message = replace(filled(bound, draft, values), attachments=attached)
     return (d.eml(bound.ref, message),)
+
+
+_SIGNED_EXTENSION: Final = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png"}
 
 
 async def master_list_update(d: QuoteDrafting, design: DesignRequestSource) -> tuple[Rendered, ...]:

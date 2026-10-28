@@ -1034,6 +1034,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/{case_id}/signed-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Signed Quote
+         * @description The quotation printed, signed on paper and scanned: kept with the
+         *     case (no electronic signature, 2026-10-28).
+         */
+        post: operations["upload_signed_quote_api_v1_sales_quotes__case_id__signed_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}/source/{attachment_id}": {
         parameters: {
             query?: never;
@@ -3783,6 +3804,7 @@ export interface components {
             /** Sender */
             sender: string;
             sent: components["schemas"]["StampView"] | null;
+            signed_copy?: components["schemas"]["SignedCopyView"] | null;
             /** Status */
             status: string;
             submission: components["schemas"]["SubmissionView"] | null;
@@ -4310,6 +4332,40 @@ export interface components {
             sheets: string[];
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * SignedCopyBody
+         * @description The printed quotation as signed and scanned (PDF, JPG or PNG), base64.
+         *     10 MiB of bytes (`SIGNED_MAX_BYTES`; the service refuses more).
+         */
+        SignedCopyBody: {
+            /** Case Version */
+            case_version: number;
+            /** Content B64 */
+            content_b64: string;
+        };
+        /**
+         * SignedCopyView
+         * @description The signed paper copy uploaded to the quotation: its file, who, when.
+         */
+        SignedCopyView: {
+            /**
+             * Artifact Id
+             * Format: uuid
+             */
+            artifact_id: string;
+            /** Content Type */
+            content_type: string;
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /**
+             * Uploaded By
+             * Format: uuid
+             */
+            uploaded_by: string;
         };
         /**
          * SourceAnchor
@@ -6830,6 +6886,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_signed_quote_api_v1_sales_quotes__case_id__signed_copy_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignedCopyBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactView"];
                 };
             };
             /** @description Validation Error */

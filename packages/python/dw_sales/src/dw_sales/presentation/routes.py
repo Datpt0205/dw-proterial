@@ -195,6 +195,16 @@ class VersionBody(BaseModel):
     case_version: int = Field(ge=1)
 
 
+class SignedCopyBody(VersionBody):
+    """The printed quotation as signed and scanned (PDF, JPG or PNG), base64.
+    10 MiB of bytes (`SIGNED_MAX_BYTES`; the service refuses more)."""
+
+    content_b64: Annotated[str, Field(min_length=1, max_length=13_981_016)]
+
+    def data(self) -> bytes:
+        return _file_bytes(self.content_b64)
+
+
 class RenderBody(VersionBody):
     """An artifact kind to render from the case at the version the caller saw;
     which kinds are open now is `GET .../artifacts`'s ``available``."""
@@ -827,6 +837,21 @@ def build_router(
             context, case_id, kind=body.kind, case_version=body.case_version
         )
         return await idem.record(RenderedView(artifacts=rendered))
+
+    @router.post(
+        "/quotes/{case_id}/signed-copy",
+        response_model=ArtifactView,
+        dependencies=[scopes(SalesScopes.CASE_READ, SalesScopes.QUOTE_PREPARE)],
+    )
+    async def upload_signed_quote(
+        case_id: uuid.UUID, body: SignedCopyBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ArtifactView:
+        """The quotation printed, signed on paper and scanned: kept with the
+        case (no electronic signature, 2026-10-28)."""
+        view = await svc.artifacts.upload_signed_quote(
+            context, case_id, case_version=body.case_version, data=body.data()
+        )
+        return await idem.record(view)
 
     @router.get("/quotes/{case_id}/artifacts/{artifact_id}", response_class=Response)
     async def quote_artifact(

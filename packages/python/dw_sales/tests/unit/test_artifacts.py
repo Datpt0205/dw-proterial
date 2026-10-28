@@ -72,11 +72,14 @@ from dw_sales.application.artifact_content import (
 from dw_sales.application.artifacts_service import (
     ORDER_GATES,
     QUOTE_GATES,
+    SIGNED_KIND,
+    SIGNED_MAX_BYTES,
     ArtifactService,
     ArtifactView,
 )
 from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored, WorkerState
 from dw_sales.application.drafting import ArtifactCopy, ArtifactCopyPort, Drafting, People
+from dw_sales.application.malware import MalwareScanPort, ScanVerdict
 from dw_sales.application.order_artifacts import portal_checklist
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -104,8 +107,10 @@ from dw_sales.domain.quotes import (
     QuoteActor,
     QuoteCapability,
     QuoteCase,
+    QuoteStatus,
 )
 from dw_sales.evals.world import MemoryStore
+from dw_sales.testing.scanners import NoMalware, ScriptedScanner
 
 pytestmark = pytest.mark.unit
 
@@ -209,6 +214,12 @@ class _Store[CaseT]:
     async def get(self, case_id: uuid.UUID) -> Stored[CaseT] | None:
         case = self.held.get((self.scope, case_id))
         return None if case is None else Stored(case, CaseOrigin(None, None))
+
+    async def save(self, case: CaseT, *, expected_version: int, event: object) -> None:
+        held = self.held.get((self.scope, case.case_id))  # type: ignore[attr-defined]
+        if held is None or held.case_version != expected_version:  # type: ignore[attr-defined]
+            raise ConflictError("stale", details={"rule": "stale_case_version"})
+        self.held[(self.scope, case.case_id)] = case  # type: ignore[attr-defined]
 
 
 class _Artifacts:
@@ -355,7 +366,10 @@ def _factory(world: World) -> Any:
     return lambda scope: Work(world, scope)
 
 
-def service(world: World, copy: ArtifactCopyPort = BOOK) -> ArtifactService:
+def service(
+    world: World, copy: ArtifactCopyPort = BOOK, scanner: MalwareScanPort | None = None
+) -> ArtifactService:
+    scanner = scanner or NoMalware()
     return ArtifactService(
         uow=_factory(world),
         gate=GATE,
@@ -367,6 +381,7 @@ def service(world: World, copy: ArtifactCopyPort = BOOK) -> ArtifactService:
         catalog=MockSalesCatalog.load(SCOPE),
         directory=Directory(),
         design=quotation_service(),
+        scanner=scanner,
     )
 
 
@@ -692,7 +707,10 @@ def _who(kind: str) -> AccessContext:
 
 
 def test_every_kind_in_the_gate_tables_is_tested_here() -> None:
-    assert set(KINDS) == set(ORDER_GATES) | set(QUOTE_GATES)
+    gates = {**ORDER_GATES, **QUOTE_GATES}
+    assert set(KINDS) == {kind for kind, gate in gates.items() if gate.compose is not None}
+    # Uploaded, never rendered: tested below, under "the signed copy".
+    assert {kind for kind, gate in gates.items() if gate.compose is None} == {SIGNED_KIND}
 
 
 @pytest.mark.parametrize("kind", sorted(KINDS))
@@ -1674,3 +1692,117 @@ async def test_the_order_view_shows_each_schedules_confirmed_date_and_no_line_da
     assert split.confirmed_delivery_date is None
     assert single.confirmed_delivery_date == _M34_DATES[2][0]
     assert [s.confirmed_delivery_date for s in single.schedules] == [None]
+
+
+# ------------------------------- the signed copy (no e-signature, 2026-10-28) --
+
+SIGNED_PDF = b"%PDF-1.4\n% a scan of the signed quotation\n%%EOF\n"
+
+
+async def _signed(
+    world: World, case: QuoteCase, data: bytes = SIGNED_PDF, svc: ArtifactService | None = None
+) -> ArtifactView:
+    world.put(case)
+    return await (svc or service(world)).upload_signed_quote(
+        context(AN), case.case_id, case_version=case.case_version, data=data
+    )
+
+
+async def test_a_signed_copy_is_kept_with_the_case_and_never_offered_to_render() -> None:
+    world = World()
+    case = await m10("approved")
+    view = await _signed(world, case, svc=(svc := service(world)))
+
+    stamped = world.quotes[(SCOPE, case.case_id)]
+    assert stamped.case_version == case.case_version + 1
+    assert stamped.status is QuoteStatus.APPROVED
+    assert stamped.signed_copy is not None
+    assert stamped.signed_copy.artifact_id == view.artifact_id
+    assert world.objects[world.artifacts[(SCOPE, view.artifact_id)].object_key(SCOPE)] == SIGNED_PDF
+    assert "sales.artifact.uploaded" in {e.action for e in world.audit}
+
+    listed = await svc.quote_artifacts(context(AN), case.case_id)
+    assert SIGNED_KIND not in listed.available
+    (signed,) = [a for a in listed.artifacts if a.kind == SIGNED_KIND]
+    assert signed.downloadable
+    with pytest.raises(DomainError):
+        await svc.render_quote(
+            context(AN), case.case_id, kind=SIGNED_KIND, case_version=stamped.case_version
+        )
+
+
+async def test_the_signed_copy_stays_downloadable_after_the_quotation_is_sent() -> None:
+    world = World()
+    case = await m10("approved")
+    view = await _signed(world, case)
+    signed = world.quotes[(SCOPE, case.case_id)]
+    world.put(signed.mark_sent(by=AN, at=NOW))
+
+    download = await service(world).quote_artifact(context(AN), case.case_id, view.artifact_id)
+    assert download.data == SIGNED_PDF
+    assert download.file_name.endswith(".pdf")
+
+
+async def test_the_send_draft_drawn_after_it_attaches_the_signed_copy_not_the_unsigned_pdf() -> (
+    None
+):
+    world = World()
+    case = await m10("approved")
+    await _signed(world, case)
+    signed = world.quotes[(SCOPE, case.case_id)]
+    (draft,) = await render(world, signed, "send_draft")
+
+    message = _eml(world.objects[world.artifacts[(SCOPE, draft.artifact_id)].object_key(SCOPE)])
+    parts = {part.get_filename(): part.get_content() for part in message.iter_attachments()}
+    assert SIGNED_PDF in parts.values()
+    assert any(name.endswith("-da-ky.pdf") for name in parts)
+    assert [n for n in parts if n.endswith(".pdf")] == [n for n in parts if "-da-ky" in n]
+
+
+@pytest.mark.parametrize(
+    ("data", "scanner", "error"),
+    [
+        (b"PK\x03\x04 an xlsx", None, DomainError),
+        (b"", None, DomainError),
+        (SIGNED_PDF, ScriptedScanner({SIGNED_PDF: ScanVerdict.infected("Eicar")}), ConflictError),
+        (SIGNED_PDF, ScriptedScanner({SIGNED_PDF: ScanVerdict.unavailable("down")}), ConflictError),
+    ],
+)
+async def test_a_file_that_is_not_a_clean_scan_or_photo_is_refused_and_nothing_kept(
+    data: bytes, scanner: MalwareScanPort | None, error: type[Exception]
+) -> None:
+    world = World()
+    case = await m10("approved")
+    with pytest.raises(error):
+        await _signed(world, case, data, svc=service(world, scanner=scanner))
+    assert world.objects == {}
+    assert world.quotes[(SCOPE, case.case_id)].signed_copy is None
+
+
+async def test_only_an_approved_quotation_is_signed() -> None:
+    world = World()
+    case = await m10("pending_approval")
+    with pytest.raises(ConflictError):
+        await _signed(world, case)
+    assert world.objects == {}
+
+
+async def test_another_companys_quotation_is_not_found() -> None:
+    world = World()
+    case = await m10("approved")
+    world.put(case)
+    other = context(AN, scope=SalesScope(TenantId(uuid.uuid4()), WorkspaceId(uuid.uuid4())))
+    with pytest.raises(NotFoundError):
+        await service(world).upload_signed_quote(
+            other, case.case_id, case_version=case.case_version, data=SIGNED_PDF
+        )
+    assert world.objects == {}
+
+
+async def test_a_signed_copy_over_10_mb_is_refused_by_its_size() -> None:
+    world = World()
+    case = await m10("approved")
+    with pytest.raises(DomainError) as refused:
+        await _signed(world, case, SIGNED_PDF + b"0" * SIGNED_MAX_BYTES)
+    assert refused.value.details["rule"] == "file_size"
+    assert world.objects == {}

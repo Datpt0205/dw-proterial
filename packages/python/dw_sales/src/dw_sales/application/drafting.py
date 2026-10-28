@@ -122,6 +122,8 @@ class Drafting[CaseT]:
     copy: ArtifactCopy
     writer: ArtifactWriterPort
     scope: SalesScope
+    # The signed paper copy of a quote, scanned and uploaded, when it has one.
+    signed_copy: bytes | None = None
 
     @property
     def language(self) -> Language:

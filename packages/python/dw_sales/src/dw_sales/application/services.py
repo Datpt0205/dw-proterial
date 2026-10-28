@@ -32,6 +32,7 @@ from dw_sales.application.catalog_imports import (
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
+from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.order_intake import OrderIntake
@@ -132,6 +133,7 @@ def assemble(
     readiness: ModelReadiness,
     roles: RoleCatalogPort,
     step_activity: StepActivityReadPort,
+    scanner: MalwareScanPort,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     sources = SourceService(uow, gate, clock, inbox, files, source_cache)
@@ -173,6 +175,7 @@ def assemble(
             catalog,
             directory,
             quotation,
+            scanner,
         ),
         master_data=MasterDataService(gate, catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
@@ -187,7 +190,7 @@ def assemble(
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
         gate=gate,
     )
-    decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing)
+    decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing, notifications)
     return SalesAssembly(
         services=services,
         decisions=decisions,

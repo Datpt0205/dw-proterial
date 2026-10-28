@@ -39,7 +39,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Final, Protocol
+from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -62,6 +62,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWorkFactory,
 )
 from dw_sales.application.drafting import ArtifactCopyPort, Drafting, People, Rendered
+from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.order_artifacts import (
     OrderDrafting,
     bravo_upload,
@@ -91,7 +92,13 @@ from dw_sales.application.quote_artifacts import (
     spec_discussion_draft,
     ycbg_draft,
 )
-from dw_sales.application.support import same_version, stored_order, stored_quote
+from dw_sales.application.support import (
+    person_event,
+    same_version,
+    save_quote,
+    stored_order,
+    stored_quote,
+)
 from dw_sales.application.worker_service import require_running
 from dw_sales.domain.catalog import ConfirmationChannel, Customer
 from dw_sales.domain.dispositions import CaseKind
@@ -102,7 +109,7 @@ from dw_sales.domain.orders import (
     OrderCase,
     OrderStatus,
 )
-from dw_sales.domain.quotes import QuoteCase, QuoteStatus
+from dw_sales.domain.quotes import QuoteCase, QuoteStatus, SignedCopy
 
 _O = OrderStatus
 _Q = QuoteStatus
@@ -129,8 +136,13 @@ class ArtifactGate[CaseT]:
 
     price_bearing: bool
     open_in: Callable[[CaseT, AccessContext, Gate], bool]
-    compose: Compose[CaseT]
+    # None: a file a person uploads (the signed copy), never rendered here.
+    compose: Compose[CaseT] | None
     channel: ConfirmationChannel | None = None
+    # A file the case stamps by id, kept downloadable after the case moves on
+    # (a signed copy outlives "Đã gửi khách"); every other file is current
+    # only at the version it was rendered from.
+    kept: Callable[[CaseT, ArtifactRecord], bool] | None = None
 
 
 def _order(compose: Callable[[OrderDrafting], tuple[Rendered, ...]]) -> Compose[OrderCase]:
@@ -199,6 +211,18 @@ def _pricer_or_approver(case: QuoteCase, context: AccessContext, gate: Gate) -> 
     return context.principal_id == pricer or gate.allows(context, SalesScopes.QUOTE_APPROVE)
 
 
+SIGNED_KIND: Final = "quote_signed"
+# What an uploaded file's version is recorded as made from.
+UPLOAD_REF: Final = "upload@1.0.0"
+SIGNED_MAX_BYTES: Final = 10 * 1024 * 1024
+type SignedType = Literal["application/pdf", "image/jpeg", "image/png"]
+# What a signed copy may be, by its first bytes: a scan as PDF, or a photo.
+_SIGNED_TYPES: Final[tuple[tuple[bytes, SignedType], ...]] = (
+    (b"%PDF-", "application/pdf"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+)
+
 QUOTE_GATES: Final[Mapping[str, ArtifactGate[QuoteCase]]] = {
     "ycbg_draft": ArtifactGate(False, lambda c, *_: c.status not in _BEFORE_YCBG, ycbg_draft),
     "design_request_draft": ArtifactGate(
@@ -220,12 +244,26 @@ QUOTE_GATES: Final[Mapping[str, ArtifactGate[QuoteCase]]] = {
     "quotation_final": ArtifactGate(True, lambda c, *_: c.status is _Q.APPROVED, quotation_final),
     "send_draft": ArtifactGate(True, lambda c, *_: c.status is _Q.APPROVED, send_draft),
     "master_list_update": ArtifactGate(True, lambda c, *_: c.status is _Q.SENT, master_list_update),
+    # The printed quotation signed on paper and uploaded (no e-signature,
+    # 2026-10-28): carries prices, kept while the case stamps it.
+    SIGNED_KIND: ArtifactGate(
+        True,
+        lambda c, *_: c.signed_copy is not None,
+        None,
+        kept=lambda c, r: c.signed_copy is not None and c.signed_copy.artifact_id == r.artifact_id,
+    ),
 }
 
 ORDER_KINDS: Final = frozenset(ORDER_GATES)
 QUOTE_KINDS: Final = frozenset(QUOTE_GATES)
 
-_EXTENSIONS: Final[Mapping[str, str]] = {XLSX: ".xlsx", PDF: ".pdf", EML: ".eml"}
+_EXTENSIONS: Final[Mapping[str, str]] = {
+    XLSX: ".xlsx",
+    PDF: ".pdf",
+    EML: ".eml",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+}
 _VIEW = ConfigDict(frozen=True)
 
 
@@ -322,6 +360,8 @@ class ArtifactService:
     catalog: SalesCatalogPort
     directory: MemberDirectoryPort
     design: DesignRequestSource
+    # Every uploaded file is scanned before it is stored (ticket 25).
+    scanner: MalwareScanPort
 
     # ------------------------------------------------------------- orders --
 
@@ -353,6 +393,78 @@ class ArtifactService:
     ) -> Download:
         return await self._download(_QUOTES, context, case_id, artifact_id)
 
+    async def upload_signed_quote(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int, data: bytes
+    ) -> ArtifactView:
+        """The printed quotation, signed on paper, scanned and uploaded: kept
+        with the case, attached to the send draft drawn after it. Checked
+        before it is stored: size, kind by its bytes, and the malware scan,
+        which refuses when the scanner cannot answer."""
+        await self.gate.require(
+            context,
+            SalesScopes.CASE_READ,
+            SalesScopes.QUOTE_PREPARE,
+            resource_type="sales_artifact",
+            resource_id=str(case_id),
+        )
+        self._price(context, True, kind=SIGNED_KIND)
+        if not 0 < len(data) <= SIGNED_MAX_BYTES:
+            raise DomainError("bản đã ký phải nhỏ hơn 10 MB", details={"rule": "file_size"})
+        content_type = next((t for magic, t in _SIGNED_TYPES if data.startswith(magic)), None)
+        if content_type is None:
+            raise DomainError(
+                "bản đã ký là tệp PDF hoặc ảnh JPG, PNG", details={"rule": "file_type"}
+            )
+        verdict = await self.scanner.scan(data)
+        if verdict.outcome != "clean":
+            raise ConflictError(
+                "tệp chưa qua bước quét mã độc nên không được lưu",
+                details={"reason": f"scan_{verdict.outcome}"},
+            )
+        scope, now = sales_scope(context), self.clock.now()
+        stored: list[ArtifactRecord] = []
+        try:
+            async with self.uow(scope) as work:
+                case = await _load_quote(work, case_id)
+                same_version(case_id, case.case_version, case_version)
+                record = ArtifactRecord(
+                    artifact_id=self.ids.new_uuid(),
+                    case_kind=CaseKind.QUOTE,
+                    case_id=case_id,
+                    case_version=case.case_version + 1,
+                    kind=SIGNED_KIND,
+                    template_ref=UPLOAD_REF,
+                    sha256=hashlib.sha256(data).hexdigest(),
+                    content_type=content_type,
+                    size_bytes=len(data),
+                    created_by=context.principal_id,
+                    created_at=now,
+                )
+                signed = case.attach_signed_copy(
+                    SignedCopy(
+                        artifact_id=record.artifact_id,
+                        sha256=record.sha256,
+                        content_type=content_type,
+                        uploaded_by=context.principal_id,
+                        uploaded_at=now,
+                    )
+                )
+                await self.storage.put_object(record.object_key(scope), data, content_type)
+                stored.append(record)
+                event = person_event("quote.signed_copy_attached", context, now)
+                await save_quote(work, context, self.ids, case, signed, event)
+                if not await work.artifacts.add(record):
+                    raise ConflictError(
+                        "the signed copy was recorded by another upload",
+                        details={"case_id": str(case_id)},
+                    )
+                await work.audit.append(_audit(context, self.ids, record, "uploaded", now))
+                await work.commit()
+        except Exception:
+            await self._discard(scope, stored)
+            raise
+        return _view(record, downloadable=True)
+
     # ------------------------------------------------------------ the work --
 
     async def _list[CaseT: _Case](
@@ -371,7 +483,9 @@ class ArtifactService:
         available = sorted(
             kind
             for kind, gate in cases.gates.items()
-            if self._may(context, gate, case) and gate.channel in (None, channel)
+            if gate.compose is not None
+            and self._may(context, gate, case)
+            and gate.channel in (None, channel)
         )
         return ArtifactListView(
             case_version=case.case_version,
@@ -379,8 +493,8 @@ class ArtifactService:
             artifacts=[
                 _view(
                     record,
-                    downloadable=record.case_version == case.case_version
-                    and record.kind in cases.gates
+                    downloadable=record.kind in cases.gates
+                    and _current(cases.gates[record.kind], case, record)
                     and self._may(context, cases.gates[record.kind], case),
                 )
                 for record in records
@@ -403,8 +517,9 @@ class ArtifactService:
             resource_id=str(case_id),
         )
         gate = cases.gates.get(kind)
-        if gate is None:
+        if gate is None or gate.compose is None:
             raise DomainError("no such artifact kind", details={"field": "kind"})
+        compose = gate.compose
         self._price(context, gate.price_bearing, kind=kind)
         scope, now = sales_scope(context), self.clock.now()
         # The objects this render stored: removed again unless their records
@@ -438,8 +553,9 @@ class ArtifactService:
                         ),
                         writer=self.writer,
                         scope=scope,
+                        signed_copy=await self._signed_bytes(work, scope, case),
                     )
-                    for rendered in await gate.compose(drafting, self.design):
+                    for rendered in await compose(drafting, self.design):
                         record = self._record(cases.kind, case, kind, rendered, context, now)
                         await self.storage.put_object(
                             record.object_key(scope), rendered.data, rendered.content_type
@@ -524,7 +640,7 @@ class ArtifactService:
             self._price(context, gate is None or gate.price_bearing, kind=record.kind)
             if gate is None or not gate.open_in(case, context, self.gate):
                 raise _closed(record.kind, case.status.value, artifact_id=artifact_id)
-            if record.case_version != case.case_version:
+            if not _current(gate, case, record):
                 raise ConflictError(
                     "tài liệu được tạo từ một phiên bản hồ sơ cũ: tạo lại để tải bản mới",
                     details={
@@ -548,6 +664,23 @@ class ArtifactService:
         return Download(record, data)
 
     # ------------------------------------------------------------ helpers --
+
+    async def _signed_bytes(
+        self, work: SalesUnitOfWork, scope: SalesScope, case: _Case
+    ) -> bytes | None:
+        """The signed copy's bytes, for a quote that has one: the send draft
+        attaches them."""
+        copy = case.signed_copy if isinstance(case, QuoteCase) else None
+        record = None if copy is None else await work.artifacts.get(copy.artifact_id)
+        if copy is None or record is None:
+            return None
+        data = await self.storage.get_object(record.object_key(scope))
+        if hashlib.sha256(data).hexdigest() != copy.sha256:
+            raise InfrastructureError(
+                "tệp lưu trữ không khớp mã băm đã ghi",
+                details={"artifact_id": str(record.artifact_id), "reason": "sha256_mismatch"},
+            )
+        return data
 
     def _may[CaseT](self, context: AccessContext, gate: ArtifactGate[CaseT], case: CaseT) -> bool:
         return gate.open_in(case, context, self.gate) and (
@@ -632,6 +765,14 @@ def _audit(
             "sha256": record.sha256,
         },
     )
+
+
+def _current[CaseT: _Case](gate: ArtifactGate[CaseT], case: CaseT, record: ArtifactRecord) -> bool:
+    """Whether ``record`` is the case's file now: rendered from its current
+    version, or kept by id (a signed copy)."""
+    if gate.kept is not None:
+        return gate.kept(case, record)
+    return record.case_version == case.case_version
 
 
 def _belongs(

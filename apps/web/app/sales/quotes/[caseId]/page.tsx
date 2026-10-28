@@ -73,6 +73,7 @@ import { MessageTextDrawer } from "./model-read";
 import { ApprovalPanel } from "./approval";
 import { EvidencePanel } from "./evidence";
 import { PricingForm } from "./pricing";
+import { SendPanel, SIGNABLE } from "./send-panel";
 
 const DAY = 86_400_000;
 
@@ -382,6 +383,14 @@ function QuoteDetail() {
           onSource={openField}
         />
       </Card>
+
+      {SIGNABLE.has(data.status) ? (
+        <SendPanel
+          quote={data}
+          artifacts={artifacts.data?.artifacts ?? []}
+          onChanged={reload}
+        />
+      ) : null}
 
       {data.status === "pending_approval" ? (
         <ApprovalPanel
