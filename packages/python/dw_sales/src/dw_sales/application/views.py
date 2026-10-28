@@ -91,9 +91,11 @@ from dw_sales.domain.quotes import (
     FindingAccepted,
     FindingCorrected,
     PriceEvidence,
+    PriceSuggestion,
     QuoteCase,
     QuoteFinding,
     RequestReading,
+    suggest_price,
 )
 from dw_sales.domain.reply_intent import CaseReply, ProposedStep, ReplyKind, proposed_step
 
@@ -1321,6 +1323,36 @@ class EvidenceView(BaseModel):
     floor: Amount | None
     freight_usd_per_km: Amount | None
     reference_price: Amount | Hidden | None
+    # DW1's starting point for the price, from the rows above; None when
+    # nothing supports one. Formed without other customers' prices for a
+    # viewer who may not see them, so it never reveals one.
+    suggestion: SuggestionView | None = None
+
+
+class SuggestionView(BaseModel):
+    model_config = _VIEW
+
+    unit_price: Decimal
+    basis: str
+    source_no: str | None
+    raised_to_floor: bool
+    moq: Decimal | None
+    lead_time_days: int | None
+    copper_basis: CopperBasisView | None
+
+
+def _suggestion(suggestion: PriceSuggestion | None) -> SuggestionView | None:
+    if suggestion is None:
+        return None
+    return SuggestionView(
+        unit_price=suggestion.unit_price,
+        basis=suggestion.basis.value,
+        source_no=suggestion.source_no,
+        raised_to_floor=suggestion.raised_to_floor,
+        moq=suggestion.moq,
+        lead_time_days=suggestion.lead_time_days,
+        copper_basis=(_copper(suggestion.copper_basis, True) if suggestion.copper_basis else None),
+    )
 
 
 def evidence(rows: Iterable[PriceEvidence], prices: PriceView) -> list[EvidenceView] | Hidden:
@@ -1362,6 +1394,7 @@ def evidence(rows: Iterable[PriceEvidence], prices: PriceView) -> list[EvidenceV
                     if prices.other_customers
                     else HIDDEN
                 ),
+                suggestion=_suggestion(suggest_price(row, others=prices.other_customers)),
             )
         )
     return out

@@ -2421,6 +2421,7 @@ export interface components {
             prv_code: string | null;
             /** Reference Price */
             reference_price: components["schemas"]["Amount"] | components["schemas"]["Hidden"] | null;
+            suggestion?: components["schemas"]["SuggestionView"] | null;
             target_price: components["schemas"]["Amount"] | null;
         };
         /** ExportControlOverview */
@@ -4942,6 +4943,22 @@ export interface components {
             case_version: number;
             /** Quote No */
             quote_no: string;
+        };
+        /** SuggestionView */
+        SuggestionView: {
+            /** Basis */
+            basis: string;
+            copper_basis: components["schemas"]["CopperBasisView"] | null;
+            /** Lead Time Days */
+            lead_time_days: number | null;
+            /** Moq */
+            moq: string | null;
+            /** Raised To Floor */
+            raised_to_floor: boolean;
+            /** Source No */
+            source_no: string | null;
+            /** Unit Price */
+            unit_price: string;
         };
         /** SupersededView */
         SupersededView: {
