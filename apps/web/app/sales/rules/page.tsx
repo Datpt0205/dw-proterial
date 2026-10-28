@@ -40,12 +40,13 @@ const TONE: Record<RuleVersion["status"], "ok" | "warn" | "err" | "unk"> = {
 /**
  * Quy tắc (tickets 19, 38, 36, 40): what applies to the company per key, the
  * platform's or its own, and every version it proposed. A holder of
- * `sales.rules.propose` (Sales phụ trách, Trưởng bộ phận Sales, or the
- * company's IT holding `sales_rules_editor`) proposes a whole document for
- * one key in a form drawn from that key's JSON Schema, reads what it changes
- * against the version in force, and sends it; the server validates it again
- * and opens a `sales.rules` platform approval, which someone who did not
- * propose it decides on `/approvals`. Nothing here decides. The server
+ * `sales.rules.propose` (Trưởng bộ phận Sales, or the company's admin holding
+ * `sales_rules_editor`; a PIC holds none since 2026-10-28) writes a whole
+ * document for one key in a form drawn from that key's JSON Schema, reads
+ * what it changes against the version in force, and sends it; the server
+ * validates it again. The head's version applies at once; anyone else's
+ * opens a `sales.rules` platform approval the head decides on `/approvals`.
+ * Nothing here decides. The server
  * answers this page only to holders of the scope, and lists only the keys the
  * caller may read: one holding prices or price policy is absent for someone
  * without `sales.price.read`, so the page draws the keys it is given and
@@ -69,7 +70,10 @@ interface Proposing {
 
 function Rules() {
   const fill = useFillHeight();
-  const seesApprovals = useAuth().hasScope("approvals.read");
+  const { hasScope } = useAuth();
+  const seesApprovals = hasScope("approvals.read");
+  // The head's own version applies at once (2026-10-28); the server decides.
+  const appliesAtOnce = hasScope(SCOPE.rulesApprove);
   const name = usePeople();
   const phone = usePhoneColumns();
   const table = usePhoneTable();
@@ -89,7 +93,7 @@ function Rules() {
       <PageHeader
         breadcrumb={salesCrumbs("Quy tắc")}
         title="Quy tắc của công ty"
-        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt. Người đề xuất không tự duyệt; ${seesApprovals ? "phiên bản được quyết trên trang Duyệt, mở từ liên kết ở mỗi phiên bản." : "người giữ quyền duyệt quy tắc quyết từng phiên bản."}`}
+        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt. ${appliesAtOnce ? "Bản bạn sửa được áp dụng ngay; bản người khác đề xuất chờ bạn duyệt trên trang Duyệt." : `Người đề xuất không tự duyệt; ${seesApprovals ? "phiên bản được quyết trên trang Duyệt, mở từ liên kết ở mỗi phiên bản." : "Trưởng bộ phận Sales quyết từng phiên bản."}`}`}
       />
       {rules.error ? (
         <LoadError error={rules.error} onRetry={rules.reload} />
@@ -158,16 +162,16 @@ function Rules() {
                   render: (_, k) => k.waiting,
                 },
                 {
-                  title: "Đề xuất",
+                  title: appliesAtOnce ? "Sửa" : "Đề xuất",
                   key: "propose",
                   fixed: "right",
                   render: (_, k) => (
                     <Button
                       size="small"
                       onClick={() => setProposing({ key: k.key })}
-                      aria-label={`Đề xuất phiên bản mới: ${RULE_KEY[k.key]}`}
+                      aria-label={`${appliesAtOnce ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
                     >
-                      Đề xuất bản mới
+                      {appliesAtOnce ? "Sửa quy tắc" : "Đề xuất bản mới"}
                     </Button>
                   ),
                 },
