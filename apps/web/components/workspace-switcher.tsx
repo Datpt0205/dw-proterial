@@ -8,8 +8,7 @@ import { useAuth } from "../lib/auth/auth-context";
  * The active workspace and its company, beside the brand (the prototype's
  * workspace block: a small "Workspace" line, the workspace, the company).
  * With more than one membership it opens a menu to switch (the auth context
- * re-activates the chosen membership); with one it only shows. Nothing
- * renders for an operator with no workspace.
+ * re-activates the chosen membership). With one, or none, nothing renders.
  */
 export function WorkspaceSwitcher() {
   const { active, memberships, selectWorkspace } = useAuth();
@@ -47,15 +46,9 @@ export function WorkspaceSwitcher() {
     </span>
   );
 
-  if (!multiple)
-    return (
-      <div
-        className="flex min-w-0 items-center px-2"
-        title={`${active.tenantName} · ${active.workspaceName}`}
-      >
-        {block}
-      </div>
-    );
+  // One workspace is no choice to show (2026-10-28: "khả năng cao sẽ không
+  // có workspace"): the bar keeps the room for the product.
+  if (!multiple) return null;
 
   return (
     <Dropdown

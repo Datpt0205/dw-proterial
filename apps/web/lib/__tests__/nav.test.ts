@@ -411,3 +411,46 @@ describe("a platform page kept on a context's bar", () => {
     );
   });
 });
+
+describe("several Digital Workers (2026-10-28)", () => {
+  // A second context beside DW1, as DW2 will plug in.
+  const DW2: NavEntry = {
+    key: "purchasing",
+    label: "Mua hàng",
+    icon: SALES.icon,
+    context: { product: "DW2 Mua hàng", roleKeyPrefix: "purchasing_" },
+    items: [
+      {
+        href: "/purchasing",
+        label: "Việc cần làm",
+        hint: "Việc mua hàng chờ bạn",
+        icon: SALES.icon,
+        exact: true,
+      },
+      {
+        href: "/purchasing/orders",
+        label: "Đơn mua",
+        hint: "Các đơn mua",
+        icon: SALES.icon,
+      },
+    ],
+  };
+  const both = [SALES, DW2];
+
+  it("works in the context the page belongs to, and lists every one", () => {
+    const onDw2 = barNav(both, undefined, "/purchasing/orders/42");
+    expect(onDw2.context?.key).toBe("purchasing");
+    expect(navPages(onDw2.entries).map((p) => p.href)).toEqual([
+      "/purchasing",
+      "/purchasing/orders",
+    ]);
+    expect(onDw2.contexts.map((c) => c.key)).toEqual(["sales", "purchasing"]);
+    expect(barNav(both, undefined, "/sales/quotes").context?.key).toBe("sales");
+    // A page of neither (the platform's) keeps the first.
+    expect(barNav(both, undefined, "/approvals").context?.key).toBe("sales");
+  });
+
+  it("one context lists just it, so the brand stays a plain link", () => {
+    expect(barNav([SALES], undefined, "/sales").contexts).toHaveLength(1);
+  });
+});

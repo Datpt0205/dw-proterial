@@ -4,7 +4,6 @@ import { useEffect, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Avatar,
   Badge,
   Button,
   Card,
@@ -16,7 +15,7 @@ import {
   type GlobalToken,
   type MenuProps,
 } from "antd";
-import { LogoutOutlined, RobotOutlined } from "@ant-design/icons";
+import { LogoutOutlined } from "@ant-design/icons";
 import { AppShell } from "@dw/ui";
 import { useAuth } from "../lib/auth/auth-context";
 import { useNavBadges } from "../lib/nav/badges";
@@ -32,6 +31,7 @@ import { LoginScreen } from "./login-screen";
 import { NotificationBell } from "./notification-bell";
 import { SessionChip } from "./session-chip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
+import { BrandMark, ContextSwitcher } from "./context-switcher";
 import { FeedbackLauncher } from "./feedback/launcher";
 import { SessionExpiryBanner } from "./session-expiry-banner";
 import { SupportBannerSlot } from "./support-banner";
@@ -138,7 +138,10 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
   // The nav the user can actually reach, and the bar drawn from it: a
   // context's own pages for someone whose work is that context alone.
-  const bar = useMemo(() => barNav(visibleNav(NAV, auth), auth), [auth]);
+  const bar = useMemo(
+    () => barNav(visibleNav(NAV, auth), auth, pathname),
+    [auth, pathname],
+  );
   const nav = bar.entries;
   const pages = useMemo(() => navPages(nav), [nav]);
   // Where the logo points; the old /feedback page is gone (spec 003 US5).
@@ -220,40 +223,25 @@ export function AppFrame({ children }: { children: ReactNode }) {
     <>
       <AppShell
         brand={
-          <Link
-            href={home}
-            aria-label={
-              bar.context
-                ? `Digital Worker · ${bar.context.context!.product}, về trang đầu`
-                : "Digital Worker, về trang đầu"
-            }
-            className="flex items-center gap-2"
-          >
-            <Avatar
-              shape="square"
-              size={28}
-              icon={<RobotOutlined />}
-              style={{
-                backgroundColor: token.colorPrimary,
-                borderRadius: token.borderRadius,
-              }}
+          bar.contexts.length > 1 ? (
+            <ContextSwitcher
+              contexts={bar.contexts}
+              active={bar.context}
+              onPick={(href) => router.push(href)}
             />
-            <Typography.Text
-              strong
-              className="hidden whitespace-nowrap sm:inline"
-              style={{ fontSize: token.fontSizeLG }}
+          ) : (
+            <Link
+              href={home}
+              aria-label={
+                bar.context
+                  ? `Digital Worker · ${bar.context.context!.product}, về trang đầu`
+                  : "Digital Worker, về trang đầu"
+              }
+              className="flex items-center gap-2"
             >
-              Digital Worker
-              {bar.context ? (
-                <Typography.Text
-                  type="secondary"
-                  style={{ fontSize: token.fontSizeLG }}
-                >
-                  {` · ${bar.context.context!.product}`}
-                </Typography.Text>
-              ) : null}
-            </Typography.Text>
-          </Link>
+              <BrandMark product={bar.context?.context?.product} />
+            </Link>
+          )
         }
         workspace={<WorkspaceSwitcher />}
         navItems={menuItems(nav, current, badges, token)}

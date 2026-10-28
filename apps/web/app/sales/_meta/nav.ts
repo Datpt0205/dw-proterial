@@ -50,7 +50,7 @@ export const salesNav: NavEntry[] = [
     key: "sales",
     label: "Sales",
     icon: SolutionOutlined,
-    context: { product: "Sales", roleKeyPrefix: "sales_" },
+    context: { product: "DW1 Đơn hàng & Báo giá", roleKeyPrefix: "sales_" },
     items: [
       {
         href: "/sales",

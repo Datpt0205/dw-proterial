@@ -147,6 +147,8 @@ describe("the shell's navbar", () => {
     expect(within(bar).queryByRole("menuitem", { name: /^Sales$/ })).toBeNull();
     expect(within(bar).queryByRole("link", { name: "Duyệt" })).toBeNull();
     expect(within(bar).queryByRole("link", { name: "Trang chủ" })).toBeNull();
+    // One workspace is no choice: the block is not drawn (2026-10-28).
+    expect(screen.queryByText("Không gian làm việc")).toBeNull();
 
     const drawer = openDrawer();
     const pages = [
@@ -172,7 +174,7 @@ describe("the shell's navbar", () => {
     renderShell();
     expect(
       screen
-        .getByRole("link", { name: "Digital Worker · Sales, về trang đầu" })
+        .getByRole("link", { name: "Digital Worker · DW1 Đơn hàng & Báo giá, về trang đầu" })
         .getAttribute("href"),
     ).toBe("/sales");
 
