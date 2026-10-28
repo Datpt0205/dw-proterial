@@ -8,6 +8,8 @@ Purchasing DW for Proterial is signed (estimated 30–51 person-days).
 
 ## State
 
+- 2026-10-28, **"your turn" told at once** (Đạt: "nếu dừng thì có noti cho họ thấy chưa"): `sales_followups@1.1.0` adds `your_turn` (on by default): the follow-ups lane tells the PIC the moment a case enters a status waiting on Sales, and the head for a cross-check or an approval; once per status entered, quiet hours defer it. Whom a status waits on is `overview_service.WHOSE_TURN`, read from `STATUS_BUCKETS` and the next steps (one owner). Migration `fb59ce04fd76` widens the delivery CHECKs. Unit, lane, DB tests; two mutations red.
+- 2026-10-28, **export control backend** (ticket 45): see the ticket; the page next.
 - 2026-10-28, **latency measured, and the slow paths fixed** (agent; Đạt: "lúc test không đo P50 P95 P99 à", the source drawer slow, search jumpy):
     - **Measured now:** `dw_api/middleware/timing.py` logs one `request_timing <method> <route template> <status> <ms>` line per request (the template rebuilt from the route and the path: FastAPI 0.141 hands an included router's route over without its prefix, measured); `make latency-report` (`scripts/route_latency.py`) prints p50/p95/p99 per route from the API log, on a test stack or at Proterial's.
     - **Before** (743 requests, three rounds of the demo): `GET …/orders/{case_id}/source/{attachment_id}` p50 9.5 s, p95 11.5 s; every other route p95 under 0.9 s. Cause: a sheet view asked the reader twice (grid, then sheet names), each a fresh sandboxed process spending 4.3 s of 4.6 s compiling its imports (`PYTHONDONTWRITEBYTECODE` on a read-only root, no bytecode in the image; the Dockerfile's "negligible impact" was true of a long-lived process only), and nothing was kept.
