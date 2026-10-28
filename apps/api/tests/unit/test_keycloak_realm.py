@@ -50,3 +50,23 @@ def test_sign_in_and_password_pages_speak_vietnamese(realm: dict[str, object]) -
     # Vietnamese only: with a second locale the login page grows a language
     # switch, which Đạt asked to remove (2026-10-26).
     assert realm["supportedLocales"] == ["vi"]
+
+
+# The customer's IT signs in to Keycloak's admin console for three things the
+# portal does not do: unlock a brute-force lockout, sign a person out of every
+# device, ask a person to set up OTP. Membership of `dw-it` gives the console's
+# Users and Groups and nothing else (measured on 26.7.2, 2026-10-28: realm
+# settings, clients, authentication and identity providers answer 403, and a
+# member cannot map a realm-management role to anyone, themselves included).
+# The realm is shared by every tenant a deployment serves, so the group is for
+# a deployment that serves one customer (on premises): in a shared one a member
+# would manage every tenant's logins.
+IT_GROUP_ROLES = {"view-users", "manage-users", "query-users", "query-groups"}
+
+
+def test_the_it_group_manages_logins_and_nothing_else(realm: dict[str, object]) -> None:
+    groups = {g["name"]: g for g in realm["groups"]}  # type: ignore[attr-defined]
+    it = groups["dw-it"]
+    assert set(it.get("clientRoles", {})) == {"realm-management"}
+    assert set(it["clientRoles"]["realm-management"]) == IT_GROUP_ROLES
+    assert not it.get("realmRoles")

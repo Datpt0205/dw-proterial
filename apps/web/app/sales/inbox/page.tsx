@@ -544,6 +544,9 @@ function Inbox() {
                 ),
               },
               {
+                // The header names the sender, so the tag says only whether:
+                // the longer words made the table 64 px wider than a 1440
+                // screen and pushed "Nhận lúc" under the DW1 column.
                 title: "Người gửi",
                 key: "verified",
                 render: (_, m) =>
@@ -552,14 +555,14 @@ function Inbox() {
                       tone="ok"
                       icon={<SafetyCertificateOutlined aria-hidden />}
                     >
-                      Đã xác thực người gửi
+                      Đã xác thực
                     </StatusTag>
                   ) : (
                     <StatusTag
                       tone="warn"
                       icon={<WarningOutlined aria-hidden />}
                     >
-                      Chưa xác thực người gửi
+                      Chưa xác thực
                     </StatusTag>
                   ),
               },
@@ -603,7 +606,7 @@ function Inbox() {
                 ),
               },
               {
-                title: "Người phụ trách",
+                title: "Phụ trách",
                 key: "owner",
                 align: "center",
                 render: (_, m) =>

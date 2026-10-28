@@ -412,13 +412,13 @@ IT không tự khoá đăng nhập của chính mình, và chỉ Quản trị to
 
 ## Việc làm trên trang quản trị đăng nhập
 
-Một số việc ít gặp làm trên trang quản trị đăng nhập (Keycloak), do quản trị viên được FPT bàn giao thực hiện.
+Một số việc ít gặp làm trên trang quản trị đăng nhập (Keycloak), tại địa chỉ `<địa chỉ đăng nhập>/admin/dw/console/`. IT đăng nhập bằng chính tài khoản cổng DW của mình; tài khoản cần thuộc nhóm `dw-it`, do FPT thêm khi bàn giao. Trang quản trị chỉ hiện hai mục Users và Groups: phần cấu hình hệ thống do FPT quản lý nên không hiện cho IT.
 
 | Việc | Cách làm |
 |---|---|
 | Mở khoá người nhập sai mật khẩu nhiều lần | Users → chọn người → tắt "Temporarily locked" |
 | Đăng xuất một người khỏi mọi thiết bị | Users → chọn người → Sessions → Sign out |
-| Bật xác thực hai lớp (OTP) | Authentication → Required actions → Configure OTP |
+| Yêu cầu một người cài xác thực hai lớp (OTP) | Users → chọn người → ô "Required user actions" → chọn "Configure OTP" → Save; lần đăng nhập sau người đó được hướng dẫn cài |
 
 Không tạo người dùng trực tiếp trên trang quản trị đăng nhập: tài khoản tạo ở đó không có vai trên cổng DW và không đặt lại mật khẩu được từ khung Thành viên.
 

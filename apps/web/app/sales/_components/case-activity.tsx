@@ -29,6 +29,8 @@ type Entry = SalesSchemas["ActivityEntry"];
 type Anchor = SalesSchemas["AnchorRef"];
 
 const TITLE = "DW1 đã làm gì";
+const NO_MODEL_STEP =
+  "Hồ sơ này không có bước nào DW1 dùng AI. Việc DW1 đọc và kiểm tra theo quy tắc nằm ở Hành trình hồ sơ.";
 
 /**
  * "DW1 đã làm gì" (slice 3): each thing a model step did on the case, oldest
@@ -104,7 +106,9 @@ export function CaseActivity({
       }
     >
       {entries.length === 0 ? (
-        <Typography.Text>DW1 chưa làm gì ở hồ sơ này.</Typography.Text>
+        // Only model steps are listed here: a case DW1 read and checked by
+        // its rules alone has none, and its "Hành trình hồ sơ" says so.
+        <Typography.Text>{NO_MODEL_STEP}</Typography.Text>
       ) : (
         <Timeline
           items={entries.map((entry, i) => ({

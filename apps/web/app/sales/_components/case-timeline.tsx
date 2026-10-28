@@ -52,24 +52,35 @@ export function CaseTimeline({
     <Card size="small" title={`Quy trình ${label(PROCEDURE, procedure)}`}>
       <div className="space-y-3">
         <div className="overflow-x-auto pb-1">
+          {/* Titles under the icons: eleven steps side by side left a title
+              a few letters wide, broken mid-word (2026-10-28). The WIV code
+              opens the line under the title. */}
           <Steps
             size="small"
+            titlePlacement="vertical"
+            // antd marks `current` (0 by default) as the active step whatever
+            // its status says, which drew "Đã nhận" as where every case is.
+            current={steps.findIndex((s) => s.states.includes(status))}
             aria-label="Các bước của quy trình"
             items={steps.map((step) => ({
               title: step.states.length
                 ? step.states.map((s) => label(states, s)).join(" · ")
                 : label(STEP_COVERAGE, step.coverage),
-              subTitle: step.step_id,
               status: !step.states.includes(status)
                 ? "wait"
                 : status === "closed" || status === "declined"
                   ? "error"
                   : "process",
-              content: step.states.includes(status)
-                ? "Hồ sơ đang ở bước này"
-                : step.coverage === "yes" || !step.states.length
-                  ? undefined
-                  : label(STEP_COVERAGE, step.coverage),
+              content: [
+                step.step_id,
+                step.states.includes(status)
+                  ? "Hồ sơ đang ở bước này"
+                  : step.coverage === "yes" || !step.states.length
+                    ? null
+                    : label(STEP_COVERAGE, step.coverage),
+              ]
+                .filter(Boolean)
+                .join(" · "),
             }))}
           />
         </div>
