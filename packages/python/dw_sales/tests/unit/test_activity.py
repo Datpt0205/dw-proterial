@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -38,7 +39,7 @@ from dw_sales.adapters.reader_client import (
     ClientRfqReader,
 )
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
-from dw_sales.application.access import Gate, PriceView
+from dw_sales.application.access import Gate, PriceView, SalesScopes
 from dw_sales.application.activity import (
     PROCESS_STEPS,
     STEPS_BY_PROMPT,
@@ -98,10 +99,15 @@ from dw_sales.domain.orders import (
 )
 from dw_sales.domain.process import StepId
 from dw_sales.domain.quotes import QuoteCase, RequestReading, Sourced
-from dw_sales.evals.graders import AN, CALLERS
+from dw_sales.evals.graders import AN as _AN
+from dw_sales.evals.graders import CALLERS
 from dw_sales.evals.recorded import ByPrompt, Recorded
 from dw_sales.evals.world import ALPHA, BETA, Caller, MemoryStore, SampleSet, open_world
 from dw_sales.evals.world import NOW as WORLD_NOW
+
+# An given the set `sales_rules_editor` (`sales.rules.propose`): since
+# 2026-10-28 a PIC proposes only when the admin gives them it.
+AN = replace(_AN, scopes=_AN.scopes | {SalesScopes.RULES_PROPOSE})
 
 pytestmark = pytest.mark.unit
 

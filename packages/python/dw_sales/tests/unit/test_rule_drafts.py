@@ -6,6 +6,7 @@ import asyncio
 import json
 import unicodedata
 import uuid
+from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, get_args
@@ -21,6 +22,7 @@ from dw_kernel.errors import (
 )
 from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
+from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifact_content import BravoUploadLayout, UploadField
 from dw_sales.application.malware import ScanVerdict
 from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
@@ -46,7 +48,9 @@ from dw_sales.application.template_reading import (
     offered,
     verify,
 )
-from dw_sales.evals.graders import AN, OUTSIDER, READER
+from dw_sales.evals.graders import AN as _AN
+from dw_sales.evals.graders import OUTSIDER as _OUTSIDER
+from dw_sales.evals.graders import READER
 from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.rule_drafts import (
     ALPHA_OTHER,
@@ -57,6 +61,11 @@ from dw_sales.evals.rule_drafts import (
     template_xlsx,
 )
 from dw_sales.evals.world import ALPHA, BETA, Caller
+
+# An (and the others below) given the set `sales_rules_editor` (`sales.rules.propose`): since
+# 2026-10-28 a PIC proposes only when the admin gives them it.
+AN = replace(_AN, scopes=_AN.scopes | {SalesScopes.RULES_PROPOSE})
+OUTSIDER = replace(_OUTSIDER, scopes=_OUTSIDER.scopes | {SalesScopes.RULES_PROPOSE})
 
 pytestmark = pytest.mark.unit
 

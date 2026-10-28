@@ -221,7 +221,9 @@ function Rules() {
                   key: "status",
                   render: (_, v) => (
                     <StatusTag tone={TONE[v.status]}>
-                      {RULE_STATUS[v.status]}
+                      {v.applied_directly && v.status === "approved"
+                        ? "Trưởng bộ phận áp dụng trực tiếp"
+                        : RULE_STATUS[v.status]}
                     </StatusTag>
                   ),
                 },

@@ -298,6 +298,8 @@ rule_versions = sa.Table(
     # tenant and workspace (`fk_rule_versions_approval_requests`, ticket 38);
     # null on a version decided before it.
     sa.Column("approval_id", UUID(as_uuid=True)),
+    # Applied by the head who wrote it, with no approval (40266fbc98bf).
+    sa.Column("applied_directly", sa.Boolean, nullable=False, server_default=sa.false()),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

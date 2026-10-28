@@ -90,7 +90,7 @@ PERSONAS: tuple[Persona, ...] = (
     Persona("dev|khoa.lam", "tenant-alpha", ("sales_pic",), ("sales_quote_approver",)),
     # Leadership: counts and times only.
     Persona("dev|ha.vu", "tenant-alpha", ("sales_viewer",)),
-    # Tenant IT: proposes a rule version (`sales_rules_editor`), never a
+    # The admin: proposes a rule version (`sales_rules_editor`), never a
     # price-bearing one and never approves (dw_sales ADR 0003, 2026-10-21).
     # The separation-of-duty rules keep prices and the approval off a
     # membership that administers members.

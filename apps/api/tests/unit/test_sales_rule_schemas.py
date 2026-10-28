@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from dw_api.exception_handlers import register_exception_handlers
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.rules import OVERRIDABLE, RuleKey
-from dw_sales.evals.graders import AN, CALLERS, READER, Caller
+from dw_sales.evals.graders import CALLERS, GIANG, READER, Caller
 from dw_sales.evals.world import SampleSet, open_world
 from dw_sales.presentation.routes import build_router
 
@@ -46,16 +46,16 @@ async def _get(caller: Caller, path: str) -> httpx.Response:
 
 
 @pytest.mark.parametrize("key", list(RuleKey), ids=str)
-async def test_a_pic_reads_each_keys_schema(key: RuleKey) -> None:
-    response = await _get(AN, f"/api/v1/sales/rules/{key.value}/schema")
+async def test_the_head_reads_each_keys_schema(key: RuleKey) -> None:
+    response = await _get(GIANG, f"/api/v1/sales/rules/{key.value}/schema")
     assert response.status_code == 200
     body = response.json()
     assert body["key"] == key.value
     assert body["json_schema"] == OVERRIDABLE[key].model_json_schema(by_alias=True)
 
 
-async def test_a_pic_reads_the_platforms_released_documents() -> None:
-    response = await _get(AN, "/api/v1/sales/rules/sales_kpi/platform")
+async def test_the_head_reads_the_platforms_released_documents() -> None:
+    response = await _get(GIANG, "/api/v1/sales/rules/sales_kpi/platform")
     assert response.status_code == 200
     (current, *_) = response.json()
     assert (current["ref"], current["current"]) == ("sales_kpi@1.0.0", True)
@@ -74,6 +74,6 @@ async def test_without_the_propose_scope_both_reads_are_refused(read: str) -> No
 @pytest.mark.parametrize("read", ["schema", "platform"])
 async def test_an_unknown_key_is_not_found(read: str) -> None:
     for key in ("sales_nothing", "SALES_KPI", "sales_kpi.x"):
-        response = await _get(AN, f"/api/v1/sales/rules/{key}/{read}")
+        response = await _get(GIANG, f"/api/v1/sales/rules/{key}/{read}")
         assert response.status_code == 404, key
         assert response.json()["code"] == "not_found"

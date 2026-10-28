@@ -1,14 +1,13 @@
 """The demo tenant's own order rules, through the route a customer's would
-take (ticket 19): proposed by its Sales PIC, approved by its Sales head.
+take: applied by its Sales head, whose own version is in force at once
+(2026-10-28, migration 40266fbc98bf: a PIC proposes nothing, the head applies
+directly, and only an admin's proposal waits on the head's approval).
 
 The sample set holds the version (`adapters/mock/data/policies/`). It reaches
-the database the way any tenant's version does: proposed through
-`SalesRulesService`, which opens its `sales.rules` approval, decided on that
-approval by the platform's `ApproveAndResumeService` with the Sales guard, and
-carried out by `RuleSettlement` as the worker carries it out (ticket 38), each
-step as a person whose access context is resolved from their membership. So
-the demo exercises the maker/checker rule and the audit trail instead of a row
-written around them. Re-running is a no-op once that version is in force.
+the database the way any tenant's version does, through `SalesRulesService`
+as a person whose access context is resolved from their membership, so the
+audit trail records it as the head's. Re-running is a no-op once that version
+is in force.
 
 Which version is the caller's to name, because a version that turns a model
 step on is refused unless the step's live eval met its bar for the model
@@ -33,15 +32,11 @@ Local and test profiles only (`demo_reset`, the API's integration suite).
 
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
-from dw_agent_runtime.approval_flow import ApproveAndResumeService
-from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
@@ -50,7 +45,6 @@ from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
 )
-from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.identity import context_from
@@ -65,10 +59,7 @@ from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.application.access import Gate, sales_scope
 from dw_sales.application.model_readiness import BARS, ModelAttestation
 from dw_sales.application.rules import (
-    RULES_APPROVAL,
-    RuleDecisions,
     RuleKey,
-    RuleSettlement,
     SalesRulesService,
 )
 
@@ -77,33 +68,8 @@ DEMO_TENANT = "tenant-alpha"
 # the sample set's own with all six on (tests over seeded measurements).
 DEMO_POLICIES = DATA_DIR / "policies" / "no_model"
 MODEL_STEP_POLICIES = DATA_DIR / "policies"
-PROPOSER = "dev|an.nguyen"  # Sales PIC
-APPROVER = "dev|giang.do"  # Sales head
+HEAD = "dev|giang.do"  # Sales head
 _CONFIGS = Path(__file__).resolve().parents[6] / "configs"
-# Long enough that no run of the seed's own counts as stale: it starts none.
-_STALE_AFTER_SECONDS = 3600
-
-
-class _NoRuns:
-    """`WorkflowRunnerPort` for a process that decides run-less approvals
-    only: a `sales.rules` approval has no run to resume, so nothing here is
-    called, and a call is a defect rather than a silent no-op."""
-
-    def hosts(self, *, worker_id: str, worker_version: str, graph_version: str) -> bool:
-        raise NotImplementedError("not exercised by a run-less approval")
-
-    async def start(
-        self, *, run_context: RunContext, input_payload: dict[str, object]
-    ) -> uuid.UUID:
-        raise NotImplementedError("not exercised by a run-less approval")
-
-    async def resume(
-        self, *, run_context: RunContext, run_id: uuid.UUID, resume_payload: dict[str, object]
-    ) -> None:
-        raise NotImplementedError("not exercised by a run-less approval")
-
-    async def withdraw(self, *, run_context: RunContext, run_id: uuid.UUID) -> None:
-        raise NotImplementedError("not exercised by a run-less approval")
 
 
 async def _context(sessions: async_sessionmaker[AsyncSession], subject: str) -> AccessContext:
@@ -119,9 +85,9 @@ async def _context(sessions: async_sessionmaker[AsyncSession], subject: str) -> 
 
 
 async def seed_demo_rules(database_url: str, policies: Path) -> str | None:
-    """Propose and approve the demo tenant's own order rules, the version
-    ``policies`` holds (`DEMO_POLICIES` or `MODEL_STEP_POLICIES`); the version
-    in force afterwards, or None when ``policies`` holds none."""
+    """Apply the demo tenant's own order rules, the version ``policies``
+    holds (`DEMO_POLICIES` or `MODEL_STEP_POLICIES`), as its Sales head; the
+    version in force afterwards, or None when ``policies`` holds none."""
     own = load_tenant_order_rules(policies)
     if own is None:
         return None
@@ -129,59 +95,25 @@ async def seed_demo_rules(database_url: str, policies: Path) -> str | None:
     sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:
         lookup = SqlRuleVersionLookup(sessions)
-        pic = await _context(sessions, PROPOSER)
-        head = await _context(sessions, APPROVER)
-        scope = sales_scope(pic)
-        current = await lookup.approved(scope, RuleKey.ORDER_RULES)
+        head = await _context(sessions, HEAD)
+        current = await lookup.approved(sales_scope(head), RuleKey.ORDER_RULES)
         if current is not None and current.version == own.policy_version:
             return current.ref
         uow = SqlSalesUnitOfWorkFactory(
             sessions, audit=SqlAuditRepository, approvals=SqlApprovalRepository
         )
         book = rule_book(load_sales_policies(_CONFIGS / "policies", _CONFIGS / "copy"), lookup)
-        clock, ids = SystemClock(), Uuid7Generator()
-        readiness = model_readiness(_CONFIGS, sessions)
         service = SalesRulesService(
             uow,
             Gate(ScopeAuthorizationService()),
             book,
-            clock,
-            ids,
+            SystemClock(),
+            Uuid7Generator(),
             SqlWorkspaceDirectory(sessions),
-            readiness,
+            model_readiness(_CONFIGS, sessions),
         )
-        stored = await lookup.find(scope, RuleKey.ORDER_RULES, own.policy_version)
-        if stored is None or stored.status != "proposed" or stored.approval_id is None:
-            document = own.model_dump(mode="json", by_alias=True)
-            stored = await lookup.find(
-                scope,
-                RuleKey.ORDER_RULES,
-                (await service.propose(pic, RuleKey.ORDER_RULES, document)).version,
-            )
-        assert stored is not None and stored.approval_id is not None
-        flow = ApproveAndResumeService(
-            uow_factory=SqlPlatformUnitOfWorkFactory(sessions),
-            runner=_NoRuns(),
-            run_store=SqlWorkerRunStore(sessions, stale_run_after_seconds=_STALE_AFTER_SECONDS),
-            clock=clock,
-            id_generator=ids,
-            strict_approval_prefixes=frozenset({"sales."}),
-            decision_guards={RULES_APPROVAL: RuleDecisions(uow, book, readiness)},
-        )
-        await flow.decide(
-            approval_id=stored.approval_id,
-            approve=True,
-            comment="Bộ quy tắc demo của khách",
-            context=head,
-            authorization=ScopeAuthorizationService(),
-        )
-        # What the worker does with the `sales.rules.decided` event, done here so
-        # the version is in force when the seed returns; the worker's own
-        # delivery of the event then finds it settled and writes nothing.
-        decided = await RuleSettlement(uow, book, clock, ids, readiness).settle(
-            stored.approval_id, head
-        )
-        return decided.ref
+        document = own.model_dump(mode="json", by_alias=True)
+        return (await service.propose(head, RuleKey.ORDER_RULES, document)).ref
     finally:
         await engine.dispose()
 
@@ -196,7 +128,7 @@ async def seed_test_measurements(database_url: str) -> None:
     engine = create_async_engine(database_url, poolclass=NullPool)
     sessions = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:
-        scope = sales_scope(await _context(sessions, PROPOSER))
+        scope = sales_scope(await _context(sessions, HEAD))
         worker, _ = parse_worker_file(_CONFIGS / "workers" / "sales.yaml")
         model = step_model(_CONFIGS, worker.default_model_profile).model_for(scope.tenant_id.value)
         attest = ModelAttestation(

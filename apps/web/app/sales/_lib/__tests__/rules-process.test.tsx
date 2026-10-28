@@ -116,6 +116,7 @@ const FOLLOWUPS_DOC = {
 
 const KPI_VERSION: RuleVersion = {
   version_id: "0aa10aa0-c939-7000-8539-31fd3e621700",
+  applied_directly: false,
   key: "sales_kpi",
   version: "1.0.1",
   ref: "sales_kpi@1.0.1",

@@ -13,6 +13,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
@@ -23,6 +24,7 @@ import pytest
 from dw_kernel.errors import ConflictError
 from dw_sales.adapters.memory_rules import MemoryRuleVersions
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
+from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifact_content import SalesEmailCopy
 from dw_sales.application.rules import (
     OVERRIDABLE,
@@ -35,8 +37,13 @@ from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.orders import FindingCode
 from dw_sales.domain.process import StepId
-from dw_sales.evals.graders import AN, CALLERS, OUTSIDER
+from dw_sales.evals.graders import AN as _AN
+from dw_sales.evals.graders import CALLERS, OUTSIDER
 from dw_sales.evals.world import BETA, SampleSet, World, open_world
+
+# An given the set `sales_rules_editor` (`sales.rules.propose`): since
+# 2026-10-28 a PIC proposes only when the admin gives them it.
+AN = replace(_AN, scopes=_AN.scopes | {SalesScopes.RULES_PROPOSE})
 
 pytestmark = pytest.mark.unit
 

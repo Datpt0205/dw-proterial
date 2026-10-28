@@ -46,6 +46,11 @@ const SALES_PAGES = [
   "/sales/activity",
 ];
 
+// A PIC works to the company's settings (2026-10-28): no rules pages.
+const PIC_PAGES = SALES_PAGES.filter(
+  (page) => page !== "/sales/rules" && page !== "/sales/rules/process",
+);
+
 /**
  * Each persona's scopes as `/auth/bootstrap` hands them to the session (seed
  * of ticket 11, sales migration 68305ebe4a83): their platform role's scopes
@@ -69,7 +74,6 @@ const PIC = [
   "sales.order.cross_check",
   "sales.quote.prepare",
   "sales.worker.pause",
-  "sales.rules.propose",
 ];
 const PERSONAS: Record<string, { roles: string[]; scopes: string[] }> = {
   "an.nguyen (sales_pic)": {
@@ -88,6 +92,8 @@ const PERSONAS: Record<string, { roles: string[]; scopes: string[] }> = {
       "sales.price.other_customers.read",
       "sales.quote.approve",
       "sales.worker.resume",
+      "sales.rules.propose",
+      "sales.rules.approve",
     ],
   },
   "ha.vu (sales_viewer)": {
@@ -95,8 +101,8 @@ const PERSONAS: Record<string, { roles: string[]; scopes: string[] }> = {
     scopes: [...MEMBER, "sales.overview.read"],
   },
   "binh.tran (no sales.*)": { roles: ["member"], scopes: MEMBER },
-  // Tenant IT with the set `sales_rules_editor` (2026-10-21): the rules page
-  // and no other Sales page.
+  // The admin with the set `sales_rules_editor` (2026-10-21, kept for the
+  // admin on 2026-10-28): the rules pages and no other Sales page.
   "tam.ngo (org_admin + sales_rules_editor)": {
     roles: ["org_admin"],
     scopes: [
@@ -175,8 +181,8 @@ describe("visibleNav", () => {
   });
 
   it.each([
-    ["an.nguyen (sales_pic)", SALES_PAGES],
-    ["dieu.hoang (sales_pic)", SALES_PAGES],
+    ["an.nguyen (sales_pic)", PIC_PAGES],
+    ["dieu.hoang (sales_pic)", PIC_PAGES],
     ["giang.do (sales_head)", SALES_PAGES],
     // The viewer reads aggregates only: the overview and DW1's activity
     // (counts, no case), and no other Sales page.
@@ -207,10 +213,8 @@ describe("visibleNav", () => {
   it("shows the rules page only to who may propose a version, as GET /sales/rules does", () => {
     const pages = (scopes: string[]) =>
       navPages(visibleNav(NAV, viewer(scopes))).map((item) => item.href);
-    expect(pages(PIC)).toContain("/sales/rules");
-    expect(
-      pages(PIC.filter((scope) => scope !== "sales.rules.propose")),
-    ).not.toContain("/sales/rules");
+    expect(pages([...PIC, "sales.rules.propose"])).toContain("/sales/rules");
+    expect(pages(PIC)).not.toContain("/sales/rules");
   });
 
   it("keeps only the items a group's viewer may see, and drops an empty group", () => {
@@ -360,7 +364,7 @@ describe("barNav", () => {
   }
 
   it.each([
-    ["an.nguyen (sales_pic)", SALES_PAGES],
+    ["an.nguyen (sales_pic)", PIC_PAGES],
     ["giang.do (sales_head)", SALES_PAGES],
     ["ha.vu (sales_viewer)", ["/sales/overview", "/sales/activity"]],
   ])("is the Sales pages alone for %s", (persona, pages) => {
