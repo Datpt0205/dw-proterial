@@ -42,7 +42,7 @@ and a later stage must come after an earlier one.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
@@ -73,6 +73,9 @@ class Followup(StrEnum):
     QUOTE_WAITING_DESIGN = "quote_waiting_design"
     QUOTE_DEADLINE = "quote_deadline"
     WAITING_CUSTOMER = "waiting_customer"
+    # The case has come to a person's turn: told at once, not after a wait
+    # (2026-10-28: "nếu dừng thì có noti cho họ thấy chưa").
+    YOUR_TURN = "your_turn"
 
 
 class Stage(StrEnum):
@@ -82,6 +85,8 @@ class Stage(StrEnum):
     REMIND = "remind"
     ESCALATE = "escalate"
     WARN = "warn"
+    # Told once, as the wait begins.
+    NOTIFY = "notify"
 
 
 def _distinct(values: tuple[str, ...], what: str) -> tuple[str, ...]:
@@ -202,6 +207,17 @@ class WaitingCustomerRule(BaseModel):
     )
 
 
+class YourTurnRule(BaseModel):
+    """A case DW1 has done its part on, now waiting on a person: tell them at
+    once. The assignee for a step on their own case, the head for one decided
+    on the case by someone else (a cross-check, an approval); nobody while
+    DW1, Design or the customer holds it (those have their own reminders)."""
+
+    model_config = _FROZEN
+
+    enabled: bool = Field(description="Bật hoặc tắt báo ngay khi hồ sơ đến lượt người xử lý.")
+
+
 class WorkingHours(BaseModel):
     """When a reminder may be delivered; outside them it waits."""
 
@@ -314,6 +330,7 @@ class SalesFollowups(BaseModel):
     )
     quote_deadline: QuoteDeadlineRule = Field(description="Hạn báo giá sắp đến.")
     waiting_customer: WaitingCustomerRule = Field(description="Hồ sơ đang chờ khách hàng.")
+    your_turn: YourTurnRule = Field(description="Hồ sơ đến lượt người xử lý.")
 
     @property
     def version(self) -> str:
@@ -416,11 +433,26 @@ def _after(
     ]
 
 
-def owed(policy: SalesFollowups, cases: Sequence[WaitingCase], now: datetime) -> list[Due]:
+def owed(
+    policy: SalesFollowups,
+    cases: Sequence[WaitingCase],
+    now: datetime,
+    *,
+    turns: Mapping[CaseKind, Mapping[str, Audience]] | None = None,
+) -> list[Due]:
     """Every stage whose threshold has passed at ``now``, on every case, for
     every follow-up switched on. Quiet hours are not this function's: what is
-    owed stays owed until it is sent or the case stops waiting."""
+    owed stays owed until it is sent or the case stops waiting.
+
+    ``turns``: whom a case waits on in each status, per kind (the overview's
+    `whose_turn`); with none, no "your turn" is owed."""
     found: list[Due] = []
+    for case in cases:
+        audience = (turns or {}).get(case.kind, {}).get(case.status)
+        if policy.your_turn.enabled and audience is not None:
+            found.append(
+                Due(case, Followup.YOUR_TURN, Stage.NOTIFY, case.status_since, (audience,))
+            )
     orders = policy.order_unconfirmed
     design = policy.quote_waiting_design
     deadline = policy.quote_deadline

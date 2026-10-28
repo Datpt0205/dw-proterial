@@ -488,6 +488,33 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       label: "Múi giờ",
       help: "Tên múi giờ, ví dụ Asia/Ho_Chi_Minh.",
     },
+    your_turn: {
+      label: "Báo khi đến lượt",
+      help: "DW1 xong phần của mình thì báo ngay người phải làm tiếp: Sales phụ trách, hoặc Trưởng bộ phận cho bước kiểm chéo và duyệt.",
+    },
+    "your_turn.enabled": { label: "Bật báo khi đến lượt" },
+  },
+  sales_export_control: {
+    sample: {
+      label: "Đang dùng bản mẫu",
+      help: "Bật khi câu hỏi và cấp duyệt chưa phải của công ty; tắt khi đã thay bằng bộ thật.",
+    },
+    red_flags: {
+      label: "Câu hỏi Red flag",
+      help: "Mỗi câu trả lời Có giữ đơn của khách lại để người phụ trách kiểm soát xuất khẩu quyết định.",
+    },
+    "red_flags[].id": { label: "Mã câu hỏi", help: "Dạng rf01, rf02…" },
+    "red_flags[].text": { label: "Nội dung câu hỏi" },
+    esf_approvers: {
+      label: "Các cấp duyệt ESF",
+      help: "Theo thứ tự ký; mỗi cấp một dòng ký trên phiếu ESF DW1 soạn.",
+    },
+    noec_email: {
+      label: "Thư NOEC",
+      help: "Thư đề nghị khách xác nhận NOC; {customer_name} được điền tên khách.",
+    },
+    "noec_email.subject": { label: "Tiêu đề" },
+    "noec_email.body": { label: "Nội dung" },
   },
 };
 

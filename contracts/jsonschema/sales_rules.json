@@ -747,6 +747,22 @@
         ],
         "title": "WorkingHours",
         "type": "object"
+      },
+      "YourTurnRule": {
+        "additionalProperties": false,
+        "description": "A case DW1 has done its part on, now waiting on a person: tell them at\nonce. The assignee for a step on their own case, the head for one decided\non the case by someone else (a cross-check, an approval); nobody while\nDW1, Design or the customer holds it (those have their own reminders).",
+        "properties": {
+          "enabled": {
+            "description": "Bật hoặc tắt báo ngay khi hồ sơ đến lượt người xử lý.",
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "YourTurnRule",
+        "type": "object"
       }
     },
     "additionalProperties": false,
@@ -790,6 +806,10 @@
       "working_hours": {
         "$ref": "#/$defs/WorkingHours",
         "description": "Giờ làm việc: ngoài giờ này không gửi nhắc, nhắc được hoãn chứ không bỏ."
+      },
+      "your_turn": {
+        "$ref": "#/$defs/YourTurnRule",
+        "description": "Hồ sơ đến lượt người xử lý."
       }
     },
     "required": [
@@ -801,7 +821,8 @@
       "order_unconfirmed",
       "quote_waiting_design",
       "quote_deadline",
-      "waiting_customer"
+      "waiting_customer",
+      "your_turn"
     ],
     "title": "SalesFollowups",
     "type": "object"

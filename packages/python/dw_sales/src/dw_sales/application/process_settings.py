@@ -540,6 +540,7 @@ PROCESS_SETTINGS: Final[tuple[Placement, ...]] = _in(
     "working_hours.start",
     "working_hours.end",
     "morning_brief",
+    "your_turn",
 )
 
 

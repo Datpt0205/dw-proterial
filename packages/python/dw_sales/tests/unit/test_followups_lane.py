@@ -109,13 +109,17 @@ def _tenant_version(world: World, version: str, **sections: dict[str, Any]) -> N
     )
 
 
-async def _rig(*, brief: bool = False, **sections: dict[str, Any]) -> Rig:
+async def _rig(*, brief: bool = False, turn: bool = False, **sections: dict[str, Any]) -> Rig:
     world = open_world(REPO, SampleSet.of(REPO, None), CALLERS)
     seen = await world.process_each(AN, ["M01"])
     order_id = seen["M01"][0].case_id
     assert order_id is not None
     if not brief:
         sections = {"morning_brief": {"enabled": False}, **sections}
+    if not turn:
+        # The reminders below are timed from the PO's arrival; "your turn" is
+        # told at once and has its tests of its own.
+        sections = {"your_turn": {"enabled": False}, **sections}
     if sections:
         _tenant_version(world, "1.0.1", **sections)
     sender = Sender()
@@ -348,3 +352,25 @@ async def test_old_brief_records_are_forgotten() -> None:
     await rig.tick(tuesday + 41 * 24 * HOUR)
     days = sorted(k.subject for k in rig.records() if k.followup == BRIEF)
     assert len(days) == 1
+
+
+# ------------------------------------------- your turn (2026-10-28) --
+
+
+async def test_the_pic_is_told_at_once_when_dw1_hands_the_case_over() -> None:
+    rig = await _rig(turn=True)
+    sent = await rig.tick(rig.received)
+    assert len(sent) == 1
+    (call,) = rig.sender.calls
+    assert call.recipients == (AN.user_id,)
+    assert call.title == "Đến lượt bạn: PO VLX-PO-2609-0118"
+    assert call.link == f"/sales/orders/{rig.order_id}"
+    # Once for this wait, however many ticks follow.
+    await rig.tick(rig.received + 5 * MINUTE)
+    await rig.tick(rig.received + HOUR)
+    assert len(rig.sender.calls) == 1
+
+
+async def test_a_tenant_may_switch_your_turn_off() -> None:
+    rig = await _rig()
+    assert await rig.tick(rig.received) == ()

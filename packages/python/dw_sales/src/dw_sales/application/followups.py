@@ -58,7 +58,7 @@ from dw_platform.domain.audit import lane_audit_event, system_actor
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.overview_ports import BUCKETS, Bucket
-from dw_sales.application.overview_service import STATUS_BUCKETS
+from dw_sales.application.overview_service import STATUS_BUCKETS, WHOSE_TURN
 from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import (
@@ -209,7 +209,7 @@ class FollowupLane:
             cases = await work.followups.cases(
                 LOADED, received_since=slot.since if slot is not None else now
             )
-            stages = owed(policy, cases, now)
+            stages = owed(policy, cases, now, turns=WHOSE_TURN)
             brief_key = None if slot is None else _brief_key(slot)
             asked = [key_of(d) for d in stages] + ([brief_key] if brief_key else [])
             done = await work.followups.already_sent(asked) if asked else frozenset()
@@ -395,6 +395,20 @@ def reminder_text(policy: SalesFollowups, due: Due, now: datetime) -> tuple[str,
     ref, customer = _reference(case), case.customer_code
     since = _local(due.since, policy)
     match due.followup, due.stage:
+        case Followup.YOUR_TURN, _:
+            what = "PO" if case.kind is CaseKind.ORDER else "Báo giá"
+            if due.notify == ("head",):
+                step = "kiểm chéo" if case.kind is CaseKind.ORDER else "duyệt"
+                return (
+                    f"{what} {ref} chờ {step}",
+                    f"{what} {ref} của khách {customer} chờ {step} từ {since}. "
+                    "Mở hồ sơ để giao hoặc tự xử lý.",
+                )
+            return (
+                f"Đến lượt bạn: {what} {ref}",
+                f"DW1 đã xong phần của mình; {what.lower()} {ref} của khách {customer} "
+                f"chờ bạn từ {since}. Mở hồ sơ để xem việc cần làm.",
+            )
         case Followup.ORDER_UNCONFIRMED, Stage.REMIND:
             hours = policy.order_unconfirmed.remind.after_hours
             return (

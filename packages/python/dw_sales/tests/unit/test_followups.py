@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.application.followups import LOADED
+from dw_sales.application.overview_service import WHOSE_TURN
 from dw_sales.application.rules import OVERRIDABLE, RuleKey
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.followups import (
@@ -34,7 +35,7 @@ from dw_sales.domain.followups import (
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[5]
-POLICY_FILE = REPO / "configs" / "policies" / "sales_followups@1.0.0.yaml"
+POLICY_FILE = REPO / "configs" / "policies" / "sales_followups@1.1.0.yaml"
 # Monday 19 October 2026, 08:00 in Ho Chi Minh City (UTC+7).
 MONDAY_8 = datetime(2026, 10, 19, 1, 0, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -90,7 +91,7 @@ def _owed(
 
 def test_the_shipped_policy_holds_the_proposals_numbers() -> None:
     policy = load_sales_policies(REPO / "configs" / "policies", REPO / "configs" / "copy").followups
-    assert policy.ref == "sales_followups@1.0.0"
+    assert policy.ref == "sales_followups@1.1.0"
     assert policy.order_unconfirmed.remind.after_hours == 4
     assert policy.order_unconfirmed.remind.notify == ("pic",)
     assert policy.order_unconfirmed.escalate.after_hours == 24
@@ -321,4 +322,42 @@ def test_followups_name_the_stage_they_are_owed_at() -> None:
         "quote_waiting_design",
         "quote_deadline",
         "waiting_customer",
+        "your_turn",
     }
+
+
+# ------------------------------------------- your turn (2026-10-28) --
+
+
+def test_whose_turn_reads_the_buckets_and_the_next_steps() -> None:
+    order, quote = WHOSE_TURN[CaseKind.ORDER], WHOSE_TURN[CaseKind.QUOTE]
+    assert order["in_review"] == "pic"
+    assert order["uploaded_to_bravo"] == "head"  # a cross-check, by someone else
+    assert "received" not in order  # DW1's own
+    assert "correction_requested" not in order  # the customer's
+    assert quote["received"] == "pic"
+    assert quote["design_replied"] == "pic"
+    assert quote["pending_approval"] == "head"
+    assert "sent_to_design" not in quote  # Design's
+
+
+def test_a_case_waiting_on_a_person_is_owed_at_once_and_once_per_status() -> None:
+    case = _case(status="in_review", since=MONDAY_8)
+    (due,) = [
+        d
+        for d in owed(PLATFORM, [case], MONDAY_8, turns=WHOSE_TURN)
+        if d.followup.value == "your_turn"
+    ]
+    assert (due.stage.value, due.since, due.notify) == ("notify", MONDAY_8, ("pic",))
+    later = _case(status="prepared", since=MONDAY_8 + HOUR)
+    (again,) = [
+        d
+        for d in owed(PLATFORM, [later], MONDAY_8 + HOUR, turns=WHOSE_TURN)
+        if d.followup.value == "your_turn"
+    ]
+    assert again.since != due.since  # a new wait, a new notice
+    assert not [
+        d
+        for d in owed(PLATFORM, [_case(status="received")], MONDAY_8, turns=WHOSE_TURN)
+        if d.followup.value == "your_turn"
+    ]

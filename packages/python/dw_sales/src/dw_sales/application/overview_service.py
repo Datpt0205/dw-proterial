@@ -268,6 +268,25 @@ def figure_basis(inbox_ids: frozenset[str]) -> FigureBasis:
 
 # Steps decided on the whole case rather than on its assignee.
 _DECIDED_ON_THE_CASE: Final = frozenset({"cross_check", "approve"})
+
+
+def _turn(kind: CaseKind, status: str) -> Literal["pic", "head"] | None:
+    bucket = STATUS_BUCKETS[kind].get(status)
+    following = (_ORDER_NEXT if kind is CaseKind.ORDER else _QUOTE_NEXT).get(status)  # type: ignore[call-overload]
+    if bucket == "approver" or (following is not None and following[0] in _DECIDED_ON_THE_CASE):
+        return "head"
+    return "pic" if bucket == "sales" else None
+
+
+# Whom a case waits on in each status, as the follow-ups tell them (the
+# "your turn" notice, 2026-10-28): the assignee for a step Sales takes on its
+# own case, the head for one decided on the case by someone else; a status
+# DW1, Design or the customer holds is not here. Read from the buckets and the
+# next steps above, so whose turn it is has one owner.
+WHOSE_TURN: Final[Mapping[CaseKind, Mapping[str, Literal["pic", "head"]]]] = {
+    kind: {status: audience for status in statuses if (audience := _turn(kind, status)) is not None}
+    for kind, statuses in STATUS_BUCKETS.items()
+}
 # The page a work list is cut into when the caller names none.
 WORK_PAGE: Final = 50
 
