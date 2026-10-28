@@ -10,6 +10,7 @@ import {
   InboxOutlined,
   ProjectOutlined,
   RobotOutlined,
+  SafetyCertificateOutlined,
   ScheduleOutlined,
   SettingOutlined,
   ShoppingCartOutlined,
@@ -134,6 +135,13 @@ export const salesNav: NavEntry[] = [
             label: "Dữ liệu chủ",
             hint: "Khách hàng, mã hàng, bảng quy đổi mã, báo giá và LME: nhập từ tệp, xem trước, Trưởng bộ phận duyệt",
             icon: DatabaseOutlined,
+            scope: "sales.case.read",
+          },
+          {
+            href: "/sales/export-control",
+            label: "Kiểm soát xuất khẩu",
+            hint: "WIV-03-032 theo từng khách: danh sách cấm, red flag, NOEC/NOC, ESF và gia hạn hằng năm; đơn của khách còn thiếu bước bị giữ",
+            icon: SafetyCertificateOutlined,
             scope: "sales.case.read",
           },
           {

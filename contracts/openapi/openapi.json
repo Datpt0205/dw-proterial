@@ -4898,6 +4898,21 @@
             "title": "Cores",
             "type": "integer"
           },
+          "export_classification": {
+            "anyOf": [
+              {
+                "enum": [
+                  "applicable",
+                  "not_applicable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Export Classification"
+          },
           "family": {
             "anyOf": [
               {
@@ -4956,7 +4971,8 @@
           "uom",
           "moq",
           "pack_multiple",
-          "standard_lead_time_days"
+          "standard_lead_time_days",
+          "export_classification"
         ],
         "title": "ItemView",
         "type": "object"

@@ -41,6 +41,7 @@ const SALES_PAGES = [
   "/sales/rules",
   "/sales/rules/process",
   "/sales/master-data",
+  "/sales/export-control",
   "/sales/overview",
   "/sales/activity",
 ];
@@ -138,6 +139,7 @@ describe("the nav registry", () => {
       "Sales › Quản lý › Quy tắc",
       "Sales › Quản lý › Quy trình DW1",
       "Sales › Quản lý › Dữ liệu chủ",
+      "Sales › Quản lý › Kiểm soát xuất khẩu",
       "Sales › Quản lý › Tổng quan quy trình",
       "Sales › Quản lý › Hoạt động DW1",
     ]);
