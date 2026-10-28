@@ -156,10 +156,10 @@ function renderPage() {
   );
 }
 
-async function openKpi() {
+async function openKpi(action = "Đề xuất phiên bản mới") {
   fireEvent.click(
     await screen.findByRole("button", {
-      name: "Đề xuất phiên bản mới: Chỉ tiêu KPI",
+      name: `${action}: Chỉ tiêu KPI`,
     }),
   );
   return (await screen.findByRole("spinbutton", {
@@ -330,7 +330,10 @@ describe("the rules page (tickets 38, 40)", () => {
     async () => {
       scopes = [...scopes, "sales.rules.approve"];
       renderPage();
-      const hours = await openKpi();
+      expect(
+        await screen.findByText(/Bản bạn sửa được áp dụng ngay/),
+      ).toBeTruthy();
+      const hours = await openKpi("Sửa quy tắc");
       fireEvent.change(hours, { target: { value: "6" } });
       fireEvent.blur(hours);
       fireEvent.click(screen.getByRole("button", { name: "Xem thay đổi" }));
