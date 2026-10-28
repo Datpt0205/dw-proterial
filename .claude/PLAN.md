@@ -37,15 +37,15 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 2026-10-20..25: board, history, defects A–E, process map, IT accounts.
   2026-10-27: real mail from a drop folder of `.eml` files (ticket 43).
-- **Next:** 10-27 sweep and owed fixes done and checked on the stack
-  (`sales.md` State); the plant PC mail drop; `onprem-up` in `uat`; DW2.
+- 10-28: licence notices (`make third-party-notices`); Keycloak `dw-it`
+  group for the customer's IT; stack run clean (`sales.md` State).
+- **Next:** the plant PC mail drop; `onprem-up` in `uat`; DW2.
 
 ## Decisions Đạt owes
 
 - **Platform:** upstream `953086f`, `5452299`+`26d97dd` and this batch to
   `Datpt0205/codebase`; 46 citations of ADR-001..003 point at documents this
-  repo never had; renumbering duplicate ADRs. 10-27 (`web-ui.md`): may an
-  org admin revoke an admin? Tenant "Múi giờ"/"Ngôn ngữ" are read by nothing.
+  repo never had; renumbering duplicate ADRs.
 - **Runtime:** a plan quota on direct model calls (the runner's only).
 - **Ops:** nothing pushed until Đạt says so (ClamAV bump off, ticket 25).
 - **On premises:** Proterial's AD details for LDAP federation, and whether
@@ -56,8 +56,7 @@ own file and a row here.
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
-  10-27 decided (doing, in order): routed mail done (done), revoke rail,
-  DW1 account locked on Thành viên, tenant zone/language read-only.
+  the IP-indemnity clause's wording (carve-outs, cap) with FPT legal.
 
 ## How a feature is checked here
 
