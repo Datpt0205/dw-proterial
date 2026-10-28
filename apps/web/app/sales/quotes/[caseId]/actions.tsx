@@ -519,74 +519,98 @@ function IntakeFinding({
             : ""}
         </Typography.Text>
       ) : quote.status === "received" ? (
-        <Form
-          form={form}
-          layout="inline"
-          validateTrigger="onBlur"
-          onFinish={async (values) => {
-            const body = {
-              case_version: quote.case_version,
-              quantity: values.quantity || null,
-              needed_by: fromPickerDay(values.needed_by) ?? null,
-              customer_code: values.customer_code?.trim().toUpperCase() || null,
-              note: values.note?.trim() || null,
-            };
-            const result = await run(
-              `answer/${finding.key}`,
-              body,
-              (key) =>
-                salesApi().answerFinding(quote.case_id, finding.key, body, key),
-              "Đã bổ sung thông tin yêu cầu báo giá",
-            );
-            if (result.ok) {
-              setError(null);
-              onDone();
-            } else setError(result.error);
-          }}
-        >
+        <>
           {finding.code === "customer_unknown" ? (
-            <Form.Item
-              name="customer_code"
-              label="Mã khách hàng"
-              rules={[
-                {
-                  required: true,
-                  message: "Cần mã khách",
-                  validateTrigger: "onSubmit",
-                },
-                {
-                  pattern: CUSTOMER_CODE,
-                  message: "Mã khách gồm chữ in hoa và số",
-                  transform: (v: string) => v?.trim().toUpperCase(),
-                },
-              ]}
-            >
-              <Input maxLength={16} />
+            // Why a person confirms it: a forwarded request names its buyer only
+            // in the document, and a guessed customer would price for the wrong
+            // one. DW1's reading is filled in, never decided (2026-10-28).
+            <Typography.Paragraph>
+              Thư gửi từ {quote.sender}, không phải từ địa chỉ của khách, nên
+              DW1 không chắc khách là ai. DW1 đọc tên người mua trên yêu cầu ra
+              mã {quote.customer_code}, đã điền sẵn bên dưới: kiểm tra rồi bấm
+              “Ghi câu trả lời của khách”, hoặc sửa mã nếu sai.
+            </Typography.Paragraph>
+          ) : null}
+          <Form
+            form={form}
+            layout="inline"
+            validateTrigger="onBlur"
+            initialValues={
+              finding.code === "customer_unknown"
+                ? { customer_code: quote.customer_code }
+                : undefined
+            }
+            onFinish={async (values) => {
+              const body = {
+                case_version: quote.case_version,
+                quantity: values.quantity || null,
+                needed_by: fromPickerDay(values.needed_by) ?? null,
+                customer_code:
+                  values.customer_code?.trim().toUpperCase() || null,
+                note: values.note?.trim() || null,
+              };
+              const result = await run(
+                `answer/${finding.key}`,
+                body,
+                (key) =>
+                  salesApi().answerFinding(
+                    quote.case_id,
+                    finding.key,
+                    body,
+                    key,
+                  ),
+                "Đã bổ sung thông tin yêu cầu báo giá",
+              );
+              if (result.ok) {
+                setError(null);
+                onDone();
+              } else setError(result.error);
+            }}
+          >
+            {finding.code === "customer_unknown" ? (
+              <Form.Item
+                name="customer_code"
+                label="Mã khách hàng"
+                rules={[
+                  {
+                    required: true,
+                    message: "Cần mã khách",
+                    validateTrigger: "onSubmit",
+                  },
+                  {
+                    pattern: CUSTOMER_CODE,
+                    message: "Mã khách gồm chữ in hoa và số",
+                    transform: (v: string) => v?.trim().toUpperCase(),
+                  },
+                ]}
+              >
+                <Input maxLength={16} />
+              </Form.Item>
+            ) : (
+              <>
+                <Form.Item name="quantity" label="Số lượng">
+                  <AmountInput aria-label="Số lượng khách trả lời" />
+                </Form.Item>
+                <Form.Item name="needed_by" label="Ngày cần hàng">
+                  <DatePicker format="DD/MM/YYYY" />
+                </Form.Item>
+                <Form.Item name="note" label="Ghi chú">
+                  <Input maxLength={1000} />
+                </Form.Item>
+              </>
+            )}
+            <Form.Item>
+              <GuardedButton
+                htmlType="submit"
+                type="primary"
+                reason={reason}
+                loading={pending === `answer/${finding.key}`}
+              >
+                Ghi câu trả lời của khách
+              </GuardedButton>
             </Form.Item>
-          ) : (
-            <>
-              <Form.Item name="quantity" label="Số lượng">
-                <AmountInput aria-label="Số lượng khách trả lời" />
-              </Form.Item>
-              <Form.Item name="needed_by" label="Ngày cần hàng">
-                <DatePicker format="DD/MM/YYYY" />
-              </Form.Item>
-              <Form.Item name="note" label="Ghi chú">
-                <Input maxLength={1000} />
-              </Form.Item>
-            </>
-          )}
-          <Form.Item>
-            <GuardedButton
-              htmlType="submit"
-              type="primary"
-              reason={reason}
-              loading={pending === `answer/${finding.key}`}
-            >
-              Ghi câu trả lời của khách
-            </GuardedButton>
-          </Form.Item>
-        </Form>
+          </Form>
+        </>
       ) : null}
       <ActionError error={error} />
     </Card>
