@@ -487,3 +487,24 @@ mailbox_files = sa.Table(
     sa.Column("outcome", sa.Text, nullable=False),
     sa.Column("message_id", sa.Text),
 )
+
+# Export control, WIV-03-032: the latest result per customer and step
+# (`1a21c3a78c93`).
+export_control_screenings = sa.Table(
+    "export_control_screenings",
+    metadata,
+    *_scope(),
+    sa.Column("customer_code", sa.Text, primary_key=True),
+    sa.Column("step", sa.Text, primary_key=True),
+    sa.Column("outcome", sa.Text, nullable=False),
+    sa.Column("checked_on", sa.Date, nullable=False),
+    sa.Column("fiscal_year", sa.Integer),
+    sa.Column("answers", JSONB, nullable=False),
+    sa.Column("note", sa.Text),
+    sa.Column("evidence_file_id", UUID(as_uuid=True)),
+    sa.Column("evidence_sha256", sa.Text),
+    sa.Column("evidence_content_type", sa.Text),
+    sa.Column("evidence_size", sa.Integer),
+    sa.Column("recorded_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("recorded_at", _TS, nullable=False),
+)

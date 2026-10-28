@@ -30,6 +30,10 @@ from dw_sales.application.catalog_imports import (
     CatalogUnitOfWorkFactory,
 )
 from dw_sales.application.decisions import CaseDecisions
+from dw_sales.application.export_control import (
+    ExportControlService,
+    ExportControlUnitOfWorkFactory,
+)
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
 from dw_sales.application.malware import MalwareScanPort
@@ -89,6 +93,8 @@ class SalesServices:
     rule_drafts: RuleDraftService
     # Master data imported from a file, previewed and submitted (ticket 41).
     catalog_imports: CatalogImportService
+    # Export control, WIV-03-032 (2026-10-28).
+    export_control: ExportControlService
     gate: Gate
 
 
@@ -134,6 +140,11 @@ def assemble(
     roles: RoleCatalogPort,
     step_activity: StepActivityReadPort,
     scanner: MalwareScanPort,
+    # The master data as approved, under `catalog`'s export-control results:
+    # what the master-data page, an import's preview and the export-control
+    # page compare against.
+    master_catalog: SalesCatalogPort,
+    export_control_uow: ExportControlUnitOfWorkFactory,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     sources = SourceService(uow, gate, clock, inbox, files, source_cache)
@@ -177,7 +188,7 @@ def assemble(
             quotation,
             scanner,
         ),
-        master_data=MasterDataService(gate, catalog),
+        master_data=MasterDataService(gate, master_catalog),
         worker=WorkerService(uow, gate, clock, ids, holders, notifications, directory),
         assignment=AssignmentService(uow, gate, clock, ids, holders, directory, notifications),
         routed_mail=RoutedMailService(uow, gate, directory, clock, ids),
@@ -187,7 +198,21 @@ def assemble(
             gate, intake.rules, readiness, roles, step_activity, clock
         ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
-        catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
+        catalog_imports=CatalogImportService(
+            catalog_uow, gate, master_catalog, templates, clock, ids
+        ),
+        export_control=ExportControlService(
+            export_control_uow,
+            gate,
+            clock,
+            ids,
+            master_catalog,
+            book,
+            artifact_bytes,
+            scanner,
+            artifact_writer,
+            directory,
+        ),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing, notifications)

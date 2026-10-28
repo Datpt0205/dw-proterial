@@ -93,6 +93,11 @@ class Compliance(BaseModel):
     # When the customer was last screened against the denial lists. None when
     # never: an unscreened customer is flagged, not presumed clean.
     denial_list_checked_on: date | None = None
+    # The latest denial-list check matched: every order is held for the
+    # export-control PIC until a later check is clear (WIV-03-032).
+    denial_list_match: bool = False
+    # A red-flag question answered yes: held the same way.
+    red_flag_escalated: bool = False
 
 
 # A temporary code is issued before the customer is registered properly
@@ -186,6 +191,10 @@ class Item(BaseModel):
     # The length one reel, coil or drum holds; an order is a whole number of them.
     pack_multiple: Decimal = Field(gt=0)
     standard_lead_time_days: int = Field(gt=0, le=365)
+    # PRV's own product screen (WIV-03-032 step 1): on the export-control
+    # list (該当) or not (非該当). None: not classified, which is screened by
+    # a person, never presumed not listed.
+    export_classification: Literal["applicable", "not_applicable"] | None = None
 
 
 class ConvertEntry(BaseModel):

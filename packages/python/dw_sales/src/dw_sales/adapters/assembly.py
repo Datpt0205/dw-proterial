@@ -56,6 +56,7 @@ from dw_sales.adapters.persistence.catalog import (
     SqlApprovedLists,
     SqlCatalogUnitOfWorkFactory,
 )
+from dw_sales.adapters.persistence.export_control import SqlExportControlUnitOfWorkFactory
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.mailbox import SqlMailbox
@@ -107,6 +108,7 @@ from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
 from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
+from dw_sales.application.screened_catalog import ScreenedCatalog
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, SourceCachePort
@@ -218,7 +220,11 @@ def build_dw1(
     # The lists Sales maintains by hand from each workspace's approved import,
     # the mock where none is approved yet (ticket 41); the ERP's records from
     # the mock until Bravo is connected.
-    catalog = SnapshotSalesCatalog(SqlApprovedLists(session_factory), MockSalesCatalog.load(scope))
+    master = SnapshotSalesCatalog(SqlApprovedLists(session_factory), MockSalesCatalog.load(scope))
+    # Every reader of a customer sees the export-control results moving its
+    # compliance (WIV-03-032); the master-data pages read underneath.
+    screenings = SqlExportControlUnitOfWorkFactory(session_factory, audit=audit)
+    catalog = ScreenedCatalog(master, screenings)
     catalog_uow = SqlCatalogUnitOfWorkFactory(
         session_factory, audit=audit, approvals=approvals, outbox=outbox
     )
@@ -265,7 +271,7 @@ def build_dw1(
         rfq_reader=readers.rfq,
         reply_reader=readers.design_reply,
         cases=SqlQuoteCaseLookup(session_factory),
-        ledger=catalog,
+        ledger=master,
         policies=book,
         requests=(
             None
@@ -336,6 +342,8 @@ def build_dw1(
         step_activity=step_activity,
         # An uploaded signed quotation is scanned like every attachment.
         scanner=scanner,
+        master_catalog=master,
+        export_control_uow=screenings,
     )
     register(
         graphs=runtime.graphs,
@@ -347,7 +355,7 @@ def build_dw1(
         catalog=assembly.catalog_decisions,
         worker_file=worker_file,
     )
-    catalog_parsing = CatalogParsing(catalog_uow, readers.tables, scanner, catalog, clock, ids)
+    catalog_parsing = CatalogParsing(catalog_uow, readers.tables, scanner, master, clock, ids)
     activity = ActivityService(uow, assembly.services.gate, step_activity, clock)
     lane = (
         None
