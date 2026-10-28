@@ -1987,6 +1987,18 @@ class QuoteCase(BaseModel):
     def draft_ycbg(self) -> QuoteCase:
         return self._moved(QuoteStatus.YCBG_DRAFTED)
 
+    @property
+    def ready_for_ycbg(self) -> bool:
+        """Received, and every finding of the request itself answered: the
+        YCBG can be drafted, and DW1 drafts it at once (2026-10-28)."""
+        return self.status is QuoteStatus.RECEIVED and not any(
+            f.is_open for f in self.findings if f.code in INTAKE_FINDINGS
+        )
+
+    def drafted_when_ready(self) -> QuoteCase:
+        """The YCBG drafted if the request is complete; else the case as is."""
+        return self.draft_ycbg() if self.ready_for_ycbg else self
+
     def record_ycbg(self, ycbg_no: str, *, by: uuid.UUID, at: AwareDatetime) -> QuoteCase:
         """The number the ERP gave the YCBG Sales entered: what Design's reply quotes."""
         return self._moved(
