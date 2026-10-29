@@ -63,6 +63,7 @@ from dw_sales.adapters.persistence.measurements import SqlModelMeasurements
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
+from dw_sales.adapters.persistence.recorded_converts import SqlRecordedConverts
 from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotations
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
@@ -223,6 +224,7 @@ def build_dw1(
         SqlApprovedLists(session_factory),
         MockSalesCatalog.load(scope),
         SqlRecordedQuotations(session_factory),
+        SqlRecordedConverts(session_factory),
     )
     catalog_uow = SqlCatalogUnitOfWorkFactory(
         session_factory, audit=audit, approvals=approvals, outbox=outbox
@@ -347,6 +349,7 @@ def build_dw1(
         step_activity=step_activity,
         # An uploaded signed quotation is scanned like every attachment.
         scanner=scanner,
+        converts=catalog,
     )
     register(
         graphs=runtime.graphs,

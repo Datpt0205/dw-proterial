@@ -23,8 +23,12 @@ from dw_kernel.errors import ConflictError
 from dw_kernel.ports import UtcClock
 from dw_sales.application.catalog_imports import OPEN, CatalogSnapshot, ImportStatus
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.snapshot_catalog import ApprovedList, RecordedQuotation
-from dw_sales.domain.catalog import Quotation
+from dw_sales.application.snapshot_catalog import (
+    ApprovedList,
+    RecordedConvert,
+    RecordedQuotation,
+)
+from dw_sales.domain.catalog import ConvertEntry, Quotation
 from dw_sales.domain.master_data import CatalogList, records_of
 
 
@@ -173,6 +177,27 @@ class MemoryApprovedLists:
         documents = [record for _, record in state.records.get(found.snapshot_id, [])]
         return ApprovedList.of(
             catalog_list, found.snapshot_id, found.as_of, records_of(catalog_list, documents)
+        )
+
+
+@dataclass
+class MemoryRecordedConverts:
+    """`RecordedConvertsPort` in memory, each scope's rows its own: the first
+    confirmation of a code kept, as `SqlRecordedConverts`."""
+
+    clock: UtcClock
+    _rows: dict[SalesScope, dict[tuple[str, str], RecordedConvert]] = field(default_factory=dict)
+
+    async def converts(self, scope: SalesScope) -> Sequence[RecordedConvert]:
+        return tuple(self._rows.get(scope, {}).values())
+
+    async def learn(
+        self, scope: SalesScope, entry: ConvertEntry, *, by: uuid.UUID, case_id: uuid.UUID
+    ) -> None:
+        held = self._rows.setdefault(scope, {})
+        held.setdefault(
+            (entry.customer_code, entry.customer_item_code),
+            RecordedConvert(entry, self.clock.now()),
         )
 
 

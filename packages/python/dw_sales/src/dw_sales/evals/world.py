@@ -121,6 +121,7 @@ from dw_sales.evals.overview_memory import PythonOverviewReader
 from dw_sales.testing.catalog_store import (
     MemoryApprovedLists,
     MemoryCatalogStore,
+    MemoryRecordedConverts,
     MemoryRecordedQuotations,
 )
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
@@ -1228,7 +1229,10 @@ def open_world(
     catalog_store = MemoryCatalogStore(runtime.approvals, outbox=runtime.outbox)
     draft_store = MemoryRuleDraftStore(outbox=runtime.outbox)
     catalog = SnapshotSalesCatalog(
-        MemoryApprovedLists(catalog_store), mock, MemoryRecordedQuotations(clock)
+        MemoryApprovedLists(catalog_store),
+        mock,
+        MemoryRecordedQuotations(clock),
+        MemoryRecordedConverts(clock),
     )
     readers = client_readers(reader or InProcessReaderTransport(), policies.order_rules.intake)
     # The mailbox every service reads, at the door `build_dw1` puts in front of
@@ -1325,6 +1329,7 @@ def open_world(
         roles=StaticRoleCatalog(),
         step_activity=store,
         scanner=scanning,
+        converts=catalog,
     )
     register(
         graphs=runtime.graphs,

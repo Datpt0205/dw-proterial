@@ -26,6 +26,7 @@ from sqlalchemy.pool import NullPool
 from dw_kernel.errors import ConflictError
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_sales.adapters.mock import MockSalesCatalog
+from dw_sales.adapters.persistence.recorded_converts import SqlRecordedConverts
 from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotations
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
@@ -61,7 +62,10 @@ async def worker_sessions(
 def _catalog(sessions: async_sessionmaker[AsyncSession], scope: SalesScope) -> SnapshotSalesCatalog:
     # A process of its own: its own mock, loaded from the sample files.
     return SnapshotSalesCatalog(
-        _NoLists(), MockSalesCatalog.load(scope), SqlRecordedQuotations(sessions)
+        _NoLists(),
+        MockSalesCatalog.load(scope),
+        SqlRecordedQuotations(sessions),
+        SqlRecordedConverts(sessions),
     )
 
 

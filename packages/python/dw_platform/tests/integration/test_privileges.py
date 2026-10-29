@@ -94,6 +94,8 @@ _SALES_TABLES = (
     "sales.mailbox_files",
     # Migration c1c192e011e1: the quotations Sales sent and confirmed.
     "sales.recorded_quotations",
+    # Migration bbf5aa95bf6f: the item codes Sales confirmed.
+    "sales.recorded_convert_entries",
 )
 
 
@@ -151,6 +153,11 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     }
     # A quotation sent is a fact about the past (c1c192e011e1).
     assert {verb for tbl, verb in held if tbl == "recorded_quotations"} == {"SELECT", "INSERT"}
+    # A code Sales confirmed is kept as confirmed (bbf5aa95bf6f).
+    assert {verb for tbl, verb in held if tbl == "recorded_convert_entries"} == {
+        "SELECT",
+        "INSERT",
+    }
     # Stored mail and the files it came from (ticket 43), every partition:
     # what arrived is never rewritten or removed by the application.
     for prefix in ("mailbox_messages", "mailbox_attachments", "mailbox_files"):

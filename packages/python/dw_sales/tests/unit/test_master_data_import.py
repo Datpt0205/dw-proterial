@@ -43,6 +43,7 @@ from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, open_world
 from dw_sales.testing.catalog_store import (
     MemoryApprovedLists,
     MemoryCatalogStore,
+    MemoryRecordedConverts,
     MemoryRecordedQuotations,
 )
 
@@ -212,7 +213,10 @@ async def test_without_an_approved_import_every_list_is_the_mock() -> None:
     world = _world()
     store = MemoryCatalogStore(approvals=world.runtime.approvals)
     catalog = SnapshotSalesCatalog(
-        MemoryApprovedLists(store), mock, MemoryRecordedQuotations(world.store.clock)
+        MemoryApprovedLists(store),
+        mock,
+        MemoryRecordedQuotations(world.store.clock),
+        MemoryRecordedConverts(world.store.clock),
     )
     assert await catalog.customers(ALPHA) == await mock.customers(ALPHA)
     assert await catalog.lme_months(ALPHA) == await mock.lme_months(ALPHA)

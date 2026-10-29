@@ -36,6 +36,7 @@ from dw_sales.application.activity_ports import (
 )
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.order_ports import ConvertLedgerPort
 from dw_sales.application.runs import (
     PendingDecisionsPort,
     awaited,
@@ -60,6 +61,7 @@ from dw_sales.application.views import (
     order_change,
     order_summary,
 )
+from dw_sales.domain.catalog import ConvertEntry
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,
@@ -137,6 +139,8 @@ class OrderCommands:
     ids: IdGenerator
     intake: OrderIntake
     decisions: PendingDecisionsPort
+    # Where a code Sales confirms is kept for the customer's next PO.
+    converts: ConvertLedgerPort
 
     async def dispose(
         self,
@@ -190,6 +194,20 @@ class OrderCommands:
             event = person_event("order.mapping_confirmed", context, now, field="prv_code")
             await save_order(work, context, self.ids, case, confirmed, event)
             await work.commit()
+        # Learned once the case holds it: the customer's next PO with this
+        # code maps without asking again (the AI list, item 3).
+        code = confirmed.line(line_no).effective.customer_item_code
+        if code:
+            await self.converts.learn_convert(
+                scope,
+                ConvertEntry(
+                    customer_code=confirmed.customer_code,
+                    customer_item_code=code,
+                    prv_code=prv_code,
+                ),
+                by=context.principal_id,
+                case_id=case_id,
+            )
         return order_change(confirmed)
 
     async def correct_value(
