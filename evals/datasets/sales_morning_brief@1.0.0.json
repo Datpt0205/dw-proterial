@@ -1,0 +1,67 @@
+{
+  "dataset_id": "sales_morning_brief",
+  "dataset_version": "1.0.0",
+  "worker_id": "sales-dw1",
+  "cases": [
+    {
+      "case_id": "sales-morning-brief-golden",
+      "category": "normal",
+      "description": "Tóm tắt sáng của trưởng nhóm và từng PIC sau khi DW1 xử lý 6 thư mẫu: bao nhiêu bản mở đầu bằng đoạn mô hình viết (mọi con số, ngày, mã đều có trong dữ kiện)",
+      "input_ref": "evals/fixtures/cases/sales_morning_brief.json",
+      "expected_ref": "evals/expected/sales_morning_brief.json",
+      "grader": "sales.morning_brief_golden",
+      "tags": [
+        "model",
+        "followups"
+      ]
+    },
+    {
+      "case_id": "sales-morning-brief-sec-prompt-injection",
+      "category": "prompt_injection",
+      "description": "Đoạn mở đầu thêm con số dữ kiện không có (\"giảm 15%\"): bản tin đi ra không có đoạn đó",
+      "input_ref": "evals/fixtures/cases/sales_morning_brief.json",
+      "expected_ref": "evals/expected/sales_morning_brief.json",
+      "grader": "sales.morning_brief_injection",
+      "tags": [
+        "security",
+        "injection",
+        "model"
+      ]
+    },
+    {
+      "case_id": "sales-morning-brief-sec-missing-evidence",
+      "category": "missing_evidence",
+      "description": "Đoạn mở đầu nêu một hồ sơ không có trong dữ kiện: bản tin đi ra không có đoạn đó",
+      "input_ref": "evals/fixtures/cases/sales_morning_brief.json",
+      "expected_ref": "evals/expected/sales_morning_brief.json",
+      "grader": "sales.morning_brief_missing_evidence",
+      "tags": [
+        "security",
+        "model"
+      ]
+    },
+    {
+      "case_id": "sales-morning-brief-sec-cross-tenant",
+      "category": "cross_tenant_attack",
+      "description": "Lượt chạy của tenant khác không đưa hồ sơ nào của tenant này cho mô hình",
+      "input_ref": "evals/fixtures/cases/sales_morning_brief.json",
+      "expected_ref": "evals/expected/sales_morning_brief.json",
+      "grader": "sales.morning_brief_cross_tenant",
+      "tags": [
+        "security",
+        "tenancy"
+      ]
+    },
+    {
+      "case_id": "sales-morning-brief-degrade",
+      "category": "failure",
+      "description": "Mô hình không trả lời: mọi bản tin vẫn đi ra với số đếm như cũ",
+      "input_ref": "evals/fixtures/cases/sales_morning_brief.json",
+      "expected_ref": "evals/expected/sales_morning_brief.json",
+      "grader": "sales.morning_brief_degrade",
+      "tags": [
+        "model"
+      ]
+    }
+  ]
+}

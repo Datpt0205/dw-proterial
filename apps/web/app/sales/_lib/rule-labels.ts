@@ -459,6 +459,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "Mỗi ngày làm việc: việc mới, việc sắp đến hạn, việc đang chờ ai. Không có số tiền.",
     },
     "morning_brief.enabled": { label: "Bật bản tin buổi sáng" },
+    "morning_brief.model_opening": {
+      label: "DW1 viết đoạn mở đầu",
+      help: "Vài câu về việc nên làm trước hôm nay, do mô hình trên máy chủ công ty viết; câu nào có con số không khớp hồ sơ thì bỏ cả đoạn. Các con số đếm luôn có bên dưới.",
+    },
     "morning_brief.at": {
       label: "Giờ gửi",
       help: "Dạng HH:MM, giờ địa phương; có thể trước giờ bắt đầu làm việc.",

@@ -95,9 +95,11 @@ def caller_run(
     worker_version: str,
     trace: str,
     subject_ref: str,
+    channel: str = WEB_CHANNEL,
 ) -> RunContext:
-    """A one-call run as the person who asked, from the portal: their plan is
-    what the allowance checks, and the call is recorded under DW1's worker."""
+    """A one-call run as the person who asked (from the portal unless
+    ``channel`` names the lane that asked for them): their plan is what the
+    allowance checks, and the call is recorded under DW1's worker."""
     return RunContext(
         run_id=run_id,
         tenant_id=context.tenant_id,
@@ -105,7 +107,7 @@ def caller_run(
         actor_id=context.principal_id,
         worker_id=worker_id,
         worker_version=worker_version,
-        channel=WEB_CHANNEL,
+        channel=channel,
         plan_id=context.plan_id,
         roles=context.roles,
         scopes=context.scopes,
