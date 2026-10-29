@@ -13,10 +13,15 @@ nearest match; a code the snapshot does not hold answers None, whatever the
 fallback holds, because a snapshot replaces its list whole. Each read answers
 with the ``as_of`` of the list it came from.
 
-The quotation master list a sent quotation is recorded in
-(`QuotationLedgerPort`) stays the fallback's: an imported snapshot is never
-edited after its approval, and a quotation DW1 sends reaches it with the
-next import.
+A quotation Sales sent and confirmed (`QuotationLedgerPort`, WIV-03-023
+step 11) is kept apart (`RecordedQuotationsPort`, the database), because an
+imported snapshot is never edited after its approval. Every quotation read
+answers the list, approved snapshot or fallback, plus the recorded rows it
+does not hold yet, keyed by quote number and item: a PO checked a minute
+after its quotation was confirmed finds it, in the API and in the worker
+alike, and the next import that carries it shadows the recorded row. A
+recorded row whose number the list holds with other terms is refused when it
+is recorded, never merged on read.
 """
 
 from __future__ import annotations
@@ -27,8 +32,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Protocol
 
+from dw_kernel.errors import ConflictError
 from dw_sales.application.ports import SalesCatalogPort, SalesScope, Snapshot
-from dw_sales.application.quote_ports import QuotationLedgerPort
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -109,8 +114,29 @@ class ApprovedListsPort(Protocol):
     ) -> ApprovedList | None: ...
 
 
-class FallbackCatalogPort(SalesCatalogPort, QuotationLedgerPort, Protocol):
+class FallbackCatalogPort(SalesCatalogPort, Protocol):
     """What answers a list no snapshot was approved for: the mock today."""
+
+
+@dataclass(frozen=True)
+class RecordedQuotation:
+    """A quotation as Sales confirmed it, and when."""
+
+    quotation: Quotation
+    recorded_at: datetime
+
+
+class RecordedQuotationsPort(Protocol):
+    """The quotations Sales sent and confirmed, in the scope's tenant and
+    workspace (RLS), read the same by every process."""
+
+    async def recorded(self, scope: SalesScope) -> Sequence[RecordedQuotation]: ...
+
+    async def add(self, scope: SalesScope, rows: Sequence[Quotation]) -> None:
+        """Appends the rows not held yet, all or none. Idempotent: a row held
+        with the same terms is skipped; one held under its quote number and
+        item with other terms is a `ConflictError`, and nothing is written."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -119,6 +145,7 @@ class SnapshotSalesCatalog:
 
     approved: ApprovedListsPort
     fallback: FallbackCatalogPort
+    recorded: RecordedQuotationsPort
 
     async def _list(self, scope: SalesScope, catalog_list: CatalogList) -> ApprovedList | None:
         return await self.approved.approved(scope, catalog_list)
@@ -169,36 +196,50 @@ class SnapshotSalesCatalog:
             return await self.fallback.convert_list(scope)
         return Snapshot(own.all(ConvertEntry), own.as_of)
 
+    async def _quotations(self, scope: SalesScope) -> Snapshot[tuple[Quotation, ...]]:
+        """The list's quotations, then the recorded ones it does not hold."""
+        own = await self._list(scope, CatalogList.QUOTATIONS)
+        listed = (
+            Snapshot(own.all(Quotation), own.as_of)
+            if own is not None
+            else await self.fallback.quotations(scope)
+        )
+        held = {(q.quote_no, q.prv_code) for q in listed.data}
+        added = [
+            r
+            for r in await self.recorded.recorded(scope)
+            if (r.quotation.quote_no, r.quotation.prv_code) not in held
+        ]
+        if not added:
+            return Snapshot(tuple(listed.data), listed.as_of)
+        return Snapshot(
+            (*listed.data, *(r.quotation for r in added)),
+            max(listed.as_of, *(r.recorded_at for r in added)),
+        )
+
     async def quotations_valid_on(
         self, scope: SalesScope, customer_code: str, prv_code: str, day: date
     ) -> Snapshot[Sequence[Quotation]]:
-        own = await self._list(scope, CatalogList.QUOTATIONS)
-        if own is None:
-            return await self.fallback.quotations_valid_on(scope, customer_code, prv_code, day)
+        found = await self._quotations(scope)
         return Snapshot(
             tuple(
                 q
-                for q in own.all(Quotation)
+                for q in found.data
                 if q.customer_code == customer_code
                 and q.prv_code == prv_code
                 and q.is_valid_on(day)
             ),
-            own.as_of,
+            found.as_of,
         )
 
     async def quotations_for_item(
         self, scope: SalesScope, prv_code: str
     ) -> Snapshot[Sequence[Quotation]]:
-        own = await self._list(scope, CatalogList.QUOTATIONS)
-        if own is None:
-            return await self.fallback.quotations_for_item(scope, prv_code)
-        return Snapshot(tuple(q for q in own.all(Quotation) if q.prv_code == prv_code), own.as_of)
+        found = await self._quotations(scope)
+        return Snapshot(tuple(q for q in found.data if q.prv_code == prv_code), found.as_of)
 
     async def quotations(self, scope: SalesScope) -> Snapshot[Sequence[Quotation]]:
-        own = await self._list(scope, CatalogList.QUOTATIONS)
-        if own is None:
-            return await self.fallback.quotations(scope)
-        return Snapshot(own.all(Quotation), own.as_of)
+        return await self._quotations(scope)
 
     async def lme_for_month(self, scope: SalesScope, month: str) -> Snapshot[LmeMonth | None]:
         own = await self._list(scope, CatalogList.LME)
@@ -226,4 +267,21 @@ class SnapshotSalesCatalog:
         return await self.fallback.open_ycbg(scope)
 
     async def record(self, scope: SalesScope, rows: Sequence[Quotation]) -> None:
-        await self.fallback.record(scope, rows)
+        """Implements `QuotationLedgerPort`: a row the quotations already hold
+        is skipped, one whose number they hold with other terms, or for
+        another customer, refuses the whole record."""
+        held = (await self._quotations(scope)).data
+        terms = {(q.quote_no, q.prv_code): q for q in held}
+        owners = {q.quote_no: q.customer_code for q in held}
+        for row in rows:
+            found = terms.get((row.quote_no, row.prv_code))
+            if (found is not None and found != row) or owners.get(
+                row.quote_no, row.customer_code
+            ) != row.customer_code:
+                raise ConflictError(
+                    "the master list holds this quote number with other terms",
+                    details={"quote_no": row.quote_no, "prv_code": row.prv_code},
+                )
+        await self.recorded.add(
+            scope, [row for row in rows if (row.quote_no, row.prv_code) not in terms]
+        )

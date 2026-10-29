@@ -329,14 +329,31 @@ class _Intake:
         return self.value
 
 
+class _Notices:
+    def __init__(self) -> None:
+        self.told: list[str] = []
+
+    async def refused(self, scope: SalesScope, *, source: str, reason: str) -> None:
+        self.told.append(source)
+
+    async def unreachable(self, scope: SalesScope, *, day: date) -> None:
+        raise AssertionError("the folder was there")
+
+
 def _drop(
-    folder: Path, mailbox: SqlMailbox, now: datetime, intake: MailIntake | None = None
+    folder: Path,
+    mailbox: SqlMailbox,
+    now: datetime,
+    intake: MailIntake | None = None,
+    notices: _Notices | None = None,
 ) -> Callable[[], MailDrop]:
+    told = notices or _Notices()
     return lambda: MailDrop(
         LocalDropFolder(folder),
         ClientMailReader(InProcessReaderTransport()),
         mailbox,
         _Intake(intake or MailIntake()),
+        told,
         FixedClock(now),
         Uuid4Generator(),
     )
@@ -363,6 +380,33 @@ async def test_the_lane_stores_a_dropped_file_once_across_a_restart(
     assert again.stored == again.already_stored == ()
     subjects = [m.subject for m in await mailbox.list_messages(world.alpha)]
     assert subjects.count("RFQ 77") == 1
+
+
+async def test_a_file_the_reader_refuses_is_recorded_with_its_reason_and_told_once(
+    mailbox: SqlMailbox, migrator: AsyncEngine, world: World, tmp_path: Path
+) -> None:
+    (tmp_path / "20261029-0900-x.eml").write_bytes(b"not a mail at all")
+    _settled(tmp_path)
+    notices = _Notices()
+    new_drop = _drop(tmp_path, mailbox, datetime.now(UTC), notices=notices)
+
+    first = await new_drop().tick(world.alpha)
+    again = await new_drop().tick(world.alpha)
+
+    assert [name for name, _ in first.refused] == ["20261029-0900-x.eml"]
+    assert again.refused == ()
+    assert notices.told == ["20261029-0900-x.eml"]
+    async with migrator.connect() as conn:
+        row = (
+            await conn.execute(
+                sa.text(
+                    "SELECT outcome, reason, message_id FROM sales.mailbox_files"
+                    " WHERE tenant_id = :t AND source_name = '20261029-0900-x.eml'"
+                ),
+                {"t": world.alpha.tenant_id.value},
+            )
+        ).one()
+    assert row.outcome == "refused" and row.reason and row.message_id is None
 
 
 async def test_each_pics_folder_is_read_and_ignored_domains_are_left_out_for_good(

@@ -80,9 +80,10 @@ class QuotationLedgerPort(Protocol):
     becomes the valid quotation a later PO line is checked against.
 
     Idempotent by quote number: recording the same rows again changes nothing,
-    and different rows under a recorded number are refused. A production
-    adapter refuses every write until the customer grants write access to
-    their master list; the demo's is `adapters.mock.quotation_ledger`.
+    and different rows under a recorded number are refused. DW1 keeps the
+    rows in its own database (`SnapshotSalesCatalog` over
+    `RecordedQuotationsPort`), read by the API and the worker alike, until the
+    company's next import of the list carries them.
     """
 
     async def record(self, scope: SalesScope, rows: Sequence[Quotation]) -> None: ...

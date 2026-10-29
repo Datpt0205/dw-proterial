@@ -40,7 +40,11 @@ from dw_sales.domain.master_data import (
 )
 from dw_sales.evals.graders import AN, CALLERS, GIANG, OUTSIDER, READER
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, open_world
-from dw_sales.testing.catalog_store import MemoryApprovedLists, MemoryCatalogStore
+from dw_sales.testing.catalog_store import (
+    MemoryApprovedLists,
+    MemoryCatalogStore,
+    MemoryRecordedQuotations,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -205,8 +209,11 @@ def test_the_diff_says_what_is_added_changed_old_to_new_and_removed() -> None:
 
 async def test_without_an_approved_import_every_list_is_the_mock() -> None:
     mock = MockSalesCatalog.load(ALPHA)
-    store = MemoryCatalogStore(approvals=_world().runtime.approvals)
-    catalog = SnapshotSalesCatalog(MemoryApprovedLists(store), mock)
+    world = _world()
+    store = MemoryCatalogStore(approvals=world.runtime.approvals)
+    catalog = SnapshotSalesCatalog(
+        MemoryApprovedLists(store), mock, MemoryRecordedQuotations(world.store.clock)
+    )
     assert await catalog.customers(ALPHA) == await mock.customers(ALPHA)
     assert await catalog.lme_months(ALPHA) == await mock.lme_months(ALPHA)
 

@@ -488,6 +488,8 @@ mailbox_files = sa.Table(
     sa.Column("handled_at", _TS, primary_key=True, server_default=sa.func.now()),
     sa.Column("outcome", sa.Text, nullable=False),
     sa.Column("message_id", sa.Text),
+    # A refused file's reason (`2b666371099a`).
+    sa.Column("reason", sa.Text),
 )
 
 # Export control, WIV-03-032: the latest result per customer and step
@@ -509,4 +511,17 @@ export_control_screenings = sa.Table(
     sa.Column("evidence_size", sa.Integer),
     sa.Column("recorded_by", UUID(as_uuid=True), nullable=False),
     sa.Column("recorded_at", _TS, nullable=False),
+)
+
+# WIV-03-023 step 11: the quotations Sales sent and confirmed, which a later PO
+# line is checked against (`c1c192e011e1`). Appended, never changed.
+recorded_quotations = sa.Table(
+    "recorded_quotations",
+    metadata,
+    *_scope(),
+    sa.Column("quote_no", sa.Text, primary_key=True),
+    sa.Column("prv_code", sa.Text, primary_key=True),
+    sa.Column("customer_code", sa.Text, nullable=False),
+    sa.Column("quotation", JSONB, nullable=False),
+    sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
 )
