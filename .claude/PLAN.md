@@ -35,11 +35,10 @@ own file and a row here.
 - 10-19..29: rules, master data, follow-ups, board, mail drop (t43), quote→
   order ledger, nothing fails silently, DW1 learns PO forms (ADR 0006),
   export-control page withdrawn. `sales.md` State.
-- **Next:** AI items 3, 12, 5, 8, 10 done (10-29, `sales.md`); then "Gửi
-  cho khách" from the PIC's own mailbox through an outbox folder and their
-  own Power Automate flow (no Graph; Đạt 10-29), then items 11, 6, 7, 2, 4,
-  9; #13 scans at deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000
-  Blackwell 24 GB), not on this machine.
+- **Next:** AI items 3, 5, 6, 8, 10, 11, 12 done and "Gửi cho khách"
+  prepared (no flow until Proterial signs) (10-29, `sales.md`); item 7 (PC
+  dates from a pasted mail) in progress, then 2, 4, 9; #13 scans at
+  deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000 24 GB).
 
 ## Decisions Đạt owes
 
