@@ -150,3 +150,8 @@ class LayoutLookupPort(Protocol):
     async def read_count(self, scope: SalesScope, layout_ref: str) -> int:
         """How many order cases were opened from a PO read through it."""
         ...
+
+    async def next_version(self, scope: SalesScope, customer_code: str, kind: str) -> int:
+        """The version a new layout of the customer's form of ``kind`` takes:
+        one past every layout of it stored, whatever its status."""
+        ...

@@ -23,24 +23,23 @@ own file and a row here.
 
 ## Now (2026-10-19)
 
-- **Proterial product repo** (`origin` `Datpt0205/dw-proterial`; platform
-  seed in `Datpt0205/codebase`). DW1 on mock data: `sales.md`, tickets
-  under `sales/dw1-portal-demo/`, runbook `demo.md`, eval `sales@1.3.0`.
+- **Proterial product repo** (`Datpt0205/dw-proterial`): DW1 on mock data,
+  `sales.md`, tickets under `sales/dw1-portal-demo/`, runbook `demo.md`.
 - **On premises** (Đạt, 2026-10-18), DW1 and DW2: Qwen3.5-9B, bge-m3 and
   bge-reranker-v2-m3 on the plant's host, no API called;
   `infra/onprem/README.md` (`make onprem-models`, `make onprem-up`).
-- 2026-10-19, users change DW1 themselves: rules form (40), master data
-  from Excel (41), follow-ups and the 07:30 brief (42).
 - **2026-10-19, local Docker** (`sales.md` State): all suites pass per
   package; two defects fixed (`89bcd0d49ea6`, route walks); six live evals
   PASS on Qwen3.5-9B; on-prem compose ran (README); scope vs Proterial's
   process in `sales/dw1-scope.md`; deny-list secret set.
-- 2026-10-20..25: board, history, defects A–E, process map, IT accounts.
-  2026-10-27: real mail from a drop folder of `.eml` files (ticket 43).
-- 10-28: licence notices; Keycloak `dw-it`; latency per route (source
-  9.5 s → 1.2 s); "your turn" notices; DW1 drafts the YCBG and suggests
-  each price with its basis; export control page (t45). `sales.md` State.
-- **Next:** the plant PC mail drop; `onprem-up` in `uat`; DW2.
+- 10-19..28: rules form, master data, follow-ups (t40–42), board, history, process map, IT accounts, mail drop (t43),
+  YCBG drafted and prices suggested, who sees what. `sales.md` State.
+- 10-29: quote→order through a stored ledger; nothing fails silently
+  (outbox waits and alarms, refused mail told); DW1 learns PO forms (ADR
+  0006); export-control page withdrawn, the hold stays. `sales.md` State.
+- **Next:** the 13 AI items in `sales.md` (Đạt: "làm luôn"), #13 scans at
+  deployment: Qwen3.8-Flash-Next 2-bit + MTP on an RTX PRO 4000 Blackwell
+  24 GB (Đạt, 10-29; Giang's homelab ran it), not on this machine.
 
 ## Decisions Đạt owes
 
@@ -54,6 +53,7 @@ own file and a row here.
   on-prem overlay takes api/worker off `dw-edge` (egress blocked by network,
   not only by configuration).
 - **DW1 scope** (`sales/dw1-scope.md`): agent-proposed bars t29–t33.
+- **Model:** its Qwen Community License for on-prem use (FPT legal).
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;

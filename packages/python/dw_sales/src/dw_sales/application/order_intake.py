@@ -48,7 +48,7 @@ import re
 import unicodedata
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from enum import StrEnum
 from typing import Final
@@ -56,7 +56,7 @@ from typing import Final
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
 from dw_sales.application.handoffs import HandoffReader
-from dw_sales.application.layouts import LayoutPrefiller
+from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
 from dw_sales.application.malware import AttachmentInfectedError, AttachmentRefusedError
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader
@@ -83,7 +83,13 @@ from dw_sales.domain.dispositions import (
     RoutingReason,
 )
 from dw_sales.domain.handoffs import HandoffKind
-from dw_sales.domain.layouts import PoLayout, flagged_as_new
+from dw_sales.domain.layouts import (
+    LayoutPrefill,
+    LayoutSample,
+    PoLayout,
+    flagged_as_new,
+    layout_ref,
+)
 from dw_sales.domain.mail_parts import newest_part
 from dw_sales.domain.message_intent import IntentKind, IntentReading
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
@@ -218,6 +224,9 @@ class IntakeOutcome:
     kind: MessageKind
     disposition: MessageDisposition | None
     case: OrderCase | None = None
+    # The layout DW1 learned to read the PO with (dw_sales ADR 0006), stored
+    # by the caller with the case, in its transaction.
+    learned: LearnedLayout | None = None
 
 
 @dataclass(frozen=True)
@@ -272,6 +281,8 @@ class OrderIntake:
     # says no, the step does what it does when it is off. None: no step may
     # run, whatever the rules say.
     model_steps: ModelStepGatePort | None = None
+    # The id a learned layout is stored under (dw_sales ADR 0006).
+    new_layout_id: Callable[[], uuid.UUID] = uuid.uuid4
 
     async def classify(
         self,
@@ -567,7 +578,14 @@ class OrderIntake:
                 kinds.append(READ_AS.get(self.reader.sniff(content.data) or "", ""))
         if not documents:
             routed = self._routed(message, kind, unreadable, customer, "; ".join(reasons))
-            return await self._with_prefill(scope, routed, readable, customer, rules, run)
+            learned = await self._learn(scope, message, readable, customer, rules, run)
+            if isinstance(learned, tuple):
+                document, layout = learned
+                outcome = await self._case(
+                    scope, message, kind, customer, attributed, document, rules, run
+                )
+                return replace(outcome, learned=layout)
+            return _with_prefill(routed, learned)
         if sorted(kinds) == ["pdf", "xlsx"]:
             # A workbook and its PDF print are one PO, read from the workbook
             # (ticket 34); `one_po` says None when they are two.
@@ -623,23 +641,25 @@ class OrderIntake:
         approved = await self.layouts.approved(scope, customer_code)
         return next((layout for layout in approved if layout.kind == kind), None)
 
-    async def _with_prefill(
+    async def _learn(
         self,
         scope: SalesScope,
-        outcome: IntakeOutcome,
+        message: InboundMessage,
         readable: Sequence[AttachmentContent],
         customer: Customer,
         rules: OrderRules,
         run: RunContext | None,
-    ) -> IntakeOutcome:
-        """The routed outcome with a model's pre-filled mapping of the first
-        form no layout of the customer's reads, where the tenant's rules turn
-        the step on, a model is wired and a DW1 run is processing."""
-        prefiller, disposition = self.layout_prefiller, outcome.disposition
-        if prefiller is None or run is None or disposition is None:
-            return outcome
+    ) -> tuple[PoDocument, LearnedLayout] | LayoutPrefill | None:
+        """The first form no layout of the customer's reads, mapped by a model
+        where the tenant's rules turn the step on, a model is wired and a DW1
+        run is processing: read with that mapping and learned when every check
+        passed (dw_sales ADR 0006), or the pre-fill as the model left it, for
+        Sales to start from. None: nothing was asked."""
+        prefiller = self.layout_prefiller
+        if prefiller is None or run is None:
+            return None
         if not await self._model_step(scope, rules, ModelStep.LAYOUT_PROPOSAL):
-            return outcome
+            return None
         for content in readable:
             file_type = self.reader.sniff(content.data)
             if file_type is None or file_type == "unsupported":
@@ -651,11 +671,33 @@ class OrderIntake:
             prefill = await prefiller.prefill(scope, content, customer, rules, run=run)
             if prefill is None:
                 continue
-            stamped = MessageDisposition.model_validate(
-                {**disposition.model_dump(), "layout_prefill": prefill}
+            if prefill.mapping is None or self.layouts is None:
+                return prefill
+            layout_id = self.new_layout_id()
+            version = await self.layouts.next_version(scope, customer.code, prefill.mapping.kind)
+            read = await self.reader.read_with(
+                content, prefill.mapping, rules.intake, layout_ref=layout_ref(layout_id, version)
             )
-            return IntakeOutcome(outcome.message_id, outcome.kind, stamped, outcome.case)
-        return outcome
+            if isinstance(read, Unreadable):
+                return prefill
+            learned = LearnedLayout(
+                layout_id=layout_id,
+                version=version,
+                customer_code=customer.code,
+                mapping=prefill.mapping,
+                sample=LayoutSample(
+                    message_id=message.message_id,
+                    attachment_id=content.attachment.attachment_id,
+                    attachment_sha256=content.attachment.sha256,
+                ),
+                prefill=prefill,
+            )
+            # A new layout's first POs are confirmed value by value, learned
+            # or approved alike (`layout_onboarding.uncertain_first_pos`).
+            if rules.layout_onboarding.uncertain_first_pos > 0:
+                read = flagged_as_new(read)
+            return read, learned
+        return None
 
     async def _case(
         self,
@@ -1138,7 +1180,18 @@ def _stamped(outcome: IntakeOutcome, reading: IntentReading | None) -> IntakeOut
     disposition = MessageDisposition.model_validate(
         {**outcome.disposition.model_dump(), "reading": reading}
     )
-    return IntakeOutcome(outcome.message_id, outcome.kind, disposition, outcome.case)
+    return replace(outcome, disposition=disposition)
+
+
+def _with_prefill(outcome: IntakeOutcome, prefill: LayoutPrefill | None) -> IntakeOutcome:
+    """The routed outcome with the model's pre-fill stamped on it, for the
+    onboarding screen to open with; as it was without one."""
+    if prefill is None or outcome.disposition is None:
+        return outcome
+    stamped = MessageDisposition.model_validate(
+        {**outcome.disposition.model_dump(), "layout_prefill": prefill}
+    )
+    return replace(outcome, disposition=stamped)
 
 
 def _words(text: str) -> str:

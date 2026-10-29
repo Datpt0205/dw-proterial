@@ -459,7 +459,6 @@ _COLOURS: Final = {
 }
 _PACKAGING: Final = {"reel": "Cuộn (reel)", "coil": "Cuộn tròn (coil)", "drum": "Lô (drum)"}
 _UOMS: Final = {"m": "m"}
-_EXPORT_CLASSES: Final = {"applicable": "Thuộc danh mục", "not_applicable": "Không thuộc"}
 _CURRENCIES: Final = {"USD": "USD", "VND": "VND", "JPY": "JPY"}
 _BASES: Final = {"fixed": "Cố định", "lme_band": "Theo LME"}
 
@@ -637,19 +636,6 @@ _ITEMS = ListSpec(
             "int",
             "1-365",
             aliases=("Lead time chuẩn", "Lead time"),
-        ),
-        # WIV-03-032 step 1: PRV's own list, as 該当 / 非該当.
-        _choice(
-            "export_classification",
-            "Phân loại xuất khẩu",
-            "Thuộc danh mục / Không thuộc, để trống nếu chưa phân loại",
-            {
-                "applicable": ("該当", "Applicable", "Thuộc"),
-                "not_applicable": ("非該当", "Not applicable", "Không"),
-            },
-            labels=_EXPORT_CLASSES,
-            required=False,
-            aliases=("Phân loại", "該非判定"),
         ),
     ),
 )

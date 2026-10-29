@@ -335,21 +335,58 @@ async def test_a_layout_past_its_first_pos_reads_with_no_flag() -> None:
 # ------------------------------------------------------------ the pre-fill --
 
 
-async def test_the_model_pre_fills_a_mapping_that_passes_every_check() -> None:
+async def test_a_mapping_that_passes_every_check_is_learned_and_reads_the_po() -> None:
+    """dw_sales ADR 0006: DW1 adopts the model's mapping itself, reads the PO
+    with it in the same run and opens the case; nobody approves the layout,
+    and the first POs it reads are confirmed value by value."""
     model = _model(as_proposal(M43_MAPPING))
     world = _world(model)
 
-    ((routed, _),) = (await world.process_each(AN, ["M43"])).values()
+    ((processed, case),) = (await world.process_each(AN, ["M43"])).values()
 
-    prefill = routed.layout_prefill
-    assert prefill is not None and prefill.outcome == "proposed"
-    assert prefill.mapping is not None and prefill.mapping.unit_price == "Price"
-    assert prefill.mapping.pdf_columns is not None  # found by code on the form
-    assert (prefill.prompt, prefill.rules) == (str(LAYOUT_PROPOSAL), "sales_order_rules@1.5.2")
-    source = await world.services.layouts.source(AN.context(), "M43", "M43-A1")
-    assert source.prefill == prefill
-    proposed = await world.services.layouts.propose(AN.context(), "M43", "M43-A1", prefill.mapping)
-    assert proposed.prefill == prefill
+    assert processed.kind == "case_created" and isinstance(case, OrderCase)
+    (layout,) = world.store.state(ALPHA).layouts.values()
+    assert (layout.origin, layout.status, layout.approval_id, layout.decided_by) == (
+        "model",
+        "approved",
+        None,
+        None,
+    )
+    assert layout.customer_code == case.customer_code and layout.version == 1
+    assert layout.prefill is not None and layout.prefill.outcome == "proposed"
+    assert (layout.prefill.prompt, layout.prefill.rules) == (
+        str(LAYOUT_PROPOSAL),
+        "sales_order_rules@1.5.2",
+    )
+    assert layout.mapping.unit_price == "Price"
+    assert layout.mapping.pdf_columns is not None  # found by code on the form
+    assert case.document.layout_ref == layout.ref
+    assert any(f.flag is RegionFlag.NEW_LAYOUT for f in case.document.header.flags)
+    (learned,) = [e for e in world.store.state(ALPHA).audit if e.action == "sales.layout.learned"]
+    assert learned.resource_id == str(layout.layout_id)
+    assert learned.details["origin"] == "model" and learned.run_id is not None
+    # No approval was opened for it.
+    assert not [
+        a for a in world.runtime.approvals.rows.values() if a.approval_type == "sales.layout"
+    ]
+
+
+async def test_the_learned_layout_reads_the_customers_next_po_without_a_model() -> None:
+    model = _model(as_proposal(M43_MAPPING))
+    world = _world(model)
+    await world.process_each(AN, ["M43"])
+    calls = len(model.models["sales.po_layout_proposal"].calls)
+    (layout,) = world.store.state(ALPHA).layouts.values()
+    content = await world.inbox.read_attachment(ALPHA, "M43", "M43-A1")
+    assert content is not None
+    rules = await world.services.order_commands.intake.rules.rules(ALPHA)
+
+    again = await world.services.order_commands.intake._read_po(
+        ALPHA, content, layout.customer_code, rules.intake, flag=rules
+    )
+
+    assert isinstance(again, PoDocument) and again.layout_ref == layout.ref
+    assert len(model.models["sales.po_layout_proposal"].calls) == calls
 
 
 async def test_a_swapped_or_injected_pre_fill_is_refused_and_the_screen_opens_empty() -> None:
@@ -478,6 +515,33 @@ def test_a_layout_is_decided_once_and_never_by_its_maker() -> None:
         approved.reject(GIANG.user_id, at)
     with pytest.raises(ValidationError):
         PoLayout.model_validate({**approved.model_dump(), "decided_by": AN.user_id})
+
+
+def test_only_a_learned_layout_goes_without_an_approval_and_a_decider() -> None:
+    """ADR 0006: a learned layout is in force from the start and decided by no
+    one; a person's still waits on an approval a second person decides."""
+    at = datetime(2026, 10, 29, tzinfo=UTC)
+    base = {
+        "layout_id": uuid.UUID(int=1),
+        "customer_code": "NRV",
+        "version": 1,
+        "mapping": _mapping(),
+        "sample": {"message_id": "M43", "attachment_id": "M43-A1", "attachment_sha256": "0" * 64},
+        "proposed_by": AN.user_id,
+        "proposed_at": at,
+    }
+    with pytest.raises(ValidationError):
+        PoLayout.model_validate(base)  # a person's, with no approval
+    learned = PoLayout.model_validate({**base, "origin": "model", "status": "approved"})
+    for wrong in (
+        {"approval_id": uuid.UUID(int=2)},
+        {"decided_by": GIANG.user_id, "decided_at": at},
+        {"status": "proposed"},
+    ):
+        with pytest.raises(ValidationError):
+            PoLayout.model_validate({**learned.model_dump(), **wrong})
+    with pytest.raises(ConflictError):
+        learned.approve(GIANG.user_id, at)
 
 
 def test_a_proposal_missing_a_required_label_is_no_mapping() -> None:

@@ -465,8 +465,20 @@ class LayoutSample(BaseModel):
     attachment_sha256: Sha256Hex
 
 
+def layout_ref(layout_id: uuid.UUID, version: int) -> str:
+    """What a PO read through a layout is stamped with (`PoLayout.ref`)."""
+    return f"po_layout:{layout_id}@{version}"
+
+
+# Who mapped a form: a person (ticket 30), whose mapping another person
+# decides; or the model, whose mapping DW1 adopts once every check passes
+# (dw_sales ADR 0006).
+LayoutOrigin = Literal["person", "model"]
+
+
 class PoLayout(BaseModel):
-    """One customer's form, mapped by a person and decided by another.
+    """One customer's form, mapped by a person and decided by another, or
+    learned by DW1 from a model's mapping every check passed (ADR 0006).
 
     Tenant data: stored per tenant and workspace under row security, never
     committed, never read for another tenant. Immutable: each decision
@@ -490,13 +502,23 @@ class PoLayout(BaseModel):
     proposed_at: AwareDatetime
     # The model pre-fill the person started from, if any (its stamp).
     prefill: LayoutPrefill | None = None
-    # The platform approval the proposal waits on, opened with it.
-    approval_id: uuid.UUID
+    origin: LayoutOrigin = "person"
+    # The platform approval a person's proposal waits on, opened with it;
+    # None for a learned layout, which no one decides.
+    approval_id: uuid.UUID | None = None
     decided_by: uuid.UUID | None = None
     decided_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def _maker_is_never_the_checker(self) -> Self:
+        if self.origin == "model":
+            if self.approval_id is not None or self.decided_by is not None:
+                raise ValueError("a learned layout has no approval and no decider")
+            if self.status not in ("approved", "superseded"):
+                raise ValueError("a learned layout is in force from the start")
+            return self
+        if self.approval_id is None:
+            raise ValueError("a person's layout waits on a platform approval")
         decided = self.status != "proposed"
         if decided != (self.decided_by is not None and self.decided_at is not None):
             raise ValueError("a decided layout names who decided it and when")
@@ -511,7 +533,38 @@ class PoLayout(BaseModel):
     @property
     def ref(self) -> str:
         """What a PO read through it is stamped with."""
-        return f"po_layout:{self.layout_id}@{self.version}"
+        return layout_ref(self.layout_id, self.version)
+
+    @classmethod
+    def learned(
+        cls,
+        *,
+        layout_id: uuid.UUID,
+        customer_code: str,
+        version: int,
+        mapping: LayoutMapping,
+        sample: LayoutSample,
+        prefill: LayoutPrefill,
+        by: uuid.UUID,
+        at: AwareDatetime,
+    ) -> PoLayout:
+        """A model's mapping DW1 adopts itself, every check having passed:
+        in force at once, with no approval (ADR 0006). ``by`` is the run's
+        actor, who processed the PO the form came with."""
+        if prefill.outcome != "proposed":
+            raise ValueError("only a mapping every check passed is learned")
+        return cls(
+            layout_id=layout_id,
+            customer_code=customer_code,
+            version=version,
+            mapping=mapping,
+            sample=sample,
+            status="approved",
+            proposed_by=by,
+            proposed_at=at,
+            prefill=prefill,
+            origin="model",
+        )
 
     def approve(self, by: uuid.UUID, at: AwareDatetime) -> PoLayout:
         return self._decided("approved", by, at)

@@ -92,7 +92,8 @@ function Layouts() {
       sent,
       (key) =>
         approvalClient("sales.layout").decideApproval(
-          layout.approval_id,
+          // Only a person's proposal is decided, and it always has one.
+          layout.approval_id ?? "",
           sent,
           key,
         ),
@@ -111,7 +112,7 @@ function Layouts() {
       <PageHeader
         breadcrumb={salesCrumbs("Mẫu PO")}
         title="Mẫu PO của khách"
-        subtitle={`${rows.filter((l) => l.status === "proposed").length} mẫu chờ duyệt · ${rows.filter((l) => l.status === "approved").length} đã duyệt. Người lập mẫu không tự duyệt; DW1 đọc PO sau của khách theo mẫu đã duyệt, không dùng mô hình.`}
+        subtitle={`${rows.filter((l) => l.status === "approved").length} mẫu đang dùng · ${rows.filter((l) => l.status === "proposed").length} mẫu chờ duyệt. DW1 tự học mẫu PO của khách ở PO đầu tiên khi mọi kiểm tra đều qua; vài PO đầu đọc theo mẫu mới được đánh dấu để Sales xác nhận. Mẫu do người lập (khi DW1 không đọc được) vẫn cần Trưởng bộ phận duyệt.`}
       />
       <ActionError error={error} />
       {layouts.error ? (
@@ -182,7 +183,9 @@ function Layouts() {
               key: "proposed",
               render: (_, l) => (
                 <span className="flex flex-col">
-                  <span>{name(l.proposed_by)}</span>
+                  <span>
+                    {l.origin === "model" ? "DW1 tự học" : name(l.proposed_by)}
+                  </span>
                   <Typography.Text type="secondary">
                     {formatDateTime(l.proposed_at, { zoneLabel: false })}
                   </Typography.Text>

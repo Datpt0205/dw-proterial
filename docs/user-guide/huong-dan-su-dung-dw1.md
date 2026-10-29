@@ -48,7 +48,7 @@ Một người có thể giữ nhiều vai, ví dụ Sales phụ trách kiêm ng
 | Mở nguồn | Mở bản gốc (trang PDF hoặc ô Excel) nơi DW1 đọc ra một giá trị; cổng DW yêu cầu mở nguồn trước khi xác nhận |
 | Kiểm chéo | Một Sales khác đối chiếu đơn đã nhập Bravo với PO; người chuẩn bị đơn không tự kiểm chéo |
 | YCBG | Yêu cầu báo giá nội bộ lập trên Bravo để gửi Design |
-| Mẫu PO | Cách DW1 đọc mẫu PO của một khách; lập một lần cho mỗi mẫu, Trưởng bộ phận Sales duyệt |
+| Mẫu PO | Cách DW1 đọc mẫu PO của một khách; DW1 tự học ở PO đầu tiên, người lập tay chỉ khi DW1 không học được |
 | Dữ liệu chủ | Danh mục khách hàng, mã hàng, bảng quy đổi mã, báo giá còn hiệu lực, giá LME |
 | Phiên bản quy tắc | Bộ quy tắc kiểm tra mà DW1 đang áp dụng; mỗi thay đổi là một phiên bản mới, có người duyệt |
 | Tạm dừng DW1 | Dừng DW1 xử lý thư mới trong workspace; các bước của Sales vẫn làm bình thường |
@@ -254,9 +254,11 @@ Sau khi báo giá được duyệt:
 2. Gửi cho khách từ hộp thư của mình, bấm **Đã gửi KH**.
 3. Bấm **Xác nhận master list** khi đã ghi vào master list.
 
-## Thiết lập mẫu PO mới
+## Mẫu PO mới
 
-Khi một khách gửi PO theo mẫu DW1 chưa biết, thư hiện "Không đọc được file". Sales lập mẫu một lần; Trưởng bộ phận Sales duyệt; các PO sau theo mẫu đó DW1 tự đọc.
+Khi một khách gửi PO theo mẫu DW1 chưa biết, DW1 tự học mẫu đó: AI đọc tiêu đề các cột, DW1 kiểm số lượng × đơn giá khớp thành tiền, tổng cộng khớp, mã hàng có thật và giá nằm trong khoảng đã báo. Mọi kiểm tra đều qua thì DW1 dùng mẫu đó luôn và mở hồ sơ đơn hàng, không ai phải duyệt. Với vài PO đầu theo mẫu mới, DW1 gắn cờ mọi giá trị để Sales xác nhận bên cạnh tệp gốc.
+
+Chỉ khi DW1 không học được (thư hiện "Không đọc được file"), Sales lập mẫu tay và Trưởng bộ phận Sales duyệt:
 
 ![Trang Mẫu PO](images/09-mau-po.png)
 
@@ -322,7 +324,7 @@ Trang **Duyệt** gom mọi yêu cầu đang chờ người dùng quyết địn
 | Dữ liệu chủ | Ngay trên trang Duyệt, như phiên bản quy tắc |
 | Duyệt báo giá | Bấm **Mở hồ sơ để quyết định**, quyết định trên trang hồ sơ báo giá |
 | Kiểm chéo đơn hàng | Bấm **Mở hồ sơ để quyết định** |
-| Mẫu PO | Mở trang **Quản lý → Mẫu PO** |
+| Mẫu PO lập tay | Mở trang Mẫu PO từ đường dẫn trên thư trong **Hộp thư** |
 
 ## Duyệt báo giá
 
@@ -335,9 +337,9 @@ Người duyệt báo giá thay (nếu được giao) làm theo đúng các bư�
 
 ## Duyệt mẫu PO
 
-Mẫu PO mới chỉ có hiệu lực sau khi Trưởng bộ phận Sales duyệt; người lập mẫu không tự duyệt.
+Mẫu DW1 tự học không cần duyệt. Mẫu do Sales lập tay chỉ có hiệu lực sau khi Trưởng bộ phận Sales duyệt; người lập mẫu không tự duyệt.
 
-1. Mở **Quản lý → Mẫu PO**, chọn mẫu đang chờ duyệt.
+1. Mở trang Mẫu PO (đường dẫn trên thư trong **Hộp thư**, hoặc thông báo chờ duyệt), chọn mẫu đang chờ duyệt.
 2. Xem phần xem thử: các trường DW1 đọc được từ PO mẫu.
 3. Bấm **Duyệt**, ghi **Nhận xét**, bấm **Duyệt mẫu**.
 

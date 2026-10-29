@@ -37,11 +37,9 @@ const SALES_PAGES = [
   "/sales/orders",
   "/sales/quotes",
   "/sales/review",
-  "/sales/layouts",
   "/sales/rules",
   "/sales/rules/process",
   "/sales/master-data",
-  "/sales/export-control",
   "/sales/overview",
   "/sales/activity",
 ];
@@ -141,11 +139,9 @@ describe("the nav registry", () => {
       "Sales › Hồ sơ › Báo giá",
       "Sales › Hồ sơ › Kiểm chéo & duyệt",
       "Sales › Quản lý",
-      "Sales › Quản lý › Mẫu PO",
       "Sales › Quản lý › Quy tắc",
       "Sales › Quản lý › Quy trình DW1",
       "Sales › Quản lý › Dữ liệu chủ",
-      "Sales › Quản lý › Kiểm soát xuất khẩu",
       "Sales › Quản lý › Tổng quan quy trình",
       "Sales › Quản lý › Hoạt động DW1",
     ]);
@@ -252,17 +248,20 @@ describe("visibleNav", () => {
 
   it("shows a submenu while one of its pages is visible", () => {
     // Without sales.case.read the case pages go and "Hồ sơ" with them;
-    // without sales.overview.read "Quản lý" keeps its other pages.
-    const shown = salesBar(PIC.filter((s) => s !== "sales.overview.read"));
-    expect(shown).toEqual(
+    // without sales.overview.read "Quản lý" is down to one page, which then
+    // sits on the bar itself rather than in a submenu of one.
+    expect(salesBar(PIC)).toEqual(
       expect.arrayContaining([
         "Hồ sơ",
         "Hồ sơ › Đơn hàng",
         "Quản lý",
-        "Quản lý › Mẫu PO",
+        "Quản lý › Dữ liệu chủ",
+        "Quản lý › Tổng quan quy trình",
       ]),
     );
-    expect(shown).not.toContain("Quản lý › Tổng quan quy trình");
+    const shown = salesBar(PIC.filter((s) => s !== "sales.overview.read"));
+    expect(shown).toContain("Dữ liệu chủ");
+    expect(shown).not.toContain("Quản lý");
     const noRules = salesBar(PIC.filter((s) => s !== "sales.rules.propose"));
     expect(noRules).toContain("Quản lý");
     expect(noRules).not.toContain("Quản lý › Quy tắc");

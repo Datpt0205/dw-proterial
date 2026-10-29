@@ -108,7 +108,6 @@ from dw_sales.application.model_readiness import (
 )
 from dw_sales.application.ports import MemberDirectoryPort, SalesScope
 from dw_sales.application.quotation import QuoteRules
-from dw_sales.domain.export_control import SalesExportControl
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.domain.kpi import SalesKpi
 from dw_sales.domain.order_checks import OrderRules
@@ -139,7 +138,6 @@ class RuleKey(StrEnum):
     BRAVO_UPLOAD = "sales_bravo_upload"
     HANDOFFS = "sales_handoffs"
     FOLLOWUPS = "sales_followups"
-    EXPORT_CONTROL = "sales_export_control"
 
 
 type Policy = (
@@ -152,7 +150,6 @@ type Policy = (
     | BravoUploadLayout
     | HandoffCopy
     | SalesFollowups
-    | SalesExportControl
 )
 
 # Each key's schema: what a proposal is validated by and what is resolved.
@@ -167,7 +164,6 @@ OVERRIDABLE: Final[Mapping[RuleKey, type[Policy]]] = MappingProxyType(
         RuleKey.BRAVO_UPLOAD: BravoUploadLayout,
         RuleKey.HANDOFFS: HandoffCopy,
         RuleKey.FOLLOWUPS: SalesFollowups,
-        RuleKey.EXPORT_CONTROL: SalesExportControl,
     }
 )
 # The keys a version may be drafted for from the company's own file ("Tạo từ
@@ -416,11 +412,6 @@ class TenantRuleBook:
     async def followups(self, scope: SalesScope) -> SalesFollowups:
         policy = (await self.current(scope, RuleKey.FOLLOWUPS)).policy
         assert isinstance(policy, SalesFollowups)
-        return policy
-
-    async def export_control(self, scope: SalesScope) -> SalesExportControl:
-        policy = (await self.current(scope, RuleKey.EXPORT_CONTROL)).policy
-        assert isinstance(policy, SalesExportControl)
         return policy
 
     async def artifact_copy(self, scope: SalesScope, stamps: Sequence[str]) -> ArtifactCopy:

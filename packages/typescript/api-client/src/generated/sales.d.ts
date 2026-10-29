@@ -20,159 +20,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/export-control": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export Control */
-        get: operations["export_control_api_v1_sales_export_control_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export Control Customer */
-        get: operations["export_control_customer_api_v1_sales_export_control__customer_code__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}/denial-list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record Denial List */
-        post: operations["record_denial_list_api_v1_sales_export_control__customer_code__denial_list_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}/esf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record Esf */
-        post: operations["record_esf_api_v1_sales_export_control__customer_code__esf_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}/esf-form": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Esf Form */
-        get: operations["esf_form_api_v1_sales_export_control__customer_code__esf_form_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}/evidence/{step}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Screening Evidence */
-        get: operations["screening_evidence_api_v1_sales_export_control__customer_code__evidence__step__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}/noc": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record Noc */
-        post: operations["record_noc_api_v1_sales_export_control__customer_code__noc_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}/noec-draft": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Noec Draft */
-        get: operations["noec_draft_api_v1_sales_export_control__customer_code__noec_draft_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sales/export-control/{customer_code}/red-flag": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Record Red Flag */
-        post: operations["record_red_flag_api_v1_sales_export_control__customer_code__red_flag_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sales/inbox": {
         parameters: {
             query?: never;
@@ -2044,46 +1891,6 @@ export interface components {
             /** Unchecked Regions */
             unchecked_regions: string[];
         };
-        /** CustomerDetailView */
-        CustomerDetailView: {
-            /** Esf Approvers */
-            esf_approvers: string[];
-            /** Products */
-            products: components["schemas"]["ProductView"][];
-            /** Red Flags */
-            red_flags: components["schemas"]["RedFlagQuestionView"][];
-            /** Sample */
-            sample: boolean;
-            /** Screenings */
-            screenings: components["schemas"]["ScreeningView"][];
-            summary: components["schemas"]["CustomerScreeningView"];
-        };
-        /**
-         * CustomerScreeningView
-         * @description One customer's export control, as the overview lists it.
-         */
-        CustomerScreeningView: {
-            /** Customer Code */
-            customer_code: string;
-            /** Customer Name */
-            customer_name: string;
-            /** Denial List Checked On */
-            denial_list_checked_on: string | null;
-            /** Denial List Match */
-            denial_list_match: boolean;
-            /** Esf Fiscal Year */
-            esf_fiscal_year: number | null;
-            /** Needs */
-            needs: ("noc_missing" | "esf_due" | "denial_due" | "denial_match" | "red_flag_missing" | "red_flag_escalated" | "products_unclassified" | "products_listed")[];
-            /** Noc Confirmed */
-            noc_confirmed: boolean;
-            /** Red Flag Escalated */
-            red_flag_escalated: boolean;
-            /** Status */
-            status: string;
-            /** Traded Recently */
-            traded_recently: boolean;
-        };
         /** CustomerView */
         CustomerView: {
             /** Code */
@@ -2179,23 +1986,6 @@ export interface components {
             requested_date: string;
             /** Suggested Delivery Date */
             suggested_delivery_date: string | null;
-        };
-        /** DenialListBody */
-        DenialListBody: {
-            /**
-             * Checked On
-             * Format: date
-             */
-            checked_on: string;
-            /** Content B64 */
-            content_b64?: string | null;
-            /** Note */
-            note?: string | null;
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            outcome: "clear" | "match";
         };
         /**
          * Derivation
@@ -2377,20 +2167,6 @@ export interface components {
          * @enum {string}
          */
         EdgeGuard: "blocking_findings" | "ask_customer" | "entry_compared" | "approval" | "maker_checker" | "cross_check_not_required" | "export_control_hold" | "pc_confirmed_date" | "request_findings";
-        /** EsfBody */
-        EsfBody: {
-            /**
-             * Checked On
-             * Format: date
-             */
-            checked_on: string;
-            /** Content B64 */
-            content_b64: string;
-            /** Fiscal Year */
-            fiscal_year: number;
-            /** Note */
-            note?: string | null;
-        };
         /**
          * EvidenceView
          * @description What Sales weighs for one line (step 7). Only for `sales.price.read`;
@@ -2423,19 +2199,6 @@ export interface components {
             reference_price: components["schemas"]["Amount"] | components["schemas"]["Hidden"] | null;
             suggestion?: components["schemas"]["SuggestionView"] | null;
             target_price: components["schemas"]["Amount"] | null;
-        };
-        /** ExportControlOverview */
-        ExportControlOverview: {
-            /** Customers */
-            customers: components["schemas"]["CustomerScreeningView"][];
-            /** Denial List Max Age Days */
-            denial_list_max_age_days: number;
-            /** Fiscal Year */
-            fiscal_year: number;
-            /** Policy Ref */
-            policy_ref: string;
-            /** Sample */
-            sample: boolean;
         };
         /**
          * ExportRow
@@ -2679,8 +2442,6 @@ export interface components {
         ItemView: {
             /** Cores */
             cores: number;
-            /** Export Classification */
-            export_classification: ("applicable" | "not_applicable") | null;
             /** Family */
             family: string | null;
             /** Gauge */
@@ -2904,11 +2665,8 @@ export interface components {
          *     who decided it, and the model pre-fill it started from, if any.
          */
         LayoutView: {
-            /**
-             * Approval Id
-             * Format: uuid
-             */
-            approval_id: string;
+            /** Approval Id */
+            approval_id: string | null;
             /** Customer Code */
             customer_code: string;
             /** Decided At */
@@ -2923,6 +2681,8 @@ export interface components {
              */
             layout_id: string;
             mapping: components["schemas"]["LayoutMapping"];
+            /** Origin */
+            origin: string;
             prefill: components["schemas"]["LayoutPrefill"] | null;
             /**
              * Proposed At
@@ -3234,23 +2994,6 @@ export interface components {
          * @enum {string}
          */
         ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal";
-        /** NocBody */
-        NocBody: {
-            /**
-             * Checked On
-             * Format: date
-             */
-            checked_on: string;
-            /** Content B64 */
-            content_b64?: string | null;
-            /** Note */
-            note?: string | null;
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            outcome: "requested" | "received";
-        };
         /** OpenYcbgView */
         OpenYcbgView: {
             /** Customer Code */
@@ -3891,13 +3634,6 @@ export interface components {
             /** Value */
             value: string;
         };
-        /** ProductView */
-        ProductView: {
-            /** Classification */
-            classification: ("applicable" | "not_applicable") | null;
-            /** Prv Code */
-            prv_code: string;
-        };
         /** QuotationBasisView */
         QuotationBasisView: {
             copper_basis: components["schemas"]["CopperBasisView"];
@@ -4218,27 +3954,6 @@ export interface components {
             /** Reason Code */
             reason_code: string;
         };
-        /** RedFlagBody */
-        RedFlagBody: {
-            /** Answers */
-            answers: {
-                [key: string]: boolean;
-            };
-            /**
-             * Checked On
-             * Format: date
-             */
-            checked_on: string;
-            /** Note */
-            note?: string | null;
-        };
-        /** RedFlagQuestionView */
-        RedFlagQuestionView: {
-            /** Id */
-            id: string;
-            /** Text */
-            text: string;
-        };
         /**
          * RegionFlag
          * @description Why a value read from a file is not taken on trust (`value_uncertain`).
@@ -4447,7 +4162,7 @@ export interface components {
          * @description The Sales policies and copy a tenant may hold its own version of.
          * @enum {string}
          */
-        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups" | "sales_export_control";
+        RuleKey: "sales_order_rules" | "sales_kpi" | "sales_quote_rules" | "sales_pricing" | "sales_emails" | "sales_documents" | "sales_bravo_upload" | "sales_handoffs" | "sales_followups";
         /**
          * RuleProposalBody
          * @description A whole policy document for one key, validated by that key's schema.
@@ -4558,45 +4273,6 @@ export interface components {
             prv_code: string;
             /** Quote Nos */
             quote_nos: string[];
-        };
-        /**
-         * ScreeningStep
-         * @description The steps a person records a result of. The product screen (step 1)
-         *     is read from master data, and the yearly renewal (step 6) is an ESF
-         *     recorded for the new year: neither is a step of its own here.
-         * @enum {string}
-         */
-        ScreeningStep: "denial_list" | "red_flag" | "noc" | "esf";
-        /** ScreeningView */
-        ScreeningView: {
-            /** Answers */
-            answers: {
-                [key: string]: boolean;
-            };
-            /**
-             * Checked On
-             * Format: date
-             */
-            checked_on: string;
-            /** Fiscal Year */
-            fiscal_year: number | null;
-            /** Has Evidence */
-            has_evidence: boolean;
-            /** Note */
-            note: string | null;
-            /** Outcome */
-            outcome: string;
-            /**
-             * Recorded At
-             * Format: date-time
-             */
-            recorded_at: string;
-            /**
-             * Recorded By
-             * Format: uuid
-             */
-            recorded_by: string;
-            step: components["schemas"]["ScreeningStep"];
         };
         /** SettingView */
         SettingView: {
@@ -5237,299 +4913,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivitySummaryView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_control_api_v1_sales_export_control_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExportControlOverview"];
-                };
-            };
-        };
-    };
-    export_control_customer_api_v1_sales_export_control__customer_code__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                customer_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CustomerDetailView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    record_denial_list_api_v1_sales_export_control__customer_code__denial_list_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                customer_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DenialListBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScreeningView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    record_esf_api_v1_sales_export_control__customer_code__esf_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                customer_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EsfBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScreeningView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    esf_form_api_v1_sales_export_control__customer_code__esf_form_get: {
-        parameters: {
-            query?: {
-                format?: "xlsx" | "pdf";
-            };
-            header?: never;
-            path: {
-                customer_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    screening_evidence_api_v1_sales_export_control__customer_code__evidence__step__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                customer_code: string;
-                step: components["schemas"]["ScreeningStep"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    record_noc_api_v1_sales_export_control__customer_code__noc_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                customer_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NocBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScreeningView"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    noec_draft_api_v1_sales_export_control__customer_code__noec_draft_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                customer_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    record_red_flag_api_v1_sales_export_control__customer_code__red_flag_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                customer_code: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RedFlagBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScreeningView"];
                 };
             };
             /** @description Validation Error */

@@ -656,59 +656,6 @@ export class SalesApi {
     );
   }
 
-  // ---- export control, WIV-03-032 (ticket 45) -------------------------------
-
-  /** Every customer's export control: what is done and what is still owed. */
-  exportControl() {
-    return this.get<"/api/v1/sales/export-control">(
-      "/api/v1/sales/export-control",
-    );
-  }
-
-  /** One customer: each step's latest result, their products, the questions. */
-  exportControlCustomer(code: string) {
-    return this.get<"/api/v1/sales/export-control/{customer_code}">(
-      `/api/v1/sales/export-control/${enc(code)}`,
-    );
-  }
-
-  /**
-   * A person records one step's result (`sales.compliance.ack`); DW1 decides
-   * nothing. The document, where the step rests on one, travels as base64.
-   */
-  recordScreening(
-    code: string,
-    step: "denial-list" | "red-flag" | "noc" | "esf",
-    body:
-      | Body<"/api/v1/sales/export-control/{customer_code}/denial-list">
-      | Body<"/api/v1/sales/export-control/{customer_code}/red-flag">
-      | Body<"/api/v1/sales/export-control/{customer_code}/noc">
-      | Body<"/api/v1/sales/export-control/{customer_code}/esf">,
-    key: string,
-  ) {
-    return this.post<"/api/v1/sales/export-control/{customer_code}/noc">(
-      `/api/v1/sales/export-control/${enc(code)}/${step}`,
-      body,
-      key,
-    );
-  }
-
-  /** The NOEC mail draft (.eml), the ESF form, or a step's stored document. */
-  async exportControlFile(
-    code: string,
-    file:
-      "noec-draft" | "esf-form.xlsx" | "esf-form.pdf" | `evidence/${string}`,
-  ): Promise<Blob> {
-    const path = file.startsWith("esf-form")
-      ? `esf-form?format=${file.endsWith("pdf") ? "pdf" : "xlsx"}`
-      : file;
-    const response = await this.client.rawRequest(
-      "GET",
-      `/api/v1/sales/export-control/${enc(code)}/${path}`,
-    );
-    return response.blob();
-  }
-
   // ---- master-data imports (ticket 41) ---------------------------------------
 
   /** Where each list comes from now, its open import and its history. */

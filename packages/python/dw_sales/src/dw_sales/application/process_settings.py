@@ -576,10 +576,6 @@ LOCKED: Final[Mapping[Placement, LockReason]] = MappingProxyType(
 
 _VERSION = "the version's own fields: the editor asks for them with every proposal"
 _COPY = "copy and templates: placed on steps in slice 2, edited on /sales/rules"
-_EXPORT_CONTROL = (
-    "WIV-03-032 is a procedure of its own, not a step of the order or quote map:"
-    " edited on /sales/rules, used on Kiểm soát xuất khẩu"
-)
 
 # Fields of an overridable key this page leaves out on purpose, with why.
 NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
@@ -601,14 +597,6 @@ NOT_ON_PAGE: Final[Mapping[Placement, str]] = MappingProxyType(
         **{
             Placement(RuleKey.HANDOFFS, path): _VERSION
             for path in ("schema_version", "copy_id", "version")
-        },
-        **{
-            Placement(RuleKey.EXPORT_CONTROL, path): _VERSION
-            for path in ("schema_version", "policy_id", "policy_version")
-        },
-        **{
-            Placement(RuleKey.EXPORT_CONTROL, path): _EXPORT_CONTROL
-            for path in ("sample", "red_flags", "esf_approvers", "noec_email")
         },
         Placement(RuleKey.EMAILS, "sender"): _COPY,
         Placement(RuleKey.EMAILS, "emails"): _COPY,

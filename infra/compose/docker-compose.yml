@@ -281,6 +281,12 @@ services:
       DW_API_DEV_SECRET: ${DW_API_DEV_SECRET:-}
       DW_MODEL_PROVIDER: ${DW_MODEL_PROVIDER:-mock}
       DW_API_MODEL_PROFILE: ${DW_API_MODEL_PROFILE:-balanced}
+      # The model server DW1 reads documents with (dw_sales ADR 0005, provider
+      # `onprem`). Empty: no such server, and every model step goes to a
+      # person. On a developer machine running Ollama:
+      #   DW_ONPREM_MODEL_BASE_URL=http://host.docker.internal:11434/v1
+      DW_ONPREM_MODEL_BASE_URL: ${DW_ONPREM_MODEL_BASE_URL:-}
+      DW_ONPREM_MODEL_API_KEY: ${DW_ONPREM_MODEL_API_KEY:-}
       DW_API_OPENAI_STRUCTURED_MODE: ${DW_API_OPENAI_STRUCTURED_MODE:-json_schema}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
@@ -607,6 +613,10 @@ services:
       DW_WORKER_MODEL_PROFILE: ${DW_API_MODEL_PROFILE:-balanced}
       # The model a chat command reads a message with: the API's provider.
       DW_WORKER_MODEL_PROVIDER: ${DW_MODEL_PROVIDER:-mock}
+      # DW1's model server, the API's (above): the mailbox lane and "DW xử lý"
+      # read on the same model as a person's request.
+      DW_ONPREM_MODEL_BASE_URL: ${DW_ONPREM_MODEL_BASE_URL:-}
+      DW_ONPREM_MODEL_API_KEY: ${DW_ONPREM_MODEL_API_KEY:-}
       DW_WORKER_OPENAI_STRUCTURED_MODE: ${DW_API_OPENAI_STRUCTURED_MODE:-json_schema}
       # Observability -> Langfuse (OTLP). Empty = no export.
       LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-}
