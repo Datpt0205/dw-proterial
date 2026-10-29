@@ -32,11 +32,9 @@ own file and a row here.
   package; two defects fixed (`89bcd0d49ea6`, route walks); six live evals
   PASS on Qwen3.5-9B; on-prem compose ran (README); scope vs Proterial's
   process in `sales/dw1-scope.md`; deny-list secret set.
-- 10-19..28: rules form, master data, follow-ups (t40–42), board, history, process map, IT accounts, mail drop (t43),
-  YCBG drafted and prices suggested, who sees what. `sales.md` State.
-- 10-29: quote→order through a stored ledger; nothing fails silently
-  (outbox waits and alarms, refused mail told); DW1 learns PO forms (ADR
-  0006); export-control page withdrawn, the hold stays. `sales.md` State.
+- 10-19..29: rules, master data, follow-ups, board, mail drop (t43), quote→
+  order ledger, nothing fails silently, DW1 learns PO forms (ADR 0006),
+  export-control page withdrawn. `sales.md` State.
 - **Next:** AI items 3, 12, 5, 8, 10 done (10-29, `sales.md`); then "Gửi
   cho khách" from the PIC's own mailbox through an outbox folder and their
   own Power Automate flow (no Graph; Đạt 10-29), then items 11, 6, 7, 2, 4,
