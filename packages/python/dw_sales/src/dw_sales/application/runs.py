@@ -31,6 +31,7 @@ from typing import Final, Literal, Protocol
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, order_actor, sales_scope
@@ -84,6 +85,37 @@ _REASONS: Final[Mapping[DecisionType, str]] = MappingProxyType(
         DecisionType.ORDER_CROSS_CHECK: "Đơn đã nhập Bravo chờ kiểm chéo (WIV-03-012 bước 9)",
     }
 )
+
+
+def caller_run(
+    context: AccessContext,
+    *,
+    run_id: uuid.UUID,
+    worker_id: str,
+    worker_version: str,
+    trace: str,
+    subject_ref: str,
+) -> RunContext:
+    """A one-call run as the person who asked, from the portal: their plan is
+    what the allowance checks, and the call is recorded under DW1's worker."""
+    return RunContext(
+        run_id=run_id,
+        tenant_id=context.tenant_id,
+        workspace_id=context.workspace_id,
+        actor_id=context.principal_id,
+        worker_id=worker_id,
+        worker_version=worker_version,
+        channel=WEB_CHANNEL,
+        plan_id=context.plan_id,
+        roles=context.roles,
+        scopes=context.scopes,
+        clearance=context.clearance,
+        record_visibility=context.record_visibility,
+        visible_owners=context.visible_owners,
+        autonomy_ceiling=context.max_autonomy_level,
+        trace_id=f"{trace}-{run_id.hex[:12]}",
+        subject_ref=subject_ref,
+    )
 
 
 def subject_of(kind: CaseKind, case_id: uuid.UUID) -> str:

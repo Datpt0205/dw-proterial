@@ -274,6 +274,14 @@ export class SalesApi {
     );
   }
 
+  /** A finding explained in words by DW1's model (AI item 12): nothing is
+   * stored; a price finding only for a price reader (403 otherwise). */
+  explainFinding(caseId: string, findingKey: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/findings/{finding_key}/explanation">(
+      `/api/v1/sales/orders/${enc(caseId)}/findings/${enc(findingKey)}/explanation`,
+    );
+  }
+
   dispose(
     caseId: string,
     findingKey: string,

@@ -186,11 +186,12 @@ Mọi cờ chặn phải được quyết định trước khi đơn đi tiếp;
 
 1. Mở hồ sơ từ **Việc cần làm** hoặc **Hồ sơ → Đơn hàng**.
 2. Bấm **Mở bản gốc** hoặc **Mở nguồn** cạnh giá trị cần xem. Trang PDF hoặc bảng Excel hiện ra, khung quanh đúng chỗ DW1 đã đọc.
-3. Với từng cờ, chọn một trong hai:
+3. Chưa rõ một cờ nghĩa là gì, bấm **DW1 giải thích**: DW1 viết vài câu về điều đã so sánh, các giá trị, và nên kiểm gì tiếp, chỉ dùng số liệu có trong hồ sơ (gắn nhãn "Máy viết"). DW1 không quyết thay; người vẫn chọn cách xử lý.
+4. Với từng cờ, chọn một trong hai:
    - **Chấp nhận + lý do**: nhập lý do, ví dụ "Khách xác nhận giá theo thư ngày 22/09".
    - **Yêu cầu khách sửa**: dòng này cần khách gửi lại PO.
-4. Bấm **Ghi quyết định**. Mỗi quyết định tạo một phiên bản hồ sơ mới.
-5. Khi mọi cờ đã quyết định, bấm **Chuẩn bị xong**. Nếu nút mờ với lý do "Chưa mở nguồn", bấm **Mở nguồn** của phiên bản hồ sơ hiện tại rồi bấm lại.
+5. Bấm **Ghi quyết định**. Mỗi quyết định tạo một phiên bản hồ sơ mới.
+6. Khi mọi cờ đã quyết định, bấm **Chuẩn bị xong**. Nếu nút mờ với lý do "Chưa mở nguồn", bấm **Mở nguồn** của phiên bản hồ sơ hiện tại rồi bấm lại.
 
 Khi một dòng có mã hàng của khách chưa có trong bảng quy đổi, DW1 gợi ý các mã PRV khớp mô tả; Sales chọn mã đúng. DW1 ghi nhớ lựa chọn đó: PO sau của cùng khách có cùng mã hàng sẽ tự khớp mã PRV, không phải chọn lại. Lần chọn đầu tiên được giữ; bảng quy đổi chính thức (nhập từ Excel) luôn được ưu tiên khi đã có mã đó.
 

@@ -30,6 +30,7 @@ from dw_sales.application.catalog_imports import (
     CatalogUnitOfWorkFactory,
 )
 from dw_sales.application.decisions import CaseDecisions
+from dw_sales.application.finding_explanations import FindingExplanations
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
 from dw_sales.application.malware import MalwareScanPort
@@ -90,6 +91,8 @@ class SalesServices:
     rule_drafts: RuleDraftService
     # Master data imported from a file, previewed and submitted (ticket 41).
     catalog_imports: CatalogImportService
+    # A finding explained in words by the model, on request (AI item 12).
+    finding_explanations: FindingExplanations
     gate: Gate
 
 
@@ -137,6 +140,7 @@ def assemble(
     scanner: MalwareScanPort,
     # Where an item code Sales confirms is kept (the catalog, in practice).
     converts: ConvertLedgerPort,
+    finding_explanations: FindingExplanations,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     sources = SourceService(uow, gate, clock, inbox, files, source_cache)
@@ -191,6 +195,7 @@ def assemble(
         ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
+        finding_explanations=finding_explanations,
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing, notifications)

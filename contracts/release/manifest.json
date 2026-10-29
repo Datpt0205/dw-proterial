@@ -274,6 +274,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "3fc923d4362a01ea0fa762c21cc5adcae7294b8dcedcff16d0f2465c68c00ef2",
+      "dataset_id": "sales_finding_explanations",
+      "files": [
+        {
+          "checksum": "29930de5cfff8b5ee55ab17802cb4a9cb1cea4ec36452dd90268dce5e6811cb0",
+          "path": "evals/expected/sales_finding_explanations.json"
+        },
+        {
+          "checksum": "8b8269b74049dda200f7272ff643d46ed129258d0034a22271ebf41a2dbcc957",
+          "path": "evals/fixtures/cases/sales_finding_explanations.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "b63f78744909befe486740e4357f840bd6fb23b105f42c1796540816b0a06732",
       "dataset_id": "sales_handoff",
       "files": [
@@ -462,7 +477,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "56f2e16135f3c277d5c50ec604c545ee09285682",
+  "git_sha": "a2e9658bb9d1aaca3118a6af9ff58430b226c0c8",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -629,6 +644,11 @@
     {
       "checksum": "40b7dcacc569ed4fc4050054058fc39e2d4148144d3f85362bde04e25243ff75",
       "prompt_id": "sales.description_attributes",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "70b956d776f29d398e0f79a298ca4655b3c94cebc26571f6466259cfede0d621",
+      "prompt_id": "sales.finding_explanation",
       "version": "1.0.0"
     },
     {
