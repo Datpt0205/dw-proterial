@@ -494,9 +494,24 @@
         }
       ],
       "version": "1.0.0"
+    },
+    {
+      "checksum": "fbc513f60b061d12a33eb6ae3ee441976f5a576d22d364404aefae80785774a9",
+      "dataset_id": "sales_thread_summaries",
+      "files": [
+        {
+          "checksum": "18fe5785544dd1f90ce1da7203779fb79857579de0d5923a3fcf220f1333ce3c",
+          "path": "evals/expected/sales_thread_summaries.json"
+        },
+        {
+          "checksum": "0e53a9c9f06ed087cbf9b9c3ab8276bb767e960681cf062d41c4d7fd82e1b73d",
+          "path": "evals/fixtures/cases/sales_thread_summaries.json"
+        }
+      ],
+      "version": "1.0.0"
     }
   ],
-  "git_sha": "3a5411f07542cec46368b8e1915c01b9b70f156e",
+  "git_sha": "bf5400c9f2a2b98e2e3926ff10d65134dd9df6db",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -703,6 +718,11 @@
     {
       "checksum": "9eca800b67909bfaa1c18ebbf378f29f5de7a928df228a260ead0bd90c813801",
       "prompt_id": "sales.sender_customer",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "a3287ec19131d57babc0afcae8d8dad69023dec897ef79c0cc58369009aaf87a",
+      "prompt_id": "sales.thread_summary",
       "version": "1.0.0"
     }
   ],

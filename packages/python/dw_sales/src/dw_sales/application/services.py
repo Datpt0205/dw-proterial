@@ -61,6 +61,7 @@ from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
 from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
+from dw_sales.application.thread_summaries import ThreadSummaries
 from dw_sales.application.worker_service import WorkerService
 
 
@@ -97,6 +98,8 @@ class SalesServices:
     finding_explanations: FindingExplanations
     # A customer suggested for a sender no domain matched (AI item 5).
     sender_customers: SenderCustomers
+    # A case's mail thread summarised, each point citing its mail (AI item 8).
+    thread_summaries: ThreadSummaries
     gate: Gate
 
 
@@ -221,6 +224,9 @@ def assemble(
             ids,
             worker_id,
             worker_version,
+        ),
+        thread_summaries=ThreadSummaries(
+            uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
         ),
         gate=gate,
     )

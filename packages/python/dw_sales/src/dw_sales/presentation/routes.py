@@ -80,6 +80,7 @@ from dw_sales.application.rules import (
 from dw_sales.application.sender_customers import SenderCustomerView
 from dw_sales.application.services import SalesServices
 from dw_sales.application.source import MessageTextView, SourceView
+from dw_sales.application.thread_summaries import ThreadSummaryView
 from dw_sales.application.views import (
     BravoOrderView,
     CaseChangeView,
@@ -452,6 +453,24 @@ def build_router(
     @router.get("/quotes/{case_id}/history", response_model=list[CaseHistoryEntry])
     async def quote_history(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[CaseHistoryEntry]:
         return await svc.pipeline.history(context, CaseKind.QUOTE, case_id)
+
+    # A case's mail thread summarised by the model, on request (AI item 8):
+    # each point cites its mails, and nothing is stored.
+    @router.get(
+        "/orders/{case_id}/thread-summary",
+        response_model=ThreadSummaryView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def order_thread(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ThreadSummaryView:
+        return await svc.thread_summaries.summarize(context, CaseKind.ORDER, case_id)
+
+    @router.get(
+        "/quotes/{case_id}/thread-summary",
+        response_model=ThreadSummaryView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def quote_thread(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ThreadSummaryView:
+        return await svc.thread_summaries.summarize(context, CaseKind.QUOTE, case_id)
 
     @router.get("/my-work", response_model=Page[WorkItem])
     async def my_work(

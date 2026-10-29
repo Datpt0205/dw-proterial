@@ -51,6 +51,7 @@ import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
 import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
+import { ThreadSummary } from "../../_components/thread-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
 import { FindingWords, Money } from "../../_components/money";
@@ -501,6 +502,8 @@ function OrderDetail() {
           />
         </Card>
       ) : null}
+
+      <ThreadSummary kind="order" caseId={data.case_id} />
 
       <CaseHistory
         kind="order"
