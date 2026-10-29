@@ -42,6 +42,7 @@ function snapshot(overrides: Partial<CatalogImport> = {}): CatalogImport {
     status: "parsed",
     source: "file",
     file_name: "khach-hang.xlsx",
+    column_map: [],
     file_sha256: "a".repeat(64),
     imported_by: AN,
     imported_at: "2026-10-19T02:00:00Z",
@@ -72,7 +73,7 @@ function state(overrides: Partial<CatalogListState> = {}): CatalogListState {
 }
 
 const PREVIEW: CatalogPreview = {
-  snapshot: snapshot(),
+  snapshot: snapshot({ column_map: [["Mã khách hàng", "Mã KH"]] }),
   compared_with: {
     source: "mock",
     as_of: "2026-10-02T11:00:00Z",
@@ -199,6 +200,9 @@ describe("the import panel (ticket 41)", () => {
       expect(
         screen.getByText(/Cột không dùng \(bỏ qua\): Ghi chú/),
       ).toBeTruthy();
+      // The model's match is shown to whoever submits and approves (AI item 2).
+      expect(screen.getByText("Máy ghép")).toBeTruthy();
+      expect(screen.getByText("“Mã KH” → Mã khách hàng")).toBeTruthy();
       // Nothing on this page approves.
       expect(screen.queryByRole("button", { name: /^Duyệt/ })).toBeNull();
 

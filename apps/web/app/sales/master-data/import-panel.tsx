@@ -8,6 +8,7 @@ import {
   Button,
   Space,
   Table,
+  Tag,
   Typography,
   Upload,
   type TableColumnsType,
@@ -269,6 +270,23 @@ function Preview({ snapshotId }: { snapshotId: string }) {
       <Typography.Text role="status">
         {data ? diffSummary(data) : "Đang tải bản xem trước…"}
       </Typography.Text>
+      {data && data.snapshot.column_map.length ? (
+        // The file's own headers matched by DW1's model (AI item 2): what
+        // the approver checks before the rows below are trusted.
+        <Alert
+          type="info"
+          showIcon
+          title={
+            <Space wrap>
+              <span>DW1 ghép cột của tệp với mẫu</span>
+              <Tag>Máy ghép</Tag>
+            </Space>
+          }
+          description={data.snapshot.column_map
+            .map(([template, file]) => `“${file}” → ${template}`)
+            .join(" · ")}
+        />
+      ) : null}
       {data && data.unknown_headers.length ? (
         <Alert
           type="warning"

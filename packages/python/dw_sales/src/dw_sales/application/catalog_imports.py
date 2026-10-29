@@ -55,7 +55,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from types import MappingProxyType, TracebackType
-from typing import Any, Final, Literal, Protocol, Self
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
 
@@ -71,6 +71,7 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
+from dw_platform.application.identity import context_from
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_platform.domain.approval import (
     ApprovalDecision,
@@ -82,8 +83,10 @@ from dw_platform.domain.audit import AuditEvent, lane_audit_event
 from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import RunLessApprovalsPort
+from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope, Snapshot
+from dw_sales.application.runs import caller_run
 from dw_sales.domain.catalog import ConvertEntry, LmeMonth, Quotation, month_key
 from dw_sales.domain.master_data import (
     MAX_REJECTED_KEPT,
@@ -100,6 +103,10 @@ from dw_sales.domain.master_data import (
     parse_rows,
     records_of,
 )
+
+if TYPE_CHECKING:
+    # Not at run time: `processing` reaches this module through the inbox.
+    from dw_sales.application.processing import RequesterAccessPort
 
 logger = logging.getLogger("dw_sales.catalog_imports")
 
@@ -159,6 +166,10 @@ class CatalogSnapshot(BaseModel):
     rejected_count: int = Field(default=0, ge=0)
     rejected: tuple[RejectedRow, ...] = ()
     unknown_headers: tuple[str, ...] = ()
+    # Which of the file's headers each template column was read from, when a
+    # model matched them (AI item 2; `column_mapping`): empty when the file's
+    # headers were the template's.
+    column_map: tuple[tuple[str, str], ...] = ()
     submitted_by: uuid.UUID | None = None
     submitted_at: AwareDatetime | None = None
     approval_id: uuid.UUID | None = None
@@ -300,6 +311,8 @@ class CatalogImportView(BaseModel):
     decided_by: uuid.UUID | None
     decided_at: datetime | None
     comment: str | None
+    # [template header, file header] per column a model matched (AI item 2).
+    column_map: list[tuple[str, str]] = []
 
 
 class CatalogInForceView(BaseModel):
@@ -370,6 +383,7 @@ def import_view(snapshot: CatalogSnapshot) -> CatalogImportView:
         decided_by=snapshot.decided_by,
         decided_at=snapshot.decided_at,
         comment=snapshot.comment,
+        column_map=list(snapshot.column_map),
     )
 
 
@@ -735,6 +749,12 @@ class CatalogParsing:
     catalog: SalesCatalogPort
     clock: UtcClock
     ids: IdGenerator
+    # A model to match a file's columns no template header matched (AI item
+    # 2), asked as the importer; None: such a file is refused, as before.
+    columns: ColumnMatcher | None = None
+    access: RequesterAccessPort | None = None
+    worker_id: str = ""
+    worker_version: str = ""
 
     async def parse(self, scope: SalesScope, snapshot_id: uuid.UUID) -> str:
         """Reads one queued import; what it did, for the log. Idempotent: an
@@ -792,10 +812,18 @@ class CatalogParsing:
             # A refusal is not an outage: asked again, the reader answers the
             # same (Sales defect B), so the import settles, it is not retried.
             return _failed(snapshot, _unread(refused))
+        column_map: tuple[tuple[str, str], ...] = ()
         try:
             parsed = parse_rows(snapshot.catalog_list, table)
         except ValueError as refused:
-            return _failed(snapshot, str(refused))
+            matched = await self._matched(scope, snapshot, table)
+            if matched is None:
+                return _failed(snapshot, str(refused))
+            table, column_map = matched
+            try:
+                parsed = parse_rows(snapshot.catalog_list, table)
+            except ValueError:
+                return _failed(snapshot, str(refused))
         kept, unknown = await self._references(scope, snapshot, parsed.records)
         rejected = sorted([*parsed.rejected, *unknown], key=lambda r: r.row)
         status: ImportStatus = "parsed" if kept else "failed"
@@ -807,7 +835,41 @@ class CatalogParsing:
                 "rejected_count": len(rejected),
                 "rejected": tuple(rejected[:MAX_REJECTED_KEPT]),
                 "unknown_headers": parsed.unknown_headers,
+                "column_map": column_map,
             }
+        )
+
+    async def _matched(
+        self, scope: SalesScope, snapshot: CatalogSnapshot, table: ImportedTable
+    ) -> tuple[ImportedTable, tuple[tuple[str, str], ...]] | None:
+        """The file's columns matched by the model, asked as the importer
+        resolved again (cut to the import scope): None with no model, an
+        importer gone, or no match code accepts."""
+        if self.columns is None or self.access is None:
+            return None
+        access = await self.access.find_linked_access(
+            snapshot.imported_by,
+            scope.tenant_id.value,
+            scope.workspace_id.value,
+            frozenset({SalesScopes.MASTER_DATA_IMPORT.value}),
+        )
+        if access is None:
+            return None
+        context = context_from(access)
+        if sales_scope(context) != scope:
+            return None
+        return await self.columns.match(
+            snapshot.catalog_list,
+            table,
+            run=caller_run(
+                context,
+                run_id=self.ids.new_uuid(),
+                worker_id=self.worker_id,
+                worker_version=self.worker_version,
+                trace="sales-catalog-columns",
+                subject_ref=f"{_RESOURCE}:{snapshot.snapshot_id}",
+                channel=CATALOG_IMPORT_LANE,
+            ),
         )
 
     async def _references(

@@ -1577,6 +1577,24 @@
           "catalog_list": {
             "$ref": "#/components/schemas/CatalogList"
           },
+          "column_map": {
+            "default": [],
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Column Map",
+            "type": "array"
+          },
           "comment": {
             "anyOf": [
               {

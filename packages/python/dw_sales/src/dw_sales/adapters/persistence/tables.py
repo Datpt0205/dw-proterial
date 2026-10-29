@@ -364,6 +364,7 @@ catalog_snapshots = sa.Table(
     sa.Column("rejected_count", sa.Integer, nullable=False),
     sa.Column("rejected", JSONB, nullable=False),
     sa.Column("unknown_headers", JSONB, nullable=False),
+    sa.Column("column_map", JSONB, nullable=False, server_default=sa.text("'[]'::jsonb")),
     sa.Column("submitted_by", UUID(as_uuid=True)),
     sa.Column("submitted_at", _TS),
     sa.Column("approval_id", UUID(as_uuid=True)),

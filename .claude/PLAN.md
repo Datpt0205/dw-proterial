@@ -35,10 +35,10 @@ own file and a row here.
 - 10-19..29: rules, master data, follow-ups, board, mail drop (t43), quote→
   order ledger, nothing fails silently, DW1 learns PO forms (ADR 0006),
   export-control page withdrawn. `sales.md` State.
-- **Next:** AI items 3, 5, 6, 8, 10, 11, 12 done and "Gửi cho khách"
-  prepared (no flow until Proterial signs) (10-29, `sales.md`); item 7 (PC
-  dates from a pasted mail) in progress, then 2, 4, 9; #13 scans at
-  deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000 24 GB).
+- **Next:** AI items 2, 3, 5, 6, 7, 8, 10, 11, 12 done; "Gửi cho khách"
+  prepared (no flow until Proterial signs) (10-29, `sales.md`). Open, each
+  its own slice: #4 PO in the mail body, #9 read-only assistant; #13 scans
+  at deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000 24 GB).
 
 ## Decisions Đạt owes
 

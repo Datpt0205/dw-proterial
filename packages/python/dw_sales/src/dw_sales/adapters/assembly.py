@@ -82,6 +82,7 @@ from dw_sales.application.access import SalesAuthorizationPort
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
+from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.followups import BriefWriterPort, FollowupLane
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
@@ -386,7 +387,26 @@ def build_dw1(
         catalog=assembly.catalog_decisions,
         worker_file=worker_file,
     )
-    catalog_parsing = CatalogParsing(catalog_uow, readers.tables, scanner, catalog, clock, ids)
+    catalog_parsing = CatalogParsing(
+        catalog_uow,
+        readers.tables,
+        scanner,
+        catalog,
+        clock,
+        ids,
+        # A file no template header matches, its columns matched by the model
+        # as the importer (AI item 2): where a model and the drain are wired.
+        columns=(
+            None
+            if one_call_model is None or requester_access is None
+            else ColumnMatcher(
+                interpretation_for(one_call_model, configs, worker.default_model_profile)
+            )
+        ),
+        access=requester_access,
+        worker_id=worker.worker_id,
+        worker_version=worker.worker_version,
+    )
     activity = ActivityService(uow, assembly.services.gate, step_activity, clock)
     lane = (
         None

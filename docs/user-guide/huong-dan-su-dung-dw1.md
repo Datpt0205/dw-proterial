@@ -289,8 +289,8 @@ Danh mục khách hàng, mã hàng, bảng quy đổi mã, báo giá còn hiệu
 ![Trang Dữ liệu chủ](images/10-du-lieu-chu.png)
 
 1. Mở **Quản lý → Dữ liệu chủ**, chọn danh mục cần cập nhật.
-2. Bấm **Nhập file**, chọn tệp Excel.
-3. Xem bảng xem trước: số dòng thêm, sửa, bỏ và các dòng bị từ chối kèm lý do.
+2. Bấm **Nhập file**, chọn tệp Excel. Không bắt buộc dùng tệp mẫu: tệp theo bố cục riêng của công ty (có dòng tiêu đề phía trên, tên cột tiếng Việt, Anh hay Nhật) vẫn nhập được; DW1 ghép từng cột của tệp với cột của danh mục.
+3. Xem bảng xem trước: số dòng thêm, sửa, bỏ và các dòng bị từ chối kèm lý do. Nếu DW1 đã ghép cột, khung **DW1 ghép cột của tệp với mẫu** (nhãn "Máy ghép") cho biết cột nào của tệp được đọc thành cột nào; kiểm lại trước khi gửi duyệt. Nếu DW1 không ghép chắc được, tệp bị từ chối với lý do "thiếu cột …": đổi tên cột đó theo tệp mẫu rồi nhập lại.
 4. Bấm **Gửi duyệt**. Cổng DW báo "Đã gửi duyệt. Trưởng bộ phận Sales quyết trên trang Duyệt."
 
 ## Xem toàn bộ hồ sơ
