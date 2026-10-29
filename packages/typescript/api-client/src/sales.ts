@@ -581,6 +581,37 @@ export class SalesApi {
         );
   }
 
+  /** "Gửi cho khách": whether DW1 sends mail here, and the case's mails. */
+  outbound(kind: "order" | "quote", caseId: string) {
+    return kind === "order"
+      ? this.get<"/api/v1/sales/orders/{case_id}/outbound">(
+          `/api/v1/sales/orders/${enc(caseId)}/outbound`,
+        )
+      : this.get<"/api/v1/sales/quotes/{case_id}/outbound">(
+          `/api/v1/sales/quotes/${enc(caseId)}/outbound`,
+        );
+  }
+
+  /** Send the case's send draft from the caller's own mailbox (202). */
+  sendArtifact(
+    kind: "order" | "quote",
+    caseId: string,
+    artifactId: string,
+    caseVersion: number,
+    key: string,
+  ): Promise<
+    Accepted<"/api/v1/sales/quotes/{case_id}/artifacts/{artifact_id}/send">
+  > {
+    return this.client.request(
+      "POST",
+      `/api/v1/sales/${kind}s/${enc(caseId)}/artifacts/${enc(artifactId)}/send`,
+      shaped<
+        Accepted<"/api/v1/sales/quotes/{case_id}/artifacts/{artifact_id}/send">
+      >(),
+      { body: { case_version: caseVersion }, idempotencyKey: key },
+    );
+  }
+
   /** Render one kind from the case at the version the caller saw. */
   renderArtifact(
     kind: "order" | "quote",

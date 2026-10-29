@@ -108,6 +108,7 @@ from dw_sales.adapters.assembly import (
     build_rule_settlement,
 )
 from dw_sales.adapters.clamd import malware_scanner
+from dw_sales.adapters.outbox_folder import FakeFlow
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
@@ -116,6 +117,7 @@ from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
 from dw_sales.application.inbox_lane import SALES_INBOX_LANE
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.mail_drop import MAIL_DROP_LANE
+from dw_sales.application.outbound_mail import SALES_OUTBOUND_LANE
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import SALES_PROCESSING_LANE
 from dw_sales.application.rule_drafts import RULE_DRAFT_LANE, RULE_DRAFT_REQUESTED
@@ -156,6 +158,8 @@ from dw_worker.consumers.sales_inbox import INTERVAL_SECONDS as SALES_INBOX_INTE
 from dw_worker.consumers.sales_inbox import build_sales_inbox_consumer
 from dw_worker.consumers.sales_mail_drop import INTERVAL_SECONDS as SALES_MAIL_DROP_INTERVAL_SECONDS
 from dw_worker.consumers.sales_mail_drop import build_sales_mail_drop_consumer
+from dw_worker.consumers.sales_outbound import INTERVAL_SECONDS as SALES_OUTBOUND_INTERVAL_SECONDS
+from dw_worker.consumers.sales_outbound import build_sales_outbound_consumer
 from dw_worker.consumers.sales_processing import (
     INTERVAL_SECONDS as SALES_PROCESSING_INTERVAL_SECONDS,
 )
@@ -405,11 +409,32 @@ def build_sales(
         # the folder this process alone reads into it.
         mailbox=settings.sales_mailbox,
         mail_drop=_mail_drop_dir(settings),
+        outbox_dir=_outbox_dir(settings),
         # The API's cache: a case DW1 opens here has its pages read into it
         # ahead of the person who opens them there.
         source_cache=ValkeyCache.from_url(settings.redis_url) if settings.redis_url else None,
     )
     return mount, scope
+
+
+def _outbox_dir(settings: WorkerSettings) -> Path | None:
+    """The share of the people's outbox folders, or None; refused at startup
+    when named and not a directory."""
+    if settings.sales_outbox_dir is None:
+        return None
+    folder = Path(settings.sales_outbox_dir)
+    if not folder.is_dir():
+        raise RuntimeError(f"DW_SALES_OUTBOX_DIR is not a directory: {folder}")
+    return folder
+
+
+def _fake_flow(settings: WorkerSettings) -> FakeFlow | None:
+    """The local stand-in for the people's flows, never where deployed."""
+    if not settings.sales_outbox_fake_flow or settings.sales_outbox_dir is None:
+        return None
+    if settings.is_deployed:
+        raise RuntimeError("DW_SALES_OUTBOX_FAKE_FLOW is for a local process only")
+    return FakeFlow(Path(settings.sales_outbox_dir))
 
 
 def _mail_drop_dir(settings: WorkerSettings) -> Path | None:
@@ -496,6 +521,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # host's switch on.
     sales_inbox_consumer: Callable[[], Awaitable[None]] | None = None
     sales_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
+    sales_outbound_consumer: Callable[[], Awaitable[None]] | None = None
     # DW1's processing queue (Sales ticket 25): the same, switch or no switch:
     # "DW xử lý" queues a job whether or not the lane runs.
     sales_processing_consumer: Callable[[], Awaitable[None]] | None = None
@@ -678,6 +704,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 )
                 if mount.lane is not None:
                     sales_inbox_consumer = build_sales_inbox_consumer(mount.lane, [mailbox])
+                if mount.outbound is not None:
+                    sales_outbound_consumer = build_sales_outbound_consumer(
+                        mount.outbound, _fake_flow(settings)
+                    )
                 if mount.mail_drop is not None:
                     sales_mail_drop_consumer = build_sales_mail_drop_consumer(
                         mount.mail_drop, mailbox
@@ -774,6 +804,13 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             MAIL_DROP_LANE,
             sales_mail_drop_consumer,
             interval_seconds=SALES_MAIL_DROP_INTERVAL_SECONDS,
+        )
+    # "Gửi cho khách": jobs written to the outbox share, receipts read back.
+    if sales_outbound_consumer is not None:
+        registry.register(
+            SALES_OUTBOUND_LANE,
+            sales_outbound_consumer,
+            interval_seconds=SALES_OUTBOUND_INTERVAL_SECONDS,
         )
     # And its follow-ups and morning brief (ticket 42), which only notify, so
     # no ReapTarget either.

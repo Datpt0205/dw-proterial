@@ -78,6 +78,8 @@ _CLEARED = (
     tables.recorded_convert_entries,
     # And the senders it confirmed as a customer's.
     tables.recorded_customer_senders,
+    # And the mails a rehearsal asked DW1 to send.
+    tables.outbound_mails,
     tables.worker_state,
     tables.order_cases,
     tables.quote_cases,

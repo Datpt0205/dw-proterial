@@ -201,8 +201,9 @@ export function SendPanel({
             <Typography.Text strong>3. Gửi khách</Typography.Text>
             <Typography.Text>
               Soạn “Thư gửi báo giá (nháp)” ở khung bên dưới (thư nháp đính kèm
-              bản đã ký nếu đã tải lên), hoặc tự gửi từ hộp thư của bạn. Gửi
-              xong, bấm “Đã gửi khách” ở “Bước tiếp theo”.
+              bản đã ký nếu đã tải lên), rồi bấm “Gửi cho khách từ hộp thư của
+              bạn”: hồ sơ tự chuyển “Đã gửi khách” khi thư đi. Hoặc tải tệp
+              .eml, tự gửi, rồi bấm “Đã gửi khách” ở “Bước tiếp theo”.
             </Typography.Text>
           </Flex>
         ) : null}

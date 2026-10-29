@@ -136,3 +136,19 @@ Decided 2026-10-27 (Sales ticket 43): Proterial gives DW1 no Microsoft 365 acces
 - **Internal mail** is left out by the tenant's order rules (`ignored_sender_domains`, on the rules page under step O1), not by the flows; empty takes everything, and a Design mailbox's mail is always taken.
 
 The step-by-step guides (the PICs', and the PC's and this host's) are Word documents kept outside the repository. Measured on Đạt's machine on 2026-10-27, his FPT account as the DW1 account and his PC as the plant PC, the Docker stack reading the synced folder: a Gmail message to his own mailbox reached the stored mailbox 1 min 20 s after it arrived (flow 17 s, OneDrive sync 12 s, the lane's settle and tick 51 s), its sender, arrival and SPF/DKIM/DMARC read correctly from the Exchange export. A colleague ran the copied flow: a mail to their mailbox was stored after 11 min 29 s, 10 min 17 s of it OneDrive bringing a file another user's flow wrote down to the PC (one measurement; a file the DW1 account writes itself took 12 s). Not yet run on a plant host.
+
+## Sending mail from each PIC's own mailbox (prepared, not yet set up)
+
+Decided 2026-10-29: "Gửi cho khách" sends a case's send draft from the mailbox of the person who pressed it, never from a shared mailbox on a server and with no Graph API: the receiving path above, run the other way. Until Proterial signs, nobody has a sending flow and the button says so; nothing below is set up yet.
+
+- **Storage in Proterial's tenant, never a personal account.** The DW1 account's OneDrive (or, better, a SharePoint library, which outlives any one person) holds `DW1-outbox/<sign-in address>/` per PIC, shared (edit) with that PIC alone. A personal Microsoft account would put customers' mail outside Proterial's control, and the connector it needs is usually blocked by Power Platform DLP.
+- **Each PIC's flow**, a second one beside the receiving flow, signed in as themselves (standard connectors):
+  1. *When a file is created in a folder* (OneDrive for Business or SharePoint): `DW1-outbox/<their address>/outbox`.
+  2. *Get file content*, *Parse JSON* of the job: `job`, `from`, `to`, `cc` (`;`-separated), `subject`, `body_html`, `attachments` (file names).
+  3. For each attachment name: *Get file content* of `outbox/files/<job file stem>/<name>` (retry a few times: OneDrive may bring the job before its files).
+  4. *Send an email (V2)* from their Outlook: To, CC, Subject, Body (HTML), Attachments. It lands in their Sent Items; replies come back to them and the receiving flow brings those to DW1.
+  5. *Create file* `receipts/<job file stem>.json` with `{"status": "sent"}`; on any failure (a *Configure run after: has failed* branch) `{"status": "failed"}`; then delete the job file.
+- **The plant PC** syncs `DW1-outbox` like `DW1-mail`, but shares it **read-write** to the same local user, firewalled to this host. The host mounts it at `/srv/dw/outbox` (`cifs`, `rw`).
+- **This host**: an override mounts `/srv/dw/outbox:/outbox` into the worker alone with `DW_SALES_OUTBOX_DIR=/outbox`, and sets `DW_SALES_OUTBOX_ENABLED=true` for the API, which never touches the share. The worker's `sales_outbound` lane writes each pressed mail as `outbox/<tenant>.<workspace>.<mail>.json` (its files under `outbox/files/<same>/`) every 30 s, reads `receipts/`, marks a quotation "Đã gửi KH" as the person who pressed, and tells them when their folder is missing, their flow failed, or no receipt came within 30 minutes.
+- **What a receipt cannot do**: it settles only a job DW1 wrote into that same person's folder; anything but `"sent"` counts as failed. Who receives the mail was checked by the API against the customer's contacts before the job existed.
+- Locally, `DW_SALES_OUTBOX_FAKE_FLOW=1` (refused where deployed) answers every job as a flow would, so the demo can press the button; nothing leaves the machine.

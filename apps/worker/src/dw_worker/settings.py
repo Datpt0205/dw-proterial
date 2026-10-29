@@ -343,6 +343,16 @@ class WorkerSettings(BaseSettings):
     sales_mail_drop_dir: str | None = Field(
         default=None, validation_alias=AliasChoices("DW_SALES_MAIL_DROP_DIR")
     )
+    # "Gửi cho khách" (2026-10-29): the share holding each person's outbox
+    # folder, written by this container alone. Unnamed, nothing is sent.
+    sales_outbox_dir: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_SALES_OUTBOX_DIR")
+    )
+    # Locally only: a stand-in answers every job as the people's flows will,
+    # so the demo can press "Gửi cho khách". Refused in a deployed profile.
+    sales_outbox_fake_flow: bool = Field(
+        default=False, validation_alias=AliasChoices("DW_SALES_OUTBOX_FAKE_FLOW")
+    )
 
     # --- Sales: the malware scanner (ticket 25) ---
     # `clamd`: every attachment is scanned by the `clamav` compose service

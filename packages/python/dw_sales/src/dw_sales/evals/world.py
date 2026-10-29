@@ -37,7 +37,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, Final, Self
 
 from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import parse_worker_file
@@ -72,6 +72,9 @@ from dw_sales.application.case_store import (
     LoggedEvent,
     LoggedMessage,
     MessageHandled,
+    OutboundError,
+    OutboundMail,
+    OutboundStatus,
     ProcessingJob,
     SalesUnitOfWork,
     ServedSource,
@@ -265,6 +268,8 @@ class _ScopeState:
     followups: dict[FollowupKey, SentFollowup] = field(default_factory=dict)
     # What each model step did (slice 3), in the order written.
     step_outcomes: list[StepOutcome] = field(default_factory=list)
+    # The mails Sales asked DW1 to send ("Gửi cho khách").
+    outbound: dict[uuid.UUID, OutboundMail] = field(default_factory=dict)
 
     def copy(self) -> _ScopeState:
         # The values are frozen models; copying the containers is enough.
@@ -281,6 +286,7 @@ class _ScopeState:
             jobs=dict(self.jobs),
             followups=dict(self.followups),
             step_outcomes=list(self.step_outcomes),
+            outbound=dict(self.outbound),
         )
 
 
@@ -644,6 +650,53 @@ class _StepActivity:
         self._held.extend(rows)
 
 
+class _Outbound:
+    """`OutboundMailStorePort` over one transaction's state: one active mail
+    per artifact, as `uq_outbound_mails_active_artifact` holds it."""
+
+    _PENDING: Final = ("queued", "written")
+
+    def __init__(self, held: dict[uuid.UUID, OutboundMail]) -> None:
+        self._held = held
+
+    async def add(self, mail: OutboundMail) -> OutboundMail:
+        active = next(
+            (m for m in self._held.values() if m.artifact_id == mail.artifact_id and m.active),
+            None,
+        )
+        if active is not None:
+            return active
+        self._held[mail.mail_id] = mail
+        return mail
+
+    async def get(self, mail_id: uuid.UUID) -> OutboundMail | None:
+        return self._held.get(mail_id)
+
+    async def for_case(self, case_kind: CaseKind, case_id: uuid.UUID) -> Sequence[OutboundMail]:
+        mine = [m for m in self._held.values() if (m.case_kind, m.case_id) == (case_kind, case_id)]
+        return sorted(mine, key=lambda m: m.queued_at, reverse=True)
+
+    async def pending(self) -> Sequence[OutboundMail]:
+        return sorted(
+            (m for m in self._held.values() if m.status in self._PENDING),
+            key=lambda m: m.queued_at,
+        )
+
+    async def settle(
+        self,
+        mail_id: uuid.UUID,
+        status: OutboundStatus,
+        at: datetime,
+        error: OutboundError | None = None,
+    ) -> bool:
+        held = self._held.get(mail_id)
+        if held is None or held.status not in self._PENDING:
+            return False
+        settled = None if status in self._PENDING else at
+        self._held[mail_id] = replace(held, status=status, settled_at=settled, error=error)
+        return True
+
+
 class _Work:
     """`SalesUnitOfWork`: one scope's state, copied in, written back on commit."""
 
@@ -662,6 +715,7 @@ class _Work:
         self.jobs = _Jobs(state.jobs)
         self.followups = _Followups(state)
         self.step_activity = _StepActivity(state.step_outcomes)
+        self.outbound = _Outbound(state.outbound)
         # The runtime's approvals, written at once (no rollback in memory): a
         # layout's proposal opens one here (ticket 30).
         self.approvals = store.approvals.scoped(scope.tenant_id.value)
@@ -1336,6 +1390,8 @@ def open_world(
         one_call=model,
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
+        # As a deployment with the outbox share: "Gửi cho khách" is offered.
+        outbox_enabled=True,
     )
     register(
         graphs=runtime.graphs,

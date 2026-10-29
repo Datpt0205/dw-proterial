@@ -482,6 +482,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/artifacts/{artifact_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Order Mail */
+        post: operations["send_order_mail_api_v1_sales_orders__case_id__artifacts__artifact_id__send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/assignee": {
         parameters: {
             query?: never;
@@ -683,6 +700,23 @@ export interface paths {
         put?: never;
         /** Mapping */
         post: operations["mapping_api_v1_sales_orders__case_id__lines__line_no__mapping_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/orders/{case_id}/outbound": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Outbound */
+        get: operations["order_outbound_api_v1_sales_orders__case_id__outbound_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -916,6 +950,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/{case_id}/artifacts/{artifact_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Quote Mail */
+        post: operations["send_quote_mail_api_v1_sales_quotes__case_id__artifacts__artifact_id__send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}/assignee": {
         parameters: {
             query?: never;
@@ -1044,6 +1095,23 @@ export interface paths {
         };
         /** Quote Message Text */
         get: operations["quote_message_text_api_v1_sales_quotes__case_id__message_text_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quotes/{case_id}/outbound": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote Outbound */
+        get: operations["quote_outbound_api_v1_sales_quotes__case_id__outbound_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3363,6 +3431,48 @@ export interface components {
             /** So No */
             so_no: string;
             unit_price: components["schemas"]["Amount"];
+        };
+        /**
+         * OutboundMailView
+         * @description Where one mail stands, for the case page.
+         */
+        OutboundMailView: {
+            /**
+             * Artifact Id
+             * Format: uuid
+             */
+            artifact_id: string;
+            /** Error */
+            error: ("not_connected" | "write_failed" | "flow_failed" | "no_receipt" | "gone") | null;
+            /**
+             * Mail Id
+             * Format: uuid
+             */
+            mail_id: string;
+            /** Mailbox */
+            mailbox: string;
+            /**
+             * Queued At
+             * Format: date-time
+             */
+            queued_at: string;
+            /** Settled At */
+            settled_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "written" | "sent" | "failed" | "stalled";
+        };
+        /**
+         * OutboundMailsView
+         * @description Whether DW1 sends mail here at all, and the case's mails.
+         */
+        OutboundMailsView: {
+            /** Enabled */
+            enabled: boolean;
+            /** Mails */
+            mails: components["schemas"]["OutboundMailView"][];
         };
         /** OverviewView */
         OverviewView: {
@@ -5997,6 +6107,45 @@ export interface operations {
             };
         };
     };
+    send_order_mail_api_v1_sales_orders__case_id__artifacts__artifact_id__send_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundMailView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reassign_order_api_v1_sales_orders__case_id__assignee_put: {
         parameters: {
             query?: never;
@@ -6424,6 +6573,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_outbound_api_v1_sales_orders__case_id__outbound_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundMailsView"];
                 };
             };
             /** @description Validation Error */
@@ -6889,6 +7069,45 @@ export interface operations {
             };
         };
     };
+    send_quote_mail_api_v1_sales_quotes__case_id__artifacts__artifact_id__send_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundMailView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reassign_quote_api_v1_sales_quotes__case_id__assignee_put: {
         parameters: {
             query?: never;
@@ -7160,6 +7379,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageTextView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_outbound_api_v1_sales_quotes__case_id__outbound_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundMailsView"];
                 };
             };
             /** @description Validation Error */

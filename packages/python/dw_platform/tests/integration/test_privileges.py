@@ -97,6 +97,7 @@ _SALES_TABLES = (
     # Migration bbf5aa95bf6f: the item codes Sales confirmed.
     "sales.recorded_convert_entries",
     "sales.recorded_customer_senders",
+    "sales.outbound_mails",
 )
 
 
@@ -158,6 +159,12 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {verb for tbl, verb in held if tbl == "recorded_convert_entries"} == {
         "SELECT",
         "INSERT",
+    }
+    # A mail Sales asked DW1 to send moves on, and is never removed (c42ed45c73a2).
+    assert {verb for tbl, verb in held if tbl == "outbound_mails"} == {
+        "SELECT",
+        "INSERT",
+        "UPDATE",
     }
     # And a sender confirmed as a customer's (7f94b09d1905).
     assert {verb for tbl, verb in held if tbl == "recorded_customer_senders"} == {
