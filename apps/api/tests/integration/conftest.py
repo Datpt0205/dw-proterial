@@ -42,7 +42,7 @@ _CLEAR = (
     "TRUNCATE sales.order_cases, sales.quote_cases, sales.messages, sales.artifacts,"
     " sales.po_layouts, sales.processing_jobs, sales.followup_deliveries,"
     " sales.source_served, sales.worker_state, sales.case_events, sales.step_outcomes,"
-    " sales.recorded_quotations,"
+    " sales.recorded_quotations, sales.recorded_convert_entries,"
     " platform.approval_decisions, platform.approval_requests, platform.worker_runs,"
     " platform.run_checkpoint_writes, platform.run_checkpoints,"
     " platform.notifications, platform.idempotency_keys CASCADE"

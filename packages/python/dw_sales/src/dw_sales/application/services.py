@@ -36,6 +36,7 @@ from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.order_ports import ConvertLedgerPort
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.pipeline import PipelineService
@@ -134,6 +135,8 @@ def assemble(
     roles: RoleCatalogPort,
     step_activity: StepActivityReadPort,
     scanner: MalwareScanPort,
+    # Where an item code Sales confirms is kept (the catalog, in practice).
+    converts: ConvertLedgerPort,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     sources = SourceService(uow, gate, clock, inbox, files, source_cache)
@@ -160,7 +163,7 @@ def assemble(
         processing=ProcessingService(uow, gate, clock, ids, inbox),
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=OrderQueries(uow, gate, pending, step_activity),
-        order_commands=OrderCommands(uow, gate, clock, ids, intake, pending),
+        order_commands=OrderCommands(uow, gate, clock, ids, intake, pending, converts),
         quotes=QuoteQueries(uow, gate, clock, quotation, pending, step_activity),
         quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog, pending),
         sources=sources,

@@ -7,13 +7,14 @@ cases already opened for a PO number.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Final, Literal, Protocol
 
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.threads import ThreadedCase
-from dw_sales.domain.catalog import Customer
+from dw_sales.domain.catalog import ConvertEntry, Customer
 from dw_sales.domain.layouts import LayoutMapping, PoLayout
 from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps, ModelStep, OrderRules
@@ -137,6 +138,15 @@ class ThreadLinkPort(Protocol):
     async def linked_case(
         self, scope: SalesScope, message: InboundMessage, sender: Customer | None
     ) -> ThreadedCase | None: ...
+
+
+class ConvertLedgerPort(Protocol):
+    """Where an item code Sales confirmed for a customer's own code is kept,
+    so the next PO with it maps at once (`SnapshotSalesCatalog.learn_convert`)."""
+
+    async def learn_convert(
+        self, scope: SalesScope, entry: ConvertEntry, *, by: uuid.UUID, case_id: uuid.UUID
+    ) -> bool: ...
 
 
 class LayoutLookupPort(Protocol):

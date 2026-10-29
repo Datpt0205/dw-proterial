@@ -22,6 +22,11 @@ after its quotation was confirmed finds it, in the API and in the worker
 alike, and the next import that carries it shadows the recorded row. A
 recorded row whose number the list holds with other terms is refused when it
 is recorded, never merged on read.
+
+An item code Sales confirmed for a customer's own code (`learn_convert`,
+`RecordedConvertsPort`, the AI list's item 3) is kept the same way: a later
+PO line with that code maps through it at once, the list answers first, and
+the first confirmation is the one kept.
 """
 
 from __future__ import annotations
@@ -126,6 +131,28 @@ class RecordedQuotation:
     recorded_at: datetime
 
 
+@dataclass(frozen=True)
+class RecordedConvert:
+    """A customer's item code as Sales confirmed it, and when."""
+
+    entry: ConvertEntry
+    recorded_at: datetime
+
+
+class RecordedConvertsPort(Protocol):
+    """The item codes Sales confirmed, in the scope's tenant and workspace
+    (RLS), read the same by every process."""
+
+    async def converts(self, scope: SalesScope) -> Sequence[RecordedConvert]: ...
+
+    async def learn(
+        self, scope: SalesScope, entry: ConvertEntry, *, by: uuid.UUID, case_id: uuid.UUID
+    ) -> None:
+        """Keeps ``entry`` unless the customer's code is already kept: the
+        first confirmation stays."""
+        ...
+
+
 class RecordedQuotationsPort(Protocol):
     """The quotations Sales sent and confirmed, in the scope's tenant and
     workspace (RLS), read the same by every process."""
@@ -146,6 +173,7 @@ class SnapshotSalesCatalog:
     approved: ApprovedListsPort
     fallback: FallbackCatalogPort
     recorded: RecordedQuotationsPort
+    recorded_converts: RecordedConvertsPort
 
     async def _list(self, scope: SalesScope, catalog_list: CatalogList) -> ApprovedList | None:
         return await self.approved.approved(scope, catalog_list)
@@ -182,7 +210,7 @@ class SnapshotSalesCatalog:
             return await self.fallback.item_by_prv_code(scope, prv_code)
         return Snapshot(own.one(prv_code, Item), own.as_of)
 
-    async def convert_entry(
+    async def _listed_convert(
         self, scope: SalesScope, customer_code: str, customer_item_code: str
     ) -> Snapshot[ConvertEntry | None]:
         own = await self._list(scope, CatalogList.CONVERT_LIST)
@@ -190,11 +218,53 @@ class SnapshotSalesCatalog:
             return await self.fallback.convert_entry(scope, customer_code, customer_item_code)
         return Snapshot(own.one((customer_code, customer_item_code), ConvertEntry), own.as_of)
 
+    async def convert_entry(
+        self, scope: SalesScope, customer_code: str, customer_item_code: str
+    ) -> Snapshot[ConvertEntry | None]:
+        """The list's row for the code, else the one Sales confirmed."""
+        listed = await self._listed_convert(scope, customer_code, customer_item_code)
+        if listed.data is not None:
+            return listed
+        for kept in await self.recorded_converts.converts(scope):
+            entry = kept.entry
+            if (entry.customer_code, entry.customer_item_code) == (
+                customer_code,
+                customer_item_code,
+            ):
+                return Snapshot(entry, max(listed.as_of, kept.recorded_at))
+        return listed
+
     async def convert_list(self, scope: SalesScope) -> Snapshot[Sequence[ConvertEntry]]:
         own = await self._list(scope, CatalogList.CONVERT_LIST)
-        if own is None:
-            return await self.fallback.convert_list(scope)
-        return Snapshot(own.all(ConvertEntry), own.as_of)
+        listed = (
+            Snapshot(own.all(ConvertEntry), own.as_of)
+            if own is not None
+            else await self.fallback.convert_list(scope)
+        )
+        held = {(e.customer_code, e.customer_item_code) for e in listed.data}
+        added = [
+            kept
+            for kept in await self.recorded_converts.converts(scope)
+            if (kept.entry.customer_code, kept.entry.customer_item_code) not in held
+        ]
+        if not added:
+            return listed
+        return Snapshot(
+            (*listed.data, *(kept.entry for kept in added)),
+            max(listed.as_of, *(kept.recorded_at for kept in added)),
+        )
+
+    async def learn_convert(
+        self, scope: SalesScope, entry: ConvertEntry, *, by: uuid.UUID, case_id: uuid.UUID
+    ) -> bool:
+        """Implements `ConvertLedgerPort`: keeps what Sales confirmed for a
+        customer's code the list does not hold; False when the list already
+        answers for that code, which it keeps doing."""
+        listed = await self._listed_convert(scope, entry.customer_code, entry.customer_item_code)
+        if listed.data is not None:
+            return False
+        await self.recorded_converts.learn(scope, entry, by=by, case_id=case_id)
+        return True
 
     async def _quotations(self, scope: SalesScope) -> Snapshot[tuple[Quotation, ...]]:
         """The list's quotations, then the recorded ones it does not hold."""

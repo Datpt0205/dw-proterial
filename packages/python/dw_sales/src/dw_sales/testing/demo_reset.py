@@ -74,6 +74,8 @@ _CLEARED = (
     tables.followup_deliveries,
     # The quotations a rehearsal sent: the next one quotes from the sample.
     tables.recorded_quotations,
+    # And the item codes it confirmed.
+    tables.recorded_convert_entries,
     tables.worker_state,
     tables.order_cases,
     tables.quote_cases,

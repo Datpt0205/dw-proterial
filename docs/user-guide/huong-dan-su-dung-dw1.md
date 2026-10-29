@@ -192,6 +192,8 @@ Mọi cờ chặn phải được quyết định trước khi đơn đi tiếp;
 4. Bấm **Ghi quyết định**. Mỗi quyết định tạo một phiên bản hồ sơ mới.
 5. Khi mọi cờ đã quyết định, bấm **Chuẩn bị xong**. Nếu nút mờ với lý do "Chưa mở nguồn", bấm **Mở nguồn** của phiên bản hồ sơ hiện tại rồi bấm lại.
 
+Khi một dòng có mã hàng của khách chưa có trong bảng quy đổi, DW1 gợi ý các mã PRV khớp mô tả; Sales chọn mã đúng. DW1 ghi nhớ lựa chọn đó: PO sau của cùng khách có cùng mã hàng sẽ tự khớp mã PRV, không phải chọn lại. Lần chọn đầu tiên được giữ; bảng quy đổi chính thức (nhập từ Excel) luôn được ưu tiên khi đã có mã đó.
+
 Cờ "Thiếu NOC/ESF" chỉ người được giao kiểm soát xuất khẩu chấp nhận được; trong lúc chờ, hồ sơ báo "Đơn đang bị giữ: chờ PIC kiểm soát xuất khẩu xác nhận NOC/ESF".
 
 ### Yêu cầu khách sửa PO

@@ -518,6 +518,20 @@ export_control_screenings = sa.Table(
     sa.Column("recorded_at", _TS, nullable=False),
 )
 
+# The item codes Sales confirmed for a customer's own code (`bbf5aa95bf6f`):
+# the first kept, never changed.
+recorded_convert_entries = sa.Table(
+    "recorded_convert_entries",
+    metadata,
+    *_scope(),
+    sa.Column("customer_code", sa.Text, primary_key=True),
+    sa.Column("customer_item_code", sa.Text, primary_key=True),
+    sa.Column("prv_code", sa.Text, nullable=False),
+    sa.Column("confirmed_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
 # WIV-03-023 step 11: the quotations Sales sent and confirmed, which a later PO
 # line is checked against (`c1c192e011e1`). Appended, never changed.
 recorded_quotations = sa.Table(
