@@ -46,6 +46,7 @@ def _columns(layout: PoLayout) -> dict[str, object]:
         "proposed_by": layout.proposed_by,
         "decided_by": layout.decided_by,
         "approval_id": layout.approval_id,
+        "origin": layout.origin,
         "body": layout.model_dump(mode="json"),
     }
 
@@ -115,6 +116,15 @@ class SqlLayoutLookup:
                 )
             )
         return int(count or 0)
+
+    async def next_version(self, scope: SalesScope, customer_code: str, kind: str) -> int:
+        async with tenant_session(self.session_factory, _bound(scope)) as session:
+            latest = await session.scalar(
+                sa.select(sa.func.max(_L.c.version)).where(
+                    _L.c.customer_code == customer_code, _L.c.kind == kind
+                )
+            )
+        return int(latest or 0) + 1
 
 
 def _bound(scope: SalesScope) -> TenantScope:

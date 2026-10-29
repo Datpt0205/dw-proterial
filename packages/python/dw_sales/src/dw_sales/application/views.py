@@ -1925,8 +1925,6 @@ class ItemView(BaseModel):
     moq: Decimal
     pack_multiple: Decimal
     standard_lead_time_days: int
-    # PRV's export-control screen (WIV-03-032 step 1); None: not yet screened.
-    export_classification: Literal["applicable", "not_applicable"] | None
 
 
 def item(record: Item) -> ItemView:
@@ -1940,7 +1938,6 @@ def item(record: Item) -> ItemView:
         moq=record.moq,
         pack_multiple=record.pack_multiple,
         standard_lead_time_days=record.standard_lead_time_days,
-        export_classification=record.export_classification,
     )
 
 

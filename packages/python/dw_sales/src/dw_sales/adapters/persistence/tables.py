@@ -271,9 +271,11 @@ po_layouts = sa.Table(
     sa.Column("status", sa.Text, nullable=False),
     sa.Column("proposed_by", UUID(as_uuid=True), nullable=False),
     sa.Column("decided_by", UUID(as_uuid=True)),
-    # The platform approval (`sales.layout`) the proposal waits on, of the
-    # same tenant and workspace (`fk_po_layouts_approval_requests`).
-    sa.Column("approval_id", UUID(as_uuid=True), nullable=False),
+    # The platform approval (`sales.layout`) a person's proposal waits on, of
+    # the same tenant and workspace (`fk_po_layouts_approval_requests`); NULL
+    # for a layout DW1 learned (`e91d0c239874`, ADR 0006).
+    sa.Column("approval_id", UUID(as_uuid=True)),
+    sa.Column("origin", sa.Text, nullable=False, server_default="person"),
     sa.Column("body", JSONB, nullable=False),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),

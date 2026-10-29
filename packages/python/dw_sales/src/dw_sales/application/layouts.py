@@ -54,7 +54,7 @@ from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus, decided_event_type
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.model_reading import (
     InterpretationPort,
     ModelUnavailableError,
@@ -101,6 +101,50 @@ _LAYOUT = "sales_po_layout"
 LAYOUT_APPROVAL: Final = "sales.layout"
 LAYOUT_DECIDED: Final = decided_event_type(LAYOUT_APPROVAL)
 _LAYOUT_REASON: Final = "Mẫu PO chờ duyệt: Sales lập, Trưởng bộ phận duyệt (ticket 30)"
+# What a layout DW1 learned is audited as (dw_sales ADR 0006).
+LAYOUT_LEARNED: Final = "sales.layout.learned"
+
+
+@dataclass(frozen=True)
+class LearnedLayout:
+    """A model's mapping of a customer's form every check passed, which DW1
+    adopts as the customer's layout itself (dw_sales ADR 0006) and has just
+    read the PO with, under ``layout_id`` at ``version``."""
+
+    layout_id: uuid.UUID
+    version: int
+    customer_code: str
+    mapping: LayoutMapping
+    sample: LayoutSample
+    prefill: LayoutPrefill
+
+
+async def keep_learned(
+    work: SalesUnitOfWork,
+    ids: IdGenerator,
+    clock: UtcClock,
+    context: AccessContext,
+    learned: LearnedLayout,
+    *,
+    run_id: uuid.UUID,
+) -> PoLayout:
+    """Store a learned layout in force, audited in the same transaction as
+    the run that learned it, whose actor it names (ADR 0006)."""
+    layout = decided(
+        lambda: PoLayout.learned(
+            layout_id=learned.layout_id,
+            customer_code=learned.customer_code,
+            version=learned.version,
+            mapping=learned.mapping,
+            sample=learned.sample,
+            prefill=learned.prefill,
+            by=context.principal_id,
+            at=clock.now(),
+        )
+    )
+    await work.layouts.add(layout)
+    await work.audit.append(_audit(ids, clock, context, LAYOUT_LEARNED, layout, run_id=run_id))
+    return layout
 
 
 class LayoutApprovalAsked(BaseModel):
@@ -335,8 +379,11 @@ class LayoutView(BaseModel):
     sample: LayoutSample
     proposed_by: uuid.UUID
     proposed_at: datetime
-    # The platform approval it is decided on (`POST /approvals/{id}/decisions`).
-    approval_id: uuid.UUID
+    # The platform approval it is decided on (`POST /approvals/{id}/decisions`);
+    # None for a layout DW1 learned, which no one decides (ADR 0006).
+    approval_id: uuid.UUID | None
+    # `person` (ticket 30) or `model`, learned by DW1.
+    origin: str
     decided_by: uuid.UUID | None
     decided_at: datetime | None
     prefill: LayoutPrefill | None
@@ -354,6 +401,7 @@ def layout_view(layout: PoLayout) -> LayoutView:
         proposed_by=layout.proposed_by,
         proposed_at=layout.proposed_at,
         approval_id=layout.approval_id,
+        origin=layout.origin,
         decided_by=layout.decided_by,
         decided_at=layout.decided_at,
         prefill=layout.prefill,
@@ -530,6 +578,7 @@ class LayoutService:
                 for layout in await work.layouts.list_all()
                 if layout.customer_code == customer.code and layout.kind == mapping.kind
             ]
+            approval_id = self.ids.new_uuid()
             layout = decided(
                 lambda: PoLayout(
                     layout_id=self.ids.new_uuid(),
@@ -543,7 +592,7 @@ class LayoutService:
                     ),
                     proposed_by=context.principal_id,
                     proposed_at=now,
-                    approval_id=self.ids.new_uuid(),
+                    approval_id=approval_id,
                     prefill=(
                         prefill
                         if prefill is not None and prefill.attachment_id == attachment_id
@@ -553,7 +602,7 @@ class LayoutService:
             )
             await work.approvals.add(
                 ApprovalRequest(
-                    id=layout.approval_id,
+                    id=approval_id,
                     tenant_id=TenantId(context.tenant_id),
                     workspace_id=WorkspaceId(context.workspace_id),
                     approval_type=LAYOUT_APPROVAL,
@@ -749,6 +798,7 @@ def _audit(
     layout: PoLayout,
     *,
     approval_id: uuid.UUID | None = None,
+    run_id: uuid.UUID | None = None,
 ) -> AuditEvent:
     """Ids, codes and a version: no label or value of the form."""
     details: dict[str, object] = {
@@ -756,6 +806,7 @@ def _audit(
         "kind": layout.kind,
         "version": layout.version,
         "status": layout.status,
+        "origin": layout.origin,
     }
     if approval_id is not None:
         details["approval_id"] = str(approval_id)
@@ -768,5 +819,6 @@ def _audit(
         resource_type=_LAYOUT,
         resource_id=str(layout.layout_id),
         occurred_at=clock.now(),
+        run_id=run_id,
         details=details,
     )

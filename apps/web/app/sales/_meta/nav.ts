@@ -1,7 +1,6 @@
 import {
   ApartmentOutlined,
   AuditOutlined,
-  BuildOutlined,
   ControlOutlined,
   DashboardOutlined,
   DatabaseOutlined,
@@ -10,7 +9,6 @@ import {
   InboxOutlined,
   ProjectOutlined,
   RobotOutlined,
-  SafetyCertificateOutlined,
   ScheduleOutlined,
   SettingOutlined,
   ShoppingCartOutlined,
@@ -110,13 +108,6 @@ export const salesNav: NavEntry[] = [
         icon: SettingOutlined,
         items: [
           {
-            href: "/sales/layouts",
-            label: "Mẫu PO",
-            hint: "Mẫu PO của từng khách: Sales lập một lần, Trưởng bộ phận duyệt, DW1 đọc các PO sau theo mẫu",
-            icon: BuildOutlined,
-            scope: "sales.case.read",
-          },
-          {
             href: "/sales/rules",
             label: "Quy tắc",
             hint: "Quy tắc và nội dung của công ty: đang áp dụng bản nào, đề xuất phiên bản mới, người khác duyệt",
@@ -135,13 +126,6 @@ export const salesNav: NavEntry[] = [
             label: "Dữ liệu chủ",
             hint: "Khách hàng, mã hàng, bảng quy đổi mã, báo giá và LME: nhập từ tệp, xem trước, Trưởng bộ phận duyệt",
             icon: DatabaseOutlined,
-            scope: "sales.case.read",
-          },
-          {
-            href: "/sales/export-control",
-            label: "Kiểm soát xuất khẩu",
-            hint: "WIV-03-032 theo từng khách: danh sách cấm, red flag, NOEC/NOC, ESF và gia hạn hằng năm; đơn của khách còn thiếu bước bị giữ",
-            icon: SafetyCertificateOutlined,
             scope: "sales.case.read",
           },
           {

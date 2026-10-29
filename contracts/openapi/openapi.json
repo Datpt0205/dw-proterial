@@ -2368,142 +2368,6 @@
         "title": "CreatedAccountView",
         "type": "object"
       },
-      "CustomerDetailView": {
-        "properties": {
-          "esf_approvers": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Esf Approvers",
-            "type": "array"
-          },
-          "products": {
-            "items": {
-              "$ref": "#/components/schemas/ProductView"
-            },
-            "title": "Products",
-            "type": "array"
-          },
-          "red_flags": {
-            "items": {
-              "$ref": "#/components/schemas/RedFlagQuestionView"
-            },
-            "title": "Red Flags",
-            "type": "array"
-          },
-          "sample": {
-            "title": "Sample",
-            "type": "boolean"
-          },
-          "screenings": {
-            "items": {
-              "$ref": "#/components/schemas/ScreeningView"
-            },
-            "title": "Screenings",
-            "type": "array"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/CustomerScreeningView"
-          }
-        },
-        "required": [
-          "summary",
-          "screenings",
-          "products",
-          "red_flags",
-          "esf_approvers",
-          "sample"
-        ],
-        "title": "CustomerDetailView",
-        "type": "object"
-      },
-      "CustomerScreeningView": {
-        "description": "One customer's export control, as the overview lists it.",
-        "properties": {
-          "customer_code": {
-            "title": "Customer Code",
-            "type": "string"
-          },
-          "customer_name": {
-            "title": "Customer Name",
-            "type": "string"
-          },
-          "denial_list_checked_on": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Denial List Checked On"
-          },
-          "denial_list_match": {
-            "title": "Denial List Match",
-            "type": "boolean"
-          },
-          "esf_fiscal_year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Esf Fiscal Year"
-          },
-          "needs": {
-            "items": {
-              "enum": [
-                "noc_missing",
-                "esf_due",
-                "denial_due",
-                "denial_match",
-                "red_flag_missing",
-                "red_flag_escalated",
-                "products_unclassified",
-                "products_listed"
-              ],
-              "type": "string"
-            },
-            "title": "Needs",
-            "type": "array"
-          },
-          "noc_confirmed": {
-            "title": "Noc Confirmed",
-            "type": "boolean"
-          },
-          "red_flag_escalated": {
-            "title": "Red Flag Escalated",
-            "type": "boolean"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "traded_recently": {
-            "title": "Traded Recently",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "customer_code",
-          "customer_name",
-          "status",
-          "noc_confirmed",
-          "esf_fiscal_year",
-          "denial_list_checked_on",
-          "denial_list_match",
-          "red_flag_escalated",
-          "traded_recently",
-          "needs"
-        ],
-        "title": "CustomerScreeningView",
-        "type": "object"
-      },
       "CustomerView": {
         "properties": {
           "code": {
@@ -2881,55 +2745,6 @@
           "workspace_id"
         ],
         "title": "DemoUser",
-        "type": "object"
-      },
-      "DenialListBody": {
-        "additionalProperties": false,
-        "properties": {
-          "checked_on": {
-            "format": "date",
-            "title": "Checked On",
-            "type": "string"
-          },
-          "content_b64": {
-            "anyOf": [
-              {
-                "maxLength": 13981016,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content B64"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "outcome": {
-            "enum": [
-              "clear",
-              "match"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          }
-        },
-        "required": [
-          "checked_on",
-          "outcome"
-        ],
-        "title": "DenialListBody",
         "type": "object"
       },
       "Derivation": {
@@ -3556,47 +3371,6 @@
         "title": "EdgeGuard",
         "type": "string"
       },
-      "EsfBody": {
-        "additionalProperties": false,
-        "properties": {
-          "checked_on": {
-            "format": "date",
-            "title": "Checked On",
-            "type": "string"
-          },
-          "content_b64": {
-            "maxLength": 13981016,
-            "minLength": 1,
-            "title": "Content B64",
-            "type": "string"
-          },
-          "fiscal_year": {
-            "maximum": 2100.0,
-            "minimum": 2000.0,
-            "title": "Fiscal Year",
-            "type": "integer"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          }
-        },
-        "required": [
-          "checked_on",
-          "content_b64",
-          "fiscal_year"
-        ],
-        "title": "EsfBody",
-        "type": "object"
-      },
       "EvidenceView": {
         "description": "What Sales weighs for one line (step 7). Only for `sales.price.read`;\nother customers' rows and the reference price only for\n`sales.price.other_customers.read` too.",
         "properties": {
@@ -3743,42 +3517,6 @@
           "reference_price"
         ],
         "title": "EvidenceView",
-        "type": "object"
-      },
-      "ExportControlOverview": {
-        "properties": {
-          "customers": {
-            "items": {
-              "$ref": "#/components/schemas/CustomerScreeningView"
-            },
-            "title": "Customers",
-            "type": "array"
-          },
-          "denial_list_max_age_days": {
-            "title": "Denial List Max Age Days",
-            "type": "integer"
-          },
-          "fiscal_year": {
-            "title": "Fiscal Year",
-            "type": "integer"
-          },
-          "policy_ref": {
-            "title": "Policy Ref",
-            "type": "string"
-          },
-          "sample": {
-            "title": "Sample",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "fiscal_year",
-          "denial_list_max_age_days",
-          "policy_ref",
-          "sample",
-          "customers"
-        ],
-        "title": "ExportControlOverview",
         "type": "object"
       },
       "ExportRow": {
@@ -4898,21 +4636,6 @@
             "title": "Cores",
             "type": "integer"
           },
-          "export_classification": {
-            "anyOf": [
-              {
-                "enum": [
-                  "applicable",
-                  "not_applicable"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Export Classification"
-          },
           "family": {
             "anyOf": [
               {
@@ -4971,8 +4694,7 @@
           "uom",
           "moq",
           "pack_multiple",
-          "standard_lead_time_days",
-          "export_classification"
+          "standard_lead_time_days"
         ],
         "title": "ItemView",
         "type": "object"
@@ -5597,9 +5319,16 @@
         "description": "One layout: its mapping, the PO it was mapped from, who proposed and\nwho decided it, and the model pre-fill it started from, if any.",
         "properties": {
           "approval_id": {
-            "format": "uuid",
-            "title": "Approval Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
           },
           "customer_code": {
             "title": "Customer Code",
@@ -5640,6 +5369,10 @@
           },
           "mapping": {
             "$ref": "#/components/schemas/LayoutMapping"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
           },
           "prefill": {
             "anyOf": [
@@ -5684,6 +5417,7 @@
           "proposed_by",
           "proposed_at",
           "approval_id",
+          "origin",
           "decided_by",
           "decided_at",
           "prefill"
@@ -7076,55 +6810,6 @@
           "name"
         ],
         "title": "NewTenantView",
-        "type": "object"
-      },
-      "NocBody": {
-        "additionalProperties": false,
-        "properties": {
-          "checked_on": {
-            "format": "date",
-            "title": "Checked On",
-            "type": "string"
-          },
-          "content_b64": {
-            "anyOf": [
-              {
-                "maxLength": 13981016,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content B64"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "outcome": {
-            "enum": [
-              "requested",
-              "received"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          }
-        },
-        "required": [
-          "checked_on",
-          "outcome"
-        ],
-        "title": "NocBody",
         "type": "object"
       },
       "NotificationView": {
@@ -9551,35 +9236,6 @@
         "title": "ProducedValue",
         "type": "object"
       },
-      "ProductView": {
-        "properties": {
-          "classification": {
-            "anyOf": [
-              {
-                "enum": [
-                  "applicable",
-                  "not_applicable"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Classification"
-          },
-          "prv_code": {
-            "title": "Prv Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "prv_code",
-          "classification"
-        ],
-        "title": "ProductView",
-        "type": "object"
-      },
       "QuotationBasisView": {
         "properties": {
           "copper_basis": {
@@ -10632,63 +10288,6 @@
         "title": "ReasonCount",
         "type": "object"
       },
-      "RedFlagBody": {
-        "additionalProperties": false,
-        "properties": {
-          "answers": {
-            "maxProperties": 40,
-            "minProperties": 1,
-            "patternProperties": {
-              "^rf\\d{2}$": {
-                "type": "boolean"
-              }
-            },
-            "title": "Answers",
-            "type": "object"
-          },
-          "checked_on": {
-            "format": "date",
-            "title": "Checked On",
-            "type": "string"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          }
-        },
-        "required": [
-          "checked_on",
-          "answers"
-        ],
-        "title": "RedFlagBody",
-        "type": "object"
-      },
-      "RedFlagQuestionView": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "text": {
-            "title": "Text",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "text"
-        ],
-        "title": "RedFlagQuestionView",
-        "type": "object"
-      },
       "RegionFlag": {
         "description": "Why a value read from a file is not taken on trust (`value_uncertain`).\n\nEach is a place a person looking at the file would not see the value, or\nwould see something else than the reader read.",
         "enum": [
@@ -11311,8 +10910,7 @@
           "sales_documents",
           "sales_bravo_upload",
           "sales_handoffs",
-          "sales_followups",
-          "sales_export_control"
+          "sales_followups"
         ],
         "title": "RuleKey",
         "type": "string"
@@ -11646,89 +11244,6 @@
           "quote_nos"
         ],
         "title": "ScreeningRow",
-        "type": "object"
-      },
-      "ScreeningStep": {
-        "description": "The steps a person records a result of. The product screen (step 1)\nis read from master data, and the yearly renewal (step 6) is an ESF\nrecorded for the new year: neither is a step of its own here.",
-        "enum": [
-          "denial_list",
-          "red_flag",
-          "noc",
-          "esf"
-        ],
-        "title": "ScreeningStep",
-        "type": "string"
-      },
-      "ScreeningView": {
-        "properties": {
-          "answers": {
-            "additionalProperties": {
-              "type": "boolean"
-            },
-            "title": "Answers",
-            "type": "object"
-          },
-          "checked_on": {
-            "format": "date",
-            "title": "Checked On",
-            "type": "string"
-          },
-          "fiscal_year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fiscal Year"
-          },
-          "has_evidence": {
-            "title": "Has Evidence",
-            "type": "boolean"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "outcome": {
-            "title": "Outcome",
-            "type": "string"
-          },
-          "recorded_at": {
-            "format": "date-time",
-            "title": "Recorded At",
-            "type": "string"
-          },
-          "recorded_by": {
-            "format": "uuid",
-            "title": "Recorded By",
-            "type": "string"
-          },
-          "step": {
-            "$ref": "#/components/schemas/ScreeningStep"
-          }
-        },
-        "required": [
-          "step",
-          "outcome",
-          "checked_on",
-          "fiscal_year",
-          "answers",
-          "note",
-          "has_evidence",
-          "recorded_by",
-          "recorded_at"
-        ],
-        "title": "ScreeningView",
         "type": "object"
       },
       "SetEnabledRequest": {
@@ -17614,484 +17129,6 @@
           }
         },
         "summary": "Activity Summary",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control": {
-      "get": {
-        "operationId": "export_control_api_v1_sales_export_control_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportControlOverview"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Export Control",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}": {
-      "get": {
-        "operationId": "export_control_customer_api_v1_sales_export_control__customer_code__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomerDetailView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Export Control Customer",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}/denial-list": {
-      "post": {
-        "operationId": "record_denial_list_api_v1_sales_export_control__customer_code__denial_list_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DenialListBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScreeningView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Record Denial List",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}/esf": {
-      "post": {
-        "operationId": "record_esf_api_v1_sales_export_control__customer_code__esf_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EsfBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScreeningView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Record Esf",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}/esf-form": {
-      "get": {
-        "operationId": "esf_form_api_v1_sales_export_control__customer_code__esf_form_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "format",
-            "required": false,
-            "schema": {
-              "default": "xlsx",
-              "enum": [
-                "xlsx",
-                "pdf"
-              ],
-              "title": "Format",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Esf Form",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}/evidence/{step}": {
-      "get": {
-        "operationId": "screening_evidence_api_v1_sales_export_control__customer_code__evidence__step__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "step",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/ScreeningStep"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Screening Evidence",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}/noc": {
-      "post": {
-        "operationId": "record_noc_api_v1_sales_export_control__customer_code__noc_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NocBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScreeningView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Record Noc",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}/noec-draft": {
-      "get": {
-        "operationId": "noec_draft_api_v1_sales_export_control__customer_code__noec_draft_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Noec Draft",
-        "tags": [
-          "sales"
-        ]
-      }
-    },
-    "/api/v1/sales/export-control/{customer_code}/red-flag": {
-      "post": {
-        "operationId": "record_red_flag_api_v1_sales_export_control__customer_code__red_flag_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "customer_code",
-            "required": true,
-            "schema": {
-              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
-              "title": "Customer Code",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RedFlagBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScreeningView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Record Red Flag",
         "tags": [
           "sales"
         ]

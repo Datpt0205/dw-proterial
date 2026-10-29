@@ -112,6 +112,7 @@ const LAYOUT: Layout = {
   proposed_by: AN,
   proposed_at: "2026-10-03T02:00:00Z",
   approval_id: "0aa10aa0-c939-7000-8539-31fd3e621661",
+  origin: "person",
   decided_by: null,
   decided_at: null,
   prefill: SOURCE.prefill,

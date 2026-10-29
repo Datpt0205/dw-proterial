@@ -44,6 +44,7 @@ from dw_sales.application.case_store import (
     SalesUnitOfWorkFactory,
 )
 from dw_sales.application.handoffs import HandoffCopy, HandoffCopyPort, render
+from dw_sales.application.layouts import keep_learned
 from dw_sales.application.model_calls import model_calls, recording_model_calls
 from dw_sales.application.order_intake import (
     QUOTATION_KINDS,
@@ -349,6 +350,11 @@ class InboxProcessing:
                         work, context, self.ids, stored.case, case, revised, run_id=run.run_id
                     )
                     case = await self._start_review(work, context, case, run)
+            if outcome.learned is not None:
+                # The layout the case was read through, in force with it.
+                await keep_learned(
+                    work, self.ids, self.clock, context, outcome.learned, run_id=run.run_id
+                )
             await self._record(work, context, disposition, ingest, run, case=case)
             await work.commit()
         if before is not None and case is not None:

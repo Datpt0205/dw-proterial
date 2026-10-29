@@ -1,6 +1,7 @@
 # 45 — Export control, WIV-03-032: each step recorded, the orders it moves
 
-Status: done on sample policy (2026-10-28): backend and the web page
+Status: wontfix — withdrawn 2026-10-29 (Đạt: "kiểm soát xuất khẩu đâu có nằm trong 2 quy trình"); the page, its table and the rule key removed in `fc723c5a7d81`. The hold on an order (`missing_noc_esf`, from master data, acknowledged by the export-control PIC) stays.
+Was: done on sample policy (2026-10-28): backend and the web page
 Blocked by: Proterial's WIV-03-032, red-flag form, ESF form and approvers
 (customer questionnaire, questions 1–13): shipped as a sample until then
 Category: enhancement
