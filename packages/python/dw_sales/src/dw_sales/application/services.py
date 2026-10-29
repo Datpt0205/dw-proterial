@@ -30,6 +30,7 @@ from dw_sales.application.catalog_imports import (
     CatalogUnitOfWorkFactory,
 )
 from dw_sales.application.decisions import CaseDecisions
+from dw_sales.application.design_text_reading import DesignTextReplies
 from dw_sales.application.finding_explanations import FindingExplanations
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
@@ -106,6 +107,8 @@ class SalesServices:
     outbound: OutboundMailService
     # A mail asking about an unordered quotation, drafted (AI item 11, Q12).
     screening_followups: ScreeningFollowups
+    # Design's reply written in the mail, read and confirmed (AI item 6).
+    design_text_replies: DesignTextReplies
     gate: Gate
 
 
@@ -235,6 +238,9 @@ def assemble(
         ),
         thread_summaries=ThreadSummaries(
             uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
+        ),
+        design_text_replies=DesignTextReplies(
+            uow, gate, inbox, quotation, one_call, clock, ids, worker_id, worker_version
         ),
         screening_followups=ScreeningFollowups(
             gate, catalog, quotation, one_call, clock, ids, worker_id, worker_version

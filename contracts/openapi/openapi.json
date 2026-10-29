@@ -2963,8 +2963,27 @@
       "DesignReplyView": {
         "properties": {
           "attachment_id": {
-            "title": "Attachment Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Id"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
           },
           "lines": {
             "items": {
@@ -3001,6 +3020,130 @@
           "lines"
         ],
         "title": "DesignReplyView",
+        "type": "object"
+      },
+      "DesignTextLineView": {
+        "properties": {
+          "bp_code": {
+            "title": "Bp Code",
+            "type": "string"
+          },
+          "copper_kg_per_km": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copper Kg Per Km"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "prv_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prv Code"
+          },
+          "spec_no": {
+            "title": "Spec No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "bp_code",
+          "spec_no",
+          "prv_code",
+          "copper_kg_per_km"
+        ],
+        "title": "DesignTextLineView",
+        "type": "object"
+      },
+      "DesignTextReadingView": {
+        "description": "What DW1 read of a Design reply written in the mail, for Sales to\nconfirm; always marked as the model's.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "lines": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DesignTextLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "status": {
+            "enum": [
+              "read",
+              "no_case",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "ycbg_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ycbg No"
+          }
+        },
+        "required": [
+          "message_id",
+          "status"
+        ],
+        "title": "DesignTextReadingView",
         "type": "object"
       },
       "DevSessionRequest": {
@@ -6806,6 +6949,87 @@
           "routed_without_owner"
         ],
         "title": "MessagesView",
+        "type": "object"
+      },
+      "ModelDesignReply": {
+        "additionalProperties": false,
+        "description": "What the model reads, and what Sales confirms: the YCBG answered and\neach line, every value as the mail writes it.",
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ModelReplyLine"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "ycbg_no": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Ycbg No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ycbg_no",
+          "lines"
+        ],
+        "title": "ModelDesignReply",
+        "type": "object"
+      },
+      "ModelReplyLine": {
+        "additionalProperties": false,
+        "properties": {
+          "bp_code": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Bp Code",
+            "type": "string"
+          },
+          "copper_kg_per_km": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copper Kg Per Km"
+          },
+          "line_no": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "prv_code": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prv Code"
+          },
+          "spec_no": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Spec No",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "bp_code",
+          "spec_no"
+        ],
+        "title": "ModelReplyLine",
         "type": "object"
       },
       "ModelStep": {
@@ -17822,6 +18046,118 @@
           }
         },
         "summary": "Confirm Sender Customer",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/{message_id}/design-reply": {
+      "get": {
+        "operationId": "design_text_reply_api_v1_sales_inbox__message_id__design_reply_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignTextReadingView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Design Text Reply",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "confirm_design_text_reply_api_v1_sales_inbox__message_id__design_reply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDesignReply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Design Text Reply",
         "tags": [
           "sales"
         ]

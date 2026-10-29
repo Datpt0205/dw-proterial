@@ -8,6 +8,7 @@ company's template, `rule_words` for one changed in words)."""
 
 from dw_sales.evals.corrections import GRADERS as CORRECTION_GRADERS
 from dw_sales.evals.descriptions import GRADERS as DESCRIPTION_GRADERS
+from dw_sales.evals.design_text_replies import GRADERS as DESIGN_TEXT_GRADERS
 from dw_sales.evals.finding_explanations import GRADERS as EXPLANATION_GRADERS
 from dw_sales.evals.graders import GRADERS as ORDER_GRADERS
 from dw_sales.evals.handoffs import GRADERS as HANDOFF_GRADERS
@@ -42,6 +43,7 @@ GRADERS = {
         **RULE_DRAFT_GRADERS,
         **RULE_WORDS_GRADERS,
         **EXPLANATION_GRADERS,
+        **DESIGN_TEXT_GRADERS,
         **SENDER_GRADERS,
         **SCREENING_GRADERS,
         **BRIEF_GRADERS,

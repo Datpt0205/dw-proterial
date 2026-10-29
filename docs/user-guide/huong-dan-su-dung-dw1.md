@@ -176,6 +176,8 @@ Nếu DW1 không đọc được một tệp thư (tệp hỏng hoặc lớn hơ
 
 Thư từ một địa chỉ không thuộc khách nào (người mua viết từ hộp thư mới, hộp thư cá nhân) được chuyển Sales với lý do "Chưa xác định được khách hàng". Mở dòng thư: DW1 đọc chữ ký và tên người gửi, đoán thư của khách nào và trích câu trong thư làm căn cứ (gắn nhãn "Máy đoán"). Nếu đúng, bấm **Đúng, ghi nhớ và xử lý lại**; nếu sai, chọn khách khác trong danh sách rồi bấm **Ghi nhớ và xử lý lại**. DW1 ghi nhớ địa chỉ người gửi đó là của khách đã chọn (chỉ địa chỉ này, không cả tên miền) và xử lý lại thư; thư sau từ địa chỉ này được nhận đúng khách ngay. Nếu thư ký tên một công ty không có trong danh sách, DW1 nêu tên đó: có thể là khách mới, thêm vào Dữ liệu chủ.
 
+Khi Design trả lời ngay trong nội dung thư (không đính kèm form), thư được chuyển Sales với lý do "Phản hồi Design chưa khớp hồ sơ". Mở dòng thư: DW1 đọc số YCBG và từng dòng (mã BP, số spec, mã PRV, lượng đồng), chép nguyên văn từ thư (gắn nhãn "Máy đọc"). So với thư rồi bấm **Đúng, gắn vào hồ sơ**: hồ sơ báo giá chuyển "Design đã trả lời" như khi có form. Thư nêu giá trị không rõ ràng (ví dụ hai lượng đồng cho một dòng) thì DW1 không đề xuất; đọc thư và nhập tay như trước.
+
 Thư phản hồi Design đến trước khi hồ sơ báo giá có số YCBG sẽ được chuyển Sales. Sau khi ghi số YCBG, bấm **DW xử lý lại** trên thư phản hồi để DW1 gắn thư vào đúng hồ sơ.
 
 ## Xử lý đơn hàng

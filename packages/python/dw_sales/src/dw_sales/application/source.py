@@ -282,7 +282,7 @@ def _quote_anchors(case: QuoteCase, attachment_id: str) -> list[LabelledAnchor]:
                 if v is not None and v.source.attachment_id == attachment_id
             ]
     for reply in case.design_replies:
-        if reply.attachment.attachment_id != attachment_id:
+        if reply.attachment is None or reply.attachment.attachment_id != attachment_id:
             continue
         found += [
             LabelledAnchor(field="ycbg_no", anchor=reply.document.ycbg_no.source),
@@ -509,7 +509,11 @@ def _quote_sources(case: QuoteCase) -> list[_Source]:
     """The files a quote was read from: the request's, and each Design reply's."""
     request_file = case.request.attachment
     files = [(case.request.message_id, request_file)] if request_file is not None else []
-    files += [(reply.message_id, reply.attachment) for reply in case.design_replies]
+    files += [
+        (reply.message_id, reply.attachment)
+        for reply in case.design_replies
+        if reply.attachment is not None
+    ]
     return [
         _Source(
             message_id,

@@ -1127,7 +1127,10 @@ class OrderIntake:
             words = _words(text)
             if _QUOTE_REQUEST.search(words):
                 return MessageKind.QUOTE_REQUEST
-            if _DESIGN_REPLY.search(words) and carries_document:
+            # A YCBG named, with a file or without one: Design may write its
+            # answer in the mail (AI item 6); whether Design sent it at all is
+            # `take_design_reply`'s check, the one every reply passes.
+            if _DESIGN_REPLY.search(words):
                 return MessageKind.DESIGN_REPLY
             if _PURCHASE_ORDER.search(words):
                 # A message about a PO is not a PO: it has to carry one.
