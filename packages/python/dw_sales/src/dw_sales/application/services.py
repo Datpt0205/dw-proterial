@@ -43,6 +43,7 @@ from dw_sales.application.order_ports import ConvertLedgerPort
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
 from dw_sales.application.outbound_mail import OutboundMailService
 from dw_sales.application.overview_service import OverviewService
+from dw_sales.application.pc_dates import PcDateReplies
 from dw_sales.application.pipeline import PipelineService
 from dw_sales.application.ports import (
     ArtifactBytesPort,
@@ -109,6 +110,8 @@ class SalesServices:
     screening_followups: ScreeningFollowups
     # Design's reply written in the mail, read and confirmed (AI item 6).
     design_text_replies: DesignTextReplies
+    # PC's delivery dates read from the mail Sales pastes (AI item 7).
+    pc_dates: PcDateReplies
     gate: Gate
 
 
@@ -239,6 +242,7 @@ def assemble(
         thread_summaries=ThreadSummaries(
             uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
         ),
+        pc_dates=PcDateReplies(uow, gate, one_call, clock, ids, worker_id, worker_version),
         design_text_replies=DesignTextReplies(
             uow, gate, inbox, quotation, one_call, clock, ids, worker_id, worker_version
         ),
