@@ -64,6 +64,7 @@ from dw_sales.adapters.persistence.measurements import SqlModelMeasurements
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
+from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotations
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.persistence.uow import (
@@ -81,7 +82,7 @@ from dw_sales.application.followups import FollowupLane
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
-from dw_sales.application.mail_drop import MailDrop, RulesMailIntake
+from dw_sales.application.mail_drop import MailDrop, MailDropNotices, RulesMailIntake
 from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_calls import TimedInterpretation
@@ -220,7 +221,11 @@ def build_dw1(
     # The lists Sales maintains by hand from each workspace's approved import,
     # the mock where none is approved yet (ticket 41); the ERP's records from
     # the mock until Bravo is connected.
-    master = SnapshotSalesCatalog(SqlApprovedLists(session_factory), MockSalesCatalog.load(scope))
+    master = SnapshotSalesCatalog(
+        SqlApprovedLists(session_factory),
+        MockSalesCatalog.load(scope),
+        SqlRecordedQuotations(session_factory),
+    )
     # Every reader of a customer sees the export-control results moving its
     # compliance (WIV-03-032); the master-data pages read underneath.
     screenings = SqlExportControlUnitOfWorkFactory(session_factory, audit=audit)
@@ -243,7 +248,13 @@ def build_dw1(
         None
         if mail_drop is None
         else MailDrop(
-            LocalDropFolder(mail_drop), readers.mail, stored, RulesMailIntake(book), clock, ids
+            LocalDropFolder(mail_drop),
+            readers.mail,
+            stored,
+            RulesMailIntake(book),
+            MailDropNotices(holders, notifications),
+            clock,
+            ids,
         )
     )
     tenant_rules = RuleBookOrderRules(book)

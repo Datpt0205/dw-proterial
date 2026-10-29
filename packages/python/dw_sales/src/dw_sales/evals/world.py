@@ -120,7 +120,11 @@ from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
 from dw_sales.evals.overview_memory import PythonOverviewReader
-from dw_sales.testing.catalog_store import MemoryApprovedLists, MemoryCatalogStore
+from dw_sales.testing.catalog_store import (
+    MemoryApprovedLists,
+    MemoryCatalogStore,
+    MemoryRecordedQuotations,
+)
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
 from dw_sales.testing.measurements import MemoryModelMeasurements, passing
 from dw_sales.testing.role_catalog import StaticRoleCatalog
@@ -1216,7 +1220,9 @@ def open_world(
     # and approved, else the sample's mock; with no import, the mock exactly.
     catalog_store = MemoryCatalogStore(runtime.approvals, outbox=runtime.outbox)
     draft_store = MemoryRuleDraftStore(outbox=runtime.outbox)
-    master = SnapshotSalesCatalog(MemoryApprovedLists(catalog_store), mock)
+    master = SnapshotSalesCatalog(
+        MemoryApprovedLists(catalog_store), mock, MemoryRecordedQuotations(clock)
+    )
     # Export-control results move a customer's compliance (WIV-03-032).
     export_control = MemoryExportControl()
     catalog = ScreenedCatalog(master, export_control)

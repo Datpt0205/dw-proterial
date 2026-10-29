@@ -90,6 +90,14 @@ class SqlMailbox:
                 sa.insert(_F).values(**scope_values(scope), source_name=source, outcome="left_out")
             )
 
+    async def refuse(self, scope: SalesScope, *, source: str, reason: str) -> None:
+        async with tenant_session(self.session_factory, _bound(scope)) as session:
+            await session.execute(
+                sa.insert(_F).values(
+                    **scope_values(scope), source_name=source, outcome="refused", reason=reason
+                )
+            )
+
     async def store(
         self, scope: SalesScope, mail: MailFile, *, source: str, event: AuditEvent
     ) -> bool:

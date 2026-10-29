@@ -20,8 +20,11 @@ else reads the stored mailbox, through `InboxPort`, like the mock.
    it). A file modified less than `SETTLE` ago, or still empty, may be
    arriving (OneDrive writes it in place): it waits for a later tick.
 3. A file over the size limit, or one the reader refuses (`MailRefused`), is
-   logged by name and reason and not read again until the process restarts.
-   Its content is never logged.
+   recorded as handled with its reason (`MailStorePort.refuse`), so no
+   restart reads it again, and the people who process the mailbox are told
+   which file did not arrive (`MailDropNoticePort.refused`, Đạt 2026-10-29:
+   "không thể làm hỏng luồng rồi im lặng luôn được"). Its content is never
+   logged.
 4. A mail from a sender domain the tenant's order rules leave out
    (`ignored_sender_domains`, `MailIntake`) is not stored: its file is
    recorded as handled, nothing of the mail is kept. A reply from a Design
@@ -36,7 +39,10 @@ else reads the stored mailbox, through `InboxPort`, like the mock.
 action `sales.mail.stored`, naming the file it came from.
 
 A reader that does not answer (`ReaderUnavailableError`) ends the tick: no
-file is marked, and the next tick tries again.
+file is marked, and the next tick tries again. A folder that cannot be
+listed (the share gone, OneDrive unsynced) also ends the tick, and the same
+people are told, at most once a day while it lasts: no new mail reaches DW1
+until it is back, and a log line nobody reads is not telling anyone.
 """
 
 from __future__ import annotations
@@ -44,12 +50,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Final, Literal, Protocol
 
 from dw_kernel.ports import IdGenerator, UtcClock
-from dw_platform.domain.audit import AuditEvent, lane_audit_event
-from dw_sales.application.ports import SalesScope
+from dw_platform.application.access_context import AccessContext
+from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
+from dw_sales.application.access import SalesScopes
+from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
 from dw_sales.application.quotation import QuoteRules
 from dw_sales.domain.messages import EmailAddress, InboundMessage
 from dw_sales.domain.order_checks import OrderRules
@@ -165,6 +173,10 @@ class MailStorePort(Protocol):
         else of it."""
         ...
 
+    async def refuse(self, scope: SalesScope, *, source: str, reason: str) -> None:
+        """Record that ``source`` was not read, and why; nothing else of it."""
+        ...
+
     async def store(
         self, scope: SalesScope, mail: MailFile, *, source: str, event: AuditEvent
     ) -> bool:
@@ -185,6 +197,78 @@ class DropTick:
     waiting: int = 0
 
 
+class MailDropNoticePort(Protocol):
+    """Tells the people who process the mailbox what the lane could not do."""
+
+    async def refused(self, scope: SalesScope, *, source: str, reason: str) -> None: ...
+
+    async def unreachable(self, scope: SalesScope, *, day: date) -> None: ...
+
+
+@dataclass(frozen=True)
+class MailDropNotices:
+    """`MailDropNoticePort` as in-app notices to every member of the workspace
+    who may process its mailbox, read by the function that decides who may.
+    Idempotent by key: a file is told once, an unreachable folder once a day."""
+
+    holders: ScopeHoldersPort
+    notifications: NotificationSenderPort
+
+    async def refused(self, scope: SalesScope, *, source: str, reason: str) -> None:
+        await self._tell(
+            scope,
+            key=f"sales.mail_drop.refused:{scope.workspace_id.value}:{source}",
+            title="Có thư DW1 không đọc được",
+            body=(
+                f"Tệp {source} trong thư mục thư không được lưu vào DW1, nên thư này "
+                f"không có trong Hộp thư. Mở thư gốc trong Outlook và xử lý tay. "
+                f"Lý do (cho IT): {reason}."
+            ),
+        )
+
+    async def unreachable(self, scope: SalesScope, *, day: date) -> None:
+        await self._tell(
+            scope,
+            key=f"sales.mail_drop.unreachable:{scope.workspace_id.value}:{day.isoformat()}",
+            title="DW1 không đọc được thư mục thư",
+            body=(
+                "Thư mới của khách chưa vào DW1 cho tới khi thư mục được nối lại. "
+                "Báo IT kiểm tra thư mục đồng bộ trên máy chủ của DW1."
+            ),
+        )
+
+    async def _tell(self, scope: SalesScope, *, key: str, title: str, body: str) -> None:
+        recipients = await self.holders.holding(
+            scope.tenant_id.value,
+            scope.workspace_id.value,
+            frozenset({SalesScopes.INBOX_PROCESS.value}),
+        )
+        if not recipients:
+            # Nobody to tell is itself the failure; the log is all that is left.
+            logger.error("sales_mail_drop: no one processes this mailbox to be told %s", key)
+            return
+        await self.notifications.deliver(
+            _lane_context(scope),
+            recipients=recipients,
+            source_key=key,
+            title=title,
+            body=body,
+            link="/sales/inbox",
+        )
+
+
+def _lane_context(scope: SalesScope) -> AccessContext:
+    """The lane delivering in ``scope``: its own actor, no scope at all."""
+    return AccessContext(
+        tenant_id=scope.tenant_id.value,
+        workspace_id=scope.workspace_id.value,
+        principal_id=system_actor(MAIL_DROP_LANE).value,
+        roles=frozenset(),
+        scopes=frozenset(),
+        plan_id="background",
+    )
+
+
 _Outcome = Literal["stored", "already_stored", "left_out"]
 _Taken = _Outcome | Literal["waiting"] | MailRefused
 
@@ -197,6 +281,7 @@ class MailDrop:
     reader: MailFileReaderPort
     store: MailStorePort
     intake: MailIntakePort
+    notices: MailDropNoticePort
     clock: UtcClock
     ids: IdGenerator
     max_bytes: int = MAX_MAIL_BYTES
@@ -212,7 +297,12 @@ class MailDrop:
         done: dict[_Outcome, list[str]] = {"stored": [], "already_stored": [], "left_out": []}
         refused: list[tuple[str, str]] = []
         waiting = 0
-        for dropped in sorted(await self.folder.files(), key=lambda f: f.name):
+        try:
+            listed = await self.folder.files()
+        except OSError:
+            await self.notices.unreachable(scope, day=now.date())
+            raise
+        for dropped in sorted(listed, key=lambda f: f.name):
             if dropped.name in seen or not dropped.name.lower().endswith(_SUFFIX):
                 continue
             taken = (
@@ -223,12 +313,16 @@ class MailDrop:
             if taken == "waiting":
                 waiting += 1
                 continue
-            seen.add(dropped.name)
             if isinstance(taken, MailRefused):
                 logger.warning("sales_mail_drop: %s not stored: %s", dropped.name, taken.reason)
+                # Told before it is marked: a notice that fails leaves the
+                # file to the next tick, never marked and untold.
+                await self.notices.refused(scope, source=dropped.name, reason=taken.reason)
+                await self.store.refuse(scope, source=dropped.name, reason=taken.reason)
                 refused.append((dropped.name, taken.reason))
             else:
                 done[taken].append(dropped.name)
+            seen.add(dropped.name)
         return DropTick(
             stored=tuple(done["stored"]),
             already_stored=tuple(done["already_stored"]),

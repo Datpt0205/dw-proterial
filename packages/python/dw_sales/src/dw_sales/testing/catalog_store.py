@@ -20,9 +20,11 @@ from typing import Any, Self
 
 from dw_agent_runtime.testing.memory_runtime import MemoryApprovals, MemoryAudit, MemoryOutbox
 from dw_kernel.errors import ConflictError
+from dw_kernel.ports import UtcClock
 from dw_sales.application.catalog_imports import OPEN, CatalogSnapshot, ImportStatus
 from dw_sales.application.ports import SalesScope
-from dw_sales.application.snapshot_catalog import ApprovedList
+from dw_sales.application.snapshot_catalog import ApprovedList, RecordedQuotation
+from dw_sales.domain.catalog import Quotation
 from dw_sales.domain.master_data import CatalogList, records_of
 
 
@@ -172,3 +174,29 @@ class MemoryApprovedLists:
         return ApprovedList.of(
             catalog_list, found.snapshot_id, found.as_of, records_of(catalog_list, documents)
         )
+
+
+@dataclass
+class MemoryRecordedQuotations:
+    """`RecordedQuotationsPort` in memory, each scope's rows its own (what RLS
+    gives the SQL store): appended all or none, a held row with the same
+    terms skipped, one with other terms refused, as `SqlRecordedQuotations`."""
+
+    clock: UtcClock
+    _rows: dict[SalesScope, dict[tuple[str, str], RecordedQuotation]] = field(default_factory=dict)
+
+    async def recorded(self, scope: SalesScope) -> Sequence[RecordedQuotation]:
+        return tuple(self._rows.get(scope, {}).values())
+
+    async def add(self, scope: SalesScope, rows: Sequence[Quotation]) -> None:
+        held = self._rows.setdefault(scope, {})
+        for row in rows:
+            found = held.get((row.quote_no, row.prv_code))
+            if found is not None and found.quotation != row:
+                raise ConflictError(
+                    "the master list holds this quote number with other terms",
+                    details={"quote_no": row.quote_no, "prv_code": row.prv_code},
+                )
+        at = self.clock.now()
+        for row in rows:
+            held.setdefault((row.quote_no, row.prv_code), RecordedQuotation(row, at))

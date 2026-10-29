@@ -72,6 +72,8 @@ _CLEARED = (
     tables.processing_jobs,
     # What the follow-ups sent (ticket 42): a rehearsal's cases are new cases.
     tables.followup_deliveries,
+    # The quotations a rehearsal sent: the next one quotes from the sample.
+    tables.recorded_quotations,
     tables.worker_state,
     tables.order_cases,
     tables.quote_cases,
