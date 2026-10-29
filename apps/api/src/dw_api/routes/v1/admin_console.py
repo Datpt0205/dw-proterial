@@ -28,6 +28,7 @@ from dw_platform.application.admin_console import (
     TenantSettings,
     UpdateTenantSettings,
 )
+from dw_platform.application.background_failures import BackgroundFailuresService
 from dw_platform.application.cache import membership_cache_pattern, tenant_cache_pattern
 from dw_platform.application.hierarchy import HierarchyService, SetManager
 from dw_platform.application.membership_admin import is_administrative
@@ -143,6 +144,17 @@ class WaiverDecisionBody(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
 
+class StalledEventView(BaseModel):
+    """An outbox event that spent its attempts: the kind of its error only,
+    never the text, which can carry what the failing statement held."""
+
+    id: UUID
+    event_type: str
+    occurred_at: datetime
+    attempts: int
+    error_kind: str
+
+
 def _service(container: RequireContainer) -> AdminConsoleService:
     if container.admin_console is None:
         raise InfrastructureError("database is not configured")
@@ -153,6 +165,12 @@ def _hierarchy(container: RequireContainer) -> HierarchyService:
     if container.hierarchy is None:
         raise InfrastructureError("database is not configured")
     return container.hierarchy
+
+
+def _background_failures(container: RequireContainer) -> BackgroundFailuresService:
+    if container.background_failures is None:
+        raise InfrastructureError("database is not configured")
+    return container.background_failures
 
 
 def _separation_of_duties(container: RequireContainer) -> SeparationOfDutiesService:
@@ -398,6 +416,31 @@ async def confirm_separation_of_duties_waiver(
     await _separation_of_duties(container).confirm(
         context, ConfirmWaiver(rule_key=rule_key, reason=payload.reason)
     )
+    return Response(status_code=204)
+
+
+@router.get("/background-failures", response_model=list[StalledEventView])
+async def list_background_failures(
+    context: RequireAccessContext, container: RequireContainer
+) -> list[StalledEventView]:
+    rows = await _background_failures(container).stalled(context)
+    return [
+        StalledEventView(
+            id=r.id,
+            event_type=r.event_type,
+            occurred_at=r.occurred_at,
+            attempts=r.attempts,
+            error_kind=r.error_kind,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/background-failures/{event_id}/retry", status_code=204)
+async def retry_background_failure(
+    event_id: UUID, context: RequireAccessContext, container: RequireContainer
+) -> Response:
+    await _background_failures(container).requeue(context, event_id)
     return Response(status_code=204)
 
 

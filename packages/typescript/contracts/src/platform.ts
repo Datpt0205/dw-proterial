@@ -188,6 +188,18 @@ export const adminSodRuleSchema = z.object({
 });
 export type AdminSodRule = z.infer<typeof adminSodRuleSchema>;
 
+// A background event that spent its attempts and waits for an admin to send
+// it back (2026-10-29). `error_kind` is the kind of its error only, never the
+// text, which can carry what the failing statement held.
+export const stalledEventSchema = z.object({
+  id: z.string(),
+  event_type: z.string(),
+  occurred_at: z.string(),
+  attempts: z.number().int(),
+  error_kind: z.string(),
+});
+export type StalledEvent = z.infer<typeof stalledEventSchema>;
+
 // One message in the caller's own in-app inbox. `link` is an app-relative
 // path (the database refuses anything else).
 export const notificationSchema = z.object({

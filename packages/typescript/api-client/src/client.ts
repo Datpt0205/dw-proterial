@@ -26,6 +26,8 @@ import {
   type CreatedLoginAccount,
   type TemporaryPassword,
   adminSodRuleSchema,
+  stalledEventSchema,
+  type StalledEvent,
   inboxSchema,
   hierarchyMemberSchema,
   type AdminWorkspace,
@@ -238,7 +240,12 @@ const _sodRuleMirrorsTheRoute: [
     keyof Generated["SodWaiverView"]
   >,
 ] = [true, true, true];
+const _stalledEventMirrorsTheRoute: [
+  SameType<StalledEvent, Generated["StalledEventView"]>,
+  SameType<keyof StalledEvent, keyof Generated["StalledEventView"]>,
+] = [true, true];
 void _sodRuleMirrorsTheRoute;
+void _stalledEventMirrorsTheRoute;
 
 const _inboxMirrorsTheRoute: [
   SameType<Inbox, Generated["InboxView"]>,
@@ -684,6 +691,26 @@ export class ApiClient {
       "POST",
       `/api/v1/admin/separation-of-duties/${encodeURIComponent(ruleKey)}/waiver/revoke`,
       { body: { reason } },
+    );
+  }
+
+  // ---- admin: background work that stopped --------------------------------
+
+  /** This workspace's background events that spent their attempts. */
+  listBackgroundFailures(): Promise<StalledEvent[]> {
+    return this.request(
+      "GET",
+      "/api/v1/admin/background-failures",
+      z.array(stalledEventSchema),
+    );
+  }
+
+  /** Send a stopped event back to the queue, on the record. 404 if this
+   * workspace has no such stopped event. */
+  retryBackgroundFailure(eventId: string): Promise<void> {
+    return this.requestNoContent(
+      "POST",
+      `/api/v1/admin/background-failures/${encodeURIComponent(eventId)}/retry`,
     );
   }
 

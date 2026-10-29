@@ -70,6 +70,7 @@ from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.cache import NullCache, ValkeyCache
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.approval_codes import SqlApprovalCodeStore
+from dw_platform.adapters.persistence.background_failures_repo import SqlStalledEvents
 from dw_platform.adapters.persistence.caching_lookup import CachingMembershipLookup
 from dw_platform.adapters.persistence.channel_inbound import SqlChannelUpdateQueue
 from dw_platform.adapters.persistence.channel_preferences import SqlChannelPreferences
@@ -95,6 +96,7 @@ from dw_platform.adapters.persistence.zalo_link_repo import SqlZaloLink
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.approval_codes import ApprovalSubjectVersions, DecisionCodeKey
 from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.background_failures import BackgroundFailuresService
 from dw_platform.application.cache import CachePort
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.hierarchy import HierarchyService
@@ -115,6 +117,7 @@ from dw_platform.application.support_access import (
     SupportScopeCatalog,
 )
 from dw_platform.application.tenant_members import TenantMembersService
+from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 
 _LOG = logging.getLogger("dw_api.bootstrap")
 
@@ -261,6 +264,9 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     )
     container.separation_of_duties = SeparationOfDutiesService(
         SqlSeparationOfDutiesRepository(session_factory), authorization, clock, ids
+    )
+    container.background_failures = BackgroundFailuresService(
+        SqlStalledEvents(session_factory), authorization, clock, ids, OUTBOX_MAX_ATTEMPTS
     )
     container.notifications = NotificationService(SqlNotificationRepository(session_factory))
     container.support_grants = SupportGrantService(

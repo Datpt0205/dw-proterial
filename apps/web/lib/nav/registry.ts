@@ -14,6 +14,7 @@ import {
   SafetyOutlined,
   SettingOutlined,
   SplitCellsOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import { salesNav } from "../../app/sales/_meta/nav";
 import type { NavEntry, NavItem } from "./types";
@@ -113,6 +114,13 @@ const platformNav: NavEntry[] = [
         label: "Thiết lập công ty",
         hint: "Tên công ty, múi giờ và ngôn ngữ",
         icon: SettingOutlined,
+        scope: "platform.tenant.settings.write",
+      },
+      {
+        href: "/admin/background-failures",
+        label: "Việc nền lỗi",
+        hint: "Việc chạy nền đã dừng sau nhiều lần thử, và chạy lại",
+        icon: WarningOutlined,
         scope: "platform.tenant.settings.write",
       },
       {

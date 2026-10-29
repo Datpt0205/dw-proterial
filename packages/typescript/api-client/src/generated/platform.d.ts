@@ -68,6 +68,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/background-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Background Failures */
+        get: operations["list_background_failures_api_v1_admin_background_failures_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/background-failures/{event_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Background Failure */
+        post: operations["retry_background_failure_api_v1_admin_background_failures__event_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/hierarchy": {
         parameters: {
             query?: never;
@@ -2373,6 +2407,29 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * StalledEventView
+         * @description An outbox event that spent its attempts: the kind of its error only,
+         *     never the text, which can carry what the failing statement held.
+         */
+        StalledEventView: {
+            /** Attempts */
+            attempts: number;
+            /** Error Kind */
+            error_kind: string;
+            /** Event Type */
+            event_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+        };
         /** SupportGrantModel */
         SupportGrantModel: {
             /** Activated At */
@@ -2905,6 +2962,55 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TemporaryPasswordView"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_background_failures_api_v1_admin_background_failures_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StalledEventView"][];
+                };
+            };
+        };
+    };
+    retry_background_failure_api_v1_admin_background_failures__event_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
