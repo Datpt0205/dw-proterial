@@ -75,9 +75,10 @@ from dw_sales.adapters.persistence.uow import (
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.application.access import SalesAuthorizationPort
+from dw_sales.application.access import Gate, SalesAuthorizationPort
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
+from dw_sales.application.finding_explanations import FindingExplanations
 from dw_sales.application.followups import FollowupLane
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
@@ -317,6 +318,21 @@ def build_dw1(
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
     )
+    # A finding explained on request, through the one-call door (AI item 12).
+    explanations = FindingExplanations(
+        uow=uow,
+        gate=Gate(authorization),
+        catalog=catalog,
+        model=(
+            None
+            if one_call_model is None
+            else interpretation_for(one_call_model, configs, worker.default_model_profile)
+        ),
+        clock=clock,
+        ids=ids,
+        worker_id=worker.worker_id,
+        worker_version=worker.worker_version,
+    )
     assembly = assemble(
         uow=uow,
         authorization=authorization,
@@ -350,6 +366,7 @@ def build_dw1(
         # An uploaded signed quotation is scanned like every attachment.
         scanner=scanner,
         converts=catalog,
+        finding_explanations=explanations,
     )
     register(
         graphs=runtime.graphs,

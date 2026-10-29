@@ -73,9 +73,9 @@ async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> 
     overview, no master data, no price. The process page reads the same
     scope (2026-10-22). The proposal here carries no document,
     so it is refused as invalid (422) and writes nothing. Drafting a version
-    from the company's template ("Tạo từ tệp mẫu") is the same scope, so IT,
-    who configures the rules, reaches those two routes too; the walk's draft
-    id is random, so the read answers 404."""
+    from the company's template ("Tạo từ tệp mẫu") or from words (ADR 0006)
+    is the same scope, so IT, who configures the rules, reaches those routes
+    too; the walk's draft id is random, so the read answers 404."""
     answers = {route: await _call(api.as_(TAM), *route) for route in _sales_routes()}
 
     def named(route: tuple[str, str]) -> tuple[str, str]:
@@ -91,6 +91,7 @@ async def test_tenant_it_reaches_the_rules_routes_and_nothing_else(api: Api) -> 
         ("GET", "/rules/sales_bravo_upload/platform"),
         ("POST", "/rules/sales_bravo_upload/versions"),
         ("POST", "/rules/sales_bravo_upload/drafts"),
+        ("POST", "/rules/sales_bravo_upload/drafts/words"),
         ("GET", "/rules/drafts/{draft_id}"),
     }
 

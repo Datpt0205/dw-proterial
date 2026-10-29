@@ -61,6 +61,7 @@ from dw_sales.application.catalog_imports import (
     CatalogPreviewView,
     CatalogStateView,
 )
+from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
@@ -517,6 +518,21 @@ def build_router(
     @router.get("/orders/{case_id}", response_model=OrderCaseView)
     async def order(case_id: uuid.UUID, context: ReadCtx, svc: ReadSvc) -> OrderCaseView:
         return await svc.orders.get(context, case_id)
+
+    # A finding explained in words by the model, on request (AI item 12):
+    # nothing is stored, and a price-bearing one only to a price reader.
+    @router.get(
+        "/orders/{case_id}/findings/{finding_key}/explanation",
+        response_model=FindingExplanationView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def explain_finding(
+        case_id: uuid.UUID,
+        finding_key: Annotated[str, PathParam(pattern=r"^[a-z_]+:(\d+|-)$", max_length=80)],
+        context: Ctx,
+        svc: Svc,
+    ) -> FindingExplanationView:
+        return await svc.finding_explanations.explain(context, case_id, finding_key)
 
     @router.get(
         "/orders/{case_id}/source/{attachment_id}",

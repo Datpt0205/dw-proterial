@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import (
 from dw_agent_runtime.adapters.langgraph_runner import LangGraphWorkflowRunner
 from dw_agent_runtime.adapters.run_events import RunStateListener
 from dw_agent_runtime.adapters.run_store import SqlWorkerRunStore
+from dw_agent_runtime.allowance import DailyAllowance
 from dw_agent_runtime.approval_codes import ApprovalViewService
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.profiles import Provider
@@ -404,6 +405,20 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
         # reaches a model server of its own (dw_sales ADR 0005); otherwise no
         # model is called at all.
         model=(wiring.seam.gateway if Provider.ONPREM in wiring.seam.gateway.adapters else None),
+        # The one-call door, on the same condition: a finding explained on
+        # request (AI item 12), the caller's plan allowance checked first.
+        one_call_model=(
+            wiring.model_stack.one_call(
+                DailyAllowance(
+                    allowance=wiring.runner.allowance,
+                    runs=wiring.runner.run_store,
+                    spend=wiring.runner.spend_store,
+                    clock=clock,
+                )
+            )
+            if Provider.ONPREM in wiring.seam.gateway.adapters
+            else None
+        ),
         # An opened page or grid is kept here for an hour (the source drawer,
         # 2026-10-28); without a cache URL every open reads the file.
         source_cache=container.cache,
@@ -447,6 +462,7 @@ def build_sales(
     runtime: SalesRuntime,
     telemetry: TelemetryPort,
     model: ModelGateway | None = None,
+    one_call_model: ModelGateway | None = None,
     scanner: object | None = None,
     reader: object | None = None,
     source_cache: CachePort | None = None,
@@ -507,6 +523,7 @@ def build_sales(
         runtime=runtime,
         telemetry=telemetry,
         model=model,
+        one_call_model=one_call_model,
         # Who holds the scopes each process step needs, from the platform's
         # catalog (the process page, 2026-10-23).
         roles=SqlAdminConsoleRepository(session_factory),

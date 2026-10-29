@@ -92,7 +92,7 @@ from dw_sales.application.rule_words import (
 )
 from dw_sales.application.rule_words import PROMPT_TOKENS as WORDS_PROMPT_TOKENS
 from dw_sales.application.rules import DRAFTABLE, PRICE_BEARING, Resolved, RuleKey, readable
-from dw_sales.application.runs import WEB_CHANNEL
+from dw_sales.application.runs import caller_run
 from dw_sales.application.source import SheetGrid
 from dw_sales.application.template_reading import (
     MAX_SHEETS,
@@ -657,25 +657,13 @@ class RuleDrafting:
         return None
 
     def _run(self, context: AccessContext, draft: RuleDraft) -> RunContext:
-        """The one call's run, as the asker: their plan is what the allowance
-        checks, and the call is recorded under DW1's worker."""
-        run_id = self.ids.new_uuid()
-        return RunContext(
-            run_id=run_id,
-            tenant_id=context.tenant_id,
-            workspace_id=context.workspace_id,
-            actor_id=context.principal_id,
+        """The one call's run, as the asker (`caller_run`)."""
+        return caller_run(
+            context,
+            run_id=self.ids.new_uuid(),
             worker_id=self.worker_id,
             worker_version=self.worker_version,
-            channel=WEB_CHANNEL,
-            plan_id=context.plan_id,
-            roles=context.roles,
-            scopes=context.scopes,
-            clearance=context.clearance,
-            record_visibility=context.record_visibility,
-            visible_owners=context.visible_owners,
-            autonomy_ceiling=context.max_autonomy_level,
-            trace_id=f"sales-draft-{run_id.hex[:12]}",
+            trace="sales-draft",
             subject_ref=f"{_RESOURCE}:{draft.draft_id}",
         )
 

@@ -9,6 +9,7 @@ import {
   Input,
   Radio,
   Space,
+  Tag,
   theme,
   Typography,
 } from "antd";
@@ -149,6 +150,75 @@ export function FindingsPanel({
 
 type Choice = "accepted" | "corrected_by_sales" | "ask_customer";
 
+type Explanation = SalesSchemas["FindingExplanationView"];
+
+/**
+ * "DW1 giải thích" (AI item 12): the model writes what the finding means and
+ * what to check, from the case's own facts; code refused any figure the case
+ * does not hold. Marked as the machine's words; nothing is decided by it.
+ */
+export function FindingExplanation({
+  caseId,
+  findingKey,
+}: {
+  caseId: string;
+  findingKey: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<Explanation | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const ask = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setView(await salesApi().explainFinding(caseId, findingKey));
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (view?.status === "explained")
+    return (
+      <Alert
+        type="info"
+        showIcon
+        role="status"
+        title={
+          <Space wrap>
+            <span>DW1 giải thích</span>
+            <Tag>Máy viết</Tag>
+          </Space>
+        }
+        description={
+          <>
+            <Typography.Paragraph className="mb-1!">
+              {view.explanation}
+            </Typography.Paragraph>
+            {view.check ? (
+              <Typography.Text>Nên kiểm: {view.check}</Typography.Text>
+            ) : null}
+          </>
+        }
+      />
+    );
+  return (
+    <Space orientation="vertical" size={4}>
+      <Button size="small" loading={busy} onClick={() => void ask()}>
+        DW1 giải thích
+      </Button>
+      {view ? (
+        <Typography.Text role="status">
+          {view.status === "unavailable"
+            ? "DW1 chưa giải thích được lúc này: máy chưa có mô hình hoặc mô hình không trả lời."
+            : "DW1 viết một con số không có trong hồ sơ nên lời giải thích bị bỏ; bấm lại để thử."}
+        </Typography.Text>
+      ) : null}
+      <ActionError error={error} />
+    </Space>
+  );
+}
+
 function FindingCard({
   order,
   finding,
@@ -270,6 +340,7 @@ function FindingCard({
             <FindingWords value={finding.actual} />
           </Typography.Text>
         </Typography.Text>
+        <FindingExplanation caseId={order.case_id} findingKey={finding.key} />
         {finding.code === "legacy_encoding" ? (
           <Typography.Text role="note">
             PO gõ bằng font tiếng Việt cũ: chữ đọc ra không phải chữ khách thấy,

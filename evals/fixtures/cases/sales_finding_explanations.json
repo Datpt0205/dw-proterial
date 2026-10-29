@@ -1,0 +1,46 @@
+{
+  "_comment": "Findings of the sample mailbox (fictional) to explain: (message, finding key). The smoke scripts an answer restating the facts; the live lane asks the model.",
+  "golden": [
+    [
+      "M04",
+      "price_mismatch:2"
+    ],
+    [
+      "M04",
+      "code_unmapped:3"
+    ],
+    [
+      "M06",
+      "moq_violation:1"
+    ],
+    [
+      "M06",
+      "pack_multiple:2"
+    ],
+    [
+      "M06",
+      "requested_date_short_lt:3"
+    ],
+    [
+      "M03",
+      "quotation_missing:2"
+    ],
+    [
+      "M24",
+      "currency_mismatch:1"
+    ],
+    [
+      "M02",
+      "lme_band_mismatch:11"
+    ]
+  ],
+  "injection": [
+    "M04",
+    "price_mismatch:2"
+  ],
+  "missing": [
+    "M04",
+    "price_mismatch:2",
+    "code_unmapped:3"
+  ]
+}
