@@ -33,6 +33,13 @@ head) a brief of the cases assigned to them, with nothing in it skipped.
 Counts and a link to `/sales`; never an amount, a price or a customer name
 (dw_sales ADR 0003; ui-quality §6: a notification is a side door).
 
+**Written by the model, where the step is on** (the AI list, item 10): a
+`BriefWriterPort` may open each person's brief with a few sentences of what
+to take first, from `brief_facts` (counts and the person's most pressing
+cases: reference, customer code, who it waits on, due date, next step; never
+an amount or a name). The counts follow either way, and a writer that
+declines or fails leaves the brief as it always was.
+
 **Paused DW1 reminds nobody.** The pause stops what DW1 does (decided
 2026-10-12, extended to rendering by `f4705f9`); a reminder owed meanwhile
 is sent when DW1 is resumed, if the case still waits.
@@ -50,7 +57,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from types import MappingProxyType
-from typing import Final, Literal, Protocol
+from typing import Any, Final, Literal, Protocol
 
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -192,6 +199,15 @@ def lane_context(scope: SalesScope) -> AccessContext:
     )
 
 
+class BriefWriterPort(Protocol):
+    """The opening of ``person``'s brief, written from ``facts``; None to send
+    the brief as it is (`dw_sales.application.brief_writing.BriefWriter`)."""
+
+    async def write(
+        self, scope: SalesScope, person: uuid.UUID, facts: Mapping[str, Any]
+    ) -> str | None: ...
+
+
 @dataclass(frozen=True)
 class FollowupLane:
     uow: SalesUnitOfWorkFactory
@@ -200,6 +216,8 @@ class FollowupLane:
     notifications: NotificationSenderPort
     clock: UtcClock
     ids: IdGenerator
+    # None where no model is wired: every brief is the counts alone.
+    writer: BriefWriterPort | None = None
 
     async def tick(self, scope: SalesScope) -> FollowupTick:
         policy = await self.policies.followups(scope)
@@ -332,14 +350,20 @@ class FollowupLane:
             if "pic" in notify
             else []
         )
-        briefs = [(person, brief_of(cases, slot, policy, None)) for person in heads] + [
-            (person, brief_of(cases, slot, policy, person)) for person in pics
-        ]
+        briefs = [(person, None) for person in heads] + [(person, person) for person in pics]
         told = 0
-        for person, brief in briefs:
+        for person, whose in briefs:
+            brief = brief_of(cases, slot, policy, whose)
             if brief.empty:
                 continue
-            title, body = brief_text(brief, slot, workspace=person in heads)
+            title, body = brief_text(brief, slot, workspace=whose is None)
+            opening = (
+                await self._opening(scope, person, brief_facts(brief, cases, slot, policy, whose))
+                if policy.morning_brief.model_opening
+                else None
+            )
+            if opening is not None:
+                body = f"DW1 viết: {opening}\n\n{body}"
             try:
                 await self.notifications.deliver(
                     lane_context(scope),
@@ -368,6 +392,19 @@ class FollowupLane:
         )
         # Recorded even with nobody told: a day with nothing in it is done.
         return source_key(key, scope) if told else None
+
+    async def _opening(
+        self, scope: SalesScope, person: uuid.UUID, facts: Mapping[str, Any]
+    ) -> str | None:
+        """The writer's sentences, or None: no writer, or it declined or
+        failed, which never holds the brief back."""
+        if self.writer is None:
+            return None
+        try:
+            return await self.writer.write(scope, person, facts)
+        except Exception:
+            logger.exception("sales_followups: the brief's opening was not written")
+            return None
 
 
 def _brief_key(slot: BriefSlot) -> FollowupKey:
@@ -534,6 +571,65 @@ def brief_of(
         },
         waiting=count([c for c, _ in open_]),
     )
+
+
+# The most pressing cases a written brief is told of, at most.
+BRIEF_CASES: Final = 8
+_KIND_WORDS: Final[Mapping[CaseKind, str]] = {
+    CaseKind.ORDER: "đơn hàng",
+    CaseKind.QUOTE: "báo giá",
+}
+
+
+def brief_facts(
+    brief: Brief,
+    cases: Sequence[WaitingCase],
+    slot: BriefSlot,
+    policy: SalesFollowups,
+    person: uuid.UUID | None,
+) -> dict[str, Any]:
+    """What a writer is told: the brief's counts and the most pressing of
+    ``person``'s cases (the workspace's for None), overdue first, then due
+    soon, then the longest waiting. References and customer codes, never an
+    amount or a name."""
+    horizon = slot.day.toordinal() + policy.morning_brief.due_within_days
+    mine = [
+        (c, b)
+        for c in cases
+        if (person is None or c.assigned_to == person) and (b := _bucket(c)) is not None
+    ]
+
+    def rank(row: tuple[WaitingCase, Bucket]) -> tuple[int, str, datetime]:
+        case = row[0]
+        due = case.due
+        tier = 2 if due is None else 0 if due < slot.day else 1 if due.toordinal() <= horizon else 2
+        return tier, (due.isoformat() if due else "9999"), case.status_since
+
+    shown = sorted(mine, key=rank)[:BRIEF_CASES]
+    return {
+        # Dates as a Vietnamese reader writes them, so the text copies them.
+        "day": _day(slot.day),
+        "for": "bộ phận Sales" if person is None else "bạn",
+        "new_cases_since": _local(slot.since, policy),
+        "new_orders": brief.new_orders,
+        "new_quotes": brief.new_quotes,
+        "overdue": {_KIND_WORDS[k]: n for k, n in brief.overdue.items()},
+        "due_within_days": policy.morning_brief.due_within_days,
+        "due_soon": {_KIND_WORDS[k]: n for k, n in brief.due_soon.items()},
+        "waiting_on": {_BUCKET_WORDS[b]: n for b, n in brief.waiting.items()},
+        "cases": [
+            {
+                "reference": _reference(case),
+                "kind": _KIND_WORDS[case.kind],
+                "customer_code": case.customer_code,
+                "waits_on": _BUCKET_WORDS[bucket],
+                "due": _day(case.due) if case.due else None,
+                "overdue": case.due is not None and case.due < slot.day,
+                "next_step": _NEXT_STEP.get((case.kind, case.status)),
+            }
+            for case, bucket in shown
+        ],
+    }
 
 
 def _buckets(counts: Mapping[Bucket, int]) -> str:

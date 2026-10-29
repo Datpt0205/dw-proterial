@@ -691,6 +691,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     ids=ids,
                     holders=SqlScopeHolders(sessions),
                     notifications=SqlNotificationRepository(sessions),
+                    writer=mount.brief_writer,
                 )
                 sales_followups_consumer = build_sales_followups_consumer(
                     followups, followup_scopes

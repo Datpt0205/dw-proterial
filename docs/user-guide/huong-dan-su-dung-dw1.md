@@ -155,6 +155,8 @@ Trang **Việc cần làm** là trang mở đầu mỗi ngày: liệt kê mọi 
 
 Cột **Cờ chưa quyết định** cho biết còn bao nhiêu cờ phải xem; cột **Hạn** hiện chữ đỏ khi đã quá hạn.
 
+Mỗi sáng ngày làm việc, chuông thông báo có **Tóm tắt sáng**: số hồ sơ mới, số sắp đến hạn và quá hạn, việc đang chờ ai. Khi máy chủ có mô hình và quy tắc nhắc việc để bật **DW1 viết đoạn mở đầu** (mặc định bật), DW1 viết thêm vài câu ở đầu (bắt đầu bằng "DW1 viết:") về việc nên làm trước hôm nay, nêu đúng số PO hoặc RFQ. Câu nào có con số, ngày hay mã không đúng với hồ sơ thì DW1 bỏ cả đoạn và gửi tóm tắt như thường; các con số đếm bên dưới luôn có.
+
 ## Hộp thư
 
 Trang **Hộp thư** liệt kê thư khách gửi vào hộp thư Sales, cùng hướng xử lý của DW1 cho từng thư.

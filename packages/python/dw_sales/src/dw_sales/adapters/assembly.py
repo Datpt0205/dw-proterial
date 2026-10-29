@@ -78,8 +78,9 @@ from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
 from dw_sales.application.access import SalesAuthorizationPort
 from dw_sales.application.activity import ActivityService
+from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
-from dw_sales.application.followups import FollowupLane
+from dw_sales.application.followups import BriefWriterPort, FollowupLane
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
@@ -159,6 +160,9 @@ class Dw1Mount:
     # What stores the mail dropped as `.eml` files (ticket 43): built only
     # for a process given the folder, over the stored mailbox.
     mail_drop: MailDrop | None = None
+    # What writes the opening of the 07:30 brief (AI item 10): built with
+    # the drain, which resolves each recipient, where a model is wired.
+    brief_writer: BriefWriter | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -418,6 +422,17 @@ def build_dw1(
         ),
         activity=activity,
         mail_drop=dropped,
+        brief_writer=(
+            None
+            if one_call_model is None
+            else BriefWriter(
+                model=interpretation_for(one_call_model, configs, worker.default_model_profile),
+                access=requester_access,
+                ids=ids,
+                worker_id=worker.worker_id,
+                worker_version=worker.worker_version,
+            )
+        ),
     )
 
 
@@ -489,6 +504,8 @@ def build_followup_lane(
     ids: IdGenerator,
     holders: ScopeHoldersPort,
     notifications: NotificationSenderPort,
+    # The brief's writer (AI item 10), from DW1's mount; None: counts only.
+    writer: BriefWriterPort | None = None,
 ) -> tuple[FollowupLane, SqlFollowupScopes]:
     """DW1's follow-ups and morning brief (ticket 42), for the worker's
     `sales_followups` lane, and the workspaces it visits: every one with a
@@ -498,7 +515,7 @@ def build_followup_lane(
     uow = SqlSalesUnitOfWorkFactory(session_factory, audit=audit, approvals=approvals)
     policies = load_sales_policies(configs / "policies", configs / "copy")
     book = rule_book(policies, SqlRuleVersionLookup(session_factory))
-    lane = FollowupLane(uow, book, holders, notifications, clock, ids)
+    lane = FollowupLane(uow, book, holders, notifications, clock, ids, writer)
     return lane, SqlFollowupScopes(session_factory)
 
 

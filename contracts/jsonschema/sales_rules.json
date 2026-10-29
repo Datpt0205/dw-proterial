@@ -451,6 +451,12 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "model_opening": {
+            "default": true,
+            "description": "DW1 viết đoạn mở đầu: vài câu về việc nên làm trước hôm nay, mọi con số được kiểm với hồ sơ; số đếm luôn có bên dưới.",
+            "title": "Model Opening",
+            "type": "boolean"
+          },
           "notify": {
             "description": "Ai nhận: 'pic' là mỗi Sales phụ trách (tóm tắt hồ sơ của mình), 'head' là Trưởng bộ phận (tóm tắt cả bộ phận).",
             "items": {

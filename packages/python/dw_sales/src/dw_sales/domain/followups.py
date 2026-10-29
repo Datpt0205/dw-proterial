@@ -304,6 +304,16 @@ class MorningBrief(BaseModel):
         le=30,
         description="Hồ sơ có hạn trong số ngày tới này được tính là 'sắp đến hạn'.",
     )
+    # The AI list, item 10: on where a model is wired, the brief opens with a
+    # few sentences the model wrote; the counts follow either way. Defaults
+    # on, so a version written before the field reads as on.
+    model_opening: bool = Field(
+        default=True,
+        description=(
+            "DW1 viết đoạn mở đầu: vài câu về việc nên làm trước hôm nay, mọi con số "
+            "được kiểm với hồ sơ; số đếm luôn có bên dưới."
+        ),
+    )
 
     @field_validator("notify")
     @classmethod

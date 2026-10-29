@@ -14,6 +14,7 @@ from dw_sales.evals.handoffs import GRADERS as HANDOFF_GRADERS
 from dw_sales.evals.intents import GRADERS as INTENT_GRADERS
 from dw_sales.evals.layouts import GRADERS as LAYOUT_GRADERS
 from dw_sales.evals.legacy import GRADERS as LEGACY_GRADERS
+from dw_sales.evals.morning_brief import GRADERS as BRIEF_GRADERS
 from dw_sales.evals.recorded import failing_without_live_answers
 from dw_sales.evals.replies import GRADERS as REPLY_GRADERS
 from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
@@ -41,6 +42,7 @@ GRADERS = {
         **RULE_WORDS_GRADERS,
         **EXPLANATION_GRADERS,
         **SENDER_GRADERS,
+        **BRIEF_GRADERS,
         **THREAD_GRADERS,
     }.items()
 }

@@ -1,0 +1,11 @@
+{
+  "description": "The sample mailbox's first orders and quotes (M01, M02, M04, M06, M09, M10), processed by DW1; the brief is the follow-ups lane's on the next working morning, for the head and each PIC, with the model step on and measured.",
+  "messages": [
+    "M01",
+    "M02",
+    "M04",
+    "M06",
+    "M09",
+    "M10"
+  ]
+}
