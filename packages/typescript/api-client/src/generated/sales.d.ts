@@ -1865,6 +1865,14 @@ export interface components {
              */
             as_of: string;
             catalog_list: components["schemas"]["CatalogList"];
+            /**
+             * Column Map
+             * @default []
+             */
+            column_map: [
+                string,
+                string
+            ][];
             /** Comment */
             comment: string | null;
             /** Decided At */

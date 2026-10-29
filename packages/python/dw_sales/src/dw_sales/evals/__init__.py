@@ -6,6 +6,7 @@ and `descriptions`, `intents`, `requests`, `replies`, `handoffs` and
 ticket 15's header path, and `rule_drafts` for a layout drafted from a
 company's template, `rule_words` for one changed in words)."""
 
+from dw_sales.evals.catalog_columns import GRADERS as COLUMN_GRADERS
 from dw_sales.evals.corrections import GRADERS as CORRECTION_GRADERS
 from dw_sales.evals.descriptions import GRADERS as DESCRIPTION_GRADERS
 from dw_sales.evals.design_text_replies import GRADERS as DESIGN_TEXT_GRADERS
@@ -45,6 +46,7 @@ GRADERS = {
         **RULE_WORDS_GRADERS,
         **EXPLANATION_GRADERS,
         **DESIGN_TEXT_GRADERS,
+        **COLUMN_GRADERS,
         **SENDER_GRADERS,
         **SCREENING_GRADERS,
         **PC_DATE_GRADERS,

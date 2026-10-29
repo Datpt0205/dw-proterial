@@ -89,6 +89,7 @@ from dw_sales.application.catalog_imports import (
     CatalogParsing,
     CatalogSettlement,
 )
+from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import (
@@ -1419,7 +1420,18 @@ def open_world(
         RuleSettlement(store, book, clock, ids, readiness),
         catalog_store,
         CatalogSettlement(catalog_store, clock, ids),
-        CatalogParsing(catalog_store, readers.tables, scanner or NoMalware(), catalog, clock, ids),
+        CatalogParsing(
+            catalog_store,
+            readers.tables,
+            scanner or NoMalware(),
+            catalog,
+            clock,
+            ids,
+            columns=None if model is None else ColumnMatcher(model),
+            access=Directory(tuple(callers)),
+            worker_id=worker.worker_id,
+            worker_version=worker.worker_version,
+        ),
         draft_store,
         measurements,
     )
