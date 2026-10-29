@@ -20,6 +20,7 @@ from dw_sales.evals.replies import GRADERS as REPLY_GRADERS
 from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
 from dw_sales.evals.rule_drafts import GRADERS as RULE_DRAFT_GRADERS
 from dw_sales.evals.rule_words import GRADERS as RULE_WORDS_GRADERS
+from dw_sales.evals.screening_followups import GRADERS as SCREENING_GRADERS
 from dw_sales.evals.sender_customers import GRADERS as SENDER_GRADERS
 from dw_sales.evals.thread_summaries import GRADERS as THREAD_GRADERS
 
@@ -42,6 +43,7 @@ GRADERS = {
         **RULE_WORDS_GRADERS,
         **EXPLANATION_GRADERS,
         **SENDER_GRADERS,
+        **SCREENING_GRADERS,
         **BRIEF_GRADERS,
         **THREAD_GRADERS,
     }.items()

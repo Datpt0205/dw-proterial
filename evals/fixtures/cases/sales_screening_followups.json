@@ -1,0 +1,17 @@
+{
+  "description": "The rows of the fictional sample's screening on its clock day (WIV-03-023 step 12): each customer's item quoted with no order of it in twelve months.",
+  "rows": [
+    [
+      "CVG",
+      "CB-2008"
+    ],
+    [
+      "NRV",
+      "CB-2006"
+    ],
+    [
+      "QRL",
+      "CB-2013"
+    ]
+  ]
+}

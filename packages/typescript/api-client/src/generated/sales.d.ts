@@ -881,6 +881,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/quotes/screening/{customer_code}/{prv_code}/followup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Screening Followup */
+        get: operations["screening_followup_api_v1_sales_quotes_screening__customer_code___prv_code__followup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/quotes/{case_id}": {
         parameters: {
             query?: never;
@@ -2415,6 +2432,36 @@ export interface components {
             /** Field */
             field: string;
             flag: components["schemas"]["RegionFlag"];
+        };
+        /**
+         * FollowupDraftView
+         * @description A draft, or why there is none; always marked as the model's.
+         */
+        FollowupDraftView: {
+            /** Body */
+            body?: string | null;
+            /** Customer Code */
+            customer_code: string;
+            /** Language */
+            language?: string | null;
+            /** Model Profile */
+            model_profile?: string | null;
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /** Prv Code */
+            prv_code: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafted" | "unavailable" | "refused";
+            /** Subject */
+            subject?: string | null;
+            /**
+             * To
+             * @default []
+             */
+            to: string[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -6892,6 +6939,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScreeningRow"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    screening_followup_api_v1_sales_quotes_screening__customer_code___prv_code__followup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customer_code: string;
+                prv_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowupDraftView"];
                 };
             };
             /** @description Validation Error */

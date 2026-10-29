@@ -59,6 +59,7 @@ from dw_sales.application.routed_mail import RoutedMailService
 from dw_sales.application.rule_drafts import RuleDraftService, RuleDraftUnitOfWorkFactory
 from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
+from dw_sales.application.screening_followups import ScreeningFollowups
 from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
@@ -103,6 +104,8 @@ class SalesServices:
     thread_summaries: ThreadSummaries
     # "Gửi cho khách" from the presser's own mailbox (the outbox folder).
     outbound: OutboundMailService
+    # A mail asking about an unordered quotation, drafted (AI item 11, Q12).
+    screening_followups: ScreeningFollowups
     gate: Gate
 
 
@@ -232,6 +235,9 @@ def assemble(
         ),
         thread_summaries=ThreadSummaries(
             uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
+        ),
+        screening_followups=ScreeningFollowups(
+            gate, catalog, quotation, one_call, clock, ids, worker_id, worker_version
         ),
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled

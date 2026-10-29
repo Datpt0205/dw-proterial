@@ -11,6 +11,7 @@ import { useResource } from "../../_lib/use-resource";
 import { SCOPE } from "../../_components/sales-frame";
 import { salesCrumbs } from "../../_components/crumbs";
 import { ScopeGate } from "../../_components/scope-gate";
+import { FollowupDraft } from "./followup-draft";
 
 /**
  * Rà soát báo giá năm (WIV-03-023 step 12, on mock data): every item quoted to
@@ -46,7 +47,7 @@ function Screening() {
       <Alert
         type="info"
         showIcon
-        title="Trang này chỉ liệt kê: DW1 không xóa hay đổi báo giá nào. Sales quyết định giữ hay bỏ từng báo giá ngoài DW1."
+        title="Trang này chỉ liệt kê: DW1 không xóa hay đổi báo giá nào. Sales quyết định giữ hay bỏ từng báo giá ngoài DW1. “DW1 soạn thư hỏi khách” soạn sẵn thư hỏi (không có giá) để mở trong Outlook của bạn, đọc lại rồi gửi."
       />
       {report.error ? (
         <LoadError error={report.error} onRetry={report.reload} />
@@ -82,6 +83,16 @@ function Screening() {
               title: "Báo giá liên quan",
               dataIndex: "quote_nos",
               render: (nos: string[]) => nos.join(", "),
+            },
+            {
+              title: "Hỏi khách",
+              key: "ask",
+              render: (_, r) => (
+                <FollowupDraft
+                  customerCode={r.customer_code}
+                  prvCode={r.prv_code}
+                />
+              ),
             },
           ]}
         />

@@ -78,6 +78,7 @@ from dw_sales.application.rules import (
     RulesInForceView,
     RuleVersionView,
 )
+from dw_sales.application.screening_followups import FollowupDraftView
 from dw_sales.application.sender_customers import SenderCustomerView
 from dw_sales.application.services import SalesServices
 from dw_sales.application.source import MessageTextView, SourceView
@@ -923,6 +924,22 @@ def build_router(
         context: Ctx, svc: Svc, as_of: Annotated[date | None, Query()] = None
     ) -> list[ScreeningRow]:
         return await svc.quotes.screening(context, as_of)
+
+    # Q12's question to the customer, drafted by the model on request (AI
+    # item 11): no price, the customer's contacts as recipients, nothing
+    # stored; the page opens it in the person's own mail program.
+    @router.get(
+        "/quotes/screening/{customer_code}/{prv_code}/followup",
+        response_model=FollowupDraftView,
+        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+    )
+    async def screening_followup(
+        customer_code: Annotated[str, PathParam(pattern=r"^[A-Z][A-Z0-9]{1,15}$")],
+        prv_code: Annotated[str, PathParam(pattern=r"^[A-Z0-9][A-Z0-9-]{1,31}$")],
+        context: Ctx,
+        svc: Svc,
+    ) -> FollowupDraftView:
+        return await svc.screening_followups.draft(context, customer_code, prv_code)
 
     @router.get("/quotes/{case_id}", response_model=QuoteCaseView)
     async def quote(
