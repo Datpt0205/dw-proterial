@@ -549,6 +549,7 @@ def build_sales(
         # The mock, or the mail the worker stores from the drop folder
         # (ticket 43); the API reads it, never the folder.
         mailbox=settings.sales_mailbox,
+        outbox_enabled=settings.sales_outbox_enabled,
         source_cache=source_cache,
     )
     return SalesMount(services=mount.services, activity=mount.activity)

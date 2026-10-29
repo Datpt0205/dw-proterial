@@ -26,6 +26,7 @@ from dw_sales.adapters.persistence.activity import SqlStepActivityLog
 from dw_sales.adapters.persistence.followups import SqlFollowupStore
 from dw_sales.adapters.persistence.layouts import SqlLayoutStore
 from dw_sales.adapters.persistence.orders import SqlOrderCaseRepository
+from dw_sales.adapters.persistence.outbound import SqlOutboundMails
 from dw_sales.adapters.persistence.overview import SqlOverviewReader
 from dw_sales.adapters.persistence.processing import SqlProcessingJobs
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseRepository
@@ -104,6 +105,7 @@ class SqlSalesUnitOfWork:
         self.approvals = self._approvals(session)
         self.followups = SqlFollowupStore(session, scope)
         self.step_activity = SqlStepActivityLog(session, scope)
+        self.outbound = SqlOutboundMails(session, scope)
         self.audit = self._audit(session)
         return self
 

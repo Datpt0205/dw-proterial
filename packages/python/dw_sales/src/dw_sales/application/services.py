@@ -40,6 +40,7 @@ from dw_sales.application.model_reading import InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
+from dw_sales.application.outbound_mail import OutboundMailService
 from dw_sales.application.overview_service import OverviewService
 from dw_sales.application.pipeline import PipelineService
 from dw_sales.application.ports import (
@@ -100,6 +101,8 @@ class SalesServices:
     sender_customers: SenderCustomers
     # A case's mail thread summarised, each point citing its mail (AI item 8).
     thread_summaries: ThreadSummaries
+    # "Gửi cho khách" from the presser's own mailbox (the outbox folder).
+    outbound: OutboundMailService
     gate: Gate
 
 
@@ -154,6 +157,8 @@ def assemble(
     one_call: InterpretationPort | None,
     worker_id: str,
     worker_version: str,
+    # Whether the deployment names an outbox share ("Gửi cho khách").
+    outbox_enabled: bool = False,
 ) -> SalesAssembly:
     gate = Gate(authorization)
     queue = ProcessingService(uow, gate, clock, ids, inbox)
@@ -227,6 +232,9 @@ def assemble(
         ),
         thread_summaries=ThreadSummaries(
             uow, gate, inbox, one_call, clock, ids, worker_id, worker_version
+        ),
+        outbound=OutboundMailService(
+            uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled
         ),
         gate=gate,
     )

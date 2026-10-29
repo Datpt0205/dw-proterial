@@ -517,6 +517,71 @@ class ArtifactLogPort(Protocol):
         ...
 
 
+# Where a mail Sales asked DW1 to send stands (`sales.outbound_mails`):
+# queued by the API, written to the sender's outbox folder by the worker,
+# then sent or failed by the receipt their own flow writes back; stalled when
+# no receipt came in time. Only `written` waits on a receipt.
+OutboundStatus = Literal["queued", "written", "sent", "failed", "stalled"]
+# Why it did not go: a fixed set, a CHECK holds it too.
+OutboundError = Literal["not_connected", "write_failed", "flow_failed", "no_receipt", "gone"]
+OUTBOUND_ERRORS: Final[frozenset[str]] = frozenset(
+    {"not_connected", "write_failed", "flow_failed", "no_receipt", "gone"}
+)
+
+
+@dataclass(frozen=True, slots=True)
+class OutboundMail:
+    """One mail Sales asked DW1 to send from their own mailbox: the case's
+    send draft (an artifact), the person who pressed and the mailbox it goes
+    from, never anything a model or the browser chose."""
+
+    mail_id: uuid.UUID
+    case_kind: CaseKind
+    case_id: uuid.UUID
+    artifact_id: uuid.UUID
+    requested_by: uuid.UUID
+    mailbox: str
+    status: OutboundStatus
+    queued_at: datetime
+    settled_at: datetime | None = None
+    error: OutboundError | None = None
+
+    @property
+    def active(self) -> bool:
+        """Not failed: pressing again sends nothing more."""
+        return self.status in ("queued", "written", "sent")
+
+
+class OutboundMailStorePort(Protocol):
+    """The mails Sales asked DW1 to send, in the unit of work's workspace."""
+
+    async def add(self, mail: OutboundMail) -> OutboundMail:
+        """Record ``mail``, unless its artifact has an active one already:
+        then that one is returned and nothing is written."""
+        ...
+
+    async def get(self, mail_id: uuid.UUID) -> OutboundMail | None: ...
+
+    async def for_case(self, case_kind: CaseKind, case_id: uuid.UUID) -> Sequence[OutboundMail]:
+        """The case's mails, newest first."""
+        ...
+
+    async def pending(self) -> Sequence[OutboundMail]:
+        """Queued and written mails, oldest first: what the lane looks after."""
+        ...
+
+    async def settle(
+        self,
+        mail_id: uuid.UUID,
+        status: OutboundStatus,
+        at: datetime,
+        error: OutboundError | None = None,
+    ) -> bool:
+        """Move a pending mail on; False when it is not pending (settled
+        already, by another tick or worker)."""
+        ...
+
+
 class WorkerSwitchPort(Protocol):
     async def state(self) -> WorkerState: ...
 
@@ -568,6 +633,10 @@ class SalesUnitOfWork(Protocol):
     # message's disposition and its case.
     @property
     def step_activity(self) -> StepActivityLogPort: ...
+
+    # The mails Sales asked DW1 to send (the outbox folder).
+    @property
+    def outbound(self) -> OutboundMailStorePort: ...
 
     @property
     def audit(self) -> AuditRepositoryPort: ...

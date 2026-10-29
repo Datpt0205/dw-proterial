@@ -8046,6 +8046,104 @@
         "title": "OrderedLineView",
         "type": "object"
       },
+      "OutboundMailView": {
+        "description": "Where one mail stands, for the case page.",
+        "properties": {
+          "artifact_id": {
+            "format": "uuid",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_connected",
+                  "write_failed",
+                  "flow_failed",
+                  "no_receipt",
+                  "gone"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "mail_id": {
+            "format": "uuid",
+            "title": "Mail Id",
+            "type": "string"
+          },
+          "mailbox": {
+            "title": "Mailbox",
+            "type": "string"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "title": "Queued At",
+            "type": "string"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "written",
+              "sent",
+              "failed",
+              "stalled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mail_id",
+          "artifact_id",
+          "mailbox",
+          "status",
+          "queued_at",
+          "settled_at",
+          "error"
+        ],
+        "title": "OutboundMailView",
+        "type": "object"
+      },
+      "OutboundMailsView": {
+        "description": "Whether DW1 sends mail here at all, and the case's mails.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "mails": {
+            "items": {
+              "$ref": "#/components/schemas/OutboundMailView"
+            },
+            "title": "Mails",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "mails"
+        ],
+        "title": "OutboundMailsView",
+        "type": "object"
+      },
       "OverviewView": {
         "properties": {
           "a3_shadow": {
@@ -18871,6 +18969,87 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/artifacts/{artifact_id}/send": {
+      "post": {
+        "operationId": "send_order_mail_api_v1_sales_orders__case_id__artifacts__artifact_id__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboundMailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Order Mail",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/orders/{case_id}/assignee": {
       "put": {
         "operationId": "reassign_order_api_v1_sales_orders__case_id__assignee_put",
@@ -19696,6 +19875,49 @@
           }
         },
         "summary": "Mapping",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{case_id}/outbound": {
+      "get": {
+        "operationId": "order_outbound_api_v1_sales_orders__case_id__outbound_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboundMailsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Outbound",
         "tags": [
           "sales"
         ]
@@ -20589,6 +20811,87 @@
         ]
       }
     },
+    "/api/v1/sales/quotes/{case_id}/artifacts/{artifact_id}/send": {
+      "post": {
+        "operationId": "send_quote_mail_api_v1_sales_quotes__case_id__artifacts__artifact_id__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboundMailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Quote Mail",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/quotes/{case_id}/assignee": {
       "put": {
         "operationId": "reassign_quote_api_v1_sales_quotes__case_id__assignee_put",
@@ -21086,6 +21389,49 @@
           }
         },
         "summary": "Quote Message Text",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/outbound": {
+      "get": {
+        "operationId": "quote_outbound_api_v1_sales_quotes__case_id__outbound_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboundMailsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Outbound",
         "tags": [
           "sales"
         ]

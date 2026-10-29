@@ -221,6 +221,7 @@ Sau khi đơn đã được kiểm chéo:
 1. Bấm **Đã gửi xác nhận**.
 2. Nhập ngày xác nhận cho từng dòng. Cột "DW1 gợi ý" chỉ là đề xuất; người dùng sửa theo ngày thật.
 3. Bấm **Ghi đã gửi xác nhận**. Thư nháp xác nhận ghi tên người chuẩn bị và người kiểm chéo.
+4. Soạn **Thư xác nhận PO (nháp)** rồi bấm **Gửi cho khách từ hộp thư của bạn** như với báo giá, hoặc tải .eml và tự gửi.
 
 ## Kiểm chéo đơn của người khác
 
@@ -257,8 +258,9 @@ Mỗi yêu cầu báo giá có một trang hồ sơ: yêu cầu của khách, YC
 
 Sau khi báo giá được duyệt:
 
-1. Trong khung **Tệp và thư nháp DW1 soạn**, tải tài liệu báo giá và thư gửi khách.
-2. Gửi cho khách từ hộp thư của mình, bấm **Đã gửi KH**.
+1. Trong khung **Tệp và thư nháp DW1 soạn**, soạn thư gửi khách (nháp) và đọc lại.
+2. Bấm **Gửi cho khách từ hộp thư của bạn**, rồi xác nhận. Thư đi từ hộp thư Outlook của chính người bấm (nằm trong Thư đã gửi của họ), tới người nhận ghi trong thư nháp; DW1 chỉ cho gửi tới người liên hệ của khách trong Dữ liệu chủ. Sau vài phút khung ghi "Đã gửi … lúc …" và hồ sơ tự chuyển **Đã gửi KH**. Nếu khung báo chưa gửi được (hộp thư chưa được nối, luồng gửi báo lỗi, hoặc quá 30 phút chưa có xác nhận), người bấm cũng nhận thông báo; tải tệp .eml, gửi từ Outlook rồi bấm **Đã gửi KH**.
+   - Nút này chỉ dùng được khi công ty đã nối hộp thư gửi của từng người (luồng Power Automate của chính họ); trước đó nút bị mờ và ghi rõ lý do, cách làm vẫn như cũ: tải .eml, tự gửi, bấm **Đã gửi KH**.
 3. Bấm **Xác nhận master list** khi đã ghi vào master list.
 
 ## Mẫu PO mới

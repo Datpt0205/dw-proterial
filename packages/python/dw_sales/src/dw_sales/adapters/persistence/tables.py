@@ -532,6 +532,26 @@ recorded_convert_entries = sa.Table(
     sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
+# "Gửi cho khách" (2026-10-29): the mails Sales asked DW1 to send from their
+# own mailbox (`c42ed45c73a2`). Status moves; rows stay.
+outbound_mails = sa.Table(
+    "outbound_mails",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("case_kind", sa.Text, nullable=False),
+    sa.Column("case_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("artifact_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("requested_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("mailbox", sa.Text, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("queued_at", _TS, nullable=False),
+    sa.Column("settled_at", _TS),
+    sa.Column("error", sa.Text),
+    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
+    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
 # The AI list, item 5: the senders Sales confirmed as a customer's
 # (`7f94b09d1905`). Appended, never changed; addresses lowercase.
 recorded_customer_senders = sa.Table(

@@ -15,6 +15,7 @@ import { usePeople } from "../_lib/people";
 import { useAction } from "../_lib/use-action";
 import { useResource, type Resource } from "../_lib/use-resource";
 import { GuardedButton } from "./guarded-button";
+import { OutboundSend, SENDABLE } from "./outbound-send";
 import { PAUSED_REASON, useSalesFrame } from "./sales-frame";
 
 /** Save a file the browser holds, under the name the server listed. */
@@ -101,6 +102,15 @@ export function ArtifactsPanel({
     artifacts.filter((a) => a.case_version === caseVersion).map((a) => a.kind),
   );
   const toRender = (list.data?.available ?? []).filter((k) => !current.has(k));
+  // "Gửi cho khách" for the lane's send draft, once it may be drafted.
+  const sendKind = SENDABLE[kind];
+  const showSend =
+    artifacts.some((a) => a.kind === sendKind) ||
+    (list.data?.available ?? []).includes(sendKind);
+  const sendDraft = artifacts.find(
+    (a) =>
+      a.kind === sendKind && a.case_version === caseVersion && a.downloadable,
+  );
 
   const render = async (artifactKind: string) => {
     const body = { case_version: caseVersion, kind: artifactKind };
@@ -240,6 +250,9 @@ export function ArtifactsPanel({
               },
             ]}
           />
+          {showSend ? (
+            <OutboundSend kind={kind} caseId={caseId} draft={sendDraft} />
+          ) : null}
           <ActionError error={error} />
         </div>
       )}

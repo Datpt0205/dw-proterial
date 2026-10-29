@@ -50,6 +50,7 @@ from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
 from dw_sales.adapters.order_rules import load_tenant_order_rules
+from dw_sales.adapters.outbox_folder import FolderOutbox
 from dw_sales.adapters.persistence.activity import SqlStepActivityReader
 from dw_sales.adapters.persistence.catalog import (
     OutboxFactory,
@@ -61,6 +62,7 @@ from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.mailbox import SqlMailbox
 from dw_sales.adapters.persistence.measurements import SqlModelMeasurements
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
+from dw_sales.adapters.persistence.outbound import SqlOutboundScopes
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.quotes import SqlQuoteCaseLookup
 from dw_sales.adapters.persistence.recorded_converts import SqlRecordedConverts
@@ -92,6 +94,7 @@ from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
+from dw_sales.application.outbound_mail import OutboundLane
 from dw_sales.application.ports import (
     ArtifactBytesPort,
     MemberDirectoryPort,
@@ -163,6 +166,9 @@ class Dw1Mount:
     # What writes the opening of the 07:30 brief (AI item 10): built with
     # the drain, which resolves each recipient, where a model is wired.
     brief_writer: BriefWriter | None = None
+    # "Gửi cho khách": the lane writing jobs to the outbox share and reading
+    # its receipts; built with the drain, given the share.
+    outbound: OutboundLane | None = None
 
 
 # Which mailbox DW1 reads: the fictional mock, or the mail stored from the
@@ -198,6 +204,10 @@ def build_dw1(
     mailbox: Mailbox = "mock",
     mail_drop: Path | None = None,
     source_cache: SourceCachePort | None = None,
+    # "Gửi cho khách": on in the API where the deployment says so; the share
+    # itself, its outbox folders, only in the worker, which alone writes them.
+    outbox_enabled: bool = False,
+    outbox_dir: Path | None = None,
 ) -> Dw1Mount:
     """DW1's services over ``scope``'s mock data, its graph and worker
     (``configs/workers/sales.yaml``) registered on ``runtime``, every `sales.`
@@ -364,6 +374,7 @@ def build_dw1(
         ),
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,
+        outbox_enabled=outbox_enabled or outbox_dir is not None,
     )
     register(
         graphs=runtime.graphs,
@@ -422,6 +433,21 @@ def build_dw1(
         ),
         activity=activity,
         mail_drop=dropped,
+        outbound=(
+            None
+            if outbox_dir is None
+            else OutboundLane(
+                uow=uow,
+                scopes=SqlOutboundScopes(session_factory),
+                outbox=FolderOutbox(outbox_dir),
+                artifact_bytes=artifact_bytes,
+                quotes=assembly.services.quote_commands,
+                access=requester_access,
+                notifications=notifications,
+                clock=clock,
+                ids=ids,
+            )
+        ),
         brief_writer=(
             None
             if one_call_model is None

@@ -147,6 +147,11 @@ class ApiSettings(BaseSettings):
     sales_mailbox: Literal["mock", "stored"] = Field(
         default="mock", validation_alias=AliasChoices("DW_SALES_MAILBOX")
     )
+    # "Gửi cho khách" (2026-10-29): offered where the worker has the outbox
+    # share (`DW_SALES_OUTBOX_DIR` there); the API never touches the share.
+    sales_outbox_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("DW_SALES_OUTBOX_ENABLED")
+    )
 
     # --- Sales: the malware scanner (ticket 25) ---
     # `clamd`: every attachment is scanned by the `clamav` compose service

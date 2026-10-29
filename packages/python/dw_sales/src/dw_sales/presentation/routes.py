@@ -63,6 +63,7 @@ from dw_sales.application.catalog_imports import (
 )
 from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
+from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.process_settings import ProcessSettingsView
@@ -453,6 +454,64 @@ def build_router(
     @router.get("/quotes/{case_id}/history", response_model=list[CaseHistoryEntry])
     async def quote_history(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[CaseHistoryEntry]:
         return await svc.pipeline.history(context, CaseKind.QUOTE, case_id)
+
+    # "Gửi cho khách" (2026-10-29): the case's send draft sent from the
+    # caller's own mailbox through their outbox folder and flow; 202, the
+    # worker writes it and reads the receipt. The route asks the coarse scope;
+    # the service asks the lane's prepare scope and checks the draft.
+    @router.get(
+        "/orders/{case_id}/outbound",
+        response_model=OutboundMailsView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def order_outbound(case_id: uuid.UUID, context: Ctx, svc: Svc) -> OutboundMailsView:
+        return await svc.outbound.mails(context, CaseKind.ORDER, case_id)
+
+    @router.get(
+        "/quotes/{case_id}/outbound",
+        response_model=OutboundMailsView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def quote_outbound(case_id: uuid.UUID, context: Ctx, svc: Svc) -> OutboundMailsView:
+        return await svc.outbound.mails(context, CaseKind.QUOTE, case_id)
+
+    @router.post(
+        "/orders/{case_id}/artifacts/{artifact_id}/send",
+        response_model=OutboundMailView,
+        status_code=202,
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
+    )
+    async def send_order_mail(
+        case_id: uuid.UUID,
+        artifact_id: uuid.UUID,
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> OutboundMailView:
+        mail = await svc.outbound.send(
+            context, CaseKind.ORDER, case_id, artifact_id, case_version=body.case_version
+        )
+        return await idem.record(mail, status_code=202)
+
+    @router.post(
+        "/quotes/{case_id}/artifacts/{artifact_id}/send",
+        response_model=OutboundMailView,
+        status_code=202,
+        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+    )
+    async def send_quote_mail(
+        case_id: uuid.UUID,
+        artifact_id: uuid.UUID,
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> OutboundMailView:
+        mail = await svc.outbound.send(
+            context, CaseKind.QUOTE, case_id, artifact_id, case_version=body.case_version
+        )
+        return await idem.record(mail, status_code=202)
 
     # A case's mail thread summarised by the model, on request (AI item 8):
     # each point cites its mails, and nothing is stored.
