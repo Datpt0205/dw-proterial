@@ -3247,7 +3247,13 @@
               "sheet_name_invalid",
               "model_unavailable",
               "model_not_configured",
-              "model_quota"
+              "model_quota",
+              "nothing_understood",
+              "path_unknown",
+              "type_changed",
+              "placeholder_changed",
+              "digit_invented",
+              "document_invalid"
             ],
             "title": "Code",
             "type": "string"
@@ -10808,6 +10814,17 @@
             "title": "File Sha256",
             "type": "string"
           },
+          "focus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus"
+          },
           "machine_read": {
             "items": {
               "type": "string"
@@ -10843,6 +10860,17 @@
               }
             ],
             "title": "Prompt Ref"
+          },
+          "request": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request"
           },
           "requested_at": {
             "format": "date-time",
@@ -10894,7 +10922,9 @@
           "problems",
           "error",
           "prompt_ref",
-          "model_profile"
+          "model_profile",
+          "request",
+          "focus"
         ],
         "title": "RuleDraftView",
         "type": "object"
@@ -11071,6 +11101,36 @@
           "approval_id"
         ],
         "title": "RuleVersionView",
+        "type": "object"
+      },
+      "RuleWordsBody": {
+        "additionalProperties": false,
+        "description": "What a person wants changed in a rule, in their words (dw_sales ADR\n0006), and the part of the document it is about, if not the whole.",
+        "properties": {
+          "focus": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus"
+          },
+          "request": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Request",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "RuleWordsBody",
         "type": "object"
       },
       "RulesInForceView": {
@@ -21232,6 +21292,75 @@
           }
         },
         "summary": "Request Rule Draft",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/rules/{key}/drafts/words": {
+      "post": {
+        "operationId": "request_rule_words_api_v1_sales_rules__key__drafts_words_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RuleKey"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleWordsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Rule Words",
         "tags": [
           "sales"
         ]

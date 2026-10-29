@@ -62,7 +62,7 @@ from dw_sales.application.rule_drafts import (
     RuleDraftSweep,
     RuleDraftView,
 )
-from dw_sales.application.rules import Resolved, RuleKey
+from dw_sales.application.rules import Policy, Resolved, RuleKey
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, Caller, Directory
@@ -164,12 +164,13 @@ def hidden_texts(spec: Mapping[str, Any]) -> list[str]:
 
 @dataclass(frozen=True)
 class _PlatformRules:
-    """`RulesInForcePort` answering the platform's layout for every tenant."""
+    """`RulesInForcePort` answering the platform's version of each key for
+    every tenant: the layout for a template, any key for a change in words."""
 
-    layout: BravoUploadLayout
+    policies: Mapping[RuleKey, Policy]
 
     async def current(self, scope: SalesScope, key: RuleKey) -> Resolved:
-        return Resolved(self.layout, "platform")
+        return Resolved(self.policies[key], "platform")
 
 
 def _policies(repo_root: Path) -> SalesPolicies:
@@ -209,7 +210,7 @@ class Bench:
             uow=self.store,
             sheets=ClientSourceView(InProcessReaderTransport(), _caps(self.repo_root)),
             scanner=NoMalware(),
-            rules=_PlatformRules(platform_layout(self.repo_root)),
+            rules=_PlatformRules(_policies(self.repo_root).current()),
             access=Directory(tuple(self.callers)),
             model=self.model,
             clock=FixedClock(_NOW),

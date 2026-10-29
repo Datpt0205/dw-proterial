@@ -1342,6 +1342,8 @@ describe("/sales/rules after the editor moved out", () => {
           <RulesPage />
         </UiProvider>,
       );
+      // KPI sits under "Nâng cao" (ADR 0006).
+      fireEvent.click(await screen.findByText(/^Nâng cao \(/));
       fireEvent.click(
         await screen.findByRole("button", {
           name: "Đề xuất phiên bản mới: Chỉ tiêu KPI",

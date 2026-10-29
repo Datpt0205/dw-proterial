@@ -34,8 +34,9 @@ import { ActionError, detailList } from "../_lib/errors";
 import { usePeople } from "../_lib/people";
 import {
   DRAFT_ACCEPT,
-  DRAFT_STATUS,
   draftChoices,
+  draftSource,
+  draftStatus,
   draftOption,
   draftProblemText,
   machineRead,
@@ -52,6 +53,7 @@ import {
   type RuleKey,
   type StartOption,
 } from "../_lib/rules";
+import { ARTIFACT_KIND } from "../_lib/labels";
 import { pathLabel } from "../_lib/rule-labels";
 import {
   formName,
@@ -415,6 +417,22 @@ function Editor({
     else setError(result.error);
   };
 
+  // "Muốn đổi gì?" (dw_sales ADR 0006): DW1 drafts the change from the words,
+  // the draft opens here like a template's, and nothing is sent until the
+  // person reads the diff and sends it.
+  const requestWords = async (request: string, focus: string | null) => {
+    setError(null);
+    const body = { request, focus };
+    const result = await run(
+      `words/${ruleKey}`,
+      { ruleKey, ...body },
+      (key) => salesApi().requestRuleWords(ruleKey, body, key),
+      "Đã nhận yêu cầu: DW1 đang soạn, bản nháp tự mở ở đây khi xong.",
+    );
+    if (result.ok) keepDraft(result.value);
+    else setError(result.error);
+  };
+
   const switchMode = (next: Mode) => {
     if (next === "json") {
       setJson(JSON.stringify(current(), null, 2));
@@ -618,6 +636,14 @@ function Editor({
               </Upload>
             </Form.Item>
           ) : null}
+          {scope ? null : (
+            <WordsRequest
+              ruleKey={ruleKey}
+              document={start.document}
+              busy={pending === `words/${ruleKey}` || polled !== null}
+              onSend={requestWords}
+            />
+          )}
           {draft ? (
             <DraftNotice draft={draft} stalled={draft.draft_id === unpolled} />
           ) : null}
@@ -711,6 +737,86 @@ function Editor({
  * opened and what the person still has to settle (the template's columns no
  * value takes, why DW1's mapping was not taken, the template's headers).
  */
+// The keys whose texts are the company's copy, and where each kind sits.
+const COPY_KINDS: Partial<Record<RuleKey, string>> = {
+  sales_emails: "emails",
+  sales_documents: "documents",
+};
+
+/**
+ * "Muốn đổi gì?": the person writes what to change, in their own words; for
+ * a mail, which one, and a letter to write it like. DW1 drafts the change.
+ */
+function WordsRequest({
+  ruleKey,
+  document,
+  busy,
+  onSend,
+}: {
+  ruleKey: RuleKey;
+  document: Record<string, unknown>;
+  busy: boolean;
+  onSend: (request: string, focus: string | null) => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+  const holder = COPY_KINDS[ruleKey];
+  const kinds = holder
+    ? Object.keys((document[holder] as Record<string, unknown>) ?? {})
+    : [];
+  const [kind, setKind] = useState<string | null>(kinds[0] ?? null);
+  const focus = holder && kind ? `${holder}.${kind}` : null;
+  const isMail = ruleKey === "sales_emails";
+  const words = text.trim();
+  return (
+    <Form.Item
+      label="Muốn đổi gì?"
+      layout="vertical"
+      htmlFor="rule-words"
+      extra={
+        isMail
+          ? "Chọn loại thư, rồi viết điều muốn đổi hoặc dán một thư ví dụ. DW1 viết lại thư ở mọi ngôn ngữ theo giọng và bố cục đó; mọi số liệu vẫn do hệ thống điền."
+          : "Viết bằng lời thường, ví dụ “nhắc PIC sau 6 giờ thay vì 4 giờ”. DW1 soạn bản nháp; bạn xem thay đổi rồi mới gửi."
+      }
+    >
+      <Space direction="vertical" className="w-full">
+        {holder ? (
+          <Select
+            aria-label={isMail ? "Loại thư" : "Loại chứng từ"}
+            value={kind ?? undefined}
+            onChange={setKind}
+            options={kinds.map((k) => ({
+              value: k,
+              label: (ARTIFACT_KIND as Record<string, string>)[k] ?? k,
+            }))}
+          />
+        ) : null}
+        <Input.TextArea
+          id="rule-words"
+          rows={isMail ? 6 : 2}
+          maxLength={2000}
+          showCount
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={
+            isMail
+              ? "Ví dụ: Kính gửi Quý khách, Phòng Kinh doanh xin xác nhận đơn hàng…"
+              : "Ví dụ: tắt bản tin buổi sáng"
+          }
+        />
+        <Tooltip title={words ? undefined : "Viết điều muốn đổi trước"}>
+          <Button
+            loading={busy}
+            disabled={!words}
+            onClick={() => void onSend(words, focus).then(() => setText(""))}
+          >
+            DW1 soạn thay đổi
+          </Button>
+        </Tooltip>
+      </Space>
+    </Form.Item>
+  );
+}
+
 function DraftNotice({
   draft,
   stalled,
@@ -719,7 +825,8 @@ function DraftNotice({
   /** The page stopped asking about it while it was still queued. */
   stalled: boolean;
 }) {
-  const title = `${DRAFT_STATUS[draft.status]}: ${draft.file_name}`;
+  const title = `${draftStatus(draft)}: ${draftSource(draft)}`;
+  const fromWords = draft.request !== null && draft.request !== undefined;
   if (draft.status === "queued" && stalled)
     return (
       <Alert
@@ -737,7 +844,11 @@ function DraftNotice({
         showIcon
         role="status"
         title={title}
-        description="DW1 đọc tệp trong vùng cách ly; bản nháp tự mở ở đây khi xong."
+        description={
+          fromWords
+            ? "DW1 đang soạn thay đổi theo lời bạn viết; bản nháp tự mở ở đây khi xong."
+            : "DW1 đọc tệp trong vùng cách ly; bản nháp tự mở ở đây khi xong."
+        }
       />
     );
   if (draft.status === "failed")
@@ -754,9 +865,13 @@ function DraftNotice({
       description={
         <div>
           <Typography.Paragraph className="mb-2!">
-            {ready
-              ? "Đã mở bản nháp: mỗi trường gắn “Máy đọc” do DW1 đọc từ mẫu, kèm ô đã đọc. Kiểm từng cột trước khi xem thay đổi."
-              : "Đã mở bản đang áp dụng với tên sheet của mẫu; các cột chưa đổi, không đoán. Chọn tiêu đề cho từng cột trong danh sách tiêu đề của mẫu."}
+            {fromWords
+              ? ready
+                ? "Đã mở bản nháp: mỗi mục gắn “Máy đọc” là mục DW1 đổi theo lời bạn. Bấm Xem thay đổi để đối chiếu với bản đang áp dụng trước khi gửi."
+                : "Đã mở bản đang áp dụng, chưa đổi gì. Sửa lời yêu cầu và thử lại, hoặc sửa trực tiếp các mục bên dưới."
+              : ready
+                ? "Đã mở bản nháp: mỗi trường gắn “Máy đọc” do DW1 đọc từ mẫu, kèm ô đã đọc. Kiểm từng cột trước khi xem thay đổi."
+                : "Đã mở bản đang áp dụng với tên sheet của mẫu; các cột chưa đổi, không đoán. Chọn tiêu đề cho từng cột trong danh sách tiêu đề của mẫu."}
           </Typography.Paragraph>
           {draft.problems.length ? (
             <ul className="m-0 mb-2 ps-5">
@@ -781,8 +896,13 @@ function DraftNotice({
 
 /** "sales_kpi@1.0.1 · Riêng của công ty · Đã duyệt · đang áp dụng". */
 function startLabel(option: StartOption): string {
-  if (option.draft)
-    return `Bản nháp từ tệp ${option.draft.file_name} · ${DRAFT_STATUS[option.draft.status]}`;
+  if (option.draft) {
+    const draft = option.draft;
+    const fromWords = draft.request !== null && draft.request !== undefined;
+    return fromWords
+      ? `Bản nháp từ lời yêu cầu ${draftSource(draft)} · ${draftStatus(draft)}`
+      : `Bản nháp từ tệp ${draft.file_name} · ${draftStatus(draft)}`;
+  }
   return [
     option.ref,
     RULE_LAYER[option.layer],

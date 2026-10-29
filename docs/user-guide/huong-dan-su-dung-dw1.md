@@ -288,16 +288,18 @@ Trang **Hồ sơ → Pipeline hồ sơ** hiện mọi hồ sơ theo trạng thá
 - Mỗi cột cuộn riêng; bấm vào số PO hoặc RFQ trên thẻ để mở hồ sơ.
 - Trang **Hồ sơ → Đơn hàng** và **Hồ sơ → Báo giá** hiện cùng các hồ sơ dưới dạng bảng, lọc được theo trạng thái.
 
-## Đề xuất thay đổi quy tắc
+## Sửa quy tắc
 
-Quy tắc kiểm tra (dung sai giá, lead time, hàng cần NOC/ESF, nội dung email…) do công ty tự cấu hình trên trang **Quản lý → Quy tắc** hoặc **Quản lý → Quy trình DW1**. Người đề xuất không tự duyệt; Trưởng bộ phận Sales duyệt trên trang **Duyệt**.
+Quy tắc (khi nào DW1 nhắc việc, nội dung thư gửi khách, cách kiểm PO…) do Trưởng bộ phận Sales sửa, hoặc quản trị viên công ty đề xuất để Trưởng bộ phận duyệt. Trang **Quản lý → Quy tắc** ghi mỗi quy tắc quyết định điều gì; các quy tắc kỹ thuật (KPI, chữ trên tài liệu, mẫu nhập Bravo, thư chuyển PC/QA) nằm trong mục **Nâng cao**.
 
 ![Trang Quy tắc của công ty](images/11-quy-tac.png)
 
-1. Mở **Quản lý → Quy trình DW1** để xem các bước của quy trình. Bấm vào một bước để xem các thông số bước đó dùng.
-2. Hoặc mở **Quản lý → Quy tắc**, bấm **Đề xuất phiên bản mới** ở dòng quy tắc cần sửa.
-3. Sửa giá trị trong biểu mẫu; cổng DW hiện phần thay đổi so với bản đang dùng.
-4. Bấm **Gửi duyệt**. Phiên bản mới có hiệu lực cho các hồ sơ kiểm tra sau khi được duyệt; hồ sơ cũ giữ phiên bản đã dùng.
+1. Bấm **Sửa quy tắc** (Trưởng bộ phận) hoặc **Đề xuất bản mới** ở dòng quy tắc cần sửa.
+2. Ở ô **Muốn đổi gì?**, viết bằng lời thường, ví dụ "nhắc PIC sau 6 giờ thay vì 4 giờ", rồi bấm **DW1 soạn thay đổi**. Với **Nội dung email**, chọn loại thư rồi viết điều muốn đổi hoặc dán một thư ví dụ: DW1 viết lại thư ở mọi ngôn ngữ theo giọng và bố cục đó, còn mọi số liệu (số PO, số lượng, giá, ngày) vẫn do hệ thống điền.
+3. Bản nháp DW1 soạn tự mở; mục nào DW1 đổi được gắn "Máy đọc". Có thể sửa tiếp trực tiếp trong biểu mẫu.
+4. Bấm **Xem thay đổi** để đối chiếu với bản đang áp dụng, rồi gửi. Bản của Trưởng bộ phận áp dụng ngay; bản người khác đề xuất chờ Trưởng bộ phận duyệt trên trang **Duyệt**. Hồ sơ cũ giữ phiên bản đã dùng.
+
+Nếu DW1 không hiểu yêu cầu, hoặc bản soạn bỏ hay thêm chỗ điền số liệu, tự viết một con số không có trong lời yêu cầu, hay đổi một mục quy tắc không có, bản nháp không được dùng và cổng DW nêu lý do; bản đang áp dụng vẫn mở để sửa tay.
 
 ![Trang Quy trình DW1](images/12-quy-trinh.png)
 

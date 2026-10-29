@@ -1191,6 +1191,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/rules/{key}/drafts/words": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Rule Words */
+        post: operations["request_rule_words_api_v1_sales_rules__key__drafts_words_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/rules/{key}/platform": {
         parameters: {
             query?: never;
@@ -2145,7 +2162,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "column_unmapped" | "header_not_in_template" | "header_too_long" | "header_ambiguous" | "header_twice" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota";
+            code: "column_unmapped" | "header_not_in_template" | "header_too_long" | "header_ambiguous" | "header_twice" | "required_missing" | "layout_invalid" | "sheet_name_invalid" | "model_unavailable" | "model_not_configured" | "model_quota" | "nothing_understood" | "path_unknown" | "type_changed" | "placeholder_changed" | "digit_invented" | "document_invalid";
             /** Field */
             field?: ("customer_code" | "po_no" | "revision" | "po_date" | "currency" | "line_no" | "customer_item_code" | "prv_code" | "description" | "quantity" | "uom" | "unit_price" | "amount" | "requested_date" | "suggested_delivery_date") | null;
             /** Header */
@@ -4131,6 +4148,8 @@ export interface components {
             file_name: string;
             /** File Sha256 */
             file_sha256: string;
+            /** Focus */
+            focus: string | null;
             /** Machine Read */
             machine_read: string[];
             /** Model Profile */
@@ -4139,6 +4158,8 @@ export interface components {
             problems: components["schemas"]["DraftProblem"][];
             /** Prompt Ref */
             prompt_ref: string | null;
+            /** Request */
+            request: string | null;
             /**
              * Requested At
              * Format: date-time
@@ -4240,6 +4261,17 @@ export interface components {
              * Format: uuid
              */
             version_id: string;
+        };
+        /**
+         * RuleWordsBody
+         * @description What a person wants changed in a rule, in their words (dw_sales ADR
+         *     0006), and the part of the document it is about, if not the whole.
+         */
+        RuleWordsBody: {
+            /** Focus */
+            focus?: string | null;
+            /** Request */
+            request: string;
         };
         /**
          * RulesInForceView
@@ -7193,6 +7225,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RuleDraftBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleDraftView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_rule_words_api_v1_sales_rules__key__drafts_words_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                key: components["schemas"]["RuleKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleWordsBody"];
             };
         };
         responses: {

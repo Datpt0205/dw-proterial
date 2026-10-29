@@ -55,6 +55,8 @@ def _draft(row: RowMapping) -> RuleDraft:
         error=row["error"],
         prompt_ref=row["prompt_ref"],
         model_profile=row["model_profile"],
+        request=row["request"],
+        focus=row["focus"],
     )
 
 
@@ -98,6 +100,8 @@ class SqlRuleDrafts:
                     file_name=draft.file_name,
                     file_sha256=draft.file_sha256,
                     file_size=draft.file_size,
+                    request=draft.request,
+                    focus=draft.focus,
                     **_outcome(draft),
                 )
             )

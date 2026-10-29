@@ -213,8 +213,12 @@ async def test_the_database_refuses_what_a_draft_cannot_be(
     for change, constraint in (
         # Shaped as no other check refuses it, so the status check is the one.
         ("status = 'drafted', document = NULL, template = NULL", "ck_rule_drafts_status"),
-        ("rule_key = 'sales_emails'", "ck_rule_drafts_rule_key"),
+        ("rule_key = 'sales_unknown'", "ck_rule_drafts_rule_key"),
         ("document = NULL", "ck_rule_drafts_document"),
+        # A drafted file keeps its header row; only a request goes without.
+        ("template = NULL", "ck_rule_drafts_document"),
+        ("focus = 'emails'", "ck_rule_drafts_focus"),
+        ("request = ''", "ck_rule_drafts_request"),
         ("error = 'x'", "ck_rule_drafts_error"),
     ):
         async with migrator.connect() as conn:
@@ -311,3 +315,32 @@ async def test_only_the_application_role_may_ask_which_workspaces_are_due(
             )
         ).one()
     assert (app, public) == (True, False)
+
+
+async def test_a_change_in_words_is_drafted_and_read_back_with_what_was_asked(
+    world: World,
+    drafts: SqlCatalogUnitOfWorkFactory,
+    app_sessions: async_sessionmaker[AsyncSession],
+    migrator: AsyncEngine,
+) -> None:
+    """dw_sales ADR 0006: a draft from words, for a key a file never drafts,
+    stored with the words and the part asked about, drafted with no file."""
+    asked = "Viết lại thư xác nhận ngắn gọn hơn"
+    focus = "emails.confirmation_draft"
+    requested = await _service(drafts).request_words(
+        GIANG.context(world.alpha), RuleKey.EMAILS, asked, focus
+    )
+    subject = "Xác nhận đơn ${po_no} (lần sửa ${revision})"
+    model = Recorded(
+        raw={"understood": True, "changes": [{"path": "vi.subject", "value": subject}]}
+    )
+    drafting = _drafting(drafts, app_sessions, model)
+    assert await drafting.draft(world.alpha, requested.draft_id) == "draft ready"
+
+    view = await _service(drafts).get(GIANG.context(world.alpha), requested.draft_id)
+    assert (view.status, view.request, view.focus, view.template) == ("ready", asked, focus, None)
+    assert view.machine_read == [f"{focus}.vi.subject"]
+    assert view.document is not None
+    assert view.document["emails"]["confirmation_draft"]["vi"]["subject"] == subject
+    with pytest.raises(NotFoundError):
+        await _service(drafts).get(GIANG.context(world.alpha_other), requested.draft_id)
