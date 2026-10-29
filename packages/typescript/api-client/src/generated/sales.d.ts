@@ -741,6 +741,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/pc-dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pc Dates */
+        post: operations["pc_dates_api_v1_sales_orders__case_id__pc_dates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/prepare": {
         parameters: {
             query?: never;
@@ -3674,6 +3691,55 @@ export interface components {
         PauseBody: {
             /** Reason */
             reason?: string | null;
+        };
+        /** PcDateView */
+        PcDateView: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Delivery */
+            delivery: number;
+            /** Line No */
+            line_no: number;
+            /** Quote */
+            quote: string;
+        };
+        /**
+         * PcDatesBody
+         * @description PC's mail as Sales pasted it (AI item 7): read, never stored.
+         */
+        PcDatesBody: {
+            /** Case Version */
+            case_version: number;
+            /** Text */
+            text: string;
+        };
+        /**
+         * PcDatesView
+         * @description The dates read, or why there are none; always marked as the model's.
+         */
+        PcDatesView: {
+            /**
+             * Dates
+             * @default []
+             */
+            dates: components["schemas"]["PcDateView"][];
+            /**
+             * Dropped
+             * @default 0
+             */
+            dropped: number;
+            /** Model Profile */
+            model_profile?: string | null;
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "read" | "nothing" | "unavailable";
         };
         /**
          * PendingDecisionView
@@ -6804,6 +6870,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutboundMailsView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pc_dates_api_v1_sales_orders__case_id__pc_dates_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PcDatesBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PcDatesView"];
                 };
             };
             /** @description Validation Error */

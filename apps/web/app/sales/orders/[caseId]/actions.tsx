@@ -41,6 +41,7 @@ import { useAction } from "../../_lib/use-action";
 import { useResource } from "../../_lib/use-resource";
 import { GuardedButton } from "../../_components/guarded-button";
 import { Quantity } from "../../_components/money";
+import { PcDatesReader } from "./pc-dates";
 
 type Order = SalesSchemas["OrderCaseView"];
 type Dialog =
@@ -580,6 +581,24 @@ function ConfirmDrawer({
         được xác nhận từng đợt. Ngày DW1 gợi ý (ngày nhận PO cộng lead time
         chuẩn) được điền sẵn và vẫn là gợi ý cho tới khi bạn ghi.
       </Typography.Paragraph>
+      <PcDatesReader
+        caseId={order.case_id}
+        caseVersion={order.case_version}
+        onDates={(dates) =>
+          form.setFieldsValue(
+            Object.fromEntries(
+              dates.flatMap((d) => {
+                const line = order.lines.find((l) => l.line_no === d.line_no);
+                if (!line) return [];
+                const name = line.printed_schedules
+                  ? dateField(line, d.delivery - 1)
+                  : dateField(line);
+                return [[name, toPickerDay(d.date)]];
+              }),
+            ),
+          )
+        }
+      />
       {failed ? (
         <Alert
           type="error"

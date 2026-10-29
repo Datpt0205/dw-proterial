@@ -41,6 +41,7 @@ MODEL_STEPS = [
     "sales_morning_brief@1.0.0",
     "sales_screening_followups@1.0.0",
     "sales_design_text_replies@1.0.0",
+    "sales_pc_dates@1.0.0",
 ]
 REASON = "the live model gave no usable answer"
 

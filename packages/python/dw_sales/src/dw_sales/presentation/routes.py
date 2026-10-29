@@ -66,6 +66,7 @@ from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
 from dw_sales.application.overview_service import WORK_PAGE, OverviewView, WorkItem
+from dw_sales.application.pc_dates import PcDatesView
 from dw_sales.application.pipeline import CaseHistoryEntry, PipelineView
 from dw_sales.application.process_settings import ProcessSettingsView
 from dw_sales.application.quotation import ScreeningRow
@@ -217,6 +218,12 @@ class VersionBody(BaseModel):
     model_config = _BODY
 
     case_version: int = Field(ge=1)
+
+
+class PcDatesBody(VersionBody):
+    """PC's mail as Sales pasted it (AI item 7): read, never stored."""
+
+    text: Annotated[str, Field(min_length=1, max_length=8000)]
 
 
 class SignedCopyBody(VersionBody):
@@ -514,6 +521,21 @@ def build_router(
             context, CaseKind.QUOTE, case_id, artifact_id, case_version=body.case_version
         )
         return await idem.record(mail, status_code=202)
+
+    # PC's delivery dates read from the mail Sales pastes (AI item 7): the
+    # dates fill the confirmation's fields; "Ghi đã gửi xác nhận" records them.
+    @router.post(
+        "/orders/{case_id}/pc-dates",
+        response_model=PcDatesView,
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
+    )
+    async def pc_dates(
+        case_id: uuid.UUID, body: PcDatesBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> PcDatesView:
+        view = await svc.pc_dates.read(
+            context, case_id, case_version=body.case_version, text=body.text
+        )
+        return await idem.record(view)
 
     # A case's mail thread summarised by the model, on request (AI item 8):
     # each point cites its mails, and nothing is stored.

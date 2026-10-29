@@ -471,6 +471,15 @@ export class SalesApi {
     );
   }
 
+  /** PC's delivery dates read from the mail Sales pastes (AI item 7). */
+  readPcDates(caseId: string, caseVersion: number, text: string, key: string) {
+    return this.post<"/api/v1/sales/orders/{case_id}/pc-dates">(
+      `/api/v1/sales/orders/${enc(caseId)}/pc-dates`,
+      { case_version: caseVersion, text },
+      key,
+    );
+  }
+
   /** Q12's question to the customer, drafted by the model (AI item 11). */
   screeningFollowup(customerCode: string, prvCode: string) {
     return this.get<"/api/v1/sales/quotes/screening/{customer_code}/{prv_code}/followup">(

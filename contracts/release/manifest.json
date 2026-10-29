@@ -419,6 +419,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "38f9f9d39e3c364e3103d6b29c9d229a51a9841d7b56ac23b8ba0d654e343f05",
+      "dataset_id": "sales_pc_dates",
+      "files": [
+        {
+          "checksum": "a9cde63858ed06bc67a4971d0add19e9c978783a53e565a33990f6f03c144892",
+          "path": "evals/expected/sales_pc_dates.json"
+        },
+        {
+          "checksum": "33132238c108055a81c5a92570797e443a6c43a0346f47471b3974f486b24f45",
+          "path": "evals/fixtures/cases/sales_pc_dates.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "571d54f37357dec46615e7de4d2c18c210978ea7ad877abe4e182b8d37880a30",
       "dataset_id": "sales_reply",
       "files": [
@@ -556,7 +571,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "bc1549a94288df1ddaa794d4382246d31b085cf7",
+  "git_sha": "d93d4b7c18332716d63b54994a0e6c68832486e6",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -743,6 +758,11 @@
     {
       "checksum": "d9c2b50c6bdee757321fa4af6e4457d57d60b5d274f77e9a6658c2cafb20a0dc",
       "prompt_id": "sales.morning_brief",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "b1c194d4d7138851eed1cb97c779693baae79c216c8b1e94c042d8db5eda4802",
+      "prompt_id": "sales.pc_dates",
       "version": "1.0.0"
     },
     {

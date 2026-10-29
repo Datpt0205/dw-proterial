@@ -221,7 +221,7 @@ Cờ "Thiếu NOC/ESF" chỉ người được giao kiểm soát xuất khẩu c
 Sau khi đơn đã được kiểm chéo:
 
 1. Bấm **Đã gửi xác nhận**.
-2. Nhập ngày xác nhận cho từng dòng. Cột "DW1 gợi ý" chỉ là đề xuất; người dùng sửa theo ngày thật.
+2. Nhập ngày xác nhận cho từng dòng. Cột "DW1 gợi ý" chỉ là đề xuất; người dùng sửa theo ngày thật. Nếu PC đã trả lời ngày giao bằng thư, mở **Dán thư trả lời của PC để DW1 điền ngày**, dán nội dung thư rồi bấm **DW1 đọc ngày**: DW1 điền ngày PC cho từng dòng vào cột Ngày xác nhận (chỉ ngày có nguyên văn trong thư và đúng dòng PC nêu); kiểm lại từng ngày trước khi ghi. Thư dán vào không được lưu.
 3. Bấm **Ghi đã gửi xác nhận**. Thư nháp xác nhận ghi tên người chuẩn bị và người kiểm chéo.
 4. Soạn **Thư xác nhận PO (nháp)** rồi bấm **Gửi cho khách từ hộp thư của bạn** như với báo giá, hoặc tải .eml và tự gửi.
 
