@@ -65,6 +65,8 @@ _PARAMS = {
     # Export control, WIV-03-032 (2026-10-28).
     "customer_code": "VLX",
     "step": "noc",
+    # A Q12 screening row's question to the customer (AI item 11).
+    "prv_code": "CB-2006",
 }
 
 

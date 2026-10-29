@@ -492,6 +492,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "37bb8ede7c1ef26fca66d4aa147357d76f7de2fd9916942302018cb57a04b7a2",
+      "dataset_id": "sales_screening_followups",
+      "files": [
+        {
+          "checksum": "ff1ed29aa328fa8a62b9112d0c558ac2d0f433446ca06a39d702ed4dae9e1e58",
+          "path": "evals/expected/sales_screening_followups.json"
+        },
+        {
+          "checksum": "9acce6489e7b1703d613c900263d2c152ec0dac1036aa7736001ce2d2d9c82d5",
+          "path": "evals/fixtures/cases/sales_screening_followups.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "87b329bd1daab41170bb15e94535c3182261e1be98445e1e2bf399a74e4df5ad",
       "dataset_id": "sales_sender_customers",
       "files": [
@@ -526,7 +541,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "c5874e871e22878481023a799a9d0aed144887d9",
+  "git_sha": "77b2cec950692e68ea8674cc5058e94dcc0c9c0c",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -733,6 +748,11 @@
     {
       "checksum": "28d50775bfa893a192629e51fdbd26877c9489d52de3e1d504ede4529a487b67",
       "prompt_id": "sales.rule_change_in_words",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "0f414fe06c05baeda7232bc66704f3666a42ea73d4837aeca8c02503052b8dfb",
+      "prompt_id": "sales.screening_followup",
       "version": "1.0.0"
     },
     {

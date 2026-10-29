@@ -3782,6 +3782,98 @@
         "title": "FlaggedValue",
         "type": "object"
       },
+      "FollowupDraftView": {
+        "description": "A draft, or why there is none; always marked as the model's.",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "customer_code": {
+            "title": "Customer Code",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "prv_code": {
+            "title": "Prv Code",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "drafted",
+              "unavailable",
+              "refused"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "to": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "customer_code",
+          "prv_code",
+          "status"
+        ],
+        "title": "FollowupDraftView",
+        "type": "object"
+      },
       "GrantMemberRequest": {
         "properties": {
           "department": {
@@ -20521,6 +20613,59 @@
           }
         },
         "summary": "Screening",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/screening/{customer_code}/{prv_code}/followup": {
+      "get": {
+        "operationId": "screening_followup_api_v1_sales_quotes_screening__customer_code___prv_code__followup_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+              "title": "Customer Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "prv_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Z0-9][A-Z0-9-]{1,31}$",
+              "title": "Prv Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowupDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Screening Followup",
         "tags": [
           "sales"
         ]

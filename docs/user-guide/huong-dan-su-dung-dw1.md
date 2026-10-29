@@ -263,6 +263,10 @@ Sau khi báo giá được duyệt:
    - Nút này chỉ dùng được khi công ty đã nối hộp thư gửi của từng người (luồng Power Automate của chính họ); trước đó nút bị mờ và ghi rõ lý do, cách làm vẫn như cũ: tải .eml, tự gửi, bấm **Đã gửi KH**.
 3. Bấm **Xác nhận master list** khi đã ghi vào master list.
 
+### Rà soát báo giá năm
+
+Trang **Báo giá → Rà soát báo giá năm** liệt kê các mã đã báo giá cho khách mà 12 tháng chưa có đơn. Ở mỗi dòng, bấm **DW1 soạn thư hỏi khách**: DW1 soạn thư bằng ngôn ngữ của khách, hỏi khách còn cần mã đó không và có giữ báo giá không, nêu số báo giá và hạn hiệu lực, không nêu giá (gắn nhãn "Máy viết"). Bấm **Mở trong Outlook** để thư mở sẵn trong Outlook của bạn, gửi tới người liên hệ của khách trong Dữ liệu chủ; đọc lại, sửa nếu cần rồi gửi. Thư nào có con số hay số tiền không khớp hồ sơ thì DW1 bỏ, bấm lại để soạn lại. Giữ hay bỏ báo giá vẫn do Sales quyết định.
+
 ## Mẫu PO mới
 
 Khi một khách gửi PO theo mẫu DW1 chưa biết, DW1 tự học mẫu đó: AI đọc tiêu đề các cột, DW1 kiểm số lượng × đơn giá khớp thành tiền, tổng cộng khớp, mã hàng có thật và giá nằm trong khoảng đã báo. Mọi kiểm tra đều qua thì DW1 dùng mẫu đó luôn và mở hồ sơ đơn hàng, không ai phải duyệt. Với vài PO đầu theo mẫu mới, DW1 gắn cờ mọi giá trị để Sales xác nhận bên cạnh tệp gốc.

@@ -451,6 +451,13 @@ export class SalesApi {
     );
   }
 
+  /** Q12's question to the customer, drafted by the model (AI item 11). */
+  screeningFollowup(customerCode: string, prvCode: string) {
+    return this.get<"/api/v1/sales/quotes/screening/{customer_code}/{prv_code}/followup">(
+      `/api/v1/sales/quotes/screening/${enc(customerCode)}/${enc(prvCode)}/followup`,
+    );
+  }
+
   quote(caseId: string) {
     return this.get<"/api/v1/sales/quotes/{case_id}">(
       `/api/v1/sales/quotes/${enc(caseId)}`,
