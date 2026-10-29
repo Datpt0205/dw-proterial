@@ -18,6 +18,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy import text
@@ -57,6 +58,10 @@ class SqlOutboxDrain:
                         tables.outbox_events.c.processed_at.is_(None),
                         tables.outbox_events.c.event_type.in_(list(event_types)),
                         tables.outbox_events.c.attempts < max_attempts,
+                        sa.or_(
+                            tables.outbox_events.c.next_attempt_at.is_(None),
+                            tables.outbox_events.c.next_attempt_at <= self.clock.now(),
+                        ),
                     )
                     .order_by(tables.outbox_events.c.occurred_at)
                     .limit(limit)
@@ -90,14 +95,28 @@ class SqlOutboxDrain:
                 .values(processed_at=self.clock.now(), last_error=None)
             )
 
-    async def record_failure(self, event_id: uuid.UUID, *, error: str) -> None:
+    async def record_failure(self, event_id: uuid.UUID, *, error: str, retry_at: datetime) -> None:
         async with self.session_factory() as session, session.begin():
             await session.execute(_ENABLE_DRAIN)
             await session.execute(
                 sa.update(tables.outbox_events)
                 .where(tables.outbox_events.c.id == event_id)
-                .values(last_error=error[:_ERROR_LIMIT])
+                .values(last_error=error[:_ERROR_LIMIT], next_attempt_at=retry_at)
             )
+
+    async def exhausted(self, *, max_attempts: int, limit: int) -> list[OutboxEvent]:
+        async with self.session_factory() as session, session.begin():
+            await session.execute(_ENABLE_DRAIN)
+            rows = await session.execute(
+                sa.select(tables.outbox_events)
+                .where(
+                    tables.outbox_events.c.processed_at.is_(None),
+                    tables.outbox_events.c.attempts >= max_attempts,
+                )
+                .order_by(tables.outbox_events.c.occurred_at)
+                .limit(limit)
+            )
+            return [outbox_from_row(row) for row in rows]
 
     async def backlog(self, *, event_types: Sequence[str], max_attempts: int) -> OutboxBacklog:
         if not event_types:

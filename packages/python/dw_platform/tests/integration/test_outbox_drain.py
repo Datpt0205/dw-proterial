@@ -128,7 +128,7 @@ async def test_the_drain_claims_across_tenants_and_settles_each_event(
     migrator = create_async_engine(db_urls.migrator)
     try:
         await drain.mark_processed(first.id)
-        await drain.record_failure(second.id, error="account not found")
+        await drain.record_failure(second.id, error="account not found", retry_at=NOW)
 
         settled = await _row(migrator, first.id)
         assert settled.processed_at == NOW
@@ -165,7 +165,7 @@ async def test_an_event_that_keeps_failing_stops_being_claimed(
     for attempt in range(2):
         claimed = await drain.claim_batch(event_types=[EXHAUSTED_TYPE], limit=10, max_attempts=2)
         assert [item.id for item in claimed] == [event.id], f"attempt {attempt} should be claimable"
-        await drain.record_failure(event.id, error="still broken")
+        await drain.record_failure(event.id, error="still broken", retry_at=NOW)
 
     exhausted = await drain.claim_batch(event_types=[EXHAUSTED_TYPE], limit=10, max_attempts=2)
     assert exhausted == []

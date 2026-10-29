@@ -5,6 +5,12 @@ to handle, run each one's effect, and mark it delivered. Delivery is at-least-on
 - the attempt is counted at claim time and the row is marked afterwards - so every
 handler wired here has to be idempotent.
 
+A failed event waits before it is claimed again (`retry_delay`, doubling from
+thirty seconds), so its attempts outlast a reader or a scanner restarting
+instead of being spent in the seconds the outage lasts (2026-10-29). One that
+spends them all waits for a person: `outbox_alarms` tells the tenant's
+administrators, and the admin page "Việc nền lỗi" sends it back to the queue.
+
 **No effect is wired today, deliberately.** Research-on-account-created and
 re-score-on-lead-evidence both used to live here, and both were removed rather
 than switched off: an event says what happened, never who caused it, so a
@@ -26,6 +32,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import timedelta
 
 from dw_kernel.ports import UtcClock
 from dw_observability.metrics import DW_OUTBOX_BACKLOG_SIZE, DW_OUTBOX_OLDEST_PENDING_AGE_SECONDS
@@ -39,6 +46,15 @@ EventHandler = Callable[[OutboxEvent], Awaitable[str]]
 """Deliver one event and say in a few words what it did, for the log."""
 
 _ERROR_LIMIT = 500
+# The first wait after a failure; each one after doubles it, up to the cap.
+_FIRST_DELAY = timedelta(seconds=30)
+_MAX_DELAY = timedelta(minutes=15)
+
+
+def retry_delay(attempts_made: int) -> timedelta:
+    """The wait before the next attempt, after ``attempts_made`` failed ones."""
+    factor = 1 << max(attempts_made - 1, 0)
+    return min(_FIRST_DELAY * factor, _MAX_DELAY)
 
 
 class UndeliverableEventError(Exception):
@@ -55,7 +71,10 @@ class UndeliverableEventError(Exception):
     """
 
 
-async def _deliver(event: OutboxEvent, handler: EventHandler, drain: OutboxDrainPort) -> None:
+async def _deliver(
+    event: OutboxEvent, handler: EventHandler, drain: OutboxDrainPort, clock: UtcClock
+) -> None:
+    retry_at = clock.now() + retry_delay(event.attempts)
     try:
         outcome = await handler(event)
     except UndeliverableEventError as exc:
@@ -63,11 +82,13 @@ async def _deliver(event: OutboxEvent, handler: EventHandler, drain: OutboxDrain
         # attempt was counted at claim, so the retries are bounded by
         # `max_attempts` either way; nothing here shortens them.
         logger.error("outbox event %s (%s) is undeliverable: %s", event.id, event.event_type, exc)
-        await drain.record_failure(event.id, error=str(exc)[:_ERROR_LIMIT])
+        await drain.record_failure(event.id, error=str(exc)[:_ERROR_LIMIT], retry_at=retry_at)
         return
     except Exception as exc:
         logger.exception("outbox event %s (%s) failed", event.id, event.event_type)
-        await drain.record_failure(event.id, error=f"{type(exc).__name__}: {exc}"[:_ERROR_LIMIT])
+        await drain.record_failure(
+            event.id, error=f"{type(exc).__name__}: {exc}"[:_ERROR_LIMIT], retry_at=retry_at
+        )
         return
     await drain.mark_processed(event.id)
     logger.info("outbox event %s (%s): %s", event.id, event.event_type, outcome)
@@ -96,7 +117,7 @@ def build_outbox_consumer(
             event_types=event_types, limit=batch_size, max_attempts=max_attempts
         )
         for event in events:
-            await _deliver(event, handlers[event.event_type], drain)
+            await _deliver(event, handlers[event.event_type], drain, clock)
 
         backlog = await drain.backlog(event_types=event_types, max_attempts=max_attempts)
         telemetry.set_gauge(DW_OUTBOX_BACKLOG_SIZE, backlog.pending, {})

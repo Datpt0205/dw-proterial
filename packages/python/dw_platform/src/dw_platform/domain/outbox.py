@@ -9,8 +9,16 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Final
 
 from dw_kernel.ids import TenantId, WorkspaceId
+
+# After this many delivery attempts an event stops being claimed and waits for
+# a person: the dispatcher stops at it, and the admin page lists what reached
+# it, so both read this one value. Five, with the waits between them doubling
+# from 30 s (`dw_worker.consumers.outbox.retry_delay`), ride out about seven
+# minutes of an outage, not a broken handler retried for ever.
+OUTBOX_MAX_ATTEMPTS: Final = 5
 
 
 @dataclass(slots=True)

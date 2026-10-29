@@ -242,10 +242,8 @@ class WorkerSettings(BaseSettings):
     # Outbox events are cheap to dispatch, so a batch keeps an import of many
     # accounts from taking one poll tick each.
     outbox_batch_size: int = Field(default=8, ge=1, le=64)
-    # After this many delivery attempts an event stops being claimed and waits
-    # for a human, with `last_error` saying what it kept failing on. Three is a
-    # transient fault survived twice, not a broken handler retried for ever.
-    outbox_max_attempts: int = Field(default=3, ge=1, le=10)
+    # How many attempts an event gets is not a setting: the admin page that
+    # lists what spent them reads the same `OUTBOX_MAX_ATTEMPTS`.
 
     @field_validator("embedding_provider", mode="before")
     @classmethod

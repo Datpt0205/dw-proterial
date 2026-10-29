@@ -53,6 +53,7 @@ from dw_observability.telemetry import TelemetryPort
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.admin_console import AdminConsoleService
 from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.background_failures import BackgroundFailuresService
 from dw_platform.application.cache import CachePort
 from dw_platform.application.channel_access import ChannelPreferencesPort
 from dw_platform.application.entitlement import PlanEntitlementService
@@ -167,6 +168,8 @@ class ApiContainer:
     admin_console: AdminConsoleService | None = None
     hierarchy: HierarchyService | None = None
     separation_of_duties: SeparationOfDutiesService | None = None
+    # The workspace's stopped outbox events, sent back by an admin (2026-10-29).
+    background_failures: BackgroundFailuresService | None = None
     notifications: NotificationService | None = None
     # Customer-granted support access (ADR 0024). A context registers its
     # grantable scope sets and resource describers on the catalog at the seam

@@ -12449,6 +12449,42 @@
         "title": "SpecBody",
         "type": "object"
       },
+      "StalledEventView": {
+        "description": "An outbox event that spent its attempts: the kind of its error only,\nnever the text, which can carry what the failing statement held.",
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "error_kind": {
+            "title": "Error Kind",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "event_type",
+          "occurred_at",
+          "attempts",
+          "error_kind"
+        ],
+        "title": "StalledEventView",
+        "type": "object"
+      },
       "StampView": {
         "properties": {
           "at": {
@@ -14739,6 +14775,67 @@
           }
         },
         "summary": "Reset Password",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/background-failures": {
+      "get": {
+        "operationId": "list_background_failures_api_v1_admin_background_failures_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StalledEventView"
+                  },
+                  "title": "Response List Background Failures Api V1 Admin Background Failures Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Background Failures",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/background-failures/{event_id}/retry": {
+      "post": {
+        "operationId": "retry_background_failure_api_v1_admin_background_failures__event_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Background Failure",
         "tags": [
           "admin"
         ]

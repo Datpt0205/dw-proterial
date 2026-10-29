@@ -32,6 +32,7 @@ from dw_worker.consumers.outbox import (
     EventHandler,
     UndeliverableEventError,
     build_outbox_consumer,
+    retry_delay,
 )
 
 pytestmark = pytest.mark.unit
@@ -54,6 +55,7 @@ class FakeDrain:
         self.claims: list[tuple[tuple[str, ...], int, int]] = []
         self.processed: list[uuid.UUID] = []
         self.failures: list[tuple[uuid.UUID, str]] = []
+        self.retry_at: dict[uuid.UUID, datetime] = {}
 
     async def claim_batch(
         self, *, event_types: Sequence[str], limit: int, max_attempts: int
@@ -67,8 +69,12 @@ class FakeDrain:
     async def mark_processed(self, event_id: uuid.UUID) -> None:
         self.processed.append(event_id)
 
-    async def record_failure(self, event_id: uuid.UUID, *, error: str) -> None:
+    async def record_failure(self, event_id: uuid.UUID, *, error: str, retry_at: datetime) -> None:
         self.failures.append((event_id, error))
+        self.retry_at[event_id] = retry_at
+
+    async def exhausted(self, *, max_attempts: int, limit: int) -> list[OutboxEvent]:
+        raise NotImplementedError("not exercised by the dispatcher")
 
     async def backlog(self, *, event_types: Sequence[str], max_attempts: int) -> OutboxBacklog:
         remaining = [event for event in self.events if event.event_type in set(event_types)]
@@ -190,6 +196,35 @@ async def test_one_failing_event_does_not_stop_the_rest_of_the_batch() -> None:
     assert drain.processed == [second.id]
     assert [event_id for event_id, _ in drain.failures] == [first.id]
     assert "RuntimeError: boom" in drain.failures[0][1]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_event_waits_longer_after_each_attempt_before_its_next() -> None:
+    """2026-10-29: three attempts a second apart were spent by a reader
+    restarting; each failure now waits, doubling, before the next claim."""
+    first, third = event(), event()
+    first.attempts, third.attempts = 1, 3
+    drain = FakeDrain([first, third])
+
+    async def handle(_: OutboxEvent) -> str:
+        raise RuntimeError("reader down")
+
+    await consumer_over(drain, {HANDLED_TYPE: handle})()
+
+    assert drain.retry_at[first.id] == NOW + timedelta(seconds=30)
+    assert drain.retry_at[third.id] == NOW + timedelta(minutes=2)
+
+
+def test_the_wait_doubles_and_stops_at_fifteen_minutes() -> None:
+    assert [retry_delay(n).total_seconds() for n in (1, 2, 3, 4, 5, 6, 9)] == [
+        30,
+        60,
+        120,
+        240,
+        480,
+        900,
+        900,
+    ]
 
 
 @pytest.mark.asyncio

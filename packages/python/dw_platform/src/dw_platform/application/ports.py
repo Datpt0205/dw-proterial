@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from types import TracebackType
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
@@ -315,8 +316,14 @@ class OutboxDrainPort(Protocol):
         """Record delivery. Called after the effect, so a crash retries it."""
         ...
 
-    async def record_failure(self, event_id: UUID, *, error: str) -> None:
-        """Keep the reason a delivery failed; the attempt was already counted."""
+    async def record_failure(self, event_id: UUID, *, error: str, retry_at: datetime) -> None:
+        """Keep the reason a delivery failed, and not claim the event again
+        before ``retry_at``; the attempt was already counted."""
+        ...
+
+    async def exhausted(self, *, max_attempts: int, limit: int) -> list[OutboxEvent]:
+        """Undelivered events that spent ``max_attempts``, across tenants, oldest
+        first: what no dispatcher will claim again until a person sends it back."""
         ...
 
     async def backlog(self, *, event_types: Sequence[str], max_attempts: int) -> OutboxBacklog:

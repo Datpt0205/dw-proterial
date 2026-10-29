@@ -141,6 +141,8 @@ def test_only_the_platform_lanes_are_wired() -> None:
     `approval_codes_retention` is the eleventh: single-use decision codes
     (channels Z5) a day old, the database's constant
     (`platform.prune_approval_decision_codes()`), whether or not this host polls.
+    `outbox_alarms` tells a tenant's administrators of an outbox event that
+    spent its attempts (2026-10-29), wherever the outbox runs.
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
@@ -148,6 +150,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
     settings = bare_settings(database_url="postgresql+asyncpg://dw:dw@localhost/dw")
     assert set(build_registry(settings).all()) == {
         "outbox",
+        "outbox_alarms",
         "retention",
         "retention_knowledge",
         "partitions",

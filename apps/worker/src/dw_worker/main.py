@@ -95,7 +95,9 @@ from dw_platform.adapters.persistence.zalo_link_repo import (
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.approval_codes import ApprovalSubjectVersions, DecisionCodeKey
 from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.application.background_failures import OUTBOX_ALARMS_LANE, OutboxAlarms
 from dw_platform.application.channel_access import LinkedUserAccess
+from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 from dw_platform.retention_policy import load_retention_policy
 from dw_sales.adapters.assembly import (
     Dw1Mount,
@@ -138,6 +140,8 @@ from dw_worker.consumers.offboarding import TenantOffboardingLane, build_offboar
 from dw_worker.consumers.offboarding_exports import LANE as OFFBOARDING_EXPORTS_LANE
 from dw_worker.consumers.offboarding_exports import OffboardingExportRetention
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
+from dw_worker.consumers.outbox_alarms import INTERVAL_SECONDS as OUTBOX_ALARMS_INTERVAL_SECONDS
+from dw_worker.consumers.outbox_alarms import build_outbox_alarms_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
@@ -713,10 +717,24 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 SqlOutboxDrain(sessions, clock),
                 handlers,
                 batch_size=settings.outbox_batch_size,
-                max_attempts=settings.outbox_max_attempts,
+                max_attempts=OUTBOX_MAX_ATTEMPTS,
                 telemetry=telemetry,
                 clock=clock,
             ),
+        )
+        # What the dispatcher gave up on, told to the tenant's administrators
+        # (2026-10-29): a stopped event is never only a log line.
+        registry.register(
+            OUTBOX_ALARMS_LANE,
+            build_outbox_alarms_consumer(
+                OutboxAlarms(
+                    events=SqlOutboxDrain(sessions, clock),
+                    admins=SqlScopeHolders(sessions),
+                    notices=SqlNotificationRepository(sessions),
+                    max_attempts=OUTBOX_MAX_ATTEMPTS,
+                )
+            ),
+            interval_seconds=OUTBOX_ALARMS_INTERVAL_SECONDS,
         )
 
     # ---- knowledge ingestion ---------------------------------------------
