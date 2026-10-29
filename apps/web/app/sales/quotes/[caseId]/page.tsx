@@ -563,25 +563,30 @@ function QuoteDetail() {
               {data.design_replies > 1
                 ? ` · lần phản hồi thứ ${data.design_replies}`
                 : ""}{" "}
-              <Button
-                size="small"
-                icon={<EyeOutlined aria-hidden />}
-                onClick={() => {
-                  const anchor = data.design_reply
-                    ? Object.values(
-                        data.design_reply.lines[0]?.anchors ?? {},
-                      )[0]
-                    : null;
-                  const region = anchorRegion(anchor);
-                  if (region && data.design_reply)
-                    setSource({
-                      region,
-                      attachmentId: data.design_reply.attachment_id,
-                    });
-                }}
-              >
-                Xem bản gốc
-              </Button>
+              {data.design_reply.attachment_id ? (
+                <Button
+                  size="small"
+                  icon={<EyeOutlined aria-hidden />}
+                  onClick={() => {
+                    const reply = data.design_reply;
+                    const anchor = reply
+                      ? Object.values(reply.lines[0]?.anchors ?? {})[0]
+                      : null;
+                    const region = anchorRegion(anchor);
+                    if (region && reply?.attachment_id)
+                      setSource({ region, attachmentId: reply.attachment_id });
+                  }}
+                >
+                  Xem bản gốc
+                </Button>
+              ) : (
+                // Design wrote it in the mail (AI item 6): read by DW1, each
+                // value confirmed by Sales before it was attached.
+                <span>
+                  Design trả lời trong nội dung thư; DW1 đọc, Sales đã xác nhận
+                  từng giá trị.
+                </span>
+              )}
             </Typography.Text>
             <Table
               size="small"

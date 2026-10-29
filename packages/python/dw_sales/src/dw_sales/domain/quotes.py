@@ -475,25 +475,34 @@ class DesignReplyDocument(BaseModel):
 
 class DesignReply(BaseModel):
     """A Design reply as a case holds it: the message it arrived in, and what
-    its file says."""
+    its file says, or what the mail itself says (the AI list, item 6): then
+    ``body`` is the text a model read, every anchor points into it, and
+    ``confirmed_by`` is the person who checked the reading before it was
+    attached (`DesignReplyConfirmations`)."""
 
     model_config = _FROZEN
 
     message_id: MessageId
     received_at: AwareDatetime
-    attachment: Attachment
+    attachment: Attachment | None = None
     document: DesignReplyDocument
+    body: MessageText | None = None
+    confirmed_by: uuid.UUID | None = None
 
     @model_validator(mode="after")
     def _read_from_this_messages_file(self) -> Self:
+        if (self.attachment is None) == (self.body is None):
+            raise ValueError("a reply is read from its file or from its mail, one of them")
+        if (self.body is not None) != (self.confirmed_by is not None):
+            raise ValueError("a reply read from the mail is attached once a person confirmed it")
+        source = (
+            (self.attachment.attachment_id, self.attachment.sha256)
+            if self.attachment is not None
+            else (None, self.body.sha256 if self.body is not None else "")
+        )
         for anchor in self.document.anchors():
-            if (anchor.attachment_id, anchor.attachment_sha256) != (
-                self.attachment.attachment_id,
-                self.attachment.sha256,
-            ):
-                raise ValueError(
-                    f"the reply was read from a file other than {self.attachment.attachment_id}"
-                )
+            if (anchor.attachment_id, anchor.attachment_sha256) != source:
+                raise ValueError(f"the reply was read from a source other than {source[0]}")
         return self
 
     @property

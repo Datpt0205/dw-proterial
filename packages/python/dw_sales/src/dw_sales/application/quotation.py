@@ -209,6 +209,9 @@ class ReplyAttached:
 _NO_CASE_WAITING: Final = "no case awaits Design under the reply's YCBG number"
 _LINES_UNANSWERED: Final = "the reply does not answer exactly the lines its case asked"
 _NOT_FROM_DESIGN: Final = "the reply does not come from a Design mailbox the mail system verified"
+# Design wrote the answer in the mail itself (the AI list, item 6): Sales may
+# have DW1 read it (`DesignTextReplies`).
+_IN_THE_MAIL: Final = "Design's reply is written in the mail, with no reply form attached"
 
 
 @dataclass(frozen=True, slots=True)
@@ -380,27 +383,24 @@ class QuotationService:
         Sales.
         """
         message = await self._message(scope, message_id)
-        if not self._from_design(message, await self.policies.quote_rules(scope)):
+        if not await self.from_design(scope, message):
             return ReplyUnmatched(
                 message_id=message_id,
                 ycbg_no=None,
                 reason=RoutingReason.OTHER,
                 detail=_NOT_FROM_DESIGN,
             )
+        if not message.attachments:
+            return ReplyUnmatched(message_id=message_id, ycbg_no=None, detail=_IN_THE_MAIL)
         found = await self._files(scope, message, self.reply_reader.read)
         if len(found) != 1:
             raise NotADesignReplyError(message_id)
         ((attachment, document),) = found
         ycbg_no = document.ycbg_no.value
-        waiting = [
-            case
-            for case in await self.cases.cases_for_ycbg(scope, ycbg_no)
-            if case.status is QuoteStatus.SENT_TO_DESIGN
-        ]
-        if len(waiting) != 1:
+        case = await self.awaiting_reply(scope, document)
+        if case == "no_case":
             return ReplyUnmatched(message_id=message_id, ycbg_no=ycbg_no)
-        (case,) = waiting
-        if {line.line_no for line in document.lines} != case.request.document.line_numbers():
+        if case == "lines_unanswered":
             return ReplyUnmatched(
                 message_id=message_id,
                 ycbg_no=ycbg_no,
@@ -414,6 +414,30 @@ class QuotationService:
             document=document,
         )
         return ReplyAttached(case=case.record_design_reply(reply))
+
+    async def from_design(self, scope: SalesScope, message: InboundMessage) -> bool:
+        """Whether one of the tenant's Design mailboxes sent ``message``, as
+        the mail system verified it: nothing else is read as Design's."""
+        return self._from_design(message, await self.policies.quote_rules(scope))
+
+    async def awaiting_reply(
+        self, scope: SalesScope, document: DesignReplyDocument
+    ) -> QuoteCase | Literal["no_case", "lines_unanswered"]:
+        """The one case of the scope waiting on Design under the reply's YCBG
+        number, when the reply answers exactly the lines it asked; why not
+        otherwise. A form's reply and one written in the mail are matched by
+        this alone."""
+        waiting = [
+            case
+            for case in await self.cases.cases_for_ycbg(scope, document.ycbg_no.value)
+            if case.status is QuoteStatus.SENT_TO_DESIGN
+        ]
+        if len(waiting) != 1:
+            return "no_case"
+        (case,) = waiting
+        if {line.line_no for line in document.lines} != case.request.document.line_numbers():
+            return "lines_unanswered"
+        return case
 
     # ---------------------------------------------------------- step 7 --
 

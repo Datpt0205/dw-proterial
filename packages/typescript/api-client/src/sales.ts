@@ -232,6 +232,26 @@ export class SalesApi {
     );
   }
 
+  /** Design's reply written in the mail, as the model reads it (AI item 6). */
+  designTextReply(messageId: string) {
+    return this.get<"/api/v1/sales/inbox/{message_id}/design-reply">(
+      `/api/v1/sales/inbox/${enc(messageId)}/design-reply`,
+    );
+  }
+
+  /** Sales confirms the values; each is checked against the mail again. */
+  confirmDesignTextReply(
+    messageId: string,
+    body: Body<"/api/v1/sales/inbox/{message_id}/design-reply">,
+    key: string,
+  ) {
+    return this.post<"/api/v1/sales/inbox/{message_id}/design-reply">(
+      `/api/v1/sales/inbox/${enc(messageId)}/design-reply`,
+      body,
+      key,
+    );
+  }
+
   /** Whose mail an unknown sender's is, as the model reads it and code
    * checks it (AI item 5); a suggestion only. */
   senderCustomer(messageId: string) {

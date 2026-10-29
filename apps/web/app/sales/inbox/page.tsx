@@ -68,6 +68,7 @@ import { MessageDispositionTag, ProcessingTag } from "../_components/tags";
 import { HandledPanel } from "./handled-panel";
 import { HandoffDraft } from "./handoff-draft";
 import { SenderCustomerPanel } from "./sender-customer";
+import { DesignTextPanel } from "./design-text";
 import { useFillHeight } from "../../../lib/use-fill-height";
 
 type Message = SalesSchemas["InboxMessageView"];
@@ -452,6 +453,16 @@ function Inbox() {
                         Chi tiết kỹ thuật (cho IT): {m.disposition.detail}
                       </Typography.Text>
                     </Typography.Paragraph>
+                  ) : null}
+                  {m.disposition.reason === "design_reply_unmatched" &&
+                  !m.disposition.handled_at ? (
+                    <DesignTextPanel
+                      messageId={m.message_id}
+                      onAttached={() => {
+                        inbox.reload();
+                        overview.reload();
+                      }}
+                    />
                   ) : null}
                   {m.disposition.reason === "customer_unknown" &&
                   !m.disposition.handled_at ? (

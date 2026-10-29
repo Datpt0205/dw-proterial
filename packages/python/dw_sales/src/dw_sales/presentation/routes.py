@@ -61,6 +61,7 @@ from dw_sales.application.catalog_imports import (
     CatalogPreviewView,
     CatalogStateView,
 )
+from dw_sales.application.design_text_reading import DesignTextReadingView, ModelDesignReply
 from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
 from dw_sales.application.outbound_mail import OutboundMailsView, OutboundMailView
@@ -608,6 +609,30 @@ def build_router(
     ) -> ProcessingJobView:
         job = await svc.sender_customers.confirm(context, message_id, body.customer_code)
         return await idem.record(job, status_code=202)
+
+    # Design's reply written in the mail (AI item 6): read by the model on
+    # request, attached to its case only when Sales confirms the values, each
+    # checked against the mail again.
+    @router.get(
+        "/inbox/{message_id}/design-reply",
+        response_model=DesignTextReadingView,
+        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+    )
+    async def design_text_reply(
+        message_id: _MessageId, context: Ctx, svc: Svc
+    ) -> DesignTextReadingView:
+        return await svc.design_text_replies.read(context, message_id)
+
+    @router.post(
+        "/inbox/{message_id}/design-reply",
+        response_model=CaseChangeView,
+        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+    )
+    async def confirm_design_text_reply(
+        message_id: _MessageId, body: ModelDesignReply, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChangeView:
+        change = await svc.design_text_replies.confirm(context, message_id, body)
+        return await idem.record(change)
 
     @router.post(
         "/inbox/{message_id}/reopen",

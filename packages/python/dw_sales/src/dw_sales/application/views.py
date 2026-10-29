@@ -1174,10 +1174,13 @@ class DesignReplyView(BaseModel):
 
     message_id: str
     received_at: datetime
-    attachment_id: str
+    # None: Design wrote the reply in the mail (AI item 6), read by a model
+    # and confirmed by ``confirmed_by``; each anchor quotes its words.
+    attachment_id: str | None
     ycbg_no: str
     reply_date: date
     lines: list[DesignLineView]
+    confirmed_by: uuid.UUID | None = None
 
 
 class PricedLineView(BaseModel):
@@ -1620,7 +1623,8 @@ def quote_case(
             DesignReplyView(
                 message_id=reply.message_id,
                 received_at=reply.received_at,
-                attachment_id=reply.attachment.attachment_id,
+                attachment_id=reply.attachment.attachment_id if reply.attachment else None,
+                confirmed_by=reply.confirmed_by,
                 ycbg_no=reply.ycbg_no,
                 reply_date=reply.document.reply_date.value,
                 lines=[

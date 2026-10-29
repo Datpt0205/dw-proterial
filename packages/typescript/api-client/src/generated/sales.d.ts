@@ -72,6 +72,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/inbox/{message_id}/design-reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Design Text Reply */
+        get: operations["design_text_reply_api_v1_sales_inbox__message_id__design_reply_get"];
+        put?: never;
+        /** Confirm Design Text Reply */
+        post: operations["confirm_design_text_reply_api_v1_sales_inbox__message_id__design_reply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox/{message_id}/handled": {
         parameters: {
             query?: never;
@@ -2246,7 +2264,9 @@ export interface components {
         /** DesignReplyView */
         DesignReplyView: {
             /** Attachment Id */
-            attachment_id: string;
+            attachment_id: string | null;
+            /** Confirmed By */
+            confirmed_by?: string | null;
             /** Lines */
             lines: components["schemas"]["DesignLineView"][];
             /** Message Id */
@@ -2263,6 +2283,46 @@ export interface components {
             reply_date: string;
             /** Ycbg No */
             ycbg_no: string;
+        };
+        /** DesignTextLineView */
+        DesignTextLineView: {
+            /** Bp Code */
+            bp_code: string;
+            /** Copper Kg Per Km */
+            copper_kg_per_km: string | null;
+            /** Line No */
+            line_no: number;
+            /** Prv Code */
+            prv_code: string | null;
+            /** Spec No */
+            spec_no: string;
+        };
+        /**
+         * DesignTextReadingView
+         * @description What DW1 read of a Design reply written in the mail, for Sales to
+         *     confirm; always marked as the model's.
+         */
+        DesignTextReadingView: {
+            /** Case Id */
+            case_id?: string | null;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["DesignTextLineView"][];
+            /** Message Id */
+            message_id: string;
+            /** Model Profile */
+            model_profile?: string | null;
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "read" | "no_case" | "unavailable";
+            /** Ycbg No */
+            ycbg_no?: string | null;
         };
         /**
          * DiffRow
@@ -3206,6 +3266,30 @@ export interface components {
             total: number;
             /** Without Disposition */
             without_disposition: number;
+        };
+        /**
+         * ModelDesignReply
+         * @description What the model reads, and what Sales confirms: the YCBG answered and
+         *     each line, every value as the mail writes it.
+         */
+        ModelDesignReply: {
+            /** Lines */
+            lines: components["schemas"]["ModelReplyLine"][];
+            /** Ycbg No */
+            ycbg_no: string;
+        };
+        /** ModelReplyLine */
+        ModelReplyLine: {
+            /** Bp Code */
+            bp_code: string;
+            /** Copper Kg Per Km */
+            copper_kg_per_km?: string | null;
+            /** Line No */
+            line_no: number;
+            /** Prv Code */
+            prv_code?: string | null;
+            /** Spec No */
+            spec_no: string;
         };
         /**
          * ModelStep
@@ -5388,6 +5472,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessingJobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    design_text_reply_api_v1_sales_inbox__message_id__design_reply_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignTextReadingView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_design_text_reply_api_v1_sales_inbox__message_id__design_reply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelDesignReply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChangeView"];
                 };
             };
             /** @description Validation Error */
