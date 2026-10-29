@@ -170,6 +170,8 @@ DW1 tự xử lý thư mới. Người dùng cũng có thể bấm **DW xử lý
 | Chuyển Sales xử lý | DW1 không xử lý thư này; dòng thư ghi lý do và người phụ trách | Đọc thư và xử lý như thường lệ |
 | DW1 chưa xử lý được | Có lỗi khi đọc thư; dòng thư ghi lý do | Bấm **DW xử lý lại**, hoặc báo IT nếu lỗi lặp lại |
 
+Nếu DW1 không đọc được một tệp thư (tệp hỏng hoặc lớn hơn 20 MB), thư đó không vào Hộp thư. DW1 gửi thông báo "Có thư DW1 không đọc được" kèm tên tệp cho người xử lý hộp thư; mở thư gốc trong Outlook và xử lý tay. Nếu DW1 không đọc được cả thư mục thư, người xử lý hộp thư nhận thông báo "DW1 không đọc được thư mục thư", mỗi ngày một lần cho tới khi thư mục được nối lại; báo IT.
+
 Thư phản hồi Design đến trước khi hồ sơ báo giá có số YCBG sẽ được chuyển Sales. Sau khi ghi số YCBG, bấm **DW xử lý lại** trên thư phản hồi để DW1 gắn thư vào đúng hồ sơ.
 
 ## Xử lý đơn hàng
@@ -421,6 +423,12 @@ Một số việc ít gặp làm trên trang quản trị đăng nhập (Keycloa
 | Yêu cầu một người cài xác thực hai lớp (OTP) | Users → chọn người → ô "Required user actions" → chọn "Configure OTP" → Save; lần đăng nhập sau người đó được hướng dẫn cài |
 
 Không tạo người dùng trực tiếp trên trang quản trị đăng nhập: tài khoản tạo ở đó không có vai trên cổng DW và không đặt lại mật khẩu được từ khung Thành viên.
+
+## Việc nền lỗi
+
+Một số việc DW chạy nền, không do ai bấm chờ: đọc tệp dữ liệu chủ vừa tải lên, áp dụng phiên bản quy tắc hoặc mẫu PO vừa được duyệt, tạo quy tắc từ tệp mẫu. Khi một việc lỗi, DW thử lại tối đa 5 lần, các lần cách nhau 30 giây, 1 phút, 2 phút, 4 phút, nên một dịch vụ khởi động lại vài phút không làm mất việc. Hết 5 lần mà vẫn lỗi, việc dừng lại và quản trị viên công ty nhận thông báo "Một việc nền đã dừng".
+
+Mở **Quản trị → Việc nền lỗi** để xem các việc đang dừng, lúc phát sinh và loại lỗi. Khắc phục nguyên nhân trước (ví dụ dịch vụ đọc tệp đang tắt), rồi bấm **Chạy lại**. Mỗi lần chạy lại được ghi vào nhật ký kiểm toán. Trang chỉ hiện loại lỗi; nội dung lỗi đầy đủ nằm trong nhật ký của worker, gửi FPT khi cần.
 
 # Câu hỏi thường gặp
 
