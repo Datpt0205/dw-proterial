@@ -36,6 +36,7 @@ from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutSe
 from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.model_readiness import ModelReadiness
+from dw_sales.application.model_reading import InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
@@ -57,6 +58,7 @@ from dw_sales.application.routed_mail import RoutedMailService
 from dw_sales.application.rule_drafts import RuleDraftService, RuleDraftUnitOfWorkFactory
 from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
 from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
+from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort
 from dw_sales.application.telemetry import SalesSpans, SpanPort
 from dw_sales.application.worker_service import WorkerService
@@ -93,6 +95,8 @@ class SalesServices:
     catalog_imports: CatalogImportService
     # A finding explained in words by the model, on request (AI item 12).
     finding_explanations: FindingExplanations
+    # A customer suggested for a sender no domain matched (AI item 5).
+    sender_customers: SenderCustomers
     gate: Gate
 
 
@@ -140,9 +144,16 @@ def assemble(
     scanner: MalwareScanPort,
     # Where an item code Sales confirms is kept (the catalog, in practice).
     converts: ConvertLedgerPort,
-    finding_explanations: FindingExplanations,
+    # Where a sender Sales confirms as a customer's is kept (the catalog too).
+    senders: SenderLedgerPort,
+    # The one-call door's model, for the steps a person asks for on a page
+    # (AI items 5 and 12); None where no model is configured.
+    one_call: InterpretationPort | None,
+    worker_id: str,
+    worker_version: str,
 ) -> SalesAssembly:
     gate = Gate(authorization)
+    queue = ProcessingService(uow, gate, clock, ids, inbox)
     sources = SourceService(uow, gate, clock, inbox, files, source_cache)
     processing = InboxProcessing(
         uow,
@@ -164,7 +175,7 @@ def assemble(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
         inbox=InboxQueries(uow, gate, inbox, book),
-        processing=ProcessingService(uow, gate, clock, ids, inbox),
+        processing=queue,
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
         orders=OrderQueries(uow, gate, pending, step_activity),
         order_commands=OrderCommands(uow, gate, clock, ids, intake, pending, converts),
@@ -195,7 +206,22 @@ def assemble(
         ),
         rule_drafts=RuleDraftService(draft_uow, gate, clock, ids),
         catalog_imports=CatalogImportService(catalog_uow, gate, catalog, templates, clock, ids),
-        finding_explanations=finding_explanations,
+        finding_explanations=FindingExplanations(
+            uow, gate, catalog, one_call, clock, ids, worker_id, worker_version
+        ),
+        sender_customers=SenderCustomers(
+            uow,
+            gate,
+            inbox,
+            catalog,
+            senders,
+            queue,
+            one_call,
+            clock,
+            ids,
+            worker_id,
+            worker_version,
+        ),
         gate=gate,
     )
     decisions = CaseDecisions(uow, gate, clock, ids, quotation, processing, notifications)

@@ -690,7 +690,7 @@ class QuotationService:
         rules = await step.rules.rules(scope)
         if not await step.gate.allows(scope, rules, ModelStep.RFQ_EXTRACTION):
             raise RequestNotExtractedError(message_id, "no_request_file")
-        by_domain = await self.catalog.customer_by_email_domain(scope, message.sender.domain)
+        by_domain = await self.catalog.customer_by_sender(scope, message.sender.address)
         customer = by_domain.data
         if customer is None:
             raise RequestNotExtractedError(message_id, "customer_unknown")
@@ -720,7 +720,7 @@ class QuotationService:
         self, scope: SalesScope, message: InboundMessage, document: RfqDocument
     ) -> tuple[Customer, CustomerSource, datetime]:
         """The requester, how it was found, and the ``as_of`` of what was read."""
-        by_domain = await self.catalog.customer_by_email_domain(scope, message.sender.domain)
+        by_domain = await self.catalog.customer_by_sender(scope, message.sender.address)
         if by_domain.data is not None:
             return by_domain.data, "sender_domain", by_domain.as_of
         if document.buyer is not None:

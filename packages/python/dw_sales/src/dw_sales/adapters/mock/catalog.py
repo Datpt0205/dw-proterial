@@ -174,6 +174,12 @@ class MockSalesCatalog:
     ) -> Snapshot[Customer | None]:
         return self._one(scope, self._customer_by_domain.get(domain.lower()))
 
+    async def customer_by_sender(
+        self, scope: SalesScope, address: str
+    ) -> Snapshot[Customer | None]:
+        """By the address's domain: the mock keeps no confirmed sender."""
+        return await self.customer_by_email_domain(scope, address.rpartition("@")[2])
+
     async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]:
         return self._many(scope, tuple(self._customers.values()))
 

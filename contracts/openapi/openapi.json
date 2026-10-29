@@ -11374,6 +11374,106 @@
         "title": "ScreeningRow",
         "type": "object"
       },
+      "SenderCustomerBody": {
+        "additionalProperties": false,
+        "description": "The customer Sales confirms an unknown sender as (AI item 5).",
+        "properties": {
+          "customer_code": {
+            "pattern": "^[A-Z][A-Z0-9]{1,15}$",
+            "title": "Customer Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_code"
+        ],
+        "title": "SenderCustomerBody",
+        "type": "object"
+      },
+      "SenderCustomerView": {
+        "description": "A suggestion, or why there is none; always marked as the model's.",
+        "properties": {
+          "customer_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Code"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "suggested",
+              "no_match",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "sender",
+          "status"
+        ],
+        "title": "SenderCustomerView",
+        "type": "object"
+      },
       "SetEnabledRequest": {
         "additionalProperties": false,
         "properties": {
@@ -17333,6 +17433,118 @@
           }
         },
         "summary": "Process All",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/inbox/{message_id}/customer": {
+      "get": {
+        "operationId": "sender_customer_api_v1_sales_inbox__message_id__customer_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SenderCustomerView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sender Customer",
+        "tags": [
+          "sales"
+        ]
+      },
+      "post": {
+        "operationId": "confirm_sender_customer_api_v1_sales_inbox__message_id__customer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SenderCustomerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingJobView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Sender Customer",
         "tags": [
           "sales"
         ]

@@ -67,6 +67,7 @@ import { ScopeGate } from "../_components/scope-gate";
 import { MessageDispositionTag, ProcessingTag } from "../_components/tags";
 import { HandledPanel } from "./handled-panel";
 import { HandoffDraft } from "./handoff-draft";
+import { SenderCustomerPanel } from "./sender-customer";
 import { useFillHeight } from "../../../lib/use-fill-height";
 
 type Message = SalesSchemas["InboxMessageView"];
@@ -451,6 +452,16 @@ function Inbox() {
                         Chi tiết kỹ thuật (cho IT): {m.disposition.detail}
                       </Typography.Text>
                     </Typography.Paragraph>
+                  ) : null}
+                  {m.disposition.reason === "customer_unknown" &&
+                  !m.disposition.handled_at ? (
+                    <SenderCustomerPanel
+                      messageId={m.message_id}
+                      onConfirmed={() => {
+                        inbox.reload();
+                        overview.reload();
+                      }}
+                    />
                   ) : null}
                   {m.disposition.kind === "routed_to_sales" ? (
                     <HandledPanel

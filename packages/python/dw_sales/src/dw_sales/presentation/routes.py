@@ -77,6 +77,7 @@ from dw_sales.application.rules import (
     RulesInForceView,
     RuleVersionView,
 )
+from dw_sales.application.sender_customers import SenderCustomerView
 from dw_sales.application.services import SalesServices
 from dw_sales.application.source import MessageTextView, SourceView
 from dw_sales.application.views import (
@@ -164,6 +165,14 @@ class CatalogUploadBody(BaseModel):
 
     def data(self) -> bytes:
         return _file_bytes(self.content_b64)
+
+
+class SenderCustomerBody(BaseModel):
+    """The customer Sales confirms an unknown sender as (AI item 5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer_code: CustomerCode
 
 
 class RuleWordsBody(BaseModel):
@@ -497,6 +506,29 @@ def build_router(
     ) -> HandledView:
         view = await svc.routed_mail.handle(context, message_id, body.note)
         return await idem.record(view)
+
+    # Whose mail an unknown sender's is (AI item 5): the model suggests from
+    # the mail, code checks the words it quotes; Sales confirms, the address
+    # is kept as the customer's and the message queued again (202).
+    @router.get(
+        "/inbox/{message_id}/customer",
+        response_model=SenderCustomerView,
+        dependencies=[scopes(SalesScopes.INBOX_PROCESS)],
+    )
+    async def sender_customer(message_id: _MessageId, context: Ctx, svc: Svc) -> SenderCustomerView:
+        return await svc.sender_customers.suggest(context, message_id)
+
+    @router.post(
+        "/inbox/{message_id}/customer",
+        response_model=ProcessingJobView,
+        status_code=202,
+        dependencies=[scopes(SalesScopes.INBOX_PROCESS)],
+    )
+    async def confirm_sender_customer(
+        message_id: _MessageId, body: SenderCustomerBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> ProcessingJobView:
+        job = await svc.sender_customers.confirm(context, message_id, body.customer_code)
+        return await idem.record(job, status_code=202)
 
     @router.post(
         "/inbox/{message_id}/reopen",

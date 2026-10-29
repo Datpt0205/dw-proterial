@@ -54,6 +54,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/inbox/{message_id}/customer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sender Customer */
+        get: operations["sender_customer_api_v1_sales_inbox__message_id__customer_get"];
+        put?: never;
+        /** Confirm Sender Customer */
+        post: operations["confirm_sender_customer_api_v1_sales_inbox__message_id__customer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox/{message_id}/handled": {
         parameters: {
             query?: never;
@@ -4344,6 +4362,39 @@ export interface components {
             /** Quote Nos */
             quote_nos: string[];
         };
+        /**
+         * SenderCustomerBody
+         * @description The customer Sales confirms an unknown sender as (AI item 5).
+         */
+        SenderCustomerBody: {
+            /** Customer Code */
+            customer_code: string;
+        };
+        /**
+         * SenderCustomerView
+         * @description A suggestion, or why there is none; always marked as the model's.
+         */
+        SenderCustomerView: {
+            /** Customer Code */
+            customer_code?: string | null;
+            /** Customer Name */
+            customer_name?: string | null;
+            /** Evidence */
+            evidence?: string | null;
+            /** Message Id */
+            message_id: string;
+            /** Model Profile */
+            model_profile?: string | null;
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /** Sender */
+            sender: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "suggested" | "no_match" | "unavailable";
+        };
         /** SettingView */
         SettingView: {
             key: components["schemas"]["RuleKey"];
@@ -5035,6 +5086,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessingQueuedView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sender_customer_api_v1_sales_inbox__message_id__customer_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SenderCustomerView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_sender_customer_api_v1_sales_inbox__message_id__customer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SenderCustomerBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingJobView"];
                 };
             };
             /** @description Validation Error */

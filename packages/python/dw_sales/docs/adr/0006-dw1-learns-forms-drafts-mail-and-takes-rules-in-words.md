@@ -89,3 +89,17 @@ head). The model proposes, it never applies. Rules that read as engineering
 - A model step remains measured before it is trusted (ADR 0005 §9): the
   learned layout rides on `layout_proposal`'s bar, and the two new steps get
   their own datasets and bars before their switches do anything.
+
+## Addendum, 2026-10-29: a sender is learned the same way (the AI list, item 5)
+
+A mail from an address on no customer's domain was `customer_unknown` for
+every mail from it until the master data changed. Now the model reads which
+customer wrote it, from candidates code picks (a word of a customer's name no
+other customer's name holds, found in the mail), and code accepts only a
+candidate whose words, quoted from the mail, hold such a word. A person
+confirms; the sender's **address** is then kept as the customer's
+(`sales.recorded_customer_senders`) and the mail processed again. The
+address, not the domain: a buyer writing from a public mail provider must not
+make every sender there that customer's. The customer's own domains answer
+first. As with the convert list, the confirmation is the person's decision
+and no head's batch review follows (Đạt, 2026-10-29).

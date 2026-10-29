@@ -326,7 +326,7 @@ class OrderIntake:
             return IntakeOutcome(message.message_id, kind, None)
         if classification.thread is not None:
             return await self._reply(scope, message, classification.thread, run)
-        sender = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
+        sender = (await self.catalog.customer_by_sender(scope, message.sender.address)).data
         if kind is MessageKind.OTHER:
             reason = classification.reason or _other_reason(message)
             outcome = self._routed(message, kind, reason, sender, classification.detail)
@@ -353,7 +353,7 @@ class OrderIntake:
                 RoutingReason.MALWARE_DETECTED,
                 "; ".join(f"{a.attachment_id}: {a.infected}" for a in infected),
             )
-        sender = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
+        sender = (await self.catalog.customer_by_sender(scope, message.sender.address)).data
         rules = await self.rules.rules(scope)
         by_content = await self._by_content(scope, attached, sender, rules.intake)
         if len(by_content) > 1:

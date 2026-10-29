@@ -27,6 +27,10 @@ An item code Sales confirmed for a customer's own code (`learn_convert`,
 `RecordedConvertsPort`, the AI list's item 3) is kept the same way: a later
 PO line with that code maps through it at once, the list answers first, and
 the first confirmation is the one kept.
+
+A sender Sales confirmed as a customer's (`learn_sender`,
+`RecordedSendersPort`, the AI list's item 5) is found by `customer_by_sender`
+after the customer's own domains: the address, never its domain.
 """
 
 from __future__ import annotations
@@ -153,6 +157,28 @@ class RecordedConvertsPort(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class RecordedSender:
+    """The customer Sales confirmed a sender's address as, and when."""
+
+    customer_code: str
+    recorded_at: datetime
+
+
+class RecordedSendersPort(Protocol):
+    """The senders Sales confirmed as a customer's, in the scope's tenant and
+    workspace (RLS), read the same by every process. Addresses lowercase."""
+
+    async def sender(self, scope: SalesScope, address: str) -> RecordedSender | None: ...
+
+    async def learn(
+        self, scope: SalesScope, address: str, customer_code: str, *, by: uuid.UUID, message_id: str
+    ) -> None:
+        """Keeps the address as the customer's unless it is already kept: the
+        first confirmation stays."""
+        ...
+
+
 class RecordedQuotationsPort(Protocol):
     """The quotations Sales sent and confirmed, in the scope's tenant and
     workspace (RLS), read the same by every process."""
@@ -174,6 +200,7 @@ class SnapshotSalesCatalog:
     fallback: FallbackCatalogPort
     recorded: RecordedQuotationsPort
     recorded_converts: RecordedConvertsPort
+    recorded_senders: RecordedSendersPort
 
     async def _list(self, scope: SalesScope, catalog_list: CatalogList) -> ApprovedList | None:
         return await self.approved.approved(scope, catalog_list)
@@ -191,6 +218,34 @@ class SnapshotSalesCatalog:
         if own is None:
             return await self.fallback.customer_by_email_domain(scope, domain)
         return Snapshot(own.customer_by_domain(domain.lower()), own.as_of)
+
+    async def customer_by_sender(
+        self, scope: SalesScope, address: str
+    ) -> Snapshot[Customer | None]:
+        """The customer of the sender's domain, else the one Sales confirmed
+        the address as."""
+        by_domain = await self.customer_by_email_domain(scope, address.rpartition("@")[2])
+        if by_domain.data is not None:
+            return by_domain
+        kept = await self.recorded_senders.sender(scope, address.lower())
+        if kept is None:
+            return by_domain
+        found = await self.customer_by_code(scope, kept.customer_code)
+        if found.data is None:
+            return by_domain
+        return Snapshot(found.data, max(found.as_of, kept.recorded_at))
+
+    async def learn_sender(
+        self, scope: SalesScope, address: str, customer_code: str, *, by: uuid.UUID, message_id: str
+    ) -> bool:
+        """Implements `SenderLedgerPort`: keeps the address as the customer's;
+        False when the sender's domain already answers, which it keeps doing."""
+        if (await self.customer_by_email_domain(scope, address.rpartition("@")[2])).data:
+            return False
+        await self.recorded_senders.learn(
+            scope, address.lower(), customer_code, by=by, message_id=message_id
+        )
+        return True
 
     async def customers(self, scope: SalesScope) -> Snapshot[Sequence[Customer]]:
         own = await self._list(scope, CatalogList.CUSTOMERS)
