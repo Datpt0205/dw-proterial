@@ -133,6 +133,18 @@ export class SalesApi {
     return this.get<"/api/v1/sales/pipeline">("/api/v1/sales/pipeline");
   }
 
+  /** The case's mail thread summarised by the model, each point citing its
+   * mails (AI item 8); nothing is stored. */
+  threadSummary(kind: "order" | "quote", caseId: string) {
+    return kind === "order"
+      ? this.get<"/api/v1/sales/orders/{case_id}/thread-summary">(
+          `/api/v1/sales/orders/${enc(caseId)}/thread-summary`,
+        )
+      : this.get<"/api/v1/sales/quotes/{case_id}/thread-summary">(
+          `/api/v1/sales/quotes/${enc(caseId)}/thread-summary`,
+        );
+  }
+
   /** One case's events, oldest first. */
   history(kind: "order" | "quote", caseId: string) {
     return kind === "order"

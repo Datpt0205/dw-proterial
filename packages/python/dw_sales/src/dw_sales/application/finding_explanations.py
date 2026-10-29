@@ -23,7 +23,6 @@ date or a code no fact holds, so every figure in it is one the case has.
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -38,6 +37,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, PriceView, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
+from dw_sales.application.figure_check import unsupported
 from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.application.runs import caller_run
@@ -52,10 +52,6 @@ FINDING_EXPLANATION: Final = PromptRef("sales.finding_explanation", "1.0.0")
 PROMPT_TOKENS: Final = 1300
 _OUTPUT_TOKENS: Final = 600
 _ORDER: Final = "sales_order_case"
-# A number, a date or a code as it may be written: a run of digits, with the
-# letters, separators and decimal marks that hold it together (`Q26-0104`,
-# `0.712`, `31/12/2026`, `1,200`).
-_FIGURE = re.compile(r"[A-Za-z]*\d[\w./,\-]*")
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -82,20 +78,9 @@ class FindingExplanationView(BaseModel):
     model_profile: str | None = None
 
 
-def figures(text: str) -> set[str]:
-    """Each figure in ``text``, its trailing punctuation dropped."""
-    return {m.group(0).rstrip(".,-/") for m in _FIGURE.finditer(text)}
-
-
-# Names that hold a digit and are no figure: the Digital Workers' own.
-_NAMES: Final = frozenset({"DW1", "DW2"})
-
-
 def unsupported_figures(answer: ModelExplanation, facts: str) -> set[str]:
-    """The figures the answer holds that no fact holds."""
-    written = (figures(answer.explanation) | figures(answer.check or "")) - _NAMES
-    known = figures(facts)
-    return {f for f in written if f not in known and not any(f in k for k in known)}
+    """The figures the answer holds that no fact holds (`figure_check`)."""
+    return unsupported(f"{answer.explanation} {answer.check or ''}", facts)
 
 
 def _text(value: object) -> object:

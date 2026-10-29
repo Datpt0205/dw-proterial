@@ -20,6 +20,7 @@ from dw_sales.evals.requests import GRADERS as REQUEST_GRADERS
 from dw_sales.evals.rule_drafts import GRADERS as RULE_DRAFT_GRADERS
 from dw_sales.evals.rule_words import GRADERS as RULE_WORDS_GRADERS
 from dw_sales.evals.sender_customers import GRADERS as SENDER_GRADERS
+from dw_sales.evals.thread_summaries import GRADERS as THREAD_GRADERS
 
 # Every grader, failing a live case whose model gave no usable answer
 # (`recorded.failing_without_live_answers`): one wrap here, so a grader
@@ -40,6 +41,7 @@ GRADERS = {
         **RULE_WORDS_GRADERS,
         **EXPLANATION_GRADERS,
         **SENDER_GRADERS,
+        **THREAD_GRADERS,
     }.items()
 }
 

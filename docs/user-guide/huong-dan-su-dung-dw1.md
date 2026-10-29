@@ -292,6 +292,7 @@ Trang **Hồ sơ → Pipeline hồ sơ** hiện mọi hồ sơ theo trạng thá
 - Chọn **Đơn hàng** hoặc **Báo giá** để đổi quy trình; chọn **Việc của tôi** để chỉ xem hồ sơ đang chờ mình.
 - Mỗi cột cuộn riêng; bấm vào số PO hoặc RFQ trên thẻ để mở hồ sơ.
 - Trang **Hồ sơ → Đơn hàng** và **Hồ sơ → Báo giá** hiện cùng các hồ sơ dưới dạng bảng, lọc được theo trạng thái.
+- Trên trang một hồ sơ, thẻ **Tóm tắt chuỗi thư** có nút **DW1 tóm tắt**: DW1 đọc các thư của hồ sơ (PO, bản sửa, thư khách trả lời, phản hồi Design) và viết vài ý về điều đang diễn ra, mỗi ý kèm mã thư làm căn cứ; bấm mã thư để mở thư đó. Ý nào dùng con số không có trong thư được trích bị bỏ, và thẻ ghi rõ bao nhiêu ý bị bỏ. Bản tóm tắt gắn nhãn "Máy viết" và không được lưu.
 
 ## Sửa quy tắc
 

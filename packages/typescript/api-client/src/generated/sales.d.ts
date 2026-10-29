@@ -762,6 +762,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/thread-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Thread */
+        get: operations["order_thread_api_v1_sales_orders__case_id__thread_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/overview": {
         parameters: {
             query?: never;
@@ -1135,6 +1152,23 @@ export interface paths {
         put?: never;
         /** Submit */
         post: operations["submit_api_v1_sales_quotes__case_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quotes/{case_id}/thread-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote Thread */
+        get: operations["quote_thread_api_v1_sales_quotes__case_id__thread_summary_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4764,6 +4798,13 @@ export interface components {
             /** Unit Price */
             unit_price: string;
         };
+        /** SummaryPoint */
+        SummaryPoint: {
+            /** Cites */
+            cites: string[];
+            /** Text */
+            text: string;
+        };
         /** SupersededView */
         SupersededView: {
             /** Attachment Id */
@@ -4822,6 +4863,41 @@ export interface components {
             end: number;
             /** Start */
             start: number;
+        };
+        /**
+         * ThreadSummaryView
+         * @description A summary, or why there is none; always marked as the model's.
+         */
+        ThreadSummaryView: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /**
+             * Dropped
+             * @default 0
+             */
+            dropped: number;
+            /**
+             * Mails
+             * @default 0
+             */
+            mails: number;
+            /** Model Profile */
+            model_profile?: string | null;
+            /**
+             * Points
+             * @default []
+             */
+            points: components["schemas"]["SummaryPoint"][];
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "summarized" | "empty" | "unavailable" | "refused";
         };
         /** TimeStat */
         TimeStat: {
@@ -6510,6 +6586,37 @@ export interface operations {
             };
         };
     };
+    order_thread_api_v1_sales_orders__case_id__thread_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadSummaryView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     overview_api_v1_sales_overview_get: {
         parameters: {
             query?: never;
@@ -7278,6 +7385,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_thread_api_v1_sales_quotes__case_id__thread_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadSummaryView"];
                 };
             };
             /** @description Validation Error */

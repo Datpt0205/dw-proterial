@@ -12645,6 +12645,27 @@
         "title": "SuggestionView",
         "type": "object"
       },
+      "SummaryPoint": {
+        "properties": {
+          "cites": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cites",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "cites"
+        ],
+        "title": "SummaryPoint",
+        "type": "object"
+      },
       "SupersededView": {
         "properties": {
           "attachment_id": {
@@ -13328,6 +13349,72 @@
           "end"
         ],
         "title": "TextRange",
+        "type": "object"
+      },
+      "ThreadSummaryView": {
+        "description": "A summary, or why there is none; always marked as the model's.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "dropped": {
+            "default": 0,
+            "title": "Dropped",
+            "type": "integer"
+          },
+          "mails": {
+            "default": 0,
+            "title": "Mails",
+            "type": "integer"
+          },
+          "model_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile"
+          },
+          "points": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SummaryPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "prompt_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Ref"
+          },
+          "status": {
+            "enum": [
+              "summarized",
+              "empty",
+              "unavailable",
+              "refused"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "status"
+        ],
+        "title": "ThreadSummaryView",
         "type": "object"
       },
       "TimeStat": {
@@ -19917,6 +20004,49 @@
         ]
       }
     },
+    "/api/v1/sales/orders/{case_id}/thread-summary": {
+      "get": {
+        "operationId": "order_thread_api_v1_sales_orders__case_id__thread_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadSummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Thread",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/sales/overview": {
       "get": {
         "operationId": "overview_api_v1_sales_overview_get",
@@ -21401,6 +21531,49 @@
           }
         },
         "summary": "Submit",
+        "tags": [
+          "sales"
+        ]
+      }
+    },
+    "/api/v1/sales/quotes/{case_id}/thread-summary": {
+      "get": {
+        "operationId": "quote_thread_api_v1_sales_quotes__case_id__thread_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadSummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quote Thread",
         "tags": [
           "sales"
         ]

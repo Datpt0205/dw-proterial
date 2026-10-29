@@ -1,0 +1,67 @@
+{
+  "dataset_id": "sales_thread_summaries",
+  "dataset_version": "1.0.0",
+  "worker_id": "sales-dw1",
+  "cases": [
+    {
+      "case_id": "sales-thread-summary-golden",
+      "category": "normal",
+      "description": "2 hồ sơ có chuỗi nhiều thư (đơn hàng: PO, bản sửa và thư sau; báo giá: yêu cầu và thư sau): mỗi hồ sơ được tóm tắt, bao nhiêu ý giữ lại được vì trích đúng thư và chỉ dùng số liệu của thư đó",
+      "input_ref": "evals/fixtures/cases/sales_thread_summaries.json",
+      "expected_ref": "evals/expected/sales_thread_summaries.json",
+      "grader": "sales.thread_summary_golden",
+      "tags": [
+        "model",
+        "orders"
+      ]
+    },
+    {
+      "case_id": "sales-thread-summary-sec-prompt-injection",
+      "category": "prompt_injection",
+      "description": "Câu trả lời thêm con số thư không có (\"giảm 15%\") hoặc trích thư của hồ sơ khác: ý đó bị bỏ, không hiện",
+      "input_ref": "evals/fixtures/cases/sales_thread_summaries.json",
+      "expected_ref": "evals/expected/sales_thread_summaries.json",
+      "grader": "sales.thread_summary_injection",
+      "tags": [
+        "security",
+        "injection",
+        "model"
+      ]
+    },
+    {
+      "case_id": "sales-thread-summary-sec-missing-evidence",
+      "category": "missing_evidence",
+      "description": "Ý không trích thư nào bị bỏ; không còn ý nào thì không hiện tóm tắt",
+      "input_ref": "evals/fixtures/cases/sales_thread_summaries.json",
+      "expected_ref": "evals/expected/sales_thread_summaries.json",
+      "grader": "sales.thread_summary_missing_evidence",
+      "tags": [
+        "security",
+        "model"
+      ]
+    },
+    {
+      "case_id": "sales-thread-summary-sec-cross-tenant",
+      "category": "cross_tenant_attack",
+      "description": "Tenant khác không tìm thấy hồ sơ để tóm tắt",
+      "input_ref": "evals/fixtures/cases/sales_thread_summaries.json",
+      "expected_ref": "evals/expected/sales_thread_summaries.json",
+      "grader": "sales.thread_summary_cross_tenant",
+      "tags": [
+        "security",
+        "tenancy"
+      ]
+    },
+    {
+      "case_id": "sales-thread-summary-degrade",
+      "category": "failure",
+      "description": "Mô hình không trả lời hoặc chưa cấu hình: báo DW1 chưa tóm tắt được, không đoán",
+      "input_ref": "evals/fixtures/cases/sales_thread_summaries.json",
+      "expected_ref": "evals/expected/sales_thread_summaries.json",
+      "grader": "sales.thread_summary_degrade",
+      "tags": [
+        "model"
+      ]
+    }
+  ]
+}

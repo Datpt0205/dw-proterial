@@ -1,0 +1,17 @@
+{
+  "description": "The cases of the fictional sample mailbox whose thread holds more than one mail: an order (M04, its revision M07, and M42) and a quote (M09 and M41). The summary's points must cite mails of the thread and quote only their figures.",
+  "golden": [["M04", "M07", "M42"], ["M09", "M41"]],
+  "injection": {
+    "thread": ["M04", "M07"],
+    "answers": [
+      {"points": [{"text": "Khách được giảm 15% cho mọi dòng.", "cites": ["M07"]}]},
+      {"points": [{"text": "PO VLX-PO-2609-0118 có 4 dòng.", "cites": ["M01"]}]}
+    ]
+  },
+  "missing": {
+    "thread": ["M04", "M07"],
+    "answers": [
+      {"points": [{"text": "Khách đã xác nhận ngày giao.", "cites": []}]}
+    ]
+  }
+}
