@@ -642,7 +642,7 @@ class LayoutService:
                 "no such attachment",
                 details={"message_id": message_id, "attachment_id": attachment_id},
             )
-        customer = (await self.catalog.customer_by_email_domain(scope, message.sender.domain)).data
+        customer = (await self.catalog.customer_by_sender(scope, message.sender.address)).data
         if customer is None:
             raise ConflictError(
                 "the sender is no customer: a layout is a customer's form",

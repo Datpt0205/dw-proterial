@@ -475,9 +475,28 @@
         }
       ],
       "version": "1.0.0"
+    },
+    {
+      "checksum": "87b329bd1daab41170bb15e94535c3182261e1be98445e1e2bf399a74e4df5ad",
+      "dataset_id": "sales_sender_customers",
+      "files": [
+        {
+          "checksum": "5d24eddd0d45be57392511f1ce9e5a29fe8272ba75ba2681cd85bd1370f55a86",
+          "path": "evals/expected/sales_sender_customers.json"
+        },
+        {
+          "checksum": "bbb58464b38b225f6492ee7bf20a3b8bdfeb0525c4ed5e77769165f31d1705ad",
+          "path": "evals/fixtures/cases/sales_sender_customers.json"
+        },
+        {
+          "checksum": "0dc1b61b600f4f50889f42faa4ff61cd2c48c2e33c920d4f30ef330df2ac2ee8",
+          "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/attachments/M15_TVT-PO-0929-01.xlsx"
+        }
+      ],
+      "version": "1.0.0"
     }
   ],
-  "git_sha": "a2e9658bb9d1aaca3118a6af9ff58430b226c0c8",
+  "git_sha": "3a5411f07542cec46368b8e1915c01b9b70f156e",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -679,6 +698,11 @@
     {
       "checksum": "28d50775bfa893a192629e51fdbd26877c9489d52de3e1d504ede4529a487b67",
       "prompt_id": "sales.rule_change_in_words",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "9eca800b67909bfaa1c18ebbf378f29f5de7a928df228a260ead0bd90c813801",
+      "prompt_id": "sales.sender_customer",
       "version": "1.0.0"
     }
   ],

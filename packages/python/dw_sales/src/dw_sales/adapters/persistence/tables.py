@@ -532,6 +532,19 @@ recorded_convert_entries = sa.Table(
     sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
+# The AI list, item 5: the senders Sales confirmed as a customer's
+# (`7f94b09d1905`). Appended, never changed; addresses lowercase.
+recorded_customer_senders = sa.Table(
+    "recorded_customer_senders",
+    metadata,
+    *_scope(),
+    sa.Column("sender_address", sa.Text, primary_key=True),
+    sa.Column("customer_code", sa.Text, nullable=False),
+    sa.Column("confirmed_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("message_id", sa.Text, nullable=False),
+    sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
+)
+
 # WIV-03-023 step 11: the quotations Sales sent and confirmed, which a later PO
 # line is checked against (`c1c192e011e1`). Appended, never changed.
 recorded_quotations = sa.Table(

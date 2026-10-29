@@ -126,7 +126,7 @@ export const ROUTING_ADVICE = {
   sample_request:
     "Khách xin hàng mẫu: xem tình trạng kiểm soát xuất khẩu của khách rồi xử lý theo quy trình hàng mẫu.",
   customer_unknown:
-    "DW1 không xác định được khách hàng từ địa chỉ gửi và tài liệu: kiểm tra người gửi, thêm khách vào Dữ liệu chủ nếu là khách mới.",
+    "DW1 không xác định được khách hàng từ địa chỉ gửi và tài liệu: xem khách DW1 đoán bên dưới rồi xác nhận, hoặc chọn khách khác; nếu là khách mới, thêm vào Dữ liệu chủ.",
   attachment_unreadable:
     "DW1 không đọc được tệp đính kèm: mở tệp gốc để xử lý tay, hoặc thiết lập mẫu PO nếu đây là PO của khách.",
   malware_detected:

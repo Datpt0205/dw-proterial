@@ -76,6 +76,8 @@ _CLEARED = (
     tables.recorded_quotations,
     # And the item codes it confirmed.
     tables.recorded_convert_entries,
+    # And the senders it confirmed as a customer's.
+    tables.recorded_customer_senders,
     tables.worker_state,
     tables.order_cases,
     tables.quote_cases,

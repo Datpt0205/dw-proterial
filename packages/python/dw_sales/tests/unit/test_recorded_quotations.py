@@ -19,7 +19,11 @@ from dw_sales.application.snapshot_catalog import ApprovedList, SnapshotSalesCat
 from dw_sales.domain.catalog import Quotation
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.evals.world import ALPHA, BETA
-from dw_sales.testing.catalog_store import MemoryRecordedConverts, MemoryRecordedQuotations
+from dw_sales.testing.catalog_store import (
+    MemoryRecordedConverts,
+    MemoryRecordedQuotations,
+    MemoryRecordedSenders,
+)
 
 LISTED_AT = datetime(2026, 10, 1, tzinfo=UTC)
 RECORDED_AT = datetime(2026, 10, 29, 9, 0, tzinfo=UTC)
@@ -47,6 +51,7 @@ def _catalog(
         MockSalesCatalog.load(ALPHA),
         recorded,
         MemoryRecordedConverts(FixedClock(RECORDED_AT)),
+        MemoryRecordedSenders(FixedClock(RECORDED_AT)),
     )
 
 

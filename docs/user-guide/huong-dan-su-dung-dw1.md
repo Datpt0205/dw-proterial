@@ -172,6 +172,8 @@ DW1 tự xử lý thư mới. Người dùng cũng có thể bấm **DW xử lý
 
 Nếu DW1 không đọc được một tệp thư (tệp hỏng hoặc lớn hơn 20 MB), thư đó không vào Hộp thư. DW1 gửi thông báo "Có thư DW1 không đọc được" kèm tên tệp cho người xử lý hộp thư; mở thư gốc trong Outlook và xử lý tay. Nếu DW1 không đọc được cả thư mục thư, người xử lý hộp thư nhận thông báo "DW1 không đọc được thư mục thư", mỗi ngày một lần cho tới khi thư mục được nối lại; báo IT.
 
+Thư từ một địa chỉ không thuộc khách nào (người mua viết từ hộp thư mới, hộp thư cá nhân) được chuyển Sales với lý do "Chưa xác định được khách hàng". Mở dòng thư: DW1 đọc chữ ký và tên người gửi, đoán thư của khách nào và trích câu trong thư làm căn cứ (gắn nhãn "Máy đoán"). Nếu đúng, bấm **Đúng, ghi nhớ và xử lý lại**; nếu sai, chọn khách khác trong danh sách rồi bấm **Ghi nhớ và xử lý lại**. DW1 ghi nhớ địa chỉ người gửi đó là của khách đã chọn (chỉ địa chỉ này, không cả tên miền) và xử lý lại thư; thư sau từ địa chỉ này được nhận đúng khách ngay. Nếu thư ký tên một công ty không có trong danh sách, DW1 nêu tên đó: có thể là khách mới, thêm vào Dữ liệu chủ.
+
 Thư phản hồi Design đến trước khi hồ sơ báo giá có số YCBG sẽ được chuyển Sales. Sau khi ghi số YCBG, bấm **DW xử lý lại** trên thư phản hồi để DW1 gắn thư vào đúng hồ sơ.
 
 ## Xử lý đơn hàng

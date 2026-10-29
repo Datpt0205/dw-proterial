@@ -27,6 +27,7 @@ from dw_sales.application.snapshot_catalog import (
     ApprovedList,
     RecordedConvert,
     RecordedQuotation,
+    RecordedSender,
 )
 from dw_sales.domain.catalog import ConvertEntry, Quotation
 from dw_sales.domain.master_data import CatalogList, records_of
@@ -198,6 +199,25 @@ class MemoryRecordedConverts:
         held.setdefault(
             (entry.customer_code, entry.customer_item_code),
             RecordedConvert(entry, self.clock.now()),
+        )
+
+
+@dataclass
+class MemoryRecordedSenders:
+    """`RecordedSendersPort` in memory, each scope's rows its own: the first
+    confirmation of an address kept, as `SqlRecordedSenders`."""
+
+    clock: UtcClock
+    _rows: dict[SalesScope, dict[str, RecordedSender]] = field(default_factory=dict)
+
+    async def sender(self, scope: SalesScope, address: str) -> RecordedSender | None:
+        return self._rows.get(scope, {}).get(address)
+
+    async def learn(
+        self, scope: SalesScope, address: str, customer_code: str, *, by: uuid.UUID, message_id: str
+    ) -> None:
+        self._rows.setdefault(scope, {}).setdefault(
+            address, RecordedSender(customer_code, self.clock.now())
         )
 
 

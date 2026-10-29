@@ -96,6 +96,7 @@ _SALES_TABLES = (
     "sales.recorded_quotations",
     # Migration bbf5aa95bf6f: the item codes Sales confirmed.
     "sales.recorded_convert_entries",
+    "sales.recorded_customer_senders",
 )
 
 
@@ -155,6 +156,11 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {verb for tbl, verb in held if tbl == "recorded_quotations"} == {"SELECT", "INSERT"}
     # A code Sales confirmed is kept as confirmed (bbf5aa95bf6f).
     assert {verb for tbl, verb in held if tbl == "recorded_convert_entries"} == {
+        "SELECT",
+        "INSERT",
+    }
+    # And a sender confirmed as a customer's (7f94b09d1905).
+    assert {verb for tbl, verb in held if tbl == "recorded_customer_senders"} == {
         "SELECT",
         "INSERT",
     }

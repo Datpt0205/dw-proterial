@@ -28,6 +28,7 @@ from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_te
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.persistence.recorded_converts import SqlRecordedConverts
 from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotations
+from dw_sales.adapters.persistence.recorded_senders import SqlRecordedSenders
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.domain.catalog import Quotation
@@ -66,6 +67,7 @@ def _catalog(sessions: async_sessionmaker[AsyncSession], scope: SalesScope) -> S
         MockSalesCatalog.load(scope),
         SqlRecordedQuotations(sessions),
         SqlRecordedConverts(sessions),
+        SqlRecordedSenders(sessions),
     )
 
 

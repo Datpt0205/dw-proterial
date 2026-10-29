@@ -63,7 +63,6 @@ from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies, r
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.application.access import Gate
 from dw_sales.application.activity_ports import StepRowFilter
 from dw_sales.application.case_store import (
     STALE_CASE_VERSION,
@@ -87,7 +86,6 @@ from dw_sales.application.catalog_imports import (
     CatalogParsing,
     CatalogSettlement,
 )
-from dw_sales.application.finding_explanations import FindingExplanations
 from dw_sales.application.followups import BRIEF, FollowupKey, SentFollowup
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import (
@@ -125,6 +123,7 @@ from dw_sales.testing.catalog_store import (
     MemoryCatalogStore,
     MemoryRecordedConverts,
     MemoryRecordedQuotations,
+    MemoryRecordedSenders,
 )
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
 from dw_sales.testing.measurements import MemoryModelMeasurements, passing
@@ -1235,6 +1234,7 @@ def open_world(
         mock,
         MemoryRecordedQuotations(clock),
         MemoryRecordedConverts(clock),
+        MemoryRecordedSenders(clock),
     )
     readers = client_readers(reader or InProcessReaderTransport(), policies.order_rules.intake)
     # The mailbox every service reads, at the door `build_dw1` puts in front of
@@ -1301,16 +1301,6 @@ def open_world(
         worker.worker_id,
         worker.worker_version,
     )
-    explanations = FindingExplanations(
-        uow=store,
-        gate=Gate(ScopeAuthorizationService()),
-        catalog=catalog,
-        model=model,
-        clock=clock,
-        ids=ids,
-        worker_id=worker.worker_id,
-        worker_version=worker.worker_version,
-    )
     assembly = assemble(
         uow=store,
         authorization=ScopeAuthorizationService(),
@@ -1342,7 +1332,10 @@ def open_world(
         step_activity=store,
         scanner=scanning,
         converts=catalog,
-        finding_explanations=explanations,
+        senders=catalog,
+        one_call=model,
+        worker_id=worker.worker_id,
+        worker_version=worker.worker_version,
     )
     register(
         graphs=runtime.graphs,

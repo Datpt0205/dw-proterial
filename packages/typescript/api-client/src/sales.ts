@@ -220,6 +220,24 @@ export class SalesApi {
     );
   }
 
+  /** Whose mail an unknown sender's is, as the model reads it and code
+   * checks it (AI item 5); a suggestion only. */
+  senderCustomer(messageId: string) {
+    return this.get<"/api/v1/sales/inbox/{message_id}/customer">(
+      `/api/v1/sales/inbox/${enc(messageId)}/customer`,
+    );
+  }
+
+  /** Sales confirms the sender as the customer's: the address is kept and
+   * the message queued to be processed again (202). */
+  confirmSenderCustomer(messageId: string, customerCode: string, key: string) {
+    return this.post<"/api/v1/sales/inbox/{message_id}/customer">(
+      `/api/v1/sales/inbox/${enc(messageId)}/customer`,
+      { customer_code: customerCode },
+      key,
+    );
+  }
+
   /** The quotation printed, signed on paper and scanned (PDF, JPG, PNG),
    * kept with the case; no electronic signature (2026-10-28). */
   uploadSignedQuote(

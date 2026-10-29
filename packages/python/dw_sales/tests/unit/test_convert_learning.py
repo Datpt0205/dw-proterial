@@ -19,7 +19,11 @@ from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, open_world
-from dw_sales.testing.catalog_store import MemoryRecordedConverts, MemoryRecordedQuotations
+from dw_sales.testing.catalog_store import (
+    MemoryRecordedConverts,
+    MemoryRecordedQuotations,
+    MemoryRecordedSenders,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -43,7 +47,11 @@ class Lists:
 def _catalog(converts: MemoryRecordedConverts, lists: Lists | None = None) -> SnapshotSalesCatalog:
     clock = FixedClock(AT)
     return SnapshotSalesCatalog(
-        lists or Lists(), MockSalesCatalog.load(ALPHA), MemoryRecordedQuotations(clock), converts
+        lists or Lists(),
+        MockSalesCatalog.load(ALPHA),
+        MemoryRecordedQuotations(clock),
+        converts,
+        MemoryRecordedSenders(clock),
     )
 
 
