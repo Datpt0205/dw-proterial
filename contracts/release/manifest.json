@@ -445,9 +445,24 @@
         }
       ],
       "version": "1.0.0"
+    },
+    {
+      "checksum": "c55fb0f4bae18405c474a2b350019b7d72d8e7e4e21748d2d9680d0db83304a2",
+      "dataset_id": "sales_rule_words",
+      "files": [
+        {
+          "checksum": "9cbab0473f105a48f46a9a5063aa70cf4f1d9ea4d42926d81c65ac15eaa83070",
+          "path": "evals/expected/sales_rule_words.json"
+        },
+        {
+          "checksum": "6e9a91297eab0e25d01906d513070e7a5c278b661312ea65eee425c98bbee998",
+          "path": "evals/fixtures/cases/sales_rule_words.json"
+        }
+      ],
+      "version": "1.0.0"
     }
   ],
-  "git_sha": "f05768268811f3df19c86b5f9bdd26c00f8448f6",
+  "git_sha": "56f2e16135f3c277d5c50ec604c545ee09285682",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -520,6 +535,11 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "280946cde22a22631cff7ec85637d71043228ff804878763e9ace9c1f7c8aaae",
+      "policy_id": "sales_followups",
+      "version": "1.1.0"
+    },
+    {
       "checksum": "2c98a259d0b8b314d4e58169686e61faaafd0ccff881340c11757e9af6ac2b1d",
       "policy_id": "sales_kpi",
       "version": "1.0.0"
@@ -558,6 +578,11 @@
       "checksum": "b9a31c9a7c6a9fc0bc4e60b3ae612354a14227aafee847e9f4ffa37b85fe9f0e",
       "policy_id": "sales_order_rules",
       "version": "1.6.0"
+    },
+    {
+      "checksum": "c030cf419e606d68fd1e9cedd908d3ba04e00ff6456726e37356141068c090f6",
+      "policy_id": "sales_order_rules",
+      "version": "1.7.0"
     },
     {
       "checksum": "7a21c0b330d9f40d51096d8a2d75816025c3ea0bf7fe583f27eab85882c76e90",
@@ -629,6 +654,11 @@
     {
       "checksum": "a810fe957f277681649f1b0a143f6a971f5f1632c4267de91b871c76b376de6a",
       "prompt_id": "sales.rfq_extraction",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "28d50775bfa893a192629e51fdbd26877c9489d52de3e1d504ede4529a487b67",
+      "prompt_id": "sales.rule_change_in_words",
       "version": "1.0.0"
     }
   ],

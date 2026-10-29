@@ -1,4 +1,5 @@
-"""A rule version drafted from a company's own file ("Tạo từ tệp mẫu", phase 1).
+"""A rule version drafted from a company's own file ("Tạo từ tệp mẫu", phase 1),
+or from a person's words (dw_sales ADR 0006, decision 3: `rule_words`).
 
 The person uploads the Excel template their Bravo imports; DW1 drafts a
 `sales_bravo_upload` document from it, which opens in the rules editor as a
@@ -46,6 +47,7 @@ the problem codes, never a header or a value.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import uuid
@@ -70,10 +72,26 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import BravoUploadLayout
 from dw_sales.application.catalog_imports import OutboxPort
 from dw_sales.application.malware import MalwareScanPort
-from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
+from dw_sales.application.model_reading import (
+    InterpretationPort,
+    ModelUnavailableError,
+    PromptRef,
+    estimated_tokens,
+)
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import RequesterAccessPort
-from dw_sales.application.rules import DRAFTABLE, Resolved, RuleKey
+from dw_sales.application.rule_words import (
+    MAX_REQUEST_CHARS,
+    OUTPUT_TOKENS,
+    RULE_CHANGE_IN_WORDS,
+    ModelRuleChanges,
+    WordsApplied,
+    apply_changes,
+    focus_of,
+    leaf_paths,
+)
+from dw_sales.application.rule_words import PROMPT_TOKENS as WORDS_PROMPT_TOKENS
+from dw_sales.application.rules import DRAFTABLE, PRICE_BEARING, Resolved, RuleKey, readable
 from dw_sales.application.runs import WEB_CHANNEL
 from dw_sales.application.source import SheetGrid
 from dw_sales.application.template_reading import (
@@ -113,6 +131,10 @@ _OUTPUT_TOKENS: Final = 600
 MAX_DRAFT_BYTES: Final = 2 * 1024 * 1024
 DRAFT_EXTENSIONS: Final = (".xlsx", ".xls")
 _FILE_NAME: Final = re.compile(r"^[^/\\\x00-\x1f]{1,200}$")
+# The part of a document a request in words is about: a dotted path.
+_FOCUS: Final = r"^[A-Za-z_][A-Za-z0-9_.]*$"
+# What a request in words is kept as, for the worker to read.
+_WORDS_FILE: Final = "yeu-cau.txt"
 # How long a draft is kept: the sweep, and a new request, drop older ones.
 KEPT_FOR: Final = timedelta(days=30)
 # How long a draft may stay queued. The worker reads one in a minute or two;
@@ -145,6 +167,10 @@ class RuleDraft(BaseModel):
     error: str | None = Field(default=None, max_length=500)
     prompt_ref: str | None = None
     model_profile: str | None = None
+    # A draft from words (ADR 0006): what the person typed, and the part of
+    # the document it is about (None: the whole of it).
+    request: str | None = Field(default=None, max_length=MAX_REQUEST_CHARS)
+    focus: str | None = Field(default=None, pattern=_FOCUS, max_length=200)
 
 
 class RuleDraftView(BaseModel):
@@ -170,6 +196,8 @@ class RuleDraftView(BaseModel):
     error: str | None
     prompt_ref: str | None
     model_profile: str | None
+    request: str | None
+    focus: str | None
 
 
 def draft_view(draft: RuleDraft) -> RuleDraftView:
@@ -189,6 +217,8 @@ def draft_view(draft: RuleDraft) -> RuleDraftView:
         error=draft.error,
         prompt_ref=draft.prompt_ref,
         model_profile=draft.model_profile,
+        request=draft.request,
+        focus=draft.focus,
     )
 
 
@@ -320,17 +350,53 @@ class RuleDraftService:
             raise DomainError(
                 f"tệp lớn hơn {MAX_DRAFT_BYTES // (1024 * 1024)} MB", details={"rule": "file_size"}
             )
-        now = self.clock.now()
         draft = RuleDraft(
             draft_id=self.ids.new_uuid(),
             rule_key=key,
             status="queued",
             requested_by=context.principal_id,
-            requested_at=now,
+            requested_at=self.clock.now(),
             file_name=name,
             file_sha256=hashlib.sha256(data).hexdigest(),
             file_size=len(data),
         )
+        return await self._queue(context, draft, data)
+
+    async def request_words(
+        self, context: AccessContext, key: RuleKey, request: str, focus: str | None = None
+    ) -> RuleDraftView:
+        """What a person wants changed, in their words, for any key they may
+        propose a version of and read (a price-bearing key asks for
+        `sales.price.read` too): kept, queued for the worker (202)."""
+        await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        if not readable(self.gate, context, key):
+            await self.gate.require(context, SalesScopes.PRICE_READ, resource_type=_RESOURCE)
+        words = request.strip()
+        if not words:
+            raise DomainError("hãy viết điều cần đổi", details={"rule": "request_empty"})
+        if len(words) > MAX_REQUEST_CHARS:
+            raise DomainError(
+                f"yêu cầu dài hơn {MAX_REQUEST_CHARS} ký tự", details={"rule": "request_long"}
+            )
+        if focus is not None and not re.fullmatch(_FOCUS, focus):
+            raise DomainError("phần cần sửa không hợp lệ", details={"rule": "focus"})
+        data = words.encode("utf-8")
+        draft = RuleDraft(
+            draft_id=self.ids.new_uuid(),
+            rule_key=key,
+            status="queued",
+            requested_by=context.principal_id,
+            requested_at=self.clock.now(),
+            file_name=_WORDS_FILE,
+            file_sha256=hashlib.sha256(data).hexdigest(),
+            file_size=len(data),
+            request=words,
+            focus=focus,
+        )
+        return await self._queue(context, draft, data)
+
+    async def _queue(self, context: AccessContext, draft: RuleDraft, data: bytes) -> RuleDraftView:
+        now = draft.requested_at
         async with self.uow(sales_scope(context)) as work:
             await work.drafts.prune(now - KEPT_FOR)
             await work.drafts.add(draft, data)
@@ -446,6 +512,8 @@ class RuleDrafting:
         return f"draft {settled.status}"
 
     async def _settle(self, scope: SalesScope, draft: RuleDraft, content: bytes) -> RuleDraft:
+        if draft.request is not None:
+            return await self._settle_words(scope, draft, draft.request)
         verdict = await self.scanner.scan(content)
         if verdict.outcome == "unavailable":
             raise InfrastructureError(
@@ -495,6 +563,62 @@ class RuleDrafting:
             return _with(stamped, "refused", fallback, (*checked.problems, *fallback.problems))
         return _with(stamped, "ready", checked, checked.problems)
 
+    async def _settle_words(self, scope: SalesScope, draft: RuleDraft, request: str) -> RuleDraft:
+        """A request in words (`rule_words`): the model proposes changes to the
+        part asked about, code applies and checks them. Typed by the person,
+        not a customer's file, so nothing is scanned or opened in the reader."""
+        price = draft.rule_key in PRICE_BEARING
+        context = await self._asker(scope, draft, price=price)
+        if context is None:
+            return _failed(draft, "người yêu cầu không còn quyền đề xuất quy tắc này")
+        base = (await self.rules.current(scope, draft.rule_key)).policy.model_dump(
+            mode="json", by_alias=True
+        )
+        try:
+            part = focus_of(base, draft.focus)
+        except (KeyError, IndexError, ValueError):
+            return _failed(draft, "quy tắc không có phần được yêu cầu sửa")
+        in_force = Proposal(document=base, machine_read=(), evidence={})
+        if self.model is None:
+            return _with(draft, "unavailable", in_force, (_problem("model_not_configured"),))
+        inputs = {
+            "rule_name": draft.rule_key.value,
+            "document": json.dumps(part, ensure_ascii=False, indent=1),
+            "paths": "\n".join(leaf_paths(part)),
+            "request": request,
+        }
+        room = self.model.max_input_tokens - WORDS_PROMPT_TOKENS
+        if estimated_tokens("".join(inputs.values())) > room:
+            return _failed(draft, "phần cần sửa quá dài cho một lần đọc: chọn phần nhỏ hơn")
+        stamped = draft.model_copy(
+            update={
+                "prompt_ref": str(RULE_CHANGE_IN_WORDS),
+                "model_profile": self.model.model_profile,
+            }
+        )
+        try:
+            answer = await self.model.interpret(
+                RULE_CHANGE_IN_WORDS,
+                inputs,
+                ModelRuleChanges,
+                run=self._run(context, draft),
+                max_output_tokens=OUTPUT_TOKENS,
+            )
+        except ModelUnavailableError:
+            return _with(stamped, "unavailable", in_force, (_problem("model_unavailable"),))
+        except QuotaExceededError:
+            return _with(stamped, "unavailable", in_force, (_problem("model_quota"),))
+        applied = apply_changes(draft.rule_key, base, answer, request=request, focus=draft.focus)
+        if not isinstance(applied, WordsApplied):
+            problems = tuple(_problem(p.code, p.path) for p in applied.problems)
+            return _with(stamped, "refused", in_force, problems)
+        drafted = Proposal(
+            document=applied.document,
+            machine_read=applied.changed,
+            evidence=dict.fromkeys(applied.changed, "yêu cầu"),
+        )
+        return _with(stamped, "ready", drafted, ())
+
     def _without_mapping(
         self,
         draft: RuleDraft,
@@ -506,17 +630,21 @@ class RuleDrafting:
         fallback = offered(row, base)
         return _with(draft, status, fallback, (DraftProblem(code=why), *fallback.problems))
 
-    async def _asker(self, scope: SalesScope, draft: RuleDraft) -> AccessContext | None:
+    async def _asker(
+        self, scope: SalesScope, draft: RuleDraft, *, price: bool = False
+    ) -> AccessContext | None:
         """Who asked, as the platform resolves them now, cut to the ceiling;
         None when they may no longer propose, or the context is another
-        workspace's."""
+        workspace's. ``price``: the key holds prices, so the asker must still
+        read them too."""
+        ceiling = DRAFT_CEILING | ({SalesScopes.PRICE_READ.value} if price else frozenset())
         access = await self.access.find_linked_access(
-            draft.requested_by, scope.tenant_id.value, scope.workspace_id.value, DRAFT_CEILING
+            draft.requested_by, scope.tenant_id.value, scope.workspace_id.value, ceiling
         )
         if access is None:
             return None
         context = context_from(access)
-        if sales_scope(context) != scope or SalesScopes.RULES_PROPOSE.value not in context.scopes:
+        if sales_scope(context) != scope or not ceiling <= context.scopes:
             return None
         return context
 
@@ -550,6 +678,10 @@ class RuleDrafting:
             trace_id=f"sales-draft-{run_id.hex[:12]}",
             subject_ref=f"{_RESOURCE}:{draft.draft_id}",
         )
+
+
+def _problem(code: str, where: str | None = None) -> DraftProblem:
+    return DraftProblem.model_validate({"code": code, "where": where})
 
 
 def _with(

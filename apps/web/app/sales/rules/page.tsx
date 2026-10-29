@@ -2,14 +2,16 @@
 
 import { Suspense, useCallback, useState } from "react";
 import Link from "next/link";
-import { Button, Space, Table, Typography } from "antd";
+import { Button, Collapse, Space, Table, Typography } from "antd";
 import { PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import { formatDateTime, TIME_ZONE_LABEL } from "../../../lib/dates";
 import { salesApi } from "../_lib/api";
 import { usePeople } from "../_lib/people";
 import {
+  ADVANCED_RULES,
   keyRows,
+  RULE_ABOUT,
   RULE_KEY,
   RULE_LAYER,
   RULE_STATUS,
@@ -85,6 +87,76 @@ function Rules() {
   const [proposing, setProposing] = useState<Proposing | null>(null);
 
   const keys = rules.data ? keyRows(rules.data) : [];
+  const main = keys.filter((k) => !ADVANCED_RULES.has(k.key));
+  const advanced = keys.filter((k) => ADVANCED_RULES.has(k.key));
+
+  // One table per group of keys: what each rule decides, whose version
+  // applies, what waits, and the way in. Version codes stay in the editor.
+  const keyTable = (rows: KeyRow[], loading: boolean) => (
+    <Table<KeyRow>
+      rowKey="key"
+      loading={loading}
+      dataSource={rows}
+      pagination={false}
+      scroll={table.scroll()}
+      locale={{ emptyText: loading ? " " : "Không có quy tắc." }}
+      tableLayout={table.tableLayout}
+      columns={phone(
+        [
+          {
+            title: "Quy tắc",
+            key: "key",
+            render: (_, k) => (
+              <span className="flex flex-col">
+                <Typography.Text strong>{RULE_KEY[k.key]}</Typography.Text>
+                <Typography.Text>{RULE_ABOUT[k.key]}</Typography.Text>
+                {isPhone ? (
+                  <span className="mt-1 flex flex-wrap items-center gap-2">
+                    <StatusTag tone={k.layer === "tenant" ? "ok" : "gray"}>
+                      {RULE_LAYER[k.layer]}
+                    </StatusTag>
+                    {k.waiting ? (
+                      <Typography.Text>{k.waiting} chờ duyệt</Typography.Text>
+                    ) : null}
+                  </span>
+                ) : null}
+              </span>
+            ),
+          },
+          {
+            title: "Đang dùng",
+            key: "in_force",
+            render: (_, k) => (
+              <StatusTag tone={k.layer === "tenant" ? "ok" : "gray"}>
+                {RULE_LAYER[k.layer]}
+              </StatusTag>
+            ),
+          },
+          {
+            title: "Chờ duyệt",
+            key: "waiting",
+            align: "right",
+            render: (_, k) => k.waiting,
+          },
+          {
+            title: appliesAtOnce ? "Sửa" : "Đề xuất",
+            key: "propose",
+            fixed: "right",
+            render: (_, k) => (
+              <Button
+                size="small"
+                onClick={() => setProposing({ key: k.key })}
+                aria-label={`${appliesAtOnce ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
+              >
+                {appliesAtOnce ? "Sửa quy tắc" : "Đề xuất bản mới"}
+              </Button>
+            ),
+          },
+        ],
+        ["propose"],
+      )}
+    />
+  );
   const versions = rules.data?.versions ?? [];
   const own = keys.filter((k) => k.layer === "tenant").length;
   const waiting = versions.filter((v) => v.status === "proposed").length;
@@ -99,85 +171,15 @@ function Rules() {
         <LoadError error={rules.error} onRetry={rules.reload} />
       ) : (
         <>
-          <Table<KeyRow>
-            rowKey="key"
-            loading={rules.loading}
-            dataSource={keys}
-            pagination={false}
-            scroll={table.scroll()}
-            locale={{ emptyText: rules.loading ? " " : "Không có quy tắc." }}
-            tableLayout={table.tableLayout}
-            footer={() => `${keys.length} quy tắc`}
-            columns={phone(
-              [
-                {
-                  title: "Quy tắc",
-                  key: "key",
-                  render: (_, k) => (
-                    <span className="flex flex-col">
-                      <Typography.Text strong>
-                        {RULE_KEY[k.key]}
-                      </Typography.Text>
-                      <Typography.Text code>{k.key}</Typography.Text>
-                      {isPhone ? (
-                        <span className="mt-1 flex flex-wrap items-center gap-2">
-                          <StatusTag
-                            tone={k.layer === "tenant" ? "ok" : "gray"}
-                          >
-                            {RULE_LAYER[k.layer]}
-                          </StatusTag>
-                          {k.waiting ? (
-                            <Typography.Text>
-                              {k.waiting} chờ duyệt
-                            </Typography.Text>
-                          ) : null}
-                        </span>
-                      ) : null}
-                    </span>
-                  ),
-                },
-                {
-                  title: "Đang áp dụng",
-                  key: "in_force",
-                  render: (_, k) => (
-                    <Space orientation="vertical" size={2}>
-                      <Typography.Text code>{k.inForce}</Typography.Text>
-                      <StatusTag tone={k.layer === "tenant" ? "ok" : "gray"}>
-                        {RULE_LAYER[k.layer]}
-                      </StatusTag>
-                    </Space>
-                  ),
-                },
-                {
-                  title: "Bản của nền tảng",
-                  key: "platform",
-                  render: (_, k) => (
-                    <Typography.Text code>{k.platform}</Typography.Text>
-                  ),
-                },
-                {
-                  title: "Chờ duyệt",
-                  key: "waiting",
-                  align: "right",
-                  render: (_, k) => k.waiting,
-                },
-                {
-                  title: appliesAtOnce ? "Sửa" : "Đề xuất",
-                  key: "propose",
-                  fixed: "right",
-                  render: (_, k) => (
-                    <Button
-                      size="small"
-                      onClick={() => setProposing({ key: k.key })}
-                      aria-label={`${appliesAtOnce ? "Sửa quy tắc" : "Đề xuất phiên bản mới"}: ${RULE_KEY[k.key]}`}
-                    >
-                      {appliesAtOnce ? "Sửa quy tắc" : "Đề xuất bản mới"}
-                    </Button>
-                  ),
-                },
-              ],
-              ["propose"],
-            )}
+          {keyTable(main, rules.loading)}
+          <Collapse
+            items={[
+              {
+                key: "advanced",
+                label: `Nâng cao (${advanced.length} quy tắc): KPI, chữ trên tài liệu, mẫu nhập Bravo, thư chuyển PC/QA`,
+                children: keyTable(advanced, rules.loading),
+              },
+            ]}
           />
           <Typography.Title level={4} className="mb-0!">
             Các phiên bản của công ty

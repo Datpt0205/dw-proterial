@@ -165,6 +165,16 @@ class CatalogUploadBody(BaseModel):
         return _file_bytes(self.content_b64)
 
 
+class RuleWordsBody(BaseModel):
+    """What a person wants changed in a rule, in their words (dw_sales ADR
+    0006), and the part of the document it is about, if not the whole."""
+
+    model_config = _BODY
+
+    request: Annotated[str, Field(min_length=1, max_length=2000)]
+    focus: Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_.]*$", max_length=200)] | None = None
+
+
 class RuleDraftBody(BaseModel):
     """A company's template to draft a rule version from ("Tạo từ tệp
     mẫu"): its name and its bytes, base64, decoded here and never opened."""
@@ -1208,6 +1218,20 @@ def build_router(
         key: RuleKey, body: RuleDraftBody, context: Ctx, svc: Svc, idem: Idem
     ) -> RuleDraftView:
         view = await svc.rule_drafts.request(context, key, body.file_name, body.data())
+        return await idem.record(view, status_code=202)
+
+    # A draft from what a person typed (ADR 0006, decision 3), for any key
+    # they may propose and read; drafted by the worker like a file's (202).
+    @router.post(
+        "/rules/{key}/drafts/words",
+        response_model=RuleDraftView,
+        status_code=202,
+        dependencies=[scopes(SalesScopes.RULES_PROPOSE)],
+    )
+    async def request_rule_words(
+        key: RuleKey, body: RuleWordsBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> RuleDraftView:
+        view = await svc.rule_drafts.request_words(context, key, body.request, body.focus)
         return await idem.record(view, status_code=202)
 
     @router.get(

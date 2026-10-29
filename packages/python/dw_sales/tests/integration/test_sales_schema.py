@@ -23,7 +23,7 @@ from dw_sales.application.case_store import JobError, JobStatus
 from dw_sales.application.catalog_imports import ImportSource, ImportStatus
 from dw_sales.application.followups import BRIEF, BRIEF_STAGE
 from dw_sales.application.rule_drafts import DraftStatus
-from dw_sales.application.rules import DRAFTABLE, RuleKey
+from dw_sales.application.rules import RuleKey
 from dw_sales.domain import dispositions, followups, orders, quotes
 from dw_sales.domain.master_data import CatalogList
 from dw_sales.domain.order_checks import ModelStep
@@ -83,7 +83,9 @@ _SETS: dict[str, set[str]] = {
     "ck_catalog_snapshots_source": set(get_args(ImportSource)),
     # A rule draft's status and the keys drafted ("Tạo từ tệp mẫu").
     "ck_rule_drafts_status": set(get_args(DraftStatus)),
-    "ck_rule_drafts_rule_key": {key.value for key in DRAFTABLE},
+    # Every key: a draft in words may be of any (ADR 0006); from a file, only
+    # `DRAFTABLE`'s, which the service refuses for the rest.
+    "ck_rule_drafts_rule_key": _values(RuleKey),
     # The model steps a measurement is of (ADR 0005, addendum of 2026-10-23).
     "ck_model_step_measurements_step": _values(ModelStep),
 }

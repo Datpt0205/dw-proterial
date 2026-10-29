@@ -156,7 +156,13 @@ function renderPage() {
   );
 }
 
+/** Opens "Nâng cao", where the technical rules sit (ADR 0006). */
+async function openAdvanced() {
+  fireEvent.click(await screen.findByText(/^Nâng cao \(/));
+}
+
 async function openKpi(action = "Đề xuất phiên bản mới") {
+  await openAdvanced();
   fireEvent.click(
     await screen.findByRole("button", {
       name: `${action}: Chỉ tiêu KPI`,
@@ -231,14 +237,18 @@ describe("the rules page (tickets 38, 40)", () => {
     "lists what applies per key and every version, each linked to its approval",
     async () => {
       renderPage();
-      const kpiRow = (await screen.findByText("sales_kpi@1.0.0")).closest(
+      // A rule reads as what it decides and whose version applies, with no
+      // version code on the first screen (ADR 0006).
+      const orders = (await screen.findByText(/^Cách DW1 kiểm PO/)).closest(
         "tr",
       )!;
-      expect(within(kpiRow).getByText("Riêng của công ty")).toBeTruthy();
-      const [inForce, shipped] = screen.getAllByText("sales_order_rules@1.5.1");
-      const orders = inForce!.closest("tr")!;
-      expect(shipped!.closest("tr")).toBe(orders);
       expect(within(orders).getByText("Của nền tảng")).toBeTruthy();
+      expect(within(orders).queryByText("sales_order_rules@1.5.1")).toBeNull();
+      await openAdvanced();
+      const kpiRow = (
+        await screen.findByText(/^Mục tiêu thời gian xử lý/)
+      ).closest("tr")!;
+      expect(within(kpiRow).getByText("Riêng của công ty")).toBeTruthy();
 
       const waiting = screen
         .getByText("sales_order_rules@1.5.2")
@@ -537,8 +547,8 @@ describe("the rules page for a proposer who reads no price (2026-10-21)", () => 
         versions: [version({}), REJECTED],
       });
       renderPage();
-      await screen.findByText("sales_kpi@1.0.0");
-      expect(screen.getByText("1 quy tắc")).toBeTruthy();
+      await openAdvanced();
+      await screen.findByText(/^Mục tiêu thời gian xử lý/);
       for (const text of [
         "Chính sách giá",
         "sales_pricing",
@@ -561,7 +571,7 @@ describe("the rules page for a proposer who reads no price (2026-10-21)", () => 
       });
       renderPage();
       expect(await screen.findByText("Chính sách giá")).toBeTruthy();
-      expect(screen.getByText("3 quy tắc")).toBeTruthy();
+      expect(screen.getByText(/^Chính sách giá: giá sàn/)).toBeTruthy();
     },
     SLOW,
   );

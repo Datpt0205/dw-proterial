@@ -183,6 +183,13 @@ ProblemCode = Literal[
     "model_unavailable",
     "model_not_configured",
     "model_quota",
+    # A change in words (`rule_words`, ADR 0006): `where` names the path.
+    "nothing_understood",
+    "path_unknown",
+    "type_changed",
+    "placeholder_changed",
+    "digit_invented",
+    "document_invalid",
 ]
 
 

@@ -61,6 +61,33 @@ export function waitingNotice(
   };
 }
 
+/** What each rule decides, in one sentence a non-technical reader follows. */
+export const RULE_ABOUT: Record<RuleKey, string> = {
+  sales_order_rules:
+    "Cách DW1 kiểm PO: sai lệch giá cho phép, lead time, khách tạm, khi nào giữ đơn.",
+  sales_quote_rules:
+    "Cách DW1 lập yêu cầu báo giá: hộp thư Design, thông tin bắt buộc, hạn báo giá.",
+  sales_pricing:
+    "Chính sách giá: giá sàn, phụ phí đồng, cước vận chuyển (chỉ người xem được giá).",
+  sales_emails:
+    "Nội dung các thư DW1 soạn cho khách và Design: viết lại theo một thư ví dụ.",
+  sales_followups:
+    "Khi nào DW1 nhắc PIC và Trưởng bộ phận, giờ làm việc, bản tin buổi sáng.",
+  sales_kpi:
+    "Mục tiêu thời gian xử lý và số phút làm tay của mỗi bước, để tính thời gian tiết kiệm.",
+  sales_documents: "Chữ trên các bảng tính và tài liệu DW1 xuất ra.",
+  sales_bravo_upload: "Mẫu tệp nhập Bravo: tên sheet và thứ tự cột.",
+  sales_handoffs: "Nội dung thư chuyển việc cho PC và QA.",
+};
+
+/** Rules that read as engineering: under "Nâng cao", not the first screen. */
+export const ADVANCED_RULES: ReadonlySet<RuleKey> = new Set<RuleKey>([
+  "sales_kpi",
+  "sales_documents",
+  "sales_bravo_upload",
+  "sales_handoffs",
+]);
+
 export interface KeyRow {
   key: RuleKey;
   /** `id@version` of what applies now. */
@@ -151,6 +178,28 @@ export const DRAFT_STATUS: Record<RuleDraft["status"], string> = {
   failed: "Không đọc được tệp",
 };
 
+/** The same statuses for a draft from a person's words (ADR 0006). */
+export const WORDS_STATUS: Record<RuleDraft["status"], string> = {
+  queued: "DW1 đang soạn",
+  ready: "DW1 đã soạn xong",
+  refused: "Bản DW1 soạn không đạt kiểm tra",
+  unavailable: "Chưa soạn được bằng mô hình",
+  failed: "Không soạn được",
+};
+
+/** A draft's status, in the words of what it came from. */
+export function draftStatus(draft: RuleDraft): string {
+  const fromWords = draft.request !== null && draft.request !== undefined;
+  return (fromWords ? WORDS_STATUS : DRAFT_STATUS)[draft.status];
+}
+
+/** What a draft came from: the person's words, or the company's file. */
+export function draftSource(draft: RuleDraft): string {
+  return draft.request !== null && draft.request !== undefined
+    ? `“${draft.request.length > 80 ? `${draft.request.slice(0, 80)}…` : draft.request}”`
+    : draft.file_name;
+}
+
 /**
  * A draft as a version to start from, once it has a document: the API drafts
  * one for every outcome but queued and failed (`template_reading.offered`
@@ -237,6 +286,18 @@ export function draftProblemText(problem: DraftProblem): string {
       return "Máy chủ này chưa có mô hình: chọn tiêu đề cho từng cột trong danh sách tiêu đề của mẫu.";
     case "model_quota":
       return "Gói đã hết lượt dùng mô hình hôm nay: chọn tiêu đề cho từng cột trong danh sách tiêu đề của mẫu.";
+    case "nothing_understood":
+      return "DW1 chưa hiểu cần đổi gì: viết rõ hơn, ví dụ “nhắc PIC sau 6 giờ thay vì 4 giờ”.";
+    case "path_unknown":
+      return `Quy tắc này không có mục “${problem.where ?? ""}”: DW1 không thêm mục mới.`;
+    case "type_changed":
+      return `“${problem.where ?? ""}”: giá trị DW1 đề xuất không đúng kiểu của mục này.`;
+    case "placeholder_changed":
+      return `“${problem.where ?? ""}”: bản DW1 viết bỏ hoặc thêm chỗ điền dữ liệu \${…}; mọi số liệu do hệ thống điền nên phải giữ nguyên.`;
+    case "digit_invented":
+      return `“${problem.where ?? ""}”: bản DW1 viết có con số không có trong lời yêu cầu; số liệu chỉ do hệ thống điền.`;
+    case "document_invalid":
+      return `Bản DW1 soạn không hợp lệ ở “${problem.where ?? "tài liệu"}”.`;
     default: {
       const unknown: never = problem.code;
       return String(unknown);

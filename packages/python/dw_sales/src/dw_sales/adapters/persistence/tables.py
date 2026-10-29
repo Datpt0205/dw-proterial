@@ -417,6 +417,9 @@ rule_drafts = sa.Table(
     sa.Column("error", sa.Text),
     sa.Column("prompt_ref", sa.Text),
     sa.Column("model_profile", sa.Text),
+    # A draft from a person's words (`71305f72d962`, ADR 0006).
+    sa.Column("request", sa.Text),
+    sa.Column("focus", sa.Text),
     sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )

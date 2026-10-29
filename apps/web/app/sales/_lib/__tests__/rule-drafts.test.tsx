@@ -93,6 +93,8 @@ function draft(overrides: Partial<RuleDraft>): RuleDraft {
     requested_at: "2026-10-21T02:00:00Z",
     file_name: "mau.xlsx",
     file_sha256: "a".repeat(64),
+    request: null,
+    focus: null,
     template: null,
     document: null,
     machine_read: [],
@@ -142,6 +144,19 @@ const UNAVAILABLE = draft({
   problems: [{ code: "model_not_configured" }],
 });
 
+const WORDS = "Đổi tên sheet thành NhapDonBan";
+const WORDS_QUEUED = draft({ request: WORDS, file_name: "yeu-cau.txt" });
+const WORDS_READY = draft({
+  request: WORDS,
+  file_name: "yeu-cau.txt",
+  status: "ready",
+  document: { ...PLATFORM_DOC, sheet_name: "NhapDonBan" },
+  machine_read: ["sheet_name"],
+  evidence: { sheet_name: "yêu cầu" },
+  prompt_ref: "sales.rule_change_in_words@1.0.0",
+  model_profile: "onprem",
+});
+
 const VIEW: View = {
   in_force: { sales_bravo_upload: "sales_bravo_upload@1.1.0" },
   layers: { sales_bravo_upload: "platform" },
@@ -172,6 +187,9 @@ const api = {
   })),
   rulePlatformDocuments: vi.fn(async () => PLATFORM),
   requestRuleDraft: vi.fn(async (...args: unknown[]) => (void args, draft({}))),
+  requestRuleWords: vi.fn(
+    async (...args: unknown[]) => (void args, WORDS_QUEUED),
+  ),
   ruleDraft: vi.fn(async (...args: unknown[]) => (void args, READY)),
 };
 vi.mock("../api", () => ({ salesApi: () => api }));
@@ -195,6 +213,7 @@ function renderPage() {
 }
 
 async function openBravo() {
+  fireEvent.click(await screen.findByText(/^Nâng cao \(/));
   fireEvent.click(
     await screen.findByRole("button", {
       name: "Đề xuất phiên bản mới: Mẫu tệp nhập Bravo",
@@ -487,6 +506,7 @@ describe("Tạo từ tệp mẫu on the rules page", () => {
     "offers no template upload for a key that is not drafted",
     async () => {
       renderPage();
+      fireEvent.click(await screen.findByText(/^Nâng cao \(/));
       fireEvent.click(
         await screen.findByRole("button", {
           name: "Đề xuất phiên bản mới: Chỉ tiêu KPI",
@@ -499,4 +519,58 @@ describe("Tạo từ tệp mẫu on the rules page", () => {
     },
     SLOW,
   );
+});
+
+describe("a change in words (dw_sales ADR 0006)", () => {
+  it(
+    "sends what the person wrote, polls while DW1 drafts, and opens the draft",
+    async () => {
+      // Answers queued by an earlier test are dropped first.
+      api.ruleDraft.mockReset();
+      api.ruleDraft.mockImplementation(
+        async (...args: unknown[]) => (void args, WORDS_READY),
+      );
+      renderPage();
+      await openBravo();
+      const send = screen.getByRole("button", { name: "DW1 soạn thay đổi" });
+      expect((send as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.change(screen.getByLabelText("Muốn đổi gì?"), {
+        target: { value: WORDS },
+      });
+      fireEvent.click(send);
+      await waitFor(() =>
+        expect(api.requestRuleWords).toHaveBeenCalledTimes(1),
+      );
+      const [key, body] = api.requestRuleWords.mock.calls[0] as [
+        string,
+        { request: string; focus: string | null },
+      ];
+      expect([key, body]).toEqual([
+        "sales_bravo_upload",
+        { request: WORDS, focus: null },
+      ]);
+      expect(await screen.findByText(`DW1 đang soạn: “${WORDS}”`)).toBeTruthy();
+      expect(
+        await screen.findByText(`DW1 đã soạn xong: “${WORDS}”`, undefined, {
+          timeout: 10_000,
+        }),
+      ).toBeTruthy();
+      expect(
+        await screen.findByText(
+          `Bản nháp từ lời yêu cầu “${WORDS}” · DW1 đã soạn xong`,
+        ),
+      ).toBeTruthy();
+    },
+    // Two polls and a drawer under a full suite's load.
+    2 * SLOW,
+  );
+
+  it("says a refused change in words", () => {
+    expect(
+      draftProblemText({ code: "digit_invented", where: "vi.body" }),
+    ).toMatch(/có con số không có trong lời yêu cầu/);
+    expect(
+      draftProblemText({ code: "path_unknown", where: "auto_approve" }),
+    ).toMatch(/không có mục “auto_approve”/);
+  });
 });

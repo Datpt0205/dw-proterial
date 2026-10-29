@@ -827,6 +827,21 @@ export class SalesApi {
   }
 
   /** A draft: queued, or what DW1 read from the file and proposes. */
+  /** What a person wants changed in a rule, in their words (dw_sales ADR
+   * 0006): drafted by the worker like a template, opened in the editor. */
+  requestRuleWords(
+    ruleKey: SalesSchemas["RuleKey"],
+    body: Body<"/api/v1/sales/rules/{key}/drafts/words">,
+    key: string,
+  ): Promise<Accepted<"/api/v1/sales/rules/{key}/drafts/words">> {
+    return this.client.request(
+      "POST",
+      `/api/v1/sales/rules/${enc(ruleKey)}/drafts/words`,
+      shaped<Accepted<"/api/v1/sales/rules/{key}/drafts/words">>(),
+      { body, idempotencyKey: key },
+    );
+  }
+
   ruleDraft(draftId: string) {
     return this.get<"/api/v1/sales/rules/drafts/{draft_id}">(
       `/api/v1/sales/rules/drafts/${enc(draftId)}`,
