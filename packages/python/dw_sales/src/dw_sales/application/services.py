@@ -22,6 +22,7 @@ from dw_sales.application.activity_ports import StepActivityReadPort
 from dw_sales.application.artifact_content import ArtifactWriterPort
 from dw_sales.application.artifacts_service import ArtifactService
 from dw_sales.application.assignment import AssignmentService
+from dw_sales.application.assistant import AssistantService, AssistantStoreFactory
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.catalog_imports import (
     CatalogDecisions,
@@ -29,6 +30,7 @@ from dw_sales.application.catalog_imports import (
     CatalogTemplatePort,
     CatalogUnitOfWorkFactory,
 )
+from dw_sales.application.customer_reminders import CustomerReminders
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.design_text_reading import DesignTextReplies
 from dw_sales.application.finding_explanations import FindingExplanations
@@ -108,6 +110,10 @@ class SalesServices:
     outbound: OutboundMailService
     # A mail asking about an unordered quotation, drafted (AI item 11, Q12).
     screening_followups: ScreeningFollowups
+    # A reminder to a customer DW1 waits on, drafted (DW01 function 4).
+    customer_reminders: CustomerReminders
+    # Status questions answered from live data, in sessions (ADR 0007).
+    assistant: AssistantService
     # Design's reply written in the mail, read and confirmed (AI item 6).
     design_text_replies: DesignTextReplies
     # PC's delivery dates read from the mail Sales pastes (AI item 7).
@@ -161,6 +167,8 @@ def assemble(
     converts: ConvertLedgerPort,
     # Where a sender Sales confirms as a customer's is kept (the catalog too).
     senders: SenderLedgerPort,
+    # The status assistant's sessions, each bound to its person (ADR 0007).
+    assistant: AssistantStoreFactory,
     # The one-call door's model, for the steps a person asks for on a page
     # (AI items 5 and 12); None where no model is configured.
     one_call: InterpretationPort | None,
@@ -188,15 +196,17 @@ def assemble(
         sources,
     )
     overview = OverviewService(uow, gate, clock, inbox, book, directory, pending)
+    orders = OrderQueries(uow, gate, pending, step_activity)
+    quotes = QuoteQueries(uow, gate, clock, quotation, pending, step_activity)
     services = SalesServices(
         overview=overview,
         pipeline=PipelineService(uow, gate, clock, overview),
         inbox=InboxQueries(uow, gate, inbox, book),
         processing=queue,
         dw1=Dw1Runs(uow, gate, inbox, runs, pending),
-        orders=OrderQueries(uow, gate, pending, step_activity),
+        orders=orders,
         order_commands=OrderCommands(uow, gate, clock, ids, intake, pending, converts),
-        quotes=QuoteQueries(uow, gate, clock, quotation, pending, step_activity),
+        quotes=quotes,
         quote_commands=QuoteCommands(uow, gate, clock, ids, quotation, catalog, pending),
         sources=sources,
         artifacts=ArtifactService(
@@ -248,6 +258,21 @@ def assemble(
         ),
         screening_followups=ScreeningFollowups(
             gate, catalog, quotation, one_call, clock, ids, worker_id, worker_version
+        ),
+        customer_reminders=CustomerReminders(
+            uow, gate, catalog, one_call, clock, ids, worker_id, worker_version
+        ),
+        assistant=AssistantService(
+            assistant,
+            gate,
+            orders,
+            quotes,
+            overview,
+            one_call,
+            clock,
+            ids,
+            worker_id,
+            worker_version,
         ),
         outbound=OutboundMailService(
             uow, gate, catalog, directory, artifact_bytes, clock, ids, outbox_enabled

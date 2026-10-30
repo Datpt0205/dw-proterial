@@ -20,6 +20,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/assistant/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assistant Ask */
+        post: operations["assistant_ask_api_v1_sales_assistant_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/assistant/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assistant Sessions */
+        get: operations["assistant_sessions_api_v1_sales_assistant_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/assistant/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assistant Session */
+        get: operations["assistant_session_api_v1_sales_assistant_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/inbox": {
         parameters: {
             query?: never;
@@ -619,6 +670,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/customer-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Reminder */
+        get: operations["order_reminder_api_v1_sales_orders__case_id__customer_reminder_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/findings/{finding_key}/corrections": {
         parameters: {
             query?: never;
@@ -1062,6 +1130,23 @@ export interface paths {
         };
         /** Quote Assignees */
         get: operations["quote_assignees_api_v1_sales_quotes__case_id__assignees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/quotes/{case_id}/customer-reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quote Reminder */
+        get: operations["quote_reminder_api_v1_sales_quotes__case_id__customer_reminder_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1640,6 +1725,15 @@ export interface components {
             /** Value */
             value?: string | null;
         };
+        /** AnswerView */
+        AnswerView: {
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            turn: components["schemas"]["TurnView"];
+        };
         /** ArtifactListView */
         ArtifactListView: {
             /** Artifacts */
@@ -1686,6 +1780,17 @@ export interface components {
             size_bytes: number;
             /** Template Ref */
             template_ref: string;
+        };
+        /**
+         * AskBody
+         * @description A question to the status assistant (ADR 0007), and the session it
+         *     continues; none opens a new one.
+         */
+        AskBody: {
+            /** Question */
+            question: string;
+            /** Session Id */
+            session_id?: string | null;
         };
         /**
          * AssigneeBody
@@ -1827,6 +1932,21 @@ export interface components {
          * @enum {string}
          */
         CaseKind: "order" | "quote";
+        /** CaseRefView */
+        CaseRefView: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "order" | "quote";
+            /** Label */
+            label: string;
+        };
         /**
          * CaseReply
          * @description A message attached to a case because its thread headers name a message
@@ -2121,6 +2241,42 @@ export interface components {
             regions: string[];
             /** Unchecked Regions */
             unchecked_regions: string[];
+        };
+        /**
+         * CustomerReminderView
+         * @description A draft, or why there is none; always marked as the model's.
+         */
+        CustomerReminderView: {
+            /**
+             * Asked On
+             * Format: date
+             */
+            asked_on: string;
+            /** Body */
+            body?: string | null;
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Language */
+            language?: string | null;
+            /** Model Profile */
+            model_profile?: string | null;
+            /** Prompt Ref */
+            prompt_ref?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "drafted" | "unavailable" | "refused";
+            /** Subject */
+            subject?: string | null;
+            /**
+             * To
+             * @default []
+             */
+            to: string[];
         };
         /** CustomerView */
         CustomerView: {
@@ -4074,6 +4230,12 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * QuestionKind
+         * @description What DW1 answers (the agreed list), and everything else.
+         * @enum {string}
+         */
+        QuestionKind: "order_status" | "quote_status" | "my_work" | "overdue" | "out_of_scope";
         /** QuotationBasisView */
         QuotationBasisView: {
             copper_basis: components["schemas"]["CopperBasisView"];
@@ -4762,6 +4924,36 @@ export interface components {
              */
             status: "suggested" | "no_match" | "unavailable";
         };
+        /** SessionDetailView */
+        SessionDetailView: {
+            /** Created At */
+            created_at: string;
+            /** Last Turn At */
+            last_turn_at: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** Title */
+            title: string;
+            /** Turns */
+            turns: components["schemas"]["TurnView"][];
+        };
+        /** SessionView */
+        SessionView: {
+            /** Created At */
+            created_at: string;
+            /** Last Turn At */
+            last_turn_at: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** Title */
+            title: string;
+        };
         /** SettingView */
         SettingView: {
             key: components["schemas"]["RuleKey"];
@@ -5251,6 +5443,25 @@ export interface components {
             pc?: null;
             sales: components["schemas"]["TimeStat"];
         };
+        /** TurnView */
+        TurnView: {
+            /** Answer */
+            answer: string;
+            /**
+             * Answered By
+             * @enum {string}
+             */
+            answered_by: "model" | "code";
+            /** Asked At */
+            asked_at: string;
+            /** Cites */
+            cites: components["schemas"]["CaseRefView"][];
+            kind: components["schemas"]["QuestionKind"];
+            /** Question */
+            question: string;
+            /** Seq */
+            seq: number;
+        };
         /**
          * UnappliedDecisionView
          * @description A cross-check decision the platform recorded and DW1's run could not
@@ -5443,6 +5654,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivitySummaryView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_ask_api_v1_sales_assistant_ask_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_sessions_api_v1_sales_assistant_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionView"][];
+                };
+            };
+        };
+    };
+    assistant_session_api_v1_sales_assistant_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDetailView"];
                 };
             };
             /** @description Validation Error */
@@ -6659,6 +6957,37 @@ export interface operations {
             };
         };
     };
+    order_reminder_api_v1_sales_orders__case_id__customer_reminder_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerReminderView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     correct_value_api_v1_sales_orders__case_id__findings__finding_key__corrections_post: {
         parameters: {
             query?: never;
@@ -7557,6 +7886,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssigneeView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_reminder_api_v1_sales_quotes__case_id__customer_reminder_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerReminderView"];
                 };
             };
             /** @description Validation Error */

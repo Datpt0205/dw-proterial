@@ -23,7 +23,6 @@ and an amount in a mail no approval looked at is a quotation by another name.
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Final, Literal
@@ -35,7 +34,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import local_time
-from dw_sales.application.figure_check import unsupported
+from dw_sales.application.figure_check import names_amount, unsupported
 from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.ports import SalesCatalogPort
 from dw_sales.application.quotation import QuotationService
@@ -48,13 +47,6 @@ SCREENING_FOLLOWUP: Final = PromptRef("sales.screening_followup", "1.0.0")
 PROMPT_TOKENS: Final = 900
 _OUTPUT_TOKENS: Final = 700
 _RESOURCE: Final = "sales_quote_screening"
-# What an amount looks like in any of the customers' languages: a percent, a
-# currency code or symbol. A follow-up mail carries none.
-_AMOUNT: Final = re.compile(
-    # `\uff05` is the full-width percent sign a Japanese mail may use.
-    r"[%\uff05$¥€₫]|\b(?:USD|VND|JPY|EUR|SGD|THB|CNY|đồng)\b|円|ドル",
-    re.IGNORECASE,
-)
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -176,7 +168,7 @@ class ScreeningFollowups:
         except (ModelUnavailableError, QuotaExceededError):
             return FollowupDraftView(**stamp, status="unavailable")
         written = f"{answer.subject}\n{answer.body}"
-        if unsupported(written, facts) or _AMOUNT.search(written):
+        if unsupported(written, facts) or names_amount(written):
             return FollowupDraftView(**stamp, status="refused")
         return FollowupDraftView(
             **stamp, status="drafted", subject=answer.subject, body=answer.body

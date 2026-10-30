@@ -17,7 +17,8 @@ vi.mock("../../../../lib/auth/auth-context", () => ({
 const screeningFollowup = vi.fn();
 vi.mock("../api", () => ({ salesApi: () => ({ screeningFollowup }) }));
 
-import { FollowupDraft, mailtoOf } from "../../quotes/screening/followup-draft";
+import { mailtoOf } from "../../_components/drafted-mail";
+import { FollowupDraft } from "../../quotes/screening/followup-draft";
 
 const DRAFTED = {
   customer_code: "NRV",

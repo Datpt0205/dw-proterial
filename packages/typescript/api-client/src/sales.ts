@@ -479,6 +479,30 @@ export class SalesApi {
     );
   }
 
+  /** A status question to DW1 (ADR 0007), continuing ``sessionId`` or
+   * opening a session; the model reads it, code answers from live data. */
+  assistantAsk(question: string, sessionId: string | null, key: string) {
+    return this.post<"/api/v1/sales/assistant/ask">(
+      "/api/v1/sales/assistant/ask",
+      { question, session_id: sessionId },
+      key,
+    );
+  }
+
+  /** The caller's own assistant sessions, the most recently used first. */
+  assistantSessions() {
+    return this.get<"/api/v1/sales/assistant/sessions">(
+      "/api/v1/sales/assistant/sessions",
+    );
+  }
+
+  /** One of the caller's sessions with its turns, oldest first. */
+  assistantSession(sessionId: string) {
+    return this.get<"/api/v1/sales/assistant/sessions/{session_id}">(
+      `/api/v1/sales/assistant/sessions/${enc(sessionId)}`,
+    );
+  }
+
   /** PC's delivery dates read from the mail Sales pastes (AI item 7). */
   readPcDates(caseId: string, caseVersion: number, text: string, key: string) {
     return this.post<"/api/v1/sales/orders/{case_id}/pc-dates">(
@@ -486,6 +510,18 @@ export class SalesApi {
       { case_version: caseVersion, text },
       key,
     );
+  }
+
+  /** A reminder to the customer the case waits on, drafted by the model
+   * (DW01 function 4); nothing is sent or stored. */
+  customerReminder(kind: "order" | "quote", caseId: string) {
+    return kind === "order"
+      ? this.get<"/api/v1/sales/orders/{case_id}/customer-reminder">(
+          `/api/v1/sales/orders/${enc(caseId)}/customer-reminder`,
+        )
+      : this.get<"/api/v1/sales/quotes/{case_id}/customer-reminder">(
+          `/api/v1/sales/quotes/${enc(caseId)}/customer-reminder`,
+        );
   }
 
   /** Q12's question to the customer, drafted by the model (AI item 11). */

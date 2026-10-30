@@ -122,6 +122,7 @@ from dw_sales.domain.layouts import LayoutStatus, PoLayout
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase
 from dw_sales.domain.quotes import QuoteCase
+from dw_sales.evals.assistant_memory import MemoryAssistantStores
 from dw_sales.evals.overview_memory import PythonOverviewReader
 from dw_sales.testing.catalog_store import (
     MemoryApprovedLists,
@@ -1393,6 +1394,7 @@ def open_world(
         scanner=scanning,
         converts=catalog,
         senders=catalog,
+        assistant=MemoryAssistantStores(),
         one_call=model,
         worker_id=worker.worker_id,
         worker_version=worker.worker_version,

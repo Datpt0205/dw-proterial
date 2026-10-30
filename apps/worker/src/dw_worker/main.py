@@ -110,6 +110,7 @@ from dw_sales.adapters.assembly import (
 from dw_sales.adapters.clamd import malware_scanner
 from dw_sales.adapters.outbox_folder import FakeFlow
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
+from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
 from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
@@ -534,6 +535,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # What DW1's model steps did (slice 3): the months of `sales.step_outcomes`
     # past the policy file's term, dropped wherever DW1 is.
     sales_step_outcomes_retention: RetentionPrunePort | None = None
+    # The status assistant's sessions (ADR 0007): thirty days after their
+    # last turn, the database's constant (`sales.prune_assistant_sessions()`).
+    sales_assistant_retention: RetentionPrunePort | None = None
 
     if settings.database_url:
         # ---- transactional outbox ----------------------------------------
@@ -729,6 +733,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 sales_step_outcomes_retention = SqlStepOutcomeRetention(
                     session_factory=sessions, policy=retention_policy, clock=clock
                 )
+                sales_assistant_retention = SqlAssistantRetention(session_factory=sessions)
                 # A master-data upload's file, read in the reader sandbox
                 # (ticket 41). Only where DW1 is built: an upload needs the
                 # Sales routes, which the API mounts on the same condition.
@@ -827,6 +832,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "sales_step_outcomes_retention",
             build_retention_consumer(sales_step_outcomes_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+
+    # And the assistant's sessions past their thirty days (ADR 0007).
+    if sales_assistant_retention is not None:
+        registry.register(
+            "sales_assistant_retention",
+            build_retention_consumer(sales_assistant_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
 

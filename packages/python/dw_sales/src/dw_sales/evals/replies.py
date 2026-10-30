@@ -247,7 +247,7 @@ def grade_no_false_accept(
     return GradeResult.ok(**details)
 
 
-async def _spec_discussion(world: World) -> uuid.UUID:
+async def spec_discussion_case(world: World) -> uuid.UUID:
     """M09's request taken to Design and the spec put to the customer, as
     Sales does before a reply in its thread arrives."""
     from dw_sales.evals.graders import AN
@@ -268,7 +268,7 @@ async def _spec_discussion(world: World) -> uuid.UUID:
     return case_id
 
 
-async def _correction(world: World) -> uuid.UUID:
+async def correction_case(world: World) -> uuid.UUID:
     """M04 with both findings sent back to the customer."""
     from dw_sales.evals.graders import AN
 
@@ -322,8 +322,8 @@ async def _injection(ctx: GraderContext, input_data: dict[str, Any]) -> GradeRes
     seen: dict[str, Any] = {}
     with SampleWith([_threaded(c, ids) for c in cases]) as sample:
         world = open_world(ctx.repo_root, sample, CALLERS, model=model)
-        quote_id = await _spec_discussion(world)
-        order_id = await _correction(world)
+        quote_id = await spec_discussion_case(world)
+        order_id = await correction_case(world)
         before = {
             CaseKind.QUOTE: world.quote(quote_id).model_dump(mode="json"),
             CaseKind.ORDER: world.order(order_id).model_dump(mode="json"),
@@ -377,7 +377,7 @@ async def _keeps_po(ctx: GraderContext) -> GradeResult:
         prompts=ctx.prompt_registry,
     )
     world = open_world(ctx.repo_root, SampleSet.of(ctx.repo_root, None), CALLERS, model=scripted)
-    case_id = await _correction(world)
+    case_id = await correction_case(world)
     await world.process_each(AN, ["M42"])
     view = await world.services.orders.get(AN.context(), case_id)
     (reply,) = view.replies
@@ -445,7 +445,7 @@ async def _cross_tenant(ctx: GraderContext, input_data: dict[str, Any]) -> Grade
     from dw_sales.evals.graders import CALLERS
 
     world = open_world(ctx.repo_root, SampleSet.of(ctx.repo_root, None), CALLERS)
-    await _correction(world)
+    await correction_case(world)
     m04 = await world.inbox.get_message(ALPHA, "M04")
     assert m04 is not None and m04.internet_message_id is not None
     reference = (m04.internet_message_id,)
@@ -544,7 +544,7 @@ async def _degrade(ctx: GraderContext) -> GradeResult:
     sample = SampleSet.of(ctx.repo_root, None)
     down = Recorded(failure=ModelUnavailableError("InfrastructureError"))
     world = open_world(ctx.repo_root, sample, CALLERS, model=down)
-    case_id = await _spec_discussion(world)
+    case_id = await spec_discussion_case(world)
     seen = await world.process_each(AN, ["M41"])
     disposition, _ = seen["M41"]
     (reply,) = (await world.services.quotes.get(AN.context(), case_id)).replies
@@ -557,7 +557,7 @@ async def _degrade(ctx: GraderContext) -> GradeResult:
         return GradeResult.fail("the model down did not leave the reply to Sales", **details)
     spent = Recorded(failure=BudgetExceededError("run reached its input-token ceiling"))
     world = open_world(ctx.repo_root, sample, CALLERS, model=spent)
-    await _spec_discussion(world)
+    await spec_discussion_case(world)
     try:
         await world.process_each(AN, ["M41"])
     except BudgetExceededError:

@@ -54,6 +54,7 @@ import { CaseSummary } from "../../_components/case-summary";
 import { ReassignButton } from "../../_components/reassign";
 import { CaseActivity } from "../../_components/case-activity";
 import { CaseHistory } from "../../_components/case-history";
+import { CustomerReminder } from "../../_components/customer-reminder";
 import { ThreadSummary } from "../../_components/thread-summary";
 import { CaseTimeline } from "../../_components/case-timeline";
 import { salesCrumbs } from "../../_components/crumbs";
@@ -530,6 +531,10 @@ function OrderDetail() {
             ]}
           />
         </Card>
+      ) : null}
+
+      {data.status === "correction_requested" ? (
+        <CustomerReminder kind="order" caseId={data.case_id} />
       ) : null}
 
       <ThreadSummary kind="order" caseId={data.case_id} />
