@@ -37,8 +37,10 @@ own file and a row here.
   export-control page withdrawn. `sales.md` State.
 - **Next:** AI items 2–8, 10–12 done (#4 PO in the mail body, 10-30);
   "Gửi cho khách" prepared (no flow until Proterial signs) (`sales.md`).
-  #9 assistant deferred (Đạt: portal first); #13 scans at deployment
-  (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000 24 GB).
+  #13 scans at deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000
+  24 GB). 10-30 contract check (`sales.md`): DW01 still owes status Q&A on
+  the portal (#9 back in scope) and customer reminders; DW02 not started,
+  and its contract gives it 4 weeks.
 
 ## Decisions Đạt owes
 
@@ -56,7 +58,9 @@ own file and a row here.
 - **Sales:** real data replaces the mock; HIGH: 9B accuracy by code around
   the model, decided on Proterial's server (`sales.md` State 2026-10-21);
   retention of `sales.step_outcomes` (365 days, 10-23) and of stored mail;
-  the IP-indemnity clause's wording (carve-outs, cap) with FPT legal.
+  the IP-indemnity clause's wording (carve-outs, cap) with FPT legal;
+  DW2 go-live week 4 (contract) vs week 6 (rollout plan); whether the
+  rollout plan `.xlsx` stays out of git (repo public).
 
 ## How a feature is checked here
 
