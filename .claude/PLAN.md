@@ -40,7 +40,8 @@ own file and a row here.
   #13 scans at deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000
   24 GB). 10-30: DW01's contract gaps closed (status Q&A with sessions,
   ADR 0007; customer reminders); DW02 not started, its contract gives it
-  4 weeks (next: lift the shared pieces to the platform, then scaffold).
+  4 weeks (next: docs/adr/0013, lift the small shared pieces one
+  commit each, then `make new-context NAME=purchasing`).
 
 ## Decisions Đạt owes
 
