@@ -37,7 +37,7 @@ from typing import Annotated, Final, Literal, NamedTuple, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
-from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.anchors import MessageText, SourceAnchor
 from dw_sales.domain.catalog import (
     CopperBasis,
     Currency,
@@ -433,11 +433,20 @@ class Derivation(BaseModel):
 
 
 class PoDocument(BaseModel):
-    """What a reader got out of one attachment, and how it read it."""
+    """What a reader got out of one attachment, and how it read it.
+
+    Or, for a PO the customer wrote in the mail itself (AI item 4), what a
+    model read of the message's newest part (`po_body_reading`):
+    ``attachment_id`` None, ``body`` the text as DW1 read it, and every
+    anchor a range of that text with its digest, as a quotation's request
+    read from the mail is (ticket 29).
+    """
 
     model_config = _FROZEN
 
-    attachment_id: AttachmentId
+    # None: read from the message's text (``body``), not from a file.
+    attachment_id: AttachmentId | None
+    # The attachment's bytes' sha256; for the message's text, its text's.
     attachment_sha256: Sha256Hex
     # The reader that produced it: stamped on the case (spec decision 11).
     parser_version: VersionRef
@@ -461,9 +470,20 @@ class PoDocument(BaseModel):
     # How the bytes it was read from were made from the attachment (ticket 27);
     # None: read from the attachment itself.
     derivation: Derivation | None = None
+    # The message's newest part a PO written in the mail was read from.
+    body: MessageText | None = None
 
     @model_validator(mode="after")
     def _lines_and_anchors_belong(self) -> Self:
+        if (self.attachment_id is None) != (self.body is not None):
+            raise ValueError("a PO is read from one attachment or from the message's text")
+        if self.body is not None and (
+            self.body.sha256 != self.attachment_sha256
+            or self.print_copy is not None
+            or self.derivation is not None
+            or self.layout_ref is not None
+        ):
+            raise ValueError("a PO read from the message's text has no file of its own")
         _require_unique_line_numbers(line.line_no for line in self.lines)
         if self.rows_printed < len(self.lines):
             raise ValueError("more lines read than rows printed")
@@ -477,9 +497,18 @@ class PoDocument(BaseModel):
                 derived,
             ):
                 raise ValueError(f"an anchor points outside attachment {self.attachment_id}")
+            if self.body is not None and (
+                anchor.chars is None or anchor.chars.end > len(self.body.text)
+            ):
+                raise ValueError("an anchor points outside the message's text")
         if self.print_copy is not None and self.print_copy.attachment_id == self.attachment_id:
             raise ValueError("a PO's print is another attachment than the PO")
         return self
+
+    @property
+    def from_message(self) -> bool:
+        """Whether the PO was written in the mail, not attached to it."""
+        return self.body is not None
 
     def legacy_texts(self) -> list[tuple[str, SourceAnchor, LegacyEncoding]]:
         """Each value read from text typed in a TCVN3 or VNI font, in reading
@@ -1630,7 +1659,8 @@ class OrderCase(BaseModel):
         )
 
     @property
-    def attachment_id(self) -> str:
+    def attachment_id(self) -> str | None:
+        """The PO's file; None for a PO written in the mail."""
         return self.document.attachment_id
 
     @property

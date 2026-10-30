@@ -38,6 +38,7 @@ const MODEL_STEPS: Record<ModelStep, null> = {
   reply_intent: null,
   request_handoff: null,
   layout_proposal: null,
+  po_body_extraction: null,
 };
 export const MODEL_STEP_IDS = Object.keys(MODEL_STEPS) as ModelStep[];
 

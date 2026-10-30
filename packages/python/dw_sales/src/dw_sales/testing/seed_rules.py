@@ -21,7 +21,7 @@ DW1's profile routes it to (dw_sales ADR 0005, addendum of 2026-10-23):
   nothing is refused. A developer with a local model attests the steps
   (`run_evals.py --live onprem --attest`) and proposes a version that turns
   them on, through the same route.
-- `MODEL_STEP_POLICIES`, `sales_order_rules@1.5.2`, all six on: the API's
+- `MODEL_STEP_POLICIES`, `sales_order_rules@1.5.2`, every step on: the API's
   integration suite, whose test database no live run reaches, records
   stand-in measurements first (`seed_test_measurements`, through the lane's
   own write path) and seeds this one, so the model steps run through the

@@ -1048,6 +1048,11 @@
             "title": "Message Intent",
             "type": "boolean"
           },
+          "po_body_extraction": {
+            "default": false,
+            "title": "Po Body Extraction",
+            "type": "boolean"
+          },
           "reply_intent": {
             "title": "Reply Intent",
             "type": "boolean"

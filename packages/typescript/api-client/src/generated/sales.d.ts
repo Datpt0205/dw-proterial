@@ -724,6 +724,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sales/orders/{case_id}/message-text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order Message Text */
+        get: operations["order_message_text_api_v1_sales_orders__case_id__message_text_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sales/orders/{case_id}/outbound": {
         parameters: {
             query?: never;
@@ -3258,8 +3275,9 @@ export interface components {
         };
         /**
          * MessageTextView
-         * @description The message's newest part a model read a quotation from, as the case
-         *     holds it: what its values' ``chars`` index into. It may state a price.
+         * @description The message's newest part a model read a quotation's request or an
+         *     order's PO from, as the case holds it: what its values' ``chars`` index
+         *     into. It may state a price.
          */
         MessageTextView: {
             /**
@@ -3324,7 +3342,7 @@ export interface components {
          *     (`application.model_readiness.BARS`).
          * @enum {string}
          */
-        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal";
+        ModelStep: "description_attributes" | "message_intent" | "rfq_extraction" | "reply_intent" | "request_handoff" | "layout_proposal" | "po_body_extraction";
         /** OpenYcbgView */
         OpenYcbgView: {
             /** Customer Code */
@@ -3344,7 +3362,7 @@ export interface components {
             /** Assigned To */
             assigned_to: string | null;
             /** Attachment Id */
-            attachment_id: string;
+            attachment_id: string | null;
             /** Attachment Sha256 */
             attachment_sha256: string;
             /** Base So No */
@@ -5123,7 +5141,7 @@ export interface components {
         /** SupersededView */
         SupersededView: {
             /** Attachment Id */
-            attachment_id: string;
+            attachment_id: string | null;
             /** Message Id */
             message_id: string;
             /**
@@ -6847,6 +6865,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChangeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_message_text_api_v1_sales_orders__case_id__message_text_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTextView"];
                 };
             };
             /** @description Validation Error */

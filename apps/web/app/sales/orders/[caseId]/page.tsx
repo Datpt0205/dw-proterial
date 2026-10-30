@@ -34,8 +34,11 @@ import {
 import { usePeople } from "../../_lib/people";
 import {
   anchorRegion,
+  mailRange,
+  markMailServed,
   regionLabel,
   useServedRevision,
+  wasMailServed,
   wasServed,
 } from "../../_lib/served";
 import { coverageStatement } from "../../_lib/statements";
@@ -61,6 +64,10 @@ import {
   SourceDrawer,
   type SourceTarget,
 } from "../../_components/source-drawer";
+import {
+  MailTextDrawer,
+  type MailTarget,
+} from "../../_components/mail-text-drawer";
 import { OrderStateTag, ValueStateTag } from "../../_components/tags";
 import { OrderActions } from "./actions";
 import { CandidatePicker } from "./candidate-picker";
@@ -150,6 +157,7 @@ function OrderDetail() {
     useCallback(() => salesApi().customers(), []),
   );
   const [source, setSource] = useState<SourceTarget | null>(null);
+  const [mail, setMail] = useState<MailTarget | null>(null);
   const [picking, setPicking] = useState<number | null>(null);
 
   const data = order.data;
@@ -163,15 +171,31 @@ function OrderDetail() {
     order.reload();
     work.reload();
   }, [order, work]);
+  const loadMail = useCallback(
+    () => salesApi().orderMessageText(caseId),
+    [caseId],
+  );
+  const mailServed = useCallback(
+    (version: number) => markMailServed(caseId, version),
+    [caseId],
+  );
 
   if (order.loading) return <RegionState kind="loading" />;
   if (order.error || !data)
     return <LoadError error={order.error} onRetry={order.reload} />;
 
-  const required = expectedRegions(data);
-  const missing = required.filter(
-    (r) => !wasServed(data.case_id, data.case_version, r),
-  );
+  // A PO written in the mail (AI item 4): its one source is the mail's text.
+  const fromMail = data.attachment_id === null;
+  const missingRegions = fromMail
+    ? []
+    : expectedRegions(data).filter(
+        (r) => !wasServed(data.case_id, data.case_version, r),
+      );
+  const missing = fromMail
+    ? wasMailServed(data.case_id, data.case_version)
+      ? []
+      : ["nội dung thư"]
+    : missingRegions.map(regionLabel);
   const mine = (work.data ?? []).find(
     (w) => w.kind === "order" && w.id === data.case_id,
   );
@@ -191,6 +215,11 @@ function OrderDetail() {
 
   const openSource = (field: string, lineNo: number | null) => {
     const anchor = anchorOf(data, field, lineNo);
+    if (fromMail) {
+      const range = mailRange(anchor) ?? mailRange(data.header_anchors.po_no);
+      if (range) setMail({ field, lineNo, ...range });
+      return;
+    }
     const region =
       anchorRegion(anchor) ?? anchorRegion(data.header_anchors.po_no);
     if (region) setSource({ region, field, lineNo });
@@ -234,14 +263,12 @@ function OrderDetail() {
         subtitle={`${customer?.name ?? `Khách ${data.customer_code}`} · mã khách ${data.customer_code} · ngày PO ${formatDate(data.po_date)}`}
         actions={
           <>
-            {primary ? (
+            {primary || fromMail ? (
               <Button
                 icon={<FileSearchOutlined aria-hidden />}
-                onClick={() =>
-                  setSource({ region: primary, field: "po_no", lineNo: null })
-                }
+                onClick={() => openSource("po_no", null)}
               >
-                Mở bản gốc
+                {fromMail ? "Mở thư của khách" : "Mở bản gốc"}
               </Button>
             ) : null}
             <ReassignButton
@@ -393,17 +420,19 @@ function OrderDetail() {
           />
           {missing.length && data.status !== "closed" ? (
             <Typography.Text role="note">
-              Chưa mở nguồn: {missing.map(regionLabel).join(", ")} của phiên bản{" "}
+              Chưa mở nguồn: {missing.join(", ")} của phiên bản{" "}
               {data.case_version}.{" "}
               <Button
                 size="small"
                 icon={<EyeOutlined aria-hidden />}
                 onClick={() =>
-                  setSource({
-                    region: missing[0]!,
-                    field: "po_no",
-                    lineNo: null,
-                  })
+                  fromMail
+                    ? openSource("po_no", null)
+                    : setSource({
+                        region: missingRegions[0]!,
+                        field: "po_no",
+                        lineNo: null,
+                      })
                 }
               >
                 Mở nguồn
@@ -559,8 +588,8 @@ function OrderDetail() {
                   },
                   {
                     key: "file",
-                    label: "Tệp",
-                    children: `${data.attachment_id} · ${data.attachment_sha256.slice(0, 16)}…`,
+                    label: fromMail ? "Nguồn" : "Tệp",
+                    children: `${data.attachment_id ?? "Nội dung thư"} · ${data.attachment_sha256.slice(0, 16)}…`,
                   },
                   {
                     key: "release",
@@ -645,14 +674,25 @@ function OrderDetail() {
         ]}
       />
 
-      <SourceDrawer
-        kind="order"
-        caseId={data.case_id}
-        caseVersion={data.case_version}
-        attachmentId={data.attachment_id}
-        target={source}
-        onClose={() => setSource(null)}
-      />
+      {data.attachment_id !== null ? (
+        <SourceDrawer
+          kind="order"
+          caseId={data.case_id}
+          caseVersion={data.case_version}
+          attachmentId={data.attachment_id}
+          target={source}
+          onClose={() => setSource(null)}
+        />
+      ) : (
+        <MailTextDrawer
+          resourceKey={`sales/order/${data.case_id}/${data.case_version}/message-text`}
+          load={loadMail}
+          target={mail}
+          mayRead={viewer.hasScope("sales.price.read")}
+          onClose={() => setMail(null)}
+          onServed={mailServed}
+        />
+      )}
       {picking !== null ? (
         <CandidatePicker
           order={data}

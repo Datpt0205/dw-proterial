@@ -70,6 +70,7 @@ from dw_sales.application.order_ports import (
     QuoteFormPort,
     ThreadLinkPort,
 )
+from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.support import decided
@@ -167,6 +168,8 @@ HANDOFF_KINDS: Final[Mapping[RoutingReason, HandoffKind]] = {
 }
 # Why a message no model could read goes to Sales once its retries are over.
 NOT_UNDERSTOOD: Final = "DW1 did not understand the message: no usable model answer"
+# Why a message about an order goes to Sales when no PO is read from it.
+NO_DOCUMENT: Final = "it names an order but carries no document"
 
 # Matched against NFKC-normalised, casefolded text, in English, Vietnamese and
 # the Japanese the customers' own systems print.
@@ -275,6 +278,10 @@ class OrderIntake:
     # A model pre-filling the mapping of a form no layout reads (ticket 30),
     # for a tenant whose rules turn it on. None: no model is wired.
     layout_prefiller: LayoutPrefiller | None = None
+    # A model reading a PO written in the mail body, with no file (AI item 4),
+    # for a tenant whose rules turn it on. None: no model is wired, and such a
+    # message is routed to Sales as before.
+    body_pos: PoBodyReader | None = None
     # Whether a model step the tenant's rules turn on may run: its live eval
     # met the bar for the model and prompt it runs on now (dw_sales ADR 0005,
     # addendum of 2026-10-23). Asked before every model call above; where it
@@ -375,12 +382,30 @@ class OrderIntake:
             and await self._model_step(scope, rules, ModelStep.MESSAGE_INTENT)
         ):
             return await self._intent(scope, message, attached, sender, rules, run, now)
-        return Classification(self._kind(message, attached))
+        body = await self._reads_body(scope, rules, attached, run)
+        return Classification(self._kind(message, attached, body=body))
 
     async def _model_step(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool:
         """Whether ``step`` may call a model for this tenant now: on in its
         rules and measured at its bar (`model_steps`); never without a gate."""
         return self.model_steps is not None and await self.model_steps.allows(scope, rules, step)
+
+    async def _reads_body(
+        self,
+        scope: SalesScope,
+        rules: OrderRules,
+        attached: Sequence[_Attached],
+        run: RunContext | None,
+    ) -> bool:
+        """Whether a PO written in the mail may be read (AI item 4): it
+        carries no document, a reader and a DW1 run are here, and the step
+        may run for the tenant now."""
+        return (
+            self.body_pos is not None
+            and run is not None
+            and not self._carries_document(attached)
+            and await self._model_step(scope, rules, ModelStep.PO_BODY_EXTRACTION)
+        )
 
     async def _by_content(
         self,
@@ -446,14 +471,14 @@ class OrderIntake:
         route = INTENT_ROUTES[read.kind]
         if isinstance(route, RoutingReason):
             return Classification(MessageKind.OTHER, route, reading=read.reading)
-        if route is MessageKind.PO and not self._carries_document(attached):
-            # A message about a PO is not a PO: it has to carry one.
-            return Classification(
-                MessageKind.OTHER,
-                RoutingReason.OTHER,
-                "it names an order but carries no document",
-                read.reading,
-            )
+        if (
+            route is MessageKind.PO
+            and not self._carries_document(attached)
+            and not await self._reads_body(scope, rules, attached, run)
+        ):
+            # A message about a PO is not a PO: it has to carry one, or, where
+            # a model reads it, be written in the mail.
+            return Classification(MessageKind.OTHER, RoutingReason.OTHER, NO_DOCUMENT, read.reading)
         return Classification(route, reading=read.reading)
 
     async def _reply(
@@ -551,6 +576,8 @@ class OrderIntake:
                 readable.append(content)
         unreadable = RoutingReason.ATTACHMENT_UNREADABLE
         if not readable:
+            if await self._reads_body(scope, rules, attached, run):
+                return await self._body_order(scope, message, sender, rules, run)
             return self._routed(message, kind, unreadable, sender, "; ".join(reasons))
 
         customer, attributed = sender, False
@@ -595,7 +622,7 @@ class OrderIntake:
         if len(documents) > 1:
             # Two orders, or a workbook and a print that are not the same PO:
             # either way Sales decides which is entered.
-            ids = ", ".join(d.attachment_id for d in documents)
+            ids = ", ".join(d.attachment_id or "" for d in documents)
             return self._routed(
                 message,
                 kind,
@@ -606,6 +633,39 @@ class OrderIntake:
         return await self._case(
             scope, message, kind, customer, attributed, documents[0], rules, run
         )
+
+    async def _body_order(
+        self,
+        scope: SalesScope,
+        message: InboundMessage,
+        sender: Customer | None,
+        rules: OrderRules,
+        run: RunContext | None,
+    ) -> IntakeOutcome:
+        """A PO written in the mail (AI item 4): read by a model, every value
+        flagged for Sales to confirm against the mail. The customer is the
+        sender's, never a name the mail writes; a PO not read is routed to
+        Sales as before, with why."""
+        assert self.body_pos is not None and run is not None  # `_reads_body`
+        kind = MessageKind.PO
+        if sender is None:
+            return self._routed(
+                message,
+                kind,
+                RoutingReason.CUSTOMER_UNKNOWN,
+                None,
+                "the sender's domain matches no customer, and a PO in the mail names no buyer",
+            )
+        read = await self.body_pos.read(message, run=run)
+        if isinstance(read, str):
+            return self._routed(
+                message,
+                kind,
+                RoutingReason.OTHER,
+                sender,
+                f"{NO_DOCUMENT}; DW1 did not read a PO from the mail ({read})",
+            )
+        return await self._case(scope, message, kind, sender, False, read, rules, run)
 
     async def _read_po(
         self,
@@ -1118,9 +1178,12 @@ class OrderIntake:
             for item in attached
         )
 
-    def _kind(self, message: InboundMessage, attached: Sequence[_Attached]) -> MessageKind:
+    def _kind(
+        self, message: InboundMessage, attached: Sequence[_Attached], *, body: bool
+    ) -> MessageKind:
         """The keyword tables: for a message no reader accepted, while the
-        tenant's rules leave the model reading off."""
+        tenant's rules leave the model reading off. ``body``: a PO written
+        in the mail may be read (`_reads_body`)."""
         carries_document = self._carries_document(attached)
         headline = " ".join([message.subject, *(a.name for a in message.attachments)])
         for text in (headline, message.body_text):
@@ -1133,9 +1196,10 @@ class OrderIntake:
             if _DESIGN_REPLY.search(words):
                 return MessageKind.DESIGN_REPLY
             if _PURCHASE_ORDER.search(words):
-                # A message about a PO is not a PO: it has to carry one.
+                # A message about a PO is not a PO: it has to carry one, or,
+                # where a model reads it, be written in the mail.
                 if not carries_document:
-                    return MessageKind.OTHER
+                    return MessageKind.PO if body else MessageKind.OTHER
                 return MessageKind.REVISED_PO if _REVISED.search(words) else MessageKind.PO
         return MessageKind.OTHER
 

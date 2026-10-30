@@ -27,6 +27,7 @@ from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.case_store import (
+    MESSAGE_TEXT,
     ArtifactRecord,
     CaseEvent,
     ServedSource,
@@ -298,6 +299,30 @@ async def test_records_the_flows_keep_besides_cases(
         assert not await work.served.served(AN_ID, CaseKind.ORDER, case.case_id, case.case_version)
         assert await work.artifacts.get(artifact.artifact_id) == artifact
         assert await work.worker.state() == paused
+
+
+async def test_the_mail_text_an_order_was_read_from_is_recorded_as_served(
+    order_run: OrderRun, uow: SqlSalesUnitOfWorkFactory
+) -> None:
+    """A PO written in the mail (AI item 4) is opened as the mail's text,
+    which `ck_source_served_region` held to quotations before cbd4fbacfce2."""
+    case = order_run.outcomes["M01"].case
+    assert case is not None
+    text = ServedSource(
+        principal_id=DIEU_ID,
+        case_kind=CaseKind.ORDER,
+        case_id=case.case_id,
+        case_version=case.case_version,
+        attachment_id=None,
+        attachment_sha256="c" * 64,
+        served_at=T0,
+    )
+    async with uow(order_run.scope) as work:
+        await work.served.record(text)
+        await work.commit()
+    async with uow(order_run.scope) as work:
+        regions = await work.served.served(DIEU_ID, CaseKind.ORDER, case.case_id, case.case_version)
+        assert MESSAGE_TEXT in regions
 
 
 async def test_every_serving_of_a_case_is_read_back_by_case_and_only_in_its_workspace(

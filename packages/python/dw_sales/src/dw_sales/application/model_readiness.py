@@ -42,6 +42,7 @@ from dw_sales.application.handoffs import REQUEST_HANDOFF
 from dw_sales.application.layouts import LAYOUT_PROPOSAL
 from dw_sales.application.message_intent import MESSAGE_INTENT
 from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES, PromptRef
+from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
@@ -109,6 +110,11 @@ BARS: Final[Mapping[ModelStep, StepBar]] = MappingProxyType(
         # and no accepted swap (the grader's own condition).
         ModelStep.LAYOUT_PROPOSAL: StepBar(
             0.90, "all.right", LAYOUT_PROPOSAL, "sales_layout", "sales.layout_golden"
+        ),
+        # AI item 4: the golden mails' values read into the right field, over
+        # every value the golden POs state. A PO refused goes to a person.
+        ModelStep.PO_BODY_EXTRACTION: StepBar(
+            0.85, "all.right_field", PO_BODY_EXTRACTION, "sales_po_body", "sales.po_body_golden"
         ),
     }
 )

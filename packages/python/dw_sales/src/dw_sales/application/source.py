@@ -18,7 +18,10 @@ A quotation's value a model read (ticket 29) is confirmed under the same
 gate, per value (`require_value_served`): the page or sheet it was read
 from, or, for a value read from the mail, the message's text, which is
 served on its own (`quote_message_text`) and recorded as a region with no
-attachment (`MESSAGE_TEXT`), never inside the case view.
+attachment (`MESSAGE_TEXT`), never inside the case view. A PO written in the
+mail (AI item 4) has the message's text as its one region: it is served by
+`order_message_text`, and `prepare` and `cross-check` ask for it as they ask
+for a file's pages.
 
 A source view carries amounts, so the route also requires
 `sales.price.read`; the scopes are the presentation's to declare and this
@@ -49,7 +52,7 @@ from dw_sales.application.case_store import (
 )
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.support import stored_order, stored_quote
-from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.anchors import MessageText, SourceAnchor
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import CorrectedBySales, OrderCase, PoDocument
 from dw_sales.domain.quotes import QuoteCase, QuoteFindingCode, Sourced
@@ -186,8 +189,9 @@ class SourceView(BaseModel):
 
 
 class MessageTextView(BaseModel):
-    """The message's newest part a model read a quotation from, as the case
-    holds it: what its values' ``chars`` index into. It may state a price."""
+    """The message's newest part a model read a quotation's request or an
+    order's PO from, as the case holds it: what its values' ``chars`` index
+    into. It may state a price."""
 
     model_config = _VIEW
 
@@ -203,9 +207,9 @@ class MessageTextView(BaseModel):
 
 def _region(anchor: SourceAnchor) -> SourceRegion | None:
     if anchor.attachment_id is None:
-        # The message's own text is never a file region: a quote serves it
-        # by its own route (`quote_message_text`, `value_region`).
-        return None
+        # The message's own text, served by its own route
+        # (`quote_message_text`, `order_message_text`).
+        return MESSAGE_TEXT
     if anchor.page is not None:
         return SourceRegion(anchor.attachment_id, anchor.page, None)
     if anchor.sheet is not None:
@@ -232,7 +236,9 @@ def _order_anchors(document: PoDocument) -> list[LabelledAnchor]:
 def _order_sources(message_id: str, document: PoDocument) -> list[_Source]:
     """The files one revision was read from: the PO, and its PDF print when
     the mail carried one (ticket 34), labelled where it shows a value
-    differently."""
+    differently. None for a PO written in the mail: it has no file."""
+    if document.attachment_id is None:
+        return []
     sources = [
         _Source(
             message_id, document.attachment_id, document.attachment_sha256, _order_anchors(document)
@@ -353,12 +359,17 @@ async def require_served(work: SalesUnitOfWork, principal_id: uuid.UUID, case: O
                 "case_id": str(case.case_id),
                 "case_version": case.case_version,
                 "rule": "source_not_served",
-                "missing": [
-                    f"{r.attachment_id}:{'page ' + str(r.page) if r.page else r.sheet}"
-                    for r in missing
-                ],
+                "missing": [_missing(r) for r in missing],
             },
         )
+
+
+def _missing(region: SourceRegion) -> str:
+    """A region as a refusal names it: ``message_text``, or the file and its
+    page or sheet."""
+    if region == MESSAGE_TEXT:
+        return "message_text"
+    return f"{region.attachment_id}:{'page ' + str(region.page) if region.page else region.sheet}"
 
 
 def value_region(case: QuoteCase, line_no: int | None, field: str) -> SourceRegion | None:
@@ -385,8 +396,6 @@ def value_region(case: QuoteCase, line_no: int | None, field: str) -> SourceRegi
     held = getattr(holder, field, None)
     if not isinstance(held, Sourced):
         return None
-    if held.source.attachment_id is None:
-        return MESSAGE_TEXT
     return _region(held.source)
 
 
@@ -422,12 +431,7 @@ async def require_value_served(
             "case_id": str(case.case_id),
             "case_version": case.case_version,
             "rule": "source_not_served",
-            "missing": [
-                "message_text"
-                if region == MESSAGE_TEXT
-                else f"{region.attachment_id}:"
-                f"{'page ' + str(region.page) if region.page else region.sheet}"
-            ],
+            "missing": [_missing(region)],
         },
     )
 
@@ -435,11 +439,12 @@ async def require_value_served(
 @dataclass(frozen=True)
 class OpenedSources:
     """The pages and sheets of a case's files that were served, each by its
-    file's id and sha256: what tells a value someone opened from one nobody
-    did (audit gaps 1 and 5). A page of a revision the case no longer reads
-    has another sha256, so it never stands for the current file's."""
+    file's id and sha256, and the message's text by its own (id None): what
+    tells a value someone opened from one nobody did (audit gaps 1 and 5). A
+    page of a revision the case no longer reads has another sha256, so it
+    never stands for the current file's."""
 
-    regions: frozenset[tuple[str, str, int | None, str | None]]
+    regions: frozenset[tuple[str | None, str, int | None, str | None]]
 
     @classmethod
     def of(
@@ -450,14 +455,12 @@ class OpenedSources:
         until: datetime | None = None,
     ) -> OpenedSources:
         """The regions served to ``by`` (anyone when None), no later than
-        ``until`` (ever when None). The message's text is no file region."""
+        ``until`` (ever when None)."""
         return cls(
             frozenset(
                 (s.attachment_id, s.attachment_sha256, s.page, s.sheet)
                 for s in servings
-                if s.attachment_id is not None
-                and (by is None or s.principal_id == by)
-                and (until is None or s.served_at <= until)
+                if (by is None or s.principal_id == by) and (until is None or s.served_at <= until)
             )
         )
 
@@ -465,7 +468,7 @@ class OpenedSources:
         """Whether the page or sheet ``anchor`` points into was served. An
         anchor that names neither cannot have been."""
         region = _region(anchor)
-        if region is None or region.attachment_id is None:
+        if region is None:
             return False
         key = (region.attachment_id, anchor.attachment_sha256, region.page, region.sheet)
         return key in self.regions
@@ -593,30 +596,55 @@ class SourceService:
         recorded like a page of a file: what confirming a value read from it
         requires (`require_value_served`)."""
         await self._authorize(context, "sales_quote_case", case_id)
-        scope, now = sales_scope(context), self.clock.now()
-        async with self.uow(scope) as work:
+        async with self.uow(sales_scope(context)) as work:
             case = (await stored_quote(work, case_id, viewer=context)).case
-            body = case.request.body
-            if body is None:
-                raise NotFoundError(
-                    "the request was not read from the message's text",
-                    details={"case_id": str(case_id)},
-                )
-            await work.served.record(
-                ServedSource(
-                    principal_id=context.principal_id,
-                    case_kind=CaseKind.QUOTE,
-                    case_id=case_id,
-                    case_version=case.case_version,
-                    attachment_id=None,
-                    attachment_sha256=body.sha256,
-                    served_at=now,
-                )
+            return await self._message_text(
+                work, context, CaseKind.QUOTE, case_id, case.case_version, case.request.body
             )
-            await work.commit()
+
+    async def order_message_text(
+        self, context: AccessContext, case_id: uuid.UUID
+    ) -> MessageTextView:
+        """The message's text a PO written in the mail was read from (AI item
+        4), served and recorded like a page of a file: what `prepare` and
+        `cross-check` require of it (`require_served`)."""
+        await self._authorize(context, "sales_order_case", case_id)
+        async with self.uow(sales_scope(context)) as work:
+            case = (await stored_order(work, case_id, viewer=context)).case
+            return await self._message_text(
+                work, context, CaseKind.ORDER, case_id, case.case_version, case.document.body
+            )
+
+    async def _message_text(
+        self,
+        work: SalesUnitOfWork,
+        context: AccessContext,
+        case_kind: CaseKind,
+        case_id: uuid.UUID,
+        case_version: int,
+        body: MessageText | None,
+    ) -> MessageTextView:
+        if body is None:
+            raise NotFoundError(
+                "the case was not read from the message's text",
+                details={"case_id": str(case_id)},
+            )
+        now = self.clock.now()
+        await work.served.record(
+            ServedSource(
+                principal_id=context.principal_id,
+                case_kind=case_kind,
+                case_id=case_id,
+                case_version=case_version,
+                attachment_id=None,
+                attachment_sha256=body.sha256,
+                served_at=now,
+            )
+        )
+        await work.commit()
         return MessageTextView(
             case_id=case_id,
-            case_version=case.case_version,
+            case_version=case_version,
             text=body.text,
             sha256=body.sha256,
             served_at=now,

@@ -30,6 +30,7 @@ from.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Annotated, Self
 
@@ -146,3 +147,21 @@ class SourceAnchor(BaseModel):
         match = _CELL_REF.fullmatch(self.cell_ref)
         assert match is not None  # refused in the constructor otherwise
         return match.group(part)
+
+
+class MessageText(BaseModel):
+    """The newest part of the message as a model read it (subject first,
+    history cut, `mail_parts.newest_part`), kept on the case: what a body
+    anchor's characters index into, and what the screen highlights them in.
+    A quotation's request (ticket 29) and an order's PO (AI item 4) hold one."""
+
+    model_config = _FROZEN
+
+    text: str = Field(min_length=1, max_length=50_000)
+    sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def _digest_is_the_texts(self) -> Self:
+        if hashlib.sha256(self.text.encode("utf-8")).hexdigest() != self.sha256:
+            raise ValueError("the message text changed")
+        return self

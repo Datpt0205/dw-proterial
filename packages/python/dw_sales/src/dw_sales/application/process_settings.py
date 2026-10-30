@@ -165,11 +165,15 @@ STEP_SETTINGS: Final[Mapping[StepId, tuple[Placement, ...]]] = MappingProxyType(
                 _in(_ORDER, "model_assist.description_attributes"),
                 _severities("code_unmapped", "code_ambiguous"),
             ),
-            # Enter the PO: a new layout's first POs, read value by value.
+            # Enter the PO: a new layout's first POs and a PO written in the
+            # mail, read value by value.
             _step(
                 StepId.O3,
                 _in(
-                    _ORDER, "layout_onboarding.uncertain_first_pos", "model_assist.layout_proposal"
+                    _ORDER,
+                    "layout_onboarding.uncertain_first_pos",
+                    "model_assist.layout_proposal",
+                    "model_assist.po_body_extraction",
                 ),
                 _severities("value_uncertain", "line_total_mismatch"),
             ),

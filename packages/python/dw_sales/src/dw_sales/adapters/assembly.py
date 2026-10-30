@@ -96,6 +96,7 @@ from dw_sales.application.model_reading import DescriptionReader, Interpretation
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.outbound_mail import OutboundLane
+from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import (
     ArtifactBytesPort,
     MemberDirectoryPort,
@@ -324,6 +325,7 @@ def build_dw1(
         layout_prefiller=(
             None if interpretation is None else LayoutPrefiller(interpretation, layout_checks)
         ),
+        body_pos=None if interpretation is None else PoBodyReader(interpretation),
         model_steps=readiness,
     )
     runs = RuntimeDw1Runs(

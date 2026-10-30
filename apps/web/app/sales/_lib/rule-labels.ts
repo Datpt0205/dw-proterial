@@ -218,6 +218,10 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
     "model_assist.layout_proposal": {
       label: "Đề xuất ánh xạ cho mẫu PO mới",
     },
+    "model_assist.po_body_extraction": {
+      label: "Đọc PO khách viết trong thân thư",
+      help: "Thư nêu đơn hàng mà không đính kèm tệp: mô hình đọc PO từ nội dung thư; mọi giá trị cần Sales xác nhận với thư.",
+    },
     layout_onboarding: { label: "Mẫu PO mới duyệt" },
     "layout_onboarding.uncertain_first_pos": {
       label: "Số PO đầu cần xác nhận từng giá trị",
