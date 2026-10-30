@@ -56,11 +56,13 @@ from dw_sales.application.activity import ActivityService
 from dw_sales.application.activity_ports import CaseListActivity, HandledBy
 from dw_sales.application.artifacts_service import ArtifactListView, ArtifactView, Download
 from dw_sales.application.assignment import AssigneeView
+from dw_sales.application.assistant import AnswerView, SessionDetailView, SessionView
 from dw_sales.application.catalog_imports import (
     CatalogImportView,
     CatalogPreviewView,
     CatalogStateView,
 )
+from dw_sales.application.customer_reminders import CustomerReminderView
 from dw_sales.application.design_text_reading import DesignTextReadingView, ModelDesignReply
 from dw_sales.application.finding_explanations import FindingExplanationView
 from dw_sales.application.layouts import LayoutPreviewView, LayoutSourceView, LayoutView
@@ -104,6 +106,7 @@ from dw_sales.application.views import (
     WorkerStateView,
 )
 from dw_sales.domain.activity import StepResult
+from dw_sales.domain.assistant import QUESTION_CHARS
 from dw_sales.domain.catalog import CopperBasis, CustomerCode, DocumentNo, PrvCode
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.layouts import LayoutMapping
@@ -224,6 +227,16 @@ class PcDatesBody(VersionBody):
     """PC's mail as Sales pasted it (AI item 7): read, never stored."""
 
     text: Annotated[str, Field(min_length=1, max_length=8000)]
+
+
+class AskBody(BaseModel):
+    """A question to the status assistant (ADR 0007), and the session it
+    continues; none opens a new one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: Annotated[str, Field(min_length=1, max_length=QUESTION_CHARS)]
+    session_id: uuid.UUID | None = None
 
 
 class SignedCopyBody(VersionBody):
@@ -537,6 +550,34 @@ def build_router(
         )
         return await idem.record(view)
 
+    # Status questions answered from live data, in the caller's own sessions
+    # (ADR 0007; the contract's DW01 criterion 6). The model reads the
+    # question; code finds the case among those the caller may see.
+    @router.post(
+        "/assistant/ask",
+        response_model=AnswerView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def assistant_ask(body: AskBody, context: Ctx, svc: Svc, idem: Idem) -> AnswerView:
+        view = await svc.assistant.ask(context, body.question, body.session_id)
+        return await idem.record(view)
+
+    @router.get(
+        "/assistant/sessions",
+        response_model=list[SessionView],
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def assistant_sessions(context: Ctx, svc: Svc) -> list[SessionView]:
+        return await svc.assistant.sessions(context)
+
+    @router.get(
+        "/assistant/sessions/{session_id}",
+        response_model=SessionDetailView,
+        dependencies=[scopes(SalesScopes.CASE_READ)],
+    )
+    async def assistant_session(session_id: uuid.UUID, context: Ctx, svc: Svc) -> SessionDetailView:
+        return await svc.assistant.session(context, session_id)
+
     # A case's mail thread summarised by the model, on request (AI item 8):
     # each point cites its mails, and nothing is stored.
     @router.get(
@@ -554,6 +595,25 @@ def build_router(
     )
     async def quote_thread(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ThreadSummaryView:
         return await svc.thread_summaries.summarize(context, CaseKind.QUOTE, case_id)
+
+    # A reminder to the customer a case waits on, drafted by the model on
+    # request (DW01 function 4): no amount, the customer's contacts as
+    # recipients, nothing sent or stored.
+    @router.get(
+        "/orders/{case_id}/customer-reminder",
+        response_model=CustomerReminderView,
+        dependencies=[scopes(SalesScopes.ORDER_PREPARE)],
+    )
+    async def order_reminder(case_id: uuid.UUID, context: Ctx, svc: Svc) -> CustomerReminderView:
+        return await svc.customer_reminders.draft(context, CaseKind.ORDER, case_id)
+
+    @router.get(
+        "/quotes/{case_id}/customer-reminder",
+        response_model=CustomerReminderView,
+        dependencies=[scopes(SalesScopes.QUOTE_PREPARE)],
+    )
+    async def quote_reminder(case_id: uuid.UUID, context: Ctx, svc: Svc) -> CustomerReminderView:
+        return await svc.customer_reminders.draft(context, CaseKind.QUOTE, case_id)
 
     @router.get("/my-work", response_model=Page[WorkItem])
     async def my_work(

@@ -44,6 +44,8 @@ MODEL_STEPS = [
     "sales_pc_dates@1.0.0",
     "sales_catalog_columns@1.0.0",
     "sales_po_body@1.0.0",
+    "sales_customer_reminders@1.0.0",
+    "sales_assistant@1.0.0",
 ]
 REASON = "the live model gave no usable answer"
 

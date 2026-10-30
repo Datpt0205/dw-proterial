@@ -156,6 +156,22 @@ API and the plan use the English terms. The spec is
   working morning at the policy's local time: what came in since the last
   brief and whose turn it is, what is due soon or overdue, what waits on
   whom; counts only, never an amount (ticket 42).
+- **Customer reminder** (Thư nhắc khách): on a case waiting on the customer
+  (`correction_requested`, `spec_discussion`), a mail DW1 drafts on request
+  in the customer's language, from the PO or request number, the day the
+  customer was asked and, for an order, the points asked; never an amount.
+  The person opens it in their own mail program and sends it; nothing is
+  sent or stored by DW1 (the contract's DW01 function 4).
+- **Status assistant** (Hỏi đáp DW1): status questions on the agreed list
+  (a PO's status, a quote request's status, the work waiting, the work
+  overdue) answered from live data among the cases the person may see;
+  anything else is said to be outside it, never guessed. The model reads
+  the question and may word the answer; code finds the case and checks
+  every figure; no answer carries an amount (ADR 0007).
+- **Assistant session** (Phiên hỏi đáp): a person's own conversation with
+  the status assistant, kept thirty days after its last turn. Its **focus**
+  is the case the conversation is on, kept as the case's kind and id, so a
+  follow-up such as "PO đó" means that case.
 
 - **Drop folder** (Thư mục thư): where real mail reaches DW1 without any
   access to Microsoft 365: a DW1 account owns one OneDrive folder per Sales

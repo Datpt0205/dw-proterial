@@ -22,6 +22,20 @@ _FIGURE = re.compile(r"[A-Za-z]*\d[\w./,\-]*")
 _PARTS = re.compile(r"[./,\-]")
 # Names that hold a digit and are no figure: the Digital Workers' own.
 _NAMES: Final = frozenset({"DW1", "DW2"})
+# What an amount looks like in any of the customers' languages: a percent, a
+# currency code or symbol. A mail to a customer no approval looked at carries
+# none (items 11 and the customer reminder): a "5%" passes a figure check
+# whenever a date holds a 5.
+_AMOUNT: Final = re.compile(
+    # `\uff05` is the full-width percent sign a Japanese mail may use.
+    r"[%\uff05$¥€₫]|\b(?:USD|VND|JPY|EUR|SGD|THB|CNY|đồng)\b|円|ドル",
+    re.IGNORECASE,
+)
+
+
+def names_amount(text: str) -> bool:
+    """Whether ``text`` writes an amount of money or a percentage."""
+    return _AMOUNT.search(text) is not None
 
 
 def figures(text: str) -> set[str]:

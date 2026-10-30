@@ -98,6 +98,9 @@ _SALES_TABLES = (
     "sales.recorded_convert_entries",
     "sales.recorded_customer_senders",
     "sales.outbound_mails",
+    # Migration e0940c90ce04 (dw_sales ADR 0007): the status assistant's sessions.
+    "sales.assistant_sessions",
+    "sales.assistant_turns",
 )
 
 
@@ -171,6 +174,11 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "SELECT",
         "INSERT",
     }
+    # The status assistant's turns are appended; a session moves only its
+    # `last_turn_at` (a column grant, which `has_table_privilege` does not
+    # count) and leaves through `sales.prune_assistant_sessions()` (e0940c90ce04).
+    for table in ("assistant_sessions", "assistant_turns"):
+        assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
     # Stored mail and the files it came from (ticket 43), every partition:
     # what arrived is never rewritten or removed by the application.
     for prefix in ("mailbox_messages", "mailbox_attachments", "mailbox_files"):

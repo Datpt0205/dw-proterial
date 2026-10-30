@@ -578,3 +578,37 @@ recorded_quotations = sa.Table(
     sa.Column("quotation", JSONB, nullable=False),
     sa.Column("recorded_at", _TS, nullable=False, server_default=sa.func.now()),
 )
+
+# dw_sales ADR 0007: the status assistant's sessions, each a person's own
+# (`tenant AND ((workspace AND user) OR scope)`), and their turns. Thirty days
+# after a session's last turn, `sales.prune_assistant_sessions()` removes it.
+assistant_sessions = sa.Table(
+    "assistant_sessions",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    *_scope(),
+    sa.Column("user_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("created_at", _TS, nullable=False),
+    sa.Column("last_turn_at", _TS, nullable=False),
+)
+
+assistant_turns = sa.Table(
+    "assistant_turns",
+    metadata,
+    sa.Column("session_id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("seq", sa.Integer, primary_key=True),
+    *_scope(),
+    sa.Column("user_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("asked_at", _TS, nullable=False),
+    sa.Column("question", sa.Text, nullable=False),
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("reference", sa.Text),
+    sa.Column("answer", sa.Text, nullable=False),
+    # `[{kind, case_id, label}]`: the cases the answer rests on.
+    sa.Column("cites", JSONB, nullable=False),
+    sa.Column("focus_kind", sa.Text),
+    sa.Column("focus_case_id", UUID(as_uuid=True)),
+    sa.Column("focus_label", sa.Text),
+    sa.Column("answered_by", sa.Text, nullable=False),
+)

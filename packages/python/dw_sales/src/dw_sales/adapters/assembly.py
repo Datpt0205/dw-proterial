@@ -52,6 +52,7 @@ from dw_sales.adapters.model_interpretation import GatewayInterpretation, Profil
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.outbox_folder import FolderOutbox
 from dw_sales.adapters.persistence.activity import SqlStepActivityReader
+from dw_sales.adapters.persistence.assistant import SqlAssistantStoreFactory
 from dw_sales.adapters.persistence.catalog import (
     OutboxFactory,
     SqlApprovedLists,
@@ -370,6 +371,7 @@ def build_dw1(
         scanner=scanner,
         converts=catalog,
         senders=catalog,
+        assistant=SqlAssistantStoreFactory(session_factory),
         one_call=(
             None
             if one_call_model is None

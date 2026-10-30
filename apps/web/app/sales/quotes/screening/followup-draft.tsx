@@ -1,35 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { MailOutlined } from "@ant-design/icons";
-import { Alert, Button, Flex, Space, Tag, Typography } from "antd";
+import { Space, Typography } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
 import { useAuth } from "../../../../lib/auth/auth-context";
 import { salesApi } from "../../_lib/api";
 import { ActionError } from "../../_lib/errors";
+import { DraftedMail } from "../../_components/drafted-mail";
 import { GuardedButton } from "../../_components/guarded-button";
 
 type Draft = SalesSchemas["FollowupDraftView"];
 
-/** The longest `mailto:` link mail programs reliably open. */
-const MAILTO_MAX = 1900;
-
-/** The draft as a `mailto:` link the person's own mail program opens. */
-export function mailtoOf(draft: Draft): string | null {
-  if (!draft.subject || !draft.body || !draft.to.length) return null;
-  const link =
-    `mailto:${draft.to.map(encodeURIComponent).join(",")}` +
-    `?subject=${encodeURIComponent(draft.subject)}` +
-    `&body=${encodeURIComponent(draft.body)}`;
-  return link.length <= MAILTO_MAX ? link : null;
-}
-
 /**
  * Q12's question to the customer (AI item 11): DW1 drafts it on request, with
- * no price, to the customer's contacts in the master data. Nothing is sent:
- * "Mở trong Outlook" opens it in the person's own mail program to read,
- * change and send from their own mailbox; "Sao chép" when the mail is too
- * long for a link.
+ * no price, to the customer's contacts in the master data. Nothing is sent
+ * (`DraftedMail`).
  */
 export function FollowupDraft({
   customerCode,
@@ -58,52 +43,7 @@ export function FollowupDraft({
     }
   };
 
-  if (draft?.status === "drafted") {
-    const mailto = mailtoOf(draft);
-    return (
-      <Flex vertical gap={6} className="max-w-xl">
-        <Alert
-          type="info"
-          showIcon
-          role="status"
-          title={
-            <Space wrap>
-              <span>{draft.subject}</span>
-              <Tag>Máy viết</Tag>
-            </Space>
-          }
-          description={
-            <Flex vertical gap={4}>
-              <Typography.Text>Gửi tới: {draft.to.join(", ")}</Typography.Text>
-              <Typography.Paragraph className="mb-0! whitespace-pre-wrap">
-                {draft.body}
-              </Typography.Paragraph>
-            </Flex>
-          }
-        />
-        <Space wrap>
-          {mailto ? (
-            <Button
-              type="primary"
-              icon={<MailOutlined aria-hidden />}
-              href={mailto}
-            >
-              Mở trong Outlook
-            </Button>
-          ) : null}
-          <Button
-            onClick={() =>
-              void navigator.clipboard.writeText(
-                `${draft.subject}\n\n${draft.body}`,
-              )
-            }
-          >
-            Sao chép thư
-          </Button>
-        </Space>
-      </Flex>
-    );
-  }
+  if (draft?.status === "drafted") return <DraftedMail draft={draft} />;
   return (
     <Space orientation="vertical" size={4}>
       <GuardedButton
