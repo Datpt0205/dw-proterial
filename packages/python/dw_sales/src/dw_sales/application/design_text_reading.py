@@ -49,7 +49,7 @@ from dw_sales.application.quotation import QuotationService
 from dw_sales.application.runs import caller_run
 from dw_sales.application.support import person_event, save_quote
 from dw_sales.application.views import CaseChangeView, quote_change
-from dw_sales.domain.anchors import SourceAnchor, TextRange
+from dw_sales.domain.anchors import MessageText, SourceAnchor, TextRange
 from dw_sales.domain.dispositions import (
     CaseKind,
     DispositionKind,
@@ -58,7 +58,7 @@ from dw_sales.domain.dispositions import (
 )
 from dw_sales.domain.mail_parts import newest_part
 from dw_sales.domain.messages import InboundMessage
-from dw_sales.domain.quotes import DesignReply, DesignReplyDocument, MessageText
+from dw_sales.domain.quotes import DesignReply, DesignReplyDocument
 from dw_sales.domain.rfq_reading import normalised, text_digest
 
 # The prompt the reply is read with. Its file is

@@ -43,7 +43,7 @@ from pydantic import (
 )
 
 from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
-from dw_sales.domain.anchors import SourceAnchor
+from dw_sales.domain.anchors import MessageText, SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
     CopperBasis,
@@ -284,23 +284,6 @@ class RfqDocument(BaseModel):
 
     def item(self, line_no: int) -> RequestedItem:
         return next(item for item in self.items if item.line_no == line_no)
-
-
-class MessageText(BaseModel):
-    """The newest part of the message as a model read it (subject first,
-    history cut, `mail_parts.newest_part`), kept on the case: what a body
-    anchor's characters index into, and what the screen highlights them in."""
-
-    model_config = _FROZEN
-
-    text: str = Field(min_length=1, max_length=50_000)
-    sha256: Sha256Hex
-
-    @model_validator(mode="after")
-    def _digest_is_the_texts(self) -> Self:
-        if hashlib.sha256(self.text.encode("utf-8")).hexdigest() != self.sha256:
-            raise ValueError("the message text changed")
-        return self
 
 
 class RequestReading(BaseModel):

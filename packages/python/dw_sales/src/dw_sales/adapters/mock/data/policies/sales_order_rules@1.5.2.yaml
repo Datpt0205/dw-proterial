@@ -7,7 +7,8 @@ policy_version: "1.5.2"
 # its orders under. Platform 1.6.0 with the model steps on: model_assist.
 # description_attributes (ticket 28), message_intent (ticket 31),
 # rfq_extraction (ticket 29), reply_intent (ticket 32), request_handoff
-# (ticket 33) and layout_proposal (ticket 30), for the unit tests and evals
+# (ticket 33), layout_proposal (ticket 30) and po_body_extraction (AI item
+# 4), for the unit tests and evals
 # that run a model over a recorded answer, and the API's integration suite
 # over stand-in measurements (dw_sales ADR 0005). `make demo-reset` installs
 # 1.5.3 instead (`no_model/`): this version with every step off, since a
@@ -155,6 +156,8 @@ model_assist:
   reply_intent: true
   request_handoff: true
   layout_proposal: true
+  # A local model reads a PO written in the mail body (AI item 4).
+  po_body_extraction: true
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or

@@ -150,8 +150,9 @@ class Stored[CaseT]:
 class ServedSource(BaseModel):
     """One region of a case's source a principal was shown (spec decision 12):
     a page of a PDF or a sheet of a workbook, for one case version; or, for a
-    quotation a model read from the mail (ticket 29), the message's text the
-    case holds (``attachment_id`` None, its text's sha256)."""
+    quotation's request (ticket 29) or an order's PO (AI item 4) a model read
+    from the mail, the message's text the case holds (``attachment_id``
+    None, its text's sha256)."""
 
     model_config = _FROZEN
 
@@ -170,8 +171,6 @@ class ServedSource(BaseModel):
         if self.attachment_id is None:
             if self.page is not None or self.sheet is not None:
                 raise ValueError("the message's text has no page or sheet")
-            if self.case_kind is not CaseKind.QUOTE:
-                raise ValueError("only a quotation is read from the message's text")
         elif (self.page is None) == (self.sheet is None):
             raise ValueError("a served region is a page or a sheet")
         return self

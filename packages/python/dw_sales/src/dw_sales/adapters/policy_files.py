@@ -119,7 +119,7 @@ def load_sales_policies(policies_dir: Path, copy_dir: Path) -> SalesPolicies:
     file names still points at.
     """
     current = SalesPolicies(
-        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.7.0.yaml"),
+        order_rules=load_order_rules(policies_dir / "sales_order_rules@1.8.0.yaml"),
         quote_rules=load_quote_rules(policies_dir / "sales_quote_rules@1.1.0.yaml"),
         pricing=load_pricing(policies_dir / "sales_pricing@1.0.0.yaml"),
         kpi=load_kpi(policies_dir / "sales_kpi@1.0.0.yaml"),

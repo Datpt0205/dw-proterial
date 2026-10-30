@@ -324,6 +324,14 @@ export class SalesApi {
     );
   }
 
+  /** The mail a PO written in the mail body was read from (AI item 4);
+   * served and recorded like a page, which prepare and cross-check require. */
+  orderMessageText(caseId: string) {
+    return this.get<"/api/v1/sales/orders/{case_id}/message-text">(
+      `/api/v1/sales/orders/${enc(caseId)}/message-text`,
+    );
+  }
+
   /** A finding explained in words by DW1's model (AI item 12): nothing is
    * stored; a price finding only for a price reader (403 otherwise). */
   explainFinding(caseId: string, findingKey: string) {

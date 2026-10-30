@@ -103,6 +103,7 @@ from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
+from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.processing import ClaimedJob, ProcessingDrain
 from dw_sales.application.quotation import QuotationService
@@ -1158,7 +1159,10 @@ class World:
             required_regions(self.order(case_id)),
             key=lambda r: (r.attachment_id or "", r.page or 0, r.sheet or ""),
         ):
-            assert region.attachment_id is not None  # an order is read from a file
+            if region.attachment_id is None:
+                # A PO written in the mail: its one region is the mail's text.
+                await self.services.sources.order_message_text(context, case_id)
+                continue
             await self.services.sources.order_source(
                 context, case_id, region.attachment_id, page=region.page, sheet=region.sheet
             )
@@ -1343,6 +1347,7 @@ def open_world(
         handoffs=None if model is None else HandoffReader(model, catalog, store),
         layouts=store,
         layout_prefiller=None if model is None else LayoutPrefiller(model, layout_checks),
+        body_pos=None if model is None else PoBodyReader(model),
         model_steps=readiness,
     )
     directory = Directory(tuple(callers))

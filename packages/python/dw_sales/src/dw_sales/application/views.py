@@ -668,7 +668,8 @@ class SupersededView(BaseModel):
 
     message_id: str
     received_at: datetime
-    attachment_id: str
+    # None: that revision was written in the mail (AI item 4).
+    attachment_id: str | None
     revision: int
     value_state: ValueState = ValueState.SUPERSEDED
 
@@ -719,7 +720,10 @@ class OrderCaseView(BaseModel):
     revision: int
     po_date: date
     currency: Currency
-    attachment_id: str
+    # None: the PO was written in the mail (AI item 4); its values' anchors
+    # are ranges of the message's text, served by its own route, and
+    # ``attachment_sha256`` is that text's digest.
+    attachment_id: str | None
     attachment_sha256: str
     header_anchors: dict[str, SourceAnchor]
     header_flags: list[FlaggedValue]

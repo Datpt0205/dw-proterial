@@ -26,18 +26,41 @@ export function regionKey(region: SourceRegion): string {
   return "page" in region ? `page:${region.page}` : `sheet:${region.sheet}`;
 }
 
+// The mail's own text, the one region of a PO written in the mail (AI item 4).
+const MAIL = "mail";
+
+function mark(caseId: string, caseVersion: number, region: string) {
+  const key = caseKey(caseId, caseVersion);
+  const set = served.get(key) ?? new Set<string>();
+  if (set.has(region)) return;
+  set.add(region);
+  served.set(key, set);
+  revision += 1;
+  listeners.forEach((listener) => listener());
+}
+
 export function markServed(
   caseId: string,
   caseVersion: number,
   region: SourceRegion,
 ) {
-  const key = caseKey(caseId, caseVersion);
-  const set = served.get(key) ?? new Set<string>();
-  if (set.has(regionKey(region))) return;
-  set.add(regionKey(region));
-  served.set(key, set);
-  revision += 1;
-  listeners.forEach((listener) => listener());
+  mark(caseId, caseVersion, regionKey(region));
+}
+
+export function markMailServed(caseId: string, caseVersion: number) {
+  mark(caseId, caseVersion, MAIL);
+}
+
+export function wasMailServed(caseId: string, caseVersion: number): boolean {
+  return served.get(caseKey(caseId, caseVersion))?.has(MAIL) ?? false;
+}
+
+/** Where in the mail's text an anchor points; null for a file's anchor. */
+export function mailRange(
+  anchor: Anchor | null | undefined,
+): { start: number; end: number } | null {
+  if (!anchor || anchor.attachment_id !== null || !anchor.chars) return null;
+  return { start: anchor.chars.start, end: anchor.chars.end };
 }
 
 function subscribe(listener: () => void) {

@@ -127,6 +127,7 @@ class ModelStep(StrEnum):
     REPLY_INTENT = "reply_intent"
     REQUEST_HANDOFF = "request_handoff"
     LAYOUT_PROPOSAL = "layout_proposal"
+    PO_BODY_EXTRACTION = "po_body_extraction"
 
 
 class ModelAssist(BaseModel):
@@ -162,6 +163,10 @@ class ModelAssist(BaseModel):
     # A local model proposes which label on a new PO form names which field,
     # for the layout-onboarding screen a person completes (ticket 30).
     layout_proposal: bool
+    # A local model reads a PO written in the mail body, with no file (AI
+    # item 4); every value it read is flagged for Sales to confirm. Off when
+    # a version written before 1.8.0 does not say.
+    po_body_extraction: bool = False
 
     def on(self, step: ModelStep) -> bool:
         """Whether the tenant's rules turn ``step`` on. On is not enough to use

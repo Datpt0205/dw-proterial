@@ -709,6 +709,14 @@ def build_router(
             context, case_id, attachment_id, page=page, sheet=sheet
         )
 
+    @router.get(
+        "/orders/{case_id}/message-text",
+        response_model=MessageTextView,
+        dependencies=[scopes(SalesScopes.CASE_READ, SalesScopes.PRICE_READ)],
+    )
+    async def order_message_text(case_id: uuid.UUID, context: Ctx, svc: Svc) -> MessageTextView:
+        return await svc.sources.order_message_text(context, case_id)
+
     @router.get("/orders/{case_id}/artifacts", response_model=ArtifactListView)
     async def order_artifacts(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ArtifactListView:
         return await svc.artifacts.order_artifacts(context, case_id)
