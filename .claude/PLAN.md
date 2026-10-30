@@ -38,9 +38,9 @@ own file and a row here.
 - **Next:** AI items 2–8, 10–12 done (#4 PO in the mail body, 10-30);
   "Gửi cho khách" prepared (no flow until Proterial signs) (`sales.md`).
   #13 scans at deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000
-  24 GB). 10-30 contract check (`sales.md`): DW01 still owes status Q&A on
-  the portal (#9 back in scope) and customer reminders; DW02 not started,
-  and its contract gives it 4 weeks.
+  24 GB). 10-30: DW01's contract gaps closed (status Q&A with sessions,
+  ADR 0007; customer reminders); DW02 not started, its contract gives it
+  4 weeks (next: lift the shared pieces to the platform, then scaffold).
 
 ## Decisions Đạt owes
 

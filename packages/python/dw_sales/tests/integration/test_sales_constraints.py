@@ -389,20 +389,23 @@ async def test_an_artifact_key_always_carries_its_tenant_and_workspace(
 
 
 @pytest.mark.parametrize(
-    "region",
+    ("attachment", "region"),
     [
-        # The message's text is a quotation's source only (ticket 29).
-        "NULL, NULL",
-        # A file's region is still a page or a sheet.
-        "1, 'PO'",
+        # The message's text (a quotation's since ticket 29, an order's since
+        # cbd4fbacfce2) has neither page nor sheet.
+        ("NULL", "1, NULL"),
+        # A file's region is still a page or a sheet, not both.
+        ("'M01-A1'", "1, 'PO'"),
     ],
 )
-async def test_a_served_region_is_a_page_a_sheet_or_a_quotations_message_text(
-    small_run: OrderRun, app_sessions: async_sessionmaker[AsyncSession], region: str
+async def test_a_served_region_is_a_page_a_sheet_or_the_message_text(
+    small_run: OrderRun,
+    app_sessions: async_sessionmaker[AsyncSession],
+    attachment: str,
+    region: str,
 ) -> None:
     case = _m01(small_run)
     scope = small_run.scope
-    attachment = "NULL" if region == "NULL, NULL" else "'M01-A1'"
     refused = await _refused(
         app_sessions,
         scope,
