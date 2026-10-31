@@ -116,7 +116,7 @@ jobs:
           DW_TEST_CLAMD: 127.0.0.1:3310
         run: |
           uv sync --all-packages
-          uv run pytest -m integration packages/python/dw_sales/tests/integration/test_clamd.py
+          uv run pytest -m integration packages/python/dw_platform/tests/integration/test_clamd.py
       - name: Open or update the pull request
         if: steps.digest.outputs.changed == 'true'
         env:

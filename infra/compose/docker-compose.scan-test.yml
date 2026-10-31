@@ -1,5 +1,5 @@
 # The `clamav` service with its port published on the loopback, for the
-# integration suite only (`packages/python/dw_sales/tests/integration/
+# integration suite only (`packages/python/dw_platform/tests/integration/
 # test_clamd.py`, DW_TEST_CLAMD=127.0.0.1:3310). Layered over
 # docker-compose.yml, so the image, its digest and its config have one owner:
 #

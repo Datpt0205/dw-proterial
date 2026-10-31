@@ -53,6 +53,7 @@ from dw_kernel.errors import (
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.malware import MalwareScanPort
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import EML, PDF, XLSX, ArtifactWriterPort
@@ -62,7 +63,6 @@ from dw_sales.application.case_store import (
     SalesUnitOfWorkFactory,
 )
 from dw_sales.application.drafting import ArtifactCopyPort, Drafting, People, Rendered
-from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.order_artifacts import (
     OrderDrafting,
     bravo_upload,

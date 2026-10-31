@@ -1,4 +1,4 @@
-"""`MalwareScanPort` over clamd's ``INSTREAM`` command, on TCP (ticket 25).
+"""`MalwareScanPort` over clamd's ``INSTREAM`` command, on TCP (sales ticket 25).
 
 The protocol, as clamd documents it: send ``zINSTREAM\\0``, then the file in
 chunks, each a 4-byte big-endian length and that many bytes, then a zero
@@ -21,7 +21,10 @@ import struct
 from contextlib import suppress
 from typing import Final
 
-from dw_sales.application.malware import MalwareScanPort, ScanVerdict
+from dw_platform.application.malware import (
+    MalwareScanPort,
+    ScanVerdict,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -86,9 +89,7 @@ class SkippedScan:
 
     async def scan(self, data: bytes) -> ScanVerdict:
         if not self._warned:
-            _LOG.warning(
-                "sales: attachments are NOT scanned for malware (DW_SALES_MALWARE_SCAN=skip)"
-            )
+            _LOG.warning("attachments are NOT scanned for malware (DW_SALES_MALWARE_SCAN=skip)")
             self._warned = True
         return ScanVerdict.clean()
 

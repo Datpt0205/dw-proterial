@@ -51,7 +51,9 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
 from dw_platform.application.identity import MembershipAccess
+from dw_platform.application.malware import MalwareScanPort
 from dw_platform.domain.audit import AuditEntry, AuditEvent
+from dw_platform.testing.scanners import NoMalware
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.assembly import model_requests, step_model
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
@@ -98,7 +100,6 @@ from dw_sales.application.layouts import (
     LayoutPrefiller,
     LayoutSettlement,
 )
-from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
@@ -110,6 +111,7 @@ from dw_sales.application.quotation import QuotationService
 from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rules import RULES_DECIDED, RuleBookOrderRules, RuleSettlement
 from dw_sales.application.runs import subject_of
+from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, required_regions
@@ -134,7 +136,6 @@ from dw_sales.testing.catalog_store import (
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
 from dw_sales.testing.measurements import MemoryModelMeasurements, passing
 from dw_sales.testing.role_catalog import StaticRoleCatalog
-from dw_sales.testing.scanners import NoMalware
 from dw_sales.workflows.graph import register
 
 ALPHA = SalesScope(TenantId(uuid.UUID(int=0xA1FA)), WorkspaceId(uuid.UUID(int=0xA1FB)))

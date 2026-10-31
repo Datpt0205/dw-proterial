@@ -358,7 +358,7 @@ class WorkerSettings(BaseSettings):
     # `clamd`: every attachment is scanned by the `clamav` compose service
     # before anything reads it. `skip`: files are handed over unscanned, for a
     # host-run local process that cannot reach a scanner publishing no port;
-    # refused in a deployed profile (`dw_sales.adapters.clamd.malware_scanner`,
+    # refused in a deployed profile (`dw_platform.adapters.clamd.malware_scanner`,
     # the one rule both processes read).
     sales_malware_scan: Literal["clamd", "skip"] = Field(
         default="clamd", validation_alias=AliasChoices("DW_SALES_MALWARE_SCAN")

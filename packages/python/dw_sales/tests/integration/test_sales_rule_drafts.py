@@ -29,6 +29,7 @@ from dw_platform.adapters.persistence.repositories import (
 )
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.testing.scanners import NoMalware
 from dw_sales.adapters.persistence.catalog import SqlCatalogUnitOfWorkFactory
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
 from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
@@ -50,7 +51,6 @@ from dw_sales.evals.graders import GIANG
 from dw_sales.evals.recorded import Recorded
 from dw_sales.evals.rule_drafts import gold, template_xlsx
 from dw_sales.evals.world import Directory
-from dw_sales.testing.scanners import NoMalware
 
 pytestmark = pytest.mark.integration
 

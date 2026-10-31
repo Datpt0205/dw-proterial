@@ -1,4 +1,4 @@
-"""Ticket 25, against clamd itself: the `clamav` compose service's image and
+"""Sales ticket 25, against clamd itself: the `clamav` compose service's image and
 config, reached at ``DW_TEST_CLAMD`` (``host:port``).
 
 CI runs clamd as a service container for this suite and sets the variable;
@@ -12,13 +12,14 @@ not itself something a virus scanner on the machine quarantines.
 
 from __future__ import annotations
 
+import io
 import os
+import zipfile
 
 import pytest
 
-from dw_sales.adapters.clamd import ClamdScanner
-from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
-from dw_sales.application.malware import ScanVerdict
+from dw_platform.adapters.clamd import ClamdScanner
+from dw_platform.application.malware import ScanVerdict
 
 pytestmark = pytest.mark.integration
 
@@ -41,8 +42,13 @@ async def test_the_eicar_test_file_is_found_by_its_signature() -> None:
     assert await _scanner().scan(_EICAR) == ScanVerdict.infected("Eicar-Test-Signature")
 
 
-async def test_a_mock_po_is_clean() -> None:
-    data = (ATTACHMENTS_DIR / "M01_VLX-PO-2609-0118.xlsx").read_bytes()
+async def test_an_ordinary_office_file_is_clean() -> None:
+    # An Office file is a zip: one built here, so the suite needs no context's fixtures.
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("xl/workbook.xml", "<workbook/>")
+    data = buffer.getvalue()
 
     assert await _scanner().scan(data) == ScanVerdict.clean()
 

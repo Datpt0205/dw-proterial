@@ -55,9 +55,12 @@ from typing import Final
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError
+from dw_platform.application.malware import (
+    AttachmentInfectedError,
+    AttachmentRefusedError,
+)
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
-from dw_sales.application.malware import AttachmentInfectedError, AttachmentRefusedError
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import (

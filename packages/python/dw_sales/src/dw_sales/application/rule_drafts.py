@@ -65,13 +65,13 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import context_from
+from dw_platform.application.malware import MalwareScanPort
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_platform.domain.audit import AuditEvent, lane_audit_event
 from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import BravoUploadLayout
 from dw_sales.application.catalog_imports import OutboxPort
-from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.model_reading import (
     InterpretationPort,
     ModelUnavailableError,
