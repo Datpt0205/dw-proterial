@@ -6,9 +6,11 @@ from dataclasses import dataclass
 
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.intake import PurchaseRequests
+from dw_purchasing.application.sourcing import SupplierSourcing
 
 
 @dataclass(frozen=True)
 class PurchasingServices:
     requests: PurchaseRequests
     approvals: RequestApprovals
+    sourcing: SupplierSourcing

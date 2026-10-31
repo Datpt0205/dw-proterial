@@ -136,7 +136,8 @@ def test_every_released_rules_file_loads_and_one_named_for_another_version_is_re
     tmp_path: Path,
 ) -> None:
     files = PolicyFiles.load(REPO / "configs/policies")
-    assert files.current().ref == "purchasing_rules@1.1.0"
+    newest = max(files.versions, key=lambda v: tuple(int(p) for p in v.split(".")))
+    assert files.current().version == newest and {"1.0.0", "1.1.0"} <= files.versions
     wrong = tmp_path / "purchasing_rules@9.9.9.yaml"
     wrong.write_bytes((REPO / "configs/policies/purchasing_rules@1.0.0.yaml").read_bytes())
     with pytest.raises(ValueError, match="holds"):

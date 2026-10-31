@@ -32,6 +32,7 @@ from dw_purchasing.application.approvals import (
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.testing.memory import MemoryStore
 
 ALPHA: Final = (uuid.UUID(int=0xA1), uuid.UUID(int=0xA2))
@@ -92,6 +93,9 @@ class ScriptedModel:
     answers: Mapping[str, Mapping[str, Any]]
     failure: Exception | None = None
     calls: list[tuple[PromptRef, Mapping[str, str], RunContext]] = field(default_factory=list)
+    # Answers for one schema by its name (an RFQ's wording, a supplier's
+    # offer), where the keys could meet another schema's.
+    by_schema: dict[str, Mapping[str, Mapping[str, Any]]] = field(default_factory=dict)
     model_profile: str = "onprem"
     route: str = "structured_extraction"
     max_input_tokens: int = 6000
@@ -109,7 +113,7 @@ class ScriptedModel:
         if self.failure is not None:
             raise self.failure
         text = next(iter(inputs.values()))
-        for key, answer in self.answers.items():
+        for key, answer in self.by_schema.get(schema.__name__, self.answers).items():
             if key in text:
                 return schema.model_validate(answer)
         raise ModelUnavailableError("no scripted answer")
@@ -125,6 +129,7 @@ class World:
     approvals: RequestApprovals
     decisions: RequestDecisions
     settlement: RequestSettlement
+    sourcing: SupplierSourcing
 
 
 def open_world(
@@ -149,11 +154,18 @@ def open_world(
         clock=clock,
         ids=ids,
     )
+    master = MockMasterData.load(tenant_id=ALPHA[0], workspace_id=ALPHA[1])
     approvals = RequestApprovals(
+        uow=store, gate=Gate(Authz()), rules=book, master=master, clock=clock, ids=ids
+    )
+    sourcing = SupplierSourcing(
         uow=store,
         gate=Gate(Authz()),
         rules=book,
-        master=MockMasterData.load(tenant_id=ALPHA[0], workspace_id=ALPHA[1]),
+        master=master,
+        inbox=service.inbox,
+        model=model if with_model else None,
+        worker=Worker("purchasing-dw2", "1.0.0"),
         clock=clock,
         ids=ids,
     )
@@ -166,4 +178,5 @@ def open_world(
         approvals,
         RequestDecisions(store),
         RequestSettlement(store, clock, ids),
+        sourcing,
     )

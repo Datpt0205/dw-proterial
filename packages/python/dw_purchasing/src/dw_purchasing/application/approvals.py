@@ -148,6 +148,8 @@ class RequestApprovals:
             approval_id=approval_id,
             required_scope=tier.scope,
             tier_label=tier.label,
+            limit=tier.up_to,
+            limit_currency=_approval_rules(rules).currency,
             case_version=case.case_version + 1,
             submitted_by=context.principal_id,
             submitted_at=self.clock.now(),

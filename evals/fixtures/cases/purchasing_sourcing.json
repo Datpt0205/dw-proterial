@@ -1,0 +1,117 @@
+{
+  "comment": "DW2 reads suppliers' replies to its RFQs (DW02 function 3). `answers` are what a model that reads the mock replies well answers, keyed by a token only that mail holds; `variants` are answers a misled model could give; `rfq_words` what a model may write for an RFQ.",
+  "answers": {
+    "Kimura xin báo giá": {
+      "lines": [
+        {
+          "line_span": "DC-200 Dao cắt cáp: đơn giá 1.200.000 VND, giao hàng 7 ngày, hiệu lực đến 30/11/2026",
+          "item_code_span": "DC-200",
+          "unit_price_span": "1.200.000",
+          "currency_span": "VND",
+          "lead_time_span": "7 ngày",
+          "valid_until_span": "30/11/2026"
+        }
+      ]
+    },
+    "An Phát báo giá": {
+      "lines": [
+        {
+          "line_span": "DC-200 giá 1.290.000 đ, giao 3 ngày",
+          "item_code_span": "DC-200",
+          "unit_price_span": "1.290.000",
+          "currency_span": "đ",
+          "lead_time_span": "3 ngày",
+          "valid_until_span": null
+        },
+        {
+          "line_span": "BK-1700 giá 37.500 đ, giao 5 ngày",
+          "item_code_span": "BK-1700",
+          "unit_price_span": "37.500",
+          "currency_span": "đ",
+          "lead_time_span": "5 ngày",
+          "valid_until_span": null
+        }
+      ]
+    },
+    "Bảo Hộ Sài Gòn báo giá": {
+      "lines": [
+        {
+          "line_span": "GT-C5 găng tay chống cắt: 98.000 VND/đôi, giao trong 5 ngày",
+          "item_code_span": "GT-C5",
+          "unit_price_span": "98.000",
+          "currency_span": "VND",
+          "lead_time_span": "5 ngày",
+          "valid_until_span": null
+        },
+        {
+          "line_span": "BK-1700 băng keo: 35.000 VND/cuộn, giao 2 ngày",
+          "item_code_span": "BK-1700",
+          "unit_price_span": "35.000",
+          "currency_span": "VND",
+          "lead_time_span": "2 ngày",
+          "valid_until_span": null
+        }
+      ]
+    },
+    "Kimura điều chỉnh": {
+      "lines": [
+        {
+          "line_span": "DC-200 đơn giá 900.000 VND, giao 1 ngày",
+          "item_code_span": "DC-200",
+          "unit_price_span": "900.000",
+          "currency_span": "VND",
+          "lead_time_span": "1 ngày",
+          "valid_until_span": null
+        }
+      ]
+    }
+  },
+  "variants": {
+    "invented_price": {
+      "An Phát báo giá": {
+        "lines": [
+          {
+            "line_span": "DC-200 giá 1.290.000 đ, giao 3 ngày",
+            "item_code_span": "DC-200",
+            "unit_price_span": "1.090.000",
+            "currency_span": "đ",
+            "lead_time_span": "3 ngày",
+            "valid_until_span": null
+          }
+        ]
+      }
+    },
+    "item_not_asked": {
+      "Bảo Hộ Sài Gòn báo giá": {
+        "lines": [
+          {
+            "line_span": "BK-1700 băng keo: 35.000 VND/cuộn, giao 2 ngày",
+            "item_code_span": "BK-1700",
+            "unit_price_span": "35.000",
+            "currency_span": "VND",
+            "lead_time_span": "2 ngày",
+            "valid_until_span": null
+          }
+        ]
+      }
+    }
+  },
+  "rfq_words": {
+    "good": {
+      "subject": "Yêu cầu báo giá theo PR-2611-004",
+      "body": "Kính gửi quý công ty,\n\nPhòng Mua hàng đề nghị báo giá: DC-200 Dao cắt cáp DC-200, số lượng 4 cái, cần trước 20/11/2026.\nXin gửi báo giá trước ngày 05/11/2026.\n\nTrân trọng,\nPhòng Mua hàng"
+    },
+    "leaks_price": {
+      "subject": "Yêu cầu báo giá theo PR-2611-004",
+      "body": "Kính gửi quý công ty,\n\nXin báo giá DC-200, 4 cái. Giá mục tiêu của chúng tôi là 1.250.000 VND.\n\nTrân trọng"
+    },
+    "invents_figure": {
+      "subject": "Yêu cầu báo giá theo PR-2611-004",
+      "body": "Kính gửi quý công ty,\n\nXin báo giá DC-200, 40 cái, cần trước 20/11/2026.\n\nTrân trọng"
+    },
+    "names_amount": {
+      "subject": "Yêu cầu báo giá theo PR-2611-004",
+      "body": "Kính gửi quý công ty,\n\nXin báo giá DC-200, 4 cái, cần trước 20/11/2026. Ngân sách tối đa 20 triệu đồng.\n\nTrân trọng"
+    }
+  }
+}

@@ -15,7 +15,8 @@ from typing import Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from dw_purchasing.domain.checks import CrossCheck
-from dw_purchasing.domain.requests import PurchaseRequest
+from dw_purchasing.domain.requests import Currency, Price, PurchaseRequest
+from dw_purchasing.domain.sourcing import Offer, RfqRound, Selection
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -36,6 +37,10 @@ class CaseStatus(StrEnum):
     AWAITING_APPROVAL = "awaiting_approval"
     APPROVED = "approved"
     REJECTED = "rejected"
+    # Approved, and an RFQ drafted per supplier; offers are recorded here.
+    RFQ_DRAFTED = "rfq_drafted"
+    # A person chose a supplier for every line.
+    SUPPLIER_SELECTED = "supplier_selected"
 
 
 class ApprovalAsked(BaseModel):
@@ -49,6 +54,10 @@ class ApprovalAsked(BaseModel):
     approval_id: uuid.UUID
     required_scope: str = Field(pattern=r"^purchasing\.approve\.[a-z0-9_]+$")
     tier_label: str = Field(min_length=1, max_length=80)
+    # The most the tier decides (None: the last tier, no limit), in
+    # ``limit_currency``: a supplier chosen later is held to it.
+    limit: Price | None
+    limit_currency: Currency
     case_version: int = Field(ge=1)
     submitted_by: uuid.UUID
     submitted_at: AwareDatetime
@@ -90,6 +99,10 @@ class PurchaseCase(BaseModel):
     check: CrossCheck | None = None
     approval: ApprovalAsked | None = None
     decision: Decided | None = None
+    # DW02 function 3: whom DW2 asked, what they offered, whom a person chose.
+    rfq: RfqRound | None = None
+    offers: tuple[Offer, ...] = ()
+    selection: Selection | None = None
 
     @model_validator(mode="after")
     def _a_mail_names_its_message(self) -> Self:
@@ -100,13 +113,21 @@ class PurchaseCase(BaseModel):
     @model_validator(mode="after")
     def _each_state_holds_what_it_needs(self) -> Self:
         sent = self.status is not CaseStatus.RECEIVED
-        decided = self.status in (CaseStatus.APPROVED, CaseStatus.REJECTED)
+        sourcing = self.status in (CaseStatus.RFQ_DRAFTED, CaseStatus.SUPPLIER_SELECTED)
+        decided = self.status in (CaseStatus.APPROVED, CaseStatus.REJECTED) or sourcing
+        if sourcing != (self.rfq is not None):
+            raise ValueError("a case being sourced holds its RFQ round, and only it does")
+        if (self.status is CaseStatus.SUPPLIER_SELECTED) != (self.selection is not None):
+            raise ValueError("a case with suppliers chosen holds the choice, and only it does")
+        if sourcing and (self.decision is None or not self.decision.approved):
+            raise ValueError("only an approved request is sourced")
         if sent != (self.check is not None and self.approval is not None):
             raise ValueError("a case sent for approval holds its check and its approval")
         if decided != (self.decision is not None):
             raise ValueError("a decided case holds its decision, and only it does")
         if (
             decided
+            and not sourcing
             and self.decision is not None
             and self.decision.approved != (self.status is CaseStatus.APPROVED)
         ):

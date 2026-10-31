@@ -70,7 +70,16 @@ mail_outcomes = sa.Table(
 
 AuditFactory = Callable[[AsyncSession], AuditRepositoryPort]
 ApprovalsFactory = Callable[[AsyncSession], ApprovalsPort]
-_BODY_KEYS = ("request", "source_ref", "check", "approval", "decision")
+_BODY_KEYS = (
+    "request",
+    "source_ref",
+    "check",
+    "approval",
+    "decision",
+    "rfq",
+    "offers",
+    "selection",
+)
 
 
 def _body(case: PurchaseCase) -> dict[str, Any]:

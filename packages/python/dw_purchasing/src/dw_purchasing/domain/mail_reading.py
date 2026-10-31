@@ -97,7 +97,7 @@ def fold(text: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
 
 
-def _occurrences(haystack: str, needle: str) -> list[int]:
+def occurrences(haystack: str, needle: str) -> list[int]:
     """Where ``needle`` starts as a whole token run: neither end inside a
     word, so ``24`` of ``AWG24`` and ``PR-1`` of ``PR-12`` are not found."""
     found: list[int] = []
@@ -190,7 +190,7 @@ class _Mail:
 
     def holds(self, span: str | None, *, within: str | None = None) -> bool:
         haystack = within if within is not None else self.folded
-        return span is None or bool(_occurrences(haystack, fold(span)))
+        return span is None or bool(occurrences(haystack, fold(span)))
 
     def require(self, span: str | None, reason: str, *, within: str | None = None) -> str:
         if span is None or not self.holds(span, within=within):
@@ -257,7 +257,7 @@ def _lines(mail: _Mail, answer: ModelPrMail, received_on: date) -> tuple[PrLine,
     lines: list[PrLine] = []
     for number, line in enumerate(answer.lines, start=1):
         folded = fold(line.line_span)
-        if folded in seen or len(_occurrences(mail.folded, folded)) != 1:
+        if folded in seen or len(occurrences(mail.folded, folded)) != 1:
             raise _UnreadError("line_unreadable")
         seen.add(folded)
         description = mail.require(line.description_span, "line_unreadable", within=folded)

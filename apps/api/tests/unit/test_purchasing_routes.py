@@ -29,6 +29,7 @@ from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.entitlement import DEFAULT_PLANS, PlanEntitlementService
 from dw_platform.application.identity import DbAccessContextFactory
 from dw_platform.application.support_access import SupportGrantService, SupportScopeCatalog
+from dw_purchasing.adapters.policy_files import PolicyFiles
 from dw_purchasing.application.access import Gate
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.presentation.routes import PurchasingMount
@@ -37,6 +38,8 @@ from dw_purchasing.testing.world import ALPHA, EVERY_SCOPE, World, open_world
 pytestmark = pytest.mark.unit
 
 REPO = Path(__file__).resolve().parents[4]
+# The rules a case is stamped with: the newest the checkout ships.
+CURRENT = PolicyFiles.load(REPO / "configs/policies").current().ref
 ANSWERS = json.loads(
     (REPO / "evals/fixtures/cases/purchasing_pr_intake.json").read_text(encoding="utf-8")
 )["answers"]
@@ -109,7 +112,9 @@ async def _call(
 
 def _mounted(world: World) -> PurchasingMount:
     return PurchasingMount(
-        services=PurchasingServices(requests=world.service, approvals=world.approvals)
+        services=PurchasingServices(
+            requests=world.service, approvals=world.approvals, sourcing=world.sourcing
+        )
     )
 
 
@@ -123,7 +128,7 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
     listed = await _call(container, "GET", "/requests")
     assert [c["case_id"] for c in listed.json()["items"]] == [case_id]
     detail = await _call(container, "GET", f"/requests/{case_id}")
-    assert detail.json()["rules_ref"] == "purchasing_rules@1.1.0"
+    assert detail.json()["rules_ref"] == CURRENT
 
     read = await _call(container, "POST", "/mail/P01/read")
     assert read.status_code == 200 and read.json()["disposition"] == "opened"
@@ -141,6 +146,28 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("POST", "/mail/P01/read", None),
         ("GET", f"/requests/{uuid.uuid4()}/check", None),
         ("POST", f"/requests/{uuid.uuid4()}/submit", {"case_version": 1}),
+        ("POST", f"/requests/{uuid.uuid4()}/rfq", {"case_version": 1}),
+        ("POST", f"/requests/{uuid.uuid4()}/offers/from-mail/Q01", {"case_version": 1}),
+        ("GET", f"/requests/{uuid.uuid4()}/comparison", None),
+        (
+            "POST",
+            f"/requests/{uuid.uuid4()}/selection",
+            {"case_version": 1, "choices": [{"line_no": 1, "supplier_code": "KIMURA"}]},
+        ),
+        (
+            "POST",
+            f"/requests/{uuid.uuid4()}/offers",
+            {
+                "case_version": 1,
+                "offer": {
+                    "supplier_code": "KIMURA",
+                    "line_no": 1,
+                    "unit_price": "1",
+                    "currency": "VND",
+                    "lead_time_days": 1,
+                },
+            },
+        ),
     ],
 )
 async def test_every_route_refuses_a_caller_without_its_scope_and_touches_nothing(
@@ -199,7 +226,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 7
+    assert len(routes) == 12
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]

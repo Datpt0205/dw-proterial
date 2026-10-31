@@ -217,6 +217,7 @@ async def test_the_roles_hold_purchasing_scopes_and_no_platform_role_does(
         read,
         PurchasingScopes.REQUEST_INTAKE.value,
         PurchasingScopes.REQUEST_SUBMIT.value,
+        PurchasingScopes.RFQ_PREPARE.value,
     }
     assert roles["purchasing_viewer"] == {read}
     assert roles["purchasing_head"] == {
