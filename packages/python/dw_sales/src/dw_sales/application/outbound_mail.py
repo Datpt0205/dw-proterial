@@ -41,7 +41,7 @@ from datetime import datetime, timedelta
 from email import message_from_bytes, policy
 from email.message import EmailMessage
 from email.utils import getaddresses
-from typing import TYPE_CHECKING, Final, Literal, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -50,6 +50,7 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import context_from
+from dw_platform.application.outbox_folder import OutboxFolderPort, Receipt
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import (
@@ -131,35 +132,6 @@ def mail_view(mail: OutboundMail) -> OutboundMailView:
 
 
 # --------------------------------------------------------------- the job --
-
-
-@dataclass(frozen=True, slots=True)
-class Receipt:
-    """What a flow wrote back for one job."""
-
-    mailbox: str
-    name: str
-    status: Literal["sent", "failed"]
-
-
-class OutboxFolderPort(Protocol):
-    """The share's outbox folders, one per mailbox (`adapters.outbox_folder`)."""
-
-    def connected(self, mailbox: str) -> bool:
-        """Whether ``mailbox`` has an outbox folder: its flow is set up."""
-        ...
-
-    def write(
-        self, mailbox: str, name: str, job: bytes, attachments: Sequence[tuple[str, bytes]]
-    ) -> None:
-        """The job and its files, the job last: a flow sees it complete."""
-        ...
-
-    def receipts(self) -> Sequence[Receipt]: ...
-
-    def forget(self, receipt: Receipt) -> None:
-        """Move a handled receipt aside: it is not read again."""
-        ...
 
 
 def job_name(scope: SalesScope, mail_id: uuid.UUID) -> str:

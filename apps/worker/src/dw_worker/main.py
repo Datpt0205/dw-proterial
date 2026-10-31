@@ -55,6 +55,7 @@ from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.cache import ValkeyCache
 from dw_platform.adapters.clamd import malware_scanner
+from dw_platform.adapters.outbox_folder import FakeFlow
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.approval_codes import (
     SqlApprovalCodeRetention,
@@ -108,7 +109,6 @@ from dw_sales.adapters.assembly import (
     build_layout_settlement,
     build_rule_settlement,
 )
-from dw_sales.adapters.outbox_folder import FakeFlow
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
 from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
