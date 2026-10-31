@@ -2,11 +2,10 @@
 
 Three rules hold for every file written here:
 
-- **A string is text, never a formula** (G29). openpyxl reads a string that
-  starts with ``=`` as a formula; every string cell is set back to type
-  ``s``, and one that a spreadsheet would read as a formula once edited
-  (``= + - @``, a tab or a carriage return first) also gets Excel's quote
-  prefix. A PO description reading ``=HYPERLINK(...)`` stays those characters.
+- **A string is text, never a formula** (G29): every cell goes through
+  `dw_platform.adapters.spreadsheet.put` (the rule lives there since DW2's
+  Bravo file became its second writer). A PO description reading
+  ``=HYPERLINK(...)`` stays those characters.
 - **The same content writes the same bytes.** The zip entries, the workbook's
   own dates and the PDF's are the content's ``stamped_at``, and a message's
   MIME boundary is derived from its content, so the send draft attaches the
@@ -36,7 +35,6 @@ from typing import Final
 from xml.sax.saxutils import escape
 
 from openpyxl import Workbook as OpenpyxlWorkbook
-from openpyxl.styles import Font
 from openpyxl.worksheet.worksheet import Worksheet
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -47,14 +45,13 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from dw_platform.adapters.spreadsheet import put
 from dw_platform.domain.messages import EmailAddress
 from dw_sales.application.artifact_content import EmailDraft, Sheet, Value, Workbook
 
 # DejaVu Sans cut down to Latin and Vietnamese, the subset the mock
 # attachments are printed with (licence beside it).
 LATIN_FONT: Final = Path(__file__).resolve().parent / "mock" / "fonts" / "DejaVuSans-LatinVi.ttf"
-# What a spreadsheet reads as the start of a formula once a cell is edited.
-_FORMULA_START: Final = ("=", "+", "-", "@", "\t", "\r")
 _LATIN_FONT: Final = "DW1Latin"
 # Adobe's Japanese CID font: no file to ship, and every PDF reader has it.
 _JAPANESE_FONT: Final = "HeiseiKakuGo-W5"
@@ -176,49 +173,29 @@ def _naive_utc(at: datetime) -> datetime:
     return at.astimezone(UTC).replace(tzinfo=None, microsecond=0)
 
 
-def _put(sheet: Worksheet, row: int, col: int, value: Value, *, bold: bool = False) -> None:
-    if value is None:
-        return
-    cell = sheet.cell(row=row, column=col)
-    cell.value = value
-    if isinstance(value, str):
-        # openpyxl typed a leading "=" as a formula when assigned: text it is.
-        cell.data_type = "s"
-        if value.startswith(_FORMULA_START):
-            cell.quotePrefix = True
-    elif isinstance(value, Decimal):
-        # The places the case holds, so 0.6890 prints as 0.6890, not 0.689.
-        places = -value.as_tuple().exponent  # type: ignore[operator]
-        cell.number_format = "0." + "0" * places if places > 0 else "0"
-    elif isinstance(value, date):
-        cell.number_format = "yyyy-mm-dd"
-    if bold:
-        cell.font = Font(bold=True)
-
-
 def _fill(target: Worksheet, sheet: Sheet) -> None:
     row = 1
     if sheet.title:
-        _put(target, row, 1, sheet.title, bold=True)
+        put(target, row, 1, sheet.title, bold=True)
         row += 2
     for name, value in sheet.heading:
-        _put(target, row, 1, name, bold=True)
-        _put(target, row, 2, value)
+        put(target, row, 1, name, bold=True)
+        put(target, row, 2, value)
         row += 1
     if sheet.title or sheet.heading:
         row += 1
     if sheet.columns:
         for col, header in enumerate(sheet.columns, start=1):
-            _put(target, row, col, header, bold=True)
+            put(target, row, col, header, bold=True)
         row += 1
         for values in sheet.rows:
             for col, value in enumerate(values, start=1):
-                _put(target, row, col, value)
+                put(target, row, col, value)
             row += 1
     if sheet.notes:
         row += 1
         for note in sheet.notes:
-            _put(target, row, 1, note)
+            put(target, row, 1, note)
             row += 1
 
 
