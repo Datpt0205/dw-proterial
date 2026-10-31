@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, Protocol
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi import Path as PathParam
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -123,6 +123,7 @@ def build_router(
     intake = [scope(PurchasingScopes.REQUEST_INTAKE)]
     submit = [scope(PurchasingScopes.REQUEST_SUBMIT)]
     rfq = [scope(PurchasingScopes.RFQ_PREPARE)]
+    po = [scope(PurchasingScopes.PO_PREPARE)]
 
     @router.get("/requests", response_model=CasePage, dependencies=read)
     async def list_requests(
@@ -211,6 +212,25 @@ def build_router(
             context, case_id, body.choices, case_version=body.case_version
         )
         return await idem.record(change)
+
+    @router.post("/requests/{case_id}/po", response_model=CaseChange, dependencies=po)
+    async def draft_orders(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.orders.draft(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
+
+    @router.get("/requests/{case_id}/po/bravo.xlsx", dependencies=po)
+    async def bravo_file(case_id: uuid.UUID, context: Ctx, svc: Svc) -> Response:
+        download = await svc.orders.bravo_file(context, case_id)
+        return Response(
+            content=download.data,
+            media_type=download.media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{download.filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
 
     @router.get("/mail", response_model=list[InboxItem], dependencies=read)
     async def mailbox(context: Ctx, svc: Svc) -> list[InboxItem]:

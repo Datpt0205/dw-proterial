@@ -130,10 +130,44 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
       first, offer price span, unasked item recorded, sourcing-state
       validator.
 
+- 2026-11-01, **lift: the spreadsheet cell writer** (`599682d`): DW2's
+  Bravo file is the second writer of a workbook a person opens, so Sales'
+  G29 cell rule (text never a formula) is `dw_platform.adapters.spreadsheet.put`.
+- 2026-11-01, **slice 4 — draft PO + Bravo import file (DW02 function 4), done**:
+    - `POST /requests/{id}/po` (`purchasing.po.prepare`; suppliers chosen):
+      one order per chosen supplier (`<pr_no>-NN`), lines at the chosen
+      offers' prices, names from the master data; refused when the rules
+      have no `bravo_po`, a chosen supplier left the master data, or the
+      orders' total is not the selection's. The layout and its rules ref are
+      stamped beside the orders.
+    - `GET /requests/{id}/po/bravo.xlsx` (`purchasing.po.prepare`; the file
+      holds prices): drawn from the stamp, byte for byte the same each time
+      (openpyxl dates the workbook at save, measured; the date is pinned),
+      `no-store`, file name cleaned of `/`. DW2 records nothing in Bravo.
+    - `purchasing_rules@1.3.0` adds `bravo_po` (sheet, date format, columns
+      from a fixed field set; headers MOCK). Migration `126b205278ad`:
+      `po_drafted`, `ck_cases_sent`/`ck_cases_sourced` rewritten,
+      `ck_cases_po`; buyer gets `purchasing.po.prepare`.
+    - Checks: unit 112 + API routes 16 (the download through the app);
+      integration 11 (orders and file on the SQL store, `ck_cases_po`,
+      another tenant finds nothing); eval `purchasing_po@1.0.0` 4/4 (red
+      with the formula guard bypassed or a gone supplier accepted); the
+      other three datasets green. Mutations, each red: po gate (draft,
+      file), draft without a choice, stale version, file from the rules in
+      force, no-layout rules, price from the first offer, byte stability,
+      formula guard, header uniqueness, column order, po validator,
+      supplier gone, total mismatch. Two first mutations were too weak or
+      unmatched by a test and were redone or closed with one.
+
 ## Next
 
-1. Slice 4 — draft PO + Bravo import file (function 4). Stop and report.
-3. Then: confirmation/delivery tracking (5), brief + Q&A (6), the web pages.
+1. Đạt reviews the four slices (this report).
+2. The web pages for DW2 (mailbox, case, check, RFQ, comparison, PO).
+3. Function 5 — supplier confirmation and delivery tracking (the PO number
+   Bravo assigns recorded back; confirmations read from mail).
+4. Function 6 — the morning brief and status Q&A over purchase cases.
+5. Demo personas and seed for DW2 (`make demo-reset`), on-prem live evals
+   of the three model steps on Qwen3.5-9B.
 
 ## Not done, on purpose
 
@@ -162,3 +196,11 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
 - **Who requests**: today a buyer enters a department's form; whether
   departments get their own `purchasing_requester` role (and see only their
   own requests) is Proterial's process.
+- **Bravo import template**: the real column headers, sheet and date format
+  of Proterial's Bravo PO import (the mock's are invented), and whether one
+  file per PR or one per supplier. A tenant rule, so no deploy when it lands.
+- **Who may download the PO file**: today `purchasing.po.prepare` (the
+  buyer); the head approves but does not download. Proterial's call.
+- **Re-approval past the tier**: a choice above the approved tier's limit is
+  refused; whether it should instead open a new approval at the higher tier
+  automatically.

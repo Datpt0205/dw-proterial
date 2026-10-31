@@ -21,6 +21,7 @@ from typing import Annotated, Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dw_purchasing.domain.checks import CrossCheck, FindingCode
+from dw_purchasing.domain.orders import BravoPoLayout
 from dw_purchasing.domain.requests import (
     Currency,
     Price,
@@ -135,6 +136,9 @@ class PurchasingRules(BaseModel):
     approval: ApprovalRules | None = None
     # Whom to ask. Absent before 1.2.0: no RFQ is drafted under such rules.
     rfq: RfqRules | None = None
+    # The Bravo import file's shape (DW02 function 4). Absent before 1.3.0:
+    # no order is drafted under such rules.
+    bravo_po: BravoPoLayout | None = None
 
     @field_validator("internal_domains")
     @classmethod

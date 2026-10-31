@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import io
 import json
 import uuid
 from collections.abc import Callable, Coroutine, Mapping
@@ -489,5 +490,178 @@ PURCHASING_GRADERS.update(
         "purchasing.sourcing_injection": grade_sourcing_injection,
         "purchasing.sourcing_missing_evidence": grade_sourcing_missing_evidence,
         "purchasing.sourcing_cross_tenant": grade_sourcing_cross_tenant,
+    }
+)
+
+
+# ---------------------------------------------- function 4: draft orders --
+
+_CHOICES = (("1", "KIMURA"), ("2", "BAOHO"), ("3", "ANPHAT"))
+
+
+async def _suppliers_chosen(world: World) -> uuid.UUID:
+    from dw_purchasing.domain.sourcing import Choice
+
+    case_id = await _rfq_drafted(world)
+    await _read_replies(world, case_id, "Q01", "Q02", "Q03")
+    version = (await world.service.case(caller(), case_id)).case_version
+    choices = [Choice(line_no=int(n), supplier_code=s) for n, s in _CHOICES]
+    await world.sourcing.select(caller(), case_id, choices, case_version=version)
+    return case_id
+
+
+def _sheet_rows(data: bytes) -> list[list[object]]:
+    from openpyxl import load_workbook
+
+    book = load_workbook(io.BytesIO(data))
+    sheet = book[book.sheetnames[0]]
+    return [[c.value for c in row] for row in sheet.iter_rows()]
+
+
+def grade_po_golden(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """One draft order per chosen supplier at the chosen prices, and a Bravo
+    file with the layout's headers and a row per order line."""
+
+    async def work() -> dict[str, object]:
+        world = _sourcing_world(ctx, data)
+        case_id = await _suppliers_chosen(world)
+        version = (await world.service.case(caller(), case_id)).case_version
+        await world.orders.draft(caller(), case_id, case_version=version)
+        case = await world.service.case(caller(), case_id)
+        assert case.po is not None
+        rows = _sheet_rows((await world.orders.bravo_file(caller(), case_id)).data)
+        return {
+            "orders": [
+                [o.po_ref, o.supplier_code, f"{o.total.normalize():f}"] for o in case.po.orders
+            ],
+            "headers": rows[0],
+            "rows": len(rows) - 1,
+        }
+
+    found = _run(work)
+    if found != expected["po"]:
+        return GradeResult.fail("orders differ", found=found)
+    return GradeResult.ok()
+
+
+def grade_po_injection(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """A requester's description written as a spreadsheet formula reaches the
+    Bravo file as text a person reads, never as a formula Excel runs."""
+    from dw_purchasing.domain.requests import PrLine, PurchaseRequest
+
+    async def work() -> list[tuple[str, bool]]:
+        world = _sourcing_world(ctx, data)
+        case_id = await _suppliers_chosen(world)
+        stored = world.store.scopes[ALPHA]
+        case = stored.cases[case_id]
+        lines = list(case.request.lines)
+        lines[0] = PrLine.model_validate(
+            {**lines[0].model_dump(), "description": '=HYPERLINK("http://x.example","Mở")'}
+        )
+        request = PurchaseRequest.model_validate({**case.request.model_dump(), "lines": lines})
+        stored.cases[case_id] = case.model_copy(update={"request": request})
+        await world.orders.draft(caller(), case_id, case_version=case.case_version)
+        from openpyxl import load_workbook
+
+        book = load_workbook(io.BytesIO((await world.orders.bravo_file(caller(), case_id)).data))
+        sheet = book[book.sheetnames[0]]
+        return [
+            (str(c.value), bool(c.quotePrefix) and c.data_type == "s")
+            for row in sheet.iter_rows()
+            for c in row
+            if isinstance(c.value, str) and c.value.startswith("=")
+        ]
+
+    found = _run(work)
+    if not found or not all(text for _, text in found):
+        return GradeResult.fail("a formula reached the file", found=found)
+    return GradeResult.ok()
+
+
+def grade_po_missing_evidence(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """Nothing is drafted from what is not there: rules without a Bravo
+    layout, or a chosen supplier the master data no longer lists."""
+
+    async def work() -> list[str]:
+        refused: list[str] = []
+        world = _sourcing_world(ctx, data)
+        case_id = await _suppliers_chosen(world)
+        current = world.approvals.rules.platform.current()
+        without = current.model_dump(mode="json")
+        without["version"], without["bravo_po"] = "9.9.9-eval", None
+        world.tenant_policies.documents[(ALPHA[0], "purchasing_rules")] = without
+        version = (await world.service.case(caller(), case_id)).case_version
+        try:
+            await world.orders.draft(caller(), case_id, case_version=version)
+        except ConflictError as exc:
+            refused.append(str(exc.details.get("rule")))
+        world = _sourcing_world(ctx, data)
+        case_id = await _suppliers_chosen(world)
+        master = await world.orders.master.for_context(caller())
+        gone = master.model_copy(
+            update={"suppliers": tuple(s for s in master.suppliers if s.code != "BAOHO")}
+        )
+        world.orders = dataclasses.replace(world.orders, master=_Fixed(gone))
+        try:
+            await world.orders.draft(caller(), case_id, case_version=version)
+        except ConflictError as exc:
+            refused.append(str(exc.details.get("rule")))
+        return refused
+
+    refused = _run(work)
+    if refused != ["no_layout", "supplier_gone"]:
+        return GradeResult.fail("drafted without evidence", refused=refused)
+    return GradeResult.ok()
+
+
+def grade_po_cross_tenant(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """Another tenant can neither draft our orders nor download their file."""
+
+    async def work() -> list[str]:
+        world = _sourcing_world(ctx, data)
+        case_id = await _suppliers_chosen(world)
+        version = (await world.service.case(caller(), case_id)).case_version
+        await world.orders.draft(caller(), case_id, case_version=version)
+        leaks: list[str] = []
+        attempts: dict[str, Coroutine[Any, Any, object]] = {
+            "draft": world.orders.draft(caller(BETA), case_id, case_version=version + 1),
+            "file": world.orders.bravo_file(caller(BETA), case_id),
+        }
+        for name, attempt in attempts.items():
+            try:
+                await attempt
+                leaks.append(name)
+            except NotFoundError:
+                pass
+        return leaks
+
+    leaks = _run(work)
+    return GradeResult.fail("cross-tenant reach", leaks=leaks) if leaks else GradeResult.ok()
+
+
+@dataclasses.dataclass(frozen=True)
+class _Fixed:
+    """`MasterDataPort` answering one fixed master data."""
+
+    data: Any
+
+    async def for_context(self, context: Any) -> Any:
+        return self.data
+
+
+PURCHASING_GRADERS.update(
+    {
+        "purchasing.po_golden": grade_po_golden,
+        "purchasing.po_injection": grade_po_injection,
+        "purchasing.po_missing_evidence": grade_po_missing_evidence,
+        "purchasing.po_cross_tenant": grade_po_cross_tenant,
     }
 )

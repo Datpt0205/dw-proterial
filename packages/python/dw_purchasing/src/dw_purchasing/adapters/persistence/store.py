@@ -79,6 +79,7 @@ _BODY_KEYS = (
     "rfq",
     "offers",
     "selection",
+    "po",
 )
 
 
