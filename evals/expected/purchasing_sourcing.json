@@ -61,5 +61,42 @@
     "names_amount": [
       "template"
     ]
+  },
+  "po": {
+    "orders": [
+      [
+        "PR-2611-004-01",
+        "ANPHAT",
+        "4500000"
+      ],
+      [
+        "PR-2611-004-02",
+        "BAOHO",
+        "4900000"
+      ],
+      [
+        "PR-2611-004-03",
+        "KIMURA",
+        "4800000"
+      ]
+    ],
+    "headers": [
+      "Số PO DW2",
+      "Ngày đặt hàng",
+      "Mã NCC",
+      "Tên NCC",
+      "Mã vật tư",
+      "Diễn giải",
+      "ĐVT",
+      "Số lượng",
+      "Đơn giá",
+      "Thành tiền",
+      "Mã ngoại tệ",
+      "Ngày cần",
+      "Mã ngân sách",
+      "Số PR",
+      "Bộ phận"
+    ],
+    "rows": 3
   }
 }

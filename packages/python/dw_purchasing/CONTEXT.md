@@ -21,7 +21,8 @@ dw_sales ADR 0005 as DW2 applies it).
   `awaiting_approval` (Chờ duyệt) — checked and sent to its approver;
   `approved` (Đã duyệt) / `rejected` (Từ chối) — the approver decided;
   `rfq_drafted` (Đang hỏi giá) — RFQs drafted, offers being recorded;
-  `supplier_selected` (Đã chọn nhà cung cấp) — a person chose one per line.
+  `supplier_selected` (Đã chọn nhà cung cấp) — a person chose one per line;
+  `po_drafted` (Đã soạn PO) — one draft order per chosen supplier.
 - **Cross-check (đối chiếu)**: each line's reference price (a supplier
   quotation still valid, else the last price paid, else the requester's
   estimate), the request's amount (unknown when a line has no price), and
@@ -58,6 +59,14 @@ dw_sales ADR 0005 as DW2 applies it).
 - **Selection (lựa chọn)**: one offer per line, chosen by a person, its total
   held to the most the approver's tier decides (stamped on the case).
 
+- **Draft PO (PO nháp)**: one order per chosen supplier (`<pr_no>-NN`, by
+  supplier code), its lines at the chosen offers' prices, the supplier's name
+  from the master data. Nothing is recorded in Bravo by DW2.
+- **Bravo import file (file nhập Bravo)**: one sheet, the columns, headers,
+  order and date format the tenant's rule (`bravo_po`) gives, each column one
+  of DW2's fields; stamped on the case with the orders, so the file drawn
+  again is the file drawn then. Every string cell is text, never a formula.
+
 ## Roles and scopes
 
 - `purchasing_buyer` (Nhân viên mua hàng): `purchasing.request.read`,
@@ -67,5 +76,6 @@ dw_sales ADR 0005 as DW2 applies it).
   `purchasing.approve.tier1`, `purchasing.approve.tier2`.
 - Permission set `purchasing_director_approver`: `purchasing.approve.tier3`.
 - The buyer also holds `purchasing.request.submit` and
-  `purchasing.rfq.prepare`. Deciding any approval
+  `purchasing.rfq.prepare` and `purchasing.po.prepare` (draft the orders,
+  download the file). Deciding any approval
   also needs the platform's `approvals.decide`.

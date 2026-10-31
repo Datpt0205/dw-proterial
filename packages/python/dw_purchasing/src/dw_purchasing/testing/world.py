@@ -21,6 +21,7 @@ from dw_agent_runtime.model.interpretation import ModelUnavailableError, PromptR
 from dw_kernel.errors import PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
+from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.policy_files import PolicyFiles
@@ -31,6 +32,7 @@ from dw_purchasing.application.approvals import (
     RequestSettlement,
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
+from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.rules import RuleBook
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.testing.memory import MemoryStore
@@ -130,6 +132,7 @@ class World:
     decisions: RequestDecisions
     settlement: RequestSettlement
     sourcing: SupplierSourcing
+    orders: PurchaseOrders
 
 
 def open_world(
@@ -179,4 +182,13 @@ def open_world(
         RequestDecisions(store),
         RequestSettlement(store, clock, ids),
         sourcing,
+        PurchaseOrders(
+            uow=store,
+            gate=Gate(Authz()),
+            rules=book,
+            master=master,
+            spreadsheet=BravoFile(),
+            clock=clock,
+            ids=ids,
+        ),
     )

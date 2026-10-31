@@ -23,6 +23,7 @@ from dw_platform.domain.audit import AuditEvent
 from dw_platform.domain.messages import InboundMessage
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.checks import MasterData
+from dw_purchasing.domain.orders import Cell
 from dw_purchasing.domain.rules import PurchasingRules
 
 
@@ -139,6 +140,14 @@ class MasterDataPort(Protocol):
     budgets), for the caller's tenant and workspace."""
 
     async def for_context(self, context: AccessContext) -> MasterData: ...
+
+
+class SpreadsheetPort(Protocol):
+    """Writes one sheet of rows to a workbook's bytes, every string as text."""
+
+    def write(
+        self, sheet: str, rows: Sequence[Sequence[Cell]], *, date_format: str, at: datetime
+    ) -> bytes: ...
 
 
 class TenantPolicyPort(Protocol):

@@ -113,7 +113,10 @@ async def _call(
 def _mounted(world: World) -> PurchasingMount:
     return PurchasingMount(
         services=PurchasingServices(
-            requests=world.service, approvals=world.approvals, sourcing=world.sourcing
+            requests=world.service,
+            approvals=world.approvals,
+            sourcing=world.sourcing,
+            orders=world.orders,
         )
     )
 
@@ -149,6 +152,8 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("POST", f"/requests/{uuid.uuid4()}/rfq", {"case_version": 1}),
         ("POST", f"/requests/{uuid.uuid4()}/offers/from-mail/Q01", {"case_version": 1}),
         ("GET", f"/requests/{uuid.uuid4()}/comparison", None),
+        ("POST", f"/requests/{uuid.uuid4()}/po", {"case_version": 1}),
+        ("GET", f"/requests/{uuid.uuid4()}/po/bravo.xlsx", None),
         (
             "POST",
             f"/requests/{uuid.uuid4()}/selection",
@@ -226,7 +231,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 12
+    assert len(routes) == 14
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
@@ -258,3 +263,60 @@ def test_the_composition_root_makes_purchasing_approvals_strict_and_guarded() ->
     assert flow.is_strict("purchasing.request")
     assert isinstance(flow.decision_guards[APPROVAL_PREFIX], RequestDecisions)
     assert isinstance(mount, PurchasingMount)
+
+
+async def test_the_bravo_file_downloads_as_a_workbook_named_for_the_request() -> None:
+    from datetime import UTC, datetime
+
+    from dw_purchasing.domain.sourcing import Choice
+    from dw_purchasing.testing.world import caller
+
+    sourcing = json.loads(
+        (REPO / "evals/fixtures/cases/purchasing_sourcing.json").read_text(encoding="utf-8")
+    )
+    world = _world()
+    world.model.by_schema = {
+        "ModelOffer": sourcing["answers"],
+        "RfqWording": {"PR-2611-004": sourcing["rfq_words"]["good"]},
+    }
+    me = caller()
+    case_id = (await world.service.read_mail(me, "P01")).case_id
+    assert case_id is not None
+    await world.approvals.submit(me, case_id, case_version=1)
+    sent = await world.service.case(me, case_id)
+    assert sent.approval is not None
+    world.store.decide(
+        sent.approval.approval_id,
+        tenant_id=ALPHA[0],
+        workspace_id=ALPHA[1],
+        approved=True,
+        decided_by=uuid.UUID(int=0x4EAD),
+        at=datetime(2026, 11, 2, tzinfo=UTC),
+    )
+    await world.settlement.settle(
+        sent.approval.approval_id, caller(principal=uuid.UUID(int=0x4EAD))
+    )
+    await world.sourcing.draft_rfq(me, case_id, case_version=3)
+    for message_id in ("Q01", "Q02", "Q03"):
+        version = (await world.service.case(me, case_id)).case_version
+        await world.sourcing.read_offer_mail(me, case_id, message_id, case_version=version)
+    choices = [
+        Choice(line_no=n, supplier_code=s) for n, s in ((1, "KIMURA"), (2, "BAOHO"), (3, "ANPHAT"))
+    ]
+    version = (await world.service.case(me, case_id)).case_version
+    await world.sourcing.select(me, case_id, choices, case_version=version)
+    container = _container(EVERY_SCOPE, _mounted(world))
+    drafted = await _call(
+        container, "POST", f"/requests/{case_id}/po", {"case_version": version + 1}
+    )
+    assert drafted.status_code == 200, drafted.text
+
+    response = await _call(container, "GET", f"/requests/{case_id}/po/bravo.xlsx")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/vnd.openxmlformats")
+    assert (
+        response.headers["content-disposition"]
+        == 'attachment; filename="bravo-po-PR-2611-004.xlsx"'
+    )
+    assert response.headers["cache-control"] == "no-store"
+    assert response.content[:2] == b"PK"

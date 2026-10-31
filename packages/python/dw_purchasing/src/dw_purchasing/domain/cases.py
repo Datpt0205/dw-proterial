@@ -15,6 +15,7 @@ from typing import Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from dw_purchasing.domain.checks import CrossCheck
+from dw_purchasing.domain.orders import PoRound
 from dw_purchasing.domain.requests import Currency, Price, PurchaseRequest
 from dw_purchasing.domain.sourcing import Offer, RfqRound, Selection
 
@@ -41,6 +42,8 @@ class CaseStatus(StrEnum):
     RFQ_DRAFTED = "rfq_drafted"
     # A person chose a supplier for every line.
     SUPPLIER_SELECTED = "supplier_selected"
+    # One draft order per chosen supplier, and the Bravo file drawn from them.
+    PO_DRAFTED = "po_drafted"
 
 
 class ApprovalAsked(BaseModel):
@@ -103,6 +106,8 @@ class PurchaseCase(BaseModel):
     rfq: RfqRound | None = None
     offers: tuple[Offer, ...] = ()
     selection: Selection | None = None
+    # DW02 function 4: the draft orders and the layout of their Bravo file.
+    po: PoRound | None = None
 
     @model_validator(mode="after")
     def _a_mail_names_its_message(self) -> Self:
@@ -113,12 +118,19 @@ class PurchaseCase(BaseModel):
     @model_validator(mode="after")
     def _each_state_holds_what_it_needs(self) -> Self:
         sent = self.status is not CaseStatus.RECEIVED
-        sourcing = self.status in (CaseStatus.RFQ_DRAFTED, CaseStatus.SUPPLIER_SELECTED)
+        sourcing = self.status in (
+            CaseStatus.RFQ_DRAFTED,
+            CaseStatus.SUPPLIER_SELECTED,
+            CaseStatus.PO_DRAFTED,
+        )
+        chosen = self.status in (CaseStatus.SUPPLIER_SELECTED, CaseStatus.PO_DRAFTED)
         decided = self.status in (CaseStatus.APPROVED, CaseStatus.REJECTED) or sourcing
         if sourcing != (self.rfq is not None):
             raise ValueError("a case being sourced holds its RFQ round, and only it does")
-        if (self.status is CaseStatus.SUPPLIER_SELECTED) != (self.selection is not None):
+        if chosen != (self.selection is not None):
             raise ValueError("a case with suppliers chosen holds the choice, and only it does")
+        if (self.status is CaseStatus.PO_DRAFTED) != (self.po is not None):
+            raise ValueError("a case with orders drafted holds them, and only it does")
         if sourcing and (self.decision is None or not self.decision.approved):
             raise ValueError("only an approved request is sourced")
         if sent != (self.check is not None and self.approval is not None):

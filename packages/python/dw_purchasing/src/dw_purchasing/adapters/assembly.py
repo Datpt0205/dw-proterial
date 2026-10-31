@@ -20,6 +20,7 @@ from dw_agent_runtime.ports import ModelGateway
 from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.errors import ConfigError
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.persistence.store import (
@@ -35,6 +36,7 @@ from dw_purchasing.application.approvals import (
     RequestSettlement,
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
+from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.ports import TenantPolicyPort
 from dw_purchasing.application.rules import RuleBook
 from dw_purchasing.application.services import PurchasingServices
@@ -89,6 +91,15 @@ def build_purchasing(
         requests=requests,
         approvals=RequestApprovals(
             uow=store, gate=Gate(authorization), rules=book, master=master, clock=clock, ids=ids
+        ),
+        orders=PurchaseOrders(
+            uow=store,
+            gate=Gate(authorization),
+            rules=book,
+            master=master,
+            spreadsheet=BravoFile(),
+            clock=clock,
+            ids=ids,
         ),
         sourcing=SupplierSourcing(
             uow=store,

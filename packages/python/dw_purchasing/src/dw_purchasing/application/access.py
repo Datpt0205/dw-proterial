@@ -32,6 +32,9 @@ class PurchasingScopes(StrEnum):
     # Draft the RFQs of an approved request, record what suppliers offer,
     # choose a supplier per line.
     RFQ_PREPARE = "purchasing.rfq.prepare"
+    # Draft the purchase orders of a request whose suppliers are chosen, and
+    # draw the file Bravo imports them from.
+    PO_PREPARE = "purchasing.po.prepare"
 
 
 class PurchasingAuthorizationPort(Protocol):

@@ -1,7 +1,7 @@
-"""DW02 function 3 on PostgreSQL, as `dw_app` under RLS: an approved request's
-RFQs drafted, suppliers' replies read into offers, a supplier chosen per
-line, all on the SQL store; the catalog refuses a sourcing state without what
-it must hold."""
+"""DW02 functions 3 and 4 on PostgreSQL, as `dw_app` under RLS: an approved
+request's RFQs drafted, suppliers' replies read into offers, a supplier chosen
+per line, the orders drafted and their Bravo file drawn, all on the SQL store;
+the catalog refuses a state without what it must hold."""
 
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from dw_platform.adapters.persistence.repositories import (
 )
 from dw_platform.domain.approval import ApprovalStatus
 from dw_purchasing.adapters.assembly import request_settlement
+from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.persistence.store import SqlPurchasingStore
@@ -32,6 +33,7 @@ from dw_purchasing.adapters.policy_files import PolicyFiles
 from dw_purchasing.application.access import Gate
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.intake import PurchaseRequests, Worker
+from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.rules import RuleBook
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.domain.cases import CaseStatus
@@ -123,6 +125,21 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
         ("BAOHO", 2),
     }
 
+    # DW02 function 4: the orders and their Bravo file, on the SQL store.
+    orders = PurchaseOrders(store, Gate(Authz()), book, master, BravoFile(), clock, ids)
+    await orders.draft(me, case_id, case_version=chosen.case_version)
+    drafted = await intake.case(me, case_id)
+    assert drafted.status is CaseStatus.PO_DRAFTED and drafted.po is not None
+    assert [o.po_ref for o in drafted.po.orders] == [
+        "PR-2611-004-01",
+        "PR-2611-004-02",
+        "PR-2611-004-03",
+    ]
+    download = await orders.bravo_file(me, case_id)
+    assert download.data == (await orders.bravo_file(me, case_id)).data
+    with pytest.raises(NotFoundError):
+        await orders.bravo_file(caller(tenancy.beta), case_id)
+
     # Another workspace sees none of it.
     with pytest.raises(NotFoundError):
         await sourcing.comparison(caller(tenancy.alpha_other), case_id)
@@ -130,12 +147,14 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
     # The catalog refuses a sourcing state without its round or its choice.
     async with store(me) as work:
         session = work.cases._session  # the scoped transaction
-        for patch in (
-            "body = body - 'selection'",
-            "status = 'rfq_drafted'",
-            "body = jsonb_set(body, '{rfq}', 'null')",
+        for patch, check in (
+            ("body = body - 'selection'", "ck_cases_sourced"),
+            ("status = 'rfq_drafted'", "ck_cases_(sourced|po)"),
+            ("body = jsonb_set(body, '{rfq}', 'null')", "ck_cases_sourced"),
+            ("body = body - 'po'", "ck_cases_po"),
+            ("status = 'supplier_selected'", "ck_cases_po"),
         ):
-            with pytest.raises(sa.exc.DBAPIError, match="ck_cases_sourced"):
+            with pytest.raises(sa.exc.DBAPIError, match=check):
                 async with session.begin_nested():
                     await session.execute(
                         sa.text(f"UPDATE purchasing.cases SET {patch} WHERE id = :i"),

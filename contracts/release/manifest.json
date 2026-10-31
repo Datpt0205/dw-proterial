@@ -104,6 +104,21 @@
       "version": "1.2.0"
     },
     {
+      "checksum": "4890e9c8b405b4b7e25bf92680b21760cbb1a425553d7923eb5d627338f4f5dd",
+      "dataset_id": "purchasing_po",
+      "files": [
+        {
+          "checksum": "3a42564f31ac71f2b4886273437ddf80b9a7e80e9c1b20ad9a40a68f7d4fce7b",
+          "path": "evals/expected/purchasing_sourcing.json"
+        },
+        {
+          "checksum": "8c5a214f2fa69f2043818ff273c91dd14a71728225dcc0ed9dada45c9fae85ee",
+          "path": "evals/fixtures/cases/purchasing_sourcing.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "86d937cd65e76bce5c6b6831db6f9a18fab6ca60c24cd0e4113340261e49bbaf",
       "dataset_id": "purchasing_pr_approval",
       "files": [
@@ -138,7 +153,7 @@
       "dataset_id": "purchasing_sourcing",
       "files": [
         {
-          "checksum": "b9f035b97541534c061f87b3567d06848bdd9ac4129a56d854d5573bf3ef8007",
+          "checksum": "3a42564f31ac71f2b4886273437ddf80b9a7e80e9c1b20ad9a40a68f7d4fce7b",
           "path": "evals/expected/purchasing_sourcing.json"
         },
         {
@@ -676,7 +691,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "ce5ae34d85e5279f0b78c12ea666f8da6dd17516",
+  "git_sha": "599682d56231945631f694f7fd820758ae09ba70",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -737,6 +752,11 @@
       "checksum": "5887752ee12f12e89a6ac2d5ac47baf1be99de649ca8f69fce50df911f7a174c",
       "policy_id": "purchasing_rules",
       "version": "1.2.0"
+    },
+    {
+      "checksum": "aee64b12511d475cf5e213707926f2f44135100b6f264571039928cdfc0ae7cf",
+      "policy_id": "purchasing_rules",
+      "version": "1.3.0"
     },
     {
       "checksum": "ab14ee8601fa9bae54158dc6495f95c88f725483266d304be3bdd5ebea512391",
