@@ -27,10 +27,10 @@ import re
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from dw_agent_runtime.model.figure_check import names_amount
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
 from dw_sales.application.assistant import QUESTION_INTENT, AnswerView
-from dw_sales.application.figure_check import names_amount
 from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import BETA, SampleSet, World, open_world

@@ -129,6 +129,14 @@ async def test_a_figure_the_facts_lack_sends_the_plain_brief() -> None:
     assert not _body_of(sender, AN.user_id).startswith("DW1 viết:")
 
 
+async def test_a_digital_workers_name_is_no_figure_the_facts_must_hold() -> None:
+    def naming(facts: dict[str, Any]) -> dict[str, Any]:
+        return {"text": f"DW1 đã đọc {facts['cases'][0]['reference']}, DW2 chưa nhận."}
+
+    sender, _ = await _brief(Answering(naming))
+    assert _body_of(sender, AN.user_id).startswith("DW1 viết: DW1 đã đọc VLX-PO-2609-0118")
+
+
 async def test_the_model_is_not_asked_where_the_opening_is_switched_off() -> None:
     model = Answering(_first)
     sender, _ = await _brief(model, on=False)

@@ -29,14 +29,15 @@ from typing import TYPE_CHECKING, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.model.figure_check import unsupported
 from dw_kernel.errors import QuotaExceededError
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.identity import context_from
 from dw_sales.application.access import SalesScopes, sales_scope
-from dw_sales.application.figure_check import unsupported
 from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.runs import caller_run
+from dw_sales.domain.process import DW_NAMES
 
 if TYPE_CHECKING:
     # Not at run time: `model_readiness` imports this module for its bar,
@@ -107,6 +108,6 @@ class BriefWriter:
             )
         except (ModelUnavailableError, QuotaExceededError):
             return None
-        if unsupported(answer.text, text):
+        if unsupported(answer.text, text, names=DW_NAMES):
             return None
         return answer.text.strip()

@@ -35,12 +35,12 @@ from typing import Any, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.model.figure_check import names_amount, unsupported
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes
 from dw_sales.application.artifact_content import local_time
-from dw_sales.application.figure_check import names_amount, unsupported
 from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.orders_service import OrderQueries
 from dw_sales.application.overview_service import OverviewService, WorkItem
@@ -63,6 +63,7 @@ from dw_sales.domain.assistant import (
     same_reference,
 )
 from dw_sales.domain.dispositions import CaseKind
+from dw_sales.domain.process import DW_NAMES
 
 # The prompts. Their files are `configs/prompts/sales/question_intent@1.0.0.yaml`
 # and `assistant_answer@1.0.0.yaml`; a test holds each to its file and its
@@ -503,7 +504,7 @@ class AssistantService:
             )
         except (ModelUnavailableError, QuotaExceededError):
             return found.sentence, "code"
-        if unsupported(answer.answer, facts) or names_amount(answer.answer):
+        if unsupported(answer.answer, facts, names=DW_NAMES) or names_amount(answer.answer):
             return found.sentence, "code"
         return answer.answer, "model"
 

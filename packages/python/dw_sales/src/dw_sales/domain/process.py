@@ -20,6 +20,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
+# Names that hold a digit and are no figure: the Digital Workers' own. A
+# model's prose may write them with no source holding them
+# (`dw_agent_runtime.model.figure_check.unsupported`'s ``names``).
+DW_NAMES: Final = frozenset({"DW1", "DW2"})
+
 
 class Procedure(StrEnum):
     ORDER_ENTRY = "WIV-03-012"
