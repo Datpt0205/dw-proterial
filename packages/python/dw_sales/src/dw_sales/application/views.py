@@ -30,6 +30,7 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import PriceView
 from dw_sales.application.case_store import (
     JobError,
@@ -67,7 +68,6 @@ from dw_sales.domain.dispositions import CaseKind, MessageDisposition
 from dw_sales.domain.handoffs import Handoff
 from dw_sales.domain.layouts import LayoutPrefill
 from dw_sales.domain.message_intent import IntentReading
-from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import (
     ALLOWED_DISPOSITIONS,
     AMOUNT_FIELDS,

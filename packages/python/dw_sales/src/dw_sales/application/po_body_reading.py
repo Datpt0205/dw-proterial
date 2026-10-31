@@ -24,8 +24,8 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     estimated_tokens,
 )
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import InboundMessage
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.domain.order_checks import received_date
 from dw_sales.domain.orders import PoDocument
 from dw_sales.domain.po_body_reading import ModelPoBody, read_po_body

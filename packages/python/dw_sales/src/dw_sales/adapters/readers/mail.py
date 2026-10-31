@@ -37,8 +37,7 @@ from email.utils import getaddresses, parsedate_to_datetime
 from html.parser import HTMLParser
 from typing import Final, get_args
 
-from dw_sales.adapters.reader_wire import MailRead
-from dw_sales.domain.messages import (
+from dw_platform.domain.messages import (
     MAX_REFERENCES,
     Attachment,
     EmailAddress,
@@ -47,6 +46,7 @@ from dw_sales.domain.messages import (
     MailAuthResult,
     is_email_address,
 )
+from dw_sales.adapters.reader_wire import MailRead
 
 # The largest file the mailbox takes: its base64 must fit the sandbox's
 # request (32 MB), and Outlook's own limit on what it sends is 20 MB.

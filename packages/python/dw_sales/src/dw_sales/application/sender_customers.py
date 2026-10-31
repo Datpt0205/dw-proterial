@@ -48,14 +48,14 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.views import ProcessingJobView
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.dispositions import DispositionKind, RoutingReason
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import InboundMessage
 
 # The prompt the sender's company is read with. Its file is
 # `configs/prompts/sales/sender_customer@1.0.0.yaml`; a test holds the two

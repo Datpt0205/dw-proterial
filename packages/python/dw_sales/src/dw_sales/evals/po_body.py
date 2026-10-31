@@ -35,9 +35,9 @@ from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
+from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION, PoBodyReader
-from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import FlaggedValue, OrderCase, PoDocument, RegionFlag
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency

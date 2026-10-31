@@ -27,11 +27,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import DispositionKind, OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase, QuoteStatus
 

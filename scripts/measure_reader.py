@@ -25,11 +25,11 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, LEGACY_DIR
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.adapters.reader_client import HttpReaderTransport
 from dw_sales.adapters.reader_wire import ReaderArgs, ReaderOp, ReaderRequest
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.testing.reading_tools import xls_made_in_reader
 
 REPO = Path(__file__).resolve().parent.parent

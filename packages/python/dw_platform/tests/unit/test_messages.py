@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from dw_sales.domain.messages import (
+from dw_platform.domain.messages import (
     Attachment,
     AttachmentContent,
     EmailAddress,

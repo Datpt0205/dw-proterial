@@ -29,6 +29,8 @@ from dw_agent_runtime.model.interpretation import (
     estimated_tokens,
 )
 from dw_agent_runtime.model.prompts import PromptRegistry
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.adapters.policy_files import load_sales_policies
@@ -51,8 +53,6 @@ from dw_sales.domain.handoffs import (
     locate,
     quantity_of,
 )
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN as _AN
 from dw_sales.evals.graders import CALLERS, GIANG

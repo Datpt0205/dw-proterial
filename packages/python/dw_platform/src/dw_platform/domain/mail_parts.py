@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Final
 
-from dw_sales.domain.messages import InboundMessage
+from dw_platform.domain.messages import InboundMessage
 
 # Elements whose whole content is history, by class or id, as clients write them.
 _QUOTE_CLASSES: Final = frozenset({"gmail_quote", "gmail_attr", "moz-cite-prefix", "yahoo_quoted"})

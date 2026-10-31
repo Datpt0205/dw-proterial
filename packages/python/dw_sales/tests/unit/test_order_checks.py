@@ -17,10 +17,10 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from dw_platform.domain.messages import MailAuthentication
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import BravoOrder, ConvertEntry, Customer, Item, LmeMonth, Quotation
-from dw_sales.domain.messages import MailAuthentication
 from dw_sales.domain.order_checks import (
     SAME_REVISION_CHANGED,
     MappedLine,

@@ -28,14 +28,14 @@ from dw_agent_runtime.model.interpretation import (
 )
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.errors import ConflictError
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import PROMPT_TOKENS, REPLY_INTENT, ReplyReader
 from dw_sales.application.threads import ThreadedCase, ThreadLinks
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.dispositions import CaseKind, DispositionKind, MessageDisposition
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.orders import DispositionKind as FindingDisposition
 from dw_sales.domain.orders import OrderStatus
 from dw_sales.domain.quotes import QuoteStatus

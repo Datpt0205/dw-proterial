@@ -19,6 +19,7 @@ from typing import Protocol
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.directory import WorkspaceMember
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -28,7 +29,6 @@ from dw_sales.domain.catalog import (
     OpenYcbg,
     Quotation,
 )
-from dw_sales.domain.messages import AttachmentContent, InboundMessage
 
 
 @dataclass(frozen=True, slots=True)

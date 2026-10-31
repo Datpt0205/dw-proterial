@@ -26,6 +26,7 @@ from dw_agent_runtime.model.interpretation import (
 )
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import Attachment, EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_tenant_order_rules
@@ -42,7 +43,6 @@ from dw_sales.application.order_intake import (
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.dispositions import DispositionKind, RoutingReason
 from dw_sales.domain.message_intent import IntentKind, ModelMessageIntent, located_numbers
-from dw_sales.domain.messages import Attachment, EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded

@@ -50,6 +50,7 @@ import httpx
 from pydantic import ValidationError
 
 from dw_kernel.errors import DomainError, InfrastructureError
+from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.formats import refusal, sniff
 from dw_sales.adapters.reader_wire import (
     MailRead,
@@ -67,7 +68,6 @@ from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
 from dw_sales.domain.master_data import ImportedTable
-from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument

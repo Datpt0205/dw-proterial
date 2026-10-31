@@ -26,6 +26,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH
 from dw_sales.adapters.order_rules import load_order_rules
@@ -49,7 +50,6 @@ from dw_sales.adapters.readers.pdf import _without_trailing_words
 from dw_sales.adapters.readers.schedules import listed_schedules
 from dw_sales.application.order_ports import PoDocumentReaderPort
 from dw_sales.domain.anchors import SourceAnchor
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PoLine, RegionFlag, Unreadable
 

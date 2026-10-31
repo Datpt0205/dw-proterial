@@ -8,15 +8,15 @@ from pathlib import Path
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict
 
-from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path, read_records
-from dw_sales.application.ports import SalesScope
-from dw_sales.domain.messages import (
+from dw_platform.domain.messages import (
     Attachment,
     AttachmentContent,
     EmailAddress,
     InboundMessage,
     MailAuthentication,
 )
+from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path, read_records
+from dw_sales.application.ports import SalesScope
 
 
 class _AttachmentFixture(BaseModel):

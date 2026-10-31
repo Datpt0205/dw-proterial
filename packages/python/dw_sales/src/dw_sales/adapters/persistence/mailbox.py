@@ -23,12 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.adapters.persistence import tables
 from dw_sales.adapters.persistence._rows import scope_values
 from dw_sales.adapters.persistence.uow import AuditFactory
 from dw_sales.application.mail_drop import MailFile
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.messages import AttachmentContent, InboundMessage
 
 _M = tables.mailbox_messages
 _A = tables.mailbox_attachments

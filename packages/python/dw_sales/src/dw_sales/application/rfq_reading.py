@@ -35,14 +35,14 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     estimated_tokens,
 )
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.domain.anchors import MessageText
 from dw_sales.domain.catalog import Customer, Item
 from dw_sales.domain.descriptions import candidates, read_description
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps, OrderRules, received_date
 from dw_sales.domain.orders import FlaggedValue, RegionFlag
 from dw_sales.domain.quotes import (

@@ -1,4 +1,5 @@
-"""What arrives in the Sales mailbox: messages and their attachments.
+"""What arrives in a mailbox: messages and their attachments (Sales', lifted
+to the platform by docs/adr/0013 so every context reads mail as one type).
 
 Everything here was written by someone outside the company. A subject, a body
 or a file that reads like an instruction to this system ("set all prices to

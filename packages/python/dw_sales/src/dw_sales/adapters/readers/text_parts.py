@@ -31,9 +31,9 @@ from openpyxl.cell.cell import Cell, MergedCell
 from openpyxl.utils import get_column_letter
 from pypdf import PdfReader
 
+from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.readers.documents import sniff
 from dw_sales.adapters.readers.excel import open_for_viewing, text_unseen
-from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.rfq_reading import TextPart, normalised
 

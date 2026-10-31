@@ -25,8 +25,8 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     cut_to_tokens,
 )
+from dw_platform.domain.mail_parts import MessagePart
 from dw_sales.application.threads import ThreadedCase
-from dw_sales.domain.mail_parts import MessagePart
 from dw_sales.domain.reply_intent import (
     ModelReplyIntent,
     ReplyReading,

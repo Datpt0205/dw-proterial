@@ -13,10 +13,10 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from dw_kernel.errors import DomainError
+from dw_platform.domain.messages import AttachmentContent
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Quotation
-from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.quotes import DesignReplyDocument, QuoteCase, RfqDocument
 
 

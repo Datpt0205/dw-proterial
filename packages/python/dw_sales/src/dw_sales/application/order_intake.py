@@ -59,6 +59,8 @@ from dw_platform.application.malware import (
     AttachmentInfectedError,
     AttachmentRefusedError,
 )
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.layouts import LayoutPrefiller, LearnedLayout
 from dw_sales.application.message_intent import IntentReader
@@ -94,9 +96,7 @@ from dw_sales.domain.layouts import (
     flagged_as_new,
     layout_ref,
 )
-from dw_sales.domain.mail_parts import newest_part
 from dw_sales.domain.message_intent import IntentKind, IntentReading
-from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import (
     CUSTOMER_CHECK_CODES,
     DOCUMENT_CHECK_CODES,

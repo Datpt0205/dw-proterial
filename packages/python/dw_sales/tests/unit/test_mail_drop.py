@@ -17,6 +17,7 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.messages import EmailAddress, InboundMessage
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.adapters.reader_client import ReaderUnavailableError
 from dw_sales.application.mail_drop import (
@@ -30,7 +31,6 @@ from dw_sales.application.mail_drop import (
     MailRefused,
 )
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.messages import EmailAddress, InboundMessage
 from dw_sales.domain.order_checks import OrderRules
 
 NOW = datetime(2026, 10, 27, 9, 0, tzinfo=UTC)

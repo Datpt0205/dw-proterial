@@ -38,6 +38,7 @@ from dw_kernel.errors import (
 )
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalStatus
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
 from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.application.layouts import (
@@ -56,7 +57,6 @@ from dw_sales.domain.layouts import (
     check_labels,
     plausible,
 )
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.orders import FindingCode, OrderCase, PoDocument, RegionFlag
 from dw_sales.evals.graders import AN, CALLERS, GIANG
 from dw_sales.evals.recorded import ByPrompt, Recorded

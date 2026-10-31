@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Final
 
+from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.formats import sniff
 from dw_sales.adapters.reader_wire import (
     RESULTS,
@@ -65,7 +66,6 @@ from dw_sales.adapters.readers.text_parts import AttachmentTexts
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
-from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import Derivation, PoDocument, Unreadable
 

@@ -35,6 +35,7 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.activity import STEPS_BY_PROMPT
 from dw_sales.application.case_store import (
@@ -91,7 +92,6 @@ from dw_sales.domain.dispositions import (
     RoutingReason,
 )
 from dw_sales.domain.message_intent import IntentReading
-from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.orders import OrderCase, OrderStatus
 from dw_sales.domain.quotes import QuoteCase
 

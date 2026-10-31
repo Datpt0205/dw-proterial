@@ -37,6 +37,7 @@ from typing import Annotated, Final, Literal, NamedTuple, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
+from dw_platform.domain.messages import AttachmentId, Sha256Hex
 from dw_sales.domain.anchors import MessageText, SourceAnchor
 from dw_sales.domain.catalog import (
     CopperBasis,
@@ -49,7 +50,6 @@ from dw_sales.domain.catalog import (
 from dw_sales.domain.description_reading import DescriptionReading
 from dw_sales.domain.descriptions import StatedAttributes
 from dw_sales.domain.legacy_fonts import LegacyEncoding
-from dw_sales.domain.messages import AttachmentId, Sha256Hex
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 

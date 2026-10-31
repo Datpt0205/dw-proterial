@@ -33,7 +33,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dw_sales.domain.messages import EmailAddress, is_domain, is_email_address
+from dw_platform.domain.messages import EmailAddress, is_domain, is_email_address
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 

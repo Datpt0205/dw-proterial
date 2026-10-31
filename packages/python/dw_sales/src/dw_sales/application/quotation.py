@@ -20,6 +20,12 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 
 from dw_agent_runtime.contracts import RunContext
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError
+from dw_platform.domain.messages import (
+    Attachment,
+    AttachmentContent,
+    InboundMessage,
+    is_email_address,
+)
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.quote_ports import (
     DesignReplyReaderPort,
@@ -35,12 +41,6 @@ from dw_sales.domain.dispositions import (
     DispositionKind,
     MessageDisposition,
     RoutingReason,
-)
-from dw_sales.domain.messages import (
-    Attachment,
-    AttachmentContent,
-    InboundMessage,
-    is_email_address,
 )
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.pricing import Incoterm, SalesPricing

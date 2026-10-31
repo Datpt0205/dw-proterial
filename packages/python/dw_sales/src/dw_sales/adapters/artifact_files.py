@@ -47,8 +47,8 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from dw_platform.domain.messages import EmailAddress
 from dw_sales.application.artifact_content import EmailDraft, Sheet, Value, Workbook
-from dw_sales.domain.messages import EmailAddress
 
 # DejaVu Sans cut down to Latin and Vietnamese, the subset the mock
 # attachments are printed with (licence beside it).

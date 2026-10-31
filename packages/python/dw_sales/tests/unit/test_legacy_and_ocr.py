@@ -24,6 +24,7 @@ import pytest
 from pypdf import PdfReader
 
 from dw_kernel.errors import DomainError
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.formats import refusal, sniff
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
 from dw_sales.adapters.order_rules import load_order_rules
@@ -39,7 +40,6 @@ from dw_sales.adapters.readers.ocr import (
 )
 from dw_sales.adapters.readers.operations import InProcessReaderTransport, ReaderTools
 from dw_sales.adapters.readers.pdf import PdfPoReader
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import check_document
 from dw_sales.domain.orders import FindingCode, PoDocument, RegionFlag, Unreadable
 from dw_sales.testing.reading_tools import (

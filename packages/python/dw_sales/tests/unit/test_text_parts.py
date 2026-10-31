@@ -12,11 +12,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.styles.colors import Color
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.readers.excel import text_unseen
 from dw_sales.adapters.readers.text_parts import AttachmentTexts
-from dw_sales.domain.messages import Attachment, AttachmentContent
 
 pytestmark = pytest.mark.unit
 

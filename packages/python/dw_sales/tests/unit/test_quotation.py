@@ -23,6 +23,12 @@ from pydantic import ValidationError
 
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import (
+    Attachment,
+    EmailAddress,
+    InboundMessage,
+    MailAuthentication,
+)
 from dw_sales.adapters.memory_rules import MemoryRuleVersions, platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.generate_attachments import load_quote_requests
@@ -42,12 +48,6 @@ from dw_sales.application.quotation import (
 from dw_sales.application.rules import RuleKey, TenantRuleBook
 from dw_sales.domain.catalog import LmeBand, LmeMonth, Quotation
 from dw_sales.domain.dispositions import RoutingReason
-from dw_sales.domain.messages import (
-    Attachment,
-    EmailAddress,
-    InboundMessage,
-    MailAuthentication,
-)
 from dw_sales.domain.pricing import SalesPricing
 from dw_sales.domain.quotes import (
     DeclineReason,

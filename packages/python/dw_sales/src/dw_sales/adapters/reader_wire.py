@@ -35,12 +35,12 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
+from dw_platform.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.application.order_ports import QuoteForm
 from dw_sales.application.source import SheetGrid
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
 from dw_sales.domain.master_data import ImportedTable
-from dw_sales.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument

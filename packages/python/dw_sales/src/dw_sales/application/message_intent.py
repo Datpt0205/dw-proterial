@@ -30,10 +30,10 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     cut_to_tokens,
 )
+from dw_platform.domain.mail_parts import MessagePart
 from dw_sales.application.order_ports import OrderCaseLookupPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer
-from dw_sales.domain.mail_parts import MessagePart
 from dw_sales.domain.message_intent import (
     IntentKind,
     IntentReading,

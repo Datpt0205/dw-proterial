@@ -16,6 +16,7 @@ from typing import Protocol
 
 from dw_kernel.errors import ConflictError
 from dw_platform.application.directory import WorkspaceMember
+from dw_platform.domain.messages import EmailAddress
 from dw_sales.application.artifact_content import (
     EML,
     INTERNAL,
@@ -37,7 +38,6 @@ from dw_sales.application.artifact_content import (
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Customer, Language
-from dw_sales.domain.messages import EmailAddress
 
 
 @dataclass(frozen=True, slots=True)
