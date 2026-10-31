@@ -104,6 +104,21 @@
       "version": "1.2.0"
     },
     {
+      "checksum": "3b3e4016d96e127ac15646749a7e72169e939dfb71cb949515b443b09d5ee19a",
+      "dataset_id": "purchasing_pr_intake",
+      "files": [
+        {
+          "checksum": "04dd3d81ffa3073579f56d5f816683f210266f8164a3bea1530d07cc15272a89",
+          "path": "evals/expected/purchasing_pr_intake.json"
+        },
+        {
+          "checksum": "14a2be1bd9e362b7c6709fc1df0c5a5d16a344c53b3cf11e7b753990ec70b47d",
+          "path": "evals/fixtures/cases/purchasing_pr_intake.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "b7aaf4ccdeca9c9889bd82c53760d22454f00a10c2dd69ca5a2000de6239425a",
       "dataset_id": "sales",
       "files": [
@@ -631,7 +646,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "8951d37b10ead6fb4e10fcffe65dbc535733a3af",
+  "git_sha": "4031bc8e5b93c6e131ef101a94d8ad81239f1658",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -677,6 +692,11 @@
       "checksum": "bbebba26b5708933b6f8ab5c43a08f57d4c6ef595e09afb1a9422df0b7d6b49c",
       "policy_id": "attachment_ingest",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "7cb367cb9c9b430dbfdc3160884f277f0a3d47f748162f78bb69cb3d2cf5b222",
+      "policy_id": "purchasing_rules",
+      "version": "1.0.0"
     },
     {
       "checksum": "ab14ee8601fa9bae54158dc6495f95c88f725483266d304be3bdd5ebea512391",
@@ -796,6 +816,11 @@
       "version": "1.1.0"
     },
     {
+      "checksum": "66a481c35d4488e9a499dd44e3a94a48be2db0a499a5c9b5bbbba1957cacdc07",
+      "prompt_id": "purchasing.pr_mail_reading",
+      "version": "1.0.0"
+    },
+    {
       "checksum": "ee6b8e1d4f8918860c3b4ecbe039f7208932eda1da776410d5a91da18705ce5d",
       "prompt_id": "sales.assistant_answer",
       "version": "1.0.0"
@@ -901,6 +926,18 @@
   "tool_specs": [],
   "toolsets": [],
   "workers": [
+    {
+      "agent_prompt_id": null,
+      "agent_prompt_version": null,
+      "autonomy_level": "A1",
+      "graph_version": "1.0.0",
+      "memory_policy_version": "1.0.0",
+      "policy_version": "1.0.0",
+      "prompt_bundle_version": "1.0.0",
+      "toolset_version": null,
+      "worker_id": "purchasing-dw2",
+      "worker_version": "1.0.0"
+    },
     {
       "agent_prompt_id": null,
       "agent_prompt_version": null,

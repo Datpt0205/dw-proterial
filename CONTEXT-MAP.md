@@ -8,6 +8,7 @@ and its own decisions; the platform's decisions apply to every context.
 | -------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------ |
 | Platform | Tenancy and authorization, the agent runtime, model gateway, knowledge, memory, audit, notifications, ops | `docs/platform/CONTEXT.md`            | `docs/adr/`                          |
 | Sales    | DW1 Đơn hàng & Báo giá: order intake (WIV-03-012) and quotation (WIV-03-023), on mock data behind ports   | `packages/python/dw_sales/CONTEXT.md` | `packages/python/dw_sales/docs/adr/` |
+| Purchasing | DW2 Mua hàng: purchase request (PR) to draft PO, supplier RFQ and confirmation (DW02), on mock data behind ports | `packages/python/dw_purchasing/CONTEXT.md` | `docs/adr/0013-what-a-second-context-shares-moves-to-the-platform.md` |
 
 A product adds a context with
 `make new-context NAME=<name>` and gives it a row here, with its glossary at

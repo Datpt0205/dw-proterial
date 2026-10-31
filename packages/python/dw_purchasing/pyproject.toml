@@ -8,14 +8,21 @@ dependencies = [
     "dw-platform",
     "dw-agent-runtime",
     # Pinned to match the packages that already own these: `apps/api` for
-    # FastAPI and `dw_agent_runtime` for LangGraph. A context that picked its own
-    # range would be a second opinion about one fact, and uv would refuse the
-    # workspace the first time the two disagreed.
+    # FastAPI, `dw_platform` for PyYAML. A context that picked its own range
+    # would be a second opinion about one fact, and uv would refuse the
+    # workspace the first time the two disagreed. No LangGraph: DW2 has no
+    # graph (`configs/workers/purchasing.yaml`).
     "fastapi>=0.115,<1",
-    "langgraph>=0.6,<2",
     "pydantic>=2.10,<3",
+    "pyyaml>=6,<7",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",
 ]
+
+[project.optional-dependencies]
+# `dw_purchasing.testing.eval_graders`: the `purchasing.*` graders speak the
+# eval runner's types. An extra, as Sales' is: the API and worker images never
+# import the graders, and `scripts/run_evals.py` runs from the workspace.
+evals = ["dw-evals"]
 
 [build-system]
 requires = ["hatchling>=1.26"]

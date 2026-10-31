@@ -379,14 +379,6 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     container.tool_registry = wiring.tool_registry
 
     # ---- BOUNDED CONTEXTS PLUG IN HERE -----------------------------------
-    # Purchasing: built from the seam, never from a global. `container.runtime`
-    # carries the session factory, clock, ids, registries and gateways; anything
-    # this context needs beyond them is its own adapter.
-    from dw_purchasing.adapters.sink import InMemoryPurchasingSink
-    from dw_purchasing.application.handlers import HandlePurchasing
-
-    container.purchasing_handler = HandlePurchasing(InMemoryPurchasingSink())
-
     # Sales: built from the seam, never from a global. `container.runtime`
     # carries the session factory, clock, ids, registries and gateways; anything
     # this context needs beyond them is its own adapter (`build_sales` below).
@@ -433,6 +425,29 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     )
     register_sales_support(container.support_catalog)
     register_sales_service_accounts(service_accounts)
+
+    # Purchasing (DW2): built from the seam, never from a global. It reads mail
+    # through the same one-call door as Sales, the caller's plan allowance
+    # checked first, and only where this process reaches a model server.
+    container.purchasing = build_purchasing_mount(
+        settings,
+        session_factory=wiring.seam.session_factory,
+        clock=wiring.seam.clock,
+        ids=wiring.seam.ids,
+        authorization=authorization,
+        model=(
+            wiring.model_stack.one_call(
+                DailyAllowance(
+                    allowance=wiring.runner.allowance,
+                    runs=wiring.runner.run_store,
+                    spend=wiring.runner.spend_store,
+                    clock=clock,
+                )
+            )
+            if Provider.ONPREM in wiring.seam.gateway.adapters
+            else None
+        ),
+    )
 
     # Build your context from `container.runtime` (the RuntimeSeam) and attach
     # its handlers, then mount its router in `main.create_app`. Nothing above
@@ -561,6 +576,47 @@ def build_sales(
         source_cache=source_cache,
     )
     return SalesMount(services=mount.services, activity=mount.activity)
+
+
+def build_purchasing_mount(
+    settings: ApiSettings,
+    *,
+    session_factory: async_sessionmaker[AsyncSession],
+    clock: UtcClock,
+    ids: IdGenerator,
+    authorization: ScopeAuthorizationService,
+    model: ModelGateway | None,
+) -> object:
+    """The Purchasing context's mount, part of the seam above.
+
+    DW2's mailbox is a fictional mock bound to the demo's one (tenant,
+    workspace), the pair Sales' demo names too (`ApiSettings.sales_demo_scope`);
+    every other scope reads it empty. Without that pair nothing is wired and
+    the Purchasing routes answer that no data source is configured. A
+    tenant's own rules are read from the platform's policy overrides.
+    """
+    from dw_platform.adapters.persistence.policy_overrides import SqlPolicyOverrideRepository
+    from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+    from dw_purchasing.adapters.assembly import build_purchasing
+    from dw_purchasing.presentation.routes import PurchasingMount
+
+    demo = settings.sales_demo_scope()
+    if demo is None:
+        _LOG.warning("purchasing: no data source configured; /api/v1/purchasing answers 503")
+        return PurchasingMount(services=None)
+    return PurchasingMount(
+        services=build_purchasing(
+            demo_scope=demo,
+            configs=CONFIGS,
+            session_factory=session_factory,
+            audit=SqlAuditRepository,
+            authorization=authorization,
+            tenant_policies=SqlPolicyOverrideRepository(session_factory),
+            model=model,
+            clock=clock,
+            ids=ids,
+        )
+    )
 
 
 def register_sales_support(catalog: SupportScopeCatalog) -> None:

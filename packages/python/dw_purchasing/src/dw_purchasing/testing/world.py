@@ -1,0 +1,141 @@
+"""DW2 assembled over in-memory adapters: the unit tests' and the eval smoke's.
+
+`open_world` builds `PurchaseRequests` over the mock mailbox (bound to
+`ALPHA`), the platform's rule files from the checkout, a tenant policy store
+and a scripted model that answers each mail by the PR number in it, the way a
+recorded live answer replays. Nothing here reaches a database or a model.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Final
+
+from pydantic import BaseModel
+
+from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import ModelUnavailableError, PromptRef
+from dw_kernel.errors import PermissionDeniedError
+from dw_kernel.ports import FixedClock, Uuid4Generator
+from dw_platform.application.access_context import AccessContext
+from dw_purchasing.adapters.mock.inbox import MockInbox
+from dw_purchasing.adapters.policy_files import PolicyFiles
+from dw_purchasing.application.access import Gate, PurchasingScopes
+from dw_purchasing.application.intake import PurchaseRequests, Worker
+from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.testing.memory import MemoryStore
+
+ALPHA: Final = (uuid.UUID(int=0xA1), uuid.UUID(int=0xA2))
+BETA: Final = (uuid.UUID(int=0xB1), uuid.UUID(int=0xB2))
+BUYER: Final = uuid.UUID(int=0xB0B)
+EVERY_SCOPE: Final = frozenset(s.value for s in PurchasingScopes)
+
+
+def caller(
+    scope: tuple[uuid.UUID, uuid.UUID] = ALPHA,
+    *,
+    scopes: frozenset[str] = EVERY_SCOPE,
+    principal: uuid.UUID = BUYER,
+) -> AccessContext:
+    return AccessContext(
+        tenant_id=scope[0],
+        workspace_id=scope[1],
+        principal_id=principal,
+        roles=frozenset({"purchasing_buyer"}),
+        scopes=scopes,
+        plan_id="professional",
+    )
+
+
+class Authz:
+    """The platform's scope check, as the verified context's scopes answer it."""
+
+    async def require(
+        self,
+        *,
+        context: AccessContext,
+        action: str,
+        resource_type: str,
+        resource_id: str | None = None,
+    ) -> None:
+        if action not in context.scopes:
+            raise PermissionDeniedError(f"missing scope {action}", details={"scope": action})
+
+    def is_allowed(self, context: AccessContext, action: str) -> bool:
+        return action in context.scopes
+
+
+@dataclass
+class TenantPolicies:
+    """`TenantPolicyPort` over a dict keyed by (tenant, policy id)."""
+
+    documents: dict[tuple[uuid.UUID, str], dict[str, object]] = field(default_factory=dict)
+
+    async def get(self, context: AccessContext, policy_id: str) -> dict[str, object] | None:
+        return self.documents.get((context.tenant_id, policy_id))
+
+
+@dataclass
+class ScriptedModel:
+    """`InterpretationPort` answering by the first key found in the mail;
+    ``failure`` raised instead when set. Every call is kept."""
+
+    answers: Mapping[str, Mapping[str, Any]]
+    failure: Exception | None = None
+    calls: list[tuple[PromptRef, Mapping[str, str], RunContext]] = field(default_factory=list)
+    model_profile: str = "onprem"
+    route: str = "structured_extraction"
+    max_input_tokens: int = 6000
+
+    async def interpret[OutputT: BaseModel](
+        self,
+        prompt: PromptRef,
+        inputs: Mapping[str, str],
+        schema: type[OutputT],
+        *,
+        run: RunContext,
+        max_output_tokens: int,
+    ) -> OutputT:
+        self.calls.append((prompt, inputs, run))
+        if self.failure is not None:
+            raise self.failure
+        text = next(iter(inputs.values()))
+        for key, answer in self.answers.items():
+            if key in text:
+                return schema.model_validate(answer)
+        raise ModelUnavailableError("no scripted answer")
+
+
+@dataclass
+class World:
+    service: PurchaseRequests
+    store: MemoryStore
+    model: ScriptedModel
+    tenant_policies: TenantPolicies
+    clock: FixedClock
+
+
+def open_world(
+    repo: Path, answers: Mapping[str, Mapping[str, Any]], *, with_model: bool = True
+) -> World:
+    from datetime import UTC, datetime
+
+    files = PolicyFiles.load(repo / "configs" / "policies")
+    store = MemoryStore()
+    model = ScriptedModel(answers)
+    policies = TenantPolicies()
+    clock = FixedClock(datetime(2026, 11, 2, 7, 0, tzinfo=UTC))
+    service = PurchaseRequests(
+        uow=store,
+        gate=Gate(Authz()),
+        rules=RuleBook(files, policies, files.versions),
+        inbox=MockInbox.load(tenant_id=ALPHA[0], workspace_id=ALPHA[1]),
+        model=model if with_model else None,
+        worker=Worker("purchasing-dw2", "1.0.0"),
+        clock=clock,
+        ids=Uuid4Generator(),
+    )
+    return World(service, store, model, policies, clock)

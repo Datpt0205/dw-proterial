@@ -1,0 +1,12 @@
+"""What the Purchasing router serves, bundled by the composition root."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from dw_purchasing.application.intake import PurchaseRequests
+
+
+@dataclass(frozen=True)
+class PurchasingServices:
+    requests: PurchaseRequests
