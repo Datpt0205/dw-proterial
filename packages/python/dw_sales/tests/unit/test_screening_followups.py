@@ -113,6 +113,6 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
     ],
 )
 def test_an_amount_is_seen_in_any_of_the_customers_languages(text: str, amount: bool) -> None:
-    from dw_sales.application.figure_check import names_amount
+    from dw_agent_runtime.model.figure_check import names_amount
 
     assert names_amount(text) is amount

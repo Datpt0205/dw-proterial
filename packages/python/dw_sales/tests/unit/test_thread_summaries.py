@@ -141,7 +141,7 @@ def test_the_prompt_file_is_the_one_the_step_names_and_fits_its_room() -> None:
 
 
 def test_a_figure_counts_whole_or_as_a_whole_part_never_as_a_substring() -> None:
-    from dw_sales.application.figure_check import unsupported
+    from dw_agent_runtime.model.figure_check import unsupported
 
     source = "Hạn 2026-10-09, đơn giá 0.79, PO NRV-PO-26-0457"
     assert unsupported("trước ngày 9 tháng 10 năm 2026", source) == set()

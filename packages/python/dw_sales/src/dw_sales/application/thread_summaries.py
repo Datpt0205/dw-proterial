@@ -26,18 +26,19 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.model.figure_check import unsupported
 from dw_kernel.errors import QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.figure_check import unsupported
 from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.ports import InboxPort
 from dw_sales.application.runs import caller_run
 from dw_sales.application.support import stored_order, stored_quote
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.mail_parts import newest_part
+from dw_sales.domain.process import DW_NAMES
 
 # The prompt a thread is summarised with. Its file is
 # `configs/prompts/sales/thread_summary@1.0.0.yaml`; a test holds the two
@@ -98,7 +99,8 @@ def checked(answer: ModelThreadSummary, mails: dict[str, str]) -> tuple[list[Sum
         cites = list(dict.fromkeys(point.cites))
         if not cites or any(c not in mails for c in cites):
             continue
-        if unsupported(point.text, "\n".join([*cites, *(mails[c] for c in cites)])):
+        sources = "\n".join([*cites, *(mails[c] for c in cites)])
+        if unsupported(point.text, sources, names=DW_NAMES):
             continue
         kept.append(SummaryPoint(text=point.text, cites=cites))
     return kept, len(answer.points) - len(kept)

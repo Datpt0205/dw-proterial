@@ -1,5 +1,5 @@
-"""Every figure a model wrote is one its sources hold (the AI list, items 8
-and 12).
+"""Every figure a model wrote is one its sources hold (sales' AI list, items
+8 and 12; lifted here by docs/adr/0013 so every context checks prose alike).
 
 A model's prose is shown only when each number, date and code in it appears
 in what it was given: code cannot check that a sentence is right, but it can
@@ -13,6 +13,7 @@ inside ``0.79`` is not a nine.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from typing import Final
 
 # A number, a date or a code as it may be written: a run of digits, with the
@@ -20,11 +21,9 @@ from typing import Final
 # `0.712`, `31/12/2026`, `1,200`).
 _FIGURE = re.compile(r"[A-Za-z]*\d[\w./,\-]*")
 _PARTS = re.compile(r"[./,\-]")
-# Names that hold a digit and are no figure: the Digital Workers' own.
-_NAMES: Final = frozenset({"DW1", "DW2"})
 # What an amount looks like in any of the customers' languages: a percent, a
 # currency code or symbol. A mail to a customer no approval looked at carries
-# none (items 11 and the customer reminder): a "5%" passes a figure check
+# none (sales items 11 and the customer reminder): a "5%" passes a figure check
 # whenever a date holds a 5.
 _AMOUNT: Final = re.compile(
     # `\uff05` is the full-width percent sign a Japanese mail may use.
@@ -47,8 +46,10 @@ def _key(figure: str) -> str:
     return figure.lstrip("0") or "0" if figure.isdigit() else figure
 
 
-def unsupported(written: str, sources: str) -> set[str]:
-    """The figures ``written`` holds that ``sources`` do not."""
+def unsupported(written: str, sources: str, *, names: Collection[str] = ()) -> set[str]:
+    """The figures ``written`` holds that ``sources`` do not. ``names`` hold a
+    digit and are no figure (a context's Digital Workers, ``DW1``): the
+    caller's, since which names a deployment has is not the platform's to say."""
     known = figures(sources)
     parts = {_key(p) for k in known for p in (k, *_PARTS.split(k)) if p}
-    return {f for f in figures(written) - _NAMES if f not in known and _key(f) not in parts}
+    return {f for f in figures(written) - set(names) if f not in known and _key(f) not in parts}

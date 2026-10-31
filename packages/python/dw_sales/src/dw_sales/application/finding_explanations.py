@@ -32,18 +32,19 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.model.figure_check import unsupported
 from dw_kernel.errors import NotFoundError, PermissionDeniedError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, PriceView, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.figure_check import unsupported
 from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.application.runs import caller_run
 from dw_sales.application.support import stored_order
 from dw_sales.application.views import PRICE_BEARING_ORDER_CODES
 from dw_sales.domain.orders import Finding, OrderCase
+from dw_sales.domain.process import DW_NAMES
 
 # The prompt a finding is explained with. Its file is
 # `configs/prompts/sales/finding_explanation@1.0.0.yaml`; a test holds the two
@@ -80,7 +81,7 @@ class FindingExplanationView(BaseModel):
 
 def unsupported_figures(answer: ModelExplanation, facts: str) -> set[str]:
     """The figures the answer holds that no fact holds (`figure_check`)."""
-    return unsupported(f"{answer.explanation} {answer.check or ''}", facts)
+    return unsupported(f"{answer.explanation} {answer.check or ''}", facts, names=DW_NAMES)
 
 
 def _text(value: object) -> object:
