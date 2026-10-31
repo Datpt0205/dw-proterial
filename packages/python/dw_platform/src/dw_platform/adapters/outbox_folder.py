@@ -6,7 +6,7 @@ how a flow is set up).
     <root>/<mailbox>/outbox/<job>.json          the job the flow sends
     <root>/<mailbox>/outbox/files/<job>/<name>  the files it attaches
     <root>/<mailbox>/receipts/<job>.json        {"status": "sent" | "failed"}
-    <root>/<mailbox>/receipts/done/<job>.json   a receipt DW1 has read
+    <root>/<mailbox>/receipts/done/<job>.json   a receipt the lane has read
 
 A mailbox with no `outbox` folder is not connected: its person's flow is not
 set up. Files are written to a temporary name and renamed, the job last, so
@@ -24,9 +24,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
 
-from dw_sales.application.outbound_mail import Receipt
+from dw_platform.application.outbox_folder import Receipt
 
-logger = logging.getLogger("dw_sales.outbox_folder")
+logger = logging.getLogger("dw_platform.outbox_folder")
 
 _RECEIPT_MAX_BYTES: Final = 4096
 _SAFE_NAME: Final = frozenset(

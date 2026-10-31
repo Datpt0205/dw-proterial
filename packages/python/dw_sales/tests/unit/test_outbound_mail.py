@@ -14,8 +14,8 @@ import pytest
 
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
+from dw_platform.adapters.outbox_folder import FakeFlow, FolderOutbox
 from dw_platform.application.access_context import AccessContext
-from dw_sales.adapters.outbox_folder import FakeFlow, FolderOutbox
 from dw_sales.application.outbound_mail import (
     RECEIPT_WITHIN,
     OutboundLane,

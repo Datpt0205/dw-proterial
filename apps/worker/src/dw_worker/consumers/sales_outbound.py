@@ -9,7 +9,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Final, Protocol
 
-from dw_sales.adapters.outbox_folder import FakeFlow
+from dw_platform.adapters.outbox_folder import FakeFlow
 from dw_sales.application.outbound_mail import OutboundTick
 
 logger = logging.getLogger("dw_worker.sales_outbound")
