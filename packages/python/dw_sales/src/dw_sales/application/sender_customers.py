@@ -37,6 +37,12 @@ from typing import Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.context import caller_run
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+    PromptRef,
+)
 from dw_kernel.errors import ConflictError, NotFoundError, QuotaExceededError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -44,9 +50,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
-from dw_sales.application.runs import caller_run
 from dw_sales.application.views import ProcessingJobView
 from dw_sales.domain.catalog import Customer
 from dw_sales.domain.dispositions import DispositionKind, RoutingReason

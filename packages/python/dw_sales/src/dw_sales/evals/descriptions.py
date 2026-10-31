@@ -43,6 +43,10 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    PromptRef,
+)
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_evals.graders import GraderContext, GradeResult
 from dw_sales.adapters.assembly import demo_order_rules
@@ -52,8 +56,6 @@ from dw_sales.application.model_readiness import bar_verdict
 from dw_sales.application.model_reading import (
     DESCRIPTION_ATTRIBUTES,
     DescriptionReader,
-    ModelUnavailableError,
-    PromptRef,
 )
 from dw_sales.domain.catalog import ConvertEntry, Item
 from dw_sales.domain.description_reading import (

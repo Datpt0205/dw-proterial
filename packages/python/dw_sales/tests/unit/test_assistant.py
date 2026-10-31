@@ -11,6 +11,10 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_kernel.errors import NotFoundError
 from dw_sales.application.assistant import (
     ANSWER_TOKENS,
@@ -18,7 +22,6 @@ from dw_sales.application.assistant import (
     INTENT_TOKENS,
     QUESTION_INTENT,
 )
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.domain.assistant import (
     ACTION,
     CATALOG,

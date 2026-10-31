@@ -45,7 +45,12 @@ from dw_sales.application.catalog_imports import CATALOG_APPROVAL
 from dw_sales.application.decisions import CaseDecisions
 from dw_sales.application.layouts import LAYOUT_APPROVAL
 from dw_sales.application.rules import RULES_APPROVAL
-from dw_sales.application.runs import APPROVAL_PREFIX, DecisionAsked, DecisionGiven, Dw1Task
+from dw_sales.application.runs import (
+    APPROVAL_PREFIX,
+    DecisionAsked,
+    DecisionGiven,
+    Dw1Task,
+)
 from dw_sales.application.support import DW1_WORKER_ID
 
 GRAPH_VERSION = "1.0.0"

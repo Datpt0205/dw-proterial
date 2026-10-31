@@ -24,6 +24,7 @@ import pytest
 from pydantic import ValidationError
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import FixedClock
@@ -65,7 +66,7 @@ from dw_sales.application.model_calls import (
     model_calls,
     recording_model_calls,
 )
-from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES, ModelUnavailableError
+from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.quotation import QuotationService

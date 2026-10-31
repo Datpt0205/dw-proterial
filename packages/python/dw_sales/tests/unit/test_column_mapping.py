@@ -12,13 +12,16 @@ from typing import Any
 import pytest
 from openpyxl import Workbook
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_sales.application.column_mapping import (
     CATALOG_COLUMNS,
     PROMPT_TOKENS,
     ModelColumnMap,
     remapped,
 )
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.domain.master_data import SPECS, CatalogList, ImportedTable, TableRow
 from dw_sales.evals.graders import AN, CALLERS
 from dw_sales.evals.recorded import Recorded

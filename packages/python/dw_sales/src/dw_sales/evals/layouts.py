@@ -42,6 +42,10 @@ from pydantic import BaseModel
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    PromptRef,
+)
 from dw_evals.graders import GraderContext, GradeResult
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
@@ -54,7 +58,6 @@ from dw_sales.adapters.reader_client import ClientPoReaders
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.layouts import LAYOUT_PROPOSAL, LayoutChecks, LayoutPrefiller
 from dw_sales.application.model_readiness import bar_verdict
-from dw_sales.application.model_reading import ModelUnavailableError, PromptRef
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.layouts import (
     PROPOSAL_KEYS,

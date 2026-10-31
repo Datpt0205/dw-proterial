@@ -44,6 +44,10 @@ from typing import Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+)
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import FixedClock, Uuid4Generator
@@ -54,7 +58,6 @@ from dw_sales.adapters.reader_client import ClientSourceView
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import Gate, SalesScopes
 from dw_sales.application.artifact_content import BravoUploadLayout
-from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rule_drafts import (
     BRAVO_TEMPLATE_MAPPING,

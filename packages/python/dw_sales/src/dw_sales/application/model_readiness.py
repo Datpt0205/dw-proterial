@@ -34,6 +34,7 @@ from typing import Any, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+from dw_agent_runtime.model.interpretation import PromptRef
 from dw_kernel.errors import ConflictError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor_label
@@ -41,7 +42,7 @@ from dw_sales.application.artifact_content import local_time
 from dw_sales.application.handoffs import REQUEST_HANDOFF
 from dw_sales.application.layouts import LAYOUT_PROPOSAL
 from dw_sales.application.message_intent import MESSAGE_INTENT
-from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES, PromptRef
+from dw_sales.application.model_reading import DESCRIPTION_ATTRIBUTES
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.reply_intent import REPLY_INTENT

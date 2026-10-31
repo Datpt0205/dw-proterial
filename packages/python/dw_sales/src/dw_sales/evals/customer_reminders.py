@@ -24,10 +24,10 @@ import uuid
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
 from dw_sales.application.customer_reminders import CUSTOMER_REMINDER, CustomerReminderView
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.replies import correction_case, spec_discussion_case

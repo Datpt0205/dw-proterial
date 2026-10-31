@@ -24,6 +24,10 @@ from pydantic import ValidationError
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR
@@ -36,7 +40,6 @@ from dw_sales.application.handoffs import (
     HandoffReader,
     render,
 )
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import RuleKey
 from dw_sales.domain.catalog import Customer

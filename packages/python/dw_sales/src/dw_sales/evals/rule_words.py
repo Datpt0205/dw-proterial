@@ -29,10 +29,13 @@ from collections.abc import Coroutine, Mapping
 from dataclasses import replace
 from typing import Any
 
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+)
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_sales.application.access import SalesScopes
-from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError
 from dw_sales.application.rule_drafts import RuleDraftView
 from dw_sales.application.rule_words import RULE_CHANGE_IN_WORDS, focus_of
 from dw_sales.application.rules import RuleKey

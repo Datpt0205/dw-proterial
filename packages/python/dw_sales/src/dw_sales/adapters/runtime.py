@@ -17,11 +17,12 @@ from datetime import datetime
 from typing import Protocol
 
 from dw_agent_runtime.adapters.run_store import WaitingRun
+from dw_agent_runtime.context import WEB_CHANNEL
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.ports import WorkflowRunnerPort
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.access_context import AccessContext
-from dw_sales.application.runs import WEB_CHANNEL, Dw1Task
+from dw_sales.application.runs import Dw1Task
 from dw_sales.workflows.graph import STATE_SCHEMA_VERSION
 
 

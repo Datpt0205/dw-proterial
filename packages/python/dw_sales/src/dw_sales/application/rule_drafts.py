@@ -59,7 +59,14 @@ from typing import Any, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.context import caller_run
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+    PromptRef,
+    estimated_tokens,
+)
 from dw_kernel.errors import DomainError, InfrastructureError, NotFoundError, QuotaExceededError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -72,12 +79,6 @@ from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import BravoUploadLayout
 from dw_sales.application.catalog_imports import OutboxPort
-from dw_sales.application.model_reading import (
-    InterpretationPort,
-    ModelUnavailableError,
-    PromptRef,
-    estimated_tokens,
-)
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.processing import RequesterAccessPort
 from dw_sales.application.rule_words import (
@@ -92,7 +93,6 @@ from dw_sales.application.rule_words import (
 )
 from dw_sales.application.rule_words import PROMPT_TOKENS as WORDS_PROMPT_TOKENS
 from dw_sales.application.rules import DRAFTABLE, PRICE_BEARING, Resolved, RuleKey, readable
-from dw_sales.application.runs import caller_run
 from dw_sales.application.source import SheetGrid
 from dw_sales.application.template_reading import (
     MAX_SHEETS,

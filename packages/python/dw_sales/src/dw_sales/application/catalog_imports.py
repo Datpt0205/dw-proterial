@@ -60,6 +60,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
+from dw_agent_runtime.context import caller_run
 from dw_kernel.errors import (
     ConflictError,
     DomainError,
@@ -86,7 +87,6 @@ from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.column_mapping import ColumnMatcher
 from dw_sales.application.ports import SalesCatalogPort, SalesScope, Snapshot
-from dw_sales.application.runs import caller_run
 from dw_sales.domain.catalog import ConvertEntry, LmeMonth, Quotation, month_key
 from dw_sales.domain.master_data import (
     MAX_REJECTED_KEPT,

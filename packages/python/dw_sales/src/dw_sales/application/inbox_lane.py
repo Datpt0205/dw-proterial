@@ -55,6 +55,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final, Literal, Protocol
 
+from dw_agent_runtime.context import WEB_CHANNEL
 from dw_kernel.errors import (
     ConflictError,
     EntitlementDeniedError,
@@ -73,7 +74,6 @@ from dw_sales.application.access import sales_scope
 from dw_sales.application.case_store import ProcessingJob, SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.processing import PROCESSING_CEILING
-from dw_sales.application.runs import WEB_CHANNEL
 from dw_sales.application.support import DW1_WORKER_ID
 from dw_sales.application.views import ProcessingJobView
 

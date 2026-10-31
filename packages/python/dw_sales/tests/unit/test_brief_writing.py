@@ -13,12 +13,15 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.policy_files import rule_book
 from dw_sales.application.brief_writing import MORNING_BRIEF, PROMPT_TOKENS, BriefWriter
 from dw_sales.application.followups import BRIEF, FollowupLane
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.domain.followups import SalesFollowups
 from dw_sales.evals.graders import AN, CALLERS, GIANG
 from dw_sales.evals.recorded import Recorded
