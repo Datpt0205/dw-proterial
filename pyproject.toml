@@ -20,6 +20,7 @@ dw-memory = { workspace = true }
 dw-connectors = { workspace = true }
 dw-observability = { workspace = true }
 dw-evals = { workspace = true }
+dw-purchasing = { workspace = true }
 dw-sales = { workspace = true }
 dw-api = { workspace = true }
 dw-docgen = { workspace = true }
@@ -109,6 +110,7 @@ known-first-party = [
     "dw_observability",
     "dw_evals",
     "dw_api",
+    "dw_purchasing",
     "dw_sales",
     "dw_docgen",
     "dw_reader",
@@ -149,6 +151,7 @@ mypy_path = [
     "packages/python/dw_connectors/src",
     "packages/python/dw_observability/src",
     "packages/python/dw_evals/src",
+    "packages/python/dw_purchasing/src",
     "packages/python/dw_sales/src",
     "apps/api/src",
     "apps/docgen/src",
@@ -224,6 +227,7 @@ source = [
     "packages/python/dw_observability/src",
     "packages/python/dw_platform/src",
     "apps/api/src",
+    "packages/python/dw_purchasing/src",
     "packages/python/dw_sales/src",
     "apps/docgen/src",
     "apps/reader/src",
@@ -258,7 +262,37 @@ root_packages = [
     "dw_sales",
     "dw_api",
     "dw_worker",
+    "dw_purchasing",
 ]
+
+[[tool.importlinter.contracts]]
+# Contexts are independent: one importing another is a super-agent forming, and
+# the second one is always where it starts. The platform may not import a
+# context either — that direction is what keeps the skeleton reusable.
+name = "Purchasing is independent"
+type = "forbidden"
+source_modules = ["dw_purchasing"]
+forbidden_modules = ["dw_api", "dw_worker", "dw_docgen", "dw_reader"]
+
+[[tool.importlinter.contracts]]
+# Clean/Hexagonal direction inside the context: adapters and presentation
+# depend on application ports, application on the domain, never the reverse.
+name = "dw_purchasing layers"
+type = "layers"
+containers = ["dw_purchasing"]
+layers = [
+    "presentation | adapters",
+    "workflows",
+    "application",
+    "domain",
+]
+
+[[tool.importlinter.contracts]]
+# No context imports another. Where one needs another's data, the consumer
+# declares a Protocol and a composition root satisfies it.
+name = "Contexts are independent of each other"
+type = "independence"
+modules = ["dw_sales", "dw_purchasing"]
 
 [[tool.importlinter.contracts]]
 # Contexts are independent: one importing another is a super-agent forming, and
@@ -346,7 +380,7 @@ source_modules = [
     "dw_observability",
     "dw_evals",
 ]
-forbidden_modules = ["dw_sales"]
+forbidden_modules = ["dw_sales", "dw_purchasing"]
 
 [[tool.importlinter.contracts]]
 name = "Kernel is pure (stdlib only)"
@@ -378,7 +412,7 @@ forbidden_modules = [
 [[tool.importlinter.contracts]]
 name = "Domain layers never import frameworks or providers"
 type = "forbidden"
-source_modules = ["dw_platform.domain"]
+source_modules = ["dw_platform.domain", "dw_purchasing.domain"]
 forbidden_modules = [
     "fastapi",
     "sqlalchemy",
