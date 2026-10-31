@@ -108,6 +108,18 @@ class ApprovalRules(BaseModel):
         return next(tier for tier in self.tiers if tier.up_to is None or check.amount <= tier.up_to)
 
 
+class RfqRules(BaseModel):
+    """Whom DW2 drafts a request for quotation to (DW02 function 3)."""
+
+    model_config = _FROZEN
+
+    # At most this many suppliers asked per line, from those the master data
+    # lists for its item.
+    max_suppliers_per_line: int = Field(ge=1, le=10)
+    # The reply date an RFQ asks for, in days from the day it is drafted.
+    reply_days: int = Field(ge=1, le=60)
+
+
 class PurchasingRules(BaseModel):
     """One version of the tenant's rules (module docstring)."""
 
@@ -121,6 +133,8 @@ class PurchasingRules(BaseModel):
     # Who approves what. Absent in 1.0.0, which received requests only: a
     # request is not sent for approval under rules that set no limits.
     approval: ApprovalRules | None = None
+    # Whom to ask. Absent before 1.2.0: no RFQ is drafted under such rules.
+    rfq: RfqRules | None = None
 
     @field_validator("internal_domains")
     @classmethod

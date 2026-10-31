@@ -19,7 +19,9 @@ dw_sales ADR 0005 as DW2 applies it).
   `PurchaseCase`.
 - **Case status**: `received` (Đã nhận) — the request is on file;
   `awaiting_approval` (Chờ duyệt) — checked and sent to its approver;
-  `approved` (Đã duyệt) / `rejected` (Từ chối) — the approver decided.
+  `approved` (Đã duyệt) / `rejected` (Từ chối) — the approver decided;
+  `rfq_drafted` (Đang hỏi giá) — RFQs drafted, offers being recorded;
+  `supplier_selected` (Đã chọn nhà cung cấp) — a person chose one per line.
 - **Cross-check (đối chiếu)**: each line's reference price (a supplier
   quotation still valid, else the last price paid, else the requester's
   estimate), the request's amount (unknown when a line has no price), and
@@ -42,6 +44,20 @@ dw_sales ADR 0005 as DW2 applies it).
   domains. The platform's version ships in `configs/policies`; a tenant's own
   replaces it whole and is read from the platform's policy overrides.
 
+- **RFQ (yêu cầu báo giá)**: one drafted mail per supplier code picks from
+  the master data (supplies the item, quoted it or was paid for it, at most
+  the rules' number per line), to the supplier's contacts. The model words
+  it from code's facts; kept only when every figure is in the facts and no
+  amount is named, else code's template. DW2 sends nothing.
+- **Offer (báo giá)**: one supplier's unit price, currency, lead time and
+  validity for one line; typed by a buyer, or read from the supplier's
+  verified reply (spans, tied to the lines that supplier was asked for).
+- **Comparison (bảng so sánh)**: per line, the valid offers in the request's
+  currency, cheapest first, each with its total and whether it meets the
+  need-by date. Code's, never a model's or a supplier's.
+- **Selection (lựa chọn)**: one offer per line, chosen by a person, its total
+  held to the most the approver's tier decides (stamped on the case).
+
 ## Roles and scopes
 
 - `purchasing_buyer` (Nhân viên mua hàng): `purchasing.request.read`,
@@ -50,5 +66,6 @@ dw_sales ADR 0005 as DW2 applies it).
 - `purchasing_head` (Trưởng phòng Mua hàng): `purchasing.request.read`,
   `purchasing.approve.tier1`, `purchasing.approve.tier2`.
 - Permission set `purchasing_director_approver`: `purchasing.approve.tier3`.
-- The buyer also holds `purchasing.request.submit`. Deciding any approval
+- The buyer also holds `purchasing.request.submit` and
+  `purchasing.rfq.prepare`. Deciding any approval
   also needs the platform's `approvals.decide`.

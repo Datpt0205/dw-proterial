@@ -15,7 +15,14 @@ from typing import Any
 
 from dw_platform.application.access_context import AccessContext
 from dw_purchasing.adapters.mock.inbox import DATA_DIR
-from dw_purchasing.domain.checks import Budget, Item, MasterData, PastPurchase, SupplierQuote
+from dw_purchasing.domain.checks import (
+    Budget,
+    Item,
+    MasterData,
+    PastPurchase,
+    Supplier,
+    SupplierQuote,
+)
 
 
 class MockMasterData:
@@ -35,6 +42,7 @@ class MockMasterData:
             quotes=tuple(SupplierQuote.model_validate(r) for r in raw["quotes"]),
             history=tuple(PastPurchase.model_validate(r) for r in raw["history"]),
             budgets={b.code: b for b in budgets},
+            suppliers=tuple(Supplier.model_validate(r) for r in raw["suppliers"]),
         )
         return cls(data, tenant_id=tenant_id, workspace_id=workspace_id)
 

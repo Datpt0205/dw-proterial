@@ -97,10 +97,42 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
       worker handler. One guard (status beside version) was redundant and
       removed: every write moves the version.
 
+- 2026-11-01, **slice 3 — RFQ + offers + comparison + choice (DW02 function 3), done**:
+    - `POST /requests/{id}/rfq` (approved only): suppliers per line from the
+      master data (`suppliers_for`: supplies it, quoted it, was paid for it;
+      known suppliers only; at most `rfq.max_suppliers_per_line`, rules
+      `1.2.0`), reply date `rfq.reply_days`, recipients the supplier's
+      contacts. `purchasing.rfq_mail@1.0.0` words it from code's facts (dates
+      day first, as the mail writes them); kept only when `figure_check`
+      finds no figure outside the facts and `names_amount` none, else the
+      template. Nothing is sent.
+    - Offers: `POST /requests/{id}/offers` (typed; known supplier, a line of
+      the request) and `/offers/from-mail/{message_id}` (verified sender of an
+      asked supplier's domain; `purchasing.supplier_quote_reading@1.0.0`
+      spans; tied by item code to the lines asked; an unasked item is left
+      out; read once).
+    - `GET /requests/{id}/comparison`: valid offers in the request's
+      currency, cheapest first, totals, need-by met. `POST /selection`: one
+      offer per line, total held to the stamped tier `limit` (409
+      `exceeds_approved_limit`).
+    - Migration `0e9a49b7a6f8`: statuses `rfq_drafted`,
+      `supplier_selected`; `ck_cases_sent` rewritten; `ck_cases_sourced`
+      (absent jsonb keys read as absent, not NULL); buyer gets
+      `purchasing.rfq.prepare`.
+    - Checks: unit 95 + API routes 15; integration 11 (the whole flow on the
+      SQL store, `ck_cases_sourced` refusals, another workspace finds
+      nothing); eval `purchasing_sourcing@1.0.0` 4/4 (red with the comparison
+      reversed or unasked items kept). Mutations, each red: supplier cap,
+      unknown supplier, RFQ figure check, RFQ amount check, RFQ before
+      approval, rfq gate, reply read twice, unverified reply, any sender,
+      unknown typed supplier, unknown line, one per line, choice without
+      offer, approved limit, expired and foreign offers compared, dearest
+      first, offer price span, unasked item recorded, sourcing-state
+      validator.
+
 ## Next
 
-1. Slice 3 — RFQ to suppliers + comparison table (function 3).
-2. Slice 4 — draft PO + Bravo import file (function 4). Stop and report.
+1. Slice 4 — draft PO + Bravo import file (function 4). Stop and report.
 3. Then: confirmation/delivery tracking (5), brief + Q&A (6), the web pages.
 
 ## Not done, on purpose
@@ -110,6 +142,11 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
   registered for the Zalo decision command.
 - A sent request cannot be withdrawn or edited yet; a rejected one stays
   rejected (a new request is a new case).
+- RFQ drafts are not sent: the outbox folder (`dw_platform`) can carry them
+  from the buyer's mailbox, as DW1's mails go; wiring it is the next step
+  after the pages.
+- A supplier's reply is not linked to its RFQ by thread headers yet: the
+  buyer picks the case and the mail.
 - The Excel PR form and scanned paper: the reader's registry is Sales' until
   it is split (ADR 0013 decision 2). Bravo as a source: no connection.
 - No offsets kept for a mail's spans (DW1 keeps anchors): the mailbox is the

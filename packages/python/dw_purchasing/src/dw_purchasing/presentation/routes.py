@@ -36,8 +36,10 @@ from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.approvals import CheckView
 from dw_purchasing.application.intake import CaseChange, InboxItem
 from dw_purchasing.application.services import PurchasingServices
+from dw_purchasing.application.sourcing import ComparisonView, OfferForm
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.requests import PurchaseRequest
+from dw_purchasing.domain.sourcing import Choice
 
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu Mua hàng"
 _PAGE = 50
@@ -73,6 +75,20 @@ class VersionBody(BaseModel):
     case_version: int = Field(ge=1)
 
 
+class OfferBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_version: int = Field(ge=1)
+    offer: OfferForm
+
+
+class SelectionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_version: int = Field(ge=1)
+    choices: list[Choice] = Field(min_length=1, max_length=100)
+
+
 _MessageId = Annotated[str, PathParam(pattern=r"^[!-~]{1,512}$")]
 
 
@@ -106,6 +122,7 @@ def build_router(
     read = [scope(PurchasingScopes.REQUEST_READ)]
     intake = [scope(PurchasingScopes.REQUEST_INTAKE)]
     submit = [scope(PurchasingScopes.REQUEST_SUBMIT)]
+    rfq = [scope(PurchasingScopes.RFQ_PREPARE)]
 
     @router.get("/requests", response_model=CasePage, dependencies=read)
     async def list_requests(
@@ -146,6 +163,53 @@ def build_router(
         case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
     ) -> CaseChange:
         change = await svc.approvals.submit(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
+
+    @router.post("/requests/{case_id}/rfq", response_model=CaseChange, dependencies=rfq)
+    async def draft_rfq(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.sourcing.draft_rfq(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
+
+    @router.post("/requests/{case_id}/offers", response_model=CaseChange, dependencies=rfq)
+    async def record_offer(
+        case_id: uuid.UUID, body: OfferBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.sourcing.record_offer(
+            context, case_id, body.offer, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/requests/{case_id}/offers/from-mail/{message_id}",
+        response_model=CaseChange,
+        dependencies=rfq,
+    )
+    async def read_offer_mail(
+        case_id: uuid.UUID,
+        message_id: _MessageId,
+        body: VersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChange:
+        change = await svc.sourcing.read_offer_mail(
+            context, case_id, message_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.get("/requests/{case_id}/comparison", response_model=ComparisonView, dependencies=read)
+    async def comparison(case_id: uuid.UUID, context: Ctx, svc: Svc) -> ComparisonView:
+        return await svc.sourcing.comparison(context, case_id)
+
+    @router.post("/requests/{case_id}/selection", response_model=CaseChange, dependencies=rfq)
+    async def select_suppliers(
+        case_id: uuid.UUID, body: SelectionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.sourcing.select(
+            context, case_id, body.choices, case_version=body.case_version
+        )
         return await idem.record(change)
 
     @router.get("/mail", response_model=list[InboxItem], dependencies=read)

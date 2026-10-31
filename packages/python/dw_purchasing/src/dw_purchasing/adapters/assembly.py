@@ -38,6 +38,7 @@ from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.ports import TenantPolicyPort
 from dw_purchasing.application.rules import RuleBook
 from dw_purchasing.application.services import PurchasingServices
+from dw_purchasing.application.sourcing import SupplierSourcing
 
 
 def interpretation_for(model: ModelGateway, configs: Path, profile: str) -> GatewayInterpretation:
@@ -83,13 +84,20 @@ def build_purchasing(
         clock=clock,
         ids=ids,
     )
+    master = MockMasterData.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1])
     return PurchasingServices(
         requests=requests,
         approvals=RequestApprovals(
+            uow=store, gate=Gate(authorization), rules=book, master=master, clock=clock, ids=ids
+        ),
+        sourcing=SupplierSourcing(
             uow=store,
             gate=Gate(authorization),
             rules=book,
-            master=MockMasterData.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1]),
+            master=master,
+            inbox=requests.inbox,
+            model=requests.model,
+            worker=requests.worker,
             clock=clock,
             ids=ids,
         ),

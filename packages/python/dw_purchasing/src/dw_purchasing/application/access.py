@@ -29,6 +29,9 @@ class PurchasingScopes(StrEnum):
     APPROVE_TIER1 = "purchasing.approve.tier1"
     APPROVE_TIER2 = "purchasing.approve.tier2"
     APPROVE_TIER3 = "purchasing.approve.tier3"
+    # Draft the RFQs of an approved request, record what suppliers offer,
+    # choose a supplier per line.
+    RFQ_PREPARE = "purchasing.rfq.prepare"
 
 
 class PurchasingAuthorizationPort(Protocol):

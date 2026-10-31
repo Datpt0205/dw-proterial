@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -70,6 +70,23 @@ class PastPurchase(BaseModel):
     ordered_on: date
 
 
+Address = Annotated[str, Field(pattern=r"^[A-Za-z0-9._%+-]{1,64}@[a-z0-9.-]{1,253}$")]
+
+
+class Supplier(BaseModel):
+    """A supplier as the master data lists it."""
+
+    model_config = _FROZEN
+
+    code: Code
+    name: str = Field(min_length=1, max_length=200)
+    # The mail domains its replies come from: a reply from any other is not
+    # the supplier's.
+    domains: frozenset[str] = Field(min_length=1)
+    contacts: tuple[Address, ...] = Field(min_length=1)
+    items: frozenset[str] = frozenset()
+
+
 class Budget(BaseModel):
     model_config = _FROZEN
 
@@ -87,6 +104,10 @@ class MasterData(BaseModel):
     quotes: tuple[SupplierQuote, ...] = ()
     history: tuple[PastPurchase, ...] = ()
     budgets: Mapping[str, Budget] = Field(default_factory=dict)
+    suppliers: tuple[Supplier, ...] = ()
+
+    def supplier(self, code: str) -> Supplier | None:
+        return next((s for s in self.suppliers if s.code == code), None)
 
 
 class FindingCode(StrEnum):

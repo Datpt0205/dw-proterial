@@ -1,0 +1,65 @@
+{
+  "sourcing": {
+    "asked": {
+      "ANPHAT": [
+        1,
+        3
+      ],
+      "BAOHO": [
+        2
+      ],
+      "KIMURA": [
+        1
+      ]
+    },
+    "refused": [],
+    "offers": [
+      [
+        "ANPHAT",
+        1,
+        "1290000",
+        3
+      ],
+      [
+        "ANPHAT",
+        3,
+        "37500",
+        5
+      ],
+      [
+        "BAOHO",
+        2,
+        "98000",
+        5
+      ],
+      [
+        "KIMURA",
+        1,
+        "1200000",
+        7
+      ]
+    ],
+    "cheapest": {
+      "1": "KIMURA",
+      "2": "BAOHO",
+      "3": "ANPHAT"
+    }
+  },
+  "sourcing_missing_evidence": {
+    "invented_price": [
+      "line_unreadable"
+    ],
+    "item_not_asked": [
+      "item_not_asked"
+    ],
+    "leaks_price": [
+      "template"
+    ],
+    "invents_figure": [
+      "template"
+    ],
+    "names_amount": [
+      "template"
+    ]
+  }
+}
