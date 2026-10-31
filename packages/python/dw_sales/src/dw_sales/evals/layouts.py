@@ -47,6 +47,7 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
 )
 from dw_evals.graders import GraderContext, GradeResult
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.adapters.mock.generate_attachments import (
@@ -66,7 +67,6 @@ from dw_sales.domain.layouts import (
     as_proposal,
     label_key,
 )
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.evals.intents import _demo_rules
 from dw_sales.evals.recorded import ByPrompt, Recorded, latency, load_answers

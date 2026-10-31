@@ -25,6 +25,7 @@ from pydantic import ValidationError
 
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import Attachment, EmailAddress, InboundMessage
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, MOCK_ROOT
 from dw_sales.adapters.mock.generate_attachments import load_purchase_orders
@@ -46,7 +47,6 @@ from dw_sales.domain.dispositions import (
     DispositionKind,
     MessageDisposition,
 )
-from dw_sales.domain.messages import Attachment, EmailAddress, InboundMessage
 from dw_sales.domain.order_checks import OrderRules
 from dw_sales.domain.orders import (
     Accepted,

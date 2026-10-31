@@ -14,6 +14,7 @@ import asyncio
 from collections.abc import Callable
 from typing import TypeVar
 
+from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.formats import refusal, sniff
 from dw_sales.adapters.readers.excel import ExcelPoReader
 from dw_sales.adapters.readers.layouts import MOCK_EXCEL_LAYOUTS, MOCK_PDF_LAYOUTS
@@ -21,7 +22,6 @@ from dw_sales.adapters.readers.pdf import PdfPoReader
 from dw_sales.adapters.readers.stored import excel_layout, pdf_layout
 from dw_sales.application.order_ports import FileType
 from dw_sales.domain.layouts import LayoutMapping, LayoutSource
-from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import PoDocument, PrintedBuyer, Unreadable
 

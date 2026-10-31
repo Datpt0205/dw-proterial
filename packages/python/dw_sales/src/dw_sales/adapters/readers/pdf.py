@@ -65,12 +65,12 @@ from typing import get_args
 from pydantic import ValidationError
 from pypdf import PdfReader
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.readers.ocr import OcrError, OcrPage, PageOcrPort
 from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules, no_date
 from dw_sales.domain.anchors import PageBox, SourceAnchor
 from dw_sales.domain.layouts import LabelCell, flagged_everywhere
 from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import (
     DeliverySchedule,

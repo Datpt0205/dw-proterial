@@ -19,13 +19,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_reader import reading
 from dw_reader.main import create_app
 from dw_reader.settings import ReaderSettings
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.adapters.reader_wire import ReaderArgs, ReaderOp, ReaderReply, ReaderRequest
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.orders import PoDocument
 
 pytestmark = pytest.mark.unit

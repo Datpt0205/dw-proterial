@@ -46,6 +46,13 @@ from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import (
+    Attachment,
+    EmailAddress,
+    InboundMessage,
+    MailAuthentication,
+)
 from dw_sales.adapters.assembly import demo_order_rules
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, read_records
@@ -65,13 +72,6 @@ from dw_sales.application.order_intake import (
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.dispositions import RoutingReason
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import (
-    Attachment,
-    EmailAddress,
-    InboundMessage,
-    MailAuthentication,
-)
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded, latency, load_answers

@@ -11,10 +11,10 @@ from pathlib import Path
 import pytest
 
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import EmailAddress, InboundMessage
 from dw_sales.adapters.mock import MockInbox
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, DATA_DIR, attachment_path
 from dw_sales.application.ports import InboxPort, SalesScope
-from dw_sales.domain.messages import EmailAddress, InboundMessage
 
 pytestmark = pytest.mark.unit
 

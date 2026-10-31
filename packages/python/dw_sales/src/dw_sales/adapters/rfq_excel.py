@@ -38,6 +38,7 @@ from openpyxl.cell.rich_text import CellRichText
 from openpyxl.utils import get_column_letter
 from pydantic import ValidationError
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.readers.documents import sniff
 from dw_sales.adapters.readers.excel import MACROS_PART, legacy_text_encoding
 from dw_sales.application.order_ports import QuoteForm
@@ -45,7 +46,6 @@ from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.catalog import Currency, CustomerItemCode, DocumentNo, Name, PrvCode, Uom
 from dw_sales.domain.legacy_fonts import LegacyEncoding
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.quotes import (
     BpCode,
     CopperWeight,

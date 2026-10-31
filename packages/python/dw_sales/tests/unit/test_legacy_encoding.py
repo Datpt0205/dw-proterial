@@ -31,6 +31,7 @@ from reportlab.pdfgen.canvas import Canvas
 
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, attachment_file_name
 from dw_sales.adapters.mock.generate_attachments import FONT_PATH, load_purchase_orders
@@ -44,7 +45,6 @@ from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.views import order_case, order_finding
 from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
-from dw_sales.domain.messages import Attachment, AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps, check_document, map_line
 from dw_sales.domain.orders import (
     Accepted,

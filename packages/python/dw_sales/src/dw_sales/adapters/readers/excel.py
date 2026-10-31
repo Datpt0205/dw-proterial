@@ -55,11 +55,11 @@ from openpyxl.worksheet.cell_range import CellRange
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import ValidationError
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.readers.schedules import in_date_order, listed_schedules, no_date
 from dw_sales.domain.anchors import SourceAnchor
 from dw_sales.domain.layouts import LabelCell
 from dw_sales.domain.legacy_fonts import LegacyEncoding, legacy_encoding
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.orders import (
     DeliverySchedule,

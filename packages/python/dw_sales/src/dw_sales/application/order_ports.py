@@ -12,11 +12,11 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Final, Literal, Protocol
 
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.threads import ThreadedCase
 from dw_sales.domain.catalog import ConvertEntry, Customer
 from dw_sales.domain.layouts import LayoutMapping, PoLayout
-from dw_sales.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.domain.order_checks import IntakeCaps, ModelStep, OrderRules
 from dw_sales.domain.orders import OrderCase, PoDocument, PrintedBuyer, Unreadable
 

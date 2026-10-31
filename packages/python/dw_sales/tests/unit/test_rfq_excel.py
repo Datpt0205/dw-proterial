@@ -17,6 +17,7 @@ from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Font
 
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock import MockInbox
 from dw_sales.adapters.reader_client import ClientDesignReplyReader, ClientRfqReader
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
@@ -27,7 +28,6 @@ from dw_sales.application.quote_ports import (
     QuoteFileUnreadableError,
     RfqReaderPort,
 )
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.quotes import DesignReplyDocument, RfqDocument
 from dw_sales.testing.excel_strings import as_excel_writes_it
 

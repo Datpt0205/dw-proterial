@@ -43,6 +43,8 @@ from dw_agent_runtime.model.interpretation import (
 from dw_kernel.errors import ConflictError, NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesScope
@@ -56,8 +58,6 @@ from dw_sales.domain.dispositions import (
     MessageDisposition,
     RoutingReason,
 )
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import InboundMessage
 from dw_sales.domain.quotes import DesignReply, DesignReplyDocument
 from dw_sales.domain.rfq_reading import normalised, text_digest
 

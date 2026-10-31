@@ -59,6 +59,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus, decided_event_type
 from dw_platform.domain.audit import AuditEvent
+from dw_platform.domain.messages import AttachmentContent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
 from dw_sales.application.order_ports import OrderRulesPort
@@ -78,7 +79,6 @@ from dw_sales.domain.layouts import (
     pdf_columns,
     plausible,
 )
-from dw_sales.domain.messages import AttachmentContent
 from dw_sales.domain.order_checks import IntakeCaps, OrderRules, check_document
 from dw_sales.domain.orders import FindingCode, PoDocument, Unreadable
 

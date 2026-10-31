@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from dw_platform.domain.messages import MailAuthentication, is_domain
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -37,7 +38,6 @@ from dw_sales.domain.catalog import (
 )
 from dw_sales.domain.description_reading import DescriptionReading, Verified
 from dw_sales.domain.descriptions import StatedAttributes, candidates, read_description
-from dw_sales.domain.messages import MailAuthentication, is_domain
 from dw_sales.domain.orders import (
     CheckName,
     ExportControlMode,

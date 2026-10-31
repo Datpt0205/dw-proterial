@@ -26,6 +26,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.formats import sniff
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR, LEGACY_DIR
 from dw_sales.adapters.order_rules import load_order_rules
@@ -35,7 +36,6 @@ from dw_sales.adapters.reader_client import (
     HttpReaderTransport,
 )
 from dw_sales.adapters.readers import mock_po_readers
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.orders import PoDocument, RegionFlag
 from dw_sales.testing.reading_tools import LEGACY_PO_NO, xls_made_in_reader
 

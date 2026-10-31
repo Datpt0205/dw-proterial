@@ -36,7 +36,7 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dw_sales.domain.messages import AttachmentId, Sha256Hex
+from dw_platform.domain.messages import AttachmentId, Sha256Hex
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 

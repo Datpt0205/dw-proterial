@@ -18,6 +18,7 @@ import httpx
 import pytest
 
 from dw_kernel.errors import DomainError
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
 from dw_sales.adapters.order_rules import load_order_rules
 from dw_sales.adapters.reader_client import (
@@ -36,7 +37,6 @@ from dw_sales.adapters.readers import mock_po_readers
 from dw_sales.adapters.readers.operations import OPERATIONS, InProcessReaderTransport, handle
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
 from dw_sales.domain.anchors import SourceAnchor
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.orders import PoDocument, Unreadable
 
 pytestmark = pytest.mark.unit

@@ -48,6 +48,7 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     cut_to_tokens,
 )
+from dw_platform.domain.mail_parts import MessagePart
 from dw_sales.application.order_ports import OrderCaseLookupPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.domain.catalog import Customer
@@ -68,7 +69,6 @@ from dw_sales.domain.handoffs import (
     locate_identifier,
     quantity_of,
 )
-from dw_sales.domain.mail_parts import MessagePart
 from dw_sales.domain.rfq_reading import parse_date, parse_document_no
 
 # The prompt the spans are copied with. Its file is

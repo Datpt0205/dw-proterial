@@ -21,13 +21,13 @@ from dw_agent_runtime.model.interpretation import (
 )
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.application.case_store import MESSAGE_TEXT
 from dw_sales.application.order_intake import NO_DOCUMENT
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION, PROMPT_TOKENS
 from dw_sales.application.source import required_regions
 from dw_sales.domain.anchors import MessageText
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.orders import FindingCode, OrderCase, PoDocument, RegionFlag
 from dw_sales.domain.po_body_reading import ModelPoBody, parse_amount, read_po_body
 from dw_sales.domain.rfq_reading import normalised, parse_number

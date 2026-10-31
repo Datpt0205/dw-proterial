@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import EmailAddress, InboundMessage
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import EmailAddress, InboundMessage
 from dw_sales.domain.spans import FoldedText
 
 pytestmark = pytest.mark.unit

@@ -19,6 +19,7 @@ import pytest
 from pydantic import ValidationError
 
 from dw_kernel.errors import ConflictError, NotFoundError
+from dw_platform.domain.messages import Attachment, AttachmentContent
 from dw_sales.adapters.mock.fixtures import ATTACHMENTS_DIR
 from dw_sales.adapters.mock.generate_attachments import (
     catalogue_of,
@@ -34,7 +35,6 @@ from dw_sales.application.artifact_content import Value
 from dw_sales.application.order_artifacts import upload_rows
 from dw_sales.application.views import order_case
 from dw_sales.domain.layouts import LayoutMapping
-from dw_sales.domain.messages import Attachment, AttachmentContent
 from dw_sales.domain.order_checks import received_date
 from dw_sales.domain.orders import (
     AMOUNT_FIELDS,

@@ -23,6 +23,7 @@ import pytest
 import yaml
 
 from dw_kernel.ids import TenantId, WorkspaceId
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, MOCK_ROOT
 from dw_sales.adapters.mock.generate_attachments import (
@@ -47,7 +48,6 @@ from dw_sales.domain.catalog import (
     month_key,
 )
 from dw_sales.domain.descriptions import read_description
-from dw_sales.domain.messages import InboundMessage
 
 pytestmark = pytest.mark.unit
 

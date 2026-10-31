@@ -56,10 +56,10 @@ from typing import Final, Literal, Protocol
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
+from dw_platform.domain.messages import EmailAddress, InboundMessage
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
 from dw_sales.application.quotation import QuoteRules
-from dw_sales.domain.messages import EmailAddress, InboundMessage
 from dw_sales.domain.order_checks import OrderRules
 
 logger = logging.getLogger("dw_sales.mail_drop")

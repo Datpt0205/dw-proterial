@@ -46,8 +46,8 @@ from typing import Annotated, Final, Literal, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from dw_kernel.errors import ConflictError
+from dw_platform.domain.messages import AttachmentId, Sha256Hex
 from dw_sales.domain.catalog import CustomerCode
-from dw_sales.domain.messages import AttachmentId, Sha256Hex
 from dw_sales.domain.orders import (
     FlaggedValue,
     PoDocument,

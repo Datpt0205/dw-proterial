@@ -14,6 +14,7 @@ import pytest
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
+from dw_platform.domain.messages import EmailAddress
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.application.artifact_content import (
     XLSX,
@@ -22,7 +23,6 @@ from dw_sales.application.artifact_content import (
     Sheet,
     Workbook,
 )
-from dw_sales.domain.messages import EmailAddress
 
 pytestmark = pytest.mark.unit
 

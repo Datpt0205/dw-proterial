@@ -41,6 +41,8 @@ from dw_agent_runtime.model.budget import BudgetExceededError
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import ConflictError
+from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.application.model_readiness import bar_verdict
@@ -49,8 +51,6 @@ from dw_sales.application.runs import subject_of
 from dw_sales.application.threads import AskedAbout, ThreadedCase, ThreadLinks, question
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item
 from dw_sales.domain.dispositions import CaseKind
-from dw_sales.domain.mail_parts import newest_part
-from dw_sales.domain.messages import EmailAddress, InboundMessage, MailAuthentication
 from dw_sales.domain.order_checks import ModelStep
 from dw_sales.domain.orders import DispositionKind as FindingDisposition
 from dw_sales.domain.orders import OrderStatus

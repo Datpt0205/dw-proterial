@@ -35,8 +35,8 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dw_kernel.errors import ConflictError
+from dw_platform.domain.messages import EmailAddress
 from dw_sales.domain.catalog import Language
-from dw_sales.domain.messages import EmailAddress
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 

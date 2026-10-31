@@ -20,8 +20,8 @@ from dw_platform.application.malware import (
     MalwareScanPort,
     ScanUnavailableError,
 )
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_sales.application.ports import InboxPort, SalesScope
-from dw_sales.domain.messages import AttachmentContent, InboundMessage
 
 
 @dataclass(frozen=True)

@@ -43,6 +43,7 @@ from pydantic import (
 )
 
 from dw_kernel.errors import ConflictError, DomainError, PermissionDeniedError
+from dw_platform.domain.messages import Attachment, EmailAddress, Sha256Hex
 from dw_sales.domain.anchors import MessageText, SourceAnchor
 from dw_sales.domain.catalog import (
     BravoOrder,
@@ -61,7 +62,6 @@ from dw_sales.domain.catalog import (
     Uom,
 )
 from dw_sales.domain.description_reading import DescriptionReading
-from dw_sales.domain.messages import Attachment, EmailAddress, Sha256Hex
 from dw_sales.domain.orders import FlaggedValue, RegionFlag
 from dw_sales.domain.pricing import FreightRate, Incoterm, SalesPricing
 
