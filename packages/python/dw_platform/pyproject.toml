@@ -12,6 +12,9 @@ dependencies = [
     "redis>=5,<6",
     # Keycloak's admin REST API (adapters/identity/keycloak_accounts.py).
     "httpx>=0.28,<1",
+    # A spreadsheet cell written as text, never a formula (`adapters/spreadsheet.py`):
+    # the range `dw_sales` declares.
+    "openpyxl>=3.1,<4",
 ]
 
 [build-system]
