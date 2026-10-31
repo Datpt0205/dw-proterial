@@ -379,6 +379,14 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     container.tool_registry = wiring.tool_registry
 
     # ---- BOUNDED CONTEXTS PLUG IN HERE -----------------------------------
+    # Purchasing: built from the seam, never from a global. `container.runtime`
+    # carries the session factory, clock, ids, registries and gateways; anything
+    # this context needs beyond them is its own adapter.
+    from dw_purchasing.adapters.sink import InMemoryPurchasingSink
+    from dw_purchasing.application.handlers import HandlePurchasing
+
+    container.purchasing_handler = HandlePurchasing(InMemoryPurchasingSink())
+
     # Sales: built from the seam, never from a global. `container.runtime`
     # carries the session factory, clock, ids, registries and gateways; anything
     # this context needs beyond them is its own adapter (`build_sales` below).

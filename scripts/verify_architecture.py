@@ -59,6 +59,7 @@ IMPORT_TO_DIST = {
     "dw_api": "dw-api",
     "dw_worker": "dw-worker",
     "dw_docgen": "dw-docgen",
+    "dw_purchasing": "dw-purchasing",
     "dw_reader": "dw-reader",
     "dw_sales": "dw-sales",
 }

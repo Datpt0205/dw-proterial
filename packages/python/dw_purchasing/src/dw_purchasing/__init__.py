@@ -1,0 +1,1 @@
+"""The Purchasing bounded context."""

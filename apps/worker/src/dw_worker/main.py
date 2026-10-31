@@ -784,6 +784,22 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         )
 
     # ---- BOUNDED CONTEXT LANES REGISTER HERE -----------------------------
+    # Purchasing registers here. Left COMMENTED on purpose, twice over:
+    #
+    #   - a generated context owns no queue, so a lane would be a consumer with
+    #     nothing to consume — a placeholder, which this repo does not ship;
+    #   - `apps/worker/tests/unit/test_worker.py` asserts the exact set of lanes
+    #     this process hosts, so a context's lane arriving is a deliberate,
+    #     visible change and not something a scaffold slips in.
+    #
+    # Uncomment when the context has real work, add `dw-purchasing` to
+    # `apps/worker/pyproject.toml`, name the lane in that test, and append a
+    # `ReapTarget` for every job queue it owns so abandoned rows are settled by
+    # the one reaper rather than by a second sweeper.
+    #
+    #     from dw_purchasing.adapters import ...
+    #     registry.register("purchasing", <its consumer>)
+
     # `apps/worker/tests/unit/test_worker.py` asserts the exact set of lanes
     # this process hosts, so a context's lane arriving is a deliberate,
     # visible change. A context appends a `ReapTarget` for every job queue it
