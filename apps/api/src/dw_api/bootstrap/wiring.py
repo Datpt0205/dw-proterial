@@ -435,6 +435,7 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
         clock=wiring.seam.clock,
         ids=wiring.seam.ids,
         authorization=authorization,
+        approval_flow=wiring.approval_flow,
         model=(
             wiring.model_stack.one_call(
                 DailyAllowance(
@@ -585,9 +586,15 @@ def build_purchasing_mount(
     clock: UtcClock,
     ids: IdGenerator,
     authorization: ScopeAuthorizationService,
+    approval_flow: ApproveAndResumeService,
     model: ModelGateway | None,
 ) -> object:
     """The Purchasing context's mount, part of the seam above.
+
+    Every `purchasing.` approval is made strict (a second person, a written
+    reason) and checked by this context before the platform records it
+    (`RequestDecisions`), whether or not the demo's data source is wired: an
+    approval opened earlier must never be decided unchecked.
 
     DW2's mailbox is a fictional mock bound to the demo's one (tenant,
     workspace), the pair Sales' demo names too (`ApiSettings.sales_demo_scope`);
@@ -596,10 +603,18 @@ def build_purchasing_mount(
     tenant's own rules are read from the platform's policy overrides.
     """
     from dw_platform.adapters.persistence.policy_overrides import SqlPolicyOverrideRepository
-    from dw_platform.adapters.persistence.repositories import SqlAuditRepository
-    from dw_purchasing.adapters.assembly import build_purchasing
+    from dw_platform.adapters.persistence.repositories import (
+        SqlApprovalRepository,
+        SqlAuditRepository,
+    )
+    from dw_purchasing.adapters.assembly import build_purchasing, request_decisions
+    from dw_purchasing.application.approvals import APPROVAL_PREFIX
     from dw_purchasing.presentation.routes import PurchasingMount
 
+    approval_flow.strict_approval_prefixes |= {APPROVAL_PREFIX}
+    approval_flow.decision_guards[APPROVAL_PREFIX] = request_decisions(
+        session_factory, SqlAuditRepository, SqlApprovalRepository
+    )
     demo = settings.sales_demo_scope()
     if demo is None:
         _LOG.warning("purchasing: no data source configured; /api/v1/purchasing answers 503")
@@ -610,6 +625,7 @@ def build_purchasing_mount(
             configs=CONFIGS,
             session_factory=session_factory,
             audit=SqlAuditRepository,
+            approvals=SqlApprovalRepository,
             authorization=authorization,
             tenant_policies=SqlPolicyOverrideRepository(session_factory),
             model=model,

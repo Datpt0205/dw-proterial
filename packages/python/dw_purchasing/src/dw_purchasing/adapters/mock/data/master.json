@@ -1,0 +1,29 @@
+{
+  "_comment": "MOCK master data for DW2 (fictional items, suppliers, prices and budgets). Bound to the demo scope; every other tenant and workspace reads none.",
+  "items": [
+    {"code": "DC-200", "description": "Dao cắt cáp DC-200", "unit": "cái"},
+    {"code": "GT-C5", "description": "Găng tay chống cắt cấp 5", "unit": "đôi"},
+    {"code": "BK-1700", "description": "Băng keo cách điện 3M Temflex 1700", "unit": "cuộn"},
+    {"code": "KE-16", "description": "Khuôn ép đầu cos KE-16", "unit": "bộ"},
+    {"code": "TL-027", "description": "Bút bi Thiên Long TL-027", "unit": "hộp"},
+    {"code": "PL-1210", "description": "Pallet nhựa 1200x1000", "unit": "cái"}
+  ],
+  "quotes": [
+    {"item_code": "DC-200", "supplier_code": "KIMURA", "unit_price": "1250000", "currency": "VND", "valid_until": "2026-12-31", "lead_time_days": 7},
+    {"item_code": "DC-200", "supplier_code": "ANPHAT", "unit_price": "1310000", "currency": "VND", "valid_until": "2026-12-31", "lead_time_days": 3},
+    {"item_code": "KE-16", "supplier_code": "KIMURA", "unit_price": "18500000", "currency": "VND", "valid_until": "2026-12-31", "lead_time_days": 21},
+    {"item_code": "GT-C5", "supplier_code": "BAOHO", "unit_price": "95000", "currency": "VND", "valid_until": "2026-10-31", "lead_time_days": 5},
+    {"item_code": "PL-1210", "supplier_code": "NHUAVIET", "unit_price": "650000", "currency": "VND", "valid_until": "2027-03-31", "lead_time_days": 10}
+  ],
+  "history": [
+    {"item_code": "GT-C5", "supplier_code": "BAOHO", "unit_price": "92000", "currency": "VND", "ordered_on": "2026-08-14"},
+    {"item_code": "BK-1700", "supplier_code": "ANPHAT", "unit_price": "38000", "currency": "VND", "ordered_on": "2026-09-02"},
+    {"item_code": "TL-027", "supplier_code": "VPP-MINHCHAU", "unit_price": "52000", "currency": "VND", "ordered_on": "2026-07-20"}
+  ],
+  "budgets": [
+    {"code": "CC-PROD-01", "remaining": "60000000", "currency": "VND"},
+    {"code": "CC-MAINT-02", "remaining": "30000000", "currency": "VND"},
+    {"code": "CC-WH-01", "remaining": "10000000", "currency": "VND"},
+    {"code": "CC-ADM-01", "remaining": "15000000", "currency": "VND"}
+  ]
+}

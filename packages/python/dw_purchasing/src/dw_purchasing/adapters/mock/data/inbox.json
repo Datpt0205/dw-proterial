@@ -4,7 +4,7 @@
     "sender": {"address": "lan.nguyen@seller.example", "display_name": "Nguyễn Thị Lan"},
     "subject": "Yêu cầu mua hàng PR-2611-004 - Xưởng cắt",
     "received_at": "2026-11-02T08:15:00+07:00",
-    "body_text": "Chào anh chị phòng Mua hàng,\n\nXưởng cắt đề nghị mua các vật tư sau theo PR-2611-004.\nBộ phận: Xưởng cắt\nMã ngân sách: CC-PROD-01\n\n1. Dao cắt cáp DC-200, 4 cái, cần trước 20/11/2026\n2. Găng tay chống cắt cấp 5, 50 đôi, cần trước 20/11/2026\n3. Băng keo cách điện 3M Temflex 1700, 120 cuộn\n\nCảm ơn,\nLan",
+    "body_text": "Chào anh chị phòng Mua hàng,\n\nXưởng cắt đề nghị mua các vật tư sau theo PR-2611-004.\nBộ phận: Xưởng cắt\nMã ngân sách: CC-PROD-01\n\n1. Dao cắt cáp DC-200, 4 cái, cần trước 20/11/2026\n2. Găng tay chống cắt cấp 5 GT-C5, 50 đôi, cần trước 20/11/2026\n3. Băng keo cách điện 3M Temflex 1700 BK-1700, 120 cuộn\n\nCảm ơn,\nLan",
     "authentication": {"spf": "pass", "dkim": "pass", "dmarc": "pass"}
   },
   {

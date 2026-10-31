@@ -28,7 +28,14 @@ from dw_kernel.errors import (
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.intake import PR_MAIL_READING
 from dw_purchasing.application.ports import Disposition
-from dw_purchasing.domain.requests import CaseStatus, PrLine, PrSource, PurchaseRequest
+from dw_purchasing.domain.cases import (
+    CaseStatus,
+    PrSource,
+)
+from dw_purchasing.domain.requests import (
+    PrLine,
+    PurchaseRequest,
+)
 from dw_purchasing.testing.world import ALPHA, BETA, BUYER, World, caller, open_world
 
 pytestmark = pytest.mark.unit
@@ -71,11 +78,11 @@ async def test_a_complete_form_opens_a_case_stamped_with_the_rules_and_audited()
 
     case = await world.service.case(caller(), change.case_id)
     assert (case.status, case.source, case.source_ref) == (CaseStatus.RECEIVED, PrSource.FORM, None)
-    assert case.rules_ref == "purchasing_rules@1.0.0"
+    assert case.rules_ref == "purchasing_rules@1.1.0"
     assert case.received_by == BUYER
     (event,) = world.store.rows(*ALPHA).audit
     assert event.action == "purchasing.request.received"
-    assert event.details == {"source": "form", "rules_ref": "purchasing_rules@1.0.0", "lines": 1}
+    assert event.details == {"source": "form", "rules_ref": "purchasing_rules@1.1.0", "lines": 1}
 
 
 async def test_a_form_lacking_what_the_rules_require_is_refused_naming_it() -> None:

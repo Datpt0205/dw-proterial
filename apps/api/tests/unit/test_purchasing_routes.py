@@ -108,7 +108,9 @@ async def _call(
 
 
 def _mounted(world: World) -> PurchasingMount:
-    return PurchasingMount(services=PurchasingServices(requests=world.service))
+    return PurchasingMount(
+        services=PurchasingServices(requests=world.service, approvals=world.approvals)
+    )
 
 
 async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> None:
@@ -121,7 +123,7 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
     listed = await _call(container, "GET", "/requests")
     assert [c["case_id"] for c in listed.json()["items"]] == [case_id]
     detail = await _call(container, "GET", f"/requests/{case_id}")
-    assert detail.json()["rules_ref"] == "purchasing_rules@1.0.0"
+    assert detail.json()["rules_ref"] == "purchasing_rules@1.1.0"
 
     read = await _call(container, "POST", "/mail/P01/read")
     assert read.status_code == 200 and read.json()["disposition"] == "opened"
@@ -137,6 +139,8 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("POST", "/requests", FORM),
         ("GET", "/mail", None),
         ("POST", "/mail/P01/read", None),
+        ("GET", f"/requests/{uuid.uuid4()}/check", None),
+        ("POST", f"/requests/{uuid.uuid4()}/submit", {"case_version": 1}),
     ],
 )
 async def test_every_route_refuses_a_caller_without_its_scope_and_touches_nothing(
@@ -195,7 +199,35 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 5
+    assert len(routes) == 7
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
+
+
+def test_the_composition_root_makes_purchasing_approvals_strict_and_guarded() -> None:
+    """Whether or not the demo's data source is wired: an approval opened
+    earlier is never decided by its maker, without a reason, or unchecked."""
+    from dw_agent_runtime.approval_flow import ApproveAndResumeService
+    from dw_api.bootstrap.wiring import build_purchasing_mount
+    from dw_purchasing.application.approvals import APPROVAL_PREFIX, RequestDecisions
+
+    flow = ApproveAndResumeService(
+        uow_factory=None,  # type: ignore[arg-type]
+        runner=None,  # type: ignore[arg-type]
+        run_store=None,  # type: ignore[arg-type]
+        clock=SystemClock(),
+        id_generator=Uuid4Generator(),
+    )
+    mount = build_purchasing_mount(
+        ApiSettings(profile="test", dev_secret=SECRET),
+        session_factory=None,  # type: ignore[arg-type]
+        clock=SystemClock(),
+        ids=Uuid4Generator(),
+        authorization=ScopeAuthorizationService(),
+        approval_flow=flow,
+        model=None,
+    )
+    assert flow.is_strict("purchasing.request")
+    assert isinstance(flow.decision_guards[APPROVAL_PREFIX], RequestDecisions)
+    assert isinstance(mount, PurchasingMount)

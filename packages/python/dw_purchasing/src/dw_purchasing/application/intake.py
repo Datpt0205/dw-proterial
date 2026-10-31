@@ -50,8 +50,13 @@ from dw_purchasing.application.ports import (
     PurchasingUnitOfWork,
 )
 from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.domain.cases import (
+    CaseStatus,
+    PrSource,
+    PurchaseCase,
+)
 from dw_purchasing.domain.mail_reading import MAX_MAIL_LINES, ModelPrMail, read_pr_mail
-from dw_purchasing.domain.requests import CaseStatus, PrSource, PurchaseCase, PurchaseRequest
+from dw_purchasing.domain.requests import PurchaseRequest
 from dw_purchasing.domain.rules import PurchasingRules
 
 # The prompt DW2 reads a request in a mail with; its file is

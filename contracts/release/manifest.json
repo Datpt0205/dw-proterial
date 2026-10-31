@@ -104,15 +104,30 @@
       "version": "1.2.0"
     },
     {
+      "checksum": "86d937cd65e76bce5c6b6831db6f9a18fab6ca60c24cd0e4113340261e49bbaf",
+      "dataset_id": "purchasing_pr_approval",
+      "files": [
+        {
+          "checksum": "5c1fc10df8776bc588f914355a8c81fb6af73a7679ab4c94ed2d2eafe24c7e16",
+          "path": "evals/expected/purchasing_pr_intake.json"
+        },
+        {
+          "checksum": "85ec914fec9c50220b407fbdf5e2dcec0cf7596987462bb4fe3c41da2a72192b",
+          "path": "evals/fixtures/cases/purchasing_pr_intake.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "3b3e4016d96e127ac15646749a7e72169e939dfb71cb949515b443b09d5ee19a",
       "dataset_id": "purchasing_pr_intake",
       "files": [
         {
-          "checksum": "04dd3d81ffa3073579f56d5f816683f210266f8164a3bea1530d07cc15272a89",
+          "checksum": "5c1fc10df8776bc588f914355a8c81fb6af73a7679ab4c94ed2d2eafe24c7e16",
           "path": "evals/expected/purchasing_pr_intake.json"
         },
         {
-          "checksum": "14a2be1bd9e362b7c6709fc1df0c5a5d16a344c53b3cf11e7b753990ec70b47d",
+          "checksum": "85ec914fec9c50220b407fbdf5e2dcec0cf7596987462bb4fe3c41da2a72192b",
           "path": "evals/fixtures/cases/purchasing_pr_intake.json"
         }
       ],
@@ -646,7 +661,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "4031bc8e5b93c6e131ef101a94d8ad81239f1658",
+  "git_sha": "4d607523846e3d759766378e0121be341336a6dc",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -697,6 +712,11 @@
       "checksum": "7cb367cb9c9b430dbfdc3160884f277f0a3d47f748162f78bb69cb3d2cf5b222",
       "policy_id": "purchasing_rules",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "8b6fea4e002dd467dca5752c9115a9e736ec63ce6727c77b86f2309300e02c3b",
+      "policy_id": "purchasing_rules",
+      "version": "1.1.0"
     },
     {
       "checksum": "ab14ee8601fa9bae54158dc6495f95c88f725483266d304be3bdd5ebea512391",

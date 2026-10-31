@@ -42,7 +42,11 @@ from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from dw_purchasing.domain.requests import MAX_LINES, PrLine, PurchaseRequest
+from dw_purchasing.domain.requests import (
+    MAX_LINES,
+    PrLine,
+    PurchaseRequest,
+)
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 

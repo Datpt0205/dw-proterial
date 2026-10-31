@@ -24,6 +24,8 @@ dependencies = [
     # and registers its lane, so the context is declared here rather than
     # reached through a package that happens to pull it in.
     "dw-sales",
+    # DW2: a decided `purchasing.request` approval is carried out here.
+    "dw-purchasing",
     "pydantic>=2.10,<3",
     "pydantic-settings>=2.7,<3",
     "sqlalchemy[asyncio]>=2.0.36,<2.1",

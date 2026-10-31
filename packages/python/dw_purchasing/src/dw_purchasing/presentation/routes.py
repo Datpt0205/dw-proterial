@@ -28,14 +28,16 @@ from typing import Annotated, Any, Protocol
 
 from fastapi import APIRouter, Depends, Query
 from fastapi import Path as PathParam
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from dw_kernel.errors import DomainError, InfrastructureError
 from dw_platform.application.access_context import AccessContext
 from dw_purchasing.application.access import PurchasingScopes
+from dw_purchasing.application.approvals import CheckView
 from dw_purchasing.application.intake import CaseChange, InboxItem
 from dw_purchasing.application.services import PurchasingServices
-from dw_purchasing.domain.requests import PurchaseCase, PurchaseRequest
+from dw_purchasing.domain.cases import PurchaseCase
+from dw_purchasing.domain.requests import PurchaseRequest
 
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu Mua hàng"
 _PAGE = 50
@@ -61,6 +63,14 @@ class CasePage(BaseModel):
     # The keyset of the next page, None on the last one.
     next_before_at: datetime | None
     next_before_id: uuid.UUID | None
+
+
+class VersionBody(BaseModel):
+    """The version of the case the caller saw: a stale one is refused (409)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_version: int = Field(ge=1)
 
 
 _MessageId = Annotated[str, PathParam(pattern=r"^[!-~]{1,512}$")]
@@ -95,6 +105,7 @@ def build_router(
 
     read = [scope(PurchasingScopes.REQUEST_READ)]
     intake = [scope(PurchasingScopes.REQUEST_INTAKE)]
+    submit = [scope(PurchasingScopes.REQUEST_SUBMIT)]
 
     @router.get("/requests", response_model=CasePage, dependencies=read)
     async def list_requests(
@@ -125,6 +136,17 @@ def build_router(
     ) -> CaseChange:
         change = await svc.requests.submit_form(context, body)
         return await idem.record(change, status_code=201)
+
+    @router.get("/requests/{case_id}/check", response_model=CheckView, dependencies=read)
+    async def check_request(case_id: uuid.UUID, context: Ctx, svc: Svc) -> CheckView:
+        return await svc.approvals.preview(context, case_id)
+
+    @router.post("/requests/{case_id}/submit", response_model=CaseChange, dependencies=submit)
+    async def submit_request_for_approval(
+        case_id: uuid.UUID, body: VersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.approvals.submit(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
 
     @router.get("/mail", response_model=list[InboxItem], dependencies=read)
     async def mailbox(context: Ctx, svc: Svc) -> list[InboxItem]:

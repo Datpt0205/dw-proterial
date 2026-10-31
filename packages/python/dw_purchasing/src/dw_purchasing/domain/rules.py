@@ -15,11 +15,18 @@ written yet (failure-modes #1).
 from __future__ import annotations
 
 import re
-from typing import Annotated, Final, Self
+from decimal import Decimal
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dw_purchasing.domain.requests import Currency, PurchaseRequest, RequiredField
+from dw_purchasing.domain.checks import CrossCheck, FindingCode
+from dw_purchasing.domain.requests import (
+    Currency,
+    Price,
+    PurchaseRequest,
+    RequiredField,
+)
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -48,6 +55,59 @@ class PrFormRules(BaseModel):
         return self
 
 
+# The scopes an approval may be stamped with: the ones the purchasing
+# migrations declare (`PurchasingScopes`, held to this by test). Which band
+# of amounts each decides is the tenant's rule; which person holds each is
+# the platform's catalogue of roles and permission sets.
+ApproveScope = Literal[
+    "purchasing.approve.tier1", "purchasing.approve.tier2", "purchasing.approve.tier3"
+]
+
+
+class ApprovalTier(BaseModel):
+    """Requests up to ``up_to`` (inclusive; None for no limit) are decided by
+    a holder of ``scope``; ``label`` names who that is, as people say it."""
+
+    model_config = _FROZEN
+
+    up_to: Price | None
+    scope: ApproveScope
+    label: str = Field(min_length=1, max_length=80)
+
+
+class ApprovalRules(BaseModel):
+    """Who approves a request, by its amount (DW02 function 2)."""
+
+    model_config = _FROZEN
+
+    # The currency the limits are in; a request in another goes to the last tier.
+    currency: Currency
+    # Ascending limits; the last has none.
+    tiers: tuple[ApprovalTier, ...] = Field(min_length=1, max_length=5)
+    # How far above the reference an estimate may be before it is a finding.
+    price_tolerance_percent: Decimal = Field(ge=0, le=100)
+    # Findings that send a request to the last tier whatever its amount.
+    escalate: frozenset[FindingCode]
+
+    @model_validator(mode="after")
+    def _ascending_and_open_ended(self) -> Self:
+        limits = [tier.up_to for tier in self.tiers]
+        if limits[-1] is not None or any(limit is None for limit in limits[:-1]):
+            raise ValueError("every tier but the last has a limit, and the last has none")
+        bounded = [limit for limit in limits if limit is not None]
+        if bounded != sorted(set(bounded)):
+            raise ValueError("tier limits are strictly ascending")
+        return self
+
+    def tier_for(self, check: CrossCheck) -> ApprovalTier:
+        """The tier that decides ``check``: the last one when the amount is
+        unknown, in another currency, or a finding escalates it; else the
+        first whose limit the amount does not pass."""
+        if check.amount is None or check.currency != self.currency or check.codes & self.escalate:
+            return self.tiers[-1]
+        return next(tier for tier in self.tiers if tier.up_to is None or check.amount <= tier.up_to)
+
+
 class PurchasingRules(BaseModel):
     """One version of the tenant's rules (module docstring)."""
 
@@ -58,6 +118,9 @@ class PurchasingRules(BaseModel):
     # The company's mail domains: only a sender from one of them, verified by
     # the mail system, may be a requester.
     internal_domains: frozenset[str] = Field(min_length=1)
+    # Who approves what. Absent in 1.0.0, which received requests only: a
+    # request is not sent for approval under rules that set no limits.
+    approval: ApprovalRules | None = None
 
     @field_validator("internal_domains")
     @classmethod
