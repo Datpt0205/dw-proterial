@@ -42,7 +42,12 @@ from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.directory import WorkspaceMember
+from dw_platform.application.malware import (
+    MalwareScanPort,
+    ScanVerdict,
+)
 from dw_platform.domain.audit import AuditEvent
+from dw_platform.testing.scanners import NoMalware, ScriptedScanner
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.memory_rules import MemoryRuleVersions, platform_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
@@ -79,7 +84,6 @@ from dw_sales.application.artifacts_service import (
 )
 from dw_sales.application.case_store import ArtifactRecord, CaseOrigin, Stored, WorkerState
 from dw_sales.application.drafting import ArtifactCopy, ArtifactCopyPort, Drafting, People
-from dw_sales.application.malware import MalwareScanPort, ScanVerdict
 from dw_sales.application.order_artifacts import portal_checklist
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.ports import SalesScope
@@ -110,7 +114,6 @@ from dw_sales.domain.quotes import (
     QuoteStatus,
 )
 from dw_sales.evals.world import MemoryStore
-from dw_sales.testing.scanners import NoMalware, ScriptedScanner
 
 pytestmark = pytest.mark.unit
 

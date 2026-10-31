@@ -67,13 +67,13 @@ from dw_platform.application.support_access import (
     SupportAccessContextFactory,
     SupportGrantService,
 )
+from dw_platform.testing.scanners import NoMalware
 from dw_platform.testing.seed_env import sid
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.processing import ProcessingDrain
 from dw_sales.presentation.routes import SalesMount
-from dw_sales.testing.scanners import NoMalware
 
 SECRET = "sales-api-integration-secret-0123456789"
 REPO = Path(__file__).resolve().parents[4]

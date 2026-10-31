@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.malware import MalwareScanPort
 from dw_sales.application.access import Gate, SalesAuthorizationPort
 from dw_sales.application.activity_ports import StepActivityReadPort
 from dw_sales.application.artifact_content import ArtifactWriterPort
@@ -36,7 +37,6 @@ from dw_sales.application.design_text_reading import DesignTextReplies
 from dw_sales.application.finding_explanations import FindingExplanations
 from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
-from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.model_readiness import ModelReadiness
 from dw_sales.application.model_reading import InterpretationPort

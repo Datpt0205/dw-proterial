@@ -48,6 +48,7 @@ from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.authorization import ScopeAuthorizationService
+from dw_platform.testing.scanners import NoMalware
 from dw_sales.adapters.policy_files import SalesPolicies, load_sales_policies
 from dw_sales.adapters.reader_client import ClientSourceView
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
@@ -67,7 +68,6 @@ from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, Caller, Directory
 from dw_sales.testing.draft_store import MemoryRuleDraftStore
-from dw_sales.testing.scanners import NoMalware
 
 _NOW = datetime(2026, 10, 21, 2, 0, tzinfo=UTC)
 # Another workspace of the demo tenant.

@@ -1,8 +1,9 @@
-"""`MalwareScanPort` for tests that run DW1 with no scanner service (ticket 25).
+"""`MalwareScanPort` for tests that run a context with no scanner service
+(sales ticket 25).
 
 Each verdict is the test's to state: `NoMalware` finds nothing in any file,
 `ScriptedScanner` answers per file by its bytes, and anything else it was not
-told about is clean. The real scanner is `dw_sales.adapters.clamd`, tested
+told about is clean. The real scanner is `dw_platform.adapters.clamd`, tested
 against clamd itself in the integration suite.
 """
 
@@ -10,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from dw_sales.application.malware import ScanVerdict
+from dw_platform.application.malware import ScanVerdict
 
 
 class NoMalware:

@@ -17,9 +17,9 @@ import pytest
 
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.malware import ScanVerdict
 from dw_platform.domain.audit import system_actor
 from dw_sales.application.case_store import Settlement
-from dw_sales.application.malware import ScanVerdict
 from dw_sales.application.processing import (
     MAX_ATTEMPTS,
     RETRY_AFTER,

@@ -488,15 +488,15 @@ def build_sales(
     reader, which an import-linter contract holds.
     """
     from dw_kernel.ids import TenantId, WorkspaceId
+    from dw_platform.adapters.clamd import malware_scanner
     from dw_platform.adapters.persistence.repositories import (
         SqlApprovalRepository,
         SqlAuditRepository,
         SqlOutboxRepository,
     )
+    from dw_platform.application.malware import MalwareScanPort
     from dw_sales.adapters.assembly import build_dw1
-    from dw_sales.adapters.clamd import malware_scanner
     from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
-    from dw_sales.application.malware import MalwareScanPort
     from dw_sales.application.ports import SalesScope
     from dw_sales.presentation.routes import SalesMount
 

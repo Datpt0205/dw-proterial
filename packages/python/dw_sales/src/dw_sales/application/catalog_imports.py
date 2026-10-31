@@ -72,6 +72,7 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
 from dw_platform.application.identity import context_from
+from dw_platform.application.malware import MalwareScanPort
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_platform.domain.approval import (
     ApprovalDecision,
@@ -84,7 +85,6 @@ from dw_platform.domain.outbox import OutboxEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.column_mapping import ColumnMatcher
-from dw_sales.application.malware import MalwareScanPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope, Snapshot
 from dw_sales.application.runs import caller_run
 from dw_sales.domain.catalog import ConvertEntry, LmeMonth, Quotation, month_key

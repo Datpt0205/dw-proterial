@@ -20,11 +20,11 @@ from dw_kernel.errors import (
     NotFoundError,
     PermissionDeniedError,
 )
+from dw_platform.application.malware import ScanVerdict
 from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifact_content import BravoUploadLayout, UploadField
-from dw_sales.application.malware import ScanVerdict
 from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.rule_drafts import (
     BRAVO_TEMPLATE_MAPPING,
@@ -456,7 +456,7 @@ def test_an_asker_who_lost_the_scope_gets_nothing_drafted() -> None:
 def test_an_infected_file_fails_and_a_silent_scanner_retries() -> None:
     from dataclasses import replace
 
-    from dw_sales.testing.scanners import ScriptedScanner
+    from dw_platform.testing.scanners import ScriptedScanner
 
     data = template_xlsx(GOLDEN)
     for verdict, outcome in (

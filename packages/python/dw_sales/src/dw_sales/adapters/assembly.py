@@ -43,6 +43,7 @@ from dw_agent_runtime.registry import (
     parse_worker_file,
 )
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.malware import MalwareScanPort
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.mail_folder import LocalDropFolder
@@ -89,7 +90,6 @@ from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
 from dw_sales.application.mail_drop import MailDrop, MailDropNotices, RulesMailIntake
-from dw_sales.application.malware import MalwareScanPort, ScannedInbox
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_calls import TimedInterpretation
 from dw_sales.application.model_readiness import ModelReadiness
@@ -117,6 +117,7 @@ from dw_sales.application.reply_intent import ReplyReader
 from dw_sales.application.rfq_reading import AttachmentTextPort, ModelRequests, RfqModelReader
 from dw_sales.application.rule_drafts import RuleDrafting, RuleDraftSweep
 from dw_sales.application.rules import RuleBookOrderRules, RuleSettlement
+from dw_sales.application.scanned_inbox import ScannedInbox
 from dw_sales.application.services import SalesServices, assemble
 from dw_sales.application.snapshot_catalog import SnapshotSalesCatalog
 from dw_sales.application.source import NoSourceCache, SourceCachePort
