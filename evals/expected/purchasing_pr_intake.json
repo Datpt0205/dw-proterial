@@ -1,0 +1,14 @@
+{
+  "outcomes": {
+    "P01": ["opened", "PR-2611-004", 3],
+    "P02": ["opened", "PR-2611-009", 1],
+    "P03": ["to_person", "sender_not_internal"],
+    "P04": ["to_person", "sender_unverified"],
+    "P05": ["to_person", "no_pr_number"],
+    "P06": ["to_person", "missing:budget_code"]
+  },
+  "missing_evidence": {
+    "invented_budget": "span_not_found",
+    "invented_quantity": "line_unreadable"
+  }
+}

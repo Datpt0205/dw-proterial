@@ -60,15 +60,12 @@ def grader_table() -> dict[str, Grader]:
 
     tables = [GRADERS]
     # ---- BOUNDED CONTEXT GRADERS REGISTER HERE ----------------------------
-    # Purchasing registers its graders here once a dataset needs them: a
-    # table keyed "purchasing.<gate>" in `dw_purchasing.testing`, which `dw_evals`
-    # must never import (import-linter). A name two tables claim stops the run.
-    #
-    #     from dw_purchasing.testing.eval_graders import (
-    #         PURCHASING_GRADERS,
-    #     )
-    #
-    #     tables.append(PURCHASING_GRADERS)
+    # Purchasing's table, keyed "purchasing.<gate>" in `dw_purchasing.testing`,
+    # which `dw_evals` must never import (import-linter). A name two tables
+    # claim stops the run.
+    from dw_purchasing.testing.eval_graders import PURCHASING_GRADERS
+
+    tables.append(PURCHASING_GRADERS)
 
     from dw_sales.evals import GRADERS as SALES_GRADERS
 

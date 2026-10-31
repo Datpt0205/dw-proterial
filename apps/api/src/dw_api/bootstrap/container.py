@@ -138,7 +138,9 @@ class ApiContainer:
     entitlement: PlanEntitlementService
 
     run_store: SqlWorkerRunStore | None = None
-    purchasing_handler: object | None = None
+    # The Purchasing context's mount
+    # (`dw_purchasing.presentation.routes.PurchasingMount`), typed loosely too.
+    purchasing: object | None = None
     # The Sales context's mount (`dw_sales.presentation.routes.SalesMount`),
     # typed loosely so this package names no business context.
     sales: object | None = None

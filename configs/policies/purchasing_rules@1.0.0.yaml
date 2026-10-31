@@ -1,0 +1,25 @@
+schema_version: "1.0"
+policy_id: purchasing_rules
+version: "1.0.0"
+
+# MOCK. The rules DW2 (Mua hàng) runs under until Proterial's own arrive as
+# the tenant's version of this document, stored at runtime and never as an
+# edit to this file (ADR 0013 decision 5). Validated by
+# `dw_purchasing.domain.rules.PurchasingRules`; a case stamps the version it
+# was received under.
+
+# What a purchase request must carry to be received (DW02 function 1).
+pr_form:
+  # Beyond what every request has (number, department, requester, lines):
+  # budget_code, need_by (for the request or every line),
+  # estimated_unit_price (every line).
+  required: [budget_code]
+  max_lines: 50
+  currencies: [VND, USD, JPY]
+  # A request that names no currency is in this one.
+  default_currency: VND
+
+# The company's mail domains: only a sender from one of them, verified by the
+# mail system (SPF, DKIM and DMARC pass), may be a requester. The mock
+# company's domain.
+internal_domains: [seller.example]

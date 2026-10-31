@@ -1,0 +1,25 @@
+schema_version: "1.0"
+# DW2, Mua hàng (Proterial Purchasing): dw_purchasing. The id and version are
+# the ones DW2's model calls are recorded under
+# (dw_purchasing.application.intake.Worker); test_purchasing_configs.py holds
+# them together.
+worker_id: purchasing-dw2
+worker_version: "1.0.0"
+domain: purchasing
+# No graph: DW2's steps are one-call reads and writes through the runtime's
+# model door (dw_agent_runtime.model.interpretation) and run-less approvals.
+graph_version: "1.0.0"
+# purchasing.pr_mail_reading@1.0.0 (DW02 function 1).
+prompt_bundle_version: "1.0.0"
+# No toolset: DW2 offers a model no tool. A turn that reads a mail gets no
+# outbound tool (ADR 0007), and its model door has no way to offer one.
+toolset_version: null
+policy_version: "1.0.0"
+memory_policy_version: "1.0.0"
+# The deployment's own model server (configs/models/onprem.yaml); a process
+# with no such server calls no model and reads no mail.
+default_model_profile: onprem
+supported_channels: [web]
+# A person makes every decision: DW2 reads and drafts, code checks, people
+# approve and send.
+autonomy_level: A1

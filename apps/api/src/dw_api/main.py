@@ -192,15 +192,21 @@ def create_app(container: ApiContainer | None = None) -> FastAPI:
 
     # ---- BOUNDED CONTEXT ROUTERS MOUNT HERE ------------------------------
     # Guarded on the dependency it needs: a context whose wiring is absent
-    # mounts nothing rather than mounting a route that 500s on every call. The
-    # generated sample route takes no identity, so it also stays out of every
-    # deployed profile until the context replaces it with a real one.
-    if container.purchasing_handler is not None and not settings.is_deployed:
-        from dw_purchasing.application.handlers import HandlePurchasing
+    # mounts nothing rather than mounting a route that 500s on every call.
+    if container.purchasing is not None:
+        from dw_api.dependencies.auth import get_access_context
+        from dw_api.dependencies.idempotency import get_idempotent_operation
+        from dw_purchasing.presentation.routes import PurchasingMount
         from dw_purchasing.presentation.routes import build_router as build_purchasing_router
 
-        assert isinstance(container.purchasing_handler, HandlePurchasing)
-        app.include_router(build_purchasing_router(container.purchasing_handler))
+        assert isinstance(container.purchasing, PurchasingMount)
+        app.include_router(
+            build_purchasing_router(
+                container.purchasing.services,
+                access_context=get_access_context,
+                idempotency=get_idempotent_operation,
+            )
+        )
 
     # Guarded on the dependency it needs: a context whose wiring is absent
     # mounts nothing rather than mounting a route that 500s on every call.

@@ -16,6 +16,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd + React Flow map; CSP |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed  |
+| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | Lifts + PR intake built    |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -32,12 +33,10 @@ own file and a row here.
   package; two defects fixed (`89bcd0d49ea6`, route walks); six live evals
   PASS on Qwen3.5-9B; on-prem compose ran (README); scope vs Proterial's
   process in `sales/dw1-scope.md`; deny-list secret set.
-- 10-19..29: rules, master data, follow-ups, board, mail drop (t43), quote→
-  order ledger, nothing fails silently, DW1 learns PO forms (ADR 0006),
-  export-control page withdrawn. `sales.md` State.
-- **Next:** DW1's contract gaps closed 10-30 (Q&A, ADR 0007; reminders).
-  DW2 per `docs/adr/0013`: lift small shared pieces, then scaffold
-  `purchasing`. #13 scans at deployment (RTX PRO 4000). `sales.md`.
+- 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
+  Q&A and reminders (contract gaps closed). `sales.md` State.
+- **Next:** DW2 (`purchasing.md`): ADR 0013 lifts and PR intake done (11-01);
+  cross-check + approval limits, RFQ, draft PO next. #13 at deployment.
 
 ## Decisions Đạt owes
 
@@ -58,6 +57,7 @@ own file and a row here.
   the IP-indemnity clause's wording (carve-outs, cap) with FPT legal;
   DW2 go-live week 4 (contract) vs week 6 (rollout plan); whether the
   rollout plan `.xlsx` stays out of git (repo public).
+- **Purchasing:** tenant rule editor, retention, requester role (`purchasing.md`).
 
 ## How a feature is checked here
 
