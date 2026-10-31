@@ -35,13 +35,9 @@ own file and a row here.
 - 10-19..29: rules, master data, follow-ups, board, mail drop (t43), quote→
   order ledger, nothing fails silently, DW1 learns PO forms (ADR 0006),
   export-control page withdrawn. `sales.md` State.
-- **Next:** AI items 2–8, 10–12 done (#4 PO in the mail body, 10-30);
-  "Gửi cho khách" prepared (no flow until Proterial signs) (`sales.md`).
-  #13 scans at deployment (Qwen3.8-Flash-Next 2-bit + MTP, RTX PRO 4000
-  24 GB). 10-30: DW01's contract gaps closed (status Q&A with sessions,
-  ADR 0007; customer reminders); DW02 not started, its contract gives it
-  4 weeks (next: docs/adr/0013, lift the small shared pieces one
-  commit each, then `make new-context NAME=purchasing`).
+- **Next:** DW1's contract gaps closed 10-30 (Q&A, ADR 0007; reminders).
+  DW2 per `docs/adr/0013`: lift small shared pieces, then scaffold
+  `purchasing`. #13 scans at deployment (RTX PRO 4000). `sales.md`.
 
 ## Decisions Đạt owes
 
