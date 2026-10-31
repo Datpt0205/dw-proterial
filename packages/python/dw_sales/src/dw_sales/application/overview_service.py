@@ -58,7 +58,11 @@ from dw_sales.application.overview_ports import (
 )
 from dw_sales.application.ports import InboxPort, MemberDirectoryPort, SalesScope
 from dw_sales.application.routed_mail import message_owners
-from dw_sales.application.runs import PendingDecisionsPort, awaited, awaiting
+from dw_sales.application.runs import (
+    PendingDecisionsPort,
+    awaited,
+    awaiting,
+)
 from dw_sales.application.views import WorkerStateView, worker_state
 from dw_sales.domain.dispositions import CaseKind, DispositionKind
 from dw_sales.domain.kpi import SalesKpi

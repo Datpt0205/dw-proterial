@@ -53,6 +53,7 @@ from reportlab.pdfgen.canvas import Canvas
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import ConflictError
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
@@ -61,10 +62,7 @@ from dw_sales.adapters.mock.generate_attachments import FONT_PATH
 from dw_sales.adapters.reader_client import ClientTexts
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.model_readiness import bar_verdict
-from dw_sales.application.model_reading import (
-    DescriptionReader,
-    ModelUnavailableError,
-)
+from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.quotation import RequestNotExtractedError
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION, RequestRead, RfqModelReader
 from dw_sales.domain.catalog import ConvertEntry, Customer, Item

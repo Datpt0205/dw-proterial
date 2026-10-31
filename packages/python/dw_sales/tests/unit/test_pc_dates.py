@@ -10,8 +10,11 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_kernel.errors import ConflictError, PermissionDeniedError
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.pc_dates import PC_DATES, PROMPT_TOKENS, reads_as
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS, READER

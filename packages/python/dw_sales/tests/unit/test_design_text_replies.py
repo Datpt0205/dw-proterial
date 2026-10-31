@@ -9,13 +9,16 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_kernel.errors import ConflictError, PermissionDeniedError
 from dw_sales.application.design_text_reading import (
     DESIGN_TEXT_REPLY,
     PROMPT_TOKENS,
     ModelDesignReply,
 )
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.domain.quotes import QuoteStatus
 from dw_sales.evals.graders import CALLERS, DIEU, READER
 from dw_sales.evals.recorded import Recorded

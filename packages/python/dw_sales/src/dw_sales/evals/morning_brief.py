@@ -29,13 +29,13 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_sales.adapters.policy_files import rule_book
 from dw_sales.application.brief_writing import MORNING_BRIEF, BriefWriter
 from dw_sales.application.followups import BRIEF, FollowupLane
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.application.ports import SalesScope
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, Directory, SampleSet, open_world

@@ -43,13 +43,13 @@ from typing import Annotated, Any, Final, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
+from dw_agent_runtime.model.interpretation import estimated_tokens
 from dw_sales.application.artifact_content import (
     REQUIRED_UPLOAD_FIELDS,
     UPLOAD_HEADER_MAX,
     BravoUploadLayout,
     UploadField,
 )
-from dw_sales.application.model_reading import estimated_tokens
 from dw_sales.application.source import SheetCell, SheetGrid
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)

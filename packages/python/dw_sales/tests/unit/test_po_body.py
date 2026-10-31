@@ -15,10 +15,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_sales.application.case_store import MESSAGE_TEXT
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.order_intake import NO_DOCUMENT
 from dw_sales.application.po_body_reading import PO_BODY_EXTRACTION, PROMPT_TOKENS
 from dw_sales.application.source import required_regions

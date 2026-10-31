@@ -39,6 +39,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Final, Self
 
+from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_agent_runtime.ports import RunAllowancePort
 from dw_agent_runtime.registry import parse_worker_file
 from dw_agent_runtime.testing.memory_runtime import MemoryApprovals, MemoryRuntime
@@ -102,7 +103,7 @@ from dw_sales.application.layouts import (
 )
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_readiness import ModelReadiness
-from dw_sales.application.model_reading import DescriptionReader, InterpretationPort
+from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.po_body_reading import PoBodyReader
 from dw_sales.application.ports import InboxPort, SalesScope

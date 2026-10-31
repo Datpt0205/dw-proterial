@@ -9,8 +9,11 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_kernel.errors import NotFoundError, PermissionDeniedError
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.thread_summaries import (
     PROMPT_TOKENS,
     THREAD_SUMMARY,

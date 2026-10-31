@@ -30,9 +30,13 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+    PromptRef,
+)
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_evals.graders import Grader, GraderContext, GradeResult
-from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 
 
 def answer_key(prompt: PromptRef, inputs: Mapping[str, str]) -> str:

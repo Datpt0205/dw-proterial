@@ -31,13 +31,13 @@ from typing import Final
 from pydantic import BaseModel, ConfigDict, Field
 
 from dw_agent_runtime.contracts import RunContext
-from dw_kernel.errors import QuotaExceededError
-from dw_sales.application.model_reading import (
+from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
     estimated_tokens,
 )
+from dw_kernel.errors import QuotaExceededError
 from dw_sales.domain.master_data import SPECS, CatalogList, ImportedTable, TableRow
 
 # The prompt the columns are matched with. Its file is

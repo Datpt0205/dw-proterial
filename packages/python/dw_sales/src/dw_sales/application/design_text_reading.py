@@ -33,20 +33,20 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from dw_kernel.errors import ConflictError, NotFoundError, QuotaExceededError
-from dw_kernel.ports import IdGenerator, UtcClock
-from dw_platform.application.access_context import AccessContext
-from dw_sales.application.access import Gate, SalesScopes, sales_scope
-from dw_sales.application.case_store import SalesUnitOfWorkFactory
-from dw_sales.application.model_reading import (
+from dw_agent_runtime.context import caller_run
+from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
     estimated_tokens,
 )
+from dw_kernel.errors import ConflictError, NotFoundError, QuotaExceededError
+from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.application.access_context import AccessContext
+from dw_sales.application.access import Gate, SalesScopes, sales_scope
+from dw_sales.application.case_store import SalesUnitOfWorkFactory
 from dw_sales.application.ports import InboxPort, SalesScope
 from dw_sales.application.quotation import QuotationService
-from dw_sales.application.runs import caller_run
 from dw_sales.application.support import person_event, save_quote
 from dw_sales.application.views import CaseChangeView, quote_change
 from dw_sales.domain.anchors import MessageText, SourceAnchor, TextRange

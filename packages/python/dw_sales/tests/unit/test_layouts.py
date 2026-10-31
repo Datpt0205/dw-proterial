@@ -25,6 +25,10 @@ from pydantic import ValidationError
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.errors import (
     ConflictError,
@@ -42,7 +46,6 @@ from dw_sales.application.layouts import (
     LAYOUT_PROPOSAL,
     PROMPT_TOKENS,
 )
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.domain.layouts import (
     LabelCell,
     LayoutMapping,

@@ -9,9 +9,12 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_sales.application.customer_reminders import CUSTOMER_REMINDER, PROMPT_TOKENS
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.evals.graders import AN, CALLERS, OUTSIDER, READER
 from dw_sales.evals.recorded import Recorded

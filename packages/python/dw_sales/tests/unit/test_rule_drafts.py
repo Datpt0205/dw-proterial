@@ -13,6 +13,10 @@ from typing import Any, get_args
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_kernel.errors import (
     DomainError,
@@ -25,7 +29,6 @@ from dw_sales.adapters.reader_wire import ReaderOp, ReaderReply, ReaderRequest
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.artifact_content import BravoUploadLayout, UploadField
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.application.rule_drafts import (
     BRAVO_TEMPLATE_MAPPING,
     KEPT_FOR,

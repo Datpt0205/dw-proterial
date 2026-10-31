@@ -30,9 +30,12 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    PromptRef,
+)
 from dw_kernel.errors import NotFoundError
 from dw_sales.application.model_readiness import StepModelPort
-from dw_sales.application.model_reading import InterpretationPort, PromptRef
 from dw_sales.domain.activity import ModelCall
 
 _LOG = logging.getLogger("dw_sales.model")

@@ -9,6 +9,10 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import (
+    ModelUnavailableError,
+    estimated_tokens,
+)
 from dw_kernel.errors import NotFoundError, PermissionDeniedError
 from dw_sales.application.finding_explanations import (
     FINDING_EXPLANATION,
@@ -16,7 +20,6 @@ from dw_sales.application.finding_explanations import (
     ModelExplanation,
     unsupported_figures,
 )
-from dw_sales.application.model_reading import ModelUnavailableError, estimated_tokens
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.graders import AN, CALLERS, READER
 from dw_sales.evals.recorded import Recorded

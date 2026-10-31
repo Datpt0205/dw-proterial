@@ -16,9 +16,9 @@ from typing import Any
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext
 from dw_evals.runner import load_dataset
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.evals import GRADERS
 from dw_sales.evals.recorded import Observed, Recorded, load_answers
 

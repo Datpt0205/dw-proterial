@@ -19,6 +19,7 @@ import yaml
 from pydantic import ValidationError
 
 from dw_agent_runtime.adapters.run_store import RunStatus
+from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.errors import (
     ConflictError,
@@ -29,9 +30,12 @@ from dw_kernel.errors import (
 from dw_kernel.pagination import PageQuery, page_request
 from dw_platform.application.authorization import ApprovalAudience, ScopeAuthorizationService
 from dw_platform.domain.approval import ApprovalStatus
-from dw_sales.application.model_reading import InterpretationPort
 from dw_sales.application.quotes_service import PricedLine
-from dw_sales.application.runs import DECIDE_SCOPES, DecisionType, subject_of
+from dw_sales.application.runs import (
+    DECIDE_SCOPES,
+    DecisionType,
+    subject_of,
+)
 from dw_sales.application.support import DW1_WORKER_ID, DW1_WORKER_VERSION
 from dw_sales.domain.catalog import LmeBand
 from dw_sales.domain.description_reading import (

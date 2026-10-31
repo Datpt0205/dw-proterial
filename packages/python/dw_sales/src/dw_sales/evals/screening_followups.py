@@ -22,9 +22,9 @@ import json
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.application.screening_followups import SCREENING_FOLLOWUP, FollowupDraftView
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import BETA, SampleSet, open_world

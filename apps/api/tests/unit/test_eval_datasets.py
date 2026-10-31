@@ -15,10 +15,10 @@ from types import ModuleType
 
 import pytest
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals import runner
 from dw_evals.dataset import EvalDataset
 from dw_evals.runner import EvalReport, load_dataset, run_dataset
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.evals.recorded import Observed, Recorded
 
 pytestmark = pytest.mark.unit

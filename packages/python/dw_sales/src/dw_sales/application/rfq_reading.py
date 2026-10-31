@@ -29,13 +29,13 @@ from datetime import date
 from typing import Any, Final, Literal, Protocol
 
 from dw_agent_runtime.contracts import RunContext
-from dw_sales.application.model_reading import (
-    DescriptionReader,
+from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,
     estimated_tokens,
 )
+from dw_sales.application.model_reading import DescriptionReader
 from dw_sales.application.order_ports import ModelStepGatePort, OrderRulesPort
 from dw_sales.application.ports import SalesCatalogPort, SalesScope
 from dw_sales.domain.anchors import MessageText

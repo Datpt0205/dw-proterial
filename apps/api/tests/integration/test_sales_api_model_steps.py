@@ -23,10 +23,10 @@ from sales_flow import process, quote
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import PromptRef
 from dw_agent_runtime.model.prompts import PromptRegistry
 from dw_agent_runtime.ports import ModelRequest
 from dw_platform.testing.seed_env import sid
-from dw_sales.application.model_reading import PromptRef
 from dw_sales.evals.recorded import answer_key, load_answers
 
 pytestmark = pytest.mark.integration

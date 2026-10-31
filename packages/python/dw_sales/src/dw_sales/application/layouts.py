@@ -46,6 +46,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
 from dw_agent_runtime.contracts import RunContext
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+    PromptRef,
+    estimated_tokens,
+)
 from dw_kernel.errors import ConflictError, DomainError, NotFoundError, PermissionDeniedError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
@@ -55,12 +61,6 @@ from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus, decided
 from dw_platform.domain.audit import AuditEvent
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import SalesUnitOfWork, SalesUnitOfWorkFactory
-from dw_sales.application.model_reading import (
-    InterpretationPort,
-    ModelUnavailableError,
-    PromptRef,
-    estimated_tokens,
-)
 from dw_sales.application.order_ports import OrderRulesPort
 from dw_sales.application.ports import InboxPort, SalesCatalogPort, SalesScope
 from dw_sales.application.support import decided

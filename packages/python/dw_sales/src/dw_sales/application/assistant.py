@@ -35,17 +35,21 @@ from typing import Any, Final, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.context import caller_run
 from dw_agent_runtime.model.figure_check import names_amount, unsupported
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+    PromptRef,
+)
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes
 from dw_sales.application.artifact_content import local_time
-from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.orders_service import OrderQueries
 from dw_sales.application.overview_service import OverviewService, WorkItem
 from dw_sales.application.quotes_service import QuoteQueries
-from dw_sales.application.runs import caller_run
 from dw_sales.application.views import OrderSummaryView, QuoteSummaryView
 from dw_sales.domain.assistant import (
     ACTION,

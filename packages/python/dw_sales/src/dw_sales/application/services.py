@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.malware import MalwareScanPort
 from dw_sales.application.access import Gate, SalesAuthorizationPort
@@ -39,7 +40,6 @@ from dw_sales.application.inbox_service import InboxProcessing, InboxQueries
 from dw_sales.application.layouts import LayoutChecks, LayoutDecisions, LayoutService
 from dw_sales.application.master_data_service import MasterDataService
 from dw_sales.application.model_readiness import ModelReadiness
-from dw_sales.application.model_reading import InterpretationPort
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ConvertLedgerPort
 from dw_sales.application.orders_service import OrderCommands, OrderQueries
@@ -62,7 +62,11 @@ from dw_sales.application.quotes_service import QuoteCommands, QuoteQueries
 from dw_sales.application.routed_mail import RoutedMailService
 from dw_sales.application.rule_drafts import RuleDraftService, RuleDraftUnitOfWorkFactory
 from dw_sales.application.rules import RuleDecisions, SalesRulesService, TenantRuleBook
-from dw_sales.application.runs import Dw1Runs, Dw1RunsPort, PendingDecisionsPort
+from dw_sales.application.runs import (
+    Dw1Runs,
+    Dw1RunsPort,
+    PendingDecisionsPort,
+)
 from dw_sales.application.screening_followups import ScreeningFollowups
 from dw_sales.application.sender_customers import SenderCustomers, SenderLedgerPort
 from dw_sales.application.source import SourceCachePort, SourceService, SourceViewPort

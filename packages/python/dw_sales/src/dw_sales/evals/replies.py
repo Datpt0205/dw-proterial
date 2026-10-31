@@ -38,12 +38,12 @@ from typing import Any
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import ConflictError
 from dw_sales.adapters.mock import MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR, read_records
 from dw_sales.application.model_readiness import bar_verdict
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.application.reply_intent import REPLY_INTENT, ReplyReader
 from dw_sales.application.runs import subject_of
 from dw_sales.application.threads import AskedAbout, ThreadedCase, ThreadLinks, question

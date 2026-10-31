@@ -23,10 +23,10 @@ import json
 from collections.abc import Coroutine
 from typing import Any
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError, PermissionDeniedError
 from dw_sales.application.finding_explanations import FINDING_EXPLANATION
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.domain.orders import OrderCase
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import BETA, SampleSet, World, open_world

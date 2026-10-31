@@ -27,7 +27,10 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.approval import ApprovalRequest, ApprovalStatus
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.rules import RuleKey
-from dw_sales.application.runs import APPROVAL_PREFIX, subject_of
+from dw_sales.application.runs import (
+    APPROVAL_PREFIX,
+    subject_of,
+)
 from dw_sales.domain.dispositions import CaseKind
 from dw_sales.domain.orders import Actor
 from dw_sales.evals.graders import AN as _AN

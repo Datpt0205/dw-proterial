@@ -53,6 +53,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final, Protocol
 
+from dw_agent_runtime.context import WEB_CHANNEL
 from dw_kernel.errors import (
     ConflictError,
     EntitlementDeniedError,
@@ -75,7 +76,6 @@ from dw_sales.application.case_store import (
 )
 from dw_sales.application.inbox_service import ON_A_CASE
 from dw_sales.application.ports import InboxPort, SalesScope
-from dw_sales.application.runs import WEB_CHANNEL
 from dw_sales.application.views import MessageDispositionView, ProcessingJobView, processing_job
 from dw_sales.application.worker_service import require_running
 from dw_sales.domain.dispositions import DispositionKind

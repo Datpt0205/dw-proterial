@@ -29,11 +29,11 @@ from typing import Any
 
 from openpyxl import Workbook
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
 from dw_sales.application.catalog_imports import CatalogPreviewView
 from dw_sales.application.column_mapping import CATALOG_COLUMNS
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.domain.master_data import SPECS, CatalogList
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import ALPHA, BETA, SampleSet, World, open_world

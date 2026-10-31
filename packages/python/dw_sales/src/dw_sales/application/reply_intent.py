@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from dw_agent_runtime.contracts import RunContext
-from dw_sales.application.model_reading import (
+from dw_agent_runtime.model.interpretation import (
     InterpretationPort,
     ModelUnavailableError,
     PromptRef,

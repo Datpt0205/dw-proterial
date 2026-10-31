@@ -60,7 +60,10 @@ from dw_sales.application.quotation import (
     RequestNotExtractedError,
 )
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
-from dw_sales.application.runs import PendingDecisionsPort, withdraw_if_left
+from dw_sales.application.runs import (
+    PendingDecisionsPort,
+    withdraw_if_left,
+)
 from dw_sales.application.support import (
     DW1_WORKER_ID,
     DW1_WORKER_VERSION,

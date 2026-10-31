@@ -29,16 +29,20 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dw_agent_runtime.context import caller_run
 from dw_agent_runtime.model.figure_check import names_amount, unsupported
+from dw_agent_runtime.model.interpretation import (
+    InterpretationPort,
+    ModelUnavailableError,
+    PromptRef,
+)
 from dw_kernel.errors import NotFoundError, QuotaExceededError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.artifact_content import local_time
-from dw_sales.application.model_reading import InterpretationPort, ModelUnavailableError, PromptRef
 from dw_sales.application.ports import SalesCatalogPort
 from dw_sales.application.quotation import QuotationService
-from dw_sales.application.runs import caller_run
 from dw_sales.domain.process import DW_NAMES
 
 # The prompt the mail is drafted with. Its file is

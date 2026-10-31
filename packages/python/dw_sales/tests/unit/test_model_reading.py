@@ -15,18 +15,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic import BaseModel
 
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.budget import BudgetExceededError
-from dw_agent_runtime.ports import ModelOutputInvalidError, ModelRequest
-from dw_kernel.errors import InfrastructureError, NotFoundError
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import Uuid4Generator
 from dw_sales.adapters.assembly import step_model
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.mock.fixtures import DATA_DIR
-from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.adapters.order_rules import PlatformOrderRules, load_tenant_order_rules
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import ClientPoReaders, ClientQuoteForms
@@ -35,12 +32,10 @@ from dw_sales.application.model_readiness import ModelMeasurement, ModelReadines
 from dw_sales.application.model_reading import (
     DESCRIPTION_ATTRIBUTES,
     DescriptionReader,
-    ModelUnavailableError,
 )
 from dw_sales.application.order_intake import OrderIntake
 from dw_sales.application.order_ports import ModelStepGatePort
 from dw_sales.application.ports import SalesScope
-from dw_sales.domain.description_reading import ModelDescriptionReading
 from dw_sales.domain.order_checks import ModelStep, OrderRules
 from dw_sales.domain.orders import FindingCode, MappingStatus, OrderCase
 from dw_sales.evals.descriptions import Replayed
@@ -271,65 +266,3 @@ async def test_a_spent_budget_stops_the_run_rather_than_reading_as_not_understoo
     model = Replayed(failure=BudgetExceededError("run budget exceeded"))
     with pytest.raises(BudgetExceededError):
         await _case(_intake(model), "M36")
-
-
-# ------------------------------------------------ the gateway's adapter --
-
-
-class _Gateway:
-    def __init__(self, failure: Exception | None = None) -> None:
-        self.failure = failure
-        self.requests: list[tuple[ModelRequest, RunContext]] = []
-
-    async def generate_structured(
-        self, request: ModelRequest, output_type: type[Any], *, run_context: RunContext
-    ) -> Any:
-        self.requests.append((request, run_context))
-        if self.failure is not None:
-            raise self.failure
-        return output_type.model_validate({"lines": []})
-
-
-async def _interpret(gateway: _Gateway) -> BaseModel:
-    return await GatewayInterpretation(gateway, "onprem", 6000).interpret(
-        DESCRIPTION_ATTRIBUTES,
-        {"lines": "[]", "vocabulary": "{}"},
-        ModelDescriptionReading,
-        run=RUN,
-        max_output_tokens=400,
-    )
-
-
-async def test_the_adapter_asks_the_gateway_on_dw1s_profile_for_the_run() -> None:
-    gateway = _Gateway()
-    await _interpret(gateway)
-
-    ((request, run),) = gateway.requests
-    assert run is RUN
-    assert (request.prompt_id, request.prompt_version) == (
-        DESCRIPTION_ATTRIBUTES.prompt_id,
-        DESCRIPTION_ATTRIBUTES.version,
-    )
-    assert (request.model_profile, request.task, request.max_output_tokens) == (
-        "onprem",
-        "structured_extraction",
-        400,
-    )
-
-
-@pytest.mark.parametrize(
-    "failure",
-    [
-        InfrastructureError("model provider timed out"),
-        ModelOutputInvalidError("model output failed schema validation"),
-        NotFoundError("model provider not configured"),
-    ],
-)
-async def test_every_way_of_getting_no_answer_is_model_unavailable(failure: Exception) -> None:
-    with pytest.raises(ModelUnavailableError):
-        await _interpret(_Gateway(failure))
-
-
-async def test_a_budget_refusal_passes_through_the_adapter() -> None:
-    with pytest.raises(BudgetExceededError):
-        await _interpret(_Gateway(BudgetExceededError("run budget exceeded")))

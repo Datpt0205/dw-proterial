@@ -37,6 +37,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pydantic import BaseModel
 
+from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation
 from dw_agent_runtime.adapters.telemetry_usage import TelemetryUsageRecorder
 from dw_agent_runtime.contracts import RunContext
 from dw_agent_runtime.model.gateway import ModelUsage, RoutingModelGateway
@@ -47,7 +48,6 @@ from dw_api.exception_handlers import register_exception_handlers
 from dw_observability.metrics import DW_MODEL_COST_USD_TOTAL, DW_MODEL_TOKENS_TOTAL
 from dw_observability.otel import OtelTelemetry
 from dw_platform.application.access_context import AccessContext
-from dw_sales.adapters.model_interpretation import GatewayInterpretation
 from dw_sales.application.support import DW1_WORKER_ID, DW1_WORKER_VERSION
 from dw_sales.application.telemetry import SPAN_ATTRIBUTES, SalesSpan
 from dw_sales.domain.description_reading import ModelDescriptionLine

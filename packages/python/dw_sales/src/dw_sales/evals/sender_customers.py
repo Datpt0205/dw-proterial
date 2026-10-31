@@ -26,9 +26,9 @@ from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any
 
+from dw_agent_runtime.model.interpretation import ModelUnavailableError
 from dw_evals.graders import GraderContext, GradeResult
 from dw_kernel.errors import NotFoundError
-from dw_sales.application.model_reading import ModelUnavailableError
 from dw_sales.application.sender_customers import SENDER_CUSTOMER, SenderCustomerView
 from dw_sales.evals.recorded import Recorded, latency
 from dw_sales.evals.world import BETA, SampleWith, open_world

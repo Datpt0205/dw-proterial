@@ -32,7 +32,7 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from dw_sales.application.model_reading import PromptRef
+from dw_agent_runtime.model.interpretation import PromptRef
 from dw_sales.application.rules import OVERRIDABLE, RuleKey
 
 # The prompt a change in words is read with. Its file is
