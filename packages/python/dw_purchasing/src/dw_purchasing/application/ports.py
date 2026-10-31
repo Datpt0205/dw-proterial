@@ -17,9 +17,12 @@ from enum import StrEnum
 from typing import Protocol
 
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.authorization import ApprovalAudience
+from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
 from dw_platform.domain.audit import AuditEvent
 from dw_platform.domain.messages import InboundMessage
-from dw_purchasing.domain.requests import PurchaseCase
+from dw_purchasing.domain.cases import PurchaseCase
+from dw_purchasing.domain.checks import MasterData
 from dw_purchasing.domain.rules import PurchasingRules
 
 
@@ -50,6 +53,15 @@ class CasesPort(Protocol):
 
     async def get(self, case_id: uuid.UUID) -> PurchaseCase | None: ...
 
+    async def save(self, case: PurchaseCase, *, expected_version: int) -> None:
+        """Replaces the case stored at ``expected_version``; refuses (409) a
+        case another writer moved on meanwhile."""
+        ...
+
+    async def by_approval(self, approval_id: uuid.UUID) -> PurchaseCase | None:
+        """The case sent to this approval, if any."""
+        ...
+
     async def page(
         self, *, limit: int, before: tuple[datetime, uuid.UUID] | None
     ) -> Sequence[PurchaseCase]:
@@ -71,6 +83,22 @@ class AuditPort(Protocol):
     async def append(self, event: AuditEvent) -> None: ...
 
 
+class ApprovalsPort(Protocol):
+    """The platform's approvals, as a run-less Purchasing decision uses them:
+    opened in the case's transaction, read back when the decision is carried
+    out (the narrow side of `ApprovalRepositoryPort`)."""
+
+    async def add(self, request: ApprovalRequest) -> None: ...
+
+    async def get(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalRequest | None: ...
+
+    async def latest_decision(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalDecision | None: ...
+
+
 class PurchasingWork(Protocol):
     """One transaction, bound to one tenant and workspace."""
 
@@ -82,6 +110,9 @@ class PurchasingWork(Protocol):
 
     @property
     def audit(self) -> AuditPort: ...
+
+    @property
+    def approvals(self) -> ApprovalsPort: ...
 
 
 PurchasingUnitOfWork = Callable[[AccessContext], AbstractAsyncContextManager[PurchasingWork]]
@@ -101,6 +132,13 @@ class PlatformRulesPort(Protocol):
     """The rules that ship in ``configs/policies`` (the platform layer)."""
 
     def current(self) -> PurchasingRules: ...
+
+
+class MasterDataPort(Protocol):
+    """What the company knows (items, quotations on file, past prices,
+    budgets), for the caller's tenant and workspace."""
+
+    async def for_context(self, context: AccessContext) -> MasterData: ...
 
 
 class TenantPolicyPort(Protocol):

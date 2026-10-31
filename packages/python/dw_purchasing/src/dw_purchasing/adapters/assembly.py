@@ -21,9 +21,19 @@ from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.errors import ConfigError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_purchasing.adapters.mock.inbox import MockInbox
-from dw_purchasing.adapters.persistence.store import AuditFactory, SqlPurchasingStore
+from dw_purchasing.adapters.mock.master_data import MockMasterData
+from dw_purchasing.adapters.persistence.store import (
+    ApprovalsFactory,
+    AuditFactory,
+    SqlPurchasingStore,
+)
 from dw_purchasing.adapters.policy_files import PolicyFiles
 from dw_purchasing.application.access import Gate, PurchasingAuthorizationPort
+from dw_purchasing.application.approvals import (
+    RequestApprovals,
+    RequestDecisions,
+    RequestSettlement,
+)
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.ports import TenantPolicyPort
 from dw_purchasing.application.rules import RuleBook
@@ -48,6 +58,7 @@ def build_purchasing(
     configs: Path,
     session_factory: async_sessionmaker[AsyncSession],
     audit: AuditFactory,
+    approvals: ApprovalsFactory,
     authorization: PurchasingAuthorizationPort,
     tenant_policies: TenantPolicyPort,
     model: ModelGateway | None,
@@ -56,10 +67,12 @@ def build_purchasing(
 ) -> PurchasingServices:
     worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
     files = PolicyFiles.load(configs / "policies")
+    store = SqlPurchasingStore(session_factory, audit, approvals)
+    book = RuleBook(files, tenant_policies, files.versions)
     requests = PurchaseRequests(
-        uow=SqlPurchasingStore(session_factory, audit),
+        uow=store,
         gate=Gate(authorization),
-        rules=RuleBook(files, tenant_policies, files.versions),
+        rules=book,
         inbox=MockInbox.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1]),
         model=(
             None
@@ -70,4 +83,35 @@ def build_purchasing(
         clock=clock,
         ids=ids,
     )
-    return PurchasingServices(requests=requests)
+    return PurchasingServices(
+        requests=requests,
+        approvals=RequestApprovals(
+            uow=store,
+            gate=Gate(authorization),
+            rules=book,
+            master=MockMasterData.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1]),
+            clock=clock,
+            ids=ids,
+        ),
+    )
+
+
+def request_decisions(
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+) -> RequestDecisions:
+    """The decision guard the API's approval flow registers under
+    `APPROVAL_PREFIX`."""
+    return RequestDecisions(SqlPurchasingStore(session_factory, audit, approvals))
+
+
+def request_settlement(
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> RequestSettlement:
+    """What the worker's handler for `REQUEST_DECIDED` carries a decision out with."""
+    return RequestSettlement(SqlPurchasingStore(session_factory, audit, approvals), clock, ids)

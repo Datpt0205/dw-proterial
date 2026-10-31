@@ -58,21 +58,58 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
       the in-memory store now refuses it too); Sales' route walks lacked
       `session_id` since `22da090` (`4031bc8`).
 
+- 2026-11-01, **slice 2 — cross-check + approval limits (DW02 function 2), done**:
+    - `GET /requests/{id}/check` (read) and `POST /requests/{id}/submit`
+      (`purchasing.request.submit`, `case_version`, Idempotency-Key).
+      `domain.checks.cross_check` over master data behind `MasterDataPort`
+      (mock `data/master.json`, demo scope only): reference price = lowest
+      valid quotation, else last price paid, else the estimate; amount
+      unknown when a line has none; findings as codes.
+    - `purchasing_rules@1.1.0` adds `approval`: bands (`up_to` inclusive, the
+      last open), the scope each is decided by
+      (`purchasing.approve.tier1..3`, the migration's), a label, the price
+      tolerance and the findings that escalate to the last tier. Unknown
+      amount or another currency → the last tier. Rules without `approval`
+      send nothing (409 `no_limits`).
+    - Sending stamps the check and `ApprovalAsked` (approval id, scope,
+      label, version, sender) on the case and opens a run-less platform
+      approval `purchasing.request` in the same transaction, `required_scope`
+      the tier's, makers = receiver + sender. The API makes `purchasing.`
+      strict and registers `RequestDecisions` (refuses another approval of
+      the case or a stale `subject_version`); the worker settles
+      `purchasing.request.decided` (`RequestSettlement`: outcome from the
+      approval row, read with the stamped scope, idempotent).
+    - Migration `911fdfb96d5e`: statuses, generated `approval_id` (unique per
+      tenant), `ck_cases_sent`; buyer + submit; role `purchasing_head`
+      (tier1, tier2); permission set `purchasing_director_approver` (tier3).
+    - Checks: unit 75 + API routes 14 + worker handler; integration 10 (the
+      platform's own approval flow: maker refused, empty reason refused,
+      another tier's holder finds nothing, stale version refused by the
+      guard, outbox event, settlement idempotent, another tenant finds
+      nothing; `ck_cases_sent`; roles and permission sets cover every
+      approve scope); eval `purchasing_pr_approval@1.0.0` 4/4 (red with
+      escalation off). Mutations, each red: expired quote, highest quote,
+      partial-sum amount, other-currency price, tolerance, over budget,
+      unknown-amount escalation, escalation, inclusive limit, tier shape,
+      submit gate, stale version, sent twice, tier scope stamp, makers, guard
+      version, guard approval id, idempotent settle, pending settle, stamp
+      not rules at settle, master-data scope, API strict prefix, API guard,
+      worker handler. One guard (status beside version) was redundant and
+      removed: every write moves the version.
+
 ## Next
 
-1. Slice 2 — cross-check + approval limits (function 2): purchase history,
-   quotes on file and budget from mock master data behind a port; findings;
-   the approval tier from `purchasing_rules` (limits and the scope that
-   decides each), stamped on the case; a run-less `purchasing.request`
-   approval, strict, maker excluded; `purchasing.request.decided` settled in
-   the worker.
-2. Slice 3 — RFQ to suppliers + comparison table (function 3).
-3. Slice 4 — draft PO + Bravo import file (function 4). Stop and report.
-4. Then: confirmation/delivery tracking (5), brief + Q&A (6), the web pages.
+1. Slice 3 — RFQ to suppliers + comparison table (function 3).
+2. Slice 4 — draft PO + Bravo import file (function 4). Stop and report.
+3. Then: confirmation/delivery tracking (5), brief + Q&A (6), the web pages.
 
 ## Not done, on purpose
 
 - No web page yet: the API first, the pages after slice 4.
+- A purchase approval is decided on the web only: no subject version is
+  registered for the Zalo decision command.
+- A sent request cannot be withdrawn or edited yet; a rejected one stays
+  rejected (a new request is a new case).
 - The Excel PR form and scanned paper: the reader's registry is Sales' until
   it is split (ADR 0013 decision 2). Bravo as a source: no connection.
 - No offsets kept for a mail's spans (DW1 keeps anchors): the mailbox is the

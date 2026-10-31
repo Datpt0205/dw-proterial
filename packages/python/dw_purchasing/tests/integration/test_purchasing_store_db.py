@@ -28,7 +28,10 @@ from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.adapters.persistence.policy_overrides import SqlPolicyOverrideRepository
-from dw_platform.adapters.persistence.repositories import SqlAuditRepository
+from dw_platform.adapters.persistence.repositories import (
+    SqlApprovalRepository,
+    SqlAuditRepository,
+)
 from dw_platform.domain.audit import AuditEvent
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.persistence.store import SqlPurchasingStore
@@ -37,11 +40,13 @@ from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.ports import Disposition, MessageOutcome
 from dw_purchasing.application.rules import RuleBook
-from dw_purchasing.domain.requests import (
+from dw_purchasing.domain.cases import (
     CaseStatus,
-    PrLine,
     PrSource,
     PurchaseCase,
+)
+from dw_purchasing.domain.requests import (
+    PrLine,
     PurchaseRequest,
 )
 from dw_purchasing.testing.world import Authz, ScriptedModel, caller
@@ -77,7 +82,7 @@ def _case(*, source: PrSource = PrSource.FORM, ref: str | None = None) -> Purcha
 
 
 def _store(sessions: async_sessionmaker[AsyncSession]) -> SqlPurchasingStore:
-    return SqlPurchasingStore(sessions, SqlAuditRepository)
+    return SqlPurchasingStore(sessions, SqlAuditRepository, SqlApprovalRepository)
 
 
 async def test_a_case_and_an_outcome_round_trip_in_their_own_workspace_only(
@@ -207,10 +212,31 @@ async def test_the_roles_hold_purchasing_scopes_and_no_platform_role_does(
             for row in await conn.execute(sa.text("SELECT key, scopes FROM platform.roles"))
         }
     every = {s.value for s in PurchasingScopes}
-    assert roles["purchasing_buyer"] == every
-    assert roles["purchasing_viewer"] == {PurchasingScopes.REQUEST_READ.value}
+    read = PurchasingScopes.REQUEST_READ.value
+    assert roles["purchasing_buyer"] == {
+        read,
+        PurchasingScopes.REQUEST_INTAKE.value,
+        PurchasingScopes.REQUEST_SUBMIT.value,
+    }
+    assert roles["purchasing_viewer"] == {read}
+    assert roles["purchasing_head"] == {
+        read,
+        PurchasingScopes.APPROVE_TIER1.value,
+        PurchasingScopes.APPROVE_TIER2.value,
+    }
     leaking = {k for k, s in roles.items() if not k.startswith("purchasing_") and s & every}
     assert leaking == set()
+    async with migrator.connect() as conn:
+        sets = {
+            row.key: set(row.scopes)
+            for row in await conn.execute(
+                sa.text("SELECT key, scopes FROM platform.permission_sets")
+            )
+        }
+    assert sets["purchasing_director_approver"] == {PurchasingScopes.APPROVE_TIER3.value}
+    # Every scope a rule may stamp is held by someone the catalogue names.
+    held = set().union(*roles.values(), *sets.values())
+    assert every <= held
 
 
 async def test_the_service_on_the_database_audits_and_reads_the_tenants_own_rules(

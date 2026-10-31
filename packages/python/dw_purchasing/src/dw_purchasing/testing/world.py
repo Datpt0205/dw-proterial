@@ -22,8 +22,14 @@ from dw_kernel.errors import PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_purchasing.adapters.mock.inbox import MockInbox
+from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.policy_files import PolicyFiles
 from dw_purchasing.application.access import Gate, PurchasingScopes
+from dw_purchasing.application.approvals import (
+    RequestApprovals,
+    RequestDecisions,
+    RequestSettlement,
+)
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.rules import RuleBook
 from dw_purchasing.testing.memory import MemoryStore
@@ -116,6 +122,9 @@ class World:
     model: ScriptedModel
     tenant_policies: TenantPolicies
     clock: FixedClock
+    approvals: RequestApprovals
+    decisions: RequestDecisions
+    settlement: RequestSettlement
 
 
 def open_world(
@@ -128,14 +137,33 @@ def open_world(
     model = ScriptedModel(answers)
     policies = TenantPolicies()
     clock = FixedClock(datetime(2026, 11, 2, 7, 0, tzinfo=UTC))
+    book = RuleBook(files, policies, files.versions)
+    ids = Uuid4Generator()
     service = PurchaseRequests(
         uow=store,
         gate=Gate(Authz()),
-        rules=RuleBook(files, policies, files.versions),
+        rules=book,
         inbox=MockInbox.load(tenant_id=ALPHA[0], workspace_id=ALPHA[1]),
         model=model if with_model else None,
         worker=Worker("purchasing-dw2", "1.0.0"),
         clock=clock,
-        ids=Uuid4Generator(),
+        ids=ids,
     )
-    return World(service, store, model, policies, clock)
+    approvals = RequestApprovals(
+        uow=store,
+        gate=Gate(Authz()),
+        rules=book,
+        master=MockMasterData.load(tenant_id=ALPHA[0], workspace_id=ALPHA[1]),
+        clock=clock,
+        ids=ids,
+    )
+    return World(
+        service,
+        store,
+        model,
+        policies,
+        clock,
+        approvals,
+        RequestDecisions(store),
+        RequestSettlement(store, clock, ids),
+    )

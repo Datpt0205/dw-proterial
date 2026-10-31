@@ -16,10 +16,18 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from dw_kernel.errors import ConflictError
+from dw_kernel.ids import UserId
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.authorization import ApprovalAudience
+from dw_platform.domain.approval import (
+    ApprovalDecision,
+    ApprovalRequest,
+    ApprovalStatus,
+    DecisionOutcome,
+)
 from dw_platform.domain.audit import AuditEvent
 from dw_purchasing.application.ports import MessageOutcome
-from dw_purchasing.domain.requests import PurchaseCase
+from dw_purchasing.domain.cases import PurchaseCase
 
 _Scope = tuple[uuid.UUID, uuid.UUID]
 
@@ -29,9 +37,17 @@ class _Rows:
     cases: dict[uuid.UUID, PurchaseCase] = field(default_factory=dict)
     outcomes: dict[str, MessageOutcome] = field(default_factory=dict)
     audit: list[AuditEvent] = field(default_factory=list)
+    approvals: dict[uuid.UUID, ApprovalRequest] = field(default_factory=dict)
+    decisions: dict[uuid.UUID, ApprovalDecision] = field(default_factory=dict)
 
     def copy(self) -> _Rows:
-        return _Rows(dict(self.cases), dict(self.outcomes), list(self.audit))
+        return _Rows(
+            dict(self.cases),
+            dict(self.outcomes),
+            list(self.audit),
+            dict(self.approvals),
+            dict(self.decisions),
+        )
 
 
 @dataclass
@@ -45,6 +61,22 @@ class _Cases:
 
     async def get(self, case_id: uuid.UUID) -> PurchaseCase | None:
         return self.rows.cases.get(case_id)
+
+    async def save(self, case: PurchaseCase, *, expected_version: int) -> None:
+        stored = self.rows.cases.get(case.case_id)
+        if stored is None or stored.case_version != expected_version:
+            raise ConflictError("hồ sơ đã thay đổi", details={"rule": "stale_version"})
+        self.rows.cases[case.case_id] = case
+
+    async def by_approval(self, approval_id: uuid.UUID) -> PurchaseCase | None:
+        return next(
+            (
+                c
+                for c in self.rows.cases.values()
+                if c.approval is not None and c.approval.approval_id == approval_id
+            ),
+            None,
+        )
 
     async def page(
         self, *, limit: int, before: tuple[datetime, uuid.UUID] | None
@@ -85,6 +117,32 @@ class _Audit:
 
 
 @dataclass
+class _Approvals:
+    """The platform's approvals as `ApprovalAudience` serves them: a stamped
+    request is seen by who may decide it and by its requester only."""
+
+    rows: _Rows
+
+    async def add(self, request: ApprovalRequest) -> None:
+        self.rows.approvals[request.id] = request
+
+    async def get(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalRequest | None:
+        request = self.rows.approvals.get(request_id)
+        if request is None or request.workspace_id.value != workspace_id:
+            return None
+        return request if audience.may_see(request) else None
+
+    async def latest_decision(
+        self, request_id: uuid.UUID, *, workspace_id: uuid.UUID, audience: ApprovalAudience
+    ) -> ApprovalDecision | None:
+        if await self.get(request_id, workspace_id=workspace_id, audience=audience) is None:
+            return None
+        return self.rows.decisions.get(request_id)
+
+
+@dataclass
 class _Work:
     rows: _Rows
 
@@ -99,6 +157,10 @@ class _Work:
     @property
     def audit(self) -> _Audit:
         return _Audit(self.rows)
+
+    @property
+    def approvals(self) -> _Approvals:
+        return _Approvals(self.rows)
 
 
 @dataclass
@@ -116,3 +178,31 @@ class MemoryStore:
 
     def rows(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> _Rows:
         return self.scopes.get((tenant_id, workspace_id), _Rows())
+
+    def decide(
+        self,
+        approval_id: uuid.UUID,
+        *,
+        tenant_id: uuid.UUID,
+        workspace_id: uuid.UUID,
+        approved: bool,
+        decided_by: uuid.UUID,
+        at: datetime,
+        comment: str = "",
+    ) -> None:
+        """What the platform's approval flow writes when a person decides:
+        the request's status and its decision row (the run-less event is the
+        caller's to deliver, as the worker does)."""
+        rows = self.rows(tenant_id, workspace_id)
+        request = rows.approvals[approval_id]
+        request.status = ApprovalStatus.APPROVED if approved else ApprovalStatus.REJECTED
+        rows.decisions[approval_id] = ApprovalDecision(
+            id=uuid.uuid4(),
+            request_id=approval_id,
+            tenant_id=request.tenant_id,
+            workspace_id=request.workspace_id,
+            decided_by=UserId(decided_by),
+            outcome=DecisionOutcome.APPROVED if approved else DecisionOutcome.REJECTED,
+            comment=comment,
+            decided_at=at,
+        )

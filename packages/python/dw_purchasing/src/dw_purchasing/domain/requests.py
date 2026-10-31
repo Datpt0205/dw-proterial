@@ -15,13 +15,11 @@ master data, never the request's.
 
 from __future__ import annotations
 
-import uuid
 from datetime import date
 from decimal import Decimal
-from enum import StrEnum
 from typing import Annotated, Final, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -41,20 +39,6 @@ Price = Annotated[Decimal, Field(ge=0, max_digits=20, decimal_places=4)]
 
 # What a tenant's form may require beyond what every request has.
 RequiredField = Literal["budget_code", "need_by", "estimated_unit_price"]
-
-
-class PrSource(StrEnum):
-    """Where the request came from (DW02: email, Bravo, form, scanned paper;
-    this slice reads the first and the third)."""
-
-    FORM = "form"
-    MAIL = "mail"
-
-
-class CaseStatus(StrEnum):
-    """Where a purchase case stands (CONTEXT.md, "Purchase case")."""
-
-    RECEIVED = "received"
 
 
 class PrLine(BaseModel):
@@ -112,32 +96,3 @@ class PurchaseRequest(BaseModel):
         ):
             lacking.append("estimated_unit_price")
         return tuple(lacking)
-
-
-class PurchaseCase(BaseModel):
-    """One request, from the moment DW2 received it.
-
-    ``rules_ref`` is the tenant rules the case was received under
-    (``purchasing_rules@<version>``), stamped once: a later reader takes the
-    stamp, never whatever is in force today.
-    """
-
-    model_config = _FROZEN
-
-    case_id: uuid.UUID
-    case_version: int = Field(ge=1)
-    status: CaseStatus
-    source: PrSource
-    # The mailbox's message id for a request read from mail.
-    source_ref: str | None = Field(default=None, pattern=r"^[!-~]{1,512}$")
-    request: PurchaseRequest
-    received_at: AwareDatetime
-    # Who submitted the form, or pressed "DW2 đọc" on the mail.
-    received_by: uuid.UUID
-    rules_ref: str = Field(pattern=r"^purchasing_rules@\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$")
-
-    @model_validator(mode="after")
-    def _a_mail_names_its_message(self) -> Self:
-        if (self.source is PrSource.MAIL) != (self.source_ref is not None):
-            raise ValueError("a request read from mail names its message, and only it does")
-        return self

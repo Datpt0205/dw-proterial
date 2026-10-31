@@ -22,6 +22,13 @@ class PurchasingScopes(StrEnum):
     REQUEST_READ = "purchasing.request.read"
     # Receive a request: enter a form, or have DW2 read a mail.
     REQUEST_INTAKE = "purchasing.request.intake"
+    # Check a request and send it to the approver its amount names.
+    REQUEST_SUBMIT = "purchasing.request.submit"
+    # Decide a request, by tier: which band of amounts each decides is the
+    # tenant's rule (`ApprovalRules`), who holds each the platform's catalogue.
+    APPROVE_TIER1 = "purchasing.approve.tier1"
+    APPROVE_TIER2 = "purchasing.approve.tier2"
+    APPROVE_TIER3 = "purchasing.approve.tier3"
 
 
 class PurchasingAuthorizationPort(Protocol):

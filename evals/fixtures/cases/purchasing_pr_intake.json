@@ -17,17 +17,17 @@
           "need_by_span": "20/11/2026"
         },
         {
-          "line_span": "Găng tay chống cắt cấp 5, 50 đôi, cần trước 20/11/2026",
-          "item_code_span": null,
-          "description_span": "Găng tay chống cắt cấp 5",
+          "line_span": "Găng tay chống cắt cấp 5 GT-C5, 50 đôi, cần trước 20/11/2026",
+          "item_code_span": "GT-C5",
+          "description_span": "Găng tay chống cắt cấp 5 GT-C5",
           "quantity_span": "50",
           "unit_span": "đôi",
           "need_by_span": "20/11/2026"
         },
         {
-          "line_span": "Băng keo cách điện 3M Temflex 1700, 120 cuộn",
-          "item_code_span": null,
-          "description_span": "Băng keo cách điện 3M Temflex 1700",
+          "line_span": "Băng keo cách điện 3M Temflex 1700 BK-1700, 120 cuộn",
+          "item_code_span": "BK-1700",
+          "description_span": "Băng keo cách điện 3M Temflex 1700 BK-1700",
           "quantity_span": "120",
           "unit_span": "cuộn",
           "need_by_span": null

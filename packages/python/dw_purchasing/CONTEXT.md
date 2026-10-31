@@ -17,8 +17,20 @@ dw_sales ADR 0005 as DW2 applies it).
   with where it came from (`form` or `mail`, and the mail's id), who received
   it and the tenant rules it was received under (`rules_ref`, stamped once).
   `PurchaseCase`.
-- **Case status**: `received` (Đã nhận) — the request is on file. Later slices
-  add the states after it.
+- **Case status**: `received` (Đã nhận) — the request is on file;
+  `awaiting_approval` (Chờ duyệt) — checked and sent to its approver;
+  `approved` (Đã duyệt) / `rejected` (Từ chối) — the approver decided.
+- **Cross-check (đối chiếu)**: each line's reference price (a supplier
+  quotation still valid, else the last price paid, else the requester's
+  estimate), the request's amount (unknown when a line has no price), and
+  findings: `item_unknown`, `no_reference_price`, `currency_mismatch`,
+  `estimate_above_reference`, `need_by_short`, `budget_missing`,
+  `budget_unknown`, `over_budget`. Stamped on the case when it is sent.
+- **Approval tier (bậc duyệt)**: the band of amounts one approver decides,
+  and the scope (`purchasing.approve.tier1..3`) that approver holds; the
+  bands, who each is and which findings send a request to the last tier are
+  the tenant's rule. Stamped on the case and on the platform approval
+  (`purchasing.request`, strict) when it is sent.
 - **Mail outcome**: what DW2 did with one mail in the purchasing mailbox,
   settled once: `opened` (a case was opened) or `to_person` (a person reads
   it), with a reason code: `sender_not_internal`, `sender_unverified`,
@@ -35,3 +47,8 @@ dw_sales ADR 0005 as DW2 applies it).
 - `purchasing_buyer` (Nhân viên mua hàng): `purchasing.request.read`,
   `purchasing.request.intake`.
 - `purchasing_viewer` (Xem yêu cầu mua hàng): `purchasing.request.read`.
+- `purchasing_head` (Trưởng phòng Mua hàng): `purchasing.request.read`,
+  `purchasing.approve.tier1`, `purchasing.approve.tier2`.
+- Permission set `purchasing_director_approver`: `purchasing.approve.tier3`.
+- The buyer also holds `purchasing.request.submit`. Deciding any approval
+  also needs the platform's `approvals.decide`.

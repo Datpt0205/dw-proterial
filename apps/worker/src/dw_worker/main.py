@@ -101,6 +101,8 @@ from dw_platform.application.background_failures import OUTBOX_ALARMS_LANE, Outb
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 from dw_platform.retention_policy import load_retention_policy
+from dw_purchasing.adapters.assembly import request_settlement
+from dw_purchasing.application.approvals import REQUEST_DECIDED
 from dw_sales.adapters.assembly import (
     Dw1Mount,
     build_catalog_settlement,
@@ -608,6 +610,13 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                 ids=ids,
             ),
             applied="catalog decision applied",
+        )
+        # A purchase request's decision (DW2, DW02 function 2): a run-less
+        # `purchasing.request` approval, carried out the same way, stamped on
+        # the case as its decider.
+        handlers[REQUEST_DECIDED] = build_decided_handler(
+            request_settlement(sessions, SqlAuditRepository, SqlApprovalRepository, clock, ids),
+            applied="purchase request decision applied",
         )
         # Pinned by filename, like every other versioned artifact here: the
         # answer to a retention question has to name the version that gave it.
