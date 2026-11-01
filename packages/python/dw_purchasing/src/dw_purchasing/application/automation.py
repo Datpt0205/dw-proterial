@@ -201,7 +201,13 @@ class SwitchesService:
     automation: Automation
 
     async def view(self, context: AccessContext) -> SwitchesView:
-        await self.gate.require(context, PurchasingScopes.REQUEST_READ, resource_type="automation")
+        await self.gate.require_any(
+            context,
+            PurchasingScopes.REQUEST_READ,
+            PurchasingScopes.RULES_PROPOSE,
+            PurchasingScopes.RULES_APPROVE,
+            resource_type="automation",
+        )
         switches = await self.book.switches(context)
         steps = []
         for step in AutomationStep:

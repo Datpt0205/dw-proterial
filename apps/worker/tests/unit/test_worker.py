@@ -143,10 +143,9 @@ def test_only_the_platform_lanes_are_wired() -> None:
     (`platform.prune_approval_decision_codes()`), whether or not this host polls.
     `outbox_alarms` tells a tenant's administrators of an outbox event that
     spent its attempts (2026-10-29), wherever the outbox runs.
-    `purchasing_retention` deletes DW2's rows past the terms the same policy
-    file gives them (`tables`, retention@1.10.0): a context's own rules on
-    top of the platform's, as above, with the database alone because its
-    cases exist with or without a mailbox.
+    `purchasing_retention` deletes DW2's rows past the term each tenant's
+    rules give them (`purchasing_rules.retention`), with the database alone
+    because its cases exist with or without a mailbox.
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.

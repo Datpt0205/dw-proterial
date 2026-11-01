@@ -58,7 +58,7 @@ import { LevelTag, MarkTag } from "../_components/tags";
  */
 export default function SettingsPage() {
   return (
-    <ScopeGate scope={[SCOPE.propose]}>
+    <ScopeGate scope={[SCOPE.propose, SCOPE.rulesApprove]}>
       {/* `useSearchParams` (the version a link opens) needs a boundary to build. */}
       <Suspense fallback={<Skeleton active />}>
         <Settings />
@@ -70,6 +70,9 @@ export default function SettingsPage() {
 const ORDER: PurchaseAutomationLevel[] = ["person", "ai_review", "ai_auto"];
 
 function Settings() {
+  // A rules approver (granted by permission set) reads and decides; only a
+  // proposer changes anything. The server refuses the rest either way.
+  const proposes = useAuth().hasScope(SCOPE.propose);
   const rules = useCachedResource(
     "purchasing/rules",
     useCallback(() => purchasingApi().rules(), []),
@@ -99,6 +102,7 @@ function Settings() {
         <Switches
           steps={switches.data.steps}
           rules={rules.data}
+          proposes={proposes}
           onSent={reload}
         />
       ) : (
@@ -106,7 +110,7 @@ function Settings() {
       )}
       {rules.data ? (
         <>
-          {rules.data.keys.map((k) => (
+          {(proposes ? rules.data.keys : []).map((k) => (
             <RuleInWords
               key={k.key}
               rules={rules.data!}
@@ -126,10 +130,12 @@ function Settings() {
 function Switches({
   steps,
   rules,
+  proposes,
   onSent,
 }: {
   steps: PurchaseStepLevel[];
   rules: PurchasingRules;
+  proposes: boolean;
   onSent: () => void;
 }) {
   const inForce = rules.keys.find((k) => k.key === "purchasing_automation");
@@ -185,6 +191,7 @@ function Switches({
                 <Segmented<PurchaseAutomationLevel>
                   aria-label={`Mức cho bước ${STEP[s.step]}`}
                   value={chosen[s.step] ?? s.chosen}
+                  disabled={!proposes}
                   onChange={(level) =>
                     setChosen((c) => ({ ...c, [s.step]: level }))
                   }

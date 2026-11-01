@@ -1,50 +1,56 @@
-"""DW2's rows past their term (`retention@1.10.0`, `tables`), deleted by the
-worker's `purchasing_retention` lane through `purchasing.prune_expired`
-(migration 6cbb8581e01e): a purchase case received before its cutoff, a mail
-outcome settled before its own. A table the policy gives no term reaches the
-function as NULL, which deletes nothing of it.
-"""
+"""DW2's rows past their term, deleted per workspace through two SECURITY
+DEFINER functions (migration 191b591d4ef1 replaced the one-term
+`purchasing.prune_expired`): `purchasing.retention_scopes()` lists the
+workspaces holding DW2 rows, ids only, and `purchasing.prune_expired_in`
+deletes one workspace's rows before the cutoffs that tenant's rules give
+(`dw_purchasing.application.retention`). `dw_app` holds no DELETE on
+`mail_outcomes`, and reads no other tenant's rows."""
 
 from __future__ import annotations
 
-import logging
+import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Final
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from dw_kernel.ports import UtcClock
-from dw_platform.retention_policy import RetentionPolicy
+from dw_purchasing.application.retention import Pruned
 
-_LOG = logging.getLogger("dw_purchasing.retention")
-CASES: Final = "purchasing.cases"
-MAIL_OUTCOMES: Final = "purchasing.mail_outcomes"
-_PRUNE = sa.text("SELECT cases, outcomes FROM purchasing.prune_expired(:cases, :outcomes)")
+_SCOPES: Final = sa.text("SELECT tenant_id, workspace_id FROM purchasing.retention_scopes()")
+_PRUNE: Final = sa.text(
+    "SELECT cases, outcomes FROM purchasing.prune_expired_in("
+    ":tenant_id, :workspace_id, :cases_before, :outcomes_before)"
+)
 
 
 @dataclass(frozen=True)
-class SqlPurchasingRetention:
-    """Implements the worker's `RetentionPrunePort`."""
+class SqlRetentionStore:
+    """Implements `RetentionStorePort`."""
 
     session_factory: async_sessionmaker[AsyncSession]
-    policy: RetentionPolicy
-    clock: UtcClock
 
-    async def prune(self) -> None:
-        now = self.clock.now()
-        cutoffs = {
-            "cases": self.policy.row_cutoff_for(CASES, now=now),
-            "outcomes": self.policy.row_cutoff_for(MAIL_OUTCOMES, now=now),
+    async def scopes(self) -> Sequence[tuple[uuid.UUID, uuid.UUID]]:
+        async with self.session_factory() as session, session.begin():
+            rows = (await session.execute(_SCOPES)).all()
+        return [(row.tenant_id, row.workspace_id) for row in rows]
+
+    async def prune(
+        self,
+        scope: tuple[uuid.UUID, uuid.UUID],
+        *,
+        cases_before: datetime | None,
+        outcomes_before: datetime | None,
+    ) -> Pruned:
+        """A None cutoff deletes nothing of its table (the function's NULL)."""
+        params = {
+            "tenant_id": scope[0],
+            "workspace_id": scope[1],
+            "cases_before": cases_before,
+            "outcomes_before": outcomes_before,
         }
         async with self.session_factory() as session, session.begin():
-            row = (await session.execute(_PRUNE, cutoffs)).one()
-        if row.cases or row.outcomes:
-            _LOG.info(
-                "deleted purchasing rows past their term",
-                extra={
-                    "cases": row.cases,
-                    "outcomes": row.outcomes,
-                    "policy_version": self.policy.policy_version,
-                },
-            )
+            row = (await session.execute(_PRUNE, params)).one()
+        return Pruned(cases=row.cases, outcomes=row.outcomes)

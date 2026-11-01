@@ -14,9 +14,11 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
@@ -217,6 +219,7 @@ async def test_the_roles_hold_purchasing_scopes_and_no_platform_role_does(
         PurchasingScopes.REQUEST_SUBMIT.value,
         PurchasingScopes.RFQ_PREPARE.value,
         PurchasingScopes.PO_PREPARE.value,
+        PurchasingScopes.PO_DOWNLOAD.value,
     }
     assert roles["purchasing_viewer"] == {read}
     assert roles["purchasing_head"] == {
@@ -238,6 +241,10 @@ async def test_the_roles_hold_purchasing_scopes_and_no_platform_role_does(
             )
         }
     assert sets["purchasing_director_approver"] == {PurchasingScopes.APPROVE_TIER3.value}
+    # What a tenant's admin grants beyond the roles (fcc0e57d0817).
+    assert sets["purchasing_po_downloader"] == {PurchasingScopes.PO_DOWNLOAD.value}
+    assert sets["purchasing_request_reader"] == {read}
+    assert sets["purchasing_rules_approver"] == {PurchasingScopes.RULES_APPROVE.value}
     # Every scope a rule may stamp is held by someone the catalogue names.
     held = set().union(*roles.values(), *sets.values())
     assert every <= held
@@ -349,22 +356,27 @@ async def test_a_requesters_cases_are_narrowed_in_the_query(
             )
 
 
-async def test_rows_past_their_term_are_deleted_and_a_term_nobody_wrote_keeps_all(
+async def test_rows_past_their_tenants_term_are_deleted_one_workspace_at_a_time(
     app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
 ) -> None:
-    """`purchasing.prune_expired`, as the worker's lane runs it as `dw_app`:
-    a case received before its cutoff goes, with its mail outcome; a newer
-    one stays; a policy that gives the tables no term deletes nothing."""
+    """`purchasing.prune_expired_in`, as the worker's lane runs it as `dw_app`:
+    one workspace's case received before its cutoff goes, with its mail
+    outcome; a newer one stays; another tenant's old case is untouched; a
+    NULL cutoff deletes nothing. The lane reads the term from the tenant's
+    rules (the platform's ten years here)."""
     from datetime import timedelta
 
-    from dw_platform.retention_policy import load_retention_policy
-    from dw_purchasing.adapters.persistence.retention import SqlPurchasingRetention
+    from dw_purchasing.adapters.persistence.retention import SqlRetentionStore
+    from dw_purchasing.application.retention import PurchasingRetention
 
-    me = caller(tenancy.alpha)
+    me, them = caller(tenancy.alpha), caller(tenancy.beta)
     old = _case(source=PrSource.MAIL, ref="OLD-1").model_copy(
         update={"received_at": NOW - timedelta(days=4000)}
     )
     new = _case()
+    theirs = _case(source=PrSource.MAIL, ref="OLD-2").model_copy(
+        update={"received_at": NOW - timedelta(days=4000)}
+    )
     async with _store(app_sessions)(me) as work:
         await work.cases.add(old)
         await work.cases.add(new)
@@ -378,13 +390,39 @@ async def test_rows_past_their_term_are_deleted_and_a_term_nobody_wrote_keeps_al
                 settled_at=NOW - timedelta(days=4000),
             )
         )
-    policy = load_retention_policy(REPO / "configs/policies/retention@1.10.0.yaml")
-    keep_all = policy.model_copy(update={"tables": {}})
-    await SqlPurchasingRetention(app_sessions, keep_all, FixedClock(NOW)).prune()
-    async with _store(app_sessions)(me) as work:
-        assert await work.cases.get(old.case_id) is not None
-    await SqlPurchasingRetention(app_sessions, policy, FixedClock(NOW)).prune()
+    async with _store(app_sessions)(them) as work:
+        await work.cases.add(theirs)
+    store = SqlRetentionStore(app_sessions)
+    assert {tenancy.alpha, tenancy.beta} <= set(await store.scopes())
+    kept = await store.prune(
+        tenancy.alpha,
+        cases_before=None,
+        outcomes_before=None,
+    )
+    assert (kept.cases, kept.outcomes) == (0, 0)
+    book = platform_rule_book(REPO / "configs/policies", SqlRuleVersionLookup(app_sessions))
+    lane = PurchasingRetention(
+        store=_OnlyAlpha(store, tenancy.alpha), book=book, clock=FixedClock(NOW)
+    )
+    await lane.prune()
     async with _store(app_sessions)(me) as work:
         assert await work.cases.get(old.case_id) is None
         assert await work.cases.get(new.case_id) is not None
         assert await work.outcomes.get("OLD-1") is None
+    async with _store(app_sessions)(them) as work:
+        assert await work.cases.get(theirs.case_id) is not None
+
+
+@dataclass(frozen=True)
+class _OnlyAlpha:
+    """The real store, its scope list cut to one workspace: the test's
+    database holds other tests' tenants, which this run must not touch."""
+
+    inner: Any
+    scope: tuple[uuid.UUID, uuid.UUID]
+
+    async def scopes(self) -> list[tuple[uuid.UUID, uuid.UUID]]:
+        return [self.scope]
+
+    async def prune(self, scope: Any, **cutoffs: Any) -> Any:
+        return await self.inner.prune(scope, **cutoffs)

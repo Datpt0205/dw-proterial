@@ -125,6 +125,21 @@ class RfqRules(BaseModel):
     reply_days: int = Field(ge=1, le=60)
 
 
+class RetentionRules(BaseModel):
+    """How long DW2 keeps a tenant's rows (since 1.6.0): the tenant's own
+    number, changed like any rule and decided by a second person, so the
+    accountant's answer lands as a setting, not a release. Bounded both
+    ways: a term too short to be deliberate, or longer than any law asks,
+    is not a version."""
+
+    model_config = _FROZEN
+
+    # A purchase case, by when it was received; its mail outcomes go with it.
+    case_years: int = Field(ge=1, le=30)
+    # What DW2 did with one mail, by when it was settled.
+    mail_outcome_days: int = Field(ge=30, le=3650)
+
+
 class PurchasingRules(BaseModel):
     """One version of the tenant's rules (module docstring). Written as the
     platform's rule versions hold every document (`ck_rule_versions_document`):
@@ -154,6 +169,8 @@ class PurchasingRules(BaseModel):
     # The Bravo import file's shape (DW02 function 4). Absent before 1.3.0:
     # no order is drafted under such rules.
     bravo_po: BravoPoLayout | None = None
+    # How long rows are kept. Absent before 1.6.0: nothing is deleted for age.
+    retention: RetentionRules | None = None
 
     @field_validator("internal_domains")
     @classmethod

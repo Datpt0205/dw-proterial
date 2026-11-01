@@ -59,7 +59,7 @@ export const purchasingNav: NavEntry[] = [
         label: "Cài đặt DW2",
         hint: "Công tắc tự động của từng bước và quy tắc mua hàng: đổi bằng lời, người khác duyệt",
         icon: ControlOutlined,
-        scope: SCOPE.propose,
+        anyScope: [SCOPE.propose, SCOPE.rulesApprove],
       },
     ],
   },

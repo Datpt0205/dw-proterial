@@ -223,7 +223,14 @@ class PurchasingRulesService:
         )
 
     async def list(self, context: AccessContext) -> PurchasingRulesView:
-        await self.gate.require(context, PurchasingScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        """To who proposes and to who decides: a rules approver granted by
+        permission set reads what they are asked to decide."""
+        await self.gate.require_any(
+            context,
+            PurchasingScopes.RULES_PROPOSE,
+            PurchasingScopes.RULES_APPROVE,
+            resource_type=_RESOURCE,
+        )
         scope = ContextScope.of(context)
         keys = []
         for key in PurchasingRuleKey:

@@ -188,7 +188,21 @@ def build_router(
     submit = [scope(PurchasingScopes.REQUEST_SUBMIT)]
     rfq = [scope(PurchasingScopes.RFQ_PREPARE)]
     po = [scope(PurchasingScopes.PO_PREPARE)]
+    download = [scope(PurchasingScopes.PO_DOWNLOAD)]
     propose = [scope(PurchasingScopes.RULES_PROPOSE)]
+
+    def any_of(*needed: PurchasingScopes) -> Any:
+        async def guard(context: Ctx, svc: Svc) -> None:
+            await svc.requests.gate.require_any(context, *needed)
+
+        return [Depends(guard)]
+
+    rules_reader = any_of(PurchasingScopes.RULES_PROPOSE, PurchasingScopes.RULES_APPROVE)
+    switches_reader = any_of(
+        PurchasingScopes.REQUEST_READ,
+        PurchasingScopes.RULES_PROPOSE,
+        PurchasingScopes.RULES_APPROVE,
+    )
 
     @router.get("/requests", response_model=CasePage, dependencies=reader)
     async def list_requests(
@@ -301,7 +315,7 @@ def build_router(
         change = await svc.orders.draft(context, case_id, case_version=body.case_version)
         return await idem.record(change)
 
-    @router.get("/requests/{case_id}/po/bravo.xlsx", dependencies=po)
+    @router.get("/requests/{case_id}/po/bravo.xlsx", dependencies=download)
     async def bravo_file(case_id: uuid.UUID, context: Ctx, svc: Svc) -> Response:
         download = await svc.orders.bravo_file(context, case_id)
         return Response(
@@ -322,11 +336,11 @@ def build_router(
         item = await svc.requests.read_mail(context, message_id)
         return await idem.record(item)
 
-    @router.get("/automation", response_model=SwitchesView, dependencies=read)
+    @router.get("/automation", response_model=SwitchesView, dependencies=switches_reader)
     async def automation(context: Ctx, svc: Svc) -> SwitchesView:
         return await svc.switches.view(context)
 
-    @router.get("/rules", response_model=PurchasingRulesView, dependencies=propose)
+    @router.get("/rules", response_model=PurchasingRulesView, dependencies=rules_reader)
     async def rules_in_force(context: Ctx, svc: Svc) -> PurchasingRulesView:
         return await svc.rules.list(context)
 

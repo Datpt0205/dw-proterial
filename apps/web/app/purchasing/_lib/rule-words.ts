@@ -71,6 +71,7 @@ const named =
 const plain: Words = (value) => String(value);
 const percent: Words = (value) => `${String(value).replace(".", ",")}%`;
 const days: Words = (value) => `${String(value)} ngày`;
+const years: Words = (value) => `${String(value)} năm`;
 const yesNo: Words = (value) => (value ? "có" : "không");
 const limit: Words = (value, document) => {
   if (value === null || value === undefined) return "không giới hạn";
@@ -139,6 +140,8 @@ const PATHS: [RegExp, (index: number) => string, Words][] = [
     plain,
   ],
   [/^rfq\.reply_days$/, () => "Hỏi giá · Thời gian chờ trả lời", days],
+  [/^retention\.case_years$/, () => "Lưu trữ · Hồ sơ mua hàng", years],
+  [/^retention\.mail_outcome_days$/, () => "Lưu trữ · Kết quả xử lý thư", days],
   [/^bravo_po\.mock$/, () => "File Bravo · Mẫu dựng sẵn của nền tảng", yesNo],
   [/^bravo_po\.sheet$/, () => "File Bravo · Tên trang tính", plain],
   [
