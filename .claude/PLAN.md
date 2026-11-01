@@ -16,7 +16,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd + React Flow map; CSP |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed  |
-| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | DW02 fns 1–4 API, no web   |
+| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–4 API + web, mock    |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -35,8 +35,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** DW2 (`purchasing.md`): lifts + DW02 functions 1–4 built on mock
-  data (11-01, API only); web pages, functions 5–6 next. #13 at deployment.
+- **Next:** DW2 (`purchasing.md`): fns 1–4 + web on mock data (11-01); mail
+  drop, master data, Bravo template, outbox, fns 5–6 next. #13 at deployment.
 
 ## Decisions Đạt owes
 
@@ -57,7 +57,7 @@ own file and a row here.
   the IP-indemnity clause's wording (carve-outs, cap) with FPT legal;
   DW2 go-live week 4 (contract) vs week 6 (rollout plan); whether the
   rollout plan `.xlsx` stays out of git (repo public).
-- **Purchasing:** rule editor, retention, requesters, Bravo template (`purchasing.md`).
+- **Purchasing:** rules, retention, requesters, Bravo, readers (`purchasing.md`).
 
 ## How a feature is checked here
 

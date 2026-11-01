@@ -16,6 +16,7 @@ import {
   SplitCellsOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
+import { purchasingNav } from "../../app/purchasing/_meta/nav";
 import { salesNav } from "../../app/sales/_meta/nav";
 import type { NavEntry, NavItem } from "./types";
 import { navPages } from "./visibility";
@@ -166,6 +167,7 @@ const platformNav: NavEntry[] = [
 export const NAV: NavEntry[] = [
   // <context navs plug in here>
   ...salesNav,
+  ...purchasingNav,
   ...platformNav,
 ];
 
