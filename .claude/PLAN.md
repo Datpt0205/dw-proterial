@@ -35,9 +35,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** DW2 (`purchasing.md`): fns 1–4 + web on mock data (11-01); mail
-  drop, master data, Bravo template, outbox, fns 5–6 next. Questions for
-  Proterial: `docs/proterial/` (local only). #13 at deployment.
+- **Next:** DW2 (`purchasing.md`): mail drop, master data, Bravo template,
+  outbox, fns 5–6. Proterial questions: `docs/proterial/`. #13 at deploy.
 
 ## Decisions Đạt owes
 
