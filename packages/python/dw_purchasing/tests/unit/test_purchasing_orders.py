@@ -96,7 +96,9 @@ async def test_one_order_per_chosen_supplier_at_the_chosen_prices() -> None:
     assert [(line.line_no, line.unit_price, line.need_by) for line in kimura.lines] == [
         (1, Decimal(1_200_000), date(2026, 11, 20))
     ]
-    assert case.po.rules_ref.startswith("purchasing_rules@1.3")
+    from dw_purchasing.adapters.policy_files import PolicyFiles
+
+    assert case.po.rules_ref == PolicyFiles.load(REPO / "configs/policies").current().ref
     assert world.store.rows(*ALPHA).audit[-1].action == "purchasing.po.drafted"
 
 
@@ -301,3 +303,28 @@ async def test_nothing_is_drafted_for_a_supplier_gone_or_a_total_that_moved() ->
     with pytest.raises(ConflictError) as moved:
         await world.orders.draft(caller(), case_id, case_version=version)
     assert moved.value.details["rule"] == "total_mismatch"
+
+
+async def test_a_deployed_dw2_drafts_no_order_with_the_platforms_stand_in_layout() -> None:
+    """Rules 1.4.0 mark the shipped Bravo layout `mock`: a deployed profile
+    refuses to draft with it, so no buyer imports a file the company's Bravo
+    was never set up for. A tenant layout of its own drafts as before."""
+    import dataclasses
+
+    from dw_purchasing.adapters.policy_files import PolicyFiles
+
+    world = _world()
+    case_id = await _chosen(world)
+    deployed = dataclasses.replace(world.orders, deployed=True)
+    version = await _version(world, case_id)
+    with pytest.raises(ConflictError) as refused:
+        await deployed.draft(caller(), case_id, case_version=version)
+    assert refused.value.details["rule"] == "mock_layout"
+    own: dict[str, Any] = (
+        PolicyFiles.load(REPO / "configs/policies").current().model_dump(mode="json")
+    )
+    own["policy_version"] = "9.4.0"
+    own["bravo_po"]["mock"] = False
+    world.tenant_policies.documents[(ALPHA[0], "purchasing_rules")] = own
+    change = await deployed.draft(caller(), case_id, case_version=version)
+    assert change.status.value == "po_drafted"

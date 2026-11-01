@@ -197,7 +197,9 @@ def test_the_assembly_checks_every_door_a_version_goes_through() -> None:
         model=None,
         clock=SystemClock(),
         ids=Uuid4Generator(),
+        deployed=True,
     )
+    assert services.orders.deployed
     guard = assembly.rule_decisions(REPO / "configs", None, None, None)  # type: ignore[arg-type]
     settlement = assembly.rule_settlement(
         REPO / "configs",

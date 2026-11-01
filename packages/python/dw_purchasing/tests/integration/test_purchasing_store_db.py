@@ -347,3 +347,44 @@ async def test_a_requesters_cases_are_narrowed_in_the_query(
                 "UPDATE purchasing.cases SET body = body - 'requested_by'"
                 f" WHERE id = '{mine.case_id}'",
             )
+
+
+async def test_rows_past_their_term_are_deleted_and_a_term_nobody_wrote_keeps_all(
+    app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
+) -> None:
+    """`purchasing.prune_expired`, as the worker's lane runs it as `dw_app`:
+    a case received before its cutoff goes, with its mail outcome; a newer
+    one stays; a policy that gives the tables no term deletes nothing."""
+    from datetime import timedelta
+
+    from dw_platform.retention_policy import load_retention_policy
+    from dw_purchasing.adapters.persistence.retention import SqlPurchasingRetention
+
+    me = caller(tenancy.alpha)
+    old = _case(source=PrSource.MAIL, ref="OLD-1").model_copy(
+        update={"received_at": NOW - timedelta(days=4000)}
+    )
+    new = _case()
+    async with _store(app_sessions)(me) as work:
+        await work.cases.add(old)
+        await work.cases.add(new)
+        await work.outcomes.add(
+            MessageOutcome(
+                message_id="OLD-1",
+                disposition=Disposition.OPENED,
+                reason=None,
+                case_id=old.case_id,
+                settled_by=uuid.UUID(int=0xB0B),
+                settled_at=NOW - timedelta(days=4000),
+            )
+        )
+    policy = load_retention_policy(REPO / "configs/policies/retention@1.10.0.yaml")
+    keep_all = policy.model_copy(update={"tables": {}})
+    await SqlPurchasingRetention(app_sessions, keep_all, FixedClock(NOW)).prune()
+    async with _store(app_sessions)(me) as work:
+        assert await work.cases.get(old.case_id) is not None
+    await SqlPurchasingRetention(app_sessions, policy, FixedClock(NOW)).prune()
+    async with _store(app_sessions)(me) as work:
+        assert await work.cases.get(old.case_id) is None
+        assert await work.cases.get(new.case_id) is not None
+        assert await work.outcomes.get("OLD-1") is None

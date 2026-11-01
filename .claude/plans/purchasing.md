@@ -216,6 +216,13 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   directory, `requested_by` stamped); `GET /requests[/{id}]` narrowed to
   the requester's own in SQL (`ix_cases_tenant_id_requested_by_received_at`).
   Eval `purchasing_pr_words@1.0.0` 5/5; 8 mutations red.
+- **Retention** (`retention@1.10.0` `tables`, migration `6cbb8581e01e`):
+  `purchasing.cases` 3650 days, `purchasing.mail_outcomes` 365 days, **chờ
+  kế toán Proterial xác nhận**; lane `purchasing_retention` (hourly) through
+  `purchasing.prune_expired` (SECURITY DEFINER, NULL keeps all).
+- **Deployed Bravo guard** (rules `1.4.0`, `bravo_po.mock: true`): a
+  deployed profile drafts no order with the platform's stand-in layout
+  (409 `mock_layout`); a tenant layout of its own drafts.
 
 ## Next
 
@@ -249,7 +256,8 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 - **Who configures DW2**: built as `purchasing_configurer` (proposes) and
   the head (decides, and applies their own at once, as a Sales head). Whether
   Proterial wants the director, not the head, to decide limit changes.
-- **Retention** of `purchasing.cases` and `mail_outcomes` (none set).
+- **Retention**: 10 years for a case, 1 year for a mail outcome
+  (`retention@1.10.0`), proposed; Proterial's accountant to confirm.
 - **Who requests**: built as `purchasing_requester` (own requests only).
   Proterial to say how a request DW2 opens is numbered (code's
   `DW2-<yymmdd>-<6 hex>` today) and whether Bravo's PR number replaces it.

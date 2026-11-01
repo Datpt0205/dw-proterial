@@ -38,6 +38,10 @@ from dw_purchasing.domain.orders import PoRound, bravo_rows, draft_orders
 
 _RESOURCE: Final = "purchase_case"
 NO_LAYOUT: Final = "quy tắc mua hàng đang áp dụng chưa có mẫu file Bravo: chưa soạn PO được"
+MOCK_LAYOUT: Final = (
+    "mẫu file nhập Bravo vẫn là mẫu thử của hệ thống: cài mẫu Bravo của công ty"
+    " (Cài đặt DW2) rồi soạn PO"
+)
 XLSX: Final = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -58,6 +62,9 @@ class PurchaseOrders:
     spreadsheet: SpreadsheetPort
     clock: UtcClock
     ids: IdGenerator
+    # A deployed profile (`settings.is_deployed`): the platform's stand-in
+    # Bravo layout is refused there.
+    deployed: bool = False
 
     async def draft(
         self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
@@ -79,6 +86,10 @@ class PurchaseOrders:
         rules = await self.rules.resolve(context)
         if rules.bravo_po is None:
             raise ConflictError(NO_LAYOUT, details={"rules_ref": rules.ref, "rule": "no_layout"})
+        if self.deployed and rules.bravo_po.mock:
+            raise ConflictError(
+                MOCK_LAYOUT, details={"rules_ref": rules.ref, "rule": "mock_layout"}
+            )
         master = await self.master.for_context(context)
         names: dict[str, str] = {}
         for choice in case.selection.choices:

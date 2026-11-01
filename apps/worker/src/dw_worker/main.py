@@ -102,6 +102,7 @@ from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 from dw_platform.retention_policy import load_retention_policy
 from dw_purchasing.adapters.assembly import request_settlement, rule_settlement
+from dw_purchasing.adapters.persistence.retention import SqlPurchasingRetention
 from dw_purchasing.application.approvals import REQUEST_DECIDED
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
 from dw_sales.adapters.assembly import (
@@ -186,7 +187,7 @@ logger = logging.getLogger("dw_worker")
 
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
-RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.9.0.yaml"
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.10.0.yaml"
 # How long a processing job may run before the reaper takes it for a dead
 # worker's (Sales ticket 25). A job is one message: its scan, a few files read
 # in the reader sandbox (each killed at its own wall clock) and a model call or
@@ -498,6 +499,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     channel_inbound_messages_retention: RetentionPrunePort | None = None
     # Single-use decision codes: a day, then gone (the database's constant).
     approval_codes_retention: RetentionPrunePort | None = None
+    purchasing_retention: RetentionPrunePort | None = None
     # The Zalo self-link poll: only with a database, a bot token, a link secret
     # and ZALO_UPDATES_MODE=poll.
     zalo_poll_consumer: Callable[[], Awaitable[None]] | None = None
@@ -667,6 +669,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         channel_link_nonces_retention = SqlChannelLinkNonceRetention(session_factory=sessions)
         channel_inbound_messages_retention = SqlChannelInboundRetention(session_factory=sessions)
         approval_codes_retention = SqlApprovalCodeRetention(session_factory=sessions)
+        # DW2's own rows past the terms the same policy file gives them
+        # (`tables`, retention@1.10.0): its cases exist with or without a
+        # mailbox, so they are swept with the database alone.
+        purchasing_retention = SqlPurchasingRetention(
+            session_factory=sessions, policy=retention_policy, clock=clock
+        )
         # Rows are queued whether or not this host sends them, so they are
         # pruned whether or not it does.
         channel_deliveries_retention = SqlChannelDeliveryRetention(
@@ -941,6 +949,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "partitions",
             build_retention_consumer(partitions),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if purchasing_retention is not None:
+        registry.register(
+            "purchasing_retention",
+            build_retention_consumer(purchasing_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     if checkpoint_retention is not None:
