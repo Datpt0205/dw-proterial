@@ -42,8 +42,15 @@ dw_sales ADR 0005 as DW2 applies it).
   or a form rule `missing:<field>`, `too_many_lines`, `currency_not_allowed`.
 - **Purchasing rules (quy tắc mua hàng)**: one versioned document per tenant
   (`purchasing_rules@<version>`): what a PR form requires, the company's mail
-  domains. The platform's version ships in `configs/policies`; a tenant's own
-  replaces it whole and is read from the platform's policy overrides.
+  domains, the approval tiers, whom to ask for quotes, the Bravo layout. The
+  platform's version ships in `configs/policies`; a tenant's own replaces it
+  whole.
+- **Rule version (phiên bản quy tắc)**: a tenant's own version, held by the
+  platform's rule-version engine (`platform.rule_versions`, ADR 0013/0014):
+  proposed by the configurer or the head, decided on a `purchasing.rules`
+  approval by a second person, the head's own applied at once. A field a
+  stored version predates reads as the platform's current version has it; a
+  stored version today's schema refuses stops intake (409), never falls back.
 
 - **RFQ (yêu cầu báo giá)**: one drafted mail per supplier code picks from
   the master data (supplies the item, quoted it or was paid for it, at most
@@ -74,6 +81,10 @@ dw_sales ADR 0005 as DW2 applies it).
 - `purchasing_viewer` (Xem yêu cầu mua hàng): `purchasing.request.read`.
 - `purchasing_head` (Trưởng phòng Mua hàng): `purchasing.request.read`,
   `purchasing.approve.tier1`, `purchasing.approve.tier2`.
+- `purchasing_configurer` (Người cấu hình DW2): `purchasing.request.read`,
+  `purchasing.rules.propose`; their version waits for the head.
+- The head also holds `purchasing.rules.propose` and
+  `purchasing.rules.approve`.
 - Permission set `purchasing_director_approver`: `purchasing.approve.tier3`.
 - The buyer also holds `purchasing.request.submit` and
   `purchasing.rfq.prepare` and `purchasing.po.prepare` (draft the orders,

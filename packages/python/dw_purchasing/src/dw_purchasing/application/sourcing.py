@@ -50,7 +50,7 @@ from dw_platform.domain.mail_parts import newest_part
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import NOT_READ_NOW, CaseChange, Worker
 from dw_purchasing.application.ports import InboxPort, MasterDataPort, PurchasingUnitOfWork
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.checks import MasterData, Supplier
 from dw_purchasing.domain.offer_reading import MAX_OFFER_LINES, ModelOffer, read_offer_mail
@@ -115,7 +115,7 @@ class ComparisonView(BaseModel):
 class SupplierSourcing:
     uow: PurchasingUnitOfWork
     gate: Gate
-    rules: RuleBook
+    rules: PurchasingRuleBook
     master: MasterDataPort
     inbox: InboxPort
     # None where the deployment has no model: RFQs use the template, and a

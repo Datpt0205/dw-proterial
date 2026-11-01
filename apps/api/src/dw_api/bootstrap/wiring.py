@@ -600,20 +600,29 @@ def build_purchasing_mount(
     workspace), the pair Sales' demo names too (`ApiSettings.sales_demo_scope`);
     every other scope reads it empty. Without that pair nothing is wired and
     the Purchasing routes answer that no data source is configured. A
-    tenant's own rules are read from the platform's policy overrides.
+    tenant's own rules are its versions in the platform's rule-version engine;
+    a `purchasing.rules` approval is checked by `RuleDecisions`, the longest
+    prefix registered.
     """
-    from dw_platform.adapters.persistence.policy_overrides import SqlPolicyOverrideRepository
     from dw_platform.adapters.persistence.repositories import (
         SqlApprovalRepository,
         SqlAuditRepository,
     )
-    from dw_purchasing.adapters.assembly import build_purchasing, request_decisions
+    from dw_purchasing.adapters.assembly import (
+        build_purchasing,
+        request_decisions,
+        rule_decisions,
+    )
     from dw_purchasing.application.approvals import APPROVAL_PREFIX
+    from dw_purchasing.application.rules import RULES_APPROVAL
     from dw_purchasing.presentation.routes import PurchasingMount
 
     approval_flow.strict_approval_prefixes |= {APPROVAL_PREFIX}
     approval_flow.decision_guards[APPROVAL_PREFIX] = request_decisions(
         session_factory, SqlAuditRepository, SqlApprovalRepository
+    )
+    approval_flow.decision_guards[RULES_APPROVAL] = rule_decisions(
+        CONFIGS, session_factory, SqlAuditRepository, SqlApprovalRepository
     )
     demo = settings.sales_demo_scope()
     if demo is None:
@@ -627,7 +636,6 @@ def build_purchasing_mount(
             audit=SqlAuditRepository,
             approvals=SqlApprovalRepository,
             authorization=authorization,
-            tenant_policies=SqlPolicyOverrideRepository(session_factory),
             model=model,
             clock=clock,
             ids=ids,

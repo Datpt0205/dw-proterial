@@ -1080,6 +1080,279 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mailbox */
+        get: operations["mailbox_api_v1_purchasing_mail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/mail/{message_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Mail */
+        post: operations["read_mail_api_v1_purchasing_mail__message_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Requests */
+        get: operations["list_requests_api_v1_purchasing_requests_get"];
+        put?: never;
+        /** Submit Request */
+        post: operations["submit_request_api_v1_purchasing_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Request */
+        get: operations["get_request_api_v1_purchasing_requests__case_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check Request */
+        get: operations["check_request_api_v1_purchasing_requests__case_id__check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comparison */
+        get: operations["comparison_api_v1_purchasing_requests__case_id__comparison_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Offer */
+        post: operations["record_offer_api_v1_purchasing_requests__case_id__offers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/offers/from-mail/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read Offer Mail */
+        post: operations["read_offer_mail_api_v1_purchasing_requests__case_id__offers_from_mail__message_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/po": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft Orders */
+        post: operations["draft_orders_api_v1_purchasing_requests__case_id__po_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/po/bravo.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bravo File */
+        get: operations["bravo_file_api_v1_purchasing_requests__case_id__po_bravo_xlsx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/rfq": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft Rfq */
+        post: operations["draft_rfq_api_v1_purchasing_requests__case_id__rfq_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Select Suppliers */
+        post: operations["select_suppliers_api_v1_purchasing_requests__case_id__selection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Request For Approval */
+        post: operations["submit_request_for_approval_api_v1_purchasing_requests__case_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rules In Force */
+        get: operations["rules_in_force_api_v1_purchasing_rules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/rules/{key}/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rule Schema */
+        get: operations["rule_schema_api_v1_purchasing_rules__key__schema_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/rules/{key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Propose Rules */
+        post: operations["propose_rules_api_v1_purchasing_rules__key__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -1366,6 +1639,40 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * ApprovalAsked
+         * @description Who the case was sent to, stamped when it was sent: the approval, the
+         *     scope its decider must hold and who that is, the version of the case the
+         *     approver is shown, and who sent it. A later reader takes this stamp, never
+         *     the rules in force today.
+         */
+        ApprovalAsked: {
+            /**
+             * Approval Id
+             * Format: uuid
+             */
+            approval_id: string;
+            /** Case Version */
+            case_version: number;
+            /** Limit */
+            limit: string | null;
+            /** Limit Currency */
+            limit_currency: string;
+            /** Required Scope */
+            required_scope: string;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /**
+             * Submitted By
+             * Format: uuid
+             */
+            submitted_by: string;
+            /** Tier Label */
+            tier_label: string;
+        };
         /** ApprovalView */
         ApprovalView: {
             /** Approval Type */
@@ -1581,6 +1888,31 @@ export interface components {
             /** Subject */
             subject: string;
         };
+        /** BravoColumn */
+        BravoColumn: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "po_ref" | "pr_no" | "order_date" | "supplier_code" | "supplier_name" | "item_code" | "description" | "quantity" | "unit" | "unit_price" | "currency" | "amount" | "need_by" | "budget_code" | "department";
+            /** Header */
+            header: string;
+        };
+        /**
+         * BravoPoLayout
+         * @description The import file's shape, as the tenant's Bravo expects it.
+         */
+        BravoPoLayout: {
+            /** Columns */
+            columns: components["schemas"]["BravoColumn"][];
+            /**
+             * Date Format
+             * @enum {string}
+             */
+            date_format: "dd/mm/yyyy" | "yyyy-mm-dd" | "mm/dd/yyyy";
+            /** Sheet */
+            sheet: string;
+        };
         /**
          * CancelResult
          * @description Whether a run was actually stopped, not whether the request was understood.
@@ -1595,11 +1927,100 @@ export interface components {
             cancelled: boolean;
         };
         /**
+         * CaseChange
+         * @description What a mutation answers: ids only, so an idempotent replay keeps no
+         *     request content.
+         */
+        CaseChange: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Case Version */
+            case_version: number;
+            status: components["schemas"]["CaseStatus"];
+        };
+        /** CasePage */
+        CasePage: {
+            /** Items */
+            items: components["schemas"]["PurchaseCase"][];
+            /** Next Before At */
+            next_before_at: string | null;
+            /** Next Before Id */
+            next_before_id: string | null;
+        };
+        /**
+         * CaseStatus
+         * @description Where a purchase case stands (CONTEXT.md, "Purchase case").
+         * @enum {string}
+         */
+        CaseStatus: "received" | "awaiting_approval" | "approved" | "rejected" | "rfq_drafted" | "supplier_selected" | "po_drafted";
+        /**
+         * CaseVersionBody
+         * @description The version of the case the caller saw: a stale one is refused (409).
+         */
+        CaseVersionBody: {
+            /** Case Version */
+            case_version: number;
+        };
+        /** Choice */
+        Choice: {
+            /** Line No */
+            line_no: number;
+            /** Supplier Code */
+            supplier_code: string;
+        };
+        /**
          * CodeUnavailable
          * @description Why the portal offers no code. Each one is a sentence on the page.
          * @enum {string}
          */
         CodeUnavailable: "not_pending" | "cannot_decide" | "requester" | "web_only" | "not_linked" | "comment_required" | "channel_off";
+        /** ComparedLine */
+        ComparedLine: {
+            /** Description */
+            description: string;
+            /** Line No */
+            line_no: number;
+            /** Need By */
+            need_by: string | null;
+            /** Offers */
+            offers: components["schemas"]["ComparedOffer"][];
+            /** Quantity */
+            quantity: string;
+        };
+        /** ComparedOffer */
+        ComparedOffer: {
+            /** Cheapest */
+            cheapest: boolean;
+            /** Lead Time Days */
+            lead_time_days: number;
+            /** Meets Need By */
+            meets_need_by: boolean;
+            /** Supplier Code */
+            supplier_code: string;
+            /** Total */
+            total: string;
+            /** Unit Price */
+            unit_price: string;
+        };
+        /** ComparisonView */
+        ComparisonView: {
+            /** Approved Limit */
+            approved_limit: string | null;
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Case Version */
+            case_version: number;
+            /** Currency */
+            currency: string;
+            /** Lines */
+            lines: components["schemas"]["ComparedLine"][];
+        };
         /** CreateAccountRequest */
         CreateAccountRequest: {
             /** Display Name */
@@ -1638,6 +2059,48 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * CrossCheck
+         * @description What code found, stamped on the case when it goes to its approver.
+         */
+        CrossCheck: {
+            /** Amount */
+            amount: string | null;
+            /**
+             * Checked On
+             * Format: date
+             */
+            checked_on: string;
+            /** Currency */
+            currency: string;
+            /** Findings */
+            findings: components["schemas"]["Finding"][];
+            /** Lines */
+            lines: components["schemas"]["LineCheck"][];
+        };
+        /**
+         * Decided
+         * @description The approver's decision, as the approval recorded it.
+         */
+        Decided: {
+            /** Approved */
+            approved: boolean;
+            /**
+             * Comment
+             * @default
+             */
+            comment: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /**
+             * Decided By
+             * Format: uuid
+             */
+            decided_by: string;
         };
         /** DecisionRequest */
         DecisionRequest: {
@@ -1713,6 +2176,12 @@ export interface components {
              */
             workspace_id: string;
         };
+        /**
+         * Disposition
+         * @description What DW2 did with one mail.
+         * @enum {string}
+         */
+        Disposition: "opened" | "to_person";
         /** FeedbackAttachmentView */
         FeedbackAttachmentView: {
             /** Content Type */
@@ -1748,6 +2217,12 @@ export interface components {
             page_path?: string | null;
             /** Suggestion */
             suggestion?: string | null;
+        };
+        /** Finding */
+        Finding: {
+            code: components["schemas"]["PurchaseFindingCode"];
+            /** Line No */
+            line_no?: number | null;
         };
         /** GrantMemberRequest */
         GrantMemberRequest: {
@@ -1807,6 +2282,28 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * InboxItem
+         * @description One mail in the list a buyer works from.
+         */
+        InboxItem: {
+            /** Case Id */
+            case_id: string | null;
+            disposition: components["schemas"]["Disposition"] | null;
+            /** Message Id */
+            message_id: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Sender */
+            sender: string;
+            /** Subject */
+            subject: string;
         };
         /** InboxView */
         InboxView: {
@@ -1913,6 +2410,19 @@ export interface components {
             source_version: string;
             /** Title */
             title: string;
+        };
+        /** LineCheck */
+        LineCheck: {
+            /** Amount */
+            amount: string | null;
+            /** Basis */
+            basis: ("quote" | "history" | "estimate") | null;
+            /** Line No */
+            line_no: number;
+            /** Reference Price */
+            reference_price: string | null;
+            /** Supplier Code */
+            supplier_code: string | null;
         };
         /** LoginAccountView */
         LoginAccountView: {
@@ -2180,6 +2690,65 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * Offer
+         * @description What one supplier offers for one line.
+         */
+        Offer: {
+            /** Currency */
+            currency: string;
+            /** Lead Time Days */
+            lead_time_days: number;
+            /** Line No */
+            line_no: number;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /**
+             * Recorded By
+             * Format: uuid
+             */
+            recorded_by: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "form" | "mail";
+            /** Source Ref */
+            source_ref?: string | null;
+            /** Supplier Code */
+            supplier_code: string;
+            /** Unit Price */
+            unit_price: string;
+            /** Valid Until */
+            valid_until?: string | null;
+        };
+        /** OfferBody */
+        OfferBody: {
+            /** Case Version */
+            case_version: number;
+            offer: components["schemas"]["OfferForm"];
+        };
+        /**
+         * OfferForm
+         * @description An offer a buyer types (a supplier answered by phone, or on paper).
+         */
+        OfferForm: {
+            /** Currency */
+            currency: string;
+            /** Lead Time Days */
+            lead_time_days: number;
+            /** Line No */
+            line_no: number;
+            /** Supplier Code */
+            supplier_code: string;
+            /** Unit Price */
+            unit_price: number | string;
+            /** Valid Until */
+            valid_until?: string | null;
+        };
         /** OperatorView */
         OperatorView: {
             /**
@@ -2278,6 +2847,309 @@ export interface components {
             /** Scopes */
             scopes: string[];
         };
+        /**
+         * PoDraft
+         * @description One supplier's draft order.
+         */
+        PoDraft: {
+            /** Currency */
+            currency: string;
+            /** Lines */
+            lines: components["schemas"]["PoLine"][];
+            /** Po Ref */
+            po_ref: string;
+            /** Supplier Code */
+            supplier_code: string;
+            /** Supplier Name */
+            supplier_name: string;
+            /** Total */
+            total: string;
+        };
+        /** PoLine */
+        PoLine: {
+            /** Amount */
+            amount: string;
+            /** Description */
+            description: string;
+            /** Item Code */
+            item_code: string | null;
+            /** Line No */
+            line_no: number;
+            /** Need By */
+            need_by: string | null;
+            /** Quantity */
+            quantity: string;
+            /** Unit */
+            unit: string;
+            /** Unit Price */
+            unit_price: string;
+        };
+        /**
+         * PoRound
+         * @description The orders drafted for a case, and the layout their file is drawn with.
+         */
+        PoRound: {
+            /**
+             * Drafted At
+             * Format: date-time
+             */
+            drafted_at: string;
+            /**
+             * Drafted By
+             * Format: uuid
+             */
+            drafted_by: string;
+            layout: components["schemas"]["BravoPoLayout"];
+            /**
+             * Order Date
+             * Format: date
+             */
+            order_date: string;
+            /** Orders */
+            orders: components["schemas"]["PoDraft"][];
+            /** Rules Ref */
+            rules_ref: string;
+        };
+        /**
+         * PrLine
+         * @description One thing asked for.
+         */
+        "PrLine-Input": {
+            /** Description */
+            description: string;
+            /** Estimated Unit Price */
+            estimated_unit_price?: number | string | null;
+            /** Item Code */
+            item_code?: string | null;
+            /** Line No */
+            line_no: number;
+            /** Need By */
+            need_by?: string | null;
+            /** Quantity */
+            quantity: number | string;
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * PrLine
+         * @description One thing asked for.
+         */
+        "PrLine-Output": {
+            /** Description */
+            description: string;
+            /** Estimated Unit Price */
+            estimated_unit_price?: string | null;
+            /** Item Code */
+            item_code?: string | null;
+            /** Line No */
+            line_no: number;
+            /** Need By */
+            need_by?: string | null;
+            /** Quantity */
+            quantity: string;
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * PrSource
+         * @description Where the request came from (DW02: email, Bravo, form, scanned paper;
+         *     this slice reads the first and the third).
+         * @enum {string}
+         */
+        PrSource: "form" | "mail";
+        /**
+         * PurchaseCase
+         * @description One request, from the moment DW2 received it.
+         *
+         *     ``rules_ref`` is the tenant rules the case was received under
+         *     (``purchasing_rules@<version>``), stamped once: a later reader takes the
+         *     stamp, never whatever is in force today.
+         */
+        PurchaseCase: {
+            approval?: components["schemas"]["ApprovalAsked"] | null;
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Case Version */
+            case_version: number;
+            check?: components["schemas"]["CrossCheck"] | null;
+            decision?: components["schemas"]["Decided"] | null;
+            /**
+             * Offers
+             * @default []
+             */
+            offers: components["schemas"]["Offer"][];
+            po?: components["schemas"]["PoRound"] | null;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /**
+             * Received By
+             * Format: uuid
+             */
+            received_by: string;
+            request: components["schemas"]["PurchaseRequest-Output"];
+            rfq?: components["schemas"]["RfqRound"] | null;
+            /** Rules Ref */
+            rules_ref: string;
+            selection?: components["schemas"]["Selection"] | null;
+            source: components["schemas"]["PrSource"];
+            /** Source Ref */
+            source_ref?: string | null;
+            status: components["schemas"]["CaseStatus"];
+        };
+        /**
+         * PurchaseCheckView
+         * @description What the check found and who would approve, under the rules in force.
+         */
+        PurchaseCheckView: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /** Case Version */
+            case_version: number;
+            check: components["schemas"]["CrossCheck"];
+            /** Required Scope */
+            required_scope: string;
+            /** Rules Ref */
+            rules_ref: string;
+            /** Tier Label */
+            tier_label: string;
+        };
+        /**
+         * PurchaseFindingCode
+         * @enum {string}
+         */
+        PurchaseFindingCode: "item_unknown" | "no_reference_price" | "currency_mismatch" | "estimate_above_reference" | "need_by_short" | "budget_missing" | "budget_unknown" | "over_budget";
+        /**
+         * PurchaseRequest
+         * @description What the requester asked for, as they wrote it.
+         */
+        "PurchaseRequest-Input": {
+            /** Budget Code */
+            budget_code?: string | null;
+            /** Currency */
+            currency: string;
+            /** Department */
+            department: string;
+            /** Lines */
+            lines: components["schemas"]["PrLine-Input"][];
+            /** Need By */
+            need_by?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Pr No */
+            pr_no: string;
+            /** Requester */
+            requester: string;
+        };
+        /**
+         * PurchaseRequest
+         * @description What the requester asked for, as they wrote it.
+         */
+        "PurchaseRequest-Output": {
+            /** Budget Code */
+            budget_code?: string | null;
+            /** Currency */
+            currency: string;
+            /** Department */
+            department: string;
+            /** Lines */
+            lines: components["schemas"]["PrLine-Output"][];
+            /** Need By */
+            need_by?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Pr No */
+            pr_no: string;
+            /** Requester */
+            requester: string;
+        };
+        /** PurchasingKeyInForce */
+        PurchasingKeyInForce: {
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            };
+            key: components["schemas"]["PurchasingRuleKey"];
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "platform" | "tenant";
+            /** Platform Ref */
+            platform_ref: string;
+            /** Ref */
+            ref: string;
+        };
+        /**
+         * PurchasingRuleKey
+         * @description What a tenant may hold its own version of.
+         * @enum {string}
+         */
+        PurchasingRuleKey: "purchasing_rules";
+        /**
+         * PurchasingRuleVersionView
+         * @description A version as the settings page lists it.
+         */
+        PurchasingRuleVersionView: {
+            /** Applied Directly */
+            applied_directly: boolean;
+            /** Approval Id */
+            approval_id: string | null;
+            /** Comment */
+            comment: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            };
+            key: components["schemas"]["PurchasingRuleKey"];
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /**
+             * Proposed By
+             * Format: uuid
+             */
+            proposed_by: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "rejected" | "superseded";
+            /** Version */
+            version: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /** PurchasingRulesView */
+        PurchasingRulesView: {
+            /** Keys */
+            keys: components["schemas"]["PurchasingKeyInForce"][];
+            /** Versions */
+            versions: components["schemas"]["PurchasingRuleVersionView"][];
+        };
         /** ReadinessResponse */
         ReadinessResponse: {
             /** Checks */
@@ -2315,6 +3187,52 @@ export interface components {
             /** Scope Set Key */
             scope_set_key: string;
         };
+        /**
+         * RfqDraft
+         * @description One supplier's RFQ: who receives it, which lines, and the words.
+         */
+        RfqDraft: {
+            /** Body */
+            body: string;
+            /** Line Nos */
+            line_nos: number[];
+            /** Subject */
+            subject: string;
+            /** Supplier Code */
+            supplier_code: string;
+            /** To */
+            to: string[];
+            /**
+             * Written By
+             * @enum {string}
+             */
+            written_by: "model" | "template";
+        };
+        /** RfqRound */
+        RfqRound: {
+            /**
+             * Drafted At
+             * Format: date-time
+             */
+            drafted_at: string;
+            /**
+             * Drafted By
+             * Format: uuid
+             */
+            drafted_by: string;
+            /** Drafts */
+            drafts: components["schemas"]["RfqDraft"][];
+            /**
+             * Reply By
+             * Format: date
+             */
+            reply_by: string;
+            /**
+             * Unsourced
+             * @default []
+             */
+            unsourced: number[];
+        };
         /** RoleView */
         RoleView: {
             /** Administrative */
@@ -2325,6 +3243,37 @@ export interface components {
             name: string;
             /** Scopes */
             scopes: string[];
+        };
+        /**
+         * RuleChange
+         * @description What a proposal answers, and what the idempotency store keeps: ids and
+         *     the status, never the document (it holds the company's limits).
+         */
+        RuleChange: {
+            /** Applied Directly */
+            applied_directly: boolean;
+            /** Approval Id */
+            approval_id: string | null;
+            /** Status */
+            status: string;
+            /** Version */
+            version: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+        };
+        /**
+         * RulesBody
+         * @description A whole version of a key: what the settings page drafted and the person
+         *     read as a difference in words before sending.
+         */
+        RulesBody: {
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            };
         };
         /** RunView */
         RunView: {
@@ -2353,6 +3302,35 @@ export interface components {
             worker_id: string;
             /** Worker Version */
             worker_version: string;
+        };
+        /**
+         * Selection
+         * @description The suppliers a person chose, line by line, and what that comes to.
+         */
+        Selection: {
+            /** Choices */
+            choices: components["schemas"]["Choice"][];
+            /** Currency */
+            currency: string;
+            /**
+             * Selected At
+             * Format: date-time
+             */
+            selected_at: string;
+            /**
+             * Selected By
+             * Format: uuid
+             */
+            selected_by: string;
+            /** Total */
+            total: string;
+        };
+        /** SelectionBody */
+        SelectionBody: {
+            /** Case Version */
+            case_version: number;
+            /** Choices */
+            choices: components["schemas"]["Choice"][];
         };
         /** SetEnabledRequest */
         SetEnabledRequest: {
@@ -4811,6 +5789,573 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRefView"][];
+                };
+            };
+        };
+    };
+    mailbox_api_v1_purchasing_mail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxItem"][];
+                };
+            };
+        };
+    };
+    read_mail_api_v1_purchasing_mail__message_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requests_api_v1_purchasing_requests_get: {
+        parameters: {
+            query?: {
+                before_at?: string | null;
+                before_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CasePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_request_api_v1_purchasing_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseRequest-Input"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_request_api_v1_purchasing_requests__case_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseCase"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_request_api_v1_purchasing_requests__case_id__check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseCheckView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comparison_api_v1_purchasing_requests__case_id__comparison_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_offer_api_v1_purchasing_requests__case_id__offers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_offer_mail_api_v1_purchasing_requests__case_id__offers_from_mail__message_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseVersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_orders_api_v1_purchasing_requests__case_id__po_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseVersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bravo_file_api_v1_purchasing_requests__case_id__po_bravo_xlsx_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_rfq_api_v1_purchasing_requests__case_id__rfq_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseVersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_suppliers_api_v1_purchasing_requests__case_id__selection_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_request_for_approval_api_v1_purchasing_requests__case_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseVersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rules_in_force_api_v1_purchasing_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchasingRulesView"];
+                };
+            };
+        };
+    };
+    rule_schema_api_v1_purchasing_rules__key__schema_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_rules_api_v1_purchasing_rules__key__versions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

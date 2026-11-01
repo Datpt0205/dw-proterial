@@ -592,9 +592,9 @@ def grade_po_missing_evidence(
         refused: list[str] = []
         world = _sourcing_world(ctx, data)
         case_id = await _suppliers_chosen(world)
-        current = world.approvals.rules.platform.current()
+        current = world.approvals.rules.platform["purchasing_rules"]
         without = current.model_dump(mode="json")
-        without["version"], without["bravo_po"] = "9.9.9-eval", None
+        without["policy_version"], without["bravo_po"] = "9.9.9", None
         world.tenant_policies.documents[(ALPHA[0], "purchasing_rules")] = without
         version = (await world.service.case(caller(), case_id)).case_version
         try:

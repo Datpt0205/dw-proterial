@@ -19,6 +19,7 @@ from dw_kernel.errors import ConflictError
 from dw_kernel.ids import UserId
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
+from dw_platform.application.rule_versions import ONE_OPEN_PROPOSAL, RuleScope, RuleVersion
 from dw_platform.domain.approval import (
     ApprovalDecision,
     ApprovalRequest,
@@ -143,8 +144,63 @@ class _Approvals:
 
 
 @dataclass
+class _Versions:
+    """One tenant's rule versions, refusing what `platform.rule_versions`
+    refuses: a number twice, a second proposal on a key."""
+
+    held: dict[uuid.UUID, RuleVersion]
+
+    async def list_all(self) -> Sequence[RuleVersion]:
+        return sorted(self.held.values(), key=lambda v: (v.proposed_at, v.version_id), reverse=True)
+
+    async def get(self, version_id: uuid.UUID) -> RuleVersion | None:
+        return self.held.get(version_id)
+
+    def _once(self, version: RuleVersion) -> None:
+        if any(v.key == version.key and v.version == version.version for v in self.held.values()):
+            raise ConflictError(
+                "refused", details={"constraint": "uq_rule_versions_tenant_id_key_version"}
+            )
+
+    async def add(self, version: RuleVersion) -> None:
+        self._once(version)
+        if any(v.key == version.key and v.status == "proposed" for v in self.held.values()):
+            raise ConflictError(
+                "quy tắc này đã có một phiên bản chờ duyệt",
+                details={"constraint": "uq_rule_versions_one_proposed", "rule": ONE_OPEN_PROPOSAL},
+            )
+        self.held[version.version_id] = version
+
+    def _supersede(self, superseding: uuid.UUID | None) -> None:
+        if superseding is not None and superseding in self.held:
+            self.held[superseding] = self.held[superseding].model_copy(
+                update={"status": "superseded"}
+            )
+
+    async def decide(self, version: RuleVersion, *, superseding: uuid.UUID | None) -> None:
+        stored = self.held.get(version.version_id)
+        if stored is None or stored.status != "proposed":
+            raise ConflictError("the version is decided already")
+        self._supersede(superseding)
+        self.held[version.version_id] = version
+
+    async def apply(self, version: RuleVersion, *, superseding: uuid.UUID | None) -> None:
+        self._once(version)
+        self._supersede(superseding)
+        self.held[version.version_id] = version
+
+
+@dataclass
 class _Work:
     rows: _Rows
+    versions: dict[uuid.UUID, RuleVersion] = field(default_factory=dict)
+
+    @property
+    def rule_versions(self) -> _Versions:
+        return _Versions(self.versions)
+
+    async def commit(self) -> None:
+        return None
 
     @property
     def cases(self) -> _Cases:
@@ -168,13 +224,26 @@ class MemoryStore:
     """Implements `PurchasingUnitOfWork` (call it with a context)."""
 
     scopes: dict[_Scope, _Rows] = field(default_factory=dict)
+    # Rule versions are the tenant's, whichever workspace proposed them.
+    versions: dict[uuid.UUID, dict[uuid.UUID, RuleVersion]] = field(default_factory=dict)
 
     @asynccontextmanager
     async def __call__(self, context: AccessContext) -> AsyncIterator[_Work]:
         key = (context.tenant_id, context.workspace_id)
         working = self.scopes.get(key, _Rows()).copy()
-        yield _Work(working)
+        versions = dict(self.versions.get(context.tenant_id, {}))
+        yield _Work(working, versions)
         self.scopes[key] = working
+        self.versions[context.tenant_id] = versions
+
+    async def approved(self, scope: RuleScope, key: str) -> RuleVersion | None:
+        """`RuleVersionLookupPort`: the tenant's version in force, never another's."""
+        held = self.versions.get(scope.tenant_id.value, {}).values()
+        return next((v for v in held if v.key == key and v.status == "approved"), None)
+
+    async def find(self, scope: RuleScope, key: str, version: str) -> RuleVersion | None:
+        held = self.versions.get(scope.tenant_id.value, {}).values()
+        return next((v for v in held if v.key == key and v.version == version), None)
 
     def rows(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> _Rows:
         return self.scopes.get((tenant_id, workspace_id), _Rows())

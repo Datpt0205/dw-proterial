@@ -117,6 +117,7 @@ def _mounted(world: World) -> PurchasingMount:
             approvals=world.approvals,
             sourcing=world.sourcing,
             orders=world.orders,
+            rules=world.rules,
         )
     )
 
@@ -154,6 +155,9 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("GET", f"/requests/{uuid.uuid4()}/comparison", None),
         ("POST", f"/requests/{uuid.uuid4()}/po", {"case_version": 1}),
         ("GET", f"/requests/{uuid.uuid4()}/po/bravo.xlsx", None),
+        ("GET", "/rules", None),
+        ("GET", "/rules/purchasing_rules/schema", None),
+        ("POST", "/rules/purchasing_rules/versions", {"document": {"policy_version": "9.0.0"}}),
         (
             "POST",
             f"/requests/{uuid.uuid4()}/selection",
@@ -186,6 +190,35 @@ async def test_every_route_refuses_a_caller_without_its_scope_and_touches_nothin
     unsigned = await _call(container, method, path, body, signed_in=False)
     assert unsigned.status_code == 401
     assert world.store.scopes == {} and world.model.calls == []
+    assert world.store.versions == {}
+
+
+async def test_a_heads_rules_apply_and_the_answer_holds_no_document() -> None:
+    """What the idempotency store keeps of a proposal is ids and its status:
+    the document holds the company's limits."""
+    world = _world()
+    container = _container(EVERY_SCOPE, _mounted(world))
+    listed = await _call(container, "GET", "/rules")
+    assert listed.status_code == 200, listed.text
+    document = listed.json()["keys"][0]["document"]
+    document["policy_version"] = "9.0.0"
+    document["pr_form"]["max_lines"] = 7
+    proposed = await _call(
+        container, "POST", "/rules/purchasing_rules/versions", {"document": document}
+    )
+    assert proposed.status_code == 200, proposed.text
+    assert set(proposed.json()) == {
+        "version_id",
+        "version",
+        "status",
+        "approval_id",
+        "applied_directly",
+    }
+    assert proposed.json()["status"] == "approved"
+    again = await _call(container, "GET", "/rules")
+    assert again.json()["keys"][0]["ref"] == "purchasing_rules@9.0.0"
+    unknown = await _call(container, "GET", "/rules/sales_order_rules/schema")
+    assert unknown.status_code == 404
 
 
 async def test_a_body_naming_a_tenant_is_refused() -> None:
@@ -231,7 +264,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 14
+    assert len(routes) == 17
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
@@ -243,6 +276,7 @@ def test_the_composition_root_makes_purchasing_approvals_strict_and_guarded() ->
     from dw_agent_runtime.approval_flow import ApproveAndResumeService
     from dw_api.bootstrap.wiring import build_purchasing_mount
     from dw_purchasing.application.approvals import APPROVAL_PREFIX, RequestDecisions
+    from dw_purchasing.application.rules import RuleDecisions
 
     flow = ApproveAndResumeService(
         uow_factory=None,  # type: ignore[arg-type]
@@ -260,8 +294,10 @@ def test_the_composition_root_makes_purchasing_approvals_strict_and_guarded() ->
         approval_flow=flow,
         model=None,
     )
-    assert flow.is_strict("purchasing.request")
+    assert flow.is_strict("purchasing.request") and flow.is_strict("purchasing.rules")
     assert isinstance(flow.decision_guards[APPROVAL_PREFIX], RequestDecisions)
+    # A rules approval is checked by the rule engine's guard, the longer prefix.
+    assert isinstance(flow.decision_guards["purchasing.rules"], RuleDecisions)
     assert isinstance(mount, PurchasingMount)
 
 

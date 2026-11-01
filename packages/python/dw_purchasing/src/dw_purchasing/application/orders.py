@@ -32,7 +32,7 @@ from dw_platform.domain.audit import AuditEvent
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import CaseChange
 from dw_purchasing.application.ports import MasterDataPort, PurchasingUnitOfWork, SpreadsheetPort
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.orders import PoRound, bravo_rows, draft_orders
 
@@ -53,7 +53,7 @@ class BravoDownload(BaseModel):
 class PurchaseOrders:
     uow: PurchasingUnitOfWork
     gate: Gate
-    rules: RuleBook
+    rules: PurchasingRuleBook
     master: MasterDataPort
     spreadsheet: SpreadsheetPort
     clock: UtcClock

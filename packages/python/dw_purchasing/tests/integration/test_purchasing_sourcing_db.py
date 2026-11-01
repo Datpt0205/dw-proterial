@@ -18,11 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import NotFoundError
 from dw_kernel.ports import FixedClock, Uuid4Generator
-from dw_platform.adapters.persistence.policy_overrides import SqlPolicyOverrideRepository
 from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
 )
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.domain.approval import ApprovalStatus
 from dw_purchasing.adapters.assembly import request_settlement
 from dw_purchasing.adapters.bravo_file import BravoFile
@@ -34,7 +34,7 @@ from dw_purchasing.application.access import Gate
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import released_book
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.domain.sourcing import Choice
@@ -70,7 +70,7 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
 ) -> None:
     files = PolicyFiles.load(REPO / "configs/policies")
     store = SqlPurchasingStore(app_sessions, SqlAuditRepository, SqlApprovalRepository)
-    book = RuleBook(files, SqlPolicyOverrideRepository(app_sessions), files.versions)
+    book = released_book(files.current(), files.by_ref, SqlRuleVersionLookup(app_sessions))
     clock, ids = FixedClock(NOW), Uuid4Generator()
     model = ScriptedModel(INTAKE["answers"])
     model.by_schema = {

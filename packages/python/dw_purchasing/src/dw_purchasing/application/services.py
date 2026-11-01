@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.intake import PurchaseRequests
 from dw_purchasing.application.orders import PurchaseOrders
+from dw_purchasing.application.rules import PurchasingRulesService
 from dw_purchasing.application.sourcing import SupplierSourcing
 
 
@@ -16,3 +17,4 @@ class PurchasingServices:
     approvals: RequestApprovals
     sourcing: SupplierSourcing
     orders: PurchaseOrders
+    rules: PurchasingRulesService

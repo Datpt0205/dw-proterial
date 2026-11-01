@@ -268,7 +268,7 @@ async def test_another_workspace_of_the_same_tenant_does_not_see_the_case() -> N
 
 def _tenant_rules(**changes: Any) -> dict[str, object]:
     document: dict[str, object] = {
-        "version": "1.0.0-alpha.1",
+        "version": "9.0.0",
         "pr_form": {
             "required": ["budget_code", "need_by"],
             "max_lines": 50,
@@ -288,7 +288,7 @@ async def test_a_tenants_own_rules_decide_and_are_stamped() -> None:
     assert (item.disposition, item.reason) == (Disposition.TO_PERSON, "missing:need_by")
     change = await world.service.submit_form(caller(), _form(need_by=date(2026, 12, 1)))
     case = await world.service.case(caller(), change.case_id)
-    assert case.rules_ref == "purchasing_rules@1.0.0-alpha.1"
+    assert case.rules_ref == "purchasing_rules@9.0.0"
 
 
 async def test_one_tenants_rules_never_reach_another() -> None:
@@ -298,15 +298,21 @@ async def test_one_tenants_rules_never_reach_another() -> None:
     assert item.disposition is Disposition.OPENED
 
 
-@pytest.mark.parametrize(
-    "document",
-    [_tenant_rules(pr_form={"required": []}), _tenant_rules(version="1.0.0")],
-    ids=["unreadable", "a-platform-version"],
-)
-async def test_a_tenant_version_that_cannot_be_used_refuses_rather_than_falls_back(
-    document: dict[str, object],
-) -> None:
+async def test_a_tenant_version_that_cannot_be_read_refuses_rather_than_falls_back() -> None:
+    # A number the platform ships is refused where a version is proposed
+    # (`test_purchasing_rules.py`); a stored one today's schema cannot read
+    # is refused here, never replaced by the platform's.
     world = _world()
+    # A field a stored version predates reads as the platform's (`read_over`),
+    # so only a value today's schema refuses makes it unreadable.
+    document = _tenant_rules(
+        pr_form={
+            "required": [],
+            "max_lines": 0,
+            "currencies": ["VND"],
+            "default_currency": "VND",
+        }
+    )
     world.tenant_policies.documents[(ALPHA[0], "purchasing_rules")] = document
     with pytest.raises(ConflictError):
         await world.service.submit_form(caller(), _form())

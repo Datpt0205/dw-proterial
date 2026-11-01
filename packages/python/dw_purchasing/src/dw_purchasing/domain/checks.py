@@ -110,7 +110,7 @@ class MasterData(BaseModel):
         return next((s for s in self.suppliers if s.code == code), None)
 
 
-class FindingCode(StrEnum):
+class PurchaseFindingCode(StrEnum):
     # The line names no item the company knows.
     ITEM_UNKNOWN = "item_unknown"
     # No quotation, no past price and no estimate: the line has no price.
@@ -133,7 +133,7 @@ Basis = Literal["quote", "history", "estimate"]
 class Finding(BaseModel):
     model_config = _FROZEN
 
-    code: FindingCode
+    code: PurchaseFindingCode
     # The line it concerns; None for the request as a whole.
     line_no: int | None = None
 
@@ -161,7 +161,7 @@ class CrossCheck(BaseModel):
     findings: tuple[Finding, ...]
 
     @property
-    def codes(self) -> frozenset[FindingCode]:
+    def codes(self) -> frozenset[PurchaseFindingCode]:
         return frozenset(f.code for f in self.findings)
 
 
@@ -179,7 +179,7 @@ def cross_check(
         need_by = line.need_by or request.need_by
         known = line.item_code is not None and line.item_code in master.items
         if not known:
-            findings.append(Finding(code=FindingCode.ITEM_UNKNOWN, line_no=line.line_no))
+            findings.append(Finding(code=PurchaseFindingCode.ITEM_UNKNOWN, line_no=line.line_no))
         quotes = [
             q
             for q in master.quotes
@@ -198,22 +198,28 @@ def cross_check(
             best = min(same, key=lambda q: (q.unit_price, q.supplier_code))
             reference, basis, supplier = best.unit_price, "quote", best.supplier_code
             if need_by is not None and need_by < today + timedelta(days=best.lead_time_days):
-                findings.append(Finding(code=FindingCode.NEED_BY_SHORT, line_no=line.line_no))
+                findings.append(
+                    Finding(code=PurchaseFindingCode.NEED_BY_SHORT, line_no=line.line_no)
+                )
         elif paid:
             reference, basis, supplier = paid[-1].unit_price, "history", paid[-1].supplier_code
         elif line.estimated_unit_price is not None:
             reference, basis = line.estimated_unit_price, "estimate"
         if (quotes or past) and not (same or paid):
-            findings.append(Finding(code=FindingCode.CURRENCY_MISMATCH, line_no=line.line_no))
+            findings.append(
+                Finding(code=PurchaseFindingCode.CURRENCY_MISMATCH, line_no=line.line_no)
+            )
         if reference is None:
-            findings.append(Finding(code=FindingCode.NO_REFERENCE_PRICE, line_no=line.line_no))
+            findings.append(
+                Finding(code=PurchaseFindingCode.NO_REFERENCE_PRICE, line_no=line.line_no)
+            )
         elif (
             basis != "estimate"
             and line.estimated_unit_price is not None
             and line.estimated_unit_price > reference * (1 + tolerance_percent / 100)
         ):
             findings.append(
-                Finding(code=FindingCode.ESTIMATE_ABOVE_REFERENCE, line_no=line.line_no)
+                Finding(code=PurchaseFindingCode.ESTIMATE_ABOVE_REFERENCE, line_no=line.line_no)
             )
         lines.append(
             LineCheck(
@@ -238,10 +244,10 @@ def cross_check(
 
 def _budget(request: PurchaseRequest, master: MasterData, amount: Decimal | None) -> list[Finding]:
     if request.budget_code is None:
-        return [Finding(code=FindingCode.BUDGET_MISSING)]
+        return [Finding(code=PurchaseFindingCode.BUDGET_MISSING)]
     budget = master.budgets.get(request.budget_code)
     if budget is None or budget.currency != request.currency:
-        return [Finding(code=FindingCode.BUDGET_UNKNOWN)]
+        return [Finding(code=PurchaseFindingCode.BUDGET_UNKNOWN)]
     if amount is not None and amount > budget.remaining:
-        return [Finding(code=FindingCode.OVER_BUDGET)]
+        return [Finding(code=PurchaseFindingCode.OVER_BUDGET)]
     return []

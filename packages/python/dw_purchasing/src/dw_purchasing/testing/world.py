@@ -21,6 +21,7 @@ from dw_agent_runtime.model.interpretation import ModelUnavailableError, PromptR
 from dw_kernel.errors import PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.rule_versions import RuleVersion
 from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
@@ -33,7 +34,12 @@ from dw_purchasing.application.approvals import (
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import (
+    PurchasingRulesService,
+    RuleDecisions,
+    RuleSettlement,
+    released_book,
+)
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.testing.memory import MemoryStore
 
@@ -77,14 +83,56 @@ class Authz:
         return action in context.scopes
 
 
+# Who seeded a tenant's version in a test: fictional.
+SEEDED_BY = uuid.UUID(int=0x5EED)
+
+
+@dataclass
+class _Seeding:
+    """``documents[(tenant, key)] = document`` writes ``document`` as the
+    tenant's version in force, as a stored row is: unvalidated, so a test can
+    hold a version today's schema no longer reads."""
+
+    store: MemoryStore
+
+    def __setitem__(self, where: tuple[uuid.UUID, str], document: dict[str, Any]) -> None:
+        from datetime import UTC, datetime
+
+        tenant_id, key = where
+        # Written as the engine writes every document (`by_alias`): the
+        # version as `policy_version`, the key as `policy_id`.
+        document = {"policy_id": key, **document}
+        if "version" in document:
+            document["policy_version"] = document.pop("version")
+        held = self.store.versions.setdefault(tenant_id, {})
+        for version_id, before in list(held.items()):
+            if before.key == key and before.status == "approved":
+                held[version_id] = before.model_copy(update={"status": "superseded"})
+        at = datetime(2026, 10, 1, tzinfo=UTC)
+        version_id = uuid.uuid4()
+        held[version_id] = RuleVersion(
+            version_id=version_id,
+            key=key,
+            version=str(document["policy_version"]),
+            document=document,
+            status="approved",
+            proposed_by=SEEDED_BY,
+            proposed_at=at,
+            decided_by=SEEDED_BY,
+            decided_at=at,
+            applied_directly=True,
+        )
+
+
 @dataclass
 class TenantPolicies:
-    """`TenantPolicyPort` over a dict keyed by (tenant, policy id)."""
+    """A tenant's own rule versions, seeded into the store's (`_Seeding`)."""
 
-    documents: dict[tuple[uuid.UUID, str], dict[str, object]] = field(default_factory=dict)
+    store: MemoryStore
 
-    async def get(self, context: AccessContext, policy_id: str) -> dict[str, object] | None:
-        return self.documents.get((context.tenant_id, policy_id))
+    @property
+    def documents(self) -> _Seeding:
+        return _Seeding(self.store)
 
 
 @dataclass
@@ -133,6 +181,9 @@ class World:
     settlement: RequestSettlement
     sourcing: SupplierSourcing
     orders: PurchaseOrders
+    rules: PurchasingRulesService
+    rule_decisions: RuleDecisions
+    rule_settlement: RuleSettlement
 
 
 def open_world(
@@ -143,9 +194,9 @@ def open_world(
     files = PolicyFiles.load(repo / "configs" / "policies")
     store = MemoryStore()
     model = ScriptedModel(answers)
-    policies = TenantPolicies()
+    policies = TenantPolicies(store)
     clock = FixedClock(datetime(2026, 11, 2, 7, 0, tzinfo=UTC))
-    book = RuleBook(files, policies, files.versions)
+    book = released_book(files.current(), files.by_ref, store)
     ids = Uuid4Generator()
     service = PurchaseRequests(
         uow=store,
@@ -191,4 +242,7 @@ def open_world(
             clock=clock,
             ids=ids,
         ),
+        PurchasingRulesService(uow=store, gate=Gate(Authz()), book=book, clock=clock, ids=ids),
+        RuleDecisions(store, book),
+        RuleSettlement(store, book, clock, ids),
     )

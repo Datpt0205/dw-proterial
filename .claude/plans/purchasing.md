@@ -159,6 +159,45 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
       supplier gone, total mismatch. Two first mutations were too weak or
       unmatched by a test and were redone or closed with one.
 
+## Plan of the unattended run (Đạt, 2026-11-01: DW2 is a real product)
+
+Product rules, the three-level switch per step and the 12-step defaults are
+in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
+
+- Phase 1, the lifts (ADR 0013 decisions 2–3). Reordered against the brief
+  for one dependency: learning a template from a file and the master-data
+  import both read Excel through the reader, so the reader's split comes
+  before them.
+    1. rule versions → `dw_platform.application.rule_versions` (+ table
+       `platform.rule_versions`, moved with `ALTER TABLE … SET SCHEMA`, rows
+       kept); rule words' `apply_changes` generic;
+    2. rule drafts (words, file) → platform, worker lane generic;
+    3. reader split (wire, transport, generic ops to the platform);
+    4. template learning generic (DW2's Bravo PO layout from its file);
+    5. model readiness + measurements → platform; DW2's three-level switch;
+    6. master-data import; 7. mail drop (`DW_PURCHASING_MAILBOX`);
+    8. outbox (sent from the buyer's own mailbox).
+- Phase 2: functions 1–4 automated (requester role, auto-submit, re-approval
+  past the tier, notices, retention). Phase 3: web pages; then stop and report.
+
+## State of the unattended run
+
+- **Lift 1, rule versions** (`b28a0773`): the engine and
+  `platform.rule_versions` (moved by `SET SCHEMA`, rows kept); Sales on it,
+  behaviour unchanged, whole unit suite green.
+- **ADR 0014** (`0fd851fd`): a lift moves the decisions and their tables;
+  each context keeps its queue (drafts, imports, mailbox, outbound).
+- **Lift 2, changes in words** (`4a146c58`): `dw_platform.application.rule_words`.
+- **Reader split: deferred, on purpose.** DW2 reads attachments through
+  ports it declares, satisfied at the composition root by the reader client
+  that exists (ADR 0013 decision 2's own interim); the split moves DW1's
+  parsers and is its own change, not needed for DW2 to read a file.
+- **DW2 rules editor (API)**: `purchasing_rules` registered with the engine
+  (migration `633993a6d8b4`: key admitted, `purchasing_configurer`, head
+  proposes and approves); `GET /rules`, `GET /rules/{key}/schema`,
+  `POST /rules/{key}/versions` (ids only answered); `purchasing.rules` guard
+  in the API, settlement in the worker. Policy overrides no longer read.
+
 ## Next
 
 1. Đạt reviews the four slices (this report).
@@ -188,10 +227,9 @@ decides (dw_sales ADR 0005/0006/0007, as DW2 applies them).
 
 ## Decisions Đạt owes (Purchasing)
 
-- **Tenant rule editor**: a tenant's `purchasing_rules` is stored through the
-  platform's policy overrides, which has no route; a maker/checker editor
-  means lifting Sales' rule-version engine (ADR 0013 decision 3).
-  Recommended when Proterial's real limits arrive.
+- **Who configures DW2**: built as `purchasing_configurer` (proposes) and
+  the head (decides, and applies their own at once, as a Sales head). Whether
+  Proterial wants the director, not the head, to decide limit changes.
 - **Retention** of `purchasing.cases` and `mail_outcomes` (none set).
 - **Who requests**: today a buyer enters a department's form; whether
   departments get their own `purchasing_requester` role (and see only their
