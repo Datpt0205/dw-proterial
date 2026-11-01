@@ -281,31 +281,6 @@ po_layouts = sa.Table(
     sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
 )
 
-# A tenant's own versions of a Sales rule, proposed and decided (ticket 19).
-rule_versions = sa.Table(
-    "rule_versions",
-    metadata,
-    sa.Column("id", UUID(as_uuid=True), primary_key=True),
-    *_scope(),
-    sa.Column("key", sa.Text, nullable=False),
-    sa.Column("version", sa.Text, nullable=False),
-    sa.Column("document", JSONB, nullable=False),
-    sa.Column("status", sa.Text, nullable=False),
-    sa.Column("proposed_by", UUID(as_uuid=True), nullable=False),
-    sa.Column("proposed_at", _TS, nullable=False),
-    sa.Column("decided_by", UUID(as_uuid=True)),
-    sa.Column("decided_at", _TS),
-    sa.Column("comment", sa.Text),
-    # The platform approval (`sales.rules`) the proposal waits on, of the same
-    # tenant and workspace (`fk_rule_versions_approval_requests`, ticket 38);
-    # null on a version decided before it.
-    sa.Column("approval_id", UUID(as_uuid=True)),
-    # Applied by the head who wrote it, with no approval (40266fbc98bf).
-    sa.Column("applied_directly", sa.Boolean, nullable=False, server_default=sa.false()),
-    sa.Column("created_at", _TS, nullable=False, server_default=sa.func.now()),
-    sa.Column("updated_at", _TS, nullable=False, server_default=sa.func.now()),
-)
-
 # Each message's processing job (ticket 25, migration 0a78ca5e96d3).
 processing_jobs = sa.Table(
     "processing_jobs",

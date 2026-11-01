@@ -475,6 +475,36 @@ policy_overrides = sa.Table(
     ),
 )
 
+# A tenant's own versions of a context's rules, proposed and decided (Sales
+# ticket 19; moved from `sales` by the ADR 0013 lift, rows kept). Narrowed by
+# tenant only: a version applies to the whole tenant.
+rule_versions = sa.Table(
+    "rule_versions",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), sa.ForeignKey("workspaces.id"), nullable=False),
+    sa.Column("key", sa.Text, nullable=False),
+    sa.Column("version", sa.Text, nullable=False),
+    sa.Column("document", JSONB, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+    sa.Column("proposed_by", UUID(as_uuid=True), nullable=False),
+    sa.Column("proposed_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("decided_by", UUID(as_uuid=True)),
+    sa.Column("decided_at", sa.TIMESTAMP(timezone=True)),
+    sa.Column("comment", sa.Text),
+    # The approval the proposal waits on, of the same tenant and workspace
+    # (`fk_rule_versions_approval_requests`); null when applied directly.
+    sa.Column("approval_id", UUID(as_uuid=True)),
+    sa.Column("applied_directly", sa.Boolean, nullable=False, server_default=sa.false()),
+    sa.Column(
+        "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+    sa.Column(
+        "updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")
+    ),
+)
+
 # Separation of duties (migrations b9862fa13a80, 6b26771e549d). The rules are a
 # platform catalogue the application reads; the membership trigger enforces
 # them. A waiver is one tenant's recorded decision to lift a waivable rule.

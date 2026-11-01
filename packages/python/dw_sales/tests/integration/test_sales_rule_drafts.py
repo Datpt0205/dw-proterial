@@ -27,12 +27,12 @@ from dw_platform.adapters.persistence.repositories import (
     SqlAuditRepository,
     SqlOutboxRepository,
 )
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.testing.scanners import NoMalware
 from dw_sales.adapters.persistence.catalog import SqlCatalogUnitOfWorkFactory
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
-from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ClientSourceView
 from dw_sales.adapters.readers.operations import InProcessReaderTransport

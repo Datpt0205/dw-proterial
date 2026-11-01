@@ -69,8 +69,6 @@ _SETS: dict[str, set[str]] = {
     "ck_messages_disposition": _values(dispositions.DispositionKind),
     "ck_messages_routing_reason": _values(dispositions.RoutingReason),
     "ck_quote_cases_status": _values(quotes.QuoteStatus),
-    # The keys a tenant may hold its own version of (tickets 19 and 36).
-    "ck_rule_versions_key": _values(RuleKey),
     # A message's processing job and why it failed (ticket 25).
     "ck_processing_jobs_status": set(get_args(JobStatus)),
     "ck_processing_jobs_error_code": set(get_args(JobError)),
@@ -89,6 +87,20 @@ _SETS: dict[str, set[str]] = {
     # The model steps a measurement is of (ADR 0005, addendum of 2026-10-23).
     "ck_model_step_measurements_step": _values(ModelStep),
 }
+
+
+async def test_the_platform_rule_versions_admit_every_sales_key(catalog: AsyncConnection) -> None:
+    """The keys a tenant may hold its own version of (tickets 19 and 36), in
+    the table every context's versions share since ADR 0013's lift."""
+    definition = await catalog.scalar(
+        sa.text(
+            "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c"
+            " JOIN pg_namespace n ON n.oid = c.connamespace"
+            " WHERE n.nspname = 'platform' AND c.conname = 'ck_rule_versions_key'"
+        )
+    )
+    keys = set(re.findall(r"'([a-z_]+)'::text", str(definition)))
+    assert {k for k in keys if k.startswith("sales_")} == _values(RuleKey)
 
 
 @pytest.mark.parametrize("name", sorted(_SETS))
@@ -171,9 +183,6 @@ async def test_every_foreign_key_says_what_a_delete_does_and_is_indexed(
 # policed by tenant alone, unique keys led by `tenant_id` alone. Every other
 # Sales table is narrowed by workspace as well.
 _TENANT_WIDE = {
-    # A tenant's own rule version applies in every workspace of the tenant,
-    # whichever it was proposed in (ticket 19, migration 57a241ea182b).
-    "rule_versions",
     # A model step's measurement backs a switch in those rules: the tenant's,
     # whichever workspace recorded it (migration 2d97d03c937a).
     "model_step_measurements",

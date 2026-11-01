@@ -20,6 +20,7 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionStore
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_platform.application.ports import AuditRepositoryPort
 from dw_sales.adapters.persistence.activity import SqlStepActivityLog
@@ -36,7 +37,6 @@ from dw_sales.adapters.persistence.records import (
     SqlSourceServed,
     SqlWorkerSwitch,
 )
-from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionStore
 from dw_sales.application.case_store import RunLessApprovalsPort
 from dw_sales.application.ports import SalesScope
 
