@@ -95,8 +95,9 @@ async def test_the_heads_own_version_applies_at_once_and_is_stamped() -> None:
     assert (version.status, version.applied_directly) == ("approved", True)
     assert world.store.rows(*ALPHA).approvals == {}
     listed = await world.rules.list(_head())
-    assert [(k.ref, k.layer) for k in listed.keys] == [("purchasing_rules@9.0.0", "tenant")]
-    assert listed.keys[0].platform_ref.startswith("purchasing_rules@1.")
+    rules = [k for k in listed.keys if k.key == "purchasing_rules"]
+    assert [(k.ref, k.layer) for k in rules] == [("purchasing_rules@9.0.0", "tenant")]
+    assert rules[0].platform_ref.startswith("purchasing_rules@1.")
     item = await world.service.read_mail(caller(), "P01")
     assert item.case_id is not None
     case = await world.service.case(caller(), item.case_id)

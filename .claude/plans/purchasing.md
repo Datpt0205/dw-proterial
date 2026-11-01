@@ -197,6 +197,18 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   proposes and approves); `GET /rules`, `GET /rules/{key}/schema`,
   `POST /rules/{key}/versions` (ids only answered); `purchasing.rules` guard
   in the API, settlement in the worker. Policy overrides no longer read.
+- **Lift 3, model readiness** (`f29142f8`): `dw_agent_runtime.model.readiness`,
+  `platform.model_step_measurements` (moved, rows kept).
+- **DW2 switches, three levels** (`purchasing_automation@1.0.0`, migration
+  `82cc61f87d6c`): five steps code reads (mail sorting, opening a request from
+  a mail, submission, RFQ drafting, PO drafting); ceilings in code; `ai_auto`
+  on a step with a model reading waits for a passing measurement
+  (`purchasing_pr_mail_reading`, bar 0.9 proposed), else runs `ai_review`;
+  a version raising a step unmeasured is refused (409) at proposal, decision
+  and settlement. `GET /purchasing/automation`. The lanes that read the
+  switches come with Phase 2; the DW2 attest lane (`--attest` for DW2
+  datasets, a golden grader with `bar` details) is not built: no step can be
+  measured yet, so `ai_auto` on a model step cannot take effect (fail-closed).
 
 ## Next
 

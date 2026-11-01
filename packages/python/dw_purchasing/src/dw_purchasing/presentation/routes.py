@@ -34,6 +34,7 @@ from dw_kernel.errors import DomainError, InfrastructureError
 from dw_platform.application.access_context import AccessContext
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.approvals import PurchaseCheckView
+from dw_purchasing.application.automation import SwitchesView
 from dw_purchasing.application.intake import CaseChange, InboxItem
 from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
@@ -265,6 +266,10 @@ def build_router(
     async def read_mail(message_id: _MessageId, context: Ctx, svc: Svc, idem: Idem) -> InboxItem:
         item = await svc.requests.read_mail(context, message_id)
         return await idem.record(item)
+
+    @router.get("/automation", response_model=SwitchesView, dependencies=read)
+    async def automation(context: Ctx, svc: Svc) -> SwitchesView:
+        return await svc.switches.view(context)
 
     @router.get("/rules", response_model=PurchasingRulesView, dependencies=propose)
     async def rules_in_force(context: Ctx, svc: Svc) -> PurchasingRulesView:

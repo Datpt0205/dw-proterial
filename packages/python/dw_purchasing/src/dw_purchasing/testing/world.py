@@ -25,22 +25,23 @@ from dw_platform.application.rule_versions import RuleVersion
 from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
-from dw_purchasing.adapters.policy_files import PolicyFiles
+from dw_purchasing.adapters.policy_files import platform_rule_book
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.approvals import (
     RequestApprovals,
     RequestDecisions,
     RequestSettlement,
 )
+from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.rules import (
     PurchasingRulesService,
     RuleDecisions,
     RuleSettlement,
-    released_book,
 )
 from dw_purchasing.application.sourcing import SupplierSourcing
+from dw_purchasing.testing.measurements import FixedModel, MemoryMeasurements
 from dw_purchasing.testing.memory import MemoryStore
 
 ALPHA: Final = (uuid.UUID(int=0xA1), uuid.UUID(int=0xA2))
@@ -184,6 +185,8 @@ class World:
     rules: PurchasingRulesService
     rule_decisions: RuleDecisions
     rule_settlement: RuleSettlement
+    switches: SwitchesService
+    measurements: MemoryMeasurements
 
 
 def open_world(
@@ -191,12 +194,14 @@ def open_world(
 ) -> World:
     from datetime import UTC, datetime
 
-    files = PolicyFiles.load(repo / "configs" / "policies")
     store = MemoryStore()
+    measurements = MemoryMeasurements()
     model = ScriptedModel(answers)
     policies = TenantPolicies(store)
     clock = FixedClock(datetime(2026, 11, 2, 7, 0, tzinfo=UTC))
-    book = released_book(files.current(), files.by_ref, store)
+    book = platform_rule_book(repo / "configs" / "policies", store)
+    automation = Automation(measurements, FixedModel())
+    checks = AutomationChecks(automation, book)
     ids = Uuid4Generator()
     service = PurchaseRequests(
         uow=store,
@@ -242,7 +247,11 @@ def open_world(
             clock=clock,
             ids=ids,
         ),
-        PurchasingRulesService(uow=store, gate=Gate(Authz()), book=book, clock=clock, ids=ids),
-        RuleDecisions(store, book),
-        RuleSettlement(store, book, clock, ids),
+        PurchasingRulesService(
+            uow=store, gate=Gate(Authz()), book=book, clock=clock, ids=ids, checks=checks
+        ),
+        RuleDecisions(store, book, checks),
+        RuleSettlement(store, book, clock, ids, checks),
+        SwitchesService(Gate(Authz()), book, automation),
+        measurements,
     )

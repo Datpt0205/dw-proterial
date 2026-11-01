@@ -118,6 +118,7 @@ def _mounted(world: World) -> PurchasingMount:
             sourcing=world.sourcing,
             orders=world.orders,
             rules=world.rules,
+            switches=world.switches,
         )
     )
 
@@ -156,6 +157,7 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("POST", f"/requests/{uuid.uuid4()}/po", {"case_version": 1}),
         ("GET", f"/requests/{uuid.uuid4()}/po/bravo.xlsx", None),
         ("GET", "/rules", None),
+        ("GET", "/automation", None),
         ("GET", "/rules/purchasing_rules/schema", None),
         ("POST", "/rules/purchasing_rules/versions", {"document": {"policy_version": "9.0.0"}}),
         (
@@ -219,6 +221,10 @@ async def test_a_heads_rules_apply_and_the_answer_holds_no_document() -> None:
     assert again.json()["keys"][0]["ref"] == "purchasing_rules@9.0.0"
     unknown = await _call(container, "GET", "/rules/sales_order_rules/schema")
     assert unknown.status_code == 404
+    switches = await _call(container, "GET", "/automation")
+    assert switches.status_code == 200, switches.text
+    drafting = next(s for s in switches.json()["steps"] if s["step"] == "pr_drafting")
+    assert (drafting["level"], drafting["why"]) == ("ai_review", "not_measured")
 
 
 async def test_a_body_naming_a_tenant_is_refused() -> None:
@@ -264,7 +270,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 17
+    assert len(routes) == 18
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]

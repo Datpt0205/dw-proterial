@@ -90,3 +90,44 @@ dw_sales ADR 0005 as DW2 applies it).
   `purchasing.rfq.prepare` and `purchasing.po.prepare` (draft the orders,
   download the file). Deciding any approval
   also needs the platform's `approvals.decide`.
+
+## Automation (Đạt, 2026-11-01)
+
+DW2 is the real product signed with Proterial. Every step a model can do,
+it does; an easy step runs on its own, an important one is prepared and a
+person decides it with one press. Limits that do not move: the model only
+reads and writes, code checks and decides; money, approvals, mail leaving the
+company and Bravo always have a person; an unsure step goes to a person with
+the reason in words, never a guess.
+
+- **Switch (công tắc)**: one per step, three levels, the tenant's rule
+  `purchasing_automation@<version>` (proposed and decided like the rules):
+  `ai_auto` **AI tự làm**, `ai_review` **AI làm, người duyệt**, `person`
+  **Người làm**. `domain.automation`.
+- **Ceiling (trần)**: the furthest a step may be set, in code, never a rule:
+  a step that spends money, approves, mails outside or records in Bravo stops
+  at `ai_review`.
+- **Level in effect**: `ai_auto` takes effect only while every model step the
+  step runs on has a live measurement at its bar on the plant's model
+  (`platform.model_step_measurements`); until then it runs at `ai_review`,
+  and the settings page says "chưa đo trên model của nhà máy". A version
+  that raises a step to `ai_auto` before it is measured is refused (409).
+
+The twelve steps, the default proposed, and where each stands:
+
+| # | Step | Default | Switch |
+| --- | --- | --- | --- |
+| 1 | Sort an incoming mail by its sender; else "Cần người xem" | AI tự làm | `mail_sorting` |
+| 2 | Open a request from a mail (later: Excel, scan, a sentence) | AI tự làm once measured | `pr_drafting` |
+| 3 | Cross-check (code), each finding explained (model) | code | not yet: explanations not built |
+| 4 | Send to the approver its amount names; requester ≠ approver | AI tự làm | `submission` |
+| 5 | Pick suppliers (code), word the RFQ (model); a buyer sends | AI làm, người duyệt | `rfq` |
+| 6 | Read a supplier's quote (body, PDF, Excel) | AI tự làm once measured | not yet: replies are linked by hand |
+| 7 | Compare (code), propose with reasons (model); a buyer accepts | AI làm, người duyệt | not yet: proposal not built |
+| 8 | Draft the orders and the Bravo file; a buyer imports it | AI tự làm | `po_drafting` |
+| 9 | The PO number Bravo gave, read back | AI tự làm | function 5, not built |
+| 10 | A supplier's confirmation read and compared with the PO | AI tự làm when it matches | function 5, not built |
+| 11 | Delivery tracked (code); a reminder worded (model), a buyer sends | AI làm, người duyệt | function 5, not built |
+| 12 | Each person's morning brief, questions about a case | AI tự làm | function 6, not built |
+
+A step gets its switch the day code reads it, never before.

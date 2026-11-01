@@ -33,11 +33,11 @@ from dw_platform.adapters.persistence.repositories import (
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.persistence.store import SqlPurchasingStore
-from dw_purchasing.adapters.policy_files import PolicyFiles
+from dw_purchasing.adapters.policy_files import PolicyFiles, platform_rule_book
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.ports import Disposition, MessageOutcome
-from dw_purchasing.application.rules import PurchasingRulesService, released_book
+from dw_purchasing.application.rules import PurchasingRulesService
 from dw_purchasing.domain.cases import (
     CaseStatus,
     PrSource,
@@ -247,7 +247,7 @@ async def test_the_service_on_the_database_audits_and_reads_the_tenants_own_rule
     app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
 ) -> None:
     files = PolicyFiles.load(REPO / "configs/policies")
-    book = released_book(files.current(), files.by_ref, SqlRuleVersionLookup(app_sessions))
+    book = platform_rule_book(REPO / "configs/policies", SqlRuleVersionLookup(app_sessions))
     service = PurchaseRequests(
         uow=_store(app_sessions),
         gate=Gate(Authz()),

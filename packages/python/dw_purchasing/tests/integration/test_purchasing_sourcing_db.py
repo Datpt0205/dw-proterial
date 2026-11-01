@@ -29,12 +29,11 @@ from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.persistence.store import SqlPurchasingStore
-from dw_purchasing.adapters.policy_files import PolicyFiles
+from dw_purchasing.adapters.policy_files import platform_rule_book
 from dw_purchasing.application.access import Gate
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
-from dw_purchasing.application.rules import released_book
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.domain.sourcing import Choice
@@ -68,9 +67,8 @@ async def _decide_as_platform(
 async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
     app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy, migrator: object
 ) -> None:
-    files = PolicyFiles.load(REPO / "configs/policies")
     store = SqlPurchasingStore(app_sessions, SqlAuditRepository, SqlApprovalRepository)
-    book = released_book(files.current(), files.by_ref, SqlRuleVersionLookup(app_sessions))
+    book = platform_rule_book(REPO / "configs/policies", SqlRuleVersionLookup(app_sessions))
     clock, ids = FixedClock(NOW), Uuid4Generator()
     model = ScriptedModel(INTAKE["answers"])
     model.by_schema = {

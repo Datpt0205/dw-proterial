@@ -39,9 +39,12 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import (
     ContextScope,
     Layer,
+    NoMoreChecks,
     RuleBook,
+    RuleChecksPort,
     RuleDecisionGuard,
     RuleRegistry,
+    RuleScope,
     RuleStatus,
     RuleVersion,
     RuleVersionEngine,
@@ -50,6 +53,8 @@ from dw_platform.application.rule_versions import (
 from dw_platform.domain.approval import ApprovalRequest, decided_event_type
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.ports import PurchasingUnitOfWork
+from dw_purchasing.domain.automation import POLICY_ID as AUTOMATION_ID
+from dw_purchasing.domain.automation import PurchasingAutomation
 from dw_purchasing.domain.rules import POLICY_ID, PurchasingRules
 
 UNREADABLE: Final = "quy tắc mua hàng của công ty không đọc được: báo quản trị, chưa nhận yêu cầu"
@@ -70,10 +75,13 @@ class PurchasingRuleKey(StrEnum):
     """What a tenant may hold its own version of."""
 
     RULES = POLICY_ID
+    # How far DW2 goes on its own, per step (`domain.automation`).
+    AUTOMATION = AUTOMATION_ID
 
 
 SCHEMAS: Final[Mapping[PurchasingRuleKey, type[BaseModel]]] = {
     PurchasingRuleKey.RULES: PurchasingRules,
+    PurchasingRuleKey.AUTOMATION: PurchasingAutomation,
 }
 
 
@@ -95,14 +103,19 @@ class PurchasingRuleBook(RuleBook):
         assert isinstance(resolved.policy, PurchasingRules)
         return resolved.policy
 
-    async def resolve_at(self, context: AccessContext, ref: str) -> PurchasingRules | None:
-        """The version ``ref`` names, the tenant's or the platform's; None for
-        a number neither holds."""
+    async def switches(self, context: AccessContext) -> PurchasingAutomation:
+        return await self.switches_in_force(ContextScope.of(context))
+
+    async def switches_in_force(self, scope: RuleScope) -> PurchasingAutomation:
+        """The tenant's switches in force, else the platform's; a stored
+        version that no longer reads stops what asks (409), never falls back
+        to switches the tenant replaced."""
         try:
-            policy = await self.at(ContextScope.of(context), PurchasingRuleKey.RULES, ref)
+            resolved = await self.current(scope, PurchasingRuleKey.AUTOMATION)
         except ValidationError as exc:
-            raise ConflictError(UNREADABLE, details={"policy_id": POLICY_ID}) from exc
-        return policy if isinstance(policy, PurchasingRules) else None
+            raise ConflictError(UNREADABLE, details={"policy_id": AUTOMATION_ID}) from exc
+        assert isinstance(resolved.policy, PurchasingAutomation)
+        return resolved.policy
 
 
 def rule_key(key: str) -> PurchasingRuleKey:
@@ -187,10 +200,14 @@ class PurchasingRulesService:
     book: PurchasingRuleBook
     clock: UtcClock
     ids: IdGenerator
+    # What a version meets beyond its schema: the switches' measurements.
+    checks: RuleChecksPort = field(default_factory=NoMoreChecks)
 
     @property
     def _engine(self) -> RuleVersionEngine:
-        return RuleVersionEngine(REGISTRY, self.uow, self.book, self.clock, self.ids, _NoNames())
+        return RuleVersionEngine(
+            REGISTRY, self.uow, self.book, self.clock, self.ids, _NoNames(), self.checks
+        )
 
     async def list(self, context: AccessContext) -> PurchasingRulesView:
         await self.gate.require(context, PurchasingScopes.RULES_PROPOSE, resource_type=_RESOURCE)
@@ -237,9 +254,12 @@ class RuleDecisions:
 
     uow: PurchasingUnitOfWork
     book: PurchasingRuleBook
+    checks: RuleChecksPort = field(default_factory=NoMoreChecks)
 
     async def check(self, request: ApprovalRequest, decision: Any, context: AccessContext) -> None:
-        await RuleDecisionGuard(REGISTRY, self.uow, self.book).check(request, decision, context)
+        await RuleDecisionGuard(REGISTRY, self.uow, self.book, self.checks).check(
+            request, decision, context
+        )
 
 
 @dataclass(frozen=True)
@@ -250,20 +270,25 @@ class RuleSettlement:
     book: PurchasingRuleBook
     clock: UtcClock
     ids: IdGenerator
+    checks: RuleChecksPort = field(default_factory=NoMoreChecks)
 
     async def settle(
         self, approval_id: uuid.UUID, decider: AccessContext
     ) -> PurchasingRuleVersionView:
         settled = await RuleVersionSettlement(
-            REGISTRY, self.uow, self.book, self.clock, self.ids
+            REGISTRY, self.uow, self.book, self.clock, self.ids, self.checks
         ).settle(approval_id, decider)
         return _view(settled)
 
 
-def released_book(
-    current: PurchasingRules, released: Mapping[str, PurchasingRules], stored: Any
-) -> PurchasingRuleBook:
-    """The book over the platform's files and the tenant's stored versions."""
+def released_book(rules: Any, switches: Any, stored: Any) -> PurchasingRuleBook:
+    """The book over the platform's files (`PolicyFiles`, `SwitchFiles`) and
+    the tenant's stored versions."""
     return PurchasingRuleBook(
-        platform={PurchasingRuleKey.RULES: current}, stored=stored, released=dict(released)
+        platform={
+            PurchasingRuleKey.RULES: rules.current(),
+            PurchasingRuleKey.AUTOMATION: switches.current(),
+        },
+        stored=stored,
+        released={**rules.by_ref, **switches.by_ref},
     )

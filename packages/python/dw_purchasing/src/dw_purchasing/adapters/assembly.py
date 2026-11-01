@@ -14,7 +14,8 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation
+from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
+from dw_agent_runtime.adapters.model_measurements import SqlModelMeasurements
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
 from dw_agent_runtime.ports import ModelGateway
 from dw_agent_runtime.registry import parse_worker_file
@@ -29,13 +30,14 @@ from dw_purchasing.adapters.persistence.store import (
     AuditFactory,
     SqlPurchasingStore,
 )
-from dw_purchasing.adapters.policy_files import PolicyFiles
+from dw_purchasing.adapters.policy_files import platform_rule_book
 from dw_purchasing.application.access import Gate, PurchasingAuthorizationPort
 from dw_purchasing.application.approvals import (
     RequestApprovals,
     RequestDecisions,
     RequestSettlement,
 )
+from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.rules import (
@@ -43,7 +45,6 @@ from dw_purchasing.application.rules import (
     PurchasingRulesService,
     RuleDecisions,
     RuleSettlement,
-    released_book,
 )
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import SupplierSourcing
@@ -76,6 +77,8 @@ def build_purchasing(
     worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
     store = SqlPurchasingStore(session_factory, audit, approvals)
     book = rule_book(configs, session_factory)
+    automation = automation_for(configs, session_factory)
+    checks = AutomationChecks(automation, book)
     requests = PurchaseRequests(
         uow=store,
         gate=Gate(authorization),
@@ -106,8 +109,9 @@ def build_purchasing(
             ids=ids,
         ),
         rules=PurchasingRulesService(
-            uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids
+            uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids, checks=checks
         ),
+        switches=SwitchesService(Gate(authorization), book, automation),
         sourcing=SupplierSourcing(
             uow=store,
             gate=Gate(authorization),
@@ -126,8 +130,28 @@ def rule_book(
     configs: Path, session_factory: async_sessionmaker[AsyncSession]
 ) -> PurchasingRuleBook:
     """The platform's files under the tenant's stored versions."""
-    files = PolicyFiles.load(configs / "policies")
-    return released_book(files.current(), files.by_ref, SqlRuleVersionLookup(session_factory))
+    return platform_rule_book(configs / "policies", SqlRuleVersionLookup(session_factory))
+
+
+def automation_for(configs: Path, session_factory: async_sessionmaker[AsyncSession]) -> Automation:
+    """Whether a step's model readings have met their bars for a tenant: its
+    measurements, under its RLS, on the model DW2's worker profile
+    (`configs/workers/purchasing.yaml`) routes them to for that tenant. Built
+    with or without a model server: a version raising a step is checked
+    either way."""
+    worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
+    profiles = ModelProfileRegistry()
+    profiles.load_directory(configs / "models")
+    return Automation(
+        SqlModelMeasurements(session_factory),
+        ProfileStepModel(profiles, worker.default_model_profile),
+    )
+
+
+def _checks(configs: Path, session_factory: async_sessionmaker[AsyncSession]) -> AutomationChecks:
+    return AutomationChecks(
+        automation_for(configs, session_factory), rule_book(configs, session_factory)
+    )
 
 
 def rule_decisions(
@@ -139,7 +163,9 @@ def rule_decisions(
     """The decision guard the API's approval flow registers under
     `RULES_APPROVAL` (the longest prefix wins over `APPROVAL_PREFIX`'s)."""
     return RuleDecisions(
-        SqlPurchasingStore(session_factory, audit, approvals), rule_book(configs, session_factory)
+        SqlPurchasingStore(session_factory, audit, approvals),
+        rule_book(configs, session_factory),
+        _checks(configs, session_factory),
     )
 
 
@@ -157,6 +183,7 @@ def rule_settlement(
         rule_book(configs, session_factory),
         clock,
         ids,
+        _checks(configs, session_factory),
     )
 
 
