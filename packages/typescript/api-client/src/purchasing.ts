@@ -114,12 +114,26 @@ export class PurchasingApi {
     );
   }
 
-  draftRfq(caseId: string, caseVersion: number, idempotencyKey: string) {
+  /**
+   * The RFQs of an approved request: to the suppliers the master data lists,
+   * and to those the buyer names for a line (a line nobody is listed for).
+   */
+  draftRfq(
+    caseId: string,
+    caseVersion: number,
+    idempotencyKey: string,
+    suppliers: PurchaseChoice[] = [],
+  ) {
     return this.post<"/api/v1/purchasing/requests/{case_id}/rfq">(
       `${BASE}/requests/${enc(caseId)}/rfq`,
-      { case_version: caseVersion },
+      { case_version: caseVersion, suppliers },
       idempotencyKey,
     );
+  }
+
+  /** The suppliers the company knows, by code and name, to name one for a line. */
+  suppliers() {
+    return this.get<"/api/v1/purchasing/suppliers">(`${BASE}/suppliers`);
   }
 
   recordOffer(

@@ -13521,6 +13521,30 @@
         "title": "Review",
         "type": "object"
       },
+      "RfqBody": {
+        "additionalProperties": false,
+        "description": "The version the buyer saw, and the suppliers they name for a line the\nmaster data lists nobody for (or one more for a line).",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "suppliers": {
+            "items": {
+              "$ref": "#/components/schemas/Choice"
+            },
+            "maxItems": 100,
+            "title": "Suppliers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_version"
+        ],
+        "title": "RfqBody",
+        "type": "object"
+      },
       "RfqDraft": {
         "additionalProperties": false,
         "description": "One supplier's RFQ: who receives it, which lines, and the words.",
@@ -15790,6 +15814,24 @@
           "revision"
         ],
         "title": "SupersededView",
+        "type": "object"
+      },
+      "SupplierName": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "SupplierName",
         "type": "object"
       },
       "SupportGrantModel": {
@@ -21299,7 +21341,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CaseVersionBody"
+                "$ref": "#/components/schemas/RfqBody"
               }
             }
           },
@@ -21660,6 +21702,31 @@
           }
         },
         "summary": "Rule In Words",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/suppliers": {
+      "get": {
+        "operationId": "suppliers_api_v1_purchasing_suppliers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SupplierName"
+                  },
+                  "title": "Response Suppliers Api V1 Purchasing Suppliers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Suppliers",
         "tags": [
           "purchasing"
         ]
