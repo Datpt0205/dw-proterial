@@ -191,6 +191,19 @@ class _NoNames:
         return {}
 
 
+async def unused_version(book: PurchasingRuleBook, scope: ContextScope, key: str, base: str) -> str:
+    """The next patch number of ``base`` that neither the platform ships nor
+    the tenant holds."""
+    major, minor, patch = (int(part) for part in base.split("."))
+    while True:
+        patch += 1
+        version = f"{major}.{minor}.{patch}"
+        if not book.ships(key, f"{key}@{version}") and (
+            await book.stored.find(scope, key, version) is None
+        ):
+            return version
+
+
 @dataclass(frozen=True)
 class PurchasingRulesService:
     """List, propose and read the schema of the tenant's rule versions."""
@@ -239,9 +252,22 @@ class PurchasingRulesService:
         """A version through the one door: the head's applies at once, the
         configurer's waits on a `purchasing.rules` approval."""
         await self.gate.require(context, PurchasingScopes.RULES_PROPOSE, resource_type=_RESOURCE)
+        rule = rule_key(key)
+        if not {"policy_version", "version"} & document.keys():
+            # A change made by a press (a switch) names no number: the next
+            # one nobody has used, as a change in words gets. A number is the
+            # platform's to give, never the page's.
+            scope = ContextScope.of(context)
+            base = (await self.book.current(scope, rule)).policy.model_dump(by_alias=True)
+            document = {
+                **document,
+                "policy_version": await unused_version(
+                    self.book, scope, rule.value, base["policy_version"]
+                ),
+            }
         version = await self._engine.propose(
             context,
-            rule_key(key),
+            rule,
             document,
             applies_directly=self.gate.allows(context, PurchasingScopes.RULES_APPROVE),
         )

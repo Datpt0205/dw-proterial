@@ -47,6 +47,11 @@ from dw_purchasing.domain.sourcing import Choice
 
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu Mua hàng"
 _PAGE = 50
+_APPROVERS = (
+    PurchasingScopes.APPROVE_TIER1,
+    PurchasingScopes.APPROVE_TIER2,
+    PurchasingScopes.APPROVE_TIER3,
+)
 
 
 @dataclass(frozen=True)
@@ -168,8 +173,16 @@ def build_router(
         if not svc.requests.gate.allows(context, PurchasingScopes.REQUEST_READ):
             await svc.requests.gate.require(context, PurchasingScopes.REQUEST_READ_OWN)
 
+    async def case_reader(context: Ctx, svc: Svc) -> None:
+        """A reader, or an approver: the service gives an approver only the
+        one case waiting on the scope they hold, and 404 for any other."""
+        gate = svc.requests.gate
+        if not any(gate.allows(context, s) for s in _APPROVERS):
+            await any_reader(context, svc)
+
     read = [scope(PurchasingScopes.REQUEST_READ)]
     reader = [Depends(any_reader)]
+    one_case = [Depends(case_reader)]
     create = [scope(PurchasingScopes.REQUEST_CREATE)]
     intake = [scope(PurchasingScopes.REQUEST_INTAKE)]
     submit = [scope(PurchasingScopes.REQUEST_SUBMIT)]
@@ -205,7 +218,7 @@ def build_router(
         change = await svc.requester.submit(context, body)
         return await idem.record(change, status_code=201)
 
-    @router.get("/requests/{case_id}", response_model=PurchaseCase, dependencies=reader)
+    @router.get("/requests/{case_id}", response_model=PurchaseCase, dependencies=one_case)
     async def get_request(case_id: uuid.UUID, context: Ctx, svc: Svc) -> PurchaseCase:
         return await svc.requests.case(context, case_id)
 

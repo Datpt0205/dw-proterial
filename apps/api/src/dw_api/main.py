@@ -67,7 +67,10 @@ _CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 # which every response already carries (RFC 9110): the web counts "còn X giờ"
 # against it rather than against a device whose clock may be wrong
 # (ui-quality §8). A cross-origin page cannot read it unless it is listed.
-_CORS_EXPOSED = ["X-Request-ID", "Retry-After", "Date"]
+# Content-Disposition: a download keeps the name the server gave it (the
+# Bravo file is named for its request), which a cross-origin page reads only
+# when it is exposed.
+_CORS_EXPOSED = ["X-Request-ID", "Retry-After", "Date", "Content-Disposition"]
 
 
 def _local_web_origins(public_web_url: str) -> list[str]:

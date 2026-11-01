@@ -46,7 +46,12 @@ from dw_platform.application.rule_words import (
 )
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import Worker
-from dw_purchasing.application.rules import SCHEMAS, PurchasingRuleBook, rule_key
+from dw_purchasing.application.rules import (
+    SCHEMAS,
+    PurchasingRuleBook,
+    rule_key,
+    unused_version,
+)
 
 RULE_CHANGE_IN_WORDS: Final = PromptRef("purchasing.rule_change_in_words", "1.0.0")
 _PROMPT_TOKENS: Final = 1200
@@ -145,7 +150,7 @@ class RuleWordsDesk:
                 version=None,
                 problems=[str(p) for p in applied.problems],
             )
-        version = await self._unused(scope, rule.value, base["policy_version"])
+        version = await unused_version(self.book, scope, rule.value, base["policy_version"])
         document = {**applied.document, "policy_version": version}
         return WordsDraft(
             key=rule.value,
@@ -155,15 +160,3 @@ class RuleWordsDesk:
             version=version,
             problems=[],
         )
-
-    async def _unused(self, scope: ContextScope, key: str, base: str) -> str:
-        """The next patch number of ``base`` that neither the platform ships
-        nor the tenant holds."""
-        major, minor, patch = (int(part) for part in base.split("."))
-        while True:
-            patch += 1
-            version = f"{major}.{minor}.{patch}"
-            if not self.book.ships(key, f"{key}@{version}") and (
-                await self.book.stored.find(scope, key, version) is None
-            ):
-                return version
