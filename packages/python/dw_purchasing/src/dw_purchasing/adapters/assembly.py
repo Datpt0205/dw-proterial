@@ -45,6 +45,11 @@ from dw_purchasing.application.automation_lane import AutomationLane, ServiceAcc
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.ports import NoticesPort
+from dw_purchasing.application.reapprovals import (
+    ReapprovalDecisions,
+    Reapprovals,
+    ReapprovalSettlement,
+)
 from dw_purchasing.application.requesters import RequesterDesk
 from dw_purchasing.application.rules import (
     PurchasingRuleBook,
@@ -147,6 +152,7 @@ def build_purchasing(
             worker=requests.worker,
             clock=clock,
             ids=ids,
+            reapprovals=Reapprovals(requests.model, requests.worker, clock, ids, notices),
         ),
     )
 
@@ -233,6 +239,30 @@ def request_settlement(
     """What the worker's handler for `REQUEST_DECIDED` carries a decision out
     with, telling who asked and who sent it."""
     return RequestSettlement(
+        SqlPurchasingStore(session_factory, audit, approvals), clock, ids, notices
+    )
+
+
+def reapproval_decisions(
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+) -> ReapprovalDecisions:
+    """The decision guard the API registers under `REAPPROVAL` (longer than
+    `APPROVAL_PREFIX`, so it, not the request's guard, checks one)."""
+    return ReapprovalDecisions(SqlPurchasingStore(session_factory, audit, approvals))
+
+
+def reapproval_settlement(
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+    notices: NoticesPort,
+) -> ReapprovalSettlement:
+    """What the worker's handler for `REAPPROVAL_DECIDED` carries a decision out with."""
+    return ReapprovalSettlement(
         SqlPurchasingStore(session_factory, audit, approvals), clock, ids, notices
     )
 

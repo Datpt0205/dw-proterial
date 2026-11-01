@@ -89,6 +89,10 @@ class ApprovalRules(BaseModel):
     price_tolerance_percent: Decimal = Field(ge=0, le=100)
     # Findings that send a request to the last tier whatever its amount.
     escalate: frozenset[PurchaseFindingCode]
+    # How far above the approved tier's limit a choice of suppliers may come
+    # before it goes back for approval at the tier its total names (rules
+    # 1.5.0; 0: any amount above the limit goes back).
+    reapproval_tolerance_percent: Decimal = Field(default=Decimal(0), ge=0, le=100)
 
     @model_validator(mode="after")
     def _ascending_and_open_ended(self) -> Self:

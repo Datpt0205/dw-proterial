@@ -50,6 +50,7 @@ from dw_platform.domain.mail_parts import newest_part
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import NOT_READ_NOW, CaseChange, Worker
 from dw_purchasing.application.ports import InboxPort, MasterDataPort, PurchasingUnitOfWork
+from dw_purchasing.application.reapprovals import Reapprovals, over_limit
 from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.checks import MasterData, Supplier
@@ -124,6 +125,9 @@ class SupplierSourcing:
     worker: Worker
     clock: UtcClock
     ids: IdGenerator
+    # Where a choice past the approved tier goes back for approval; None:
+    # such a choice is refused, as before rules 1.5.0.
+    reapprovals: Reapprovals | None = None
 
     # ----------------------------------------------------------- the RFQ --
 
@@ -396,15 +400,6 @@ class SupplierSourcing:
                     details={"line_no": str(choice.line_no), "rule": "no_offer"},
                 )
             total += offer.unit_price * lines[choice.line_no].quantity
-        limit = case.approval.limit
-        if limit is not None and (
-            case.request.currency != case.approval.limit_currency or total > limit
-        ):
-            raise ConflictError(
-                "tổng theo nhà cung cấp đã chọn vượt hạn mức người đã duyệt:"
-                " cần duyệt lại bậc cao hơn",
-                details={"case_id": str(case_id), "rule": "exceeds_approved_limit"},
-            )
         selection = Selection(
             choices=tuple(sorted(choices, key=lambda c: c.line_no)),
             total=total,
@@ -412,6 +407,17 @@ class SupplierSourcing:
             selected_by=context.principal_id,
             selected_at=self.clock.now(),
         )
+        rules = (await self.rules.resolve(context)).approval
+        if over_limit(case, total, rules):
+            if rules is None or self.reapprovals is None:
+                raise ConflictError(
+                    "tổng theo nhà cung cấp đã chọn vượt hạn mức người đã duyệt:"
+                    " cần duyệt lại bậc cao hơn",
+                    details={"case_id": str(case_id), "rule": "exceeds_approved_limit"},
+                )
+            prices = {(o.supplier_code, o.line_no): o.unit_price for o in usable.values()}
+            waiting = await self.reapprovals.ask(context, self.uow, case, selection, rules, prices)
+            return _change(waiting)
         selected = _moved(case, CaseStatus.SUPPLIER_SELECTED, selection=selection)
         await self._save(
             context,

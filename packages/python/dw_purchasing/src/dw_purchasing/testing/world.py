@@ -36,6 +36,11 @@ from dw_purchasing.application.automation import Automation, AutomationChecks, S
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.ports import Person
+from dw_purchasing.application.reapprovals import (
+    ReapprovalDecisions,
+    Reapprovals,
+    ReapprovalSettlement,
+)
 from dw_purchasing.application.requesters import RequesterDesk
 from dw_purchasing.application.rules import (
     PurchasingRulesService,
@@ -239,6 +244,8 @@ class World:
     measurements: MemoryMeasurements
     requester: RequesterDesk
     people: Directory
+    reapproval_decisions: ReapprovalDecisions
+    reapproval_settlement: ReapprovalSettlement
 
 
 def open_world(
@@ -280,6 +287,9 @@ def open_world(
         worker=Worker("purchasing-dw2", "1.0.0"),
         clock=clock,
         ids=ids,
+        reapprovals=Reapprovals(
+            model if with_model else None, Worker("purchasing-dw2", "1.0.0"), clock, ids
+        ),
     )
     return World(
         service,
@@ -318,4 +328,6 @@ def open_world(
             ids=ids,
         ),
         people,
+        ReapprovalDecisions(store),
+        ReapprovalSettlement(store, clock, ids),
     )

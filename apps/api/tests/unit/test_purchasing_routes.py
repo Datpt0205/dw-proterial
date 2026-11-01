@@ -292,6 +292,7 @@ def test_the_composition_root_makes_purchasing_approvals_strict_and_guarded() ->
     from dw_agent_runtime.approval_flow import ApproveAndResumeService
     from dw_api.bootstrap.wiring import build_purchasing_mount
     from dw_purchasing.application.approvals import APPROVAL_PREFIX, RequestDecisions
+    from dw_purchasing.application.reapprovals import ReapprovalDecisions
     from dw_purchasing.application.rules import RuleDecisions
 
     flow = ApproveAndResumeService(
@@ -312,8 +313,11 @@ def test_the_composition_root_makes_purchasing_approvals_strict_and_guarded() ->
     )
     assert flow.is_strict("purchasing.request") and flow.is_strict("purchasing.rules")
     assert isinstance(flow.decision_guards[APPROVAL_PREFIX], RequestDecisions)
-    # A rules approval is checked by the rule engine's guard, the longer prefix.
+    # A rules approval is checked by the rule engine's guard, the longer prefix,
+    # and a choice past the tier by its own.
     assert isinstance(flow.decision_guards["purchasing.rules"], RuleDecisions)
+    assert isinstance(flow.decision_guards["purchasing.reapproval"], ReapprovalDecisions)
+    assert flow.is_strict("purchasing.reapproval")
     assert isinstance(mount, PurchasingMount)
 
 

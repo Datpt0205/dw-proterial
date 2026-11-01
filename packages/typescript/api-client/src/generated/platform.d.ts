@@ -2041,7 +2041,7 @@ export interface components {
          * @description Where a purchase case stands (CONTEXT.md, "Purchase case").
          * @enum {string}
          */
-        CaseStatus: "received" | "awaiting_approval" | "approved" | "rejected" | "rfq_drafted" | "supplier_selected" | "po_drafted";
+        CaseStatus: "received" | "awaiting_approval" | "approved" | "rejected" | "rfq_drafted" | "awaiting_reapproval" | "supplier_selected" | "po_drafted";
         /**
          * CaseVersionBody
          * @description The version of the case the caller saw: a stale one is refused (409).
@@ -3103,6 +3103,7 @@ export interface components {
              */
             offers: components["schemas"]["Offer"][];
             po?: components["schemas"]["PoRound"] | null;
+            reapproval?: components["schemas"]["Reapproval"] | null;
             /**
              * Received At
              * Format: date-time
@@ -3289,6 +3290,23 @@ export interface components {
             };
             /** Status */
             status: string;
+        };
+        /**
+         * Reapproval
+         * @description A choice of suppliers whose total passed what the approver's tier
+         *     decides (plus the tenant's tolerance), sent to the tier that total names:
+         *     the choice waits here, and becomes the case's selection only once that
+         *     approver approves it. ``explanation`` is the model's words for why, kept
+         *     only when every figure in them is one of code's facts; None otherwise.
+         */
+        Reapproval: {
+            approval: components["schemas"]["ApprovalAsked"];
+            /** Approved Limit */
+            approved_limit: string | null;
+            decision?: components["schemas"]["Decided"] | null;
+            /** Explanation */
+            explanation?: string | null;
+            selection: components["schemas"]["Selection"];
         };
         /** RejectSupportGrantBody */
         RejectSupportGrantBody: {

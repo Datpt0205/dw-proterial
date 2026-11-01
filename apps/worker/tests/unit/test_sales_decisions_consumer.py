@@ -19,6 +19,7 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.application.access_context import AccessContext
 from dw_platform.domain.outbox import OutboxEvent
 from dw_purchasing.application.approvals import REQUEST_DECIDED
+from dw_purchasing.application.reapprovals import REAPPROVAL_DECIDED
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
 from dw_sales.application.layouts import LAYOUT_DECIDED
 from dw_sales.application.rules import RULES_DECIDED
@@ -126,3 +127,4 @@ def test_the_worker_hands_every_layout_and_rules_decision_to_its_settlement(
     # DW2's purchase request decision (DW02 function 2), wired the same way,
     # and a version of its rules (the platform's rule-version engine).
     assert REQUEST_DECIDED in seen and PURCHASING_RULES_DECIDED in seen
+    assert REAPPROVAL_DECIDED in seen

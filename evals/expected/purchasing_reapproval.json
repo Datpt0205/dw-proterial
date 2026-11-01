@@ -1,0 +1,6 @@
+{
+  "golden": {"status": "awaiting_reapproval", "worded": true, "scope": "purchasing.approve.tier2"},
+  "injection": {"status": "awaiting_reapproval", "worded": false, "decided": 0},
+  "missing_evidence": {"worded": false},
+  "degrade": {"status": "awaiting_reapproval", "worded": false}
+}

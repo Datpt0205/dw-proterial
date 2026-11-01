@@ -233,6 +233,16 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   refuses DW2's mocks (API 503, no lane) until the stored mailbox and master
   data land. Eval `purchasing_automation@1.0.0` 5/5; 8 mutations red (one
   not a guard: `break` on the model down only saves calls).
+- **Reapproval past the tier** (rules `1.5.0`, migration `b60b5a0a4c91`):
+  a choice above the stamped limit (+ tolerance, default 0) waits on a
+  strict `purchasing.reapproval` at its tier (`awaiting_reapproval`), the
+  reason worded by `purchasing.reapproval_reason@1.0.0` and kept only when
+  every figure is a fact; guard in the API, settlement in the worker,
+  approver/requester told. Eval `purchasing_reapproval@1.0.0` 5/5; 8
+  mutations red (two first green, closed with tests).
+- **Owed by the 11-01 principle, not done**: the RFQ mail still falls back
+  to code's template when the model's words fail; by "không viết template
+  cứng" it should instead go to the buyer to write.
 
 ## Next
 
@@ -276,6 +286,5 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   file per PR or one per supplier. A tenant rule, so no deploy when it lands.
 - **Who may download the PO file**: today `purchasing.po.prepare` (the
   buyer); the head approves but does not download. Proterial's call.
-- **Re-approval past the tier**: a choice above the approved tier's limit is
-  refused; whether it should instead open a new approval at the higher tier
-  automatically.
+- **Re-approval past the tier**: built (goes back at the tier its total
+  names, tolerance 0 by default). Proterial to give the tolerance, if any.

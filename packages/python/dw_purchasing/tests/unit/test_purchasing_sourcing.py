@@ -272,7 +272,9 @@ async def test_a_person_chooses_one_offer_per_line_within_the_approved_limit() -
     assert case.selection.total == Decimal(4_800_000 + 4_900_000 + 4_500_000)
 
 
-async def test_a_choice_past_what_the_approver_approved_is_refused() -> None:
+async def test_a_choice_past_what_the_approver_approved_goes_back_for_approval() -> None:
+    """Rules 1.5.0: no longer refused, sent to the tier the new total names
+    (`test_purchasing_reapproval.py` holds the rest)."""
     world = _world()
     case_id = await _offered(world)
     version = await _version(world, case_id)
@@ -284,18 +286,19 @@ async def test_a_choice_past_what_the_approver_approved_is_refused() -> None:
         lead_time_days=2,
     )
     await world.sourcing.record_offer(caller(), case_id, pricey, case_version=version)
-    with pytest.raises(ConflictError) as refused:
-        await world.sourcing.select(
-            caller(),
-            case_id,
-            [
-                Choice(line_no=1, supplier_code="NHUAVIET"),
-                Choice(line_no=2, supplier_code="BAOHO"),
-                Choice(line_no=3, supplier_code="ANPHAT"),
-            ],
-            case_version=version + 1,
-        )
-    assert refused.value.details["rule"] == "exceeds_approved_limit"
+    world.model.by_schema["ReasonWords"] = {}
+    await world.sourcing.select(
+        caller(),
+        case_id,
+        [
+            Choice(line_no=1, supplier_code="NHUAVIET"),
+            Choice(line_no=2, supplier_code="BAOHO"),
+            Choice(line_no=3, supplier_code="ANPHAT"),
+        ],
+        case_version=version + 1,
+    )
+    case = await world.service.case(caller(), case_id)
+    assert case.status is CaseStatus.AWAITING_REAPPROVAL and case.selection is None
 
 
 async def test_an_expired_or_foreign_currency_offer_is_neither_compared_nor_chosen() -> None:

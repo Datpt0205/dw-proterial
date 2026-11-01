@@ -613,11 +613,13 @@ def build_purchasing_mount(
     from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
     from dw_purchasing.adapters.assembly import (
         build_purchasing,
+        reapproval_decisions,
         request_decisions,
         rule_decisions,
     )
     from dw_purchasing.adapters.notices import PlatformNotices
     from dw_purchasing.application.approvals import APPROVAL_PREFIX
+    from dw_purchasing.application.reapprovals import REAPPROVAL
     from dw_purchasing.application.rules import RULES_APPROVAL
     from dw_purchasing.presentation.routes import PurchasingMount
 
@@ -627,6 +629,9 @@ def build_purchasing_mount(
     )
     approval_flow.decision_guards[RULES_APPROVAL] = rule_decisions(
         CONFIGS, session_factory, SqlAuditRepository, SqlApprovalRepository
+    )
+    approval_flow.decision_guards[REAPPROVAL] = reapproval_decisions(
+        session_factory, SqlAuditRepository, SqlApprovalRepository
     )
     demo = settings.sales_demo_scope()
     if demo is None:

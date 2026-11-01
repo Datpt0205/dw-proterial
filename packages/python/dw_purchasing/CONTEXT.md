@@ -28,6 +28,9 @@ dw_sales ADR 0005 as DW2 applies it).
   `awaiting_approval` (Chờ duyệt) — checked and sent to its approver;
   `approved` (Đã duyệt) / `rejected` (Từ chối) — the approver decided;
   `rfq_drafted` (Đang hỏi giá) — RFQs drafted, offers being recorded;
+  `awaiting_reapproval` (Chờ duyệt lại) — the suppliers chosen come to more
+  than the approver's tier decides, and the choice waits on the tier its
+  total names;
   `supplier_selected` (Đã chọn nhà cung cấp) — a person chose one per line;
   `po_drafted` (Đã soạn PO) — one draft order per chosen supplier.
 - **Cross-check (đối chiếu)**: each line's reference price (a supplier
@@ -70,8 +73,15 @@ dw_sales ADR 0005 as DW2 applies it).
 - **Comparison (bảng so sánh)**: per line, the valid offers in the request's
   currency, cheapest first, each with its total and whether it meets the
   need-by date. Code's, never a model's or a supplier's.
-- **Selection (lựa chọn)**: one offer per line, chosen by a person, its total
-  held to the most the approver's tier decides (stamped on the case).
+- **Selection (lựa chọn)**: one offer per line, chosen by a person. Past the
+  most the approver's tier decides (stamped on the case), plus the tenant's
+  `reapproval_tolerance_percent` (default 0), it is not refused: it goes
+  back for approval.
+- **Reapproval (duyệt lại)**: a strict, run-less `purchasing.reapproval` at
+  the tier the new total names, its makers everyone who made the case and
+  the buyer who chose; the reason in words is the model's, kept only when
+  every figure is one of code's facts. Approved, the choice is the
+  selection; rejected, the case goes back to choosing, the choice kept.
 
 - **Draft PO (PO nháp)**: one order per chosen supplier (`<pr_no>-NN`, by
   supplier code), its lines at the chosen offers' prices, the supplier's name

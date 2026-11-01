@@ -55,6 +55,11 @@ cases = sa.Table(
     ),
     sa.Column("rules_ref", sa.Text, nullable=False),
     sa.Column("requested_by", UUID(as_uuid=True), sa.Computed("(body #>> '{requested_by}')::uuid")),
+    sa.Column(
+        "reapproval_id",
+        UUID(as_uuid=True),
+        sa.Computed("(body #>> '{reapproval,approval,approval_id}')::uuid"),
+    ),
     sa.Column("received_by", UUID(as_uuid=True), nullable=False),
     sa.Column("received_at", _TS, nullable=False),
 )
@@ -86,6 +91,7 @@ _BODY_KEYS = (
     "po",
     "requested_by",
     "review",
+    "reapproval",
 )
 
 
@@ -147,7 +153,11 @@ class _Cases:
 
     async def by_approval(self, approval_id: uuid.UUID) -> PurchaseCase | None:
         row = (
-            await self._session.execute(sa.select(cases).where(cases.c.approval_id == approval_id))
+            await self._session.execute(
+                sa.select(cases).where(
+                    sa.or_(cases.c.approval_id == approval_id, cases.c.reapproval_id == approval_id)
+                )
+            )
         ).first()
         return _case(row) if row is not None else None
 
