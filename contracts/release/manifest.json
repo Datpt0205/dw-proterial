@@ -149,6 +149,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "f2a298b15aab6675a5a4a689ab92991b7fe04cb769153d2834ceeea63af48c7b",
+      "dataset_id": "purchasing_pr_words",
+      "files": [
+        {
+          "checksum": "ad2ea62f808d9c51db47532f70b39fabb9e17749a949c78a6f33aba8d58c3be2",
+          "path": "evals/expected/purchasing_pr_words.json"
+        },
+        {
+          "checksum": "8b09e1f06d22708938c1093555cd95f57f3c07f41331c1859343aabe0210dba3",
+          "path": "evals/fixtures/cases/purchasing_pr_words.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "90d66fc0f61c8d7c7244ef76b38f308508da246ba608c864f57c3c9ed754bbb9",
       "dataset_id": "purchasing_sourcing",
       "files": [
@@ -691,7 +706,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "f29142f82cfd77dff01b4614bf82c6eb750635a7",
+  "git_sha": "395c674a52ce285160603fb2c3e5b250c44f562a",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -879,6 +894,11 @@
       "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
       "prompt_id": "platform.untrusted_demo",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "5b9918adcb37a880d483bade8111b89315bbc098a96f607fd5b5be30199d59c8",
+      "prompt_id": "purchasing.pr_from_words",
+      "version": "1.0.0"
     },
     {
       "checksum": "66a481c35d4488e9a499dd44e3a94a48be2db0a499a5c9b5bbbba1957cacdc07",

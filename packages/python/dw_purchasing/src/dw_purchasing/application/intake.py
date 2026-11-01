@@ -123,22 +123,33 @@ class PurchaseRequests:
     async def cases(
         self, context: AccessContext, *, limit: int, before: tuple[datetime, uuid.UUID] | None
     ) -> Sequence[PurchaseCase]:
-        await self.gate.require(context, PurchasingScopes.REQUEST_READ, resource_type=_RESOURCE)
+        """Every case to a holder of `purchasing.request.read`; a requester's
+        own only, narrowed in the query, to one who holds `read_own`."""
+        own = await self._reader(context, None)
         async with self.uow(context) as work:
-            return await work.cases.page(limit=limit, before=before)
+            return await work.cases.page(limit=limit, before=before, requested_by=own)
 
     async def case(self, context: AccessContext, case_id: uuid.UUID) -> PurchaseCase:
-        await self.gate.require(
-            context,
-            PurchasingScopes.REQUEST_READ,
-            resource_type=_RESOURCE,
-            resource_id=str(case_id),
-        )
+        own = await self._reader(context, case_id)
         async with self.uow(context) as work:
             case = await work.cases.get(case_id)
-        if case is None:
+        if case is None or (own is not None and case.requested_by != own):
+            # Another requester's case is absent, exactly like no case.
             raise NotFoundError("không có yêu cầu mua hàng này", details={"case_id": str(case_id)})
         return case
+
+    async def _reader(self, context: AccessContext, case_id: uuid.UUID | None) -> uuid.UUID | None:
+        """None: the caller reads every case. Else the requester whose cases
+        alone the caller reads. Refused (403) for neither scope."""
+        if self.gate.allows(context, PurchasingScopes.REQUEST_READ):
+            return None
+        await self.gate.require(
+            context,
+            PurchasingScopes.REQUEST_READ_OWN,
+            resource_type=_RESOURCE,
+            resource_id=None if case_id is None else str(case_id),
+        )
+        return context.principal_id
 
     async def mailbox(self, context: AccessContext) -> list[InboxItem]:
         await self.gate.require(context, PurchasingScopes.REQUEST_READ, resource_type="mailbox")

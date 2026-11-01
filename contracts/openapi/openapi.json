@@ -4163,6 +4163,51 @@
         "title": "DraftProblem",
         "type": "object"
       },
+      "DraftView": {
+        "description": "What the requester's page shows after DW2 read their words: the\ndraft, what the form rules still ask for, or why there is none.",
+        "properties": {
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing": {
+            "items": {
+              "enum": [
+                "budget_code",
+                "need_by",
+                "estimated_unit_price"
+              ],
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "not_read": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Read"
+          }
+        },
+        "required": [
+          "draft",
+          "missing",
+          "not_read"
+        ],
+        "title": "DraftView",
+        "type": "object"
+      },
       "EdgeAction": {
         "description": "What makes a case move: the domain method that moves it.",
         "enum": [
@@ -7897,6 +7942,76 @@
         "title": "ModelStep",
         "type": "string"
       },
+      "MyRequest": {
+        "additionalProperties": false,
+        "description": "What a requester sends: no PR number and no requester name, which are\ncode's and the directory's. ``department`` is read only where the\ndirectory names none for them.",
+        "properties": {
+          "budget_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Code"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PrLine-Input"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "lines"
+        ],
+        "title": "MyRequest",
+        "type": "object"
+      },
       "MySupportGrantModel": {
         "description": "A grant assigned to the caller: enough to open it, nothing the customer\nwrote (no reason).",
         "properties": {
@@ -10535,7 +10650,8 @@
         "description": "Where the request came from (DW02: email, Bravo, form, scanned paper;\nthis slice reads the first and the third).",
         "enum": [
           "form",
-          "mail"
+          "mail",
+          "requester"
         ],
         "title": "PrSource",
         "type": "string"
@@ -11259,6 +11375,18 @@
           },
           "request": {
             "$ref": "#/components/schemas/PurchaseRequest-Output"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
           },
           "rfq": {
             "anyOf": [
@@ -13011,6 +13139,54 @@
           "outcome"
         ],
         "title": "ReplyReading",
+        "type": "object"
+      },
+      "RequestDraft": {
+        "additionalProperties": false,
+        "description": "What a requester's own words ask for, as code read it from the model's\nspans: the lines, and the request-wide values the words name. No PR\nnumber, department or requester: those are not the words' to say (code\nnumbers the request, the requester is the signed-in person).",
+        "properties": {
+          "budget_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Code"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PrLine-Output"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          }
+        },
+        "required": [
+          "lines",
+          "currency"
+        ],
+        "title": "RequestDraft",
         "type": "object"
       },
       "RequestReading": {
@@ -16756,6 +16932,23 @@
           }
         ]
       },
+      "WordsBody": {
+        "additionalProperties": false,
+        "description": "What a requester typed in \"Tôi cần mua…\".",
+        "properties": {
+          "words": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "words"
+        ],
+        "title": "WordsBody",
+        "type": "object"
+      },
       "WorkItem": {
         "properties": {
           "action": {
@@ -20289,6 +20482,108 @@
           }
         },
         "summary": "Submit Request",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/mine": {
+      "post": {
+        "operationId": "send_my_request_api_v1_purchasing_requests_mine_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send My Request",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/mine/draft": {
+      "post": {
+        "operationId": "draft_my_request_api_v1_purchasing_requests_mine_draft_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WordsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft My Request",
         "tags": [
           "purchasing"
         ]

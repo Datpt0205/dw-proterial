@@ -36,6 +36,7 @@ from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.approvals import PurchaseCheckView
 from dw_purchasing.application.automation import SwitchesView
 from dw_purchasing.application.intake import CaseChange, InboxItem
+from dw_purchasing.application.requesters import DraftView, MyRequest
 from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import ComparisonView, OfferForm
@@ -100,6 +101,14 @@ class RulesBody(BaseModel):
     document: dict[str, Any]
 
 
+class WordsBody(BaseModel):
+    """What a requester typed in "Tôi cần mua…"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    words: str = Field(min_length=1, max_length=2000)
+
+
 class RuleChange(BaseModel):
     """What a proposal answers, and what the idempotency store keeps: ids and
     the status, never the document (it holds the company's limits)."""
@@ -144,14 +153,21 @@ def build_router(
 
         return Depends(guard)
 
+    async def any_reader(context: Ctx, svc: Svc) -> None:
+        """Every case, or a requester's own: the service narrows which."""
+        if not svc.requests.gate.allows(context, PurchasingScopes.REQUEST_READ):
+            await svc.requests.gate.require(context, PurchasingScopes.REQUEST_READ_OWN)
+
     read = [scope(PurchasingScopes.REQUEST_READ)]
+    reader = [Depends(any_reader)]
+    create = [scope(PurchasingScopes.REQUEST_CREATE)]
     intake = [scope(PurchasingScopes.REQUEST_INTAKE)]
     submit = [scope(PurchasingScopes.REQUEST_SUBMIT)]
     rfq = [scope(PurchasingScopes.RFQ_PREPARE)]
     po = [scope(PurchasingScopes.PO_PREPARE)]
     propose = [scope(PurchasingScopes.RULES_PROPOSE)]
 
-    @router.get("/requests", response_model=CasePage, dependencies=read)
+    @router.get("/requests", response_model=CasePage, dependencies=reader)
     async def list_requests(
         context: Ctx,
         svc: Svc,
@@ -170,7 +186,16 @@ def build_router(
             next_before_id=last.case_id if last else None,
         )
 
-    @router.get("/requests/{case_id}", response_model=PurchaseCase, dependencies=read)
+    @router.post("/requests/mine/draft", response_model=DraftView, dependencies=create)
+    async def draft_my_request(body: WordsBody, context: Ctx, svc: Svc) -> DraftView:
+        return await svc.requester.draft(context, body.words)
+
+    @router.post("/requests/mine", response_model=CaseChange, status_code=201, dependencies=create)
+    async def send_my_request(body: MyRequest, context: Ctx, svc: Svc, idem: Idem) -> CaseChange:
+        change = await svc.requester.submit(context, body)
+        return await idem.record(change, status_code=201)
+
+    @router.get("/requests/{case_id}", response_model=PurchaseCase, dependencies=reader)
     async def get_request(case_id: uuid.UUID, context: Ctx, svc: Svc) -> PurchaseCase:
         return await svc.requests.case(context, case_id)
 

@@ -320,3 +320,30 @@ async def test_the_service_on_the_database_audits_and_reads_the_tenants_own_rule
             .all()
         )
     assert list(actions).count("purchasing.request.received") == 2
+
+
+async def test_a_requesters_cases_are_narrowed_in_the_query(
+    app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
+) -> None:
+    """`requested_by` is the body's, generated, and the page narrows by it
+    in SQL; a requester's case that names nobody is refused by the table."""
+    hoa, nam = uuid.uuid4(), uuid.uuid4()
+    me = caller(tenancy.alpha)
+    mine = _case(source=PrSource.REQUESTER).model_copy(update={"requested_by": hoa})
+    theirs = _case(source=PrSource.REQUESTER).model_copy(update={"requested_by": nam})
+    async with _store(app_sessions)(me) as work:
+        await work.cases.add(mine)
+        await work.cases.add(theirs)
+        await work.cases.add(_case())
+    async with _store(app_sessions)(me) as work:
+        own = await work.cases.page(limit=50, before=None, requested_by=hoa)
+        every = await work.cases.page(limit=50, before=None)
+    assert [c.case_id for c in own] == [mine.case_id]
+    assert own[0].requested_by == hoa and len(every) == 3
+    with pytest.raises(DBAPIError, match="ck_cases_requester"):
+        async with _store(app_sessions)(me) as work:
+            await _execute(
+                work,
+                "UPDATE purchasing.cases SET body = body - 'requested_by'"
+                f" WHERE id = '{mine.case_id}'",
+            )

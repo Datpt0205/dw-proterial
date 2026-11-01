@@ -20,6 +20,10 @@ class PurchasingScopes(StrEnum):
 
     # Read the purchase cases and the mailbox DW2 reads requests from.
     REQUEST_READ = "purchasing.request.read"
+    # A requester's own: write a request in DW2, and read the ones they
+    # wrote (narrowed in the query, never by hiding a row on a page).
+    REQUEST_CREATE = "purchasing.request.create"
+    REQUEST_READ_OWN = "purchasing.request.read_own"
     # Receive a request: enter a form, or have DW2 read a mail.
     REQUEST_INTAKE = "purchasing.request.intake"
     # Check a request and send it to the approver its amount names.

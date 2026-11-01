@@ -28,6 +28,8 @@ class PrSource(StrEnum):
 
     FORM = "form"
     MAIL = "mail"
+    # Written in DW2 by the requester themselves ("Tôi cần mua…").
+    REQUESTER = "requester"
 
 
 class CaseStatus(StrEnum):
@@ -97,6 +99,10 @@ class PurchaseCase(BaseModel):
     received_at: AwareDatetime
     # Who submitted the form, or pressed "DW2 đọc" on the mail.
     received_by: uuid.UUID
+    # The person who asked, when DW2 knows them by their sign-in: a requester
+    # who wrote the request in DW2 themselves. Only they, of the requesters,
+    # see the case, and they never approve it.
+    requested_by: uuid.UUID | None = None
     rules_ref: str = Field(pattern=r"^purchasing_rules@\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$")
     # What code found when the case was sent for approval (DW02 function 2).
     check: CrossCheck | None = None
@@ -148,7 +154,9 @@ class PurchaseCase(BaseModel):
 
     @property
     def makers(self) -> frozenset[uuid.UUID]:
-        """Who made what an approver decides: who received it and who sent it.
-        A strict approval refuses each of them as its decider."""
+        """Who made what an approver decides: who asked for it, who received
+        it and who sent it. A strict approval refuses each of them as its
+        decider."""
         sent = {self.approval.submitted_by} if self.approval is not None else set()
-        return frozenset({self.received_by, *sent})
+        asked = {self.requested_by} if self.requested_by is not None else set()
+        return frozenset({self.received_by, *sent, *asked})

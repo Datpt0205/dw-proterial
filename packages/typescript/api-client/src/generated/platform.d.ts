@@ -1149,6 +1149,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/requests/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send My Request */
+        post: operations["send_my_request_api_v1_purchasing_requests_mine_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/mine/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft My Request */
+        post: operations["draft_my_request_api_v1_purchasing_requests_mine_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/requests/{case_id}": {
         parameters: {
             query?: never;
@@ -2212,6 +2246,18 @@ export interface components {
          * @enum {string}
          */
         Disposition: "opened" | "to_person";
+        /**
+         * DraftView
+         * @description What the requester's page shows after DW2 read their words: the
+         *     draft, what the form rules still ask for, or why there is none.
+         */
+        DraftView: {
+            draft: components["schemas"]["RequestDraft"] | null;
+            /** Missing */
+            missing: ("budget_code" | "need_by" | "estimated_unit_price")[];
+            /** Not Read */
+            not_read: string | null;
+        };
         /** FeedbackAttachmentView */
         FeedbackAttachmentView: {
             /** Content Type */
@@ -2601,6 +2647,29 @@ export interface components {
             worker_id: string;
         };
         /**
+         * MyRequest
+         * @description What a requester sends: no PR number and no requester name, which are
+         *     code's and the directory's. ``department`` is read only where the
+         *     directory names none for them.
+         */
+        MyRequest: {
+            /** Budget Code */
+            budget_code?: string | null;
+            /** Currency */
+            currency: string;
+            /** Department */
+            department?: string | null;
+            /** Lines */
+            lines: components["schemas"]["PrLine-Input"][];
+            /** Need By */
+            need_by?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
          * MySupportGrantModel
          * @description A grant assigned to the caller: enough to open it, nothing the customer
          *     wrote (no reason).
@@ -2986,7 +3055,7 @@ export interface components {
          *     this slice reads the first and the third).
          * @enum {string}
          */
-        PrSource: "form" | "mail";
+        PrSource: "form" | "mail" | "requester";
         /**
          * PurchaseCase
          * @description One request, from the moment DW2 received it.
@@ -3023,6 +3092,8 @@ export interface components {
              */
             received_by: string;
             request: components["schemas"]["PurchaseRequest-Output"];
+            /** Requested By */
+            requested_by?: string | null;
             rfq?: components["schemas"]["RfqRound"] | null;
             /** Rules Ref */
             rules_ref: string;
@@ -3210,6 +3281,23 @@ export interface components {
         RenameWorkspaceBody: {
             /** Name */
             name: string;
+        };
+        /**
+         * RequestDraft
+         * @description What a requester's own words ask for, as code read it from the model's
+         *     spans: the lines, and the request-wide values the words name. No PR
+         *     number, department or requester: those are not the words' to say (code
+         *     numbers the request, the requester is the signed-in person).
+         */
+        RequestDraft: {
+            /** Budget Code */
+            budget_code?: string | null;
+            /** Currency */
+            currency: string;
+            /** Lines */
+            lines: components["schemas"]["PrLine-Output"][];
+            /** Need By */
+            need_by?: string | null;
         };
         /** RequestSupportGrantBody */
         RequestSupportGrantBody: {
@@ -3754,6 +3842,14 @@ export interface components {
         WaiverDecisionBody: {
             /** Reason */
             reason: string;
+        };
+        /**
+         * WordsBody
+         * @description What a requester typed in "Tôi cần mua…".
+         */
+        WordsBody: {
+            /** Words */
+            words: string;
         };
         /** WorkspaceMemberView */
         WorkspaceMemberView: {
@@ -5987,6 +6083,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_my_request_api_v1_purchasing_requests_mine_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_my_request_api_v1_purchasing_requests_mine_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WordsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftView"];
                 };
             };
             /** @description Validation Error */
