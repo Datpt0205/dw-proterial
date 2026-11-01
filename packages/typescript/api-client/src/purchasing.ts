@@ -90,6 +90,18 @@ export class PurchasingApi {
     );
   }
 
+  /** A request a buyer types from paper or a form, with its own number. */
+  submitForm(
+    request: PurchasingSchemas["PurchaseRequest-Input"],
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/requests", 201>(
+      `${BASE}/requests`,
+      request,
+      idempotencyKey,
+    );
+  }
+
   /** What a send would stamp: the cross-check and the tier, nothing stored. */
   check(caseId: string) {
     return this.get<"/api/v1/purchasing/requests/{case_id}/check">(

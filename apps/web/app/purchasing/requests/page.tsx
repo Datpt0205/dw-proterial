@@ -49,13 +49,22 @@ function Requests() {
             : "Mọi yêu cầu mua hàng DW2 đã nhận, mới nhất trước."
         }
         actions={
-          hasScope(SCOPE.create) ? (
-            <Link href="/purchasing/new">
-              <Button type="primary" icon={<PlusOutlined aria-hidden />}>
-                Tôi cần mua…
-              </Button>
-            </Link>
-          ) : undefined
+          <>
+            {hasScope(SCOPE.intake) ? (
+              <Link href="/purchasing/requests/new">
+                <Button icon={<PlusOutlined aria-hidden />}>
+                  Nhập yêu cầu
+                </Button>
+              </Link>
+            ) : null}
+            {hasScope(SCOPE.create) ? (
+              <Link href="/purchasing/new">
+                <Button type="primary" icon={<PlusOutlined aria-hidden />}>
+                  Tôi cần mua…
+                </Button>
+              </Link>
+            ) : null}
+          </>
         }
       />
       <Card size="small">
