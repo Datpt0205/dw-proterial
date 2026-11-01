@@ -85,8 +85,31 @@ _SETS: dict[str, set[str]] = {
     # `DRAFTABLE`'s, which the service refuses for the rest.
     "ck_rule_drafts_rule_key": _values(RuleKey),
     # The model steps a measurement is of (ADR 0005, addendum of 2026-10-23).
-    "ck_model_step_measurements_step": _values(ModelStep),
 }
+
+
+@pytest.mark.parametrize(
+    ("constraint", "prefix", "values"),
+    [
+        ("ck_rule_versions_key", "sales_", _values(RuleKey)),
+        # Every Sales model step's measurement (dw_sales ADR 0005), in the table
+        # every context's measurements share since 315c7ae4844f.
+        ("ck_model_step_measurements_step", "", _values(ModelStep)),
+    ],
+)
+async def test_the_platform_tables_admit_every_sales_value(
+    catalog: AsyncConnection, constraint: str, prefix: str, values: set[str]
+) -> None:
+    definition = await catalog.scalar(
+        sa.text(
+            "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c"
+            " JOIN pg_namespace n ON n.oid = c.connamespace"
+            " WHERE n.nspname = 'platform' AND c.conname = :name"
+        ),
+        {"name": constraint},
+    )
+    held = set(re.findall(r"'([a-z_]+)'::text", str(definition)))
+    assert values <= held and {v for v in held if v.startswith(prefix)} >= values
 
 
 async def test_the_platform_rule_versions_admit_every_sales_key(catalog: AsyncConnection) -> None:
@@ -180,13 +203,11 @@ async def test_every_foreign_key_says_what_a_delete_does_and_is_indexed(
 
 
 # Tables whose rows belong to the whole tenant, not to one workspace, with why:
-# policed by tenant alone, unique keys led by `tenant_id` alone. Every other
-# Sales table is narrowed by workspace as well.
-_TENANT_WIDE = {
-    # A model step's measurement backs a switch in those rules: the tenant's,
-    # whichever workspace recorded it (migration 2d97d03c937a).
-    "model_step_measurements",
-}
+# policed by tenant alone, unique keys led by `tenant_id` alone. None is left
+# in `sales`: the rule versions and the model-step measurements moved to
+# `platform` (5ef229da512b, 315c7ae4844f). Every Sales table is narrowed by
+# workspace as well.
+_TENANT_WIDE: set[str] = set()
 
 
 async def test_every_table_is_policed_by_tenant_and_workspace_under_its_own_name(

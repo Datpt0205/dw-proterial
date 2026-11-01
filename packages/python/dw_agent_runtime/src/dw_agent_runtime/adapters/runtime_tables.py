@@ -130,3 +130,28 @@ tool_executions = sa.Table(
     sa.Column("started_at", sa.TIMESTAMP(timezone=True), nullable=False),
     sa.Column("finished_at", sa.TIMESTAMP(timezone=True), nullable=True),
 )
+
+
+# Each live measurement of a model step, every context's (Sales' ADR 0005
+# addendum of 2026-10-23, migration 2d97d03c937a; moved from `sales` by the
+# ADR 0013/0014 lift, rows kept): append-only, narrowed by tenant only.
+model_step_measurements = sa.Table(
+    "model_step_measurements",
+    metadata,
+    sa.Column("id", UUID(as_uuid=True), primary_key=True),
+    sa.Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("workspace_id", UUID(as_uuid=True), nullable=False),
+    sa.Column("step", sa.Text, nullable=False),
+    sa.Column("model", sa.Text, nullable=False),
+    sa.Column("prompt", sa.Text, nullable=False),
+    sa.Column("metric", sa.Text, nullable=False),
+    sa.Column("value", sa.Numeric(5, 4), nullable=False),
+    sa.Column("bar", sa.Numeric(5, 4), nullable=False),
+    sa.Column("passed", sa.Boolean, nullable=False),
+    sa.Column("dataset", sa.Text, nullable=False),
+    sa.Column("measured_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("recorded_by", sa.Text, nullable=False),
+    sa.Column(
+        "created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.func.now()
+    ),
+)

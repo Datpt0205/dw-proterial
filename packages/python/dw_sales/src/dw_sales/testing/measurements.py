@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from dw_agent_runtime.model.readiness import MeasuredScope
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.domain.audit import AuditEvent, system_actor_label
 from dw_sales.application.model_readiness import (
@@ -40,19 +41,19 @@ class MemoryModelMeasurements:
     unreadable: bool = False
 
     async def latest(
-        self, scope: SalesScope, step: ModelStep, *, model: str, prompt: str
+        self, scope: MeasuredScope, step: str, *, model: str, prompt: str
     ) -> ModelMeasurement | None:
         if self.unreadable:
             raise ConnectionError("measurements unreadable")
         found = [
             m
             for m in self.rows.get(scope.tenant_id.value, [])
-            if m.step is step and m.model == model and m.prompt == prompt
+            if m.step == step and m.model == model and m.prompt == prompt
         ]
         return max(found, key=lambda m: (m.measured_at, m.measurement_id), default=None)
 
     async def record(
-        self, scope: SalesScope, measurement: ModelMeasurement, event: AuditEvent
+        self, scope: MeasuredScope, measurement: ModelMeasurement, event: AuditEvent
     ) -> None:
         if event.tenant_id != scope.tenant_id:
             raise ValueError("the audit event is the measurement's tenant's")

@@ -21,24 +21,34 @@ the eval modules and the live results files on whoever ran the lane. Now:
   (`StepModelPort`) and the prompt version it pins now passed, at today's bar
   and on today's metric. Anything else, an unreadable store included, is not
   ready: the step does what it does when it is off, and the log says why.
+
+The measurement, the store, the check and the refusal are the agent
+runtime's since ADR 0013/0014 (`dw_agent_runtime.model.readiness`,
+`platform.model_step_measurements`); what stays here is Sales': its steps,
+their bars, and the switches in the order rules that turn them on.
 """
 
 from __future__ import annotations
 
 import logging
-import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Final, Literal, Protocol, Self
+from typing import Any, Final
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
-
-from dw_agent_runtime.model.interpretation import PromptRef
-from dw_kernel.errors import ConflictError
+from dw_agent_runtime.model import readiness as runtime
+from dw_agent_runtime.model.readiness import (
+    MODEL_BAR_UNMET,
+    MeasurementLogPort,
+    ModelMeasurement,
+    ModelMeasurementsPort,
+    Reason,
+    StepBar,
+    StepModelPort,
+    StepReadiness,
+    refusal,
+)
 from dw_kernel.ports import IdGenerator, UtcClock
-from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor_label
-from dw_sales.application.artifact_content import local_time
 from dw_sales.application.handoffs import REQUEST_HANDOFF
 from dw_sales.application.layouts import LAYOUT_PROPOSAL
 from dw_sales.application.message_intent import MESSAGE_INTENT
@@ -49,29 +59,23 @@ from dw_sales.application.reply_intent import REPLY_INTENT
 from dw_sales.application.rfq_reading import RFQ_EXTRACTION
 from dw_sales.domain.order_checks import ModelStep, OrderRules
 
+__all__ = [
+    "MODEL_BAR_UNMET",
+    "MeasurementLogPort",
+    "ModelMeasurement",
+    "ModelMeasurementsPort",
+    "Reason",
+    "StepBar",
+    "StepModelPort",
+    "StepReadiness",
+    "refusal",
+]
+
 _LOG = logging.getLogger("dw_sales.model")
 
 # The lane that records a measurement: its audit actor is `system:<lane>`
 # (ADR 0011), and so is a row's `recorded_by`.
 ATTEST_LANE: Final = "sales_model_attest"
-# The rule a refusal names when a version turns on a step that is not ready.
-MODEL_BAR_UNMET: Final = "model_bar_unmet"
-
-
-@dataclass(frozen=True, slots=True)
-class StepBar:
-    """What a step's live eval must show before its switch does anything."""
-
-    # The share the metric must reach.
-    bar: float
-    # Where the golden grader's details hold the metric, dot-separated.
-    metric: str
-    # The prompt the step runs on: a measurement of another version is not
-    # one of this step as it runs.
-    prompt: PromptRef
-    # The dataset that measures the step, and its golden case's grader.
-    dataset: str
-    grader: str
 
 
 # Each step's bar. Set by Đạt where the comment says so; the rest are the
@@ -126,111 +130,12 @@ def step_measured_by(dataset_id: str) -> ModelStep | None:
     return next((step for step, owner in BARS.items() if owner.dataset == dataset_id), None)
 
 
-def _at(details: Mapping[str, Any], path: str) -> float:
-    found: Any = details
-    for part in path.split("."):
-        found = found[part]
-    return float(found)
-
-
 def bar_verdict(
     step: ModelStep, details: Mapping[str, Any], *, holds: bool = True
 ) -> dict[str, object]:
-    """A golden grader's verdict on its step's bar, read from the grader's own
-    ``details`` at the metric's path. ``holds`` is any condition of the
-    grader's own besides the share (no accepted swap, no false accept)."""
-    owner = BARS[step]
-    value = _at(details, owner.metric)
-    return {
-        "step": step.value,
-        "metric": owner.metric,
-        "value": value,
-        "bar": owner.bar,
-        "passed": holds and value >= owner.bar,
-    }
-
-
-# ------------------------------------------------------- the measurement --
-
-
-class ModelMeasurement(BaseModel):
-    """One live measurement of one step: a row of
-    `sales.model_step_measurements`, whose CHECKs say the same."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    measurement_id: uuid.UUID
-    step: ModelStep
-    # The model the step was measured on: the profile route's `model`.
-    model: str = Field(min_length=1, max_length=200)
-    prompt: str = Field(pattern=r"^[a-z0-9_.]+@\d+\.\d+\.\d+$")
-    metric: str = Field(pattern=r"^[a-z_]+(\.[a-z_]+)*$")
-    value: float = Field(ge=0, le=1)
-    # The bar when it was measured.
-    bar: float = Field(ge=0, le=1)
-    passed: bool
-    # ``dataset_id@version`` the eval ran.
-    dataset: str = Field(pattern=r"^[a-z0-9_]+@\d+\.\d+\.\d+$")
-    measured_at: AwareDatetime
-    recorded_by: str = Field(pattern=r"^system:[a-z][a-z0-9_]*$")
-
-    @model_validator(mode="after")
-    def _a_pass_meets_its_bar(self) -> Self:
-        if self.passed and self.value < self.bar:
-            raise ValueError("a passing measurement is at or above its bar")
-        return self
-
-
-class ModelMeasurementsPort(Protocol):
-    """The tenant's measurements, read under its RLS: never another's."""
-
-    async def latest(
-        self, scope: SalesScope, step: ModelStep, *, model: str, prompt: str
-    ) -> ModelMeasurement | None:
-        """The newest measurement of ``step`` on ``model`` and ``prompt``."""
-        ...
-
-
-class MeasurementLogPort(Protocol):
-    """Where the attesting lane writes: the row and its audit event in one
-    transaction, under the tenant's RLS. Append-only."""
-
-    async def record(
-        self, scope: SalesScope, measurement: ModelMeasurement, event: AuditEvent
-    ) -> None: ...
-
-
-class StepModelPort(Protocol):
-    """The model a tenant's model steps run on now: the route DW1's profile
-    resolves to for that tenant, read as the gateway reads it."""
-
-    def model_for(self, tenant_id: uuid.UUID) -> str: ...
-
-
-# ------------------------------------------------------------ readiness --
-
-Reason = Literal["ready", "not_measured", "failed", "unreadable"]
-
-
-@dataclass(frozen=True, slots=True)
-class StepReadiness:
-    step: ModelStep
-    # None when it could not be resolved (`unreadable`).
-    model: str | None
-    prompt: str
-    bar: float
-    # The newest measurement on ``model`` and ``prompt``; None: none, or unreadable.
-    latest: ModelMeasurement | None
-    reason: Reason
-
-    @property
-    def ready(self) -> bool:
-        return self.reason == "ready"
-
-
-def _passes(owner: StepBar, latest: ModelMeasurement) -> bool:
-    """A pass, at today's bar, on today's metric."""
-    return latest.passed and latest.value >= owner.bar and latest.metric == owner.metric
+    """A golden grader's verdict on its step's bar (`runtime.bar_verdict`
+    with the bar this module holds for ``step``)."""
+    return runtime.bar_verdict(step, BARS[step], details, holds=holds)
 
 
 @dataclass(frozen=True)
@@ -242,24 +147,7 @@ class ModelReadiness:
     models: StepModelPort
 
     async def check(self, scope: SalesScope, step: ModelStep) -> StepReadiness:
-        owner = BARS[step]
-        prompt = str(owner.prompt)
-        try:
-            model = self.models.model_for(scope.tenant_id.value)
-            latest = await self.measurements.latest(scope, step, model=model, prompt=prompt)
-        except Exception as exc:
-            _LOG.warning(
-                "model step %s: measurements unreadable for tenant %s (%s)",
-                step.value,
-                scope.tenant_id.value,
-                type(exc).__name__,
-            )
-            return StepReadiness(step, None, prompt, owner.bar, None, "unreadable")
-        if latest is None:
-            reason: Reason = "not_measured"
-        else:
-            reason = "ready" if _passes(owner, latest) else "failed"
-        return StepReadiness(step, model, prompt, owner.bar, latest, reason)
+        return await runtime.ReadinessCheck(BARS, self.measurements, self.models).check(scope, step)
 
     async def allows(self, scope: SalesScope, rules: OrderRules, step: ModelStep) -> bool:
         if not rules.model_assist.on(step):
@@ -292,56 +180,6 @@ class ModelReadiness:
         return [r for r in [await self.check(scope, s) for s in turned_on] if not r.ready]
 
 
-def refusal(unready: Sequence[StepReadiness]) -> ConflictError:
-    """The 409 a version meets when it turns on the ``unready`` steps: each
-    named with its bar, the model and prompt it runs on, and its latest
-    measurement or "chưa đo"."""
-    return ConflictError(
-        "Chưa bật được bước có mô hình: "
-        + "; ".join(_worded(r) for r in unready)
-        + ". Một bước chỉ bật được khi lần đo trực tiếp gần nhất, trên mô hình và"
-        " lời nhắc bước đó đang dùng, đạt ngưỡng. Tắt bước đó trong phiên bản này,"
-        " hoặc đo lại (run_evals.py --live --attest) rồi đề xuất lại.",
-        details={"rule": MODEL_BAR_UNMET, "steps": [_detail(r) for r in unready]},
-    )
-
-
-def _worded(readiness: StepReadiness) -> str:
-    latest = readiness.latest
-    if readiness.reason == "unreadable":
-        measured = "không đọc được kết quả đo"
-    elif latest is None:
-        measured = "chưa đo"
-    else:
-        when = local_time(latest.measured_at).strftime("%H:%M %d/%m/%Y")
-        measured = f"lần đo gần nhất {latest.value:.1%} lúc {when}, chưa đạt"
-    return (
-        f"«{readiness.step.value}» (ngưỡng {readiness.bar:.0%}, mô hình"
-        f" {readiness.model or 'không xác định'}, lời nhắc {readiness.prompt}: {measured})"
-    )
-
-
-def _detail(readiness: StepReadiness) -> dict[str, object]:
-    latest = readiness.latest
-    return {
-        "step": readiness.step.value,
-        "bar": readiness.bar,
-        "model": readiness.model,
-        "prompt": readiness.prompt,
-        "reason": readiness.reason,
-        "latest": None
-        if latest is None
-        else {
-            "value": latest.value,
-            "passed": latest.passed,
-            "measured_at": latest.measured_at.isoformat(),
-        },
-    }
-
-
-# --------------------------------------------------------- attestation --
-
-
 @dataclass(frozen=True)
 class ModelAttestation:
     """Records a live eval's measurement of a step for one tenant: the lane
@@ -365,40 +203,12 @@ class ModelAttestation:
         ``held`` whether that run's own verdict passed (the grader's
         conditions and every case of the dataset). The bar and the metric are
         this module's; the row passes only at or above the bar."""
-        owner = BARS[step]
-        now = self.clock.now()
-        kept = round(value, 4)
-        measurement = ModelMeasurement(
-            measurement_id=self.ids.new_uuid(),
-            step=step,
-            model=model,
-            prompt=str(owner.prompt),
-            metric=owner.metric,
-            value=kept,
-            bar=owner.bar,
-            passed=held and kept >= owner.bar,
-            dataset=dataset,
-            measured_at=now,
-            recorded_by=system_actor_label(ATTEST_LANE),
-        )
-        event = lane_audit_event(
+        return await runtime.Attestation(
+            self.log,
+            self.clock,
+            self.ids,
+            BARS,
             lane=ATTEST_LANE,
-            event_id=self.ids.new_uuid(),
-            tenant_id=scope.tenant_id,
-            workspace_id=scope.workspace_id,
             action="sales.model_step.measured",
             resource_type="sales_model_step_measurement",
-            resource_id=str(measurement.measurement_id),
-            occurred_at=now,
-            details={
-                "step": step.value,
-                "model": model,
-                "prompt": measurement.prompt,
-                "value": measurement.value,
-                "bar": measurement.bar,
-                "passed": measurement.passed,
-                "dataset": dataset,
-            },
-        )
-        await self.log.record(scope, measurement, event)
-        return measurement
+        ).attest(scope, step, model=model, value=value, held=held, dataset=dataset)

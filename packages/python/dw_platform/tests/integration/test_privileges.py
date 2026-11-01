@@ -51,6 +51,8 @@ async def test_the_application_can_read_the_tables_it_serves(app_engine: AsyncEn
             "platform.memberships",
             # Moved from `sales` by 5ef229da512b (ADR 0013): every context's versions.
             "platform.rule_versions",
+            # Moved from `sales` by 315c7ae4844f: every context's model steps.
+            "platform.model_step_measurements",
             "knowledge.documents",
             "memory.items",
             *_SALES_TABLES,
@@ -84,9 +86,6 @@ _SALES_TABLES = (
     # Migration 42868d8c21c5: rule drafts from a company's template.
     "sales.rule_drafts",
     "sales.rule_draft_files",
-    # Migration 2d97d03c937a (dw_sales ADR 0005, addendum of 2026-10-23): each
-    # live measurement of a model step.
-    "sales.model_step_measurements",
     # Migration e544ff20fad6 (ticket 43): the stored mailbox, and the files
     # the drop lane has handled.
     "sales.mailbox_messages",
@@ -149,12 +148,6 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
     for table in ("artifacts", "source_served", "followup_deliveries"):
         assert {verb for tbl, verb in held if tbl == table} == every - {"UPDATE"}, table
-    # A model step's live measurement is a fact about the past, like the audit
-    # log: never rewritten or removed by the application.
-    assert {verb for tbl, verb in held if tbl == "model_step_measurements"} == {
-        "SELECT",
-        "INSERT",
-    }
     # A quotation sent is a fact about the past (c1c192e011e1).
     assert {verb for tbl, verb in held if tbl == "recorded_quotations"} == {"SELECT", "INSERT"}
     # A code Sales confirmed is kept as confirmed (bbf5aa95bf6f).
@@ -652,3 +645,28 @@ async def test_the_application_writes_the_rule_versions_of_every_context(
     finally:
         await migrator.dispose()
     assert held == {"SELECT", "INSERT", "UPDATE", "DELETE"}
+
+
+async def test_a_model_steps_measurement_is_never_rewritten_or_removed(
+    db_urls: DatabaseUrls,
+) -> None:
+    """`platform.model_step_measurements` (moved from `sales` by 315c7ae4844f)
+    kept its grants: a live measurement is a fact about the past, like the
+    audit log, so the application reads and appends only."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            held = {
+                verb
+                for verb in ("SELECT", "INSERT", "UPDATE", "DELETE")
+                if await conn.scalar(
+                    sa.text(
+                        "SELECT has_table_privilege('dw_app',"
+                        " 'platform.model_step_measurements', :v)"
+                    ),
+                    {"v": verb},
+                )
+            }
+    finally:
+        await migrator.dispose()
+    assert held == {"SELECT", "INSERT"}
