@@ -203,6 +203,18 @@ class RetentionPolicy(BaseModel):
     channel_deliveries: ChannelDeliveryRetention
     offboarding_exports: OffboardingExportRetention
     batch_limit: int = Field(gt=0, le=10_000)
+    # A context's own tables whose rows are deleted one by one past their
+    # term, by the context's lane (`<schema>.<table>`, since 1.10.0). Absent:
+    # none, and nothing of a context is swept for being old.
+    tables: dict[str, RetentionClass] = Field(default_factory=dict)
+
+    def row_cutoff_for(self, table: str, *, now: datetime) -> datetime | None:
+        """The instant before which ``table``'s rows have outlived their term;
+        None for a table with no term, which keeps every row."""
+        found = self.tables.get(table)
+        if found is None or found.days is None:
+            return None
+        return now - timedelta(days=found.days)
 
     def cutoff_for(self, name: str, *, now: datetime) -> datetime | None:
         """The instant before which rows of this class have outlived their term.

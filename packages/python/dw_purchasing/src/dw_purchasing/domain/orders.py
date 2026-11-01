@@ -65,6 +65,9 @@ class BravoPoLayout(BaseModel):
 
     model_config = _FROZEN
 
+    # The platform's stand-in (rules 1.4.0): a deployed DW2 drafts no order
+    # with it, since the company's Bravo would not import it.
+    mock: bool = False
     sheet: SheetName
     date_format: DateFormat
     columns: tuple[BravoColumn, ...] = Field(min_length=1, max_length=40)

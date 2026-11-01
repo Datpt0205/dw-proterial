@@ -76,6 +76,7 @@ def build_purchasing(
     model: ModelGateway | None,
     clock: UtcClock,
     ids: IdGenerator,
+    deployed: bool,
 ) -> PurchasingServices:
     worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
     store = SqlPurchasingStore(session_factory, audit, approvals)
@@ -110,6 +111,7 @@ def build_purchasing(
             spreadsheet=BravoFile(),
             clock=clock,
             ids=ids,
+            deployed=deployed,
         ),
         rules=PurchasingRulesService(
             uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids, checks=checks

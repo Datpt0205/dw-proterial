@@ -1,0 +1,87 @@
+schema_version: "1.0"
+policy_id: purchasing_rules
+version: "1.4.0"
+
+# MOCK. The rules DW2 (Mua hàng) runs under until Proterial's own arrive as
+# the tenant's version of this document, stored at runtime and never as an
+# edit to this file (ADR 0013 decision 5). Validated by
+# `dw_purchasing.domain.rules.PurchasingRules`; a case stamps the version it
+# was received under, and the approver its check sent it to.
+#
+# 1.1.0 adds `approval` (DW02 function 2), 1.2.0 `rfq` (function 3), 1.3.0
+# `bravo_po` (function 4), 1.4.0 `bravo_po.mock`: this layout is the
+# platform's stand-in, so a deployed DW2 drafts no order from it until the
+# tenant holds its own (learned from its Bravo template, or written by its
+# head). Every figure and every header is fictional.
+
+# What a purchase request must carry to be received (DW02 function 1).
+pr_form:
+  # Beyond what every request has (number, department, requester, lines):
+  # budget_code, need_by (for the request or every line),
+  # estimated_unit_price (every line).
+  required: [budget_code]
+  max_lines: 50
+  currencies: [VND, USD, JPY]
+  # A request that names no currency is in this one.
+  default_currency: VND
+
+# The company's mail domains: only a sender from one of them, verified by the
+# mail system (SPF, DKIM and DMARC pass), may be a requester. The mock
+# company's domain.
+internal_domains: [seller.example]
+
+# Who approves a request, by its amount after the cross-check (the sum of
+# quantity times each line's reference price: a valid quotation, else the
+# last price paid, else the requester's estimate).
+approval:
+  currency: VND
+  tiers:
+    - up_to: 20000000
+      scope: purchasing.approve.tier1
+      label: Trưởng phòng Mua hàng
+    - up_to: 200000000
+      scope: purchasing.approve.tier2
+      label: Giám đốc nhà máy
+    - up_to: null
+      scope: purchasing.approve.tier3
+      label: Tổng giám đốc
+  # An estimate this far above the reference price is a finding.
+  price_tolerance_percent: 10
+  # These findings send a request to the last tier whatever its amount.
+  escalate: [no_reference_price, over_budget, budget_unknown, currency_mismatch]
+
+# Whom DW2 drafts a request for quotation to, once a request is approved: per
+# line, the suppliers the master data lists for its item (supplies it, quoted
+# it, or was paid for it), at most this many, by supplier code.
+rfq:
+  max_suppliers_per_line: 3
+  # The reply date the RFQ asks for, in days from the day it is drafted.
+  reply_days: 3
+
+# The file a buyer imports draft purchase orders into Bravo from: its sheet,
+# how a date is shown, and its columns in order. Each column is one of DW2's
+# fields (po_ref, pr_no, order_date, supplier_code, supplier_name, item_code,
+# description, quantity, unit, unit_price, currency, amount, need_by,
+# budget_code, department); the headers are MOCK until Proterial's Bravo
+# import template arrives.
+bravo_po:
+  # The platform's stand-in, not a company's template: refused when deployed.
+  mock: true
+  sheet: PO
+  date_format: dd/mm/yyyy
+  columns:
+    - {header: "Số PO DW2", field: po_ref}
+    - {header: "Ngày đặt hàng", field: order_date}
+    - {header: "Mã NCC", field: supplier_code}
+    - {header: "Tên NCC", field: supplier_name}
+    - {header: "Mã vật tư", field: item_code}
+    - {header: "Diễn giải", field: description}
+    - {header: "ĐVT", field: unit}
+    - {header: "Số lượng", field: quantity}
+    - {header: "Đơn giá", field: unit_price}
+    - {header: "Thành tiền", field: amount}
+    - {header: "Mã ngoại tệ", field: currency}
+    - {header: "Ngày cần", field: need_by}
+    - {header: "Mã ngân sách", field: budget_code}
+    - {header: "Số PR", field: pr_no}
+    - {header: "Bộ phận", field: department}

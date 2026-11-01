@@ -639,6 +639,7 @@ def build_purchasing_mount(
             model=model,
             clock=clock,
             ids=ids,
+            deployed=settings.is_deployed,
         )
     )
 
