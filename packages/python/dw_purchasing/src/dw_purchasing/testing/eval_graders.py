@@ -1216,3 +1216,145 @@ PURCHASING_GRADERS.update(
         "purchasing.reapproval_degrade": grade_reapproval_degrade,
     }
 )
+
+
+# ------------------------------------------------ a rule changed in words --
+
+_CONFIGURES = frozenset({"purchasing.request.read", "purchasing.rules.propose"})
+
+
+def _configurer(scope: tuple[uuid.UUID, uuid.UUID] = ALPHA) -> Any:
+    return caller(scope, scopes=_CONFIGURES, principal=uuid.UUID(int=0xC0F))
+
+
+def _words_rule_world(ctx: GraderContext, data: dict[str, Any]) -> World:
+    world = _world(ctx, {})
+    world.model.answers = data["answers"]
+    if ctx.live_model is not None:
+        world.words = dataclasses.replace(world.words, model=ctx.live_model)
+    return world
+
+
+def _at(document: dict[str, Any], path: str) -> Any:
+    node: Any = document
+    for part in path.split("."):
+        node = node[int(part)] if isinstance(node, list) else node[part]
+    return node
+
+
+def grade_rule_words_golden(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    async def work() -> dict[str, object]:
+        world = _words_rule_world(ctx, data)
+        found: dict[str, object] = {}
+        for key, (paths, _value) in expected["golden"].items():
+            draft = await world.words.draft(
+                _configurer(), "purchasing_rules", data["requests"][key]
+            )
+            got = None if draft.document is None else _at(draft.document, paths[0])
+            found[key] = [draft.changed, got]
+            if draft.version is None or draft.version == draft.base_ref.partition("@")[2]:
+                found[f"{key}:version"] = draft.version
+        if world.store.versions:
+            found["applied"] = True
+        return found
+
+    found = _run(work)
+    want = {k: [paths, value] for k, (paths, value) in expected["golden"].items()}
+    if found != want:
+        return GradeResult.fail("the draft is not the change asked", found=found)
+    return GradeResult.ok()
+
+
+def grade_rule_words_injection(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    async def work() -> list[str]:
+        world = _words_rule_world(ctx, data)
+        draft = await world.words.draft(
+            _configurer(), "purchasing_rules", data["requests"]["injection"]
+        )
+        if draft.document is not None or world.store.versions:
+            return ["drafted or applied"]
+        return draft.problems
+
+    found = _run(work)
+    if found != expected["injection"]:
+        return GradeResult.fail("the instruction reached a draft", found=found)
+    return GradeResult.ok()
+
+
+def grade_rule_words_missing_evidence(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    async def work() -> dict[str, object]:
+        world = _words_rule_world(ctx, data)
+        vague = await world.words.draft(
+            _configurer(), "purchasing_rules", data["requests"]["vague"]
+        )
+        switch = await world.words.draft(
+            _configurer(), "purchasing_automation", data["requests"]["switch"]
+        )
+        return {"vague": vague.problems, "switch": switch.problems}
+
+    found = _run(work)
+    if found != expected["missing_evidence"]:
+        return GradeResult.fail("a change nobody can stand behind was drafted", found=found)
+    return GradeResult.ok()
+
+
+def grade_rule_words_cross_tenant(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    async def work() -> list[str]:
+        world = _words_rule_world(ctx, data)
+        from dw_purchasing.adapters.policy_files import PolicyFiles
+
+        theirs: dict[str, Any] = (
+            PolicyFiles.load(ctx.repo_root / "configs/policies").current().model_dump(mode="json")
+        )
+        theirs["policy_version"] = "9.9.0"
+        theirs["rfq"]["max_suppliers_per_line"] = 9
+        world.tenant_policies.documents[(BETA[0], "purchasing_rules")] = theirs
+        draft = await world.words.draft(
+            _configurer(), "purchasing_rules", data["requests"]["limit"]
+        )
+        leaks: list[str] = []
+        if draft.base_ref.endswith("@9.9.0"):
+            leaks.append("another tenant's version is the base")
+        if draft.document is not None and draft.document["rfq"]["max_suppliers_per_line"] == 9:
+            leaks.append("another tenant's value drafted")
+        return leaks
+
+    leaks = _run(work)
+    return GradeResult.fail("cross-tenant", leaks=leaks) if leaks else GradeResult.ok()
+
+
+def grade_rule_words_degrade(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    async def work() -> int:
+        world = _words_rule_world(ctx, data)
+        world.model.failure = ModelUnavailableError("down")
+        told = 0
+        for desk in (world.words, dataclasses.replace(world.words, model=None)):
+            try:
+                await desk.draft(_configurer(), "purchasing_rules", data["requests"]["limit"])
+            except InfrastructureError:
+                told += 1
+        return told
+
+    told = _run(work)
+    return GradeResult.ok() if told == 2 else GradeResult.fail("degraded to a guess", told=told)
+
+
+PURCHASING_GRADERS.update(
+    {
+        "purchasing.rule_words_golden": grade_rule_words_golden,
+        "purchasing.rule_words_injection": grade_rule_words_injection,
+        "purchasing.rule_words_missing_evidence": grade_rule_words_missing_evidence,
+        "purchasing.rule_words_cross_tenant": grade_rule_words_cross_tenant,
+        "purchasing.rule_words_degrade": grade_rule_words_degrade,
+    }
+)

@@ -51,6 +51,7 @@ from dw_purchasing.application.reapprovals import (
     ReapprovalSettlement,
 )
 from dw_purchasing.application.requesters import RequesterDesk
+from dw_purchasing.application.rule_drafting import RuleWordsDesk
 from dw_purchasing.application.rules import (
     PurchasingRuleBook,
     PurchasingRulesService,
@@ -132,6 +133,13 @@ def build_purchasing(
             uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids, checks=checks
         ),
         switches=SwitchesService(Gate(authorization), book, automation),
+        words=RuleWordsDesk(
+            gate=Gate(authorization),
+            book=book,
+            model=requests.model,
+            worker=requests.worker,
+            ids=ids,
+        ),
         requester=RequesterDesk(
             uow=store,
             gate=Gate(authorization),

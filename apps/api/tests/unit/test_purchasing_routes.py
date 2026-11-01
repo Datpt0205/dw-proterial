@@ -122,6 +122,7 @@ def _mounted(world: World) -> PurchasingMount:
             rules=world.rules,
             switches=world.switches,
             requester=world.requester,
+            words=world.words,
         )
     )
 
@@ -162,6 +163,7 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("GET", f"/requests/{uuid.uuid4()}/po/bravo.xlsx", None),
         ("GET", "/rules", None),
         ("GET", "/automation", None),
+        ("POST", "/rules/purchasing_rules/words", {"request": "hỏi giá tối đa 4 nhà cung cấp"}),
         ("POST", "/requests/mine/draft", {"words": "Tôi cần mua 10 hộp găng tay"}),
         (
             "POST",
@@ -280,7 +282,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 21
+    assert len(routes) == 22
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]

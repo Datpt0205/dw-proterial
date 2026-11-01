@@ -240,6 +240,11 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   every figure is a fact; guard in the API, settlement in the worker,
   approver/requester told. Eval `purchasing_reapproval@1.0.0` 5/5; 8
   mutations red (two first green, closed with tests).
+- **Rules changed in words** (`POST /purchasing/rules/{key}/words`,
+  `purchasing.rule_change_in_words@1.0.0`): synchronous, nothing stored; the
+  platform's `apply_changes` decides, the draft carries an unused number;
+  the person sends it through the one door. Eval
+  `purchasing_rule_words@1.0.0` 5/5; 3 mutations red.
 - **Owed by the 11-01 principle, not done**: the RFQ mail still falls back
   to code's template when the model's words fail; by "không viết template
   cứng" it should instead go to the buyer to write.

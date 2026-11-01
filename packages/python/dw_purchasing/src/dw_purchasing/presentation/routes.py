@@ -37,6 +37,7 @@ from dw_purchasing.application.approvals import PurchaseCheckView
 from dw_purchasing.application.automation import SwitchesView
 from dw_purchasing.application.intake import CaseChange, InboxItem
 from dw_purchasing.application.requesters import DraftView, MyRequest
+from dw_purchasing.application.rule_drafting import WordsDraft
 from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import ComparisonView, OfferForm
@@ -107,6 +108,15 @@ class WordsBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     words: str = Field(min_length=1, max_length=2000)
+
+
+class PurchasingRuleWordsBody(BaseModel):
+    """What a person wants changed, in their words, and the part it is about."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request: str = Field(min_length=1, max_length=2000)
+    focus: str | None = Field(default=None, pattern=r"^[A-Za-z_][A-Za-z0-9_.]*$", max_length=200)
 
 
 class RuleChange(BaseModel):
@@ -310,6 +320,12 @@ def build_router(
     @router.get("/rules/{key}/schema", dependencies=propose)
     async def rule_schema(key: _RuleKey, context: Ctx, svc: Svc) -> dict[str, Any]:
         return await svc.rules.schema(context, key)
+
+    @router.post("/rules/{key}/words", response_model=WordsDraft, dependencies=propose)
+    async def rule_in_words(
+        key: _RuleKey, body: PurchasingRuleWordsBody, context: Ctx, svc: Svc
+    ) -> WordsDraft:
+        return await svc.words.draft(context, key, body.request, body.focus)
 
     @router.post("/rules/{key}/versions", response_model=RuleChange, dependencies=propose)
     async def propose_rules(

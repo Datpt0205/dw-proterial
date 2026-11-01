@@ -1421,6 +1421,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/rules/{key}/words": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rule In Words */
+        post: operations["rule_in_words_api_v1_purchasing_rules__key__words_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -3275,6 +3292,16 @@ export interface components {
              */
             version_id: string;
         };
+        /**
+         * PurchasingRuleWordsBody
+         * @description What a person wants changed, in their words, and the part it is about.
+         */
+        PurchasingRuleWordsBody: {
+            /** Focus */
+            focus?: string | null;
+            /** Request */
+            request: string;
+        };
         /** PurchasingRulesView */
         PurchasingRulesView: {
             /** Keys */
@@ -3906,6 +3933,28 @@ export interface components {
         WordsBody: {
             /** Words */
             words: string;
+        };
+        /**
+         * WordsDraft
+         * @description What the settings page shows: the whole document changed, the paths
+         *     the machine changed ("Máy đề xuất"), the version it would be, or the
+         *     problems that refused it (codes and paths, never a word of the model's).
+         */
+        WordsDraft: {
+            /** Base Ref */
+            base_ref: string;
+            /** Changed */
+            changed: string[];
+            /** Document */
+            document: {
+                [key: string]: unknown;
+            } | null;
+            /** Key */
+            key: string;
+            /** Problems */
+            problems: string[];
+            /** Version */
+            version: string | null;
         };
         /** WorkspaceMemberView */
         WorkspaceMemberView: {
@@ -6690,6 +6739,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rule_in_words_api_v1_purchasing_rules__key__words_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchasingRuleWordsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordsDraft"];
                 };
             };
             /** @description Validation Error */
