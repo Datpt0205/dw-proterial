@@ -11,6 +11,10 @@
     {
       "name": "sales",
       "pathPrefixes": ["/api/v1/sales"]
+    },
+    {
+      "name": "purchasing",
+      "pathPrefixes": ["/api/v1/purchasing"]
     }
   ]
 }

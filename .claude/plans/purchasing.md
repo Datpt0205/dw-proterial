@@ -245,23 +245,53 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   platform's `apply_changes` decides, the draft carries an unused number;
   the person sends it through the one door. Eval
   `purchasing_rule_words@1.0.0` 5/5; 3 mutations red.
+- **Phase 3, the web pages** (2026-11-01): `apps/web/app/purchasing` on
+  the `@dw/ui` shell, its own bar ("DW2 Mua hàng"): "Việc của tôi" (one
+  press to decide after the reason the strict approvals require; the
+  request shown beside it), "Tôi cần mua…" (model draft, or the hand form
+  when DW2 cannot read), "Hộp thư", "Hồ sơ mua hàng" and the case (next
+  step, lines, check, RFQ drafts, offers by hand or read from mail, code's
+  comparison with the cheapest-in-time pre-chosen, PO + Bravo download,
+  history with "Máy đọc"/"Máy viết"/"Mẫu cố định"/"Người nhập"), "Cài đặt
+  DW2" (switches by press, rules in words, every change read as words,
+  decided by a second person; no code, JSON or YAML shown). Words are
+  `CONTEXT.md` "Screen words", tested both ways (web labels, Python mail
+  reasons). `PurchasingApi` typed from `generated/purchasing.d.ts`.
+  Walked per role with Playwright (requester, buyer, head, director,
+  configurer, 360 px) on the demo tenant; `e2e/purchasing.spec.ts` 5/5.
+  Defects the walk found, fixed with tests: the director was asked to decide
+  a request they could not read (an approver now reads the one case its
+  stamped scope decides, 404 for any other); a switch change reused the
+  number in force (409; an unnumbered proposal is now numbered by the
+  platform); every requester's number was the same for hours (uuid7 head;
+  now its random tail, `DW2-<yymmdd>-<8 hex>`); the hand form did not open
+  when the model was down; a requester was shown a buyer's button; the
+  Bravo file lost its name (CORS now exposes `Content-Disposition`).
+  Demo personas: `uv run python -m dw_purchasing.testing.seed_personas`
+  (Bình head, Khoa buyer, An requester, Tâm configurer, Giang last tier;
+  Dung buyer in Beta).
 - **Owed by the 11-01 principle, not done**: the RFQ mail still falls back
   to code's template when the model's words fail; by "không viết template
   cứng" it should instead go to the buyer to write.
 
 ## Next
 
-1. Đạt reviews the four slices (this report).
-2. The web pages for DW2 (mailbox, case, check, RFQ, comparison, PO).
+1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
+2. The rest of Phase 1: mail drop (`DW_PURCHASING_MAILBOX=stored`), master
+   data import, the Bravo layout learned from Proterial's file, the outbox
+   (RFQs sent from the buyer's mailbox), the DW2 attest lane.
 3. Function 5 — supplier confirmation and delivery tracking (the PO number
    Bravo assigns recorded back; confirmations read from mail).
 4. Function 6 — the morning brief and status Q&A over purchase cases.
-5. Demo personas and seed for DW2 (`make demo-reset`), on-prem live evals
-   of the three model steps on Qwen3.5-9B.
+5. On-prem live evals of DW2's model steps on Qwen3.5-9B (no measurement
+   was made in this run, so no model step can be "AI tự làm").
+6. A request for an item not in the catalogue has no RFQ path (refused,
+   "không nhà cung cấp nào"): a buyer naming suppliers by hand is not built.
 
 ## Not done, on purpose
 
-- No web page yet: the API first, the pages after slice 4.
+- No buyer form page: a buyer's own PR form (`POST /requests`) is API only;
+  requests come from mail, a requester, or that route.
 - A purchase approval is decided on the web only: no subject version is
   registered for the Zalo decision command.
 - A sent request cannot be withdrawn or edited yet; a rejected one stays
@@ -285,7 +315,10 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   (`retention@1.10.0`), proposed; Proterial's accountant to confirm.
 - **Who requests**: built as `purchasing_requester` (own requests only).
   Proterial to say how a request DW2 opens is numbered (code's
-  `DW2-<yymmdd>-<6 hex>` today) and whether Bravo's PR number replaces it.
+  `DW2-<yymmdd>-<8 hex>` today) and whether Bravo's PR number replaces it.
+- **Who reads a request to decide it**: built as the holder of the scope
+  the approval stamped, that one case only while it waits (the director
+  reads nothing else). Whether directors should read every request.
 - **Bravo import template**: the real column headers, sheet and date format
   of Proterial's Bravo PO import (the mock's are invented), and whether one
   file per PR or one per supplier. A tenant rule, so no deploy when it lands.
