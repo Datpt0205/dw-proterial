@@ -77,7 +77,9 @@ def test_every_roster_user_is_seeded_with_the_same_name_roles_and_tenant() -> No
         }
         actual = {
             **{key: str(entry[key]) for key in expected if key != "roles"},
-            "roles": sorted(entry["roles"]),
+            # DW2's keys are its own seed's, checked beside it
+            # (dw_purchasing/tests/unit/test_purchasing_demo_roster.py).
+            "roles": sorted(r for r in entry["roles"] if not r.startswith("purchasing_")),
         }
         if actual != expected:
             drift.append((entry["subject"], {"roster": actual, "seed": expected}))

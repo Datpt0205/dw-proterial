@@ -9,7 +9,7 @@ function 1, step 2 of DW2's automation).
   form rules still ask for named. Words the model cannot read into a request
   come back as "DW2 chưa hiểu" with why, never a guessed line.
 - **The requester sends it** (`submit`): the request is held to the same
-  form rules as any other, numbered by code (`DW2-<yymmdd>-<6 hex>`; the
+  form rules as any other, numbered by code (`DW2-<yymmdd>-<8 hex>`; the
   tenant's own numbering is a decision Proterial owes), named for the
   signed-in person by the platform's directory, and stamped with them as
   `requested_by`: they see it, and they never approve it.
@@ -21,8 +21,9 @@ only lines.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -96,6 +97,13 @@ class MyRequest(BaseModel):
     need_by: date | None = None
     lines: tuple[PrLine, ...] = Field(min_length=1, max_length=100)
     note: str = Field(default="", max_length=1000)
+
+
+def request_number(now: datetime, case_id: uuid.UUID) -> str:
+    """`DW2-<yymmdd>-<8 hex>` from the case id's random tail: a uuid7 begins
+    with its millisecond, so its head is the same for every request opened
+    within hours of another (two requesters were given one number before)."""
+    return f"DW2-{now:%y%m%d}-{case_id.hex[-8:].upper()}"
 
 
 @dataclass(frozen=True)
@@ -181,7 +189,7 @@ class RequesterDesk:
         now = self.clock.now()
         case_id = self.ids.new_uuid()
         request = PurchaseRequest(
-            pr_no=f"DW2-{now:%y%m%d}-{case_id.hex[:6].upper()}",
+            pr_no=request_number(now, case_id),
             department=department[:80],
             requester=person.display_name[:120],
             budget_code=mine.budget_code,

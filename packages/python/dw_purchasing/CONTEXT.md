@@ -21,7 +21,7 @@ dw_sales ADR 0005 as DW2 applies it).
 - **Requester (người yêu cầu)**: a member of a department who writes their
   own request in DW2 ("Tôi cần mua…"). The model reads their words into a
   draft (spans only, code keeps whole lines or none); they press "Gửi". The
-  number is code's (`DW2-<yymmdd>-<6 hex>`), the name and department the
+  number is code's (`DW2-<yymmdd>-<8 hex>`), the name and department the
   directory's. A requester sees only the requests they wrote (narrowed in
   the query) and is a maker of its approval, so never its decider.
 - **Case status**: `received` (Đã nhận) — the request is on file;
@@ -161,3 +161,49 @@ A step gets its switch the day code reads it, never before.
   supplier's verified mail is never read as a request. Every person is told
   in the app what is theirs to do, once per case and step; a step that
   refuses is told once in its own words. The lane audits as itself.
+
+## Screen words
+
+The labels the DW2 pages show, one line per code set; the web's
+`app/purchasing/_lib/labels.ts` is tested against these lines and the case
+status and role lines above, so a word changed on one side turns a test red.
+
+Steps: `mail_sorting` (Phân loại thư đến), `pr_drafting` (Mở yêu cầu từ thư),
+`submission` (Gửi người duyệt), `rfq` (Soạn thư hỏi giá), `po_drafting` (Soạn
+PO và file Bravo).
+
+Levels: `ai_auto` (AI tự làm), `ai_review` (AI làm, người duyệt), `person`
+(Người làm).
+
+Model steps: `purchasing_pr_mail_reading` (Đọc yêu cầu từ thư).
+
+Why a level: `set` (theo quy tắc của công ty), `not_measured` (chưa đo trên
+model của nhà máy), `unreadable` (số đo không đọc được).
+
+Findings: `item_unknown` (mã hàng chưa có trong danh mục),
+`no_reference_price` (chưa có giá tham chiếu), `currency_mismatch` (giá
+tham chiếu ở loại tiền khác), `estimate_above_reference` (giá ước tính cao
+hơn giá tham chiếu), `need_by_short` (ngày cần hàng sớm hơn thời gian giao),
+`budget_missing` (thiếu mã ngân sách), `budget_unknown` (mã ngân sách không
+có), `over_budget` (vượt ngân sách còn lại).
+
+Reference bases: `quote` (báo giá còn hạn), `history` (giá đã mua lần
+trước), `estimate` (giá ước tính của người yêu cầu).
+
+Sources: `form` (Biểu mẫu), `mail` (Thư), `requester` (Người yêu cầu tự viết).
+
+Mail outcomes: `opened` (Đã mở hồ sơ), `to_person` (Cần người xem).
+
+Mail reasons: `sender_not_internal` (người gửi không thuộc công ty),
+`sender_unverified` (hệ thống thư không xác thực được người gửi),
+`no_pr_number` (thư không có số yêu cầu mua hàng), `no_department` (thư
+không nói bộ phận yêu cầu), `span_not_found` (DW2 đọc ra một giá trị không
+có trong thư), `line_unreadable` (DW2 không đọc trọn được một dòng hàng),
+`currency_unreadable` (không rõ đơn vị tiền), `need_by_unreadable` (không
+đọc được ngày cần hàng), `value_malformed` (một giá trị trong thư không đúng
+dạng), `no_lines` (thư không có dòng hàng nào), `too_many_lines` (thư có
+nhiều dòng hàng hơn quy tắc cho phép), `currency_not_allowed` (loại tiền
+quy tắc không cho phép).
+
+Marks: `machine_read` (Máy đọc), `machine_written` (Máy viết), `template`
+(Mẫu cố định), `person` (Người nhập).

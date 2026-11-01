@@ -408,3 +408,22 @@ async def test_a_requester_writes_their_request_and_finds_only_theirs() -> None:
     for method, path, body in (("POST", "/requests", FORM), ("GET", "/mail", None)):
         refused = await _call(container, method, path, body)
         assert refused.status_code == 403, path
+
+
+async def test_an_approver_of_the_last_tier_reads_the_case_waiting_on_them_only() -> None:
+    """The director holds `purchasing.approve.tier3` and nothing else of DW2's:
+    the case route answers the one request whose approval stamped that scope,
+    404 for any other, and the list stays refused."""
+    world = _world()
+    waiting = await world.service.submit_form(world_caller(), PurchaseRequest.model_validate(FORM))
+    await world.approvals.submit(world_caller(), waiting.case_id, case_version=1)
+    stamped = (await world.service.case(world_caller(), waiting.case_id)).approval
+    assert stamped is not None
+    other = await world.service.submit_form(
+        world_caller(), PurchaseRequest.model_validate({**FORM, "pr_no": "PR-OTHER-1"})
+    )
+    container = _container(frozenset({stamped.required_scope}), _mounted(world))
+    read = await _call(container, "GET", f"/requests/{waiting.case_id}")
+    assert read.status_code == 200, read.text
+    assert (await _call(container, "GET", f"/requests/{other.case_id}")).status_code == 404
+    assert (await _call(container, "GET", "/requests")).status_code == 403

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +14,10 @@ import pytest
 import yaml
 
 from dw_kernel.errors import DomainError, NotFoundError, PermissionDeniedError
+from dw_kernel.ports import Uuid7Generator
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.ports import Person
-from dw_purchasing.application.requesters import PR_FROM_WORDS, MyRequest
+from dw_purchasing.application.requesters import PR_FROM_WORDS, MyRequest, request_number
 from dw_purchasing.domain.cases import PrSource
 from dw_purchasing.domain.mail_reading import ModelPrMail, read_pr_words
 from dw_purchasing.testing.world import ALPHA, BETA, World, caller, open_world
@@ -124,6 +126,44 @@ async def test_the_requester_is_a_maker_of_the_approval_and_never_its_decider() 
     (request,) = world.store.rows(*ALPHA).approvals.values()
     makers = request.payload["makers"]
     assert isinstance(makers, list) and str(HOA) in makers
+
+
+async def test_an_approver_reads_the_one_case_waiting_on_their_tier_and_no_other() -> None:
+    """The director holds only the last tier's scope: they read the request
+    they are asked to decide, so the decision is made on what was seen, and
+    nothing else (another case, one already decided, another tenant's)."""
+    world = _world()
+    waiting = await _sent(world)
+    other = await _sent(world, NAM, department="Kho")
+    await world.approvals.submit(caller(), waiting, case_version=1)
+    stamped = (await world.service.case(caller(), waiting)).approval
+    assert stamped is not None
+    approver = caller(scopes=frozenset({stamped.required_scope}))
+    assert (await world.service.case(approver, waiting)).case_id == waiting
+    with pytest.raises(NotFoundError):
+        await world.service.case(approver, other)
+    with pytest.raises(NotFoundError):
+        await world.service.case(caller(BETA, scopes=frozenset({stamped.required_scope})), waiting)
+    another_tier = next(
+        s.value
+        for s in (PurchasingScopes.APPROVE_TIER1, PurchasingScopes.APPROVE_TIER3)
+        if s.value != stamped.required_scope
+    )
+    with pytest.raises(NotFoundError):
+        await world.service.case(caller(scopes=frozenset({another_tier})), waiting)
+    # A list is never theirs: an approver reads one case, by its approval.
+    with pytest.raises(PermissionDeniedError):
+        await world.service.cases(approver, limit=50, before=None)
+
+
+def test_two_requests_opened_in_the_same_moment_get_two_numbers() -> None:
+    """A uuid7 begins with its millisecond: the number reads its random tail,
+    so requests opened together are told apart."""
+    ids = Uuid7Generator()
+    now = datetime(2026, 11, 1, 8, 0, tzinfo=UTC)
+    numbers = {request_number(now, ids.new_uuid()) for _ in range(200)}
+    assert len(numbers) == 200
+    assert all(n.startswith("DW2-261101-") and len(n) == len("DW2-261101-") + 8 for n in numbers)
 
 
 def test_the_words_reader_keeps_only_lines_found_whole() -> None:

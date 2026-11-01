@@ -83,7 +83,8 @@ LANE_CEILING: Final = frozenset(
 # ticks rather than in one long transaction-free burst.
 PER_TICK: Final = 20
 
-# Why a mail goes to a person, as the buyers read it.
+# Why a mail goes to a person, as the buyers read it: CONTEXT.md's "Mail
+# reasons" line, word for word (test_purchasing_screen_words.py).
 _MAIL_REASONS: Final = {
     "sender_not_internal": "người gửi không thuộc công ty",
     "sender_unverified": "hệ thống thư không xác thực được người gửi",
@@ -95,6 +96,8 @@ _MAIL_REASONS: Final = {
     "need_by_unreadable": "không đọc được ngày cần hàng",
     "value_malformed": "một giá trị trong thư không đúng dạng",
     "no_lines": "thư không có dòng hàng nào",
+    "too_many_lines": "thư có nhiều dòng hàng hơn quy tắc cho phép",
+    "currency_not_allowed": "loại tiền quy tắc không cho phép",
 }
 
 

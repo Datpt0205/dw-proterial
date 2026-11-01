@@ -69,6 +69,12 @@ _OUTPUT_TOKENS: Final = 80 * MAX_MAIL_LINES + 200
 _PROMPT_TOKENS: Final = 1200
 NOT_READ_NOW: Final = "DW2 chưa đọc được thư lúc này: thử lại sau"
 _RESOURCE: Final = "purchase_case"
+_READ_SCOPES: Final = (PurchasingScopes.REQUEST_READ, PurchasingScopes.REQUEST_READ_OWN)
+_APPROVE_SCOPES: Final = (
+    PurchasingScopes.APPROVE_TIER1,
+    PurchasingScopes.APPROVE_TIER2,
+    PurchasingScopes.APPROVE_TIER3,
+)
 
 _FROZEN = ConfigDict(frozen=True)
 
@@ -131,13 +137,33 @@ class PurchaseRequests:
             return await work.cases.page(limit=limit, before=before, requested_by=own)
 
     async def case(self, context: AccessContext, case_id: uuid.UUID) -> PurchaseCase:
-        own = await self._reader(context, case_id)
+        """One case to a reader of every case, a requester's own to them, and
+        the one case an approval waits on to whoever holds the scope that
+        approval stamped (the director, who reads nothing else): a decision
+        is made on what was seen. Any other is absent, exactly like no case."""
+        reads = any(self.gate.allows(context, s) for s in _READ_SCOPES)
+        approver = not reads and any(self.gate.allows(context, s) for s in _APPROVE_SCOPES)
+        own = None if approver else await self._reader(context, case_id)
         async with self.uow(context) as work:
             case = await work.cases.get(case_id)
-        if case is None or (own is not None and case.requested_by != own):
-            # Another requester's case is absent, exactly like no case.
+        if (
+            case is None
+            or (own is not None and case.requested_by != own)
+            or (approver and not self._awaits(context, case))
+        ):
             raise NotFoundError("không có yêu cầu mua hàng này", details={"case_id": str(case_id)})
         return case
+
+    def _awaits(self, context: AccessContext, case: PurchaseCase) -> bool:
+        """The case waits on a decision whose stamped scope the caller holds."""
+        stamped = (
+            case.approval.required_scope
+            if case.status is CaseStatus.AWAITING_APPROVAL and case.approval
+            else case.reapproval.approval.required_scope
+            if case.status is CaseStatus.AWAITING_REAPPROVAL and case.reapproval
+            else None
+        )
+        return stamped is not None and self.gate.authz.is_allowed(context, stamped)
 
     async def _reader(self, context: AccessContext, case_id: uuid.UUID | None) -> uuid.UUID | None:
         """None: the caller reads every case. Else the requester whose cases

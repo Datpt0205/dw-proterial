@@ -146,6 +146,22 @@ async def test_raising_a_step_to_ai_auto_before_it_is_measured_is_refused() -> N
     assert raised.status == "approved"
 
 
+async def test_a_switch_pressed_on_the_page_is_numbered_by_the_platform() -> None:
+    """The settings page sends a document with no number: the platform gives
+    the next one neither it ships nor the tenant holds, each time."""
+    world = _world()
+    unnumbered = _switches("x")
+    del unnumbered["policy_version"]
+    first = await world.rules.propose(_head(), "purchasing_automation", unnumbered)
+    second = await world.rules.propose(
+        _head(),
+        "purchasing_automation",
+        {**unnumbered, "steps": {**unnumbered["steps"], "rfq": "person"}},
+    )
+    assert (first.version, second.version) == ("1.0.1", "1.0.2")
+    assert first.status == second.status == "approved"
+
+
 async def test_an_approval_decided_after_its_measurement_fails_is_not_applied() -> None:
     world = _world()
     await world.rules.propose(_head(), "purchasing_automation", _switches("9.0.0"))

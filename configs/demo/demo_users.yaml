@@ -15,8 +15,9 @@ users:
       Sales PIC đơn hàng, kiêm PIC kiểm soát xuất khẩu (sales_export_control) —
       chuẩn bị đơn, kiểm chéo đơn người khác chuẩn bị, xác nhận NOC/ESF; không
       kiểm chéo đơn của chính mình, không xem giá khách khác, không duyệt báo
-      giá, không cho DW1 chạy lại
-    roles: [member, sales_pic]
+      giá, không cho DW1 chạy lại. DW2: người yêu cầu mua hàng — tự viết yêu
+      cầu, chỉ thấy yêu cầu của mình
+    roles: [member, sales_pic, purchasing_requester]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
     tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
@@ -35,7 +36,8 @@ users:
     display_name: Đỗ Trường Giang
     description: >-
       Trưởng bộ phận Sales — mọi quyền của PIC, xem giá khách khác, duyệt báo
-      giá, cho DW1 chạy lại; không duyệt báo giá do chính mình định giá
+      giá, cho DW1 chạy lại; không duyệt báo giá do chính mình định giá. DW2:
+      duyệt bậc cuối (purchasing_director_approver), không gì khác
     roles: [director, sales_head]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
     tenant_name: FDX
@@ -45,8 +47,9 @@ users:
     description: >-
       Sales PIC, người duyệt báo giá thay (sales_quote_approver) — duyệt báo
       giá người khác định giá; không duyệt báo giá do chính mình định giá,
-      không xem giá khách khác, không cho DW1 chạy lại
-    roles: [member, sales_pic]
+      không xem giá khách khác, không cho DW1 chạy lại. DW2: nhân viên mua
+      hàng — hộp thư, gửi duyệt, hỏi giá, soạn PO; không duyệt
+    roles: [member, sales_pic, purchasing_buyer]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
     tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
@@ -66,8 +69,9 @@ users:
       (sales_rules_editor) — quản lý thành viên và vai trò; đề xuất phiên bản
       quy tắc Sales không chứa giá, Trưởng bộ phận Sales duyệt; không xem được
       giá, không duyệt quy tắc, không mở hồ sơ Sales nào (tách nhiệm: IT không
-      phải Sales)
-    roles: [org_admin]
+      phải Sales). DW2: người cấu hình — đổi công tắc và quy tắc mua hàng bằng
+      lời, Trưởng phòng Mua hàng duyệt
+    roles: [org_admin, purchasing_configurer]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
     tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
@@ -75,8 +79,9 @@ users:
     display_name: Trần Thị Bình
     description: >-
       Quản lý phòng Mua hàng, ngoài phòng Sales — phê duyệt việc của đội mình;
-      bị từ chối (403) ở mọi trang Sales
-    roles: [manager]
+      bị từ chối (403) ở mọi trang Sales. DW2: trưởng phòng Mua hàng — duyệt
+      bậc 1–2, duyệt phiên bản quy tắc người khác đề xuất
+    roles: [manager, purchasing_head]
     tenant_id: d6b43d0e-c3c6-5dbc-bc08-150621bd9a5d
     tenant_name: FDX
     workspace_id: 64764894-718d-5558-ba17-9a2949214063
@@ -101,8 +106,10 @@ users:
     workspace_id: eda6af16-a0c4-55d3-be0b-163414390572
   - subject: dev|dung.vo
     display_name: Võ Thị Dung
-    description: Tenant Beta — quản lý, dùng để thử duyệt chéo tenant; không có quyền Sales
-    roles: [manager]
+    description: >-
+      Tenant Beta — quản lý, dùng để thử duyệt chéo tenant; không có quyền
+      Sales. DW2: nhân viên mua hàng của Beta, không thấy hồ sơ của Alpha
+    roles: [manager, purchasing_buyer]
     tenant_id: 6634f09a-d1d7-54a6-aa23-f3f018f41f28
     tenant_name: Công ty Beta
     workspace_id: eda6af16-a0c4-55d3-be0b-163414390572

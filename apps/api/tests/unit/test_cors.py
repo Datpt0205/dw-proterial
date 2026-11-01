@@ -77,7 +77,7 @@ async def test_the_web_may_read_the_servers_clock() -> None:
     exposed = {
         h.strip().lower() for h in response.headers["access-control-expose-headers"].split(",")
     }
-    assert {"date", "x-request-id", "retry-after"} <= exposed
+    assert {"date", "x-request-id", "retry-after", "content-disposition"} <= exposed
 
 
 async def test_another_origin_is_still_not_allowed() -> None:
