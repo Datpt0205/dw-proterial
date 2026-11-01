@@ -20,7 +20,7 @@ from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.domain.orders import BravoPoLayout
 from dw_purchasing.domain.sourcing import Choice
-from dw_purchasing.testing.world import ALPHA, BETA, World, caller, open_world
+from dw_purchasing.testing.world import ALPHA, BETA, EVERY_SCOPE, World, caller, open_world
 
 pytestmark = pytest.mark.unit
 
@@ -178,6 +178,19 @@ async def test_orders_are_drafted_only_after_a_choice_by_who_may_and_once() -> N
     await _w.orders.draft(caller(), case_id, case_version=version)
     with pytest.raises(ConflictError):
         await _w.orders.draft(caller(), case_id, case_version=version + 1)
+
+
+async def test_downloading_the_file_is_its_own_grant_not_drafting() -> None:
+    """Who downloads the Bravo file is a permission a tenant's admin grants
+    (`purchasing_po_downloader`), apart from drafting the orders."""
+    world = _world()
+    case_id = await _chosen(world)
+    await world.orders.draft(caller(), case_id, case_version=await _version(world, case_id))
+    drafts_only = caller(scopes=EVERY_SCOPE - {PurchasingScopes.PO_DOWNLOAD.value})
+    with pytest.raises(PermissionDeniedError):
+        await world.orders.bravo_file(drafts_only, case_id)
+    granted = caller(scopes=frozenset({PurchasingScopes.PO_DOWNLOAD.value}))
+    assert (await world.orders.bravo_file(granted, case_id)).data
 
 
 async def test_another_tenant_can_neither_draft_nor_download() -> None:

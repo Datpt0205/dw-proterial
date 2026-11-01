@@ -52,9 +52,10 @@ dw_sales ADR 0005 as DW2 applies it).
   or a form rule `missing:<field>`, `too_many_lines`, `currency_not_allowed`.
 - **Purchasing rules (quy tắc mua hàng)**: one versioned document per tenant
   (`purchasing_rules@<version>`): what a PR form requires, the company's mail
-  domains, the approval tiers, whom to ask for quotes, the Bravo layout. The
-  platform's version ships in `configs/policies`; a tenant's own replaces it
-  whole.
+  domains, the approval tiers, whom to ask for quotes, the Bravo layout, and
+  how long rows are kept (`retention`: a case in years, 1–30, default 10; a
+  mail outcome in days, 30–3650, default 365). The platform's version ships
+  in `configs/policies`; a tenant's own replaces it whole.
 - **Rule version (phiên bản quy tắc)**: a tenant's own version, held by the
   platform's rule-version engine (`platform.rule_versions`, ADR 0013/0014):
   proposed by the configurer or the head, decided on a `purchasing.rules`
@@ -108,9 +109,15 @@ dw_sales ADR 0005 as DW2 applies it).
   each tenant, `purchasing.request.read/intake/submit`, `purchasing.rfq.prepare`,
   `purchasing.po.prepare`; no approve scope, no `approvals.decide`.
 - Permission set `purchasing_director_approver`: `purchasing.approve.tier3`.
-- The buyer also holds `purchasing.request.submit` and
-  `purchasing.rfq.prepare` and `purchasing.po.prepare` (draft the orders,
-  download the file). Deciding any approval
+  Whoever an approval stamps reads that one request while it waits.
+- Permission sets a tenant's admin grants on the members page, so who may do
+  these is the tenant's setting, not a release: `purchasing_po_downloader`
+  (`purchasing.po.download`, the Bravo file), `purchasing_request_reader`
+  (every request), `purchasing_rules_approver` (decide a rule change; reads
+  the settings page, proposes nothing).
+- The buyer also holds `purchasing.request.submit`,
+  `purchasing.rfq.prepare`, `purchasing.po.prepare` (draft the orders) and
+  `purchasing.po.download` (the file). Deciding any approval
   also needs the platform's `approvals.decide`.
 
 ## Automation (Đạt, 2026-11-01)

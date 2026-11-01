@@ -36,9 +36,11 @@ class PurchasingScopes(StrEnum):
     # Draft the RFQs of an approved request, record what suppliers offer,
     # choose a supplier per line.
     RFQ_PREPARE = "purchasing.rfq.prepare"
-    # Draft the purchase orders of a request whose suppliers are chosen, and
-    # draw the file Bravo imports them from.
+    # Draft the purchase orders of a request whose suppliers are chosen.
     PO_PREPARE = "purchasing.po.prepare"
+    # Download the file Bravo imports the drafted orders from: the buyer's by
+    # role, anyone else's by a permission set the tenant's admin grants.
+    PO_DOWNLOAD = "purchasing.po.download"
     # Propose a version of the tenant's rules (the configurer, the head), and
     # decide one someone else proposed (the head).
     RULES_PROPOSE = "purchasing.rules.propose"
@@ -84,3 +86,10 @@ class Gate:
 
     def allows(self, context: AccessContext, scope: PurchasingScopes) -> bool:
         return self.authz.is_allowed(context, scope.value)
+
+    async def require_any(
+        self, context: AccessContext, *scopes: PurchasingScopes, resource_type: str = "purchasing"
+    ) -> None:
+        """Any one of ``scopes``; refused (403) naming the first otherwise."""
+        if not any(self.allows(context, scope) for scope in scopes):
+            await self.require(context, scopes[0], resource_type=resource_type)

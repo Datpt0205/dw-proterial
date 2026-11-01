@@ -143,3 +143,19 @@ async def test_without_the_scope_nothing_is_listed_or_proposed() -> None:
     with pytest.raises(PermissionDeniedError):
         await world.rules.schema(reader, "purchasing_rules")
     assert world.store.versions == {}
+
+
+async def test_a_rules_approver_reads_what_they_decide_and_proposes_nothing() -> None:
+    """`purchasing_rules_approver` (a director, granted by the tenant's admin):
+    the versions and the switches to decide, never a proposal of their own."""
+    world = _world()
+    await world.rules.propose(_configurer(), "purchasing_rules", _document("9.0.0"))
+    approver = caller(scopes=frozenset({PurchasingScopes.RULES_APPROVE.value}))
+    listed = await world.rules.list(approver)
+    assert [v.version for v in listed.versions] == ["9.0.0"]
+    assert (await world.switches.view(approver)).steps
+    with pytest.raises(PermissionDeniedError):
+        await world.rules.propose(approver, "purchasing_rules", _document("9.0.1"))
+    nobody = caller(scopes=frozenset({PurchasingScopes.PO_DOWNLOAD.value}))
+    with pytest.raises(PermissionDeniedError):
+        await world.switches.view(nobody)

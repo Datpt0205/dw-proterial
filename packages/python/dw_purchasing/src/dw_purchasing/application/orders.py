@@ -139,7 +139,7 @@ class PurchaseOrders:
 
     async def bravo_file(self, context: AccessContext, case_id: uuid.UUID) -> BravoDownload:
         await self.gate.require(
-            context, PurchasingScopes.PO_PREPARE, resource_type=_RESOURCE, resource_id=str(case_id)
+            context, PurchasingScopes.PO_DOWNLOAD, resource_type=_RESOURCE, resource_id=str(case_id)
         )
         case = await self._get(context, case_id)
         if case.po is None:

@@ -595,7 +595,9 @@ function BravoDownload({ c }: { c: PurchaseCase }) {
   const { hasScope } = useAuth();
   const { message } = App.useApp();
   const [pending, setPending] = useState(false);
-  const why = hasScope(SCOPE.po) ? null : "Vai của bạn không gồm việc soạn PO.";
+  const why = hasScope(SCOPE.download)
+    ? null
+    : "Bạn chưa được cấp quyền tải file Bravo (quản trị viên cấp được).";
   async function download() {
     setPending(true);
     try {

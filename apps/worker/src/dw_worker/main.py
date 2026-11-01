@@ -108,11 +108,13 @@ from dw_purchasing.adapters.assembly import (
     request_settlement,
     rule_settlement,
 )
+from dw_purchasing.adapters.assembly import rule_book as purchasing_rule_book
 from dw_purchasing.adapters.notices import PlatformNotices
-from dw_purchasing.adapters.persistence.retention import SqlPurchasingRetention
+from dw_purchasing.adapters.persistence.retention import SqlRetentionStore
 from dw_purchasing.application.approvals import REQUEST_DECIDED
 from dw_purchasing.application.automation_lane import LANE as PURCHASING_AUTOMATION_LANE
 from dw_purchasing.application.reapprovals import REAPPROVAL_DECIDED
+from dw_purchasing.application.retention import PurchasingRetention
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
 from dw_sales.adapters.assembly import (
     Dw1Mount,
@@ -200,7 +202,7 @@ logger = logging.getLogger("dw_worker")
 
 # A module constant so the test holding this file to the classes code can
 # assign reads the file the sweeps below read, not a copy of its name.
-RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.10.0.yaml"
+RETENTION_POLICY_PATH = REPO_ROOT / "configs" / "policies" / "retention@1.11.0.yaml"
 # How long a processing job may run before the reaper takes it for a dead
 # worker's (Sales ticket 25). A job is one message: its scan, a few files read
 # in the reader sandbox (each killed at its own wall clock) and a model call or
@@ -748,11 +750,13 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         channel_link_nonces_retention = SqlChannelLinkNonceRetention(session_factory=sessions)
         channel_inbound_messages_retention = SqlChannelInboundRetention(session_factory=sessions)
         approval_codes_retention = SqlApprovalCodeRetention(session_factory=sessions)
-        # DW2's own rows past the terms the same policy file gives them
-        # (`tables`, retention@1.10.0): its cases exist with or without a
-        # mailbox, so they are swept with the database alone.
-        purchasing_retention = SqlPurchasingRetention(
-            session_factory=sessions, policy=retention_policy, clock=clock
+        # DW2's own rows past the term each tenant's rules give them
+        # (`purchasing_rules.retention`, since 1.6.0): its cases exist with
+        # or without a mailbox, so they are swept with the database alone.
+        purchasing_retention = PurchasingRetention(
+            store=SqlRetentionStore(sessions),
+            book=purchasing_rule_book(REPO_ROOT / "configs", sessions),
+            clock=clock,
         )
         # Rows are queued whether or not this host sends them, so they are
         # pruned whether or not it does.
