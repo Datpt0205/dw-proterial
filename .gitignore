@@ -87,6 +87,9 @@ docs/design/
 # Proterial's documents (requirements, survey) as they arrive: local only, for
 # the same reason. scripts/check_public_repo.py fails if either line goes.
 docs/**/*.docx
+# The question list for Proterial (scratch script output): local only, for
+# the same reason.
+docs/proterial/
 
 # On-premises model files (infra/onprem/fetch-models.sh); never committed.
 infra/onprem/models/
