@@ -502,6 +502,72 @@
         "title": "AnswerView",
         "type": "object"
       },
+      "ApprovalAsked": {
+        "additionalProperties": false,
+        "description": "Who the case was sent to, stamped when it was sent: the approval, the\nscope its decider must hold and who that is, the version of the case the\napprover is shown, and who sent it. A later reader takes this stamp, never\nthe rules in force today.",
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "limit_currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Limit Currency",
+            "type": "string"
+          },
+          "required_scope": {
+            "pattern": "^purchasing\\.approve\\.[a-z0-9_]+$",
+            "title": "Required Scope",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "submitted_by": {
+            "format": "uuid",
+            "title": "Submitted By",
+            "type": "string"
+          },
+          "tier_label": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Tier Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "required_scope",
+          "tier_label",
+          "limit",
+          "limit_currency",
+          "case_version",
+          "submitted_by",
+          "submitted_at"
+        ],
+        "title": "ApprovalAsked",
+        "type": "object"
+      },
       "ApprovalView": {
         "properties": {
           "approval_type": {
@@ -1193,6 +1259,45 @@
         "title": "BootstrapResponse",
         "type": "object"
       },
+      "BravoColumn": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "enum": [
+              "po_ref",
+              "pr_no",
+              "order_date",
+              "supplier_code",
+              "supplier_name",
+              "item_code",
+              "description",
+              "quantity",
+              "unit",
+              "unit_price",
+              "currency",
+              "amount",
+              "need_by",
+              "budget_code",
+              "department"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "header": {
+            "maxLength": 60,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f]+$",
+            "title": "Header",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header",
+          "field"
+        ],
+        "title": "BravoColumn",
+        "type": "object"
+      },
       "BravoEntryBody": {
         "additionalProperties": false,
         "properties": {
@@ -1311,6 +1416,42 @@
         "title": "BravoOrderView",
         "type": "object"
       },
+      "BravoPoLayout": {
+        "additionalProperties": false,
+        "description": "The import file's shape, as the tenant's Bravo expects it.",
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/BravoColumn"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "title": "Columns",
+            "type": "array"
+          },
+          "date_format": {
+            "enum": [
+              "dd/mm/yyyy",
+              "yyyy-mm-dd",
+              "mm/dd/yyyy"
+            ],
+            "title": "Date Format",
+            "type": "string"
+          },
+          "sheet": {
+            "pattern": "^[^\\[\\]:*?/\\\\\\x00-\\x1f]{1,31}$",
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet",
+          "date_format",
+          "columns"
+        ],
+        "title": "BravoPoLayout",
+        "type": "object"
+      },
       "CancelResult": {
         "description": "Whether a run was actually stopped, not whether the request was understood.\n\n`False` is an ordinary answer: the turn had already finished, or another\nprocess holds it. A caller pressing Stop twice should get 200 both times —\nthe second one describes a thread that is already not running, which is what\nthey asked for.",
         "properties": {
@@ -1349,6 +1490,30 @@
           "entries"
         ],
         "title": "CaseActivityView",
+        "type": "object"
+      },
+      "CaseChange": {
+        "description": "What a mutation answers: ids only, so an idempotent replay keeps no\nrequest content.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "status"
+        ],
+        "title": "CaseChange",
         "type": "object"
       },
       "CaseChangeView": {
@@ -1474,6 +1639,48 @@
         ],
         "title": "CaseKind",
         "type": "string"
+      },
+      "CasePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCase"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_before_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before At"
+          },
+          "next_before_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before Id"
+          }
+        },
+        "required": [
+          "items",
+          "next_before_at",
+          "next_before_id"
+        ],
+        "title": "CasePage",
+        "type": "object"
       },
       "CaseRefView": {
         "properties": {
@@ -1627,6 +1834,36 @@
           "proposal"
         ],
         "title": "CaseReplyView",
+        "type": "object"
+      },
+      "CaseStatus": {
+        "description": "Where a purchase case stands (CONTEXT.md, \"Purchase case\").",
+        "enum": [
+          "received",
+          "awaiting_approval",
+          "approved",
+          "rejected",
+          "rfq_drafted",
+          "supplier_selected",
+          "po_drafted"
+        ],
+        "title": "CaseStatus",
+        "type": "string"
+      },
+      "CaseVersionBody": {
+        "additionalProperties": false,
+        "description": "The version of the case the caller saw: a stale one is refused (409).",
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_version"
+        ],
+        "title": "CaseVersionBody",
         "type": "object"
       },
       "CatalogImportView": {
@@ -2116,6 +2353,27 @@
         "title": "CheckView",
         "type": "object"
       },
+      "Choice": {
+        "additionalProperties": false,
+        "properties": {
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "supplier_code": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Supplier Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "supplier_code"
+        ],
+        "title": "Choice",
+        "type": "object"
+      },
       "CloseBody": {
         "additionalProperties": false,
         "properties": {
@@ -2170,6 +2428,138 @@
         ],
         "title": "CodeUnavailable",
         "type": "string"
+      },
+      "ComparedLine": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          },
+          "offers": {
+            "items": {
+              "$ref": "#/components/schemas/ComparedOffer"
+            },
+            "title": "Offers",
+            "type": "array"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "description",
+          "quantity",
+          "need_by",
+          "offers"
+        ],
+        "title": "ComparedLine",
+        "type": "object"
+      },
+      "ComparedOffer": {
+        "additionalProperties": false,
+        "properties": {
+          "cheapest": {
+            "title": "Cheapest",
+            "type": "boolean"
+          },
+          "lead_time_days": {
+            "title": "Lead Time Days",
+            "type": "integer"
+          },
+          "meets_need_by": {
+            "title": "Meets Need By",
+            "type": "boolean"
+          },
+          "supplier_code": {
+            "title": "Supplier Code",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          },
+          "unit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Price",
+            "type": "string"
+          }
+        },
+        "required": [
+          "supplier_code",
+          "unit_price",
+          "total",
+          "lead_time_days",
+          "meets_need_by",
+          "cheapest"
+        ],
+        "title": "ComparedOffer",
+        "type": "object"
+      },
+      "ComparisonView": {
+        "properties": {
+          "approved_limit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Limit"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ComparedLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "currency",
+          "lines",
+          "approved_limit"
+        ],
+        "title": "ComparisonView",
+        "type": "object"
       },
       "ConfirmBody": {
         "additionalProperties": false,
@@ -2461,6 +2851,57 @@
         "title": "CreatedAccountView",
         "type": "object"
       },
+      "CrossCheck": {
+        "additionalProperties": false,
+        "description": "What code found, stamped on the case when it goes to its approver.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "checked_on": {
+            "format": "date",
+            "title": "Checked On",
+            "type": "string"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LineCheck"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "checked_on",
+          "currency",
+          "lines",
+          "amount",
+          "findings"
+        ],
+        "title": "CrossCheck",
+        "type": "object"
+      },
       "CustomerReminderView": {
         "description": "A draft, or why there is none; always marked as the model's.",
         "properties": {
@@ -2690,6 +3131,39 @@
           "steps"
         ],
         "title": "DayView",
+        "type": "object"
+      },
+      "Decided": {
+        "additionalProperties": false,
+        "description": "The approver's decision, as the approval recorded it.",
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "comment": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Comment",
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by": {
+            "format": "uuid",
+            "title": "Decided By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved",
+          "decided_by",
+          "decided_at"
+        ],
+        "title": "Decided",
         "type": "object"
       },
       "DecisionRequest": {
@@ -3424,6 +3898,15 @@
         "title": "DiffRow",
         "type": "object"
       },
+      "Disposition": {
+        "description": "What DW2 did with one mail.",
+        "enum": [
+          "opened",
+          "to_person"
+        ],
+        "title": "Disposition",
+        "type": "string"
+      },
       "DispositionBody": {
         "additionalProperties": false,
         "properties": {
@@ -3980,6 +4463,30 @@
           "created_at"
         ],
         "title": "FeedbackView",
+        "type": "object"
+      },
+      "Finding": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/PurchaseFindingCode"
+          },
+          "line_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line No"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "Finding",
         "type": "object"
       },
       "FindingCode": {
@@ -4708,6 +5215,72 @@
           "email"
         ],
         "title": "IdentityRefView",
+        "type": "object"
+      },
+      "InboxItem": {
+        "description": "One mail in the list a buyer works from.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "disposition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Disposition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "sender",
+          "subject",
+          "received_at",
+          "disposition",
+          "reason",
+          "case_id"
+        ],
+        "title": "InboxItem",
         "type": "object"
       },
       "InboxMessageView": {
@@ -6074,6 +6647,76 @@
           "after"
         ],
         "title": "LineChangeView",
+        "type": "object"
+      },
+      "LineCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quote",
+                  "history",
+                  "estimate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "reference_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Price"
+          },
+          "supplier_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Code"
+          }
+        },
+        "required": [
+          "line_no",
+          "reference_price",
+          "basis",
+          "supplier_code",
+          "amount"
+        ],
+        "title": "LineCheck",
         "type": "object"
       },
       "LineDate": {
@@ -7510,6 +8153,172 @@
           "updated_at"
         ],
         "title": "OffboardingStatusView",
+        "type": "object"
+      },
+      "Offer": {
+        "additionalProperties": false,
+        "description": "What one supplier offers for one line.",
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "lead_time_days": {
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Lead Time Days",
+            "type": "integer"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "format": "uuid",
+            "title": "Recorded By",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "form",
+              "mail"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "pattern": "^[!-~]{1,512}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "supplier_code": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Supplier Code",
+            "type": "string"
+          },
+          "unit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+            "title": "Unit Price",
+            "type": "string"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          }
+        },
+        "required": [
+          "supplier_code",
+          "line_no",
+          "unit_price",
+          "currency",
+          "lead_time_days",
+          "source",
+          "recorded_by",
+          "recorded_at"
+        ],
+        "title": "Offer",
+        "type": "object"
+      },
+      "OfferBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "offer": {
+            "$ref": "#/components/schemas/OfferForm"
+          }
+        },
+        "required": [
+          "case_version",
+          "offer"
+        ],
+        "title": "OfferBody",
+        "type": "object"
+      },
+      "OfferForm": {
+        "additionalProperties": false,
+        "description": "An offer a buyer types (a supplier answered by phone, or on paper).",
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "lead_time_days": {
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Lead Time Days",
+            "type": "integer"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "supplier_code": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Supplier Code",
+            "type": "string"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Unit Price"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          }
+        },
+        "required": [
+          "supplier_code",
+          "line_no",
+          "unit_price",
+          "currency",
+          "lead_time_days"
+        ],
+        "title": "OfferForm",
         "type": "object"
       },
       "OpenYcbgView": {
@@ -9380,6 +10189,336 @@
         "title": "PlatformRuleView",
         "type": "object"
       },
+      "PoDraft": {
+        "additionalProperties": false,
+        "description": "One supplier's draft order.",
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PoLine"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "po_ref": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Po Ref",
+            "type": "string"
+          },
+          "supplier_code": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Supplier Code",
+            "type": "string"
+          },
+          "supplier_name": {
+            "title": "Supplier Name",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "po_ref",
+          "supplier_code",
+          "supplier_name",
+          "currency",
+          "lines",
+          "total"
+        ],
+        "title": "PoDraft",
+        "type": "object"
+      },
+      "PoLine": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+            "title": "Amount",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "item_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Code"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "unit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+            "title": "Unit Price",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "item_code",
+          "description",
+          "quantity",
+          "unit",
+          "unit_price",
+          "amount",
+          "need_by"
+        ],
+        "title": "PoLine",
+        "type": "object"
+      },
+      "PoRound": {
+        "additionalProperties": false,
+        "description": "The orders drafted for a case, and the layout their file is drawn with.",
+        "properties": {
+          "drafted_at": {
+            "format": "date-time",
+            "title": "Drafted At",
+            "type": "string"
+          },
+          "drafted_by": {
+            "format": "uuid",
+            "title": "Drafted By",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/BravoPoLayout"
+          },
+          "order_date": {
+            "format": "date",
+            "title": "Order Date",
+            "type": "string"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/PoDraft"
+            },
+            "minItems": 1,
+            "title": "Orders",
+            "type": "array"
+          },
+          "rules_ref": {
+            "title": "Rules Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_date",
+          "drafted_by",
+          "drafted_at",
+          "orders",
+          "layout",
+          "rules_ref"
+        ],
+        "title": "PoRound",
+        "type": "object"
+      },
+      "PrLine-Input": {
+        "additionalProperties": false,
+        "description": "One thing asked for.",
+        "properties": {
+          "description": {
+            "maxLength": 300,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Description",
+            "type": "string"
+          },
+          "estimated_unit_price": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Unit Price"
+          },
+          "item_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Code"
+          },
+          "line_no": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit": {
+            "pattern": "^[^\\s\\x00-\\x1f\\x7f]{1,16}$",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "description",
+          "quantity",
+          "unit"
+        ],
+        "title": "PrLine",
+        "type": "object"
+      },
+      "PrLine-Output": {
+        "additionalProperties": false,
+        "description": "One thing asked for.",
+        "properties": {
+          "description": {
+            "maxLength": 300,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Description",
+            "type": "string"
+          },
+          "estimated_unit_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Unit Price"
+          },
+          "item_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Code"
+          },
+          "line_no": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "unit": {
+            "pattern": "^[^\\s\\x00-\\x1f\\x7f]{1,16}$",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "description",
+          "quantity",
+          "unit"
+        ],
+        "title": "PrLine",
+        "type": "object"
+      },
+      "PrSource": {
+        "description": "Where the request came from (DW02: email, Bravo, form, scanned paper;\nthis slice reads the first and the third).",
+        "enum": [
+          "form",
+          "mail"
+        ],
+        "title": "PrSource",
+        "type": "string"
+      },
       "PreviewLineView": {
         "properties": {
           "amount": {
@@ -10023,6 +11162,525 @@
           "anchor"
         ],
         "title": "ProducedValue",
+        "type": "object"
+      },
+      "PurchaseCase": {
+        "additionalProperties": false,
+        "description": "One request, from the moment DW2 received it.\n\n``rules_ref`` is the tenant rules the case was received under\n(``purchasing_rules@<version>``), stamped once: a later reader takes the\nstamp, never whatever is in force today.",
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalAsked"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CrossCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Decided"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "offers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Offer"
+            },
+            "title": "Offers",
+            "type": "array"
+          },
+          "po": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoRound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "received_by": {
+            "format": "uuid",
+            "title": "Received By",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/PurchaseRequest-Output"
+          },
+          "rfq": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RfqRound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules_ref": {
+            "pattern": "^purchasing_rules@\\d+\\.\\d+\\.\\d+(?:-[a-z0-9.]+)?$",
+            "title": "Rules Ref",
+            "type": "string"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Selection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/PrSource"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "pattern": "^[!-~]{1,512}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "status",
+          "source",
+          "request",
+          "received_at",
+          "received_by",
+          "rules_ref"
+        ],
+        "title": "PurchaseCase",
+        "type": "object"
+      },
+      "PurchaseCheckView": {
+        "description": "What the check found and who would approve, under the rules in force.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "check": {
+            "$ref": "#/components/schemas/CrossCheck"
+          },
+          "required_scope": {
+            "title": "Required Scope",
+            "type": "string"
+          },
+          "rules_ref": {
+            "title": "Rules Ref",
+            "type": "string"
+          },
+          "tier_label": {
+            "title": "Tier Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_version",
+          "rules_ref",
+          "check",
+          "required_scope",
+          "tier_label"
+        ],
+        "title": "PurchaseCheckView",
+        "type": "object"
+      },
+      "PurchaseFindingCode": {
+        "enum": [
+          "item_unknown",
+          "no_reference_price",
+          "currency_mismatch",
+          "estimate_above_reference",
+          "need_by_short",
+          "budget_missing",
+          "budget_unknown",
+          "over_budget"
+        ],
+        "title": "PurchaseFindingCode",
+        "type": "string"
+      },
+      "PurchaseRequest-Input": {
+        "additionalProperties": false,
+        "description": "What the requester asked for, as they wrote it.",
+        "properties": {
+          "budget_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Code"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Department",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PrLine-Input"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Note",
+            "type": "string"
+          },
+          "pr_no": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Pr No",
+            "type": "string"
+          },
+          "requester": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Requester",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pr_no",
+          "department",
+          "requester",
+          "currency",
+          "lines"
+        ],
+        "title": "PurchaseRequest",
+        "type": "object"
+      },
+      "PurchaseRequest-Output": {
+        "additionalProperties": false,
+        "description": "What the requester asked for, as they wrote it.",
+        "properties": {
+          "budget_code": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Code"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Department",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PrLine-Output"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "need_by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Need By"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Note",
+            "type": "string"
+          },
+          "pr_no": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Pr No",
+            "type": "string"
+          },
+          "requester": {
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+            "title": "Requester",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pr_no",
+          "department",
+          "requester",
+          "currency",
+          "lines"
+        ],
+        "title": "PurchaseRequest",
+        "type": "object"
+      },
+      "PurchasingKeyInForce": {
+        "properties": {
+          "document": {
+            "additionalProperties": true,
+            "title": "Document",
+            "type": "object"
+          },
+          "key": {
+            "$ref": "#/components/schemas/PurchasingRuleKey"
+          },
+          "layer": {
+            "enum": [
+              "platform",
+              "tenant"
+            ],
+            "title": "Layer",
+            "type": "string"
+          },
+          "platform_ref": {
+            "title": "Platform Ref",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ref",
+          "layer",
+          "document",
+          "platform_ref"
+        ],
+        "title": "PurchasingKeyInForce",
+        "type": "object"
+      },
+      "PurchasingRuleKey": {
+        "description": "What a tenant may hold its own version of.",
+        "enum": [
+          "purchasing_rules"
+        ],
+        "title": "PurchasingRuleKey",
+        "type": "string"
+      },
+      "PurchasingRuleVersionView": {
+        "description": "A version as the settings page lists it.",
+        "properties": {
+          "applied_directly": {
+            "title": "Applied Directly",
+            "type": "boolean"
+          },
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "document": {
+            "additionalProperties": true,
+            "title": "Document",
+            "type": "object"
+          },
+          "key": {
+            "$ref": "#/components/schemas/PurchasingRuleKey"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "format": "uuid",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "key",
+          "version",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "comment",
+          "document",
+          "approval_id",
+          "applied_directly"
+        ],
+        "title": "PurchasingRuleVersionView",
+        "type": "object"
+      },
+      "PurchasingRulesView": {
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/PurchasingKeyInForce"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/PurchasingRuleVersionView"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys",
+          "versions"
+        ],
+        "title": "PurchasingRulesView",
         "type": "object"
       },
       "QuestionKind": {
@@ -11508,6 +13166,108 @@
         "title": "ReturnView",
         "type": "object"
       },
+      "RfqDraft": {
+        "additionalProperties": false,
+        "description": "One supplier's RFQ: who receives it, which lines, and the words.",
+        "properties": {
+          "body": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "line_nos": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Line Nos",
+            "type": "array"
+          },
+          "subject": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          },
+          "supplier_code": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Supplier Code",
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "pattern": "^[A-Za-z0-9._%+-]{1,64}@[a-z0-9.-]{1,253}$",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "To",
+            "type": "array"
+          },
+          "written_by": {
+            "enum": [
+              "model",
+              "template"
+            ],
+            "title": "Written By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "supplier_code",
+          "to",
+          "line_nos",
+          "subject",
+          "body",
+          "written_by"
+        ],
+        "title": "RfqDraft",
+        "type": "object"
+      },
+      "RfqRound": {
+        "additionalProperties": false,
+        "properties": {
+          "drafted_at": {
+            "format": "date-time",
+            "title": "Drafted At",
+            "type": "string"
+          },
+          "drafted_by": {
+            "format": "uuid",
+            "title": "Drafted By",
+            "type": "string"
+          },
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/RfqDraft"
+            },
+            "minItems": 1,
+            "title": "Drafts",
+            "type": "array"
+          },
+          "reply_by": {
+            "format": "date",
+            "title": "Reply By",
+            "type": "string"
+          },
+          "unsourced": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Unsourced",
+            "type": "array"
+          }
+        },
+        "required": [
+          "drafted_by",
+          "drafted_at",
+          "reply_by",
+          "drafts"
+        ],
+        "title": "RfqRound",
+        "type": "object"
+      },
       "RoleView": {
         "properties": {
           "administrative": {
@@ -11537,6 +13297,49 @@
           "administrative"
         ],
         "title": "RoleView",
+        "type": "object"
+      },
+      "RuleChange": {
+        "description": "What a proposal answers, and what the idempotency store keeps: ids and\nthe status, never the document (it holds the company's limits).",
+        "properties": {
+          "applied_directly": {
+            "title": "Applied Directly",
+            "type": "boolean"
+          },
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version_id",
+          "version",
+          "status",
+          "approval_id",
+          "applied_directly"
+        ],
+        "title": "RuleChange",
         "type": "object"
       },
       "RuleDraftBody": {
@@ -11928,6 +13731,22 @@
         "title": "RuleWordsBody",
         "type": "object"
       },
+      "RulesBody": {
+        "additionalProperties": false,
+        "description": "A whole version of a key: what the settings page drafted and the person\nread as a difference in words before sending.",
+        "properties": {
+          "document": {
+            "additionalProperties": true,
+            "title": "Document",
+            "type": "object"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "title": "RulesBody",
+        "type": "object"
+      },
       "RulesInForceView": {
         "description": "What applies to the tenant now, per key, and every version it holds.",
         "properties": {
@@ -12099,6 +13918,74 @@
           "quote_nos"
         ],
         "title": "ScreeningRow",
+        "type": "object"
+      },
+      "Selection": {
+        "additionalProperties": false,
+        "description": "The suppliers a person chose, line by line, and what that comes to.",
+        "properties": {
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/Choice"
+            },
+            "minItems": 1,
+            "title": "Choices",
+            "type": "array"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "selected_at": {
+            "format": "date-time",
+            "title": "Selected At",
+            "type": "string"
+          },
+          "selected_by": {
+            "format": "uuid",
+            "title": "Selected By",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "choices",
+          "total",
+          "currency",
+          "selected_by",
+          "selected_at"
+        ],
+        "title": "Selection",
+        "type": "object"
+      },
+      "SelectionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/Choice"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Choices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case_version",
+          "choices"
+        ],
+        "title": "SelectionBody",
         "type": "object"
       },
       "SenderCustomerBody": {
@@ -18057,6 +19944,973 @@
         "summary": "List Users",
         "tags": [
           "platform"
+        ]
+      }
+    },
+    "/api/v1/purchasing/mail": {
+      "get": {
+        "operationId": "mailbox_api_v1_purchasing_mail_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InboxItem"
+                  },
+                  "title": "Response Mailbox Api V1 Purchasing Mail Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mailbox",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/mail/{message_id}/read": {
+      "post": {
+        "operationId": "read_mail_api_v1_purchasing_mail__message_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Mail",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests": {
+      "get": {
+        "operationId": "list_requests_api_v1_purchasing_requests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "before_at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before At"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Requests",
+        "tags": [
+          "purchasing"
+        ]
+      },
+      "post": {
+        "operationId": "submit_request_api_v1_purchasing_requests_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseRequest-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Request",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}": {
+      "get": {
+        "operationId": "get_request_api_v1_purchasing_requests__case_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseCase"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Request",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/check": {
+      "get": {
+        "operationId": "check_request_api_v1_purchasing_requests__case_id__check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseCheckView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Request",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/comparison": {
+      "get": {
+        "operationId": "comparison_api_v1_purchasing_requests__case_id__comparison_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Comparison",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/offers": {
+      "post": {
+        "operationId": "record_offer_api_v1_purchasing_requests__case_id__offers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfferBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Offer",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/offers/from-mail/{message_id}": {
+      "post": {
+        "operationId": "read_offer_mail_api_v1_purchasing_requests__case_id__offers_from_mail__message_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseVersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Offer Mail",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/po": {
+      "post": {
+        "operationId": "draft_orders_api_v1_purchasing_requests__case_id__po_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseVersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft Orders",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/po/bravo.xlsx": {
+      "get": {
+        "operationId": "bravo_file_api_v1_purchasing_requests__case_id__po_bravo_xlsx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bravo File",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/rfq": {
+      "post": {
+        "operationId": "draft_rfq_api_v1_purchasing_requests__case_id__rfq_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseVersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft Rfq",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/selection": {
+      "post": {
+        "operationId": "select_suppliers_api_v1_purchasing_requests__case_id__selection_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Suppliers",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/submit": {
+      "post": {
+        "operationId": "submit_request_for_approval_api_v1_purchasing_requests__case_id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseVersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Request For Approval",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/rules": {
+      "get": {
+        "operationId": "rules_in_force_api_v1_purchasing_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasingRulesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Rules In Force",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/rules/{key}/schema": {
+      "get": {
+        "operationId": "rule_schema_api_v1_purchasing_rules__key__schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rule Schema Api V1 Purchasing Rules  Key  Schema Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rule Schema",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/rules/{key}/versions": {
+      "post": {
+        "operationId": "propose_rules_api_v1_purchasing_rules__key__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Propose Rules",
+        "tags": [
+          "purchasing"
         ]
       }
     },

@@ -22,10 +22,10 @@ from dw_purchasing.application.approvals import REQUEST_APPROVAL, REQUEST_DECIDE
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.domain.checks import (
     Budget,
-    FindingCode,
     Item,
     MasterData,
     PastPurchase,
+    PurchaseFindingCode,
     SupplierQuote,
     cross_check,
 )
@@ -121,21 +121,24 @@ def test_without_a_valid_quotation_the_last_price_paid_then_the_estimate() -> No
     unknown = _check(_request(_line(code=None, estimated_unit_price=Decimal(7))), MasterData())
     assert (unknown.lines[0].basis, unknown.amount) == ("estimate", Decimal(70))
     assert {f.code for f in unknown.findings} == {
-        FindingCode.ITEM_UNKNOWN,
-        FindingCode.BUDGET_UNKNOWN,
+        PurchaseFindingCode.ITEM_UNKNOWN,
+        PurchaseFindingCode.BUDGET_UNKNOWN,
     }
 
 
 def test_a_line_without_any_price_leaves_the_amount_unknown_never_small() -> None:
     check = _check(_request(_line(), _line(n=2, code=None)))
     assert check.amount is None
-    assert FindingCode.NO_REFERENCE_PRICE in check.codes
+    assert PurchaseFindingCode.NO_REFERENCE_PRICE in check.codes
 
 
 def test_a_price_in_another_currency_is_no_reference() -> None:
     check = _check(_request(_line(), currency="USD"))
     assert check.amount is None
-    assert {FindingCode.CURRENCY_MISMATCH, FindingCode.NO_REFERENCE_PRICE} <= check.codes
+    assert {
+        PurchaseFindingCode.CURRENCY_MISMATCH,
+        PurchaseFindingCode.NO_REFERENCE_PRICE,
+    } <= check.codes
 
 
 def test_an_estimate_past_the_tolerance_a_short_need_by_and_the_budget_are_found() -> None:
@@ -143,13 +146,13 @@ def test_an_estimate_past_the_tolerance_a_short_need_by_and_the_budget_are_found
         _request(_line(qty=20, estimated_unit_price=Decimal(111), need_by=date(2026, 11, 5)))
     )
     assert check.codes == {
-        FindingCode.ESTIMATE_ABOVE_REFERENCE,
-        FindingCode.NEED_BY_SHORT,
-        FindingCode.OVER_BUDGET,
+        PurchaseFindingCode.ESTIMATE_ABOVE_REFERENCE,
+        PurchaseFindingCode.NEED_BY_SHORT,
+        PurchaseFindingCode.OVER_BUDGET,
     }
     within = _check(_request(_line(qty=1, estimated_unit_price=Decimal(110))))
     assert within.codes == frozenset()
-    assert _check(_request(_line(), budget=None)).codes == {FindingCode.BUDGET_MISSING}
+    assert _check(_request(_line(), budget=None)).codes == {PurchaseFindingCode.BUDGET_MISSING}
 
 
 # ----------------------------------------------------------------- the tiers --
@@ -254,7 +257,10 @@ async def test_an_amount_past_the_budget_goes_to_the_last_tier() -> None:
     world = open_world(REPO, ANSWERS)
     case_id = await _received(world, "P02")  # 2 x 18,500,000 against 30,000,000 left
     preview = await world.approvals.preview(caller(), case_id)
-    assert preview.check.codes == {FindingCode.OVER_BUDGET, FindingCode.NEED_BY_SHORT}
+    assert preview.check.codes == {
+        PurchaseFindingCode.OVER_BUDGET,
+        PurchaseFindingCode.NEED_BY_SHORT,
+    }
     assert preview.required_scope == "purchasing.approve.tier3"
 
 
@@ -276,7 +282,7 @@ async def test_sending_is_refused_on_a_stale_version_twice_or_without_its_scope(
 async def test_rules_that_set_no_limits_send_nothing() -> None:
     world = open_world(REPO, ANSWERS)
     world.tenant_policies.documents[(ALPHA[0], "purchasing_rules")] = {
-        "version": "1.0.0-t.1",
+        "version": "9.0.1",
         "pr_form": {
             "required": [],
             "max_lines": 50,
@@ -284,6 +290,8 @@ async def test_rules_that_set_no_limits_send_nothing() -> None:
             "default_currency": "VND",
         },
         "internal_domains": ["seller.example"],
+        # Said, not left out: a field a version omits reads as the platform's.
+        "approval": None,
     }
     case_id = await _received(world)
     with pytest.raises(ConflictError) as refused:
@@ -354,7 +362,7 @@ async def test_the_stamped_approver_holds_when_the_rules_change_after_sending() 
         **json.loads(
             json.dumps(
                 {
-                    "version": "1.1.0-t.1",
+                    "version": "9.1.0",
                     "pr_form": {
                         "required": ["budget_code"],
                         "max_lines": 50,

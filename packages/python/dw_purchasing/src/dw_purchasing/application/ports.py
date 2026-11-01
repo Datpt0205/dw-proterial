@@ -18,13 +18,13 @@ from typing import Protocol
 
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
+from dw_platform.application.rule_versions import RuleVersionStorePort
 from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
 from dw_platform.domain.audit import AuditEvent
 from dw_platform.domain.messages import InboundMessage
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.checks import MasterData
 from dw_purchasing.domain.orders import Cell
-from dw_purchasing.domain.rules import PurchasingRules
 
 
 class Disposition(StrEnum):
@@ -101,7 +101,8 @@ class ApprovalsPort(Protocol):
 
 
 class PurchasingWork(Protocol):
-    """One transaction, bound to one tenant and workspace."""
+    """One transaction, bound to one tenant and workspace. It commits as it
+    closes without an error (`commit` says so to the platform's engines)."""
 
     @property
     def cases(self) -> CasesPort: ...
@@ -114,6 +115,13 @@ class PurchasingWork(Protocol):
 
     @property
     def approvals(self) -> ApprovalsPort: ...
+
+    @property
+    def rule_versions(self) -> RuleVersionStorePort:
+        """The tenant's rule versions (tenant-wide, whichever workspace)."""
+        ...
+
+    async def commit(self) -> None: ...
 
 
 PurchasingUnitOfWork = Callable[[AccessContext], AbstractAsyncContextManager[PurchasingWork]]
@@ -129,12 +137,6 @@ class InboxPort(Protocol):
     ) -> InboundMessage | None: ...
 
 
-class PlatformRulesPort(Protocol):
-    """The rules that ship in ``configs/policies`` (the platform layer)."""
-
-    def current(self) -> PurchasingRules: ...
-
-
 class MasterDataPort(Protocol):
     """What the company knows (items, quotations on file, past prices,
     budgets), for the caller's tenant and workspace."""
@@ -148,9 +150,3 @@ class SpreadsheetPort(Protocol):
     def write(
         self, sheet: str, rows: Sequence[Sequence[Cell]], *, date_format: str, at: datetime
     ) -> bytes: ...
-
-
-class TenantPolicyPort(Protocol):
-    """A tenant's own document for a policy id (`PolicyOverridePort.get`)."""
-
-    async def get(self, context: AccessContext, policy_id: str) -> dict[str, object] | None: ...

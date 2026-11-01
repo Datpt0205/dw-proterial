@@ -35,6 +35,10 @@ class PurchasingScopes(StrEnum):
     # Draft the purchase orders of a request whose suppliers are chosen, and
     # draw the file Bravo imports them from.
     PO_PREPARE = "purchasing.po.prepare"
+    # Propose a version of the tenant's rules (the configurer, the head), and
+    # decide one someone else proposed (the head).
+    RULES_PROPOSE = "purchasing.rules.propose"
+    RULES_APPROVE = "purchasing.rules.approve"
 
 
 class PurchasingAuthorizationPort(Protocol):
@@ -73,3 +77,6 @@ class Gate:
             resource_type=resource_type,
             resource_id=resource_id,
         )
+
+    def allows(self, context: AccessContext, scope: PurchasingScopes) -> bool:
+        return self.authz.is_allowed(context, scope.value)

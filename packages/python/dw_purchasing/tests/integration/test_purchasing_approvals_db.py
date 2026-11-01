@@ -22,11 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_kernel.errors import ConflictError, NotFoundError, PermissionDeniedError
 from dw_kernel.ports import FixedClock, Uuid4Generator
-from dw_platform.adapters.persistence.policy_overrides import SqlPolicyOverrideRepository
 from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
 )
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.adapters.persistence.uow import SqlPlatformUnitOfWorkFactory
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.domain.approval import APPROVALS_DECIDE
@@ -42,7 +42,7 @@ from dw_purchasing.application.approvals import (
     RequestApprovals,
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import released_book
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.testing.world import BUYER, Authz, ScriptedModel, caller
 
@@ -61,7 +61,7 @@ def _services(
 ) -> tuple[PurchaseRequests, RequestApprovals, ApproveAndResumeService]:
     files = PolicyFiles.load(REPO / "configs/policies")
     store = SqlPurchasingStore(sessions, SqlAuditRepository, SqlApprovalRepository)
-    book = RuleBook(files, SqlPolicyOverrideRepository(sessions), files.versions)
+    book = released_book(files.current(), files.by_ref, SqlRuleVersionLookup(sessions))
     clock, ids = FixedClock(NOW), Uuid4Generator()
     intake = PurchaseRequests(
         uow=store,

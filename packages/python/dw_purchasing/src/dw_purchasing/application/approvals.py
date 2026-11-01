@@ -46,7 +46,7 @@ from dw_platform.domain.audit import AuditEvent
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import CaseChange
 from dw_purchasing.application.ports import MasterDataPort, PurchasingUnitOfWork
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import ApprovalAsked, CaseStatus, Decided, PurchaseCase
 from dw_purchasing.domain.checks import CrossCheck, cross_check
 from dw_purchasing.domain.rules import ApprovalRules, ApprovalTier, PurchasingRules
@@ -64,7 +64,7 @@ NO_LIMITS: Final = "quy tắc mua hàng đang áp dụng chưa có hạn mức d
 _FROZEN = ConfigDict(frozen=True)
 
 
-class CheckView(BaseModel):
+class PurchaseCheckView(BaseModel):
     """What the check found and who would approve, under the rules in force."""
 
     model_config = _FROZEN
@@ -97,12 +97,12 @@ def _approval_rules(rules: PurchasingRules) -> ApprovalRules:
 class RequestApprovals:
     uow: PurchasingUnitOfWork
     gate: Gate
-    rules: RuleBook
+    rules: PurchasingRuleBook
     master: MasterDataPort
     clock: UtcClock
     ids: IdGenerator
 
-    async def preview(self, context: AccessContext, case_id: uuid.UUID) -> CheckView:
+    async def preview(self, context: AccessContext, case_id: uuid.UUID) -> PurchaseCheckView:
         await self.gate.require(
             context,
             PurchasingScopes.REQUEST_READ,
@@ -112,7 +112,7 @@ class RequestApprovals:
         case = await self._case(context, case_id)
         rules = await self.rules.resolve(context)
         check, tier = await self._check(context, case, _approval_rules(rules))
-        return CheckView(
+        return PurchaseCheckView(
             case_id=case.case_id,
             case_version=case.case_version,
             rules_ref=rules.ref,

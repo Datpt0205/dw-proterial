@@ -20,6 +20,7 @@ from dw_agent_runtime.ports import ModelGateway
 from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.errors import ConfigError
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
@@ -37,8 +38,13 @@ from dw_purchasing.application.approvals import (
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
-from dw_purchasing.application.ports import TenantPolicyPort
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import (
+    PurchasingRuleBook,
+    PurchasingRulesService,
+    RuleDecisions,
+    RuleSettlement,
+    released_book,
+)
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import SupplierSourcing
 
@@ -63,15 +69,13 @@ def build_purchasing(
     audit: AuditFactory,
     approvals: ApprovalsFactory,
     authorization: PurchasingAuthorizationPort,
-    tenant_policies: TenantPolicyPort,
     model: ModelGateway | None,
     clock: UtcClock,
     ids: IdGenerator,
 ) -> PurchasingServices:
     worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
-    files = PolicyFiles.load(configs / "policies")
     store = SqlPurchasingStore(session_factory, audit, approvals)
-    book = RuleBook(files, tenant_policies, files.versions)
+    book = rule_book(configs, session_factory)
     requests = PurchaseRequests(
         uow=store,
         gate=Gate(authorization),
@@ -101,6 +105,9 @@ def build_purchasing(
             clock=clock,
             ids=ids,
         ),
+        rules=PurchasingRulesService(
+            uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids
+        ),
         sourcing=SupplierSourcing(
             uow=store,
             gate=Gate(authorization),
@@ -112,6 +119,44 @@ def build_purchasing(
             clock=clock,
             ids=ids,
         ),
+    )
+
+
+def rule_book(
+    configs: Path, session_factory: async_sessionmaker[AsyncSession]
+) -> PurchasingRuleBook:
+    """The platform's files under the tenant's stored versions."""
+    files = PolicyFiles.load(configs / "policies")
+    return released_book(files.current(), files.by_ref, SqlRuleVersionLookup(session_factory))
+
+
+def rule_decisions(
+    configs: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+) -> RuleDecisions:
+    """The decision guard the API's approval flow registers under
+    `RULES_APPROVAL` (the longest prefix wins over `APPROVAL_PREFIX`'s)."""
+    return RuleDecisions(
+        SqlPurchasingStore(session_factory, audit, approvals), rule_book(configs, session_factory)
+    )
+
+
+def rule_settlement(
+    configs: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> RuleSettlement:
+    """What the worker's handler for `RULES_DECIDED` carries a decision out with."""
+    return RuleSettlement(
+        SqlPurchasingStore(session_factory, audit, approvals),
+        rule_book(configs, session_factory),
+        clock,
+        ids,
     )
 
 

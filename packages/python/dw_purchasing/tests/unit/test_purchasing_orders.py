@@ -132,7 +132,7 @@ async def test_the_file_is_drawn_from_the_stamped_layout_not_the_rules_in_force(
 
     current = PolicyFiles.load(REPO / "configs/policies").current()
     changed = current.model_dump(mode="json")
-    changed["version"] = "1.3.0-t.1"
+    changed["policy_version"] = "9.3.0"
     changed["bravo_po"]["columns"] = [{"header": "Chỉ một cột", "field": "po_ref"}]
     world.tenant_policies.documents[(ALPHA[0], "purchasing_rules")] = changed
     assert (await world.orders.bravo_file(caller(), case_id)).data == before
@@ -195,7 +195,7 @@ async def test_rules_without_a_bravo_layout_draft_nothing() -> None:
 
     current = PolicyFiles.load(REPO / "configs/policies").current()
     without: dict[str, Any] = current.model_dump(mode="json")
-    without["version"], without["bravo_po"] = "1.3.0-t.2", None
+    without["policy_version"], without["bravo_po"] = "9.3.1", None
     world.tenant_policies.documents[(ALPHA[0], "purchasing_rules")] = without
     with pytest.raises(ConflictError) as refused:
         await world.orders.draft(caller(), case_id, case_version=await _version(world, case_id))

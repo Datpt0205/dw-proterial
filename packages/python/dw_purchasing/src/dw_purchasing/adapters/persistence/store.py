@@ -25,10 +25,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
+from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.naming import NAMING_CONVENTION
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionStore
 from dw_platform.adapters.persistence.tenant_session import TenantScope, bind_tenant
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.ports import AuditRepositoryPort
+from dw_platform.application.rule_versions import ContextScope
 from dw_purchasing.application.ports import ApprovalsPort, Disposition, MessageOutcome
 from dw_purchasing.domain.cases import PurchaseCase
 
@@ -222,6 +225,17 @@ class _Work:
         self.outcomes = _Outcomes(session, scope)
         self.audit = audit(session)
         self.approvals = approvals(session)
+        self.rule_versions = SqlRuleVersionStore(
+            session, ContextScope(TenantId(scope.tenant_id), WorkspaceId(_bound(scope)))
+        )
+
+    async def commit(self) -> None:
+        """The transaction commits as the unit of work closes."""
+
+
+def _bound(scope: TenantScope) -> uuid.UUID:
+    assert scope.workspace_id is not None  # a verified context always names one
+    return scope.workspace_id
 
 
 class SqlPurchasingStore:

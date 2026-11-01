@@ -49,7 +49,7 @@ from dw_purchasing.application.ports import (
     MessageOutcome,
     PurchasingUnitOfWork,
 )
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import (
     CaseStatus,
     PrSource,
@@ -110,7 +110,7 @@ class Worker:
 class PurchaseRequests:
     uow: PurchasingUnitOfWork
     gate: Gate
-    rules: RuleBook
+    rules: PurchasingRuleBook
     inbox: InboxPort
     # None where the deployment has no model: a mail is then not read.
     model: InterpretationPort | None

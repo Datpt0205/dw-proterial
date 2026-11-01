@@ -25,21 +25,19 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from dw_kernel.errors import ConflictError
-from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import FixedClock, Uuid4Generator
-from dw_platform.adapters.persistence.policy_overrides import SqlPolicyOverrideRepository
 from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
 )
-from dw_platform.domain.audit import AuditEvent
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.persistence.store import SqlPurchasingStore
 from dw_purchasing.adapters.policy_files import PolicyFiles
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.ports import Disposition, MessageOutcome
-from dw_purchasing.application.rules import RuleBook
+from dw_purchasing.application.rules import PurchasingRulesService, released_book
 from dw_purchasing.domain.cases import (
     CaseStatus,
     PrSource,
@@ -225,7 +223,11 @@ async def test_the_roles_hold_purchasing_scopes_and_no_platform_role_does(
         read,
         PurchasingScopes.APPROVE_TIER1.value,
         PurchasingScopes.APPROVE_TIER2.value,
+        PurchasingScopes.RULES_PROPOSE.value,
+        PurchasingScopes.RULES_APPROVE.value,
     }
+    # The person who configures DW2 proposes; the head decides (633993a6d8b4).
+    assert roles["purchasing_configurer"] == {read, PurchasingScopes.RULES_PROPOSE.value}
     leaking = {k for k, s in roles.items() if not k.startswith("purchasing_") and s & every}
     assert leaking == set()
     async with migrator.connect() as conn:
@@ -245,11 +247,11 @@ async def test_the_service_on_the_database_audits_and_reads_the_tenants_own_rule
     app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
 ) -> None:
     files = PolicyFiles.load(REPO / "configs/policies")
-    overrides = SqlPolicyOverrideRepository(app_sessions)
+    book = released_book(files.current(), files.by_ref, SqlRuleVersionLookup(app_sessions))
     service = PurchaseRequests(
         uow=_store(app_sessions),
         gate=Gate(Authz()),
-        rules=RuleBook(files, overrides, files.versions),
+        rules=book,
         inbox=MockInbox.load(tenant_id=tenancy.alpha[0], workspace_id=tenancy.alpha[1]),
         model=ScriptedModel(ANSWERS),
         worker=Worker("purchasing-dw2", "1.0.0"),
@@ -261,9 +263,10 @@ async def test_the_service_on_the_database_audits_and_reads_the_tenants_own_rule
     assert opened.disposition is Disposition.OPENED and opened.case_id is not None
     assert (await service.case(me, opened.case_id)).request.pr_no == "PR-2611-004"
 
-    # The tenant's own version, from the platform's store: need-by required.
+    # The tenant's own version, applied by its head through the platform's
+    # rule-version engine (`platform.rule_versions`): need-by required.
     document = {
-        "version": "1.0.0-proterial.1",
+        "version": "9.0.0",
         "pr_form": {
             "required": ["budget_code", "need_by"],
             "max_lines": 50,
@@ -272,12 +275,29 @@ async def test_the_service_on_the_database_audits_and_reads_the_tenants_own_rule
         },
         "internal_domains": ["seller.example"],
     }
-    await overrides.put(me, "purchasing_rules", document, audit=_audit(me))
+    head = me.model_copy(
+        update={
+            "scopes": me.scopes
+            | {PurchasingScopes.RULES_PROPOSE.value, PurchasingScopes.RULES_APPROVE.value}
+        }
+    )
+    rules = PurchasingRulesService(
+        uow=_store(app_sessions),
+        gate=Gate(Authz()),
+        book=book,
+        clock=FixedClock(NOW),
+        ids=Uuid4Generator(),
+    )
+    applied = await rules.propose(head, "purchasing_rules", document)
+    assert (applied.status, applied.applied_directly) == ("approved", True)
+    # Read under RLS: the other tenant's resolution never meets it.
+    beta = (await book.resolve(caller(tenancy.beta))).version
+    assert beta == files.current().version
     routed = await service.read_mail(me, "P02")
     # P02's one line names its date.
     assert routed.disposition is Disposition.OPENED and routed.case_id is not None
     stamped = (await service.case(me, routed.case_id)).rules_ref
-    assert stamped == "purchasing_rules@1.0.0-proterial.1"
+    assert stamped == "purchasing_rules@9.0.0"
 
     async with app_sessions() as session, session.begin():
         await session.execute(
@@ -300,19 +320,3 @@ async def test_the_service_on_the_database_audits_and_reads_the_tenants_own_rule
             .all()
         )
     assert list(actions).count("purchasing.request.received") == 2
-
-
-def _audit(context: object) -> AuditEvent:
-    from dw_platform.application.access_context import AccessContext
-
-    assert isinstance(context, AccessContext)
-    return AuditEvent(
-        id=uuid.uuid4(),
-        tenant_id=TenantId(context.tenant_id),
-        workspace_id=WorkspaceId(context.workspace_id),
-        actor_id=UserId(context.principal_id),
-        action="platform.policy_override.put",
-        resource_type="policy_override",
-        resource_id="purchasing_rules",
-        occurred_at=NOW,
-    )

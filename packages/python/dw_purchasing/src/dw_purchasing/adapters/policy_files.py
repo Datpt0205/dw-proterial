@@ -22,7 +22,7 @@ def _semver(version: str) -> tuple[int, ...]:
 
 def load_rules(path: Path) -> PurchasingRules:
     raw = yaml.safe_load(path.read_bytes())
-    if not isinstance(raw, dict) or raw.pop("policy_id", None) != POLICY_ID:
+    if not isinstance(raw, dict) or raw.get("policy_id") != POLICY_ID:
         raise ValueError(f"{path.name} is not a {POLICY_ID} document")
     raw.pop("schema_version", None)
     rules = PurchasingRules.model_validate(raw)
@@ -33,7 +33,7 @@ def load_rules(path: Path) -> PurchasingRules:
 
 @dataclass(frozen=True)
 class PolicyFiles:
-    """Implements `PlatformRulesPort` over every released version."""
+    """The platform layer: every released version, the newest in force."""
 
     released: tuple[PurchasingRules, ...]
 
@@ -48,5 +48,6 @@ class PolicyFiles:
         return self.released[-1]
 
     @property
-    def versions(self) -> frozenset[str]:
-        return frozenset(r.version for r in self.released)
+    def by_ref(self) -> dict[str, PurchasingRules]:
+        """Every released version by the ref a case stamps."""
+        return {r.ref: r for r in self.released}

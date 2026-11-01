@@ -20,7 +20,7 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dw_purchasing.domain.checks import CrossCheck, FindingCode
+from dw_purchasing.domain.checks import CrossCheck, PurchaseFindingCode
 from dw_purchasing.domain.orders import BravoPoLayout
 from dw_purchasing.domain.requests import (
     Currency,
@@ -88,7 +88,7 @@ class ApprovalRules(BaseModel):
     # How far above the reference an estimate may be before it is a finding.
     price_tolerance_percent: Decimal = Field(ge=0, le=100)
     # Findings that send a request to the last tier whatever its amount.
-    escalate: frozenset[FindingCode]
+    escalate: frozenset[PurchaseFindingCode]
 
     @model_validator(mode="after")
     def _ascending_and_open_ended(self) -> Self:
@@ -122,11 +122,22 @@ class RfqRules(BaseModel):
 
 
 class PurchasingRules(BaseModel):
-    """One version of the tenant's rules (module docstring)."""
+    """One version of the tenant's rules (module docstring). Written as the
+    platform's rule versions hold every document (`ck_rule_versions_document`):
+    its ``policy_id`` the key, its ``policy_version`` the version; a file
+    names the version ``version``."""
 
-    model_config = _FROZEN
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        hide_input_in_errors=True,
+        validate_by_name=True,
+        validate_by_alias=True,
+        serialize_by_alias=True,
+    )
 
-    version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$")]
+    policy_id: Literal["purchasing_rules"] = POLICY_ID
+    version: Annotated[str, Field(alias="policy_version", pattern=r"^\d+\.\d+\.\d+$")]
     pr_form: PrFormRules
     # The company's mail domains: only a sender from one of them, verified by
     # the mail system, may be a requester.
