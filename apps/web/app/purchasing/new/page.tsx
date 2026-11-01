@@ -4,19 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Dayjs } from "dayjs";
 import { Alert, App, Button, Card, DatePicker, Flex, Form, Input } from "antd";
-import {
-  DeleteOutlined,
-  PlusOutlined,
-  RobotOutlined,
-  SendOutlined,
-} from "@ant-design/icons";
+import { RobotOutlined, SendOutlined } from "@ant-design/icons";
 import type { PurchaseMyRequest, PurchaseRequestDraft } from "@dw/api-client";
 import { PageHeader } from "@dw/ui";
 import { fromPickerDay, toPickerDay } from "../../../lib/dates";
 import { errorMessage } from "../../../lib/error-message";
 import { useIdempotencyKeys } from "../../../lib/idempotency";
-import { formatAmountInput, parseAmountInput } from "../../../lib/money";
+import { formatAmountInput } from "../../../lib/money";
 import { purchasingApi } from "../_lib/api";
+import {
+  linesOut,
+  RequestLines,
+  type LineFields,
+} from "../_components/request-lines";
 import { mailReason } from "../_lib/labels";
 import { SCOPE } from "../_lib/scopes";
 import { purchasingCrumbs, ScopeGate } from "../_components/frame";
@@ -38,14 +38,6 @@ export default function NewRequestPage() {
   );
 }
 
-interface LineFields {
-  description: string;
-  quantity: string;
-  unit: string;
-  need_by?: Dayjs | null;
-  estimated_unit_price?: string;
-}
-
 interface Fields {
   lines: LineFields[];
   currency: string;
@@ -59,13 +51,6 @@ const MISSING: Record<string, string> = {
   need_by: "ngày cần hàng",
   estimated_unit_price: "giá ước tính",
 };
-
-const decimal = (label: string) => ({
-  validator: (_: unknown, value: string | undefined) =>
-    !value || parseAmountInput(value) !== null
-      ? Promise.resolve()
-      : Promise.reject(new Error(`${label} phải là một số, ví dụ 12,5`)),
-});
 
 function NewRequest() {
   const router = useRouter();
@@ -130,16 +115,7 @@ function NewRequest() {
       budget_code: fields.budget_code?.trim() || null,
       need_by: fromPickerDay(fields.need_by),
       note: fields.note?.trim() ?? "",
-      lines: fields.lines.map((l, i) => ({
-        line_no: i + 1,
-        description: l.description.trim(),
-        quantity: parseAmountInput(l.quantity)!,
-        unit: l.unit.trim(),
-        need_by: fromPickerDay(l.need_by),
-        estimated_unit_price: l.estimated_unit_price
-          ? parseAmountInput(l.estimated_unit_price)
-          : null,
-      })),
+      lines: linesOut(fields.lines),
     };
     setSending(true);
     try {
@@ -243,78 +219,7 @@ function NewRequest() {
                 setProblems(errorFields.length)
               }
             >
-              <Form.List name="lines">
-                {(rows, { add, remove }) => (
-                  <Flex vertical gap={8}>
-                    {rows.map((row, index) => (
-                      <Card
-                        key={row.key}
-                        size="small"
-                        title={`Dòng ${index + 1}`}
-                        extra={
-                          <Button
-                            type="text"
-                            icon={<DeleteOutlined aria-hidden />}
-                            aria-label={`Bỏ dòng ${index + 1}`}
-                            onClick={() => remove(row.name)}
-                          />
-                        }
-                      >
-                        <Flex gap={12} wrap>
-                          <Form.Item
-                            name={[row.name, "description"]}
-                            label="Mô tả"
-                            rules={[
-                              { required: true, message: "Ghi mô tả hàng" },
-                            ]}
-                            className="min-w-64 grow"
-                          >
-                            <Input maxLength={500} />
-                          </Form.Item>
-                          <Form.Item
-                            name={[row.name, "quantity"]}
-                            label="Số lượng"
-                            rules={[
-                              { required: true, message: "Ghi số lượng" },
-                              decimal("Số lượng"),
-                            ]}
-                          >
-                            <Input inputMode="decimal" />
-                          </Form.Item>
-                          <Form.Item
-                            name={[row.name, "unit"]}
-                            label="Đơn vị"
-                            rules={[{ required: true, message: "Ghi đơn vị" }]}
-                          >
-                            <Input maxLength={20} placeholder="hộp" />
-                          </Form.Item>
-                          <Form.Item
-                            name={[row.name, "need_by"]}
-                            label="Ngày cần"
-                          >
-                            <DatePicker format="DD/MM/YYYY" />
-                          </Form.Item>
-                          <Form.Item
-                            name={[row.name, "estimated_unit_price"]}
-                            label="Giá ước tính / đơn vị"
-                            rules={[decimal("Giá ước tính")]}
-                          >
-                            <Input inputMode="decimal" />
-                          </Form.Item>
-                        </Flex>
-                      </Card>
-                    ))}
-                    <Flex>
-                      <Button
-                        icon={<PlusOutlined aria-hidden />}
-                        onClick={() => add({})}
-                      >
-                        Thêm dòng
-                      </Button>
-                    </Flex>
-                  </Flex>
-                )}
-              </Form.List>
+              <RequestLines />
               <Flex gap={12} wrap className="mt-4">
                 <Form.Item
                   name="currency"
