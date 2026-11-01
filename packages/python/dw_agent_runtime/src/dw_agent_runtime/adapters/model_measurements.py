@@ -1,14 +1,16 @@
-"""Live measurements of DW1's model steps in PostgreSQL (dw_sales ADR 0005,
-addendum of 2026-10-23, migration 2d97d03c937a).
+"""Live measurements of every context's model steps in PostgreSQL
+(`dw_agent_runtime.model.readiness`; Sales' migration 2d97d03c937a, moved to
+`platform` by the ADR 0013/0014 lift).
 
-`sales.model_step_measurements` is narrowed by tenant only, like the rules a
-measurement backs: RLS keeps one tenant's rows from another, and nothing here
-names a tenant beyond binding the scope. `dw_app` may SELECT and INSERT, never
-UPDATE or DELETE: a measurement is a fact about the past.
+`platform.model_step_measurements` is narrowed by tenant only, like the rules
+a measurement backs: RLS keeps one tenant's rows from another, and nothing
+here names a tenant beyond binding the scope. `dw_app` may SELECT and
+INSERT, never UPDATE or DELETE: a measurement is a fact about the past.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -16,26 +18,24 @@ import sqlalchemy as sa
 from sqlalchemy import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from dw_agent_runtime.adapters import runtime_tables
+from dw_agent_runtime.model.readiness import MeasuredScope, ModelMeasurement
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
+from dw_platform.application.ports import AuditRepositoryPort
 from dw_platform.domain.audit import AuditEvent
-from dw_sales.adapters.persistence import tables
-from dw_sales.adapters.persistence._rows import scope_values
-from dw_sales.adapters.persistence.uow import AuditFactory
-from dw_sales.application.model_readiness import ModelMeasurement
-from dw_sales.application.ports import SalesScope
-from dw_sales.domain.order_checks import ModelStep
 
-_M = tables.model_step_measurements
+_M = runtime_tables.model_step_measurements
+AuditFactory = Callable[[AsyncSession], AuditRepositoryPort]
 
 
-def _bound(scope: SalesScope) -> TenantScope:
+def _bound(scope: MeasuredScope) -> TenantScope:
     return TenantScope(tenant_id=scope.tenant_id.value, workspace_id=scope.workspace_id.value)
 
 
 def _measurement(row: RowMapping) -> ModelMeasurement:
     return ModelMeasurement(
         measurement_id=row["id"],
-        step=ModelStep(row["step"]),
+        step=row["step"],
         model=row["model"],
         prompt=row["prompt"],
         metric=row["metric"],
@@ -56,14 +56,14 @@ class SqlModelMeasurements:
     session_factory: async_sessionmaker[AsyncSession]
 
     async def latest(
-        self, scope: SalesScope, step: ModelStep, *, model: str, prompt: str
+        self, scope: MeasuredScope, step: str, *, model: str, prompt: str
     ) -> ModelMeasurement | None:
         async with tenant_session(self.session_factory, _bound(scope)) as session:
             row = (
                 (
                     await session.execute(
                         sa.select(_M)
-                        .where(_M.c.step == step.value, _M.c.model == model, _M.c.prompt == prompt)
+                        .where(_M.c.step == str(step), _M.c.model == model, _M.c.prompt == prompt)
                         .order_by(_M.c.measured_at.desc(), _M.c.id.desc())
                         .limit(1)
                     )
@@ -83,14 +83,15 @@ class SqlMeasurementLog:
     audit: AuditFactory
 
     async def record(
-        self, scope: SalesScope, measurement: ModelMeasurement, event: AuditEvent
+        self, scope: MeasuredScope, measurement: ModelMeasurement, event: AuditEvent
     ) -> None:
         async with tenant_session(self.session_factory, _bound(scope)) as session:
             await session.execute(
                 sa.insert(_M).values(
                     id=measurement.measurement_id,
-                    **scope_values(scope),
-                    step=measurement.step.value,
+                    tenant_id=scope.tenant_id.value,
+                    workspace_id=scope.workspace_id.value,
+                    step=measurement.step,
                     model=measurement.model,
                     prompt=measurement.prompt,
                     metric=measurement.metric,

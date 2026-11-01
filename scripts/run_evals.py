@@ -273,7 +273,7 @@ def attest(report: Any, profile: str, tenant: uuid.UUID, workspace: uuid.UUID) -
     from dw_kernel.ports import SystemClock, Uuid7Generator
     from dw_platform.adapters.persistence.repositories import SqlAuditRepository
     from dw_sales.adapters.assembly import step_model
-    from dw_sales.adapters.persistence.measurements import SqlMeasurementLog
+    from dw_agent_runtime.adapters.model_measurements import SqlMeasurementLog
     from dw_sales.application.model_readiness import BARS, ModelAttestation, step_measured_by
     from dw_sales.application.ports import SalesScope
 

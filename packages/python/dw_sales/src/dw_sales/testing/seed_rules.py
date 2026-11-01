@@ -37,6 +37,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from dw_agent_runtime.adapters.model_measurements import SqlMeasurementLog
 from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.ports import SystemClock, Uuid7Generator
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
@@ -53,7 +54,6 @@ from dw_platform.testing.seed_env import sid
 from dw_sales.adapters.assembly import model_readiness, step_model
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.order_rules import load_tenant_order_rules
-from dw_sales.adapters.persistence.measurements import SqlMeasurementLog
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.application.access import Gate, sales_scope

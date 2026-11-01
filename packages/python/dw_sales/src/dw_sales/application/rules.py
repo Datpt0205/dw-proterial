@@ -483,7 +483,7 @@ class SalesRuleChecks:
         return Unready(
             error=refusal(steps),
             rule=MODEL_BAR_UNMET,
-            comment=_MODEL_BAR_UNMET_COMMENT.format(steps=", ".join(r.step.value for r in steps)),
+            comment=_MODEL_BAR_UNMET_COMMENT.format(steps=", ".join(str(r.step) for r in steps)),
         )
 
 

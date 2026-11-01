@@ -1,5 +1,6 @@
-"""`sales.model_step_measurements` (migration 2d97d03c937a, dw_sales ADR 0005,
-addendum of 2026-10-23) against a real database, as `dw_app`.
+"""`platform.model_step_measurements` (migration 2d97d03c937a, moved by
+315c7ae4844f; dw_sales ADR 0005, addendum of 2026-10-23) against a real
+database, as `dw_app`.
 
 The store a model step's switch is held to: written by the attesting lane
 with its audit event in one transaction, read under the tenant's RLS only
@@ -27,10 +28,10 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool
 
+from dw_agent_runtime.adapters.model_measurements import SqlMeasurementLog, SqlModelMeasurements
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.domain.audit import system_actor
-from dw_sales.adapters.persistence.measurements import SqlMeasurementLog, SqlModelMeasurements
 from dw_sales.application.model_readiness import ATTEST_LANE, ModelAttestation, ModelReadiness
 from dw_sales.application.ports import SalesScope
 from dw_sales.domain.order_checks import ModelStep
@@ -119,7 +120,7 @@ async def test_a_row_written_for_another_tenant_is_refused_by_the_policy(
         with pytest.raises(DBAPIError, match="row-level security"):
             await session.execute(
                 sa.text(
-                    "INSERT INTO sales.model_step_measurements (id, tenant_id, workspace_id,"
+                    "INSERT INTO platform.model_step_measurements (id, tenant_id, workspace_id,"
                     " step, model, prompt, metric, value, bar, passed, dataset, measured_at,"
                     " recorded_by) VALUES (:id, :t, :w, 'message_intent', 'm', :p,"
                     " 'all.kind_accuracy', 0.95, 0.9, true, 'sales_intent@1.0.0', now(),"
@@ -137,8 +138,8 @@ async def test_a_row_written_for_another_tenant_is_refused_by_the_policy(
 @pytest.mark.parametrize(
     "statement",
     [
-        "UPDATE sales.model_step_measurements SET passed = true",
-        "DELETE FROM sales.model_step_measurements",
+        "UPDATE platform.model_step_measurements SET passed = true",
+        "DELETE FROM platform.model_step_measurements",
     ],
 )
 async def test_the_application_can_neither_rewrite_nor_remove_a_measurement(
@@ -161,7 +162,7 @@ async def test_a_passing_row_below_its_bar_is_refused_by_the_database(
         async with migrator.begin() as conn:
             await conn.execute(
                 sa.text(
-                    "INSERT INTO sales.model_step_measurements (id, tenant_id, workspace_id,"
+                    "INSERT INTO platform.model_step_measurements (id, tenant_id, workspace_id,"
                     " step, model, prompt, metric, value, bar, passed, dataset, measured_at,"
                     " recorded_by) VALUES (:id, :t, :w, 'message_intent', 'm', :p,"
                     " 'all.kind_accuracy', 0.5, 0.9, true, 'sales_intent@1.0.0', now(),"

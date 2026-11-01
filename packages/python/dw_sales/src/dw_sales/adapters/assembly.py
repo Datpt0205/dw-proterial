@@ -34,6 +34,7 @@ from typing import Literal, Protocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation
+from dw_agent_runtime.adapters.model_measurements import SqlModelMeasurements
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.interpretation import InterpretationPort
 from dw_agent_runtime.model.profiles import ModelProfileRegistry
@@ -65,7 +66,6 @@ from dw_sales.adapters.persistence.catalog import (
 from dw_sales.adapters.persistence.followups import SqlFollowupScopes
 from dw_sales.adapters.persistence.layouts import SqlLayoutLookup
 from dw_sales.adapters.persistence.mailbox import SqlMailbox
-from dw_sales.adapters.persistence.measurements import SqlModelMeasurements
 from dw_sales.adapters.persistence.orders import SqlOrderCaseLookup
 from dw_sales.adapters.persistence.outbound import SqlOutboundScopes
 from dw_sales.adapters.persistence.processing import SqlProcessingQueue
