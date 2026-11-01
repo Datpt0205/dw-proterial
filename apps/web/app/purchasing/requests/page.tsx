@@ -12,7 +12,6 @@ import { useAuth } from "../../../lib/auth/auth-context";
 import { useCachedPages } from "../../../lib/use-cached-pages";
 import { casePage } from "../_lib/cases";
 import { money } from "../_lib/format";
-import { SOURCE } from "../_lib/labels";
 import { SCOPE } from "../_lib/scopes";
 import { purchasingCrumbs, ScopeGate } from "../_components/frame";
 import { CaseStatusTag } from "../_components/tags";
@@ -112,11 +111,6 @@ function Requests() {
                 key: "a",
                 align: "right",
                 render: (_, c) => amountOf(c),
-              },
-              {
-                title: "Nguồn",
-                key: "src",
-                render: (_, c) => SOURCE[c.source],
               },
               {
                 title: `Nhận lúc (${TIME_ZONE_LABEL})`,

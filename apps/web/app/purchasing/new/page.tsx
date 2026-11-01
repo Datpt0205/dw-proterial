@@ -12,7 +12,6 @@ import {
   Flex,
   Form,
   Input,
-  Typography,
 } from "antd";
 import {
   DeleteOutlined,
@@ -172,7 +171,7 @@ function NewRequest() {
       <PageHeader
         breadcrumb={purchasingCrumbs("Tôi cần mua…")}
         title="Tôi cần mua…"
-        subtitle="Viết điều bạn cần như khi nhắn cho phòng Mua hàng. DW2 soạn yêu cầu, bạn xem lại rồi gửi."
+        help="Viết điều bạn cần như khi nhắn cho phòng Mua hàng. DW2 soạn yêu cầu, bạn xem lại rồi gửi. Số yêu cầu, tên và bộ phận của bạn do hệ thống điền."
       />
       <Card size="small">
         <Flex vertical gap={8}>
@@ -346,10 +345,6 @@ function NewRequest() {
                   maxLength={2000}
                 />
               </Form.Item>
-              <Typography.Paragraph>
-                Số yêu cầu, tên và bộ phận của bạn do hệ thống điền. Bạn không
-                tự duyệt được yêu cầu của mình.
-              </Typography.Paragraph>
               <Button
                 type="primary"
                 size="large"

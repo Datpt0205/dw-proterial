@@ -20,7 +20,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import type { SalesSchemas } from "@dw/api-client";
-import { PageHeader, StatusTag } from "@dw/ui";
+import { InfoTip, PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import { useAuth } from "../../../lib/auth/auth-context";
 import {
@@ -338,9 +338,10 @@ function Inbox() {
         title="Hộp thư"
         subtitle={
           inbox.data
-            ? `${messages.length} thư · ${waiting} chưa xử lý${busy ? ` (${busy} DW1 đang xử lý)` : ""} · ${routed.length} chuyển Sales chờ xử lý. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách.`
-            : "Thư khách hàng gửi về: PO, yêu cầu báo giá, thư trả lời và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
+            ? `${messages.length} thư · ${waiting} chưa xử lý${busy ? ` (${busy} DW1 đang xử lý)` : ""} · ${routed.length} chuyển Sales chờ xử lý`
+            : undefined
         }
+        help="Thư khách hàng gửi về: PO, yêu cầu báo giá, thư trả lời và phản hồi của Design. Mỗi thư kết thúc ở đúng một hướng xử lý; thư chuyển Sales có lý do và người phụ trách."
         actions={
           <GuardedButton
             type="primary"
@@ -413,6 +414,26 @@ function Inbox() {
               onExpandedRowsChange: setExpanded,
               expandedRowRender: (m) => (
                 <div className="max-w-3xl space-y-2">
+                  {/* What the row keeps short (2026-11-01: the column holds
+                      the outcome and the case link; the why opens here). */}
+                  {m.disposition.reason ||
+                  m.disposition.reading ||
+                  m.disposition.reply ? (
+                    <Space wrap>
+                      {m.disposition.reason ? (
+                        <Typography.Text>
+                          Lý do: {label(ROUTING_REASON, m.disposition.reason)}
+                        </Typography.Text>
+                      ) : null}
+                      {m.disposition.reading ? (
+                        <IntentTag reading={m.disposition.reading} />
+                      ) : null}
+                      {m.disposition.reply ? (
+                        <ReplyTag reply={m.disposition.reply} />
+                      ) : null}
+                    </Space>
+                  ) : null}
+
                   {m.attachments.length ? (
                     <Space wrap>
                       {m.attachments.map((a) => (
@@ -448,11 +469,9 @@ function Inbox() {
                     </Typography.Paragraph>
                   ) : null}
                   {m.disposition.detail ? (
-                    <Typography.Paragraph className="!mb-0">
-                      <Typography.Text type="secondary">
-                        Chi tiết kỹ thuật (cho IT): {m.disposition.detail}
-                      </Typography.Text>
-                    </Typography.Paragraph>
+                    <InfoTip label="Chi tiết kỹ thuật cho IT">
+                      {m.disposition.detail}
+                    </InfoTip>
                   ) : null}
                   {m.disposition.reason === "design_reply_unmatched" &&
                   !m.disposition.handled_at ? (
@@ -596,24 +615,6 @@ function Inbox() {
                     <MessageDispositionTag kind={m.disposition.kind} />
                     {m.disposition.handled_at ? (
                       <StatusTag tone="ok">Sales đã xử lý</StatusTag>
-                    ) : null}
-                    {m.disposition.reason ? (
-                      <Typography.Text type="secondary">
-                        Lý do: {label(ROUTING_REASON, m.disposition.reason)}
-                      </Typography.Text>
-                    ) : null}
-                    {m.disposition.reading ? (
-                      <IntentTag reading={m.disposition.reading} />
-                    ) : null}
-                    {m.disposition.reply ? (
-                      <ReplyTag reply={m.disposition.reply} />
-                    ) : null}
-                    {m.handoff_draft ? (
-                      <Typography.Text>
-                        Có bản chuyển{" "}
-                        {m.handoff_draft.to === "qa" ? "QA" : "PC"} soạn sẵn: mở
-                        thư để xem
-                      </Typography.Text>
                     ) : null}
                     {m.disposition.case_id ? (
                       <Link

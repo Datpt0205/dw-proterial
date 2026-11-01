@@ -15,10 +15,10 @@ function refusal(
 
 describe("errorMessage: a refusal in Vietnamese", () => {
   it("reads a Sales rule's Vietnamese, not the server's English", () => {
-    const error = refusal("the platform now ships this version number", {
-      rule: "platform_version_reused",
+    const error = refusal("the layout was decided meanwhile", {
+      rule: "layout_decided",
     });
-    expect(errorMessage(error)).toBe(SALES_REFUSALS.platform_version_reused);
+    expect(errorMessage(error)).toBe(SALES_REFUSALS.layout_decided);
   });
 
   it("reads the server's own sentence for a separation-of-duties refusal", () => {
@@ -38,7 +38,6 @@ describe("errorMessage: a refusal in Vietnamese", () => {
   });
 
   it.each([
-    ["platform_version_reused", "the platform now ships this version number"],
     ["layout_decided", "the layout was decided meanwhile"],
     ["message_already_processed", "the message is already on a case"],
     ["case_closed", "a closed case is not reassigned"],

@@ -76,7 +76,7 @@ export const salesNav: NavEntry[] = [
           {
             href: "/sales/pipeline",
             label: "Pipeline hồ sơ",
-            hint: "Mọi đơn hàng và báo giá theo trạng thái: ai đang giữ, ở bước bao lâu, việc nào của bạn",
+            hint: "Mọi hồ sơ theo trạng thái: ai đang giữ, ở bước bao lâu",
             icon: ProjectOutlined,
             scope: "sales.case.read",
           },
@@ -104,7 +104,7 @@ export const salesNav: NavEntry[] = [
           {
             href: "/sales/assistant",
             label: "Hỏi đáp DW1",
-            hint: "Hỏi trạng thái PO, báo giá, việc đang chờ và việc quá hạn: DW1 trả lời từ dữ liệu đang có, trong phạm vi hồ sơ bạn được xem",
+            hint: "Hỏi DW1 trạng thái PO, báo giá và việc đang chờ",
             icon: MessageOutlined,
             scope: "sales.case.read",
           },
@@ -118,21 +118,21 @@ export const salesNav: NavEntry[] = [
           {
             href: "/sales/rules",
             label: "Quy tắc",
-            hint: "Quy tắc và nội dung của công ty: đang áp dụng bản nào, đề xuất phiên bản mới, người khác duyệt",
+            hint: "Quy tắc của công ty: bản đang áp dụng và đề xuất thay đổi",
             icon: ControlOutlined,
             scope: "sales.rules.propose",
           },
           {
             href: "/sales/rules/process",
             label: "Quy trình DW1",
-            hint: "Các bước của quy trình đơn hàng và báo giá, và quy tắc mỗi bước đọc: sửa theo bước, người khác duyệt như mọi phiên bản",
+            hint: "Các bước của quy trình đơn hàng và báo giá",
             icon: ApartmentOutlined,
             scope: "sales.rules.propose",
           },
           {
             href: "/sales/master-data",
             label: "Dữ liệu chủ",
-            hint: "Khách hàng, mã hàng, bảng quy đổi mã, báo giá và LME: nhập từ tệp, xem trước, Trưởng bộ phận duyệt",
+            hint: "Khách hàng, mã hàng, quy đổi mã, báo giá và LME",
             icon: DatabaseOutlined,
             scope: "sales.case.read",
           },
@@ -146,7 +146,7 @@ export const salesNav: NavEntry[] = [
           {
             href: "/sales/activity",
             label: "Hoạt động DW1",
-            hint: "Mỗi bước có mô hình: DW1 tự làm bao nhiêu, chuyển cho người bao nhiêu và vì sao, theo ngày; mỗi số mở danh sách hồ sơ",
+            hint: "DW1 tự làm bao nhiêu, chuyển người bao nhiêu và vì sao",
             icon: RobotOutlined,
             // The summary's two readers (`ActivityService.summary`): who
             // reads the overview, and who proposes the versions that turn a

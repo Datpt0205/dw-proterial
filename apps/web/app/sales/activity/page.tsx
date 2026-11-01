@@ -112,7 +112,7 @@ function Activity() {
       <PageHeader
         breadcrumb={salesCrumbs("Hoạt động DW1")}
         title="Hoạt động DW1"
-        subtitle={`Mỗi bước có mô hình: DW1 tự làm bao nhiêu, chuyển cho người bao nhiêu và vì sao.${opensCases ? " Mỗi số mở danh sách hồ sơ nó đếm." : ""}`}
+        help={`Mỗi bước có mô hình: DW1 tự làm bao nhiêu, chuyển cho người bao nhiêu và vì sao.${opensCases ? " Mỗi số mở danh sách hồ sơ nó đếm." : ""}`}
       />
       <div className="flex flex-wrap items-center gap-3">
         <Segmented<Range>

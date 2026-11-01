@@ -294,6 +294,16 @@ describe("what a model read is shown with the case code resolved it to (ticket 3
       ];
       page();
 
+      // What the model read sits in the expanded row since 2026-11-01: the
+      // column keeps the outcome and the case link.
+      const expand = await waitFor(() => {
+        const button = document.querySelector(
+          "button.ant-table-row-expand-icon",
+        );
+        expect(button).not.toBeNull();
+        return button as HTMLElement;
+      });
+      fireEvent.click(expand);
       const link = await screen.findByRole("link", {
         name: "PO VLX-PO-2609-0118",
       });

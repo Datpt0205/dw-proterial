@@ -369,7 +369,7 @@ function OrderDetail() {
                     : ""
                 }, nhưng DW1 không áp dụng được lúc ${formatDateTime(data.unapplied_decision.at)}. Lý do: ${label(NOT_APPLIED_REASON, data.unapplied_decision.reason_code)}. `
               : ""
-          }Người nhập Bravo cho đơn này hoặc ${label(SALES_ROLE, "sales_head")} bấm “Gửi kiểm chéo lại” để tạo yêu cầu kiểm chéo mới ở phiên bản ${data.case_version}.`}
+          }Người nhập Bravo hoặc ${label(SALES_ROLE, "sales_head")} bấm “Gửi kiểm chéo lại” để kiểm ở phiên bản ${data.case_version}.`}
         />
       ) : null}
 

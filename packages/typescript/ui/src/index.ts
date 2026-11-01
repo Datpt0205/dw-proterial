@@ -23,3 +23,4 @@ export {
   type MaskedValueProps,
 } from "./masked-value";
 export { StatusTag, type StatusTagProps } from "./status-tag";
+export { InfoTip, type InfoTipProps } from "./info-tip";

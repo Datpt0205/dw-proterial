@@ -330,7 +330,7 @@ function Process() {
         "Quy trình DW1",
       )}
       title="Quy trình DW1"
-      subtitle="Các trạng thái của hồ sơ đơn hàng và báo giá, bước khảo sát ở mỗi trạng thái, và quy tắc bước đó đọc. Mở một trạng thái để xem và đề xuất thay đổi các trường của bước; người khác duyệt trên trang Duyệt."
+      help="Các trạng thái của hồ sơ đơn hàng và báo giá, bước khảo sát ở mỗi trạng thái, và quy tắc bước đó đọc. Mở một trạng thái để xem và đề xuất thay đổi các trường của bước; người khác duyệt trên trang Duyệt."
     />
   );
   if (process.error)

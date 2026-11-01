@@ -179,9 +179,10 @@ function Quotes() {
         title="Báo giá"
         subtitle={
           quotes.data
-            ? `${open.length} yêu cầu đang làm · ${overdue.length} quá hạn · ${done.length} đã gửi hoặc từ chối. Hạn là hết ngày ghi trên yêu cầu, giờ Việt Nam.`
-            : "Yêu cầu báo giá theo hạn: quá hạn trước, rồi hạn gần nhất. Hạn là hết ngày ghi trên yêu cầu, giờ Việt Nam."
+            ? `${open.length} yêu cầu đang làm · ${overdue.length} quá hạn · ${done.length} đã gửi hoặc từ chối`
+            : undefined
         }
+        help="Yêu cầu báo giá theo hạn: quá hạn trước, rồi hạn gần nhất. Hạn là hết ngày ghi trên yêu cầu, giờ Việt Nam."
         actions={
           <Link href="/sales/quotes/screening">Rà soát báo giá năm</Link>
         }

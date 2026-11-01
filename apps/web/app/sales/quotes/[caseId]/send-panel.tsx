@@ -8,6 +8,7 @@ import {
 } from "@ant-design/icons";
 import { Alert, Button, Card, Flex, Typography, Upload } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
+import { InfoTip } from "@dw/ui";
 import { useAuth } from "../../../../lib/auth/auth-context";
 import { formatDateTime } from "../../../../lib/dates";
 import { errorMessage } from "../../../../lib/error-message";
@@ -200,10 +201,13 @@ export function SendPanel({
           <Flex vertical gap={6}>
             <Typography.Text strong>3. Gửi khách</Typography.Text>
             <Typography.Text>
-              Soạn “Thư gửi báo giá (nháp)” ở khung bên dưới (thư nháp đính kèm
-              bản đã ký nếu đã tải lên), rồi bấm “Gửi cho khách từ hộp thư của
-              bạn”: hồ sơ tự chuyển “Đã gửi khách” khi thư đi. Hoặc tải tệp
-              .eml, tự gửi, rồi bấm “Đã gửi khách” ở “Bước tiếp theo”.
+              Soạn thư ở khung bên dưới rồi bấm “Gửi cho khách từ hộp thư của
+              bạn”.{" "}
+              <InfoTip label="Cách gửi báo giá cho khách">
+                Thư nháp đính kèm bản đã ký nếu đã tải lên; hồ sơ tự chuyển “Đã
+                gửi khách” khi thư đi. Hoặc tải tệp .eml, tự gửi, rồi bấm “Đã
+                gửi khách” ở “Bước tiếp theo”.
+              </InfoTip>
             </Typography.Text>
           </Flex>
         ) : null}

@@ -285,12 +285,11 @@ function MyWork() {
         subtitle={
           <span role="status">
             {work.data
-              ? `${items.length} việc đang chờ bạn${overdue.length ? `, ${overdue.length} việc đã quá hạn` : ""}. `
+              ? `${items.length} việc đang chờ bạn${overdue.length ? `, ${overdue.length} việc đã quá hạn` : ""}`
               : ""}
-            Theo hạn rồi theo thời gian chờ (cũ nhất trước). Mọi giờ là{" "}
-            {TIME_ZONE_LABEL}.
           </span>
         }
+        help={`Việc xếp theo hạn rồi theo thời gian chờ, cũ nhất trước. Mọi giờ là ${TIME_ZONE_LABEL}.`}
       />
       {work.error ? (
         <LoadError error={work.error} onRetry={work.reload} />
