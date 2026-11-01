@@ -47,6 +47,7 @@ from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.application.rules import RULES_DECIDED, RuleKey
+from dw_sales.domain.order_checks import ModelStep
 
 pytestmark = pytest.mark.integration
 
@@ -684,7 +685,8 @@ async def test_the_process_page_serves_each_steps_model_uses_actors_and_edge_act
     body = (await rules_api.as_(AN).get("/rules/process")).json()
     steps = {step["step_id"]: step for step in body["steps"]}
     models = [model for step in body["steps"] for model in step["models"]]
-    assert len(models) == 6
+    # One per model step: counted from the enum, so a new step is counted.
+    assert len(models) == len(ModelStep)
     for model in models:
         assert model["enabled"] and model["effective"], model
         assert model["latest"]["passed"] and model["latest"]["model"] == model["model"]
