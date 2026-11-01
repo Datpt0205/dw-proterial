@@ -165,7 +165,12 @@ function Rules() {
       <PageHeader
         breadcrumb={salesCrumbs("Quy tắc")}
         title="Quy tắc của công ty"
-        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt. ${appliesAtOnce ? "Bản bạn sửa được áp dụng ngay; bản người khác đề xuất chờ bạn duyệt trên trang Duyệt." : `Người đề xuất không tự duyệt; ${seesApprovals ? "phiên bản được quyết trên trang Duyệt, mở từ liên kết ở mỗi phiên bản." : "Trưởng bộ phận Sales quyết từng phiên bản."}`}`}
+        subtitle={`${own}/${keys.length} quy tắc đang dùng phiên bản riêng · ${waiting} phiên bản chờ duyệt${appliesAtOnce ? " · Bản bạn sửa được áp dụng ngay" : ""}`}
+        help={
+          appliesAtOnce
+            ? "Bản người khác đề xuất chờ bạn duyệt trên trang Duyệt."
+            : `Người đề xuất không tự duyệt; ${seesApprovals ? "phiên bản được quyết trên trang Duyệt, mở từ liên kết ở mỗi phiên bản." : "Trưởng bộ phận Sales quyết từng phiên bản."}`
+        }
       />
       {rules.error ? (
         <LoadError error={rules.error} onRetry={rules.reload} />

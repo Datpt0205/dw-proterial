@@ -72,7 +72,7 @@ function OverviewBody() {
       <PageHeader
         breadcrumb={salesCrumbs("Tổng quan quy trình")}
         title="Tổng quan quy trình"
-        subtitle="Số hồ sơ ở mỗi bước của hai quy trình, và thời gian DW1 và Sales bỏ ra. Không có số tiền nào ở trang này."
+        help="Số hồ sơ ở mỗi bước của hai quy trình, và thời gian DW1 và Sales bỏ ra. Không có số tiền nào ở trang này."
         tags={
           data ? (
             <StatusTag tone="gray">{`Cập nhật ${formatDateTime(data.as_of)}`}</StatusTag>
@@ -167,7 +167,7 @@ function OverviewContent({ data }: { data: Overview }) {
         <Alert
           type="info"
           showIcon
-          title="Chỉ đếm số hồ sơ: chưa đủ hồ sơ để tính tỷ lệ, nên chưa có tỷ lệ hay kết luận đạt/không đạt."
+          title="Chỉ đếm số hồ sơ: chưa đủ dữ liệu để tính tỷ lệ hay kết luận đạt/không đạt."
         />
         <Row gutter={[12, 12]}>
           {kpis.map((kpi) => (

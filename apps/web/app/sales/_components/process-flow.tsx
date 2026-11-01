@@ -11,6 +11,7 @@ import {
   type CSSProperties,
 } from "react";
 import Link from "next/link";
+import { InfoTip } from "@dw/ui";
 import {
   FlagOutlined,
   LockOutlined,
@@ -635,15 +636,17 @@ export function ProcessFlow({
 
   return (
     <div className="space-y-2">
-      <Typography.Paragraph className="mb-0!">
-        Đường chính của hồ sơ đọc từ trái sang phải; các trạng thái rẽ nhánh nằm
-        ở hàng dưới. Kéo để xem tiếp, hoặc bấm “Xem cả quy trình” ở góc dưới.
-        Đưa chuột hoặc dùng Tab tới một trạng thái để xem đến lượt ai, số thiết
-        lập và đường quay lại; bấm hoặc nhấn Enter để mở thiết lập. Biểu tượng
-        khóa trên một bước chuyển là điều kiện của bước đó.
-      </Typography.Paragraph>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-        <TurnLegend />
+        <span className="flex items-center gap-1">
+          <TurnLegend />
+          <InfoTip label="Cách đọc sơ đồ quy trình">
+            Đường chính đọc từ trái sang phải; trạng thái rẽ nhánh nằm ở hàng
+            dưới. Kéo để xem tiếp, hoặc bấm “Xem cả quy trình” ở góc dưới. Đưa
+            chuột hoặc Tab tới một trạng thái để xem đến lượt ai; bấm hoặc Enter
+            để mở thiết lập. Biểu tượng khóa trên một bước chuyển là điều kiện
+            của bước đó.
+          </InfoTip>
+        </span>
         <label className="flex items-center gap-2">
           <Switch checked={showBack} onChange={onShowBack} />
           <span>Hiện đường quay lại</span>

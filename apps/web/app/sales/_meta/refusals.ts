@@ -20,8 +20,6 @@ export const SALES_REFUSALS: Readonly<Record<string, string>> = {
   assignee_not_eligible:
     "Người được chọn không làm loại hồ sơ này ở workspace này: chọn người khác.",
   case_closed: "Hồ sơ đã đóng nên không giao lại được.",
-  platform_version_reused:
-    "Số phiên bản này trùng với một phiên bản nền tảng phát hành: đặt số khác cho phiên bản của công ty.",
   rules_version_gone:
     "Hồ sơ được mở theo một phiên bản quy tắc báo giá không còn nữa, nên bước này chưa làm được.",
   printed_schedules:

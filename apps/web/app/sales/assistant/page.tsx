@@ -37,7 +37,7 @@ const QUESTION_MAX = 500;
 
 /** What DW1 answers: the agreed list (ADR 0007), said before anyone asks. */
 const CATALOG =
-  "DW1 trả lời trạng thái một PO, trạng thái một yêu cầu báo giá, việc đang chờ bạn và việc đã quá hạn, từ dữ liệu đang có trong hệ thống, trong phạm vi hồ sơ bạn được xem. Câu trả lời không có số tiền.";
+  "Hỏi trạng thái một PO, một yêu cầu báo giá, việc đang chờ bạn hoặc việc quá hạn. Câu trả lời không có số tiền.";
 
 function caseHref(ref: CaseRef): string {
   return ref.kind === "order"
@@ -78,8 +78,12 @@ function Assistant() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Hỏi đáp DW1" breadcrumb={salesCrumbs("Hỏi đáp DW1")} />
-      <Typography.Paragraph className="mb-0!">{CATALOG}</Typography.Paragraph>
+      <PageHeader
+        title="Hỏi đáp DW1"
+        breadcrumb={salesCrumbs("Hỏi đáp DW1")}
+        subtitle={CATALOG}
+        help="DW1 trả lời từ dữ liệu đang có trong hệ thống, trong phạm vi hồ sơ bạn được xem."
+      />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
         <Card
           size="small"

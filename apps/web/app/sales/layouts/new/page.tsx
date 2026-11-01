@@ -96,9 +96,10 @@ function Onboarding() {
         title="Thiết lập mẫu PO"
         subtitle={
           source.data
-            ? `Khách ${source.data.customer_code} · tệp ${source.data.kind === "pdf" ? "PDF" : "Excel"} của thư ${messageId}. Gán mỗi trường với nhãn in trên mẫu; người thứ hai duyệt trước khi DW1 đọc các PO sau theo mẫu này.`
-            : "Gán mỗi trường của PO với nhãn in trên mẫu của khách."
+            ? `Khách ${source.data.customer_code} · tệp ${source.data.kind === "pdf" ? "PDF" : "Excel"} của thư ${messageId}`
+            : undefined
         }
+        help="Gán mỗi trường của PO với nhãn in trên mẫu của khách; người thứ hai duyệt trước khi DW1 đọc các PO sau theo mẫu này."
       />
       {!messageId || !attachmentId ? (
         <Empty description="Mở trang này từ một thư trong Hộp thư: thư đó cho biết tệp cần lập mẫu.">

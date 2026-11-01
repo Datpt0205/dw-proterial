@@ -25,7 +25,7 @@ import type {
   PurchasingRules,
   PurchasingWordsDraft,
 } from "@dw/api-client";
-import { PageHeader, StatusTag } from "@dw/ui";
+import { InfoTip, PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import { formatDateTime } from "../../../lib/dates";
 import { errorMessage } from "../../../lib/error-message";
@@ -90,7 +90,7 @@ function Settings() {
       <PageHeader
         breadcrumb={purchasingCrumbs("Cài đặt DW2")}
         title="Cài đặt DW2"
-        subtitle="Mỗi bước DW2 tự làm đến đâu, và quy tắc mua hàng của công ty. Mọi thay đổi đều được một người khác duyệt."
+        help="Mỗi bước DW2 tự làm đến đâu, và quy tắc mua hàng của công ty. Mọi thay đổi đều được một người khác duyệt."
       />
       {rules.error && !rules.data ? (
         <LoadError error={rules.error} onRetry={rules.reload} />
@@ -154,13 +154,18 @@ function Switches({
   }, [before, chosen]);
   const changes = changesInWords(before, after);
   return (
-    <Card size="small" title="Công tắc tự động">
-      <Flex vertical gap={12}>
-        <Typography.Text>
+    <Card
+      size="small"
+      title="Công tắc tự động"
+      extra={
+        <InfoTip label="Giải thích công tắc tự động">
           “AI tự làm” chỉ có hiệu lực khi bước đó đã được đo trên model của nhà
           máy; trước đó DW2 làm và một người duyệt. Tiền, phê duyệt, thư gửi ra
           ngoài và Bravo luôn có người.
-        </Typography.Text>
+        </InfoTip>
+      }
+    >
+      <Flex vertical gap={12}>
         <Table<PurchaseStepLevel>
           rowKey="step"
           size="small"

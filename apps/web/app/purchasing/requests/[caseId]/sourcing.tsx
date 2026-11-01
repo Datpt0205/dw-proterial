@@ -23,6 +23,7 @@ import type {
   PurchaseChoice,
   PurchaseComparison,
 } from "@dw/api-client";
+import { InfoTip } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { formatDate, fromPickerDay } from "../../../../lib/dates";
 import { errorMessage } from "../../../../lib/error-message";
@@ -67,12 +68,11 @@ function RfqCard({ c }: { c: PurchaseCase }) {
       title={`Thư hỏi giá (${rfq.drafts.length}) · hạn trả lời ${formatDate(rfq.reply_by)}`}
     >
       <Flex vertical gap={8}>
-        <Typography.Text>
-          DW2 chỉ soạn thư; người mua gửi từ hộp thư của mình.
-          {rfq.unsourced.length
-            ? ` Dòng ${rfq.unsourced.join(", ")} chưa có nhà cung cấp nào trong danh mục: cần người mua tự tìm.`
-            : ""}
-        </Typography.Text>
+        {rfq.unsourced.length ? (
+          <Typography.Text>
+            Dòng {rfq.unsourced.join(", ")} chưa có nhà cung cấp trong danh mục.
+          </Typography.Text>
+        ) : null}
         <Collapse
           size="small"
           items={rfq.drafts.map((d) => ({
@@ -461,11 +461,14 @@ function ComparisonCard({
       {data ? (
         <Flex vertical gap={12}>
           <Typography.Text>
-            Mỗi dòng: báo giá còn hạn bằng {data.currency}, rẻ nhất trước. DW2
-            chọn sẵn báo giá rẻ nhất kịp ngày cần; bạn đổi được trước khi bấm.
             {data.approved_limit
-              ? ` Hạn mức đã duyệt: ${money(data.approved_limit, data.currency)}; vượt thì lựa chọn được gửi duyệt lại.`
-              : ""}
+              ? `Hạn mức đã duyệt: ${money(data.approved_limit, data.currency)}`
+              : "Chưa có hạn mức đã duyệt"}{" "}
+            <InfoTip label="Cách so sánh báo giá">
+              Mỗi dòng: báo giá còn hạn bằng {data.currency}, rẻ nhất trước. DW2
+              chọn sẵn báo giá rẻ nhất kịp ngày cần; bạn đổi được trước khi bấm.
+              Tổng vượt hạn mức thì lựa chọn được gửi duyệt lại.
+            </InfoTip>
           </Typography.Text>
           {lines.map((line) => (
             <Flex key={line.line_no} vertical gap={4}>

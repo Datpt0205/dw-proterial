@@ -100,7 +100,7 @@ function Review() {
       <PageHeader
         breadcrumb={salesCrumbs("Kiểm chéo & duyệt")}
         title="Kiểm chéo & duyệt"
-        subtitle="Người làm hồ sơ không tự kiểm: đơn được một Sales khác kiểm chéo với Bravo, báo giá được người không định giá duyệt."
+        help="Người làm hồ sơ không tự kiểm: đơn được một Sales khác kiểm chéo với Bravo, báo giá được người không định giá duyệt."
       />
       <Card size="small" title={`Đơn chờ kiểm chéo (${checks.length})`}>
         {orders.error ? (

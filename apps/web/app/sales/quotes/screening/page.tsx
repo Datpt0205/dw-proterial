@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import Link from "next/link";
 import { Alert, Table, Typography } from "antd";
-import { PageHeader } from "@dw/ui";
+import { InfoTip, PageHeader } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { salesApi } from "../../_lib/api";
 import { useCustomerName } from "../../_lib/customers";
@@ -47,7 +47,14 @@ function Screening() {
       <Alert
         type="info"
         showIcon
-        title="Trang này chỉ liệt kê: DW1 không xóa hay đổi báo giá nào. Sales quyết định giữ hay bỏ từng báo giá ngoài DW1. “DW1 soạn thư hỏi khách” soạn sẵn thư hỏi (không có giá) để mở trong Outlook của bạn, đọc lại rồi gửi."
+        title="Chỉ liệt kê: DW1 không xóa hay đổi báo giá nào."
+        description={
+          <InfoTip label="Giải thích rà soát báo giá">
+            Sales quyết định giữ hay bỏ từng báo giá ngoài DW1. “DW1 soạn thư
+            hỏi khách” soạn sẵn thư hỏi (không có giá) để mở trong Outlook của
+            bạn, đọc lại rồi gửi.
+          </InfoTip>
+        }
       />
       {report.error ? (
         <LoadError error={report.error} onRetry={report.reload} />

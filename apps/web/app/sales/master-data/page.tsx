@@ -96,7 +96,7 @@ function MasterData() {
       <PageHeader
         breadcrumb={salesCrumbs("Dữ liệu chủ")}
         title="Dữ liệu chủ"
-        subtitle="Dữ liệu chủ DW1 đọc: mỗi danh mục dùng dữ liệu mẫu (hư cấu) cho tới khi Sales nhập tệp thật và Trưởng bộ phận Sales duyệt. Đơn Bravo và YCBG lấy từ ERP."
+        help="Mỗi danh mục dùng dữ liệu mẫu (hư cấu) cho tới khi Sales nhập tệp thật và Trưởng bộ phận Sales duyệt. Đơn Bravo và YCBG lấy từ ERP."
       />
       <Tabs
         activeKey={tab}
@@ -175,7 +175,7 @@ function FromErp({ children }: { children: ReactNode }) {
       <Alert
         type="info"
         showIcon
-        title="Dữ liệu mẫu (hư cấu): danh sách này lấy từ Bravo (ERP), không nhập từ tệp. Khi kết nối Bravo, dữ liệu thật thay cho bản mẫu."
+        title="Dữ liệu mẫu (hư cấu): lấy từ Bravo khi kết nối."
       />
       {children}
     </div>

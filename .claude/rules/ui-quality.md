@@ -70,8 +70,16 @@ included), and what is mine to do next; in E-HSDT, for example, when the bid
 closes and whether it can be submitted. Detail opens on demand; nothing a
 decision needs sits behind hover or a collapsed panel.
 
+Only what the person acts on is on the page (Đạt, 2026-11-01: too much text
+confuses). A subtitle carries counts and facts, not how the page works; that
+explanation goes in `PageHeader`'s `help`, or beside a section in `@dw/ui`'s
+`InfoTip`, the one "details on click" (a "?" that opens on click, tap and
+keyboard). A table keeps the columns a decision needs; the rest opens in its
+expanded row or the record's page.
+
 **Ask:** with nothing clicked, can a person say whether this case can move on
-and what they should do next?
+and what they should do next? And is there a sentence here they do not need
+to do it?
 
 ## 3. Every control, every state
 

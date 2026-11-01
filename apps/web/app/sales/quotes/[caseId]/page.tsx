@@ -19,7 +19,7 @@ import {
   QuestionCircleOutlined,
 } from "@ant-design/icons";
 import type { SourceRegion } from "@dw/api-client";
-import { PageHeader, StatusTag, RegionState } from "@dw/ui";
+import { InfoTip, PageHeader, StatusTag, RegionState } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import {
   dayDeadline,
@@ -373,7 +373,17 @@ function QuoteDetail() {
           type="warning"
           showIcon
           title="Mô hình đọc yêu cầu này từ thư hoặc tệp riêng của khách"
-          description={`Mọi giá trị gắn "${label(REGION_FLAG, "model_read")}" là chữ của khách do mô hình chỉ ra và DW1 đọc lại: mở nguồn, xác nhận từng giá trị trước khi soạn YCBG. Khách hàng lấy theo tên miền người gửi; giá khách nêu chỉ để tham khảo, không vào căn cứ giá.`}
+          description={
+            <span>
+              Mở nguồn, xác nhận từng giá trị gắn “
+              {label(REGION_FLAG, "model_read")}” trước khi soạn YCBG.{" "}
+              <InfoTip label="Giải thích giá trị máy đọc">
+                Đó là chữ của khách do mô hình chỉ ra và DW1 đọc lại. Khách hàng
+                lấy theo tên miền người gửi; giá khách nêu chỉ để tham khảo,
+                không vào căn cứ giá.
+              </InfoTip>
+            </span>
+          }
         />
       ) : null}
 

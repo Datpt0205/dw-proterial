@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Breadcrumb, Flex, Typography, theme } from "antd";
+import { InfoTip } from "./info-tip";
 
 export interface PageHeaderCrumb {
   /** The app passes its router's link here; the shell imports no framework. */
@@ -20,6 +21,11 @@ export interface PageHeaderProps {
   breadcrumb?: PageHeaderCrumb[];
   /** Status tags above the title. */
   tags?: ReactNode;
+  /**
+   * How the page works, opened from a "?" beside the title: an explanation
+   * the person does not need to act, kept off the first screenful.
+   */
+  help?: ReactNode;
 }
 
 /**
@@ -34,6 +40,7 @@ export function PageHeader({
   actions,
   breadcrumb,
   tags,
+  help,
 }: PageHeaderProps) {
   const { token } = theme.useToken();
   return (
@@ -51,22 +58,31 @@ export function PageHeader({
             {tags}
           </Flex>
         )}
-        <h1
-          className="m-0 flex min-w-0 items-center gap-2 break-words"
-          style={{
-            fontSize: token.fontSizeLG + 2,
-            lineHeight: token.lineHeightHeading5,
-            fontWeight: token.fontWeightStrong,
-            color: token.colorText,
-          }}
-        >
-          {icon && (
-            <span aria-hidden className="inline-flex shrink-0">
-              {icon}
-            </span>
-          )}
-          <span className="min-w-0">{title}</span>
-        </h1>
+        <Flex align="center" gap={4} className="min-w-0">
+          <h1
+            className="m-0 flex min-w-0 items-center gap-2 break-words"
+            style={{
+              fontSize: token.fontSizeLG + 2,
+              lineHeight: token.lineHeightHeading5,
+              fontWeight: token.fontWeightStrong,
+              color: token.colorText,
+            }}
+          >
+            {icon && (
+              <span aria-hidden className="inline-flex shrink-0">
+                {icon}
+              </span>
+            )}
+            <span className="min-w-0">{title}</span>
+          </h1>
+          {help ? (
+            <InfoTip
+              label={`Giải thích trang ${typeof title === "string" ? title : ""}`.trim()}
+            >
+              {help}
+            </InfoTip>
+          ) : null}
+        </Flex>
         {subtitle && (
           <Typography.Paragraph
             type="secondary"

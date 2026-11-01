@@ -17,7 +17,7 @@ export default function PipelinePage() {
           breadcrumb={salesCrumbs("Pipeline hồ sơ")}
           icon={<ProjectOutlined />}
           title="Pipeline hồ sơ"
-          subtitle="Mỗi cột là một trạng thái, theo thứ tự hồ sơ đi qua; thẻ có viền xanh là việc đang đến lượt bạn. Giờ Việt Nam."
+          help="Mỗi cột là một trạng thái, theo thứ tự hồ sơ đi qua; thẻ có viền xanh là việc đang đến lượt bạn. Giờ Việt Nam."
         />
         <Suspense>
           <PipelineBoard />

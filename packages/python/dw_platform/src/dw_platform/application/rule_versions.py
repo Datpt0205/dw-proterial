@@ -62,6 +62,11 @@ Layer = Literal["platform", "tenant"]
 ONE_OPEN_PROPOSAL: Final = "one_open_proposal"
 # The rule a refusal reports when a version takes a number the platform ships.
 PLATFORM_VERSION_REUSED: Final = "platform_version_reused"
+# Worded here, where it is raised, for every context's settings page alike.
+REUSED_WORDS: Final = (
+    "Số phiên bản này trùng với một phiên bản nền tảng phát hành:"
+    " đặt số khác cho phiên bản của công ty."
+)
 # What `rule_versions.comment` holds (`ck_rule_versions_comment`).
 COMMENT_LIMIT: Final = 500
 # The time a refusal names a proposal's moment in: the plant's.
@@ -500,7 +505,7 @@ class RuleVersionEngine:
         policy = self.validated(key, document)
         if self.book.ships(key, policy.ref):
             raise ConflictError(
-                "a tenant version needs a number the platform does not ship",
+                REUSED_WORDS,
                 details={"key": key, "rule": PLATFORM_VERSION_REUSED},
             )
         unready = await self.checks.unready(ContextScope.of(context), key, policy)
@@ -718,7 +723,7 @@ class RuleDecisionGuard:
         if decision.approve:
             if self.book.ships(version.key, version.ref):
                 raise ConflictError(
-                    "the platform now ships this version number",
+                    REUSED_WORDS,
                     details={
                         "version_id": str(version.version_id),
                         "rule": PLATFORM_VERSION_REUSED,

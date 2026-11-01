@@ -22,7 +22,7 @@ import {
   SendOutlined,
 } from "@ant-design/icons";
 import type { Approval, PurchaseCase, PurchasingSchemas } from "@dw/api-client";
-import { PageHeader, StatusTag } from "@dw/ui";
+import { InfoTip, PageHeader, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { formatDate, formatDateTime } from "../../../../lib/dates";
 import { errorMessage } from "../../../../lib/error-message";
@@ -163,18 +163,21 @@ function NextStep({
   ) => {
     const why = hasScope(scope) ? null : "Vai của bạn không gồm bước này.";
     return (
-      <Tooltip title={why}>
-        <Button
-          type="primary"
-          size="large"
-          icon={icon}
-          disabled={why !== null || (pending !== null && pending !== id)}
-          loading={pending === id}
-          onClick={() => void act(id, run, done)}
-        >
-          {label}
-        </Button>
-      </Tooltip>
+      <Flex gap={8} align="center" wrap>
+        <Tooltip title={why}>
+          <Button
+            type="primary"
+            size="large"
+            icon={icon}
+            disabled={why !== null || (pending !== null && pending !== id)}
+            loading={pending === id}
+            onClick={() => void act(id, run, done)}
+          >
+            {label}
+          </Button>
+        </Tooltip>
+        {why ? <Typography.Text role="note">{why}</Typography.Text> : null}
+      </Flex>
     );
   };
 
@@ -192,8 +195,7 @@ function NextStep({
   let body: React.ReactNode = null;
   let say = "";
   if (c.status === "received" && reviewPending) {
-    say =
-      "DW2 đã đọc yêu cầu này từ lời người viết. Xem lại các dòng hàng bên dưới, rồi cho DW2 đi tiếp.";
+    say = "DW2 đọc yêu cầu này từ thư: xem lại các dòng hàng.";
     body = button(
       "review",
       "Đã xem, cho DW2 gửi duyệt",
@@ -203,7 +205,7 @@ function NextStep({
       "Đã ghi bạn xem lại yêu cầu",
     );
   } else if (c.status === "received") {
-    say = "Yêu cầu đã nhận. Gửi duyệt để người duyệt theo số tiền quyết định.";
+    say = "Chờ gửi duyệt.";
     body = button(
       "submit",
       "Gửi duyệt",
@@ -232,8 +234,7 @@ function NextStep({
       />
     );
   } else if (c.status === "approved") {
-    say =
-      "Đã duyệt. Soạn thư hỏi giá cho các nhà cung cấp trong danh mục; người mua gửi thư.";
+    say = "Đã duyệt: soạn thư hỏi giá.";
     body = button(
       "rfq",
       "Soạn thư hỏi giá",
@@ -243,10 +244,9 @@ function NextStep({
       "Đã soạn thư hỏi giá",
     );
   } else if (c.status === "rfq_drafted") {
-    say =
-      "Đang hỏi giá: ghi báo giá nhận được, rồi chọn nhà cung cấp cho từng dòng ở bảng so sánh.";
+    say = "Ghi báo giá nhận được, rồi chọn nhà cung cấp ở bảng so sánh.";
   } else if (c.status === "supplier_selected") {
-    say = "Đã chọn nhà cung cấp. Soạn PO nháp và file nhập Bravo.";
+    say = "Đã chọn nhà cung cấp: soạn PO.";
     body = button(
       "po",
       "Soạn PO",
@@ -256,8 +256,7 @@ function NextStep({
       "Đã soạn PO nháp",
     );
   } else if (c.status === "po_drafted") {
-    say =
-      "PO nháp đã soạn. Tải file Bravo và nhập vào Bravo; DW2 không ghi gì vào Bravo.";
+    say = "Tải file Bravo và nhập vào Bravo.";
     body = <BravoDownload c={c} />;
   } else if (c.status === "rejected") {
     say = `Yêu cầu đã bị từ chối${c.decision?.comment ? `: ${c.decision.comment}` : "."}`;
@@ -482,8 +481,11 @@ function CheckCard({ c }: { c: PurchaseCase }) {
           />
         ) : (
           <Typography.Text>
-            Không có điểm nào cần lưu ý trong các kiểm tra DW2 chạy (mã hàng,
-            giá tham chiếu, loại tiền, ngày cần, ngân sách).
+            Không có điểm cần lưu ý{" "}
+            <InfoTip label="Đối chiếu đã kiểm những gì">
+              DW2 kiểm mã hàng, giá tham chiếu, loại tiền, ngày cần và ngân
+              sách.
+            </InfoTip>
           </Typography.Text>
         )}
         <Table

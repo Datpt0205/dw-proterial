@@ -112,7 +112,8 @@ function Layouts() {
       <PageHeader
         breadcrumb={salesCrumbs("Mẫu PO")}
         title="Mẫu PO của khách"
-        subtitle={`${rows.filter((l) => l.status === "approved").length} mẫu đang dùng · ${rows.filter((l) => l.status === "proposed").length} mẫu chờ duyệt. DW1 tự học mẫu PO của khách ở PO đầu tiên khi mọi kiểm tra đều qua; vài PO đầu đọc theo mẫu mới được đánh dấu để Sales xác nhận. Mẫu do người lập (khi DW1 không đọc được) vẫn cần Trưởng bộ phận duyệt.`}
+        subtitle={`${rows.filter((l) => l.status === "approved").length} mẫu đang dùng · ${rows.filter((l) => l.status === "proposed").length} mẫu chờ duyệt`}
+        help="DW1 tự học mẫu PO của khách ở PO đầu tiên khi mọi kiểm tra đều qua; vài PO đầu đọc theo mẫu mới được đánh dấu để Sales xác nhận. Mẫu do người lập (khi DW1 không đọc được) vẫn cần Trưởng bộ phận duyệt."
       />
       <ActionError error={error} />
       {layouts.error ? (
