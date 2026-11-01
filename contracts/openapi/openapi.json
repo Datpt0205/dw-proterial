@@ -1111,6 +1111,27 @@
         "title": "AuditEventView",
         "type": "object"
       },
+      "AutomationLevel": {
+        "enum": [
+          "ai_auto",
+          "ai_review",
+          "person"
+        ],
+        "title": "AutomationLevel",
+        "type": "string"
+      },
+      "AutomationStep": {
+        "description": "The steps of DW2 that have a switch: each one code reads where the\nstep happens. The other steps of the twelve (CONTEXT.md, \"Automation\")\nget theirs the day they are built, never before (failure-modes #1).",
+        "enum": [
+          "mail_sorting",
+          "pr_drafting",
+          "submission",
+          "rfq",
+          "po_drafting"
+        ],
+        "title": "AutomationStep",
+        "type": "string"
+      },
       "Body_submit_feedback_api_v1_feedback_post": {
         "properties": {
           "images": {
@@ -11542,10 +11563,19 @@
         "title": "PurchasingKeyInForce",
         "type": "object"
       },
+      "PurchasingModelStep": {
+        "description": "The model calls a step's `ai_auto` waits on, each measured on its own\n(`dw_purchasing.application.automation.BARS`).",
+        "enum": [
+          "purchasing_pr_mail_reading"
+        ],
+        "title": "PurchasingModelStep",
+        "type": "string"
+      },
       "PurchasingRuleKey": {
         "description": "What a tenant may hold its own version of.",
         "enum": [
-          "purchasing_rules"
+          "purchasing_rules",
+          "purchasing_automation"
         ],
         "title": "PurchasingRuleKey",
         "type": "string"
@@ -15051,6 +15081,57 @@
         "title": "StepId",
         "type": "string"
       },
+      "StepLevelView": {
+        "description": "One step's switch as the settings page shows it: the level set, the\nlevel it runs at now, why they differ, and how far it may go.",
+        "properties": {
+          "ceiling": {
+            "$ref": "#/components/schemas/AutomationLevel"
+          },
+          "chosen": {
+            "$ref": "#/components/schemas/AutomationLevel"
+          },
+          "level": {
+            "$ref": "#/components/schemas/AutomationLevel"
+          },
+          "model_steps": {
+            "items": {
+              "$ref": "#/components/schemas/PurchasingModelStep"
+            },
+            "title": "Model Steps",
+            "type": "array"
+          },
+          "step": {
+            "$ref": "#/components/schemas/AutomationStep"
+          },
+          "waiting_on": {
+            "items": {
+              "$ref": "#/components/schemas/PurchasingModelStep"
+            },
+            "title": "Waiting On",
+            "type": "array"
+          },
+          "why": {
+            "enum": [
+              "set",
+              "not_measured",
+              "unreadable"
+            ],
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "chosen",
+          "level",
+          "why",
+          "ceiling",
+          "model_steps",
+          "waiting_on"
+        ],
+        "title": "StepLevelView",
+        "type": "object"
+      },
       "StepModelView": {
         "description": "One model step of a process step, read-only.",
         "properties": {
@@ -15738,6 +15819,27 @@
           "added_at"
         ],
         "title": "SupportStaffView",
+        "type": "object"
+      },
+      "SwitchesView": {
+        "properties": {
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepLevelView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ref",
+          "steps"
+        ],
+        "title": "SwitchesView",
         "type": "object"
       },
       "TargetView": {
@@ -19944,6 +20046,27 @@
         "summary": "List Users",
         "tags": [
           "platform"
+        ]
+      }
+    },
+    "/api/v1/purchasing/automation": {
+      "get": {
+        "operationId": "automation_api_v1_purchasing_automation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Automation",
+        "tags": [
+          "purchasing"
         ]
       }
     },

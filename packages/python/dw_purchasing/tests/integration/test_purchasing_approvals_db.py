@@ -34,7 +34,7 @@ from dw_purchasing.adapters.assembly import request_decisions, request_settlemen
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.persistence.store import SqlPurchasingStore
-from dw_purchasing.adapters.policy_files import PolicyFiles
+from dw_purchasing.adapters.policy_files import platform_rule_book
 from dw_purchasing.application.access import Gate
 from dw_purchasing.application.approvals import (
     APPROVAL_PREFIX,
@@ -42,7 +42,6 @@ from dw_purchasing.application.approvals import (
     RequestApprovals,
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
-from dw_purchasing.application.rules import released_book
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.testing.world import BUYER, Authz, ScriptedModel, caller
 
@@ -59,9 +58,8 @@ HEAD = uuid.UUID(int=0x4EAD)
 def _services(
     sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
 ) -> tuple[PurchaseRequests, RequestApprovals, ApproveAndResumeService]:
-    files = PolicyFiles.load(REPO / "configs/policies")
     store = SqlPurchasingStore(sessions, SqlAuditRepository, SqlApprovalRepository)
-    book = released_book(files.current(), files.by_ref, SqlRuleVersionLookup(sessions))
+    book = platform_rule_book(REPO / "configs/policies", SqlRuleVersionLookup(sessions))
     clock, ids = FixedClock(NOW), Uuid4Generator()
     intake = PurchaseRequests(
         uow=store,

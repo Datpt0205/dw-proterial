@@ -1080,6 +1080,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/automation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Automation */
+        get: operations["automation_api_v1_purchasing_automation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/mail": {
         parameters: {
             query?: never;
@@ -1819,6 +1836,19 @@ export interface components {
             /** Trace Id */
             trace_id: string | null;
         };
+        /**
+         * AutomationLevel
+         * @enum {string}
+         */
+        AutomationLevel: "ai_auto" | "ai_review" | "person";
+        /**
+         * AutomationStep
+         * @description The steps of DW2 that have a switch: each one code reads where the
+         *     step happens. The other steps of the twelve (CONTEXT.md, "Automation")
+         *     get theirs the day they are built, never before (failure-modes #1).
+         * @enum {string}
+         */
+        AutomationStep: "mail_sorting" | "pr_drafting" | "submission" | "rfq" | "po_drafting";
         /** Body_submit_feedback_api_v1_feedback_post */
         Body_submit_feedback_api_v1_feedback_post: {
             /**
@@ -3095,11 +3125,18 @@ export interface components {
             ref: string;
         };
         /**
+         * PurchasingModelStep
+         * @description The model calls a step's `ai_auto` waits on, each measured on its own
+         *     (`dw_purchasing.application.automation.BARS`).
+         * @enum {string}
+         */
+        PurchasingModelStep: "purchasing_pr_mail_reading";
+        /**
          * PurchasingRuleKey
          * @description What a tenant may hold its own version of.
          * @enum {string}
          */
-        PurchasingRuleKey: "purchasing_rules";
+        PurchasingRuleKey: "purchasing_rules" | "purchasing_automation";
         /**
          * PurchasingRuleVersionView
          * @description A version as the settings page lists it.
@@ -3408,6 +3445,26 @@ export interface components {
              */
             occurred_at: string;
         };
+        /**
+         * StepLevelView
+         * @description One step's switch as the settings page shows it: the level set, the
+         *     level it runs at now, why they differ, and how far it may go.
+         */
+        StepLevelView: {
+            ceiling: components["schemas"]["AutomationLevel"];
+            chosen: components["schemas"]["AutomationLevel"];
+            level: components["schemas"]["AutomationLevel"];
+            /** Model Steps */
+            model_steps: components["schemas"]["PurchasingModelStep"][];
+            step: components["schemas"]["AutomationStep"];
+            /** Waiting On */
+            waiting_on: components["schemas"]["PurchasingModelStep"][];
+            /**
+             * Why
+             * @enum {string}
+             */
+            why: "set" | "not_measured" | "unreadable";
+        };
         /** SupportGrantModel */
         SupportGrantModel: {
             /** Activated At */
@@ -3538,6 +3595,13 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /** SwitchesView */
+        SwitchesView: {
+            /** Ref */
+            ref: string;
+            /** Steps */
+            steps: components["schemas"]["StepLevelView"][];
         };
         /** TemporaryPasswordView */
         TemporaryPasswordView: {
@@ -5789,6 +5853,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRefView"][];
+                };
+            };
+        };
+    };
+    automation_api_v1_purchasing_automation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwitchesView"];
                 };
             };
         };

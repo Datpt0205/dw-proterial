@@ -33,7 +33,7 @@ from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation
+from dw_agent_runtime.adapters.model_interpretation import GatewayInterpretation, ProfileStepModel
 from dw_agent_runtime.adapters.model_measurements import SqlModelMeasurements
 from dw_agent_runtime.approval_flow import ApproveAndResumeService
 from dw_agent_runtime.model.interpretation import InterpretationPort
@@ -54,7 +54,6 @@ from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
 from dw_sales.adapters.mail_folder import LocalDropFolder
 from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
-from dw_sales.adapters.model_interpretation import ProfileStepModel
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.persistence.activity import SqlStepActivityReader
 from dw_sales.adapters.persistence.assistant import SqlAssistantStoreFactory
