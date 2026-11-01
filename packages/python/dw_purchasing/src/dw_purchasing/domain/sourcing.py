@@ -36,11 +36,21 @@ class RfqDraft(BaseModel):
     supplier_code: Code
     to: tuple[Address, ...] = Field(min_length=1)
     line_nos: tuple[int, ...] = Field(min_length=1)
-    subject: str = Field(min_length=1, max_length=300)
-    body: str = Field(min_length=1, max_length=8000)
-    # The model's words, kept because every figure was in the facts and no
-    # price was named; else code's template.
-    written_by: Literal["model", "template"]
+    subject: str = Field(default="", max_length=300)
+    body: str = Field(default="", max_length=8000)
+    # Who wrote the words: the model (kept because every figure was in the
+    # facts and no price was named), a person, or nobody yet (`pending`: the
+    # model had none or its words were refused, so a buyer writes them;
+    # never a fixed template, Đạt 2026-11-01). `template` is how drafts
+    # stamped before that read.
+    written_by: Literal["model", "person", "pending", "template"]
+
+    @model_validator(mode="after")
+    def _words(self) -> Self:
+        written = bool(self.subject.strip()) and bool(self.body.strip())
+        if (self.written_by == "pending") == written:
+            raise ValueError("a pending draft holds no words, any other holds both")
+        return self
 
 
 class RfqRound(BaseModel):

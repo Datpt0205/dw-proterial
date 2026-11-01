@@ -428,7 +428,7 @@ def grade_sourcing_missing_evidence(
 ) -> GradeResult:
     """A price the reply does not hold, or only an item the supplier was not
     asked about, records nothing; RFQ words naming an amount or a figure the
-    facts lack give way to code's template."""
+    facts lack leave the draft for a buyer to write, never a template."""
 
     async def work() -> dict[str, object]:
         found: dict[str, object] = {}

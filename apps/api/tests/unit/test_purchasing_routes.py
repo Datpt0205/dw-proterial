@@ -153,6 +153,11 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("POST", "/requests", FORM),
         ("GET", "/mail", None),
         ("GET", "/suppliers", None),
+        (
+            "POST",
+            f"/requests/{uuid.uuid4()}/rfq/KIMURA",
+            {"case_version": 1, "subject": "s", "body": "b"},
+        ),
         ("POST", "/mail/P01/read", None),
         ("GET", f"/requests/{uuid.uuid4()}/check", None),
         ("POST", f"/requests/{uuid.uuid4()}/review", {"case_version": 1}),
@@ -283,7 +288,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 23
+    assert len(routes) == 24
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]

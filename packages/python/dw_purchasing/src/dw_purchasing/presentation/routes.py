@@ -94,6 +94,16 @@ class RfqBody(BaseModel):
     suppliers: list[Choice] = Field(default_factory=list, max_length=100)
 
 
+class RfqWordsBody(BaseModel):
+    """A buyer's words for one supplier's RFQ."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_version: int = Field(ge=1)
+    subject: str = Field(min_length=1, max_length=300)
+    body: str = Field(min_length=1, max_length=8000)
+
+
 class OfferBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -149,6 +159,7 @@ class RuleChange(BaseModel):
 
 _MessageId = Annotated[str, PathParam(pattern=r"^[!-~]{1,512}$")]
 _RuleKey = Annotated[str, PathParam(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+_SupplierCode = Annotated[str, PathParam(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$")]
 
 
 def build_router(
@@ -277,6 +288,29 @@ def build_router(
     ) -> CaseChange:
         change = await svc.sourcing.draft_rfq(
             context, case_id, case_version=body.case_version, named=body.suppliers
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/requests/{case_id}/rfq/{supplier_code}",
+        response_model=CaseChange,
+        dependencies=rfq,
+    )
+    async def write_rfq(
+        case_id: uuid.UUID,
+        supplier_code: _SupplierCode,
+        body: RfqWordsBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChange:
+        change = await svc.sourcing.write_rfq(
+            context,
+            case_id,
+            supplier_code,
+            subject=body.subject,
+            body=body.body,
+            case_version=body.case_version,
         )
         return await idem.record(change)
 

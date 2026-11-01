@@ -65,9 +65,11 @@ dw_sales ADR 0005 as DW2 applies it).
 
 - **RFQ (yêu cầu báo giá)**: one drafted mail per supplier code picks from
   the master data (supplies the item, quoted it or was paid for it, at most
-  the rules' number per line), to the supplier's contacts. The model words
-  it from code's facts; kept only when every figure is in the facts and no
-  amount is named, else code's template. DW2 sends nothing.
+  the rules' number per line) or the buyer names for a line, to the
+  supplier's contacts. The model words it from code's facts; kept only when
+  every figure is in the facts and no amount is named, else the draft waits
+  for the buyer to write it (`pending`), never a fixed template. DW2 sends
+  nothing.
 - **Offer (báo giá)**: one supplier's unit price, currency, lead time and
   validity for one line; typed by a buyer, or read from the supplier's
   verified reply (spans, tied to the lines that supplier was asked for).
