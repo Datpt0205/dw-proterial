@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -34,6 +35,7 @@ import { useCachedResource } from "../../../../lib/use-cached-resource";
 import { purchasingApi } from "../../_lib/api";
 import { money } from "../../_lib/format";
 import { SCOPE } from "../../_lib/scopes";
+import type { Mark } from "../../_lib/labels";
 import { MarkTag } from "../../_components/tags";
 
 /**
@@ -53,7 +55,7 @@ export function Sourcing({
 }) {
   return (
     <>
-      {c.rfq ? <RfqCard c={c} /> : null}
+      {c.rfq ? <RfqCard c={c} onChanged={onChanged} /> : null}
       {c.rfq ? <OffersCard c={c} onChanged={onChanged} /> : null}
       {c.offers.length ? <ComparisonCard c={c} onChanged={onChanged} /> : null}
     </>
@@ -124,14 +126,37 @@ export function NamedSuppliers({
   );
 }
 
-function RfqCard({ c }: { c: PurchaseCase }) {
+type Draft = NonNullable<PurchaseCase["rfq"]>["drafts"][number];
+
+const DRAFT_MARK: Record<
+  Draft["written_by"],
+  { mark: Mark; tip: string } | null
+> = {
+  model: {
+    mark: "machine_written",
+    tip: "DW2 viết thư này từ dữ liệu của hệ thống; không ghi số tiền nào.",
+  },
+  person: { mark: "person", tip: "Người mua viết thư này." },
+  template: { mark: "template", tip: "Thư theo mẫu cố định (hồ sơ cũ)." },
+  pending: null,
+};
+
+function RfqCard({ c, onChanged }: { c: PurchaseCase; onChanged: () => void }) {
   const rfq = c.rfq!;
+  const pending = rfq.drafts.filter((d) => d.written_by === "pending").length;
   return (
     <Card
       size="small"
       title={`Thư hỏi giá (${rfq.drafts.length}) · hạn trả lời ${formatDate(rfq.reply_by)}`}
     >
       <Flex vertical gap={8}>
+        {pending ? (
+          <Alert
+            type="warning"
+            showIcon
+            title={`${pending} thư DW2 chưa viết được: bạn viết rồi gửi.`}
+          />
+        ) : null}
         {rfq.unsourced.length ? (
           <Typography.Text>
             Dòng {rfq.unsourced.join(", ")} chưa có nhà cung cấp trong danh mục.
@@ -139,6 +164,9 @@ function RfqCard({ c }: { c: PurchaseCase }) {
         ) : null}
         <Collapse
           size="small"
+          defaultActiveKey={rfq.drafts
+            .filter((d) => d.written_by === "pending")
+            .map((d) => d.supplier_code)}
           items={rfq.drafts.map((d) => ({
             key: d.supplier_code,
             label: (
@@ -146,36 +174,121 @@ function RfqCard({ c }: { c: PurchaseCase }) {
                 <span>
                   {d.supplier_code} · dòng {d.line_nos.join(", ")}
                 </span>
-                <MarkTag
-                  mark={
-                    d.written_by === "model" ? "machine_written" : "template"
-                  }
-                  tip={
-                    d.written_by === "model"
-                      ? "DW2 viết thư này từ dữ liệu của hệ thống; không ghi số tiền nào."
-                      : "Thư theo mẫu cố định, vì bản máy viết không qua được kiểm tra."
-                  }
-                />
+                {DRAFT_MARK[d.written_by] ? (
+                  <MarkTag
+                    mark={DRAFT_MARK[d.written_by]!.mark}
+                    tip={DRAFT_MARK[d.written_by]!.tip}
+                  />
+                ) : (
+                  <Typography.Text>Chưa có thư</Typography.Text>
+                )}
               </Flex>
             ),
-            children: (
-              <Flex vertical gap={4}>
-                <Typography.Text>
-                  Gửi: {d.to.join(", ") || "Chưa có địa chỉ"}
-                </Typography.Text>
-                <Typography.Text strong>{d.subject}</Typography.Text>
-                <Typography.Paragraph
-                  className="mb-0"
-                  style={{ whiteSpace: "pre-wrap" }}
-                >
-                  {d.body}
-                </Typography.Paragraph>
-              </Flex>
-            ),
+            children: <DraftWords c={c} d={d} onChanged={onChanged} />,
           }))}
         />
       </Flex>
     </Card>
+  );
+}
+
+/** One draft: its words, and the buyer's own in place of them on a click. */
+function DraftWords({
+  c,
+  d,
+  onChanged,
+}: {
+  c: PurchaseCase;
+  d: Draft;
+  onChanged: () => void;
+}) {
+  const { hasScope } = useAuth();
+  const { message } = App.useApp();
+  const keys = useIdempotencyKeys();
+  const [editing, setEditing] = useState(d.written_by === "pending");
+  const [subject, setSubject] = useState(d.subject);
+  const [body, setBody] = useState(d.body);
+  const [pending, setPending] = useState(false);
+  const may = hasScope(SCOPE.rfq) && c.status === "rfq_drafted";
+
+  async function save() {
+    const words = { subject, body };
+    const id = `rfq-words:${c.case_id}:${d.supplier_code}`;
+    setPending(true);
+    try {
+      await purchasingApi().writeRfq(
+        c.case_id,
+        d.supplier_code,
+        words,
+        c.case_version,
+        keys.keyFor(id, words),
+      );
+      keys.settle(id);
+      message.success("Đã lưu thư hỏi giá");
+      setEditing(false);
+      onChanged();
+    } catch (error) {
+      message.error(errorMessage(error));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Flex vertical gap={6}>
+      <Typography.Text>
+        Gửi: {d.to.join(", ") || "Chưa có địa chỉ"}
+      </Typography.Text>
+      {editing && may ? (
+        <>
+          <Input
+            aria-label={`Tiêu đề thư gửi ${d.supplier_code}`}
+            placeholder="Tiêu đề"
+            maxLength={300}
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+          />
+          <Input.TextArea
+            aria-label={`Nội dung thư gửi ${d.supplier_code}`}
+            placeholder="Nội dung thư hỏi giá"
+            autoSize={{ minRows: 5, maxRows: 14 }}
+            maxLength={8000}
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+          />
+          <Flex gap={8}>
+            <Button
+              type="primary"
+              loading={pending}
+              disabled={!subject.trim() || !body.trim()}
+              onClick={() => void save()}
+            >
+              Lưu thư
+            </Button>
+            {d.written_by !== "pending" ? (
+              <Button onClick={() => setEditing(false)}>Thôi</Button>
+            ) : null}
+          </Flex>
+        </>
+      ) : (
+        <>
+          <Typography.Text strong>{d.subject}</Typography.Text>
+          <Typography.Paragraph
+            className="mb-0"
+            style={{ whiteSpace: "pre-wrap" }}
+          >
+            {d.body}
+          </Typography.Paragraph>
+          {may ? (
+            <Flex>
+              <Button size="small" onClick={() => setEditing(true)}>
+                Sửa thư
+              </Button>
+            </Flex>
+          ) : null}
+        </>
+      )}
+    </Flex>
   );
 }
 

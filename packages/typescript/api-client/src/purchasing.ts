@@ -143,6 +143,21 @@ export class PurchasingApi {
     );
   }
 
+  /** A buyer's own words for one supplier's RFQ (DW2 sends nothing). */
+  writeRfq(
+    caseId: string,
+    supplierCode: string,
+    words: { subject: string; body: string },
+    caseVersion: number,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}">(
+      `${BASE}/requests/${enc(caseId)}/rfq/${enc(supplierCode)}`,
+      { case_version: caseVersion, ...words },
+      idempotencyKey,
+    );
+  }
+
   /** The suppliers the company knows, by code and name, to name one for a line. */
   suppliers() {
     return this.get<"/api/v1/purchasing/suppliers">(`${BASE}/suppliers`);

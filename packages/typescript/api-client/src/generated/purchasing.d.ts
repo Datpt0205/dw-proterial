@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write Rfq */
+        post: operations["write_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/requests/{case_id}/selection": {
         parameters: {
             query?: never;
@@ -1125,11 +1142,17 @@ export interface components {
          * @description One supplier's RFQ: who receives it, which lines, and the words.
          */
         RfqDraft: {
-            /** Body */
+            /**
+             * Body
+             * @default
+             */
             body: string;
             /** Line Nos */
             line_nos: number[];
-            /** Subject */
+            /**
+             * Subject
+             * @default
+             */
             subject: string;
             /** Supplier Code */
             supplier_code: string;
@@ -1139,7 +1162,7 @@ export interface components {
              * Written By
              * @enum {string}
              */
-            written_by: "model" | "template";
+            written_by: "model" | "person" | "pending" | "template";
         };
         /** RfqRound */
         RfqRound: {
@@ -1165,6 +1188,18 @@ export interface components {
              * @default []
              */
             unsourced: number[];
+        };
+        /**
+         * RfqWordsBody
+         * @description A buyer's words for one supplier's RFQ.
+         */
+        RfqWordsBody: {
+            /** Body */
+            body: string;
+            /** Case Version */
+            case_version: number;
+            /** Subject */
+            subject: string;
         };
         /**
          * RuleChange
@@ -1816,6 +1851,45 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RfqBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                supplier_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RfqWordsBody"];
             };
         };
         responses: {

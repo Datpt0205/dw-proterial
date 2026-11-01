@@ -5,8 +5,9 @@
   at most the rules' number), the recipients are each supplier's contacts,
   and the reply date is the rules'. The model words each mail from code's
   facts (`purchasing.rfq_mail@1.0.0`); the words are kept only when every
-  figure is in the facts and no amount is named, else code's template. Nothing
-  is sent: a buyer sends each draft.
+  figure is in the facts and no amount is named; else the draft waits for a
+  buyer to write it (`write_rfq`), never a fixed template. Nothing is sent: a
+  buyer sends each draft.
 - **Record an offer**: typed by a buyer (`record_offer`), or read from a
   supplier's reply (`read_offer_mail`). A reply counts only from a verified
   sender whose domain is one of an asked supplier's; the model copies spans
@@ -127,7 +128,7 @@ class SupplierSourcing:
     rules: PurchasingRuleBook
     master: MasterDataPort
     inbox: InboxPort
-    # None where the deployment has no model: RFQs use the template, and a
+    # None where the deployment has no model: a buyer writes each RFQ, and a
     # reply is typed rather than read.
     model: InterpretationPort | None
     worker: Worker
@@ -195,6 +196,43 @@ class SupplierSourcing:
         )
         return _change(drafted)
 
+    async def write_rfq(
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        supplier_code: str,
+        *,
+        subject: str,
+        body: str,
+        case_version: int,
+    ) -> CaseChange:
+        """A buyer's own words for one supplier's RFQ: one DW2 could not write,
+        or the model's changed. Nothing is sent; the buyer sends it."""
+        await self._require(context, case_id)
+        case = await self._case(context, case_id, case_version, CaseStatus.RFQ_DRAFTED)
+        assert case.rfq is not None  # an RFQ_DRAFTED case holds its round
+        drafts = list(case.rfq.drafts)
+        at = next((i for i, d in enumerate(drafts) if d.supplier_code == supplier_code), None)
+        if at is None:
+            raise NotFoundError(
+                "nhà cung cấp này không có thư hỏi giá trong hồ sơ",
+                details={"case_id": str(case_id), "supplier_code": supplier_code},
+            )
+        if not subject.strip() or not body.strip():
+            raise DomainError(
+                "thư hỏi giá cần cả tiêu đề và nội dung",
+                details={"case_id": str(case_id), "rule": "rfq_words_empty"},
+            )
+        drafts[at] = drafts[at].model_copy(
+            update={"subject": subject.strip(), "body": body.strip(), "written_by": "person"}
+        )
+        rfq = case.rfq.model_copy(update={"drafts": tuple(drafts)})
+        written = _moved(case, CaseStatus.RFQ_DRAFTED, rfq=rfq)
+        await self._save(
+            context, case, written, "purchasing.rfq.written", {"supplier": supplier_code}
+        )
+        return _change(written)
+
     async def _draft(
         self,
         context: AccessContext,
@@ -221,7 +259,8 @@ class SupplierSourcing:
         text = json.dumps(facts, ensure_ascii=False)
         words = await self._words(context, case, text)
         if words is None:
-            subject, body, by = *_template(case, supplier, lines, reply_by), "template"
+            # No words a person can stand behind: the buyer writes them.
+            subject, body, by = "", "", "pending"
         else:
             subject, body, by = words.subject, words.body, "model"
         return RfqDraft(
@@ -555,26 +594,3 @@ def _replying(rfq: RfqRound, master: MasterData, domain: str) -> Supplier | None
     asked = [master.supplier(d.supplier_code) for d in rfq.drafts]
     found = [s for s in asked if s is not None and domain in s.domains]
     return found[0] if len(found) == 1 else None
-
-
-def _template(
-    case: PurchaseCase, supplier: Supplier, lines: Sequence[PrLine], reply_by: str
-) -> tuple[str, str]:
-    asked = "\n".join(
-        f"- {line.item_code or ''} {line.description}: {line.quantity.normalize():f} {line.unit}"
-        + (
-            f", cần trước {_day(need_by)}"
-            if (need_by := line.need_by or case.request.need_by)
-            else ""
-        )
-        for line in lines
-    )
-    body = (
-        f"Kính gửi {supplier.name},\n\n"
-        "Phòng Mua hàng đề nghị quý công ty báo giá các mặt hàng sau:\n"
-        f"{asked}\n\n"
-        "Xin gửi đơn giá, đơn vị tiền tệ, thời gian giao hàng và hiệu lực báo giá"
-        f" trước ngày {reply_by}.\n\n"
-        "Trân trọng,\nPhòng Mua hàng"
-    )
-    return f"Yêu cầu báo giá theo {case.request.pr_no}", body

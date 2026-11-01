@@ -103,26 +103,56 @@ async def test_each_supplier_the_master_data_lists_gets_one_draft_for_its_lines(
 
 
 @pytest.mark.parametrize("variant", ["leaks_price", "invents_figure", "names_amount"])
-async def test_words_that_name_a_price_or_invent_a_figure_give_way_to_the_template(
+async def test_words_that_name_a_price_or_invent_a_figure_wait_for_a_buyer_to_write(
     variant: str,
 ) -> None:
+    """Never a fixed template (Đạt, 2026-11-01): words nobody can stand
+    behind leave the draft to a person, its supplier and lines kept."""
     world = _world(words={"PR-2611-004": SOURCING["rfq_words"][variant]})
     case_id = await _drafted(world)
     case = await world.service.case(caller(), case_id)
     assert case.rfq is not None
-    assert {d.written_by for d in case.rfq.drafts} == {"template"}
+    assert {d.written_by for d in case.rfq.drafts} == {"pending"}
     kimura = case.rfq.asked("KIMURA")
-    assert kimura is not None and "Dao cắt cáp DC-200: 4 cái" in kimura.body
-    assert "1.250.000" not in kimura.body and "trước ngày 05/11/2026" in kimura.body
+    assert kimura is not None and (kimura.subject, kimura.body) == ("", "")
+    assert kimura.line_nos == (1,) and kimura.to == ("sales@kimura-tools.example",)
 
 
-async def test_without_a_model_every_draft_is_the_template() -> None:
+async def test_without_a_model_every_draft_waits_for_a_buyer() -> None:
     world = _world()
     case_id = await _approved(world)
     world.model.failure = ModelUnavailableError("down")
     await world.sourcing.draft_rfq(caller(), case_id, case_version=3)
     case = await world.service.case(caller(), case_id)
-    assert case.rfq is not None and {d.written_by for d in case.rfq.drafts} == {"template"}
+    assert case.rfq is not None and {d.written_by for d in case.rfq.drafts} == {"pending"}
+
+
+async def test_a_buyer_writes_a_draft_by_who_may_on_the_version_they_saw() -> None:
+    from dw_kernel.errors import DomainError
+
+    world = _world()
+    case_id = await _approved(world)
+    world.model.failure = ModelUnavailableError("down")
+    await world.sourcing.draft_rfq(caller(), case_id, case_version=3)
+    reader = caller(scopes=frozenset({PurchasingScopes.REQUEST_READ.value}))
+    words = {"subject": "Hỏi giá PR-2611-004", "body": "Kính gửi Kimura, ..."}
+    with pytest.raises(PermissionDeniedError):
+        await world.sourcing.write_rfq(reader, case_id, "KIMURA", case_version=4, **words)
+    with pytest.raises(ConflictError):
+        await world.sourcing.write_rfq(caller(), case_id, "KIMURA", case_version=3, **words)
+    with pytest.raises(NotFoundError):
+        await world.sourcing.write_rfq(caller(), case_id, "NOBODY", case_version=4, **words)
+    with pytest.raises(DomainError):
+        await world.sourcing.write_rfq(
+            caller(), case_id, "KIMURA", case_version=4, subject=" ", body="x"
+        )
+    await world.sourcing.write_rfq(caller(), case_id, "KIMURA", case_version=4, **words)
+    case = await world.service.case(caller(), case_id)
+    assert case.rfq is not None
+    kimura = case.rfq.asked("KIMURA")
+    assert kimura is not None and kimura.written_by == "person"
+    assert (kimura.subject, kimura.body) == (words["subject"], words["body"])
+    assert {d.written_by for d in case.rfq.drafts if d.supplier_code != "KIMURA"} == {"pending"}
 
 
 async def test_only_an_approved_request_is_sent_to_suppliers_by_who_may() -> None:

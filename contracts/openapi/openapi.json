@@ -13550,8 +13550,8 @@
         "description": "One supplier's RFQ: who receives it, which lines, and the words.",
         "properties": {
           "body": {
+            "default": "",
             "maxLength": 8000,
-            "minLength": 1,
             "title": "Body",
             "type": "string"
           },
@@ -13564,8 +13564,8 @@
             "type": "array"
           },
           "subject": {
+            "default": "",
             "maxLength": 300,
-            "minLength": 1,
             "title": "Subject",
             "type": "string"
           },
@@ -13586,6 +13586,8 @@
           "written_by": {
             "enum": [
               "model",
+              "person",
+              "pending",
               "template"
             ],
             "title": "Written By",
@@ -13596,8 +13598,6 @@
           "supplier_code",
           "to",
           "line_nos",
-          "subject",
-          "body",
           "written_by"
         ],
         "title": "RfqDraft",
@@ -13645,6 +13645,36 @@
           "drafts"
         ],
         "title": "RfqRound",
+        "type": "object"
+      },
+      "RfqWordsBody": {
+        "additionalProperties": false,
+        "description": "A buyer's words for one supplier's RFQ.",
+        "properties": {
+          "body": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "subject": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "subject",
+          "body"
+        ],
+        "title": "RfqWordsBody",
         "type": "object"
       },
       "RoleView": {
@@ -21370,6 +21400,87 @@
           }
         },
         "summary": "Draft Rfq",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}": {
+      "post": {
+        "operationId": "write_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "supplier_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+              "title": "Supplier Code",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RfqWordsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Rfq",
         "tags": [
           "purchasing"
         ]

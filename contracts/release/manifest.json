@@ -123,7 +123,7 @@
       "dataset_id": "purchasing_po",
       "files": [
         {
-          "checksum": "3a42564f31ac71f2b4886273437ddf80b9a7e80e9c1b20ad9a40a68f7d4fce7b",
+          "checksum": "8f3ea33e0889b73a8d95280ced42f746cc80abb8dec08bd8e72e477b41e93a50",
           "path": "evals/expected/purchasing_sourcing.json"
         },
         {
@@ -213,7 +213,7 @@
       "dataset_id": "purchasing_sourcing",
       "files": [
         {
-          "checksum": "3a42564f31ac71f2b4886273437ddf80b9a7e80e9c1b20ad9a40a68f7d4fce7b",
+          "checksum": "8f3ea33e0889b73a8d95280ced42f746cc80abb8dec08bd8e72e477b41e93a50",
           "path": "evals/expected/purchasing_sourcing.json"
         },
         {
@@ -751,7 +751,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "d5f711dc03ece020e8c32e3d1448cb62a5d7c7bf",
+  "git_sha": "90576accd9ffc0e87083d5dfc6b6a6c3820e88e0",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
