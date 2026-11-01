@@ -45,6 +45,7 @@ from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
 )
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.identity import context_from
@@ -53,7 +54,6 @@ from dw_sales.adapters.assembly import model_readiness, step_model
 from dw_sales.adapters.mock.fixtures import DATA_DIR
 from dw_sales.adapters.order_rules import load_tenant_order_rules
 from dw_sales.adapters.persistence.measurements import SqlMeasurementLog
-from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.persistence.uow import SqlSalesUnitOfWorkFactory
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.application.access import Gate, sales_scope

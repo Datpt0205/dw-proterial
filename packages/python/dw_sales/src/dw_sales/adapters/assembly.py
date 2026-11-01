@@ -46,6 +46,7 @@ from dw_agent_runtime.registry import (
 )
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.adapters.outbox_folder import FolderOutbox
+from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.application.malware import MalwareScanPort
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
@@ -73,7 +74,6 @@ from dw_sales.adapters.persistence.recorded_converts import SqlRecordedConverts
 from dw_sales.adapters.persistence.recorded_quotations import SqlRecordedQuotations
 from dw_sales.adapters.persistence.recorded_senders import SqlRecordedSenders
 from dw_sales.adapters.persistence.rule_drafts import SqlRuleDraftScopes
-from dw_sales.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_sales.adapters.persistence.uow import (
     ApprovalsFactory,
     AuditFactory,

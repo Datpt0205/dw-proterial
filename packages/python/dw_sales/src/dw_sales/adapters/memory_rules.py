@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from dw_kernel.errors import ConflictError
+from dw_platform.application.rule_versions import RuleScope
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import (
     ONE_OPEN_PROPOSAL,
@@ -35,11 +36,11 @@ class MemoryRuleVersions:
     def for_tenant(self, tenant_id: uuid.UUID) -> TenantRuleVersions:
         return TenantRuleVersions(self._held.setdefault(tenant_id, {}))
 
-    async def approved(self, scope: SalesScope, key: RuleKey) -> RuleVersion | None:
+    async def approved(self, scope: RuleScope, key: str) -> RuleVersion | None:
         held = self._held.get(scope.tenant_id.value, {}).values()
         return next((v for v in held if v.key == key and v.status == "approved"), None)
 
-    async def find(self, scope: SalesScope, key: RuleKey, version: str) -> RuleVersion | None:
+    async def find(self, scope: RuleScope, key: str, version: str) -> RuleVersion | None:
         held = self._held.get(scope.tenant_id.value, {}).values()
         return next((v for v in held if v.key == key and v.version == version), None)
 

@@ -49,6 +49,8 @@ async def test_the_application_can_read_the_tables_it_serves(app_engine: AsyncEn
             "platform.workspaces",
             "platform.users",
             "platform.memberships",
+            # Moved from `sales` by 5ef229da512b (ADR 0013): every context's versions.
+            "platform.rule_versions",
             "knowledge.documents",
             "memory.items",
             *_SALES_TABLES,
@@ -71,8 +73,6 @@ _SALES_TABLES = (
     "sales.case_events",
     # Migration 63242ec52c4b (ticket 30): the PO layouts people map and decide.
     "sales.po_layouts",
-    # Migration 57a241ea182b (ticket 19): a tenant's own rule versions.
-    "sales.rule_versions",
     # Migration 0a78ca5e96d3 (ticket 25): each message's processing job.
     "sales.processing_jobs",
     # Migration d2b1394c67b1 (ticket 42): what DW1's follow-ups delivered.
@@ -138,7 +138,6 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
         "messages",
         "worker_state",
         "po_layouts",
-        "rule_versions",
         "processing_jobs",
         "catalog_snapshots",
         "rule_drafts",
@@ -631,3 +630,25 @@ async def test_support_access_privileges(db_urls: DatabaseUrls) -> None:
                 assert not await table("dw_provisioner", "audit_events", verb), verb
     finally:
         await migrator.dispose()
+
+
+async def test_the_application_writes_the_rule_versions_of_every_context(
+    db_urls: DatabaseUrls,
+) -> None:
+    """`platform.rule_versions` (moved from `sales` by 5ef229da512b, ADR 0013)
+    kept the grants it had: a version is proposed, decided and superseded, so
+    every verb; RLS, not a missing verb, keeps tenants apart."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.connect() as conn:
+            held = {
+                verb
+                for verb in ("SELECT", "INSERT", "UPDATE", "DELETE")
+                if await conn.scalar(
+                    sa.text("SELECT has_table_privilege('dw_app', 'platform.rule_versions', :v)"),
+                    {"v": verb},
+                )
+            }
+    finally:
+        await migrator.dispose()
+    assert held == {"SELECT", "INSERT", "UPDATE", "DELETE"}

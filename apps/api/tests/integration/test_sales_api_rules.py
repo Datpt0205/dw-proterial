@@ -86,18 +86,18 @@ async def rules_api(api: Api, migrator: AsyncEngine) -> AsyncIterator[Api]:
     # approvals they opened, gone.
     async with migrator.begin() as conn:
         await conn.execute(
-            sa.text("DELETE FROM sales.rule_versions WHERE version <> :v"),
+            sa.text("DELETE FROM platform.rule_versions WHERE version <> :v"),
             {"v": DEMO.policy_version},
         )
         await conn.execute(
             sa.text(
                 "DELETE FROM platform.approval_requests WHERE approval_type = 'sales.rules'"
-                " AND id NOT IN (SELECT approval_id FROM sales.rule_versions"
+                " AND id NOT IN (SELECT approval_id FROM platform.rule_versions"
                 " WHERE approval_id IS NOT NULL)"
             )
         )
         await conn.execute(
-            sa.text("UPDATE sales.rule_versions SET status = 'approved' WHERE version = :v"),
+            sa.text("UPDATE platform.rule_versions SET status = 'approved' WHERE version = :v"),
             {"v": DEMO.policy_version},
         )
 
@@ -224,7 +224,7 @@ async def test_proposed_by_a_pic_approved_by_the_head_and_stamped_on_the_next_ca
         with pytest.raises(sa.exc.IntegrityError, match="ck_rule_versions_checker_not_maker"):
             await conn.execute(
                 sa.text(
-                    "UPDATE sales.rule_versions SET status = 'rejected',"
+                    "UPDATE platform.rule_versions SET status = 'rejected',"
                     " decided_by = proposed_by, decided_at = now() WHERE id = :id"
                 ),
                 {"id": own.json()["version_id"]},
@@ -233,21 +233,22 @@ async def test_proposed_by_a_pic_approved_by_the_head_and_stamped_on_the_next_ca
         with pytest.raises(sa.exc.IntegrityError, match="ck_rule_versions_applied_directly"):
             await conn.execute(
                 sa.text(
-                    "UPDATE sales.rule_versions SET status = 'approved', applied_directly = true,"
-                    " decided_by = proposed_by, decided_at = now() WHERE id = :id"
+                    "UPDATE platform.rule_versions SET status = 'approved',"
+                    " applied_directly = true, decided_by = proposed_by, decided_at = now()"
+                    " WHERE id = :id"
                 ),
                 {"id": own.json()["version_id"]},
             )
     async with migrator.begin() as conn:
         with pytest.raises(sa.exc.IntegrityError, match="ck_rule_versions_proposed_has_approval"):
             await conn.execute(
-                sa.text("UPDATE sales.rule_versions SET approval_id = NULL WHERE id = :id"),
+                sa.text("UPDATE platform.rule_versions SET approval_id = NULL WHERE id = :id"),
                 {"id": own.json()["version_id"]},
             )
     async with migrator.begin() as conn:
         with pytest.raises(sa.exc.IntegrityError, match="fk_rule_versions_approval_requests"):
             await conn.execute(
-                sa.text("UPDATE sales.rule_versions SET approval_id = :other WHERE id = :id"),
+                sa.text("UPDATE platform.rule_versions SET approval_id = :other WHERE id = :id"),
                 {"other": uuid.uuid4(), "id": own.json()["version_id"]},
             )
 
@@ -281,9 +282,9 @@ async def test_the_heads_own_version_is_in_force_at_once_and_a_pic_proposes_noth
     assert listed["in_force"]["sales_order_rules"] == "sales_order_rules@9.0.7"
     assert (await order_of(an, "M01"))["rules_version"] == "sales_order_rules@9.0.7"
     async with migrator.begin() as conn:
-        await conn.execute(sa.text("DELETE FROM sales.rule_versions WHERE version = '9.0.7'"))
+        await conn.execute(sa.text("DELETE FROM platform.rule_versions WHERE version = '9.0.7'"))
         await conn.execute(
-            sa.text("UPDATE sales.rule_versions SET status = 'approved' WHERE version = :v"),
+            sa.text("UPDATE platform.rule_versions SET status = 'approved' WHERE version = :v"),
             {"v": DEMO.policy_version},
         )
 
@@ -441,11 +442,11 @@ async def test_the_table_refuses_a_document_naming_no_key_or_another_keys_versio
             with pytest.raises(sa.exc.IntegrityError, match="ck_rule_versions_document"):
                 await conn.execute(
                     sa.text(
-                        "INSERT INTO sales.rule_versions (id, tenant_id, workspace_id, key,"
+                        "INSERT INTO platform.rule_versions (id, tenant_id, workspace_id, key,"
                         " version, document, status, proposed_by, proposed_at)"
                         " SELECT gen_random_uuid(), tenant_id, workspace_id, 'sales_emails',"
                         " '9.9.9', CAST(:document AS jsonb), 'proposed', proposed_by, now()"
-                        " FROM sales.rule_versions LIMIT 1"
+                        " FROM platform.rule_versions LIMIT 1"
                     ),
                     {"document": json.dumps(document)},
                 )
@@ -525,7 +526,7 @@ async def test_tenant_it_is_shown_no_price_bearing_rule_and_cannot_propose_one(
         assert refused.status_code == 403, key
     async with migrator.connect() as conn:
         versions = await conn.scalar(
-            sa.text("SELECT count(*) FROM sales.rule_versions WHERE proposed_by = :u"),
+            sa.text("SELECT count(*) FROM platform.rule_versions WHERE proposed_by = :u"),
             {"u": user_id(TAM)},
         )
     assert versions == 0
@@ -600,7 +601,7 @@ async def test_a_second_proposal_on_a_key_waits_until_the_first_is_decided(
         with pytest.raises(sa.exc.IntegrityError, match="uq_rule_versions_one_proposed"):
             await conn.execute(
                 sa.text(
-                    "UPDATE sales.rule_versions SET status = 'proposed', decided_by = NULL,"
+                    "UPDATE platform.rule_versions SET status = 'proposed', decided_by = NULL,"
                     " decided_at = NULL WHERE id = :id"
                 ),
                 {"id": first.json()["version_id"]},
