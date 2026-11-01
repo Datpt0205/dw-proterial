@@ -42,6 +42,7 @@ from dw_purchasing.application.reapprovals import (
     ReapprovalSettlement,
 )
 from dw_purchasing.application.requesters import RequesterDesk
+from dw_purchasing.application.rule_drafting import RuleWordsDesk
 from dw_purchasing.application.rules import (
     PurchasingRulesService,
     RuleDecisions,
@@ -222,6 +223,7 @@ def services_of(world: World) -> PurchasingServices:
         rules=world.rules,
         switches=world.switches,
         requester=world.requester,
+        words=world.words,
     )
 
 
@@ -246,6 +248,7 @@ class World:
     people: Directory
     reapproval_decisions: ReapprovalDecisions
     reapproval_settlement: ReapprovalSettlement
+    words: RuleWordsDesk
 
 
 def open_world(
@@ -330,4 +333,11 @@ def open_world(
         people,
         ReapprovalDecisions(store),
         ReapprovalSettlement(store, clock, ids),
+        RuleWordsDesk(
+            Gate(Authz()),
+            book,
+            model if with_model else None,
+            Worker("purchasing-dw2", "1.0.0"),
+            ids,
+        ),
     )

@@ -1,0 +1,11 @@
+{
+  "golden": {
+    "limit": [["approval.tiers.0.up_to"], "50000000"],
+    "suppliers": [["rfq.max_suppliers_per_line"], 4]
+  },
+  "injection": ["path_unknown:approver"],
+  "missing_evidence": {
+    "vague": ["nothing_understood"],
+    "switch": ["document_invalid"]
+  }
+}

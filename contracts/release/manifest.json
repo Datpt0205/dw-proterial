@@ -194,6 +194,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "4e81e448545359ea730c28e5ddd3ca48fca51586b3b051b993d5dea5df9255f2",
+      "dataset_id": "purchasing_rule_words",
+      "files": [
+        {
+          "checksum": "d1b85fce78e1de9b08366020e5e5de2efed57495c906738efabdc4ac69517b9d",
+          "path": "evals/expected/purchasing_rule_words.json"
+        },
+        {
+          "checksum": "ce5a4d1a4f5592e5d2ffcdd20e71261fcd8d8c1fe0a6b4712e78b98b5fe6bc4d",
+          "path": "evals/fixtures/cases/purchasing_rule_words.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "90d66fc0f61c8d7c7244ef76b38f308508da246ba608c864f57c3c9ed754bbb9",
       "dataset_id": "purchasing_sourcing",
       "files": [
@@ -736,7 +751,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "530aba4c4a76b822e5fcec41bfd01dd842734cd7",
+  "git_sha": "3611ee9b7a7ec93a1d5a0965bf5ff27b21941dd5",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -958,6 +973,11 @@
     {
       "checksum": "6e69c48f1e5b84ab888004694776be765cdcc8a1c10f650ed4412da22e100901",
       "prompt_id": "purchasing.rfq_mail",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "a649d5d28d42561c1b72bd6e5a47ec6fcb3cde140a6a63d2765000529c263b5b",
+      "prompt_id": "purchasing.rule_change_in_words",
       "version": "1.0.0"
     },
     {

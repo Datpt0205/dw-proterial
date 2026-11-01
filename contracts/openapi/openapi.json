@@ -11843,6 +11843,36 @@
         "title": "PurchasingRuleVersionView",
         "type": "object"
       },
+      "PurchasingRuleWordsBody": {
+        "additionalProperties": false,
+        "description": "What a person wants changed, in their words, and the part it is about.",
+        "properties": {
+          "focus": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus"
+          },
+          "request": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Request",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "PurchasingRuleWordsBody",
+        "type": "object"
+      },
       "PurchasingRulesView": {
         "properties": {
           "keys": {
@@ -17068,6 +17098,66 @@
         "title": "WordsBody",
         "type": "object"
       },
+      "WordsDraft": {
+        "description": "What the settings page shows: the whole document changed, the paths\nthe machine changed (\"Máy đề xuất\"), the version it would be, or the\nproblems that refused it (codes and paths, never a word of the model's).",
+        "properties": {
+          "base_ref": {
+            "title": "Base Ref",
+            "type": "string"
+          },
+          "changed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "key",
+          "base_ref",
+          "document",
+          "changed",
+          "version",
+          "problems"
+        ],
+        "title": "WordsDraft",
+        "type": "object"
+      },
       "WorkItem": {
         "properties": {
           "action": {
@@ -21517,6 +21607,59 @@
           }
         },
         "summary": "Propose Rules",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/rules/{key}/words": {
+      "post": {
+        "operationId": "rule_in_words_api_v1_purchasing_rules__key__words_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchasingRuleWordsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WordsDraft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rule In Words",
         "tags": [
           "purchasing"
         ]

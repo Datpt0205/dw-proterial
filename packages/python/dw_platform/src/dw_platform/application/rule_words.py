@@ -152,7 +152,9 @@ def apply_changes(
     except ValidationError as invalid:
         return WordsRefused(
             tuple(
-                WordsProblem(code="document_invalid", path=".".join(str(p) for p in e["loc"]))
+                WordsProblem(
+                    code="document_invalid", path=".".join(str(p) for p in e["loc"]) or None
+                )
                 for e in invalid.errors()[:10]
             )
         )
