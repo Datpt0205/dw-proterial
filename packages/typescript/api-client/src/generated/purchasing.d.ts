@@ -361,6 +361,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suppliers */
+        get: operations["suppliers_api_v1_purchasing_suppliers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1093,6 +1110,17 @@ export interface components {
             reviewed_by?: string | null;
         };
         /**
+         * RfqBody
+         * @description The version the buyer saw, and the suppliers they name for a line the
+         *     master data lists nobody for (or one more for a line).
+         */
+        RfqBody: {
+            /** Case Version */
+            case_version: number;
+            /** Suppliers */
+            suppliers?: components["schemas"]["Choice"][];
+        };
+        /**
          * RfqDraft
          * @description One supplier's RFQ: who receives it, which lines, and the words.
          */
@@ -1217,6 +1245,13 @@ export interface components {
              * @enum {string}
              */
             why: "set" | "not_measured" | "unreadable";
+        };
+        /** SupplierName */
+        SupplierName: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
         };
         /** SwitchesView */
         SwitchesView: {
@@ -1780,7 +1815,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CaseVersionBody"];
+                "application/json": components["schemas"]["RfqBody"];
             };
         };
         responses: {
@@ -2002,6 +2037,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suppliers_api_v1_purchasing_suppliers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierName"][];
                 };
             };
         };

@@ -40,7 +40,7 @@ import { CaseHistory } from "../../_components/case-history";
 import { DecideApproval } from "../../_components/decide-approval";
 import { purchasingCrumbs, ScopeGate } from "../../_components/frame";
 import { CaseStatusTag, MarkTag } from "../../_components/tags";
-import { Sourcing } from "./sourcing";
+import { NamedSuppliers, Sourcing } from "./sourcing";
 
 type Check = PurchasingSchemas["CrossCheck"];
 
@@ -130,6 +130,9 @@ function NextStep({
   // Why the last press was refused, kept beside the button: a refusal the
   // person must act on never lives only in a toast (ui-quality §10).
   const [refused, setRefused] = useState<string | null>(null);
+  // Suppliers the buyer names per line, for a line the master data lists
+  // nobody for (or one more for a line).
+  const [named, setNamed] = useState<Record<number, string[]>>({});
 
   async function act(
     id: string,
@@ -235,13 +238,28 @@ function NextStep({
     );
   } else if (c.status === "approved") {
     say = "Đã duyệt: soạn thư hỏi giá.";
-    body = button(
-      "rfq",
-      "Soạn thư hỏi giá",
-      SCOPE.rfq,
-      <FileTextOutlined aria-hidden />,
-      (key) => api.draftRfq(c.case_id, c.case_version, key),
-      "Đã soạn thư hỏi giá",
+    const chosen = Object.entries(named).flatMap(([line, codes]) =>
+      codes.map((code) => ({ line_no: Number(line), supplier_code: code })),
+    );
+    body = (
+      <Flex vertical gap={8} align="start" className="w-full">
+        {button(
+          "rfq",
+          "Soạn thư hỏi giá",
+          SCOPE.rfq,
+          <FileTextOutlined aria-hidden />,
+          (key) => api.draftRfq(c.case_id, c.case_version, key, chosen),
+          "Đã soạn thư hỏi giá",
+        )}
+        {hasScope(SCOPE.rfq) ? (
+          <NamedSuppliers
+            c={c}
+            named={named}
+            onChange={setNamed}
+            open={refused !== null}
+          />
+        ) : null}
+      </Flex>
     );
   } else if (c.status === "rfq_drafted") {
     say = "Ghi báo giá nhận được, rồi chọn nhà cung cấp ở bảng so sánh.";

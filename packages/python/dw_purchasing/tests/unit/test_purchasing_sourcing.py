@@ -387,3 +387,74 @@ async def test_a_sourcing_state_holds_an_approved_decision_only() -> None:
     rejected = case.decision.model_copy(update={"approved": False})
     with pytest.raises(ValidationError):
         type(case).model_validate({**case.model_dump(), "decision": rejected})
+
+
+# ------------------------------------------------- suppliers a buyer names --
+
+
+async def _approved_form(world: World) -> uuid.UUID:
+    """A request for an item the master data does not list, approved."""
+    from dw_purchasing.domain.requests import PrLine, PurchaseRequest
+
+    form = PurchaseRequest(
+        pr_no="PR-2611-090",
+        department="Kho",
+        requester="Trần Văn Kho",
+        budget_code="CC-WH-01",
+        currency="VND",
+        lines=(PrLine(line_no=1, description="Kệ sắt 5 tầng", quantity=Decimal(2), unit="cái"),),
+    )
+    change = await world.service.submit_form(caller(), form)
+    await world.approvals.submit(caller(), change.case_id, case_version=1)
+    case = await world.service.case(caller(), change.case_id)
+    assert case.approval is not None
+    world.store.decide(
+        case.approval.approval_id,
+        tenant_id=ALPHA[0],
+        workspace_id=ALPHA[1],
+        approved=True,
+        decided_by=HEAD,
+        at=datetime(2026, 11, 2, 9, tzinfo=UTC),
+        comment="ok",
+    )
+    await world.settlement.settle(case.approval.approval_id, caller(principal=HEAD))
+    return change.case_id
+
+
+async def test_a_line_no_one_supplies_is_asked_of_the_supplier_the_buyer_names() -> None:
+    world = _world(words={})
+    case_id = await _approved_form(world)
+    version = await _version(world, case_id)
+    with pytest.raises(ConflictError):  # nobody named, nobody listed
+        await world.sourcing.draft_rfq(caller(), case_id, case_version=version)
+    await world.sourcing.draft_rfq(
+        caller(),
+        case_id,
+        case_version=version,
+        named=[Choice(line_no=1, supplier_code="NHUAVIET")],
+    )
+    case = await world.service.case(caller(), case_id)
+    assert case.rfq is not None and case.rfq.unsourced == ()
+    assert [(d.supplier_code, d.line_nos) for d in case.rfq.drafts] == [("NHUAVIET", (1,))]
+
+
+async def test_a_named_supplier_is_one_the_company_knows_for_a_line_of_the_request() -> None:
+    from dw_kernel.errors import DomainError
+
+    world = _world()
+    case_id = await _approved(world)
+    version = await _version(world, case_id)
+    for named in (
+        [Choice(line_no=1, supplier_code="NOBODY")],
+        [Choice(line_no=9, supplier_code="KIMURA")],
+        # Line 1 already asks two; three more pass the rules' three.
+        [Choice(line_no=1, supplier_code=s) for s in ("BAOHO", "NHUAVIET")],
+    ):
+        with pytest.raises(DomainError):
+            await world.sourcing.draft_rfq(caller(), case_id, case_version=version, named=named)
+    await world.sourcing.draft_rfq(
+        caller(), case_id, case_version=version, named=[Choice(line_no=2, supplier_code="KIMURA")]
+    )
+    case = await world.service.case(caller(), case_id)
+    assert case.rfq is not None
+    assert {d.supplier_code: d.line_nos for d in case.rfq.drafts}["KIMURA"] == (1, 2)

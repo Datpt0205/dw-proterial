@@ -60,6 +60,70 @@ export function Sourcing({
   );
 }
 
+/**
+ * The buyer names suppliers for a line (one the master data lists nobody
+ * for, or one more): opened on a click, and by itself when drafting was
+ * refused for want of a supplier. Codes only from the company's list; the
+ * server checks each again.
+ */
+export function NamedSuppliers({
+  c,
+  named,
+  onChange,
+  open,
+}: {
+  c: PurchaseCase;
+  named: Record<number, string[]>;
+  onChange: (named: Record<number, string[]>) => void;
+  open: boolean;
+}) {
+  const list = useCachedResource(
+    "purchasing/suppliers",
+    useCallback(() => purchasingApi().suppliers(), []),
+  );
+  const options = (list.data ?? []).map((s) => ({
+    value: s.code,
+    label: `${s.code} · ${s.name}`,
+  }));
+  return (
+    <Collapse
+      size="small"
+      className="w-full"
+      defaultActiveKey={open ? ["named"] : []}
+      key={open ? "open" : "closed"}
+      items={[
+        {
+          key: "named",
+          label: "Chỉ định nhà cung cấp cho từng dòng",
+          children: (
+            <Flex vertical gap={8}>
+              {list.error ? <LoadError error={list.error} compact /> : null}
+              {c.request.lines.map((line) => (
+                <Flex key={line.line_no} vertical gap={2}>
+                  <Typography.Text>
+                    Dòng {line.line_no} · {line.description}
+                  </Typography.Text>
+                  <Select
+                    mode="multiple"
+                    aria-label={`Nhà cung cấp cho dòng ${line.line_no}`}
+                    placeholder="Chọn nhà cung cấp"
+                    loading={list.loading}
+                    options={options}
+                    value={named[line.line_no] ?? []}
+                    onChange={(codes: string[]) =>
+                      onChange({ ...named, [line.line_no]: codes })
+                    }
+                  />
+                </Flex>
+              ))}
+            </Flex>
+          ),
+        },
+      ]}
+    />
+  );
+}
+
 function RfqCard({ c }: { c: PurchaseCase }) {
   const rfq = c.rfq!;
   return (

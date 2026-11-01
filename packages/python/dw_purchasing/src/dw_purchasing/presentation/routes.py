@@ -40,7 +40,7 @@ from dw_purchasing.application.requesters import DraftView, MyRequest
 from dw_purchasing.application.rule_drafting import WordsDraft
 from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
-from dw_purchasing.application.sourcing import ComparisonView, OfferForm
+from dw_purchasing.application.sourcing import ComparisonView, OfferForm, SupplierName
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.requests import PurchaseRequest
 from dw_purchasing.domain.sourcing import Choice
@@ -82,6 +82,16 @@ class CaseVersionBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     case_version: int = Field(ge=1)
+
+
+class RfqBody(BaseModel):
+    """The version the buyer saw, and the suppliers they name for a line the
+    master data lists nobody for (or one more for a line)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_version: int = Field(ge=1)
+    suppliers: list[Choice] = Field(default_factory=list, max_length=100)
 
 
 class OfferBody(BaseModel):
@@ -263,10 +273,16 @@ def build_router(
 
     @router.post("/requests/{case_id}/rfq", response_model=CaseChange, dependencies=rfq)
     async def draft_rfq(
-        case_id: uuid.UUID, body: CaseVersionBody, context: Ctx, svc: Svc, idem: Idem
+        case_id: uuid.UUID, body: RfqBody, context: Ctx, svc: Svc, idem: Idem
     ) -> CaseChange:
-        change = await svc.sourcing.draft_rfq(context, case_id, case_version=body.case_version)
+        change = await svc.sourcing.draft_rfq(
+            context, case_id, case_version=body.case_version, named=body.suppliers
+        )
         return await idem.record(change)
+
+    @router.get("/suppliers", response_model=list[SupplierName], dependencies=rfq)
+    async def suppliers(context: Ctx, svc: Svc) -> list[SupplierName]:
+        return await svc.sourcing.suppliers(context)
 
     @router.post("/requests/{case_id}/offers", response_model=CaseChange, dependencies=rfq)
     async def record_offer(

@@ -144,6 +144,44 @@ def suppliers_for(
     return by_supplier, unsourced
 
 
+def with_named(
+    asked: dict[str, list[int]],
+    unsourced: Sequence[int],
+    named: Sequence[Choice],
+    request: PurchaseRequest,
+    master: MasterData,
+    *,
+    most: int,
+) -> tuple[dict[str, list[int]], list[int]]:
+    """``asked`` with the suppliers a buyer names (for a line nobody is listed
+    for, or one more for a line): each a supplier the company knows, for a
+    line of this request, and at most ``most`` asked per line in all. Raises
+    ``ValueError`` naming the first that is not (``supplier_unknown:<code>``,
+    ``line_unknown:<n>``, ``too_many_suppliers:<n>``)."""
+    known = {s.code for s in master.suppliers}
+    lines = {line.line_no for line in request.lines}
+    merged = {code: list(line_nos) for code, line_nos in asked.items()}
+    for choice in named:
+        if choice.supplier_code not in known:
+            raise ValueError(f"supplier_unknown:{choice.supplier_code}")
+        if choice.line_no not in lines:
+            raise ValueError(f"line_unknown:{choice.line_no}")
+        held = merged.setdefault(choice.supplier_code, [])
+        if choice.line_no not in held:
+            held.append(choice.line_no)
+    per_line: dict[int, int] = {}
+    for line_nos in merged.values():
+        for line_no in line_nos:
+            per_line[line_no] = per_line.get(line_no, 0) + 1
+    for line_no, count in sorted(per_line.items()):
+        if count > most:
+            raise ValueError(f"too_many_suppliers:{line_no}")
+    return (
+        {code: sorted(line_nos) for code, line_nos in merged.items()},
+        [line_no for line_no in unsourced if line_no not in per_line],
+    )
+
+
 def valid_offers(offers: Sequence[Offer], *, on: date, currency: str) -> list[Offer]:
     """Offers that may be compared or chosen: in the request's currency and
     not expired on ``on``; the latest per (supplier, line)."""

@@ -41,7 +41,7 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     cut_to_tokens,
 )
-from dw_kernel.errors import ConflictError, InfrastructureError, NotFoundError
+from dw_kernel.errors import ConflictError, DomainError, InfrastructureError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
@@ -66,6 +66,7 @@ from dw_purchasing.domain.sourcing import (
     compare,
     suppliers_for,
     valid_offers,
+    with_named,
 )
 
 RFQ_MAIL: Final = PromptRef("purchasing.rfq_mail", "1.0.0")
@@ -86,6 +87,13 @@ class RfqWording(BaseModel):
 
     subject: str = Field(min_length=1, max_length=300)
     body: str = Field(min_length=1, max_length=8000)
+
+
+class SupplierName(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    name: str
 
 
 class OfferForm(BaseModel):
@@ -132,17 +140,31 @@ class SupplierSourcing:
     # ----------------------------------------------------------- the RFQ --
 
     async def draft_rfq(
-        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+        self,
+        context: AccessContext,
+        case_id: uuid.UUID,
+        *,
+        case_version: int,
+        named: Sequence[Choice] = (),
     ) -> CaseChange:
+        """The RFQs of an approved request: to the suppliers the master data
+        lists for each line, and to those the buyer ``named`` (a line nobody
+        is listed for, a supplier more for a line)."""
         await self._require(context, case_id)
         case = await self._case(context, case_id, case_version, CaseStatus.APPROVED)
         rules = await self.rules.resolve(context)
         if rules.rfq is None:
             raise ConflictError(NO_RFQ_RULES, details={"rules_ref": rules.ref, "rule": "no_rfq"})
         master = await self.master.for_context(context)
-        asked, unsourced = suppliers_for(
-            case.request, master, most=rules.rfq.max_suppliers_per_line
-        )
+        most = rules.rfq.max_suppliers_per_line
+        asked, unsourced = suppliers_for(case.request, master, most=most)
+        try:
+            asked, unsourced = with_named(asked, unsourced, named, case.request, master, most=most)
+        except ValueError as exc:
+            raise DomainError(
+                "nhà cung cấp được chọn không hợp lệ cho yêu cầu này",
+                details={"case_id": str(case_id), "rule": str(exc)},
+            ) from None
         if not asked:
             raise ConflictError(
                 "không nhà cung cấp nào trong dữ liệu chủ cung cấp các mặt hàng này",
@@ -349,6 +371,16 @@ class SupplierSourcing:
         return _change(recorded)
 
     # ---------------------------------------------------- compare, choose --
+
+    async def suppliers(self, context: AccessContext) -> list[SupplierName]:
+        """The suppliers the company knows, by code and name, for a buyer to
+        name one for a line: no contact address, no price."""
+        await self.gate.require(context, PurchasingScopes.RFQ_PREPARE, resource_type="supplier")
+        master = await self.master.for_context(context)
+        return [
+            SupplierName(code=s.code, name=s.name)
+            for s in sorted(master.suppliers, key=lambda s: s.code)
+        ]
 
     async def comparison(self, context: AccessContext, case_id: uuid.UUID) -> ComparisonView:
         await self.gate.require(
