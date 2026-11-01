@@ -36,7 +36,8 @@ own file and a row here.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
 - **Next:** DW2 (`purchasing.md`): fns 1–4 + web on mock data (11-01); mail
-  drop, master data, Bravo template, outbox, fns 5–6 next. #13 at deployment.
+  drop, master data, Bravo template, outbox, fns 5–6 next. Questions for
+  Proterial: `docs/proterial/` (local only). #13 at deployment.
 
 ## Decisions Đạt owes
 
@@ -57,7 +58,7 @@ own file and a row here.
   the IP-indemnity clause's wording (carve-outs, cap) with FPT legal;
   DW2 go-live week 4 (contract) vs week 6 (rollout plan); whether the
   rollout plan `.xlsx` stays out of git (repo public).
-- **Purchasing:** rules, retention, requesters, Bravo, readers (`purchasing.md`).
+- **Purchasing:** answers on the Proterial list (`purchasing.md`).
 
 ## How a feature is checked here
 

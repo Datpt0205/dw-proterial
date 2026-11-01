@@ -270,28 +270,38 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   Demo personas: `uv run python -m dw_purchasing.testing.seed_personas`
   (Bình head, Khoa buyer, An requester, Tâm configurer, Giang last tier;
   Dung buyer in Beta).
-- **Owed by the 11-01 principle, not done**: the RFQ mail still falls back
-  to code's template when the model's words fail; by "không viết template
-  cứng" it should instead go to the buyer to write.
+- **Second pass (Đạt, 2026-11-01: "làm hết những gì làm được")**:
+  `50d9cf53` who downloads (`purchasing.po.download`), who reads every
+  request, who decides a rule change are permission sets an admin grants;
+  retention is each tenant's rule (`purchasing_rules@1.6.0`, `retention`),
+  pruned per workspace (`191b591d4ef1`). `8a2bb9d7` DW1 and DW2 pages show
+  what a person acts on, how a page works behind "?" (`@dw/ui` `InfoTip`,
+  `PageHeader.help`; ui-quality §2). `949ccf35` a buyer names suppliers for
+  a line the catalogue lists nobody for. `90576acc` a buyer's paper-request
+  page. `46bf5ba0` an RFQ DW2 cannot word waits for the buyer (`pending`),
+  never a template. The question list for Proterial:
+  `docs/proterial/Cau-hoi-Proterial-DW1-DW2.xlsx` (not in git: repo public).
 
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
-2. The rest of Phase 1: mail drop (`DW_PURCHASING_MAILBOX=stored`), master
-   data import, the Bravo layout learned from Proterial's file, the outbox
-   (RFQs sent from the buyer's mailbox), the DW2 attest lane.
+2. The rest of Phase 1, each its own session: the stored mailbox and its
+   mail drop (`DW_PURCHASING_MAILBOX=stored`; DW2's own `purchasing.mailbox_*`
+   per ADR 0014, partitioned, registered with the partition lane and
+   offboarding, `.eml` read through the reader port at the composition
+   root); master-data import; the Bravo layout learned from Proterial's
+   file; the outbox (RFQs from the buyer's mailbox); the DW2 attest lane.
+   A deployed DW2 stays refused (503) until the mailbox and master data
+   are real.
 3. Function 5 — supplier confirmation and delivery tracking (the PO number
    Bravo assigns recorded back; confirmations read from mail).
 4. Function 6 — the morning brief and status Q&A over purchase cases.
 5. On-prem live evals of DW2's model steps on Qwen3.5-9B (no measurement
    was made in this run, so no model step can be "AI tự làm").
-6. A request for an item not in the catalogue has no RFQ path (refused,
-   "không nhà cung cấp nào"): a buyer naming suppliers by hand is not built.
+6. A sent request cannot be withdrawn (a question on the Proterial list).
 
 ## Not done, on purpose
 
-- No buyer form page: a buyer's own PR form (`POST /requests`) is API only;
-  requests come from mail, a requester, or that route.
 - A purchase approval is decided on the web only: no subject version is
   registered for the Zalo decision command.
 - A sent request cannot be withdrawn or edited yet; a rejected one stays
@@ -311,8 +321,8 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 - **Who configures DW2**: built as `purchasing_configurer` (proposes) and
   the head (decides, and applies their own at once, as a Sales head). Whether
   Proterial wants the director, not the head, to decide limit changes.
-- **Retention**: 10 years for a case, 1 year for a mail outcome
-  (`retention@1.10.0`), proposed; Proterial's accountant to confirm.
+- **Retention**: now the tenant's own setting (10 years / 365 days by
+  default, `purchasing_rules@1.6.0`); Proterial's accountant sets it.
 - **Who requests**: built as `purchasing_requester` (own requests only).
   Proterial to say how a request DW2 opens is numbered (code's
   `DW2-<yymmdd>-<8 hex>` today) and whether Bravo's PR number replaces it.
@@ -322,7 +332,7 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 - **Bravo import template**: the real column headers, sheet and date format
   of Proterial's Bravo PO import (the mock's are invented), and whether one
   file per PR or one per supplier. A tenant rule, so no deploy when it lands.
-- **Who may download the PO file**: today `purchasing.po.prepare` (the
-  buyer); the head approves but does not download. Proterial's call.
+- **Who may download the PO file**: a permission set the tenant's admin
+  grants (`purchasing_po_downloader`); the buyer holds it by role.
 - **Re-approval past the tier**: built (goes back at the tier its total
   names, tolerance 0 by default). Proterial to give the tolerance, if any.
