@@ -425,6 +425,7 @@ def _build_container(settings: ApiSettings | None) -> ApiContainer:
     )
     register_sales_support(container.support_catalog)
     register_sales_service_accounts(service_accounts)
+    register_purchasing_service_accounts(service_accounts)
 
     # Purchasing (DW2): built from the seam, never from a global. It reads mail
     # through the same one-call door as Sales, the caller's plan allowance
@@ -604,15 +605,18 @@ def build_purchasing_mount(
     a `purchasing.rules` approval is checked by `RuleDecisions`, the longest
     prefix registered.
     """
+    from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
     from dw_platform.adapters.persistence.repositories import (
         SqlApprovalRepository,
         SqlAuditRepository,
     )
+    from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
     from dw_purchasing.adapters.assembly import (
         build_purchasing,
         request_decisions,
         rule_decisions,
     )
+    from dw_purchasing.adapters.notices import PlatformNotices
     from dw_purchasing.application.approvals import APPROVAL_PREFIX
     from dw_purchasing.application.rules import RULES_APPROVAL
     from dw_purchasing.presentation.routes import PurchasingMount
@@ -628,6 +632,12 @@ def build_purchasing_mount(
     if demo is None:
         _LOG.warning("purchasing: no data source configured; /api/v1/purchasing answers 503")
         return PurchasingMount(services=None)
+    if settings.is_deployed:
+        # DW2's mailbox and master data are the fictional mocks until the
+        # stored ones land: a deployed profile refuses a mock adapter, so the
+        # routes answer that no data source is configured.
+        _LOG.warning("purchasing: mock mailbox and master data refused when deployed; 503")
+        return PurchasingMount(services=None)
     return PurchasingMount(
         services=build_purchasing(
             demo_scope=demo,
@@ -640,6 +650,9 @@ def build_purchasing_mount(
             clock=clock,
             ids=ids,
             deployed=settings.is_deployed,
+            notices=PlatformNotices(
+                SqlScopeHolders(session_factory), SqlNotificationRepository(session_factory)
+            ),
         )
     )
 
@@ -671,6 +684,15 @@ def register_sales_service_accounts(accounts: list[ServiceAccount]) -> None:
     from dw_sales.application.inbox_lane import DW1_SERVICE_ACCOUNT
 
     accounts.append(DW1_SERVICE_ACCOUNT)
+
+
+def register_purchasing_service_accounts(accounts: list[ServiceAccount]) -> None:
+    """DW2's service account, part of the seam above: every tenant the
+    platform creates gets it in its main workspace, holding `purchasing_dw2`
+    and nothing else, so the automation lane has an account to act under."""
+    from dw_purchasing.application.automation_lane import DW2_SERVICE_ACCOUNT
+
+    accounts.append(DW2_SERVICE_ACCOUNT)
 
 
 def build_engine(url: str, *, pool_pre_ping: bool = True) -> AsyncEngine:

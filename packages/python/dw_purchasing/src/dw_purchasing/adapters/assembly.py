@@ -27,6 +27,7 @@ from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.people import DirectoryPeople
+from dw_purchasing.adapters.persistence.automation import SqlAutomationScopes
 from dw_purchasing.adapters.persistence.store import (
     ApprovalsFactory,
     AuditFactory,
@@ -40,8 +41,10 @@ from dw_purchasing.application.approvals import (
     RequestSettlement,
 )
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
+from dw_purchasing.application.automation_lane import AutomationLane, ServiceAccessPort
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
+from dw_purchasing.application.ports import NoticesPort
 from dw_purchasing.application.requesters import RequesterDesk
 from dw_purchasing.application.rules import (
     PurchasingRuleBook,
@@ -77,6 +80,7 @@ def build_purchasing(
     clock: UtcClock,
     ids: IdGenerator,
     deployed: bool,
+    notices: NoticesPort,
 ) -> PurchasingServices:
     worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
     store = SqlPurchasingStore(session_factory, audit, approvals)
@@ -101,7 +105,13 @@ def build_purchasing(
     return PurchasingServices(
         requests=requests,
         approvals=RequestApprovals(
-            uow=store, gate=Gate(authorization), rules=book, master=master, clock=clock, ids=ids
+            uow=store,
+            gate=Gate(authorization),
+            rules=book,
+            master=master,
+            clock=clock,
+            ids=ids,
+            notices=notices,
         ),
         orders=PurchaseOrders(
             uow=store,
@@ -218,6 +228,35 @@ def request_settlement(
     approvals: ApprovalsFactory,
     clock: UtcClock,
     ids: IdGenerator,
+    notices: NoticesPort,
 ) -> RequestSettlement:
-    """What the worker's handler for `REQUEST_DECIDED` carries a decision out with."""
-    return RequestSettlement(SqlPurchasingStore(session_factory, audit, approvals), clock, ids)
+    """What the worker's handler for `REQUEST_DECIDED` carries a decision out
+    with, telling who asked and who sent it."""
+    return RequestSettlement(
+        SqlPurchasingStore(session_factory, audit, approvals), clock, ids, notices
+    )
+
+
+def automation_lane(
+    *,
+    services: PurchasingServices,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    approvals: ApprovalsFactory,
+    access: ServiceAccessPort,
+    mailboxes: tuple[tuple[uuid.UUID, uuid.UUID], ...],
+    notices: NoticesPort,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> AutomationLane:
+    """The worker's `purchasing_automation` lane over the services it built."""
+    return AutomationLane(
+        access=access,
+        scopes=SqlAutomationScopes(session_factory),
+        mailboxes=mailboxes,
+        services=services,
+        uow=SqlPurchasingStore(session_factory, audit, approvals),
+        notices=notices,
+        clock=clock,
+        ids=ids,
+    )

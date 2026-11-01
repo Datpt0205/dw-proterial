@@ -223,6 +223,16 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 - **Deployed Bravo guard** (rules `1.4.0`, `bravo_po.mock: true`): a
   deployed profile drafts no order with the platform's stand-in layout
   (409 `mock_layout`); a tenant layout of its own drafts.
+- **Automation lane + notices** (migration `6971b41fcdf6`): DW2's service
+  account (`purchasing_dw2`, registered with provisioning; demo seed owed),
+  lane `purchasing_automation` (60 s) reading the five switches: mail read or
+  told, cases opened for review at `ai_review`, sent at `ai_auto`, RFQs
+  drafted after approval, orders drafted after selection; supplier mail
+  (verified, known domain) never read as a PR; approver told at submission
+  (makers excluded), requester and sender at decision. A deployed profile
+  refuses DW2's mocks (API 503, no lane) until the stored mailbox and master
+  data land. Eval `purchasing_automation@1.0.0` 5/5; 8 mutations red (one
+  not a guard: `break` on the model down only saves calls).
 
 ## Next
 

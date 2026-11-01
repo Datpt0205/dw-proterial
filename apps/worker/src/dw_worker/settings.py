@@ -328,6 +328,13 @@ class WorkerSettings(BaseSettings):
         default=True, validation_alias=AliasChoices("DW_WORKER_SALES_INBOX_LANE")
     )
 
+    # Whether this host runs DW2's automation lane (`purchasing_automation`).
+    # On by default: what DW2 does on its own is each tenant's switches'
+    # to say. Off for a walk-through that presses every button by hand.
+    purchasing_automation_lane: bool = Field(
+        default=True, validation_alias=AliasChoices("DW_WORKER_PURCHASING_AUTOMATION_LANE")
+    )
+
     # --- Sales: which mailbox DW1 reads (ticket 43) ---
     # `mock`: the fictional mailbox bound to the scope above (the demo).
     # `stored`: the real mail the worker's `sales_mail_drop` lane stores from

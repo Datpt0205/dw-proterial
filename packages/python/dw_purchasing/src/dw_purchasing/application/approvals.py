@@ -25,7 +25,7 @@ stamped; nothing is re-derived when the decision is carried out.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
@@ -45,7 +45,12 @@ from dw_platform.domain.approval import (
 from dw_platform.domain.audit import AuditEvent
 from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import CaseChange
-from dw_purchasing.application.ports import MasterDataPort, PurchasingUnitOfWork
+from dw_purchasing.application.ports import (
+    MasterDataPort,
+    NoNotices,
+    NoticesPort,
+    PurchasingUnitOfWork,
+)
 from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import ApprovalAsked, CaseStatus, Decided, PurchaseCase
 from dw_purchasing.domain.checks import CrossCheck, cross_check
@@ -101,6 +106,8 @@ class RequestApprovals:
     master: MasterDataPort
     clock: UtcClock
     ids: IdGenerator
+    # Who is told a request waits for them: the holders of its tier's scope.
+    notices: NoticesPort = field(default_factory=NoNotices)
 
     async def preview(self, context: AccessContext, case_id: uuid.UUID) -> PurchaseCheckView:
         await self.gate.require(
@@ -196,6 +203,15 @@ class RequestApprovals:
                     },
                 )
             )
+        await self.notices.tell(
+            context,
+            scopes=frozenset({tier.scope}),
+            excluding=tuple(sent.makers),
+            source_key=f"purchasing.approval.asked:{approval_id}",
+            title=f"Yêu cầu mua hàng {sent.request.pr_no} chờ bạn duyệt",
+            body=f"{sent.request.department}: {len(sent.request.lines)} dòng, {tier.label}.",
+            link=f"/purchasing/requests/{sent.case_id}",
+        )
         return CaseChange(case_id=sent.case_id, case_version=sent.case_version, status=sent.status)
 
     async def _case(self, context: AccessContext, case_id: uuid.UUID) -> PurchaseCase:
@@ -277,6 +293,9 @@ class RequestSettlement:
     uow: PurchasingUnitOfWork
     clock: UtcClock
     ids: IdGenerator
+    # Who is told of the decision: who asked, who sent it, and, once it is
+    # approved, the buyers who ask suppliers next.
+    notices: NoticesPort = field(default_factory=NoNotices)
 
     async def settle(self, approval_id: uuid.UUID, decider: AccessContext) -> CaseChange:
         """The decision, as its decider. What was decided is read from the
@@ -340,6 +359,19 @@ class RequestSettlement:
                     {"approval_id": str(approval_id)},
                 )
             )
+        sent_by = decided.approval.submitted_by if decided.approval is not None else None
+        asked = [p for p in (decided.requested_by, sent_by) if p is not None]
+        verdict = "đã được duyệt" if approved else "bị từ chối"
+        await self.notices.tell(
+            decider,
+            scopes=frozenset({PurchasingScopes.RFQ_PREPARE.value}) if approved else frozenset(),
+            people=asked,
+            excluding=(decider.principal_id,),
+            source_key=f"purchasing.approval.decided:{approval_id}",
+            title=f"Yêu cầu mua hàng {decided.request.pr_no} {verdict}",
+            body=decided.decision.comment[:500] if decided.decision is not None else "",
+            link=f"/purchasing/requests/{decided.case_id}",
+        )
         return CaseChange(
             case_id=decided.case_id, case_version=decided.case_version, status=decided.status
         )

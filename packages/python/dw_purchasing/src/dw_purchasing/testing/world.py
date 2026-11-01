@@ -9,7 +9,7 @@ recorded live answer replays. Nothing here reaches a database or a model.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
@@ -42,6 +42,7 @@ from dw_purchasing.application.rules import (
     RuleDecisions,
     RuleSettlement,
 )
+from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.testing.measurements import FixedModel, MemoryMeasurements
 from dw_purchasing.testing.memory import MemoryStore
@@ -139,6 +140,30 @@ class TenantPolicies:
 
 
 @dataclass
+class RecordedNotices:
+    """Implements `NoticesPort`: every notice kept as (key, recipients' scopes,
+    people, excluded, title), once per key, as the platform's inbox holds it."""
+
+    told: dict[str, tuple[frozenset[str], tuple[uuid.UUID, ...], tuple[uuid.UUID, ...], str]] = (
+        field(default_factory=dict)
+    )
+
+    async def tell(
+        self,
+        context: AccessContext,
+        *,
+        scopes: frozenset[str],
+        people: Sequence[uuid.UUID] = (),
+        excluding: Sequence[uuid.UUID] = (),
+        source_key: str,
+        title: str,
+        body: str,
+        link: str | None,
+    ) -> None:
+        self.told.setdefault(source_key, (scopes, tuple(people), tuple(excluding), title))
+
+
+@dataclass
 class Directory:
     """`PeoplePort` over a dict: who each member is, as a directory says."""
 
@@ -180,6 +205,19 @@ class ScriptedModel:
             if key in text:
                 return schema.model_validate(answer)
         raise ModelUnavailableError("no scripted answer")
+
+
+def services_of(world: World) -> PurchasingServices:
+    """The bundle the router mounts, over ``world``."""
+    return PurchasingServices(
+        requests=world.service,
+        approvals=world.approvals,
+        sourcing=world.sourcing,
+        orders=world.orders,
+        rules=world.rules,
+        switches=world.switches,
+        requester=world.requester,
+    )
 
 
 @dataclass

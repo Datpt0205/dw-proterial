@@ -94,6 +94,9 @@ dw_sales ADR 0005 as DW2 applies it).
   `purchasing.rules.propose`; their version waits for the head.
 - The head also holds `purchasing.rules.propose` and
   `purchasing.rules.approve`.
+- `purchasing_dw2` (DW2 tài khoản dịch vụ): the automation lane's account in
+  each tenant, `purchasing.request.read/intake/submit`, `purchasing.rfq.prepare`,
+  `purchasing.po.prepare`; no approve scope, no `approvals.decide`.
 - Permission set `purchasing_director_approver`: `purchasing.approve.tier3`.
 - The buyer also holds `purchasing.request.submit` and
   `purchasing.rfq.prepare` and `purchasing.po.prepare` (draft the orders,
@@ -140,3 +143,11 @@ The twelve steps, the default proposed, and where each stands:
 | 12 | Each person's morning brief, questions about a case | AI tự làm | function 6, not built |
 
 A step gets its switch the day code reads it, never before.
+
+- **Automation lane (`purchasing_automation`)**: the worker takes each step
+  under DW2's service account at the level in effect; at "AI làm, người
+  duyệt" a case DW2 opened from a mail carries a **review** ("Máy đọc, chờ
+  người xem") a buyer clears with one press before DW2 sends it on. A known
+  supplier's verified mail is never read as a request. Every person is told
+  in the app what is theirs to do, once per case and step; a step that
+  refuses is told once in its own words. The lane audits as itself.

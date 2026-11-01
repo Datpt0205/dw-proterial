@@ -206,6 +206,13 @@ def build_router(
         change = await svc.requests.submit_form(context, body)
         return await idem.record(change, status_code=201)
 
+    @router.post("/requests/{case_id}/review", response_model=CaseChange, dependencies=intake)
+    async def review_request(
+        case_id: uuid.UUID, body: CaseVersionBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.requests.reviewed(context, case_id, case_version=body.case_version)
+        return await idem.record(change)
+
     @router.get("/requests/{case_id}/check", response_model=PurchaseCheckView, dependencies=read)
     async def check_request(case_id: uuid.UUID, context: Ctx, svc: Svc) -> PurchaseCheckView:
         return await svc.approvals.preview(context, case_id)

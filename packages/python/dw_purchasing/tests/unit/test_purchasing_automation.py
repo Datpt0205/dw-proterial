@@ -186,6 +186,7 @@ def test_the_assembly_checks_every_door_a_version_goes_through() -> None:
     from dw_kernel.ports import SystemClock, Uuid4Generator
     from dw_purchasing.adapters import assembly
     from dw_purchasing.application.automation import AutomationChecks
+    from dw_purchasing.application.ports import NoNotices
 
     services = assembly.build_purchasing(
         demo_scope=ALPHA,
@@ -198,6 +199,7 @@ def test_the_assembly_checks_every_door_a_version_goes_through() -> None:
         clock=SystemClock(),
         ids=Uuid4Generator(),
         deployed=True,
+        notices=NoNotices(),
     )
     assert services.orders.deployed
     guard = assembly.rule_decisions(REPO / "configs", None, None, None)  # type: ignore[arg-type]
