@@ -1870,6 +1870,7 @@
           "approved",
           "rejected",
           "rfq_drafted",
+          "awaiting_reapproval",
           "supplier_selected",
           "po_drafted"
         ],
@@ -11368,6 +11369,16 @@
               }
             ]
           },
+          "reapproval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reapproval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "received_at": {
             "format": "date-time",
             "title": "Received At",
@@ -12896,6 +12907,59 @@
           "checks"
         ],
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "Reapproval": {
+        "additionalProperties": false,
+        "description": "A choice of suppliers whose total passed what the approver's tier\ndecides (plus the tenant's tolerance), sent to the tier that total names:\nthe choice waits here, and becomes the case's selection only once that\napprover approves it. ``explanation`` is the model's words for why, kept\nonly when every figure in them is one of code's facts; None otherwise.",
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalAsked"
+          },
+          "approved_limit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved Limit"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Decided"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/Selection"
+          }
+        },
+        "required": [
+          "approval",
+          "selection",
+          "approved_limit"
+        ],
+        "title": "Reapproval",
         "type": "object"
       },
       "ReasonCount": {

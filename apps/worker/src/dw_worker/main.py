@@ -104,6 +104,7 @@ from dw_platform.retention_policy import load_retention_policy
 from dw_purchasing.adapters.assembly import (
     automation_lane,
     build_purchasing,
+    reapproval_settlement,
     request_settlement,
     rule_settlement,
 )
@@ -111,6 +112,7 @@ from dw_purchasing.adapters.notices import PlatformNotices
 from dw_purchasing.adapters.persistence.retention import SqlPurchasingRetention
 from dw_purchasing.application.approvals import REQUEST_DECIDED
 from dw_purchasing.application.automation_lane import LANE as PURCHASING_AUTOMATION_LANE
+from dw_purchasing.application.reapprovals import REAPPROVAL_DECIDED
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
 from dw_sales.adapters.assembly import (
     Dw1Mount,
@@ -688,6 +690,18 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         )
         # A version of a tenant's purchasing rules (ADR 0013/0014): a run-less
         # `purchasing.rules` approval, carried out by the platform's engine.
+        # A choice of suppliers past the approved tier, decided again.
+        handlers[REAPPROVAL_DECIDED] = build_decided_handler(
+            reapproval_settlement(
+                sessions,
+                SqlAuditRepository,
+                SqlApprovalRepository,
+                clock,
+                ids,
+                PlatformNotices(SqlScopeHolders(sessions), SqlNotificationRepository(sessions)),
+            ),
+            applied="purchase reapproval decision applied",
+        )
         handlers[PURCHASING_RULES_DECIDED] = build_decided_handler(
             rule_settlement(
                 REPO_ROOT / "configs",

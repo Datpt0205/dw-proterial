@@ -42,6 +42,9 @@ class CaseStatus(StrEnum):
     REJECTED = "rejected"
     # Approved, and an RFQ drafted per supplier; offers are recorded here.
     RFQ_DRAFTED = "rfq_drafted"
+    # The suppliers chosen come to more than the approver's tier decides: the
+    # choice waits on an approval at the tier its total names.
+    AWAITING_REAPPROVAL = "awaiting_reapproval"
     # A person chose a supplier for every line.
     SUPPLIER_SELECTED = "supplier_selected"
     # One draft order per chosen supplier, and the Bravo file drawn from them.
@@ -93,6 +96,22 @@ class Decided(BaseModel):
     comment: str = Field(default="", max_length=2000)
 
 
+class Reapproval(BaseModel):
+    """A choice of suppliers whose total passed what the approver's tier
+    decides (plus the tenant's tolerance), sent to the tier that total names:
+    the choice waits here, and becomes the case's selection only once that
+    approver approves it. ``explanation`` is the model's words for why, kept
+    only when every figure in them is one of code's facts; None otherwise."""
+
+    model_config = _FROZEN
+
+    approval: ApprovalAsked
+    selection: Selection
+    approved_limit: Price | None
+    explanation: str | None = Field(default=None, max_length=2000)
+    decision: Decided | None = None
+
+
 class PurchaseCase(BaseModel):
     """One request, from the moment DW2 received it.
 
@@ -132,6 +151,8 @@ class PurchaseCase(BaseModel):
     selection: Selection | None = None
     # DW02 function 4: the draft orders and the layout of their Bravo file.
     po: PoRound | None = None
+    # The last choice that went back for approval past the tier.
+    reapproval: Reapproval | None = None
 
     @model_validator(mode="after")
     def _a_mail_names_its_message(self) -> Self:
@@ -144,9 +165,13 @@ class PurchaseCase(BaseModel):
         sent = self.status is not CaseStatus.RECEIVED
         sourcing = self.status in (
             CaseStatus.RFQ_DRAFTED,
+            CaseStatus.AWAITING_REAPPROVAL,
             CaseStatus.SUPPLIER_SELECTED,
             CaseStatus.PO_DRAFTED,
         )
+        waiting = self.status is CaseStatus.AWAITING_REAPPROVAL
+        if waiting != (self.reapproval is not None and self.reapproval.decision is None):
+            raise ValueError("a choice waits on its approval exactly while the case says so")
         chosen = self.status in (CaseStatus.SUPPLIER_SELECTED, CaseStatus.PO_DRAFTED)
         decided = self.status in (CaseStatus.APPROVED, CaseStatus.REJECTED) or sourcing
         if sourcing != (self.rfq is not None):

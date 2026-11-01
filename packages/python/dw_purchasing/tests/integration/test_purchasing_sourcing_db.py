@@ -159,3 +159,98 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
                         sa.text(f"UPDATE purchasing.cases SET {patch} WHERE id = :i"),
                         {"i": case_id},
                     )
+
+
+async def test_a_choice_past_the_tier_waits_on_its_approval_on_the_database(
+    app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy, migrator: object
+) -> None:
+    """The waiting choice on the SQL store: the case in `awaiting_reapproval`
+    under its CHECKs, found by the generated `reapproval_id`, carried out by
+    the reapproval's settlement to a selection."""
+    from sqlalchemy.exc import DBAPIError
+
+    from dw_purchasing.adapters.assembly import reapproval_settlement
+    from dw_purchasing.application.reapprovals import REAPPROVAL, Reapprovals
+    from dw_purchasing.application.sourcing import OfferForm
+
+    store = SqlPurchasingStore(app_sessions, SqlAuditRepository, SqlApprovalRepository)
+    book = platform_rule_book(REPO / "configs/policies", SqlRuleVersionLookup(app_sessions))
+    clock, ids = FixedClock(NOW), Uuid4Generator()
+    model = ScriptedModel(INTAKE["answers"])
+    model.by_schema = {
+        "ModelOffer": SOURCING["answers"],
+        "RfqWording": {"PR-2611-004": SOURCING["rfq_words"]["good"]},
+    }
+    inbox = MockInbox.load(tenant_id=tenancy.alpha[0], workspace_id=tenancy.alpha[1])
+    master = MockMasterData.load(tenant_id=tenancy.alpha[0], workspace_id=tenancy.alpha[1])
+    worker = Worker("purchasing-dw2", "1.0.0")
+    intake = PurchaseRequests(store, Gate(Authz()), book, inbox, model, worker, clock, ids)
+    approvals = RequestApprovals(store, Gate(Authz()), book, master, clock, ids)
+    sourcing = SupplierSourcing(
+        store,
+        Gate(Authz()),
+        book,
+        master,
+        inbox,
+        model,
+        worker,
+        clock,
+        ids,
+        reapprovals=Reapprovals(None, worker, clock, ids),
+    )
+    me = caller(tenancy.alpha)
+    case_id = (await intake.read_mail(me, "P01")).case_id
+    assert case_id is not None
+    await approvals.submit(me, case_id, case_version=1)
+    sent = await intake.case(me, case_id)
+    assert sent.approval is not None
+    await _decide_as_platform(app_sessions, tenancy, sent.approval.approval_id)
+    await request_settlement(
+        app_sessions, SqlAuditRepository, SqlApprovalRepository, clock, ids, NoNotices()
+    ).settle(sent.approval.approval_id, caller(tenancy.alpha, principal=HEAD))
+    await sourcing.draft_rfq(me, case_id, case_version=3)
+    for message_id in ("Q01", "Q02", "Q03"):
+        version = (await intake.case(me, case_id)).case_version
+        await sourcing.read_offer_mail(me, case_id, message_id, case_version=version)
+    pricey = OfferForm(
+        supplier_code="NHUAVIET",
+        line_no=1,
+        unit_price=Decimal(5_000_000),
+        currency="VND",
+        lead_time_days=2,
+    )
+    version = (await intake.case(me, case_id)).case_version
+    await sourcing.record_offer(me, case_id, pricey, case_version=version)
+    await sourcing.select(
+        me,
+        case_id,
+        [
+            Choice(line_no=1, supplier_code="NHUAVIET"),
+            Choice(line_no=2, supplier_code="BAOHO"),
+            Choice(line_no=3, supplier_code="ANPHAT"),
+        ],
+        case_version=version + 1,
+    )
+    waiting = await intake.case(me, case_id)
+    assert waiting.status is CaseStatus.AWAITING_REAPPROVAL and waiting.reapproval is not None
+    approval_id = waiting.reapproval.approval.approval_id
+    async with store(me) as work:
+        assert (await work.cases.by_approval(approval_id)) is not None
+        kind = await work.cases._session.execute(
+            sa.text("SELECT approval_type FROM platform.approval_requests WHERE id = :i"),
+            {"i": approval_id},
+        )
+        assert kind.scalar_one() == REAPPROVAL
+    with pytest.raises(DBAPIError, match="ck_cases_reapproval"):
+        async with store(me) as work:
+            await work.cases._session.execute(
+                sa.text("UPDATE purchasing.cases SET body = body - 'reapproval' WHERE id = :i"),
+                {"i": case_id},
+            )
+    await _decide_as_platform(app_sessions, tenancy, approval_id)
+    await reapproval_settlement(
+        app_sessions, SqlAuditRepository, SqlApprovalRepository, clock, ids, NoNotices()
+    ).settle(approval_id, caller(tenancy.alpha, principal=HEAD))
+    chosen = await intake.case(me, case_id)
+    assert chosen.status is CaseStatus.SUPPLIER_SELECTED
+    assert chosen.selection == waiting.reapproval.selection

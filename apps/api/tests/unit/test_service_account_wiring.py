@@ -11,12 +11,13 @@ import pytest
 
 from dw_api.bootstrap import build_container
 from dw_api.settings import ApiSettings
+from dw_purchasing.application.automation_lane import DW2_SERVICE_ACCOUNT
 from dw_sales.application.inbox_lane import DW1_SERVICE_ACCOUNT
 
 pytestmark = pytest.mark.unit
 
 
-def test_every_new_tenant_gets_dw1s_service_account() -> None:
+def test_every_new_tenant_gets_dw1s_and_dw2s_service_accounts() -> None:
     # As `scripts/generate_contracts.py` builds it: engines are lazy, so a
     # placeholder database is enough to compose the container.
     container = build_container(
@@ -33,4 +34,8 @@ def test_every_new_tenant_gets_dw1s_service_account() -> None:
     )
 
     assert container.provisioning is not None
-    assert list(container.provisioning.service_accounts) == [DW1_SERVICE_ACCOUNT]
+    # DW2's too: its automation lane acts under it (`purchasing_dw2`).
+    assert list(container.provisioning.service_accounts) == [
+        DW1_SERVICE_ACCOUNT,
+        DW2_SERVICE_ACCOUNT,
+    ]

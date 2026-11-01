@@ -74,7 +74,8 @@ class _Cases:
             (
                 c
                 for c in self.rows.cases.values()
-                if c.approval is not None and c.approval.approval_id == approval_id
+                if (c.approval is not None and c.approval.approval_id == approval_id)
+                or (c.reapproval is not None and c.reapproval.approval.approval_id == approval_id)
             ),
             None,
         )
