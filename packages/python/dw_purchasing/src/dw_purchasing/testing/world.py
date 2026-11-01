@@ -35,6 +35,8 @@ from dw_purchasing.application.approvals import (
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
+from dw_purchasing.application.ports import Person
+from dw_purchasing.application.requesters import RequesterDesk
 from dw_purchasing.application.rules import (
     PurchasingRulesService,
     RuleDecisions,
@@ -137,6 +139,16 @@ class TenantPolicies:
 
 
 @dataclass
+class Directory:
+    """`PeoplePort` over a dict: who each member is, as a directory says."""
+
+    people: dict[uuid.UUID, Person] = field(default_factory=dict)
+
+    async def person(self, context: AccessContext, user_id: uuid.UUID) -> Person | None:
+        return self.people.get(user_id)
+
+
+@dataclass
 class ScriptedModel:
     """`InterpretationPort` answering by the first key found in the mail;
     ``failure`` raised instead when set. Every call is kept."""
@@ -187,6 +199,8 @@ class World:
     rule_settlement: RuleSettlement
     switches: SwitchesService
     measurements: MemoryMeasurements
+    requester: RequesterDesk
+    people: Directory
 
 
 def open_world(
@@ -196,6 +210,7 @@ def open_world(
 
     store = MemoryStore()
     measurements = MemoryMeasurements()
+    people = Directory()
     model = ScriptedModel(answers)
     policies = TenantPolicies(store)
     clock = FixedClock(datetime(2026, 11, 2, 7, 0, tzinfo=UTC))
@@ -254,4 +269,15 @@ def open_world(
         RuleSettlement(store, book, clock, ids, checks),
         SwitchesService(Gate(Authz()), book, automation),
         measurements,
+        RequesterDesk(
+            uow=store,
+            gate=Gate(Authz()),
+            rules=book,
+            people=people,
+            model=model if with_model else None,
+            worker=Worker("purchasing-dw2", "1.0.0"),
+            clock=clock,
+            ids=ids,
+        ),
+        people,
     )

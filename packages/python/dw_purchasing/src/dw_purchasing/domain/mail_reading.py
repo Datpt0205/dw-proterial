@@ -285,3 +285,60 @@ def _lines(mail: _Mail, answer: ModelPrMail, received_on: date) -> tuple[PrLine,
             )
         )
     return tuple(lines)
+
+
+class RequestDraft(BaseModel):
+    """What a requester's own words ask for, as code read it from the model's
+    spans: the lines, and the request-wide values the words name. No PR
+    number, department or requester: those are not the words' to say (code
+    numbers the request, the requester is the signed-in person)."""
+
+    model_config = _FROZEN
+
+    lines: tuple[PrLine, ...] = Field(min_length=1, max_length=MAX_MAIL_LINES)
+    currency: str
+    need_by: date | None = None
+    budget_code: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PrWordsVerdict:
+    draft: RequestDraft | None
+    not_read: str | None
+
+
+def read_pr_words(
+    text: str, answer: ModelPrMail, *, received_on: date, default_currency: str
+) -> PrWordsVerdict:
+    """What code accepts of a reading of a requester's words ("Tôi cần mua
+    …"): every span found as a whole token run, every line whole and parsed,
+    as in a mail (`read_pr_mail`); a PR number or department the model gives
+    is not read, the words do not decide them."""
+    words = _Mail(text)
+    try:
+        for span in (answer.budget_code_span, answer.currency_span, answer.need_by_span):
+            if not words.holds(span):
+                raise _UnreadError("span_not_found")
+        currency = (
+            parse_currency(answer.currency_span) if answer.currency_span else default_currency
+        )
+        if currency is None:
+            raise _UnreadError("currency_unreadable")
+        need_by = None
+        if answer.need_by_span is not None:
+            need_by = parse_date(answer.need_by_span, received_on=received_on)
+            if need_by is None:
+                raise _UnreadError("need_by_unreadable")
+        draft = RequestDraft(
+            lines=_lines(words, answer, received_on),
+            currency=currency,
+            need_by=need_by,
+            budget_code=(
+                " ".join(answer.budget_code_span.split()) if answer.budget_code_span else None
+            ),
+        )
+    except _UnreadError as unread:
+        return PrWordsVerdict(None, unread.reason)
+    except ValidationError:
+        return PrWordsVerdict(None, "value_malformed")
+    return PrWordsVerdict(draft, None)

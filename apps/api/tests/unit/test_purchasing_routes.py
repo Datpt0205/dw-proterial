@@ -32,8 +32,10 @@ from dw_platform.application.support_access import SupportGrantService, SupportS
 from dw_purchasing.adapters.policy_files import PolicyFiles
 from dw_purchasing.application.access import Gate
 from dw_purchasing.application.services import PurchasingServices
+from dw_purchasing.domain.requests import PurchaseRequest
 from dw_purchasing.presentation.routes import PurchasingMount
 from dw_purchasing.testing.world import ALPHA, EVERY_SCOPE, World, open_world
+from dw_purchasing.testing.world import caller as world_caller
 
 pytestmark = pytest.mark.unit
 
@@ -119,6 +121,7 @@ def _mounted(world: World) -> PurchasingMount:
             orders=world.orders,
             rules=world.rules,
             switches=world.switches,
+            requester=world.requester,
         )
     )
 
@@ -158,6 +161,12 @@ async def test_a_buyer_submits_a_form_reads_it_back_and_has_a_mail_read() -> Non
         ("GET", f"/requests/{uuid.uuid4()}/po/bravo.xlsx", None),
         ("GET", "/rules", None),
         ("GET", "/automation", None),
+        ("POST", "/requests/mine/draft", {"words": "Tôi cần mua 10 hộp găng tay"}),
+        (
+            "POST",
+            "/requests/mine",
+            {"currency": "VND", "lines": FORM["lines"], "budget_code": "CC-1"},
+        ),
         ("GET", "/rules/purchasing_rules/schema", None),
         ("POST", "/rules/purchasing_rules/versions", {"document": {"policy_version": "9.0.0"}}),
         (
@@ -270,7 +279,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 18
+    assert len(routes) == 20
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
@@ -362,3 +371,33 @@ async def test_the_bravo_file_downloads_as_a_workbook_named_for_the_request() ->
     )
     assert response.headers["cache-control"] == "no-store"
     assert response.content[:2] == b"PK"
+
+
+async def test_a_requester_writes_their_request_and_finds_only_theirs() -> None:
+    """The requester's two routes, and the reads narrowed to what they wrote:
+    the buyer's form and the mailbox stay the buyer's."""
+    from test_support_endpoint import PRINCIPAL
+
+    from dw_purchasing.application.ports import Person
+
+    world = _world()
+    world.people.people[PRINCIPAL] = Person("Lê Thị Hoa", "Bảo trì")
+    own = frozenset({"purchasing.request.create", "purchasing.request.read_own"})
+    buyer_case = await world.service.submit_form(
+        world_caller(), PurchaseRequest.model_validate(FORM)
+    )
+    container = _container(own, _mounted(world))
+    sent = await _call(
+        container,
+        "POST",
+        "/requests/mine",
+        {"currency": "VND", "lines": FORM["lines"], "budget_code": "CC-1"},
+    )
+    assert sent.status_code == 201, sent.text
+    listed = await _call(container, "GET", "/requests")
+    assert [c["case_id"] for c in listed.json()["items"]] == [sent.json()["case_id"]]
+    hidden = await _call(container, "GET", f"/requests/{buyer_case.case_id}")
+    assert hidden.status_code == 404
+    for method, path, body in (("POST", "/requests", FORM), ("GET", "/mail", None)):
+        refused = await _call(container, method, path, body)
+        assert refused.status_code == 403, path

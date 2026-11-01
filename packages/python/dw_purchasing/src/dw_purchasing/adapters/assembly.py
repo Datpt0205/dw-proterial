@@ -21,10 +21,12 @@ from dw_agent_runtime.ports import ModelGateway
 from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.errors import ConfigError
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
+from dw_purchasing.adapters.people import DirectoryPeople
 from dw_purchasing.adapters.persistence.store import (
     ApprovalsFactory,
     AuditFactory,
@@ -40,6 +42,7 @@ from dw_purchasing.application.approvals import (
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
+from dw_purchasing.application.requesters import RequesterDesk
 from dw_purchasing.application.rules import (
     PurchasingRuleBook,
     PurchasingRulesService,
@@ -112,6 +115,16 @@ def build_purchasing(
             uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids, checks=checks
         ),
         switches=SwitchesService(Gate(authorization), book, automation),
+        requester=RequesterDesk(
+            uow=store,
+            gate=Gate(authorization),
+            rules=book,
+            people=DirectoryPeople(SqlWorkspaceDirectory(session_factory)),
+            model=requests.model,
+            worker=requests.worker,
+            clock=clock,
+            ids=ids,
+        ),
         sourcing=SupplierSourcing(
             uow=store,
             gate=Gate(authorization),

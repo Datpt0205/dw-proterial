@@ -80,10 +80,20 @@ class _Cases:
         )
 
     async def page(
-        self, *, limit: int, before: tuple[datetime, uuid.UUID] | None
+        self,
+        *,
+        limit: int,
+        before: tuple[datetime, uuid.UUID] | None,
+        requested_by: uuid.UUID | None = None,
     ) -> Sequence[PurchaseCase]:
         ordered = sorted(
-            self.rows.cases.values(), key=lambda c: (c.received_at, c.case_id), reverse=True
+            (
+                c
+                for c in self.rows.cases.values()
+                if requested_by is None or c.requested_by == requested_by
+            ),
+            key=lambda c: (c.received_at, c.case_id),
+            reverse=True,
         )
         if before is not None:
             ordered = [c for c in ordered if (c.received_at, c.case_id) < before]

@@ -54,6 +54,7 @@ cases = sa.Table(
         "approval_id", UUID(as_uuid=True), sa.Computed("(body #>> '{approval,approval_id}')::uuid")
     ),
     sa.Column("rules_ref", sa.Text, nullable=False),
+    sa.Column("requested_by", UUID(as_uuid=True), sa.Computed("(body #>> '{requested_by}')::uuid")),
     sa.Column("received_by", UUID(as_uuid=True), nullable=False),
     sa.Column("received_at", _TS, nullable=False),
 )
@@ -83,6 +84,7 @@ _BODY_KEYS = (
     "offers",
     "selection",
     "po",
+    "requested_by",
 )
 
 
@@ -149,9 +151,16 @@ class _Cases:
         return _case(row) if row is not None else None
 
     async def page(
-        self, *, limit: int, before: tuple[datetime, uuid.UUID] | None
+        self,
+        *,
+        limit: int,
+        before: tuple[datetime, uuid.UUID] | None,
+        requested_by: uuid.UUID | None = None,
     ) -> Sequence[PurchaseCase]:
         query = sa.select(cases).order_by(cases.c.received_at.desc(), cases.c.id.desc())
+        if requested_by is not None:
+            # `ix_cases_tenant_id_requested_by_received_at` carries it.
+            query = query.where(cases.c.requested_by == requested_by)
         if before is not None:
             at, case_id = before
             query = query.where(

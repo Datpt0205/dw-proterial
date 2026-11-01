@@ -209,6 +209,13 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   switches come with Phase 2; the DW2 attest lane (`--attest` for DW2
   datasets, a golden grader with `bar` details) is not built: no step can be
   measured yet, so `ai_auto` on a model step cannot take effect (fail-closed).
+- **Requester, "Tôi cần mua…"** (migration `e823f9c57e5a`): role
+  `purchasing_requester` (create, read own); `POST /requests/mine/draft`
+  (`purchasing.pr_from_words@1.0.0`, spans; nothing stored),
+  `POST /requests/mine` (number by code, name and department from the
+  directory, `requested_by` stamped); `GET /requests[/{id}]` narrowed to
+  the requester's own in SQL (`ix_cases_tenant_id_requested_by_received_at`).
+  Eval `purchasing_pr_words@1.0.0` 5/5; 8 mutations red.
 
 ## Next
 
@@ -243,9 +250,9 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   the head (decides, and applies their own at once, as a Sales head). Whether
   Proterial wants the director, not the head, to decide limit changes.
 - **Retention** of `purchasing.cases` and `mail_outcomes` (none set).
-- **Who requests**: today a buyer enters a department's form; whether
-  departments get their own `purchasing_requester` role (and see only their
-  own requests) is Proterial's process.
+- **Who requests**: built as `purchasing_requester` (own requests only).
+  Proterial to say how a request DW2 opens is numbered (code's
+  `DW2-<yymmdd>-<6 hex>` today) and whether Bravo's PR number replaces it.
 - **Bravo import template**: the real column headers, sheet and date format
   of Proterial's Bravo PO import (the mock's are invented), and whether one
   file per PR or one per supplier. A tenant rule, so no deploy when it lands.

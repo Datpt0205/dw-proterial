@@ -8,6 +8,7 @@ from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.automation import SwitchesService
 from dw_purchasing.application.intake import PurchaseRequests
 from dw_purchasing.application.orders import PurchaseOrders
+from dw_purchasing.application.requesters import RequesterDesk
 from dw_purchasing.application.rules import PurchasingRulesService
 from dw_purchasing.application.sourcing import SupplierSourcing
 
@@ -20,3 +21,4 @@ class PurchasingServices:
     orders: PurchaseOrders
     rules: PurchasingRulesService
     switches: SwitchesService
+    requester: RequesterDesk

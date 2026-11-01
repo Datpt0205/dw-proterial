@@ -64,9 +64,14 @@ class CasesPort(Protocol):
         ...
 
     async def page(
-        self, *, limit: int, before: tuple[datetime, uuid.UUID] | None
+        self,
+        *,
+        limit: int,
+        before: tuple[datetime, uuid.UUID] | None,
+        requested_by: uuid.UUID | None = None,
     ) -> Sequence[PurchaseCase]:
-        """Newest first by (received_at, case_id), strictly before ``before``."""
+        """Newest first by (received_at, case_id), strictly before ``before``;
+        only the cases ``requested_by`` asked for when it is given."""
         ...
 
 
@@ -150,3 +155,18 @@ class SpreadsheetPort(Protocol):
     def write(
         self, sheet: str, rows: Sequence[Sequence[Cell]], *, date_format: str, at: datetime
     ) -> bytes: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Person:
+    display_name: str
+    # Empty when the directory does not say.
+    department: str
+
+
+class PeoplePort(Protocol):
+    """Who a member of the caller's workspace is (the platform's directory):
+    a requester's name and department on their request are the directory's,
+    never what a form says."""
+
+    async def person(self, context: AccessContext, user_id: uuid.UUID) -> Person | None: ...

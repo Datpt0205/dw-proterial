@@ -14,9 +14,16 @@ dw_sales ADR 0005 as DW2 applies it).
   unit, need-by date, an estimated unit price when the form asks).
   `dw_purchasing.domain.requests.PurchaseRequest`.
 - **Purchase case (hồ sơ mua hàng)**: one PR from the moment DW2 received it,
-  with where it came from (`form` or `mail`, and the mail's id), who received
-  it and the tenant rules it was received under (`rules_ref`, stamped once).
-  `PurchaseCase`.
+  with where it came from (`form`, `mail` and the mail's id, or `requester`),
+  who received it, who asked when DW2 knows them by their sign-in
+  (`requested_by`), and the tenant rules it was received under (`rules_ref`,
+  stamped once). `PurchaseCase`.
+- **Requester (người yêu cầu)**: a member of a department who writes their
+  own request in DW2 ("Tôi cần mua…"). The model reads their words into a
+  draft (spans only, code keeps whole lines or none); they press "Gửi". The
+  number is code's (`DW2-<yymmdd>-<6 hex>`), the name and department the
+  directory's. A requester sees only the requests they wrote (narrowed in
+  the query) and is a maker of its approval, so never its decider.
 - **Case status**: `received` (Đã nhận) — the request is on file;
   `awaiting_approval` (Chờ duyệt) — checked and sent to its approver;
   `approved` (Đã duyệt) / `rejected` (Từ chối) — the approver decided;
@@ -81,6 +88,8 @@ dw_sales ADR 0005 as DW2 applies it).
 - `purchasing_viewer` (Xem yêu cầu mua hàng): `purchasing.request.read`.
 - `purchasing_head` (Trưởng phòng Mua hàng): `purchasing.request.read`,
   `purchasing.approve.tier1`, `purchasing.approve.tier2`.
+- `purchasing_requester` (Người yêu cầu mua hàng): `purchasing.request.create`,
+  `purchasing.request.read_own`.
 - `purchasing_configurer` (Người cấu hình DW2): `purchasing.request.read`,
   `purchasing.rules.propose`; their version waits for the head.
 - The head also holds `purchasing.rules.propose` and
