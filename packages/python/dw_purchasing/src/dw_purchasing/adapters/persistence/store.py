@@ -85,6 +85,7 @@ _BODY_KEYS = (
     "selection",
     "po",
     "requested_by",
+    "review",
 )
 
 
@@ -149,6 +150,16 @@ class _Cases:
             await self._session.execute(sa.select(cases).where(cases.c.approval_id == approval_id))
         ).first()
         return _case(row) if row is not None else None
+
+    async def waiting(self, statuses: frozenset[str], *, limit: int) -> Sequence[PurchaseCase]:
+        # `ix_cases_tenant_id_workspace_id_status_received_at` carries it.
+        query = (
+            sa.select(cases)
+            .where(cases.c.status.in_(sorted(statuses)))
+            .order_by(cases.c.received_at, cases.c.id)
+            .limit(limit)
+        )
+        return [_case(row) for row in (await self._session.execute(query)).all()]
 
     async def page(
         self,

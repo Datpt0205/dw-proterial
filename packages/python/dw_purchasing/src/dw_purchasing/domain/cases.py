@@ -68,6 +68,20 @@ class ApprovalAsked(BaseModel):
     submitted_at: AwareDatetime
 
 
+class Review(BaseModel):
+    """A case DW2 opened on its own that a person is to look over first."""
+
+    model_config = _FROZEN
+
+    asked_at: AwareDatetime
+    reviewed_by: uuid.UUID | None = None
+    reviewed_at: AwareDatetime | None = None
+
+    @property
+    def pending(self) -> bool:
+        return self.reviewed_by is None
+
+
 class Decided(BaseModel):
     """The approver's decision, as the approval recorded it."""
 
@@ -103,6 +117,10 @@ class PurchaseCase(BaseModel):
     # who wrote the request in DW2 themselves. Only they, of the requesters,
     # see the case, and they never approve it.
     requested_by: uuid.UUID | None = None
+    # Opened by DW2 from a mail it read while the step is "AI làm, người
+    # duyệt": a person looks it over before DW2 sends it anywhere. Who did
+    # and when, once they have.
+    review: Review | None = None
     rules_ref: str = Field(pattern=r"^purchasing_rules@\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$")
     # What code found when the case was sent for approval (DW02 function 2).
     check: CrossCheck | None = None

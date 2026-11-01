@@ -79,6 +79,10 @@ class _Cases:
             None,
         )
 
+    async def waiting(self, statuses: frozenset[str], *, limit: int) -> Sequence[PurchaseCase]:
+        found = [c for c in self.rows.cases.values() if c.status in statuses]
+        return sorted(found, key=lambda c: (c.received_at, c.case_id))[:limit]
+
     async def page(
         self,
         *,

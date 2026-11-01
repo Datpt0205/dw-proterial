@@ -59,6 +59,11 @@ class CasesPort(Protocol):
         case another writer moved on meanwhile."""
         ...
 
+    async def waiting(self, statuses: frozenset[str], *, limit: int) -> Sequence[PurchaseCase]:
+        """Oldest first, the cases in one of ``statuses``: what DW2's lane
+        takes the next step of."""
+        ...
+
     async def by_approval(self, approval_id: uuid.UUID) -> PurchaseCase | None:
         """The case sent to this approval, if any."""
         ...
@@ -170,3 +175,44 @@ class PeoplePort(Protocol):
     never what a form says."""
 
     async def person(self, context: AccessContext, user_id: uuid.UUID) -> Person | None: ...
+
+
+class NoticesPort(Protocol):
+    """In-app notifications to the members of the caller's workspace who
+    hold any of ``scopes`` (read by the function that builds every access
+    context, so who is told and who may act cannot disagree), and to
+    ``people`` besides, never to ``excluding`` (who may not act on it: a
+    maker is not asked to approve). Once per ``source_key``: telling again
+    is a no-op."""
+
+    async def tell(
+        self,
+        context: AccessContext,
+        *,
+        scopes: frozenset[str],
+        people: Sequence[uuid.UUID] = (),
+        excluding: Sequence[uuid.UUID] = (),
+        source_key: str,
+        title: str,
+        body: str,
+        link: str | None,
+    ) -> None: ...
+
+
+class NoNotices:
+    """Implements `NoticesPort` where nobody is to be told (a lane's test
+    of something else); the composition root wires the platform's."""
+
+    async def tell(
+        self,
+        context: AccessContext,
+        *,
+        scopes: frozenset[str],
+        people: Sequence[uuid.UUID] = (),
+        excluding: Sequence[uuid.UUID] = (),
+        source_key: str,
+        title: str,
+        body: str,
+        link: str | None,
+    ) -> None:
+        return None

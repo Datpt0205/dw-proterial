@@ -1459,6 +1459,11 @@
             "title": "Date Format",
             "type": "string"
           },
+          "mock": {
+            "default": false,
+            "title": "Mock",
+            "type": "boolean"
+          },
           "sheet": {
             "pattern": "^[^\\[\\]:*?/\\\\\\x00-\\x1f]{1,31}$",
             "title": "Sheet",
@@ -11388,6 +11393,16 @@
             ],
             "title": "Requested By"
           },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Review"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rfq": {
             "anyOf": [
               {
@@ -13370,6 +13385,46 @@
           "case_version"
         ],
         "title": "ReturnView",
+        "type": "object"
+      },
+      "Review": {
+        "additionalProperties": false,
+        "description": "A case DW2 opened on its own that a person is to look over first.",
+        "properties": {
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By"
+          }
+        },
+        "required": [
+          "asked_at"
+        ],
+        "title": "Review",
         "type": "object"
       },
       "RfqDraft": {
@@ -20977,6 +21032,77 @@
           }
         },
         "summary": "Bravo File",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/review": {
+      "post": {
+        "operationId": "review_request_api_v1_purchasing_requests__case_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseVersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Request",
         "tags": [
           "purchasing"
         ]

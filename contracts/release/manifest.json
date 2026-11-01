@@ -104,6 +104,21 @@
       "version": "1.2.0"
     },
     {
+      "checksum": "120ff663019b0828c22862d251c622ae21565016259d70226c9b412e330d6db0",
+      "dataset_id": "purchasing_automation",
+      "files": [
+        {
+          "checksum": "503036d9192a8ec544b7349b2cd591094ded66cd4d4bb27e0b5cdd71e001182b",
+          "path": "evals/expected/purchasing_automation.json"
+        },
+        {
+          "checksum": "85ec914fec9c50220b407fbdf5e2dcec0cf7596987462bb4fe3c41da2a72192b",
+          "path": "evals/fixtures/cases/purchasing_pr_intake.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "4890e9c8b405b4b7e25bf92680b21760cbb1a425553d7923eb5d627338f4f5dd",
       "dataset_id": "purchasing_po",
       "files": [
@@ -706,7 +721,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "dff8221131a2b2d4fcc599cace2e530cd174730f",
+  "git_sha": "6da8667fde22a84e5ecb12c4794d4406163586cf",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [

@@ -101,9 +101,16 @@ from dw_platform.application.background_failures import OUTBOX_ALARMS_LANE, Outb
 from dw_platform.application.channel_access import LinkedUserAccess
 from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 from dw_platform.retention_policy import load_retention_policy
-from dw_purchasing.adapters.assembly import request_settlement, rule_settlement
+from dw_purchasing.adapters.assembly import (
+    automation_lane,
+    build_purchasing,
+    request_settlement,
+    rule_settlement,
+)
+from dw_purchasing.adapters.notices import PlatformNotices
 from dw_purchasing.adapters.persistence.retention import SqlPurchasingRetention
 from dw_purchasing.application.approvals import REQUEST_DECIDED
+from dw_purchasing.application.automation_lane import LANE as PURCHASING_AUTOMATION_LANE
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
 from dw_sales.adapters.assembly import (
     Dw1Mount,
@@ -149,6 +156,10 @@ from dw_worker.consumers.offboarding_exports import OffboardingExportRetention
 from dw_worker.consumers.outbox import EventHandler, build_outbox_consumer
 from dw_worker.consumers.outbox_alarms import INTERVAL_SECONDS as OUTBOX_ALARMS_INTERVAL_SECONDS
 from dw_worker.consumers.outbox_alarms import build_outbox_alarms_consumer
+from dw_worker.consumers.purchasing_automation import (
+    INTERVAL_SECONDS as PURCHASING_AUTOMATION_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.purchasing_automation import build_purchasing_automation_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
@@ -422,6 +433,52 @@ def build_sales(
     return mount, scope
 
 
+def build_purchasing_automation(
+    settings: WorkerSettings,
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    clock: UtcClock,
+    ids: IdGenerator,
+    telemetry: TelemetryPort,
+) -> Callable[[], Awaitable[None]] | None:
+    """DW2's automation lane over the workspace its mock mailbox is bound to,
+    built by the call the API makes (`build_purchasing`), or None: no such
+    workspace, a deployed profile (DW2's mocks are refused there), or the
+    host's switch off. Its model calls go through the one-call door, the
+    plan's daily allowance checked first, and only where this process reaches
+    a model server of its own."""
+    demo = settings.sales_demo_scope()
+    if demo is None or settings.is_deployed or not settings.purchasing_automation_lane:
+        return None
+    runtime = build_workflow_runtime(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
+    notices = PlatformNotices(SqlScopeHolders(sessions), SqlNotificationRepository(sessions))
+    services = build_purchasing(
+        demo_scope=demo,
+        configs=REPO_ROOT / "configs",
+        session_factory=sessions,
+        audit=SqlAuditRepository,
+        approvals=SqlApprovalRepository,
+        authorization=ScopeAuthorizationService(),
+        model=runtime.one_call if Provider.ONPREM in runtime.gateway.adapters else None,
+        clock=clock,
+        ids=ids,
+        deployed=settings.is_deployed,
+        notices=notices,
+    )
+    lane = automation_lane(
+        services=services,
+        session_factory=sessions,
+        audit=SqlAuditRepository,
+        approvals=SqlApprovalRepository,
+        access=SqlMembershipLookup(sessions),
+        mailboxes=(demo,),
+        notices=notices,
+        clock=clock,
+        ids=ids,
+    )
+    return build_purchasing_automation_consumer(lane)
+
+
 def _outbox_dir(settings: WorkerSettings) -> Path | None:
     """The share of the people's outbox folders, or None; refused at startup
     when named and not a directory."""
@@ -500,6 +557,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # Single-use decision codes: a day, then gone (the database's constant).
     approval_codes_retention: RetentionPrunePort | None = None
     purchasing_retention: RetentionPrunePort | None = None
+    purchasing_automation_consumer: Callable[[], Awaitable[None]] | None = None
     # The Zalo self-link poll: only with a database, a bot token, a link secret
     # and ZALO_UPDATES_MODE=poll.
     zalo_poll_consumer: Callable[[], Awaitable[None]] | None = None
@@ -618,7 +676,14 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # `purchasing.request` approval, carried out the same way, stamped on
         # the case as its decider.
         handlers[REQUEST_DECIDED] = build_decided_handler(
-            request_settlement(sessions, SqlAuditRepository, SqlApprovalRepository, clock, ids),
+            request_settlement(
+                sessions,
+                SqlAuditRepository,
+                SqlApprovalRepository,
+                clock,
+                ids,
+                PlatformNotices(SqlScopeHolders(sessions), SqlNotificationRepository(sessions)),
+            ),
             applied="purchase request decision applied",
         )
         # A version of a tenant's purchasing rules (ADR 0013/0014): a run-less
@@ -728,6 +793,9 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
                     memory_vectors=memory_vectors,
                     clock=clock,
                 )
+            )
+            purchasing_automation_consumer = build_purchasing_automation(
+                settings, sessions, clock=clock, ids=ids, telemetry=telemetry
             )
             sales = build_sales(settings, sessions, clock=clock, ids=ids, telemetry=telemetry)
             if sales is not None:
@@ -950,6 +1018,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             "partitions",
             build_retention_consumer(partitions),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if purchasing_automation_consumer is not None:
+        registry.register(
+            PURCHASING_AUTOMATION_LANE,
+            purchasing_automation_consumer,
+            interval_seconds=PURCHASING_AUTOMATION_INTERVAL_SECONDS,
         )
     if purchasing_retention is not None:
         registry.register(

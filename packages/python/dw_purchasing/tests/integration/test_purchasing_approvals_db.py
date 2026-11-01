@@ -42,6 +42,7 @@ from dw_purchasing.application.approvals import (
     RequestApprovals,
 )
 from dw_purchasing.application.intake import PurchaseRequests, Worker
+from dw_purchasing.application.ports import NoNotices
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.testing.world import BUYER, Authz, ScriptedModel, caller
 
@@ -174,7 +175,12 @@ async def test_a_request_goes_to_its_tier_is_decided_by_it_and_carried_out(
 
     # The worker's handler: the decider from the event's envelope, no scope.
     settlement = request_settlement(
-        app_sessions, SqlAuditRepository, SqlApprovalRepository, FixedClock(NOW), Uuid4Generator()
+        app_sessions,
+        SqlAuditRepository,
+        SqlApprovalRepository,
+        FixedClock(NOW),
+        Uuid4Generator(),
+        NoNotices(),
     )
     decider = caller(tenancy.alpha, principal=HEAD, scopes=frozenset())
     await settlement.settle(approval_id, decider)

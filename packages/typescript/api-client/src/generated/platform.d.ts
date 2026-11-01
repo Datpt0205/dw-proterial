@@ -1302,6 +1302,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/requests/{case_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Request */
+        post: operations["review_request_api_v1_purchasing_requests__case_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/requests/{case_id}/rfq": {
         parameters: {
             query?: never;
@@ -1974,6 +1991,11 @@ export interface components {
              * @enum {string}
              */
             date_format: "dd/mm/yyyy" | "yyyy-mm-dd" | "mm/dd/yyyy";
+            /**
+             * Mock
+             * @default false
+             */
+            mock: boolean;
             /** Sheet */
             sheet: string;
         };
@@ -3094,6 +3116,7 @@ export interface components {
             request: components["schemas"]["PurchaseRequest-Output"];
             /** Requested By */
             requested_by?: string | null;
+            review?: components["schemas"]["Review"] | null;
             rfq?: components["schemas"]["RfqRound"] | null;
             /** Rules Ref */
             rules_ref: string;
@@ -3311,6 +3334,21 @@ export interface components {
             resource_type: string;
             /** Scope Set Key */
             scope_set_key: string;
+        };
+        /**
+         * Review
+         * @description A case DW2 opened on its own that a person is to look over first.
+         */
+        Review: {
+            /**
+             * Asked At
+             * Format: date-time
+             */
+            asked_at: string;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Reviewed By */
+            reviewed_by?: string | null;
         };
         /**
          * RfqDraft
@@ -6391,6 +6429,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_request_api_v1_purchasing_requests__case_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseVersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseChange"];
                 };
             };
             /** @description Validation Error */

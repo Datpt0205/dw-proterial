@@ -35,7 +35,7 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     cut_to_tokens,
 )
-from dw_kernel.errors import DomainError, InfrastructureError, NotFoundError
+from dw_kernel.errors import ConflictError, DomainError, InfrastructureError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
@@ -54,6 +54,7 @@ from dw_purchasing.domain.cases import (
     CaseStatus,
     PrSource,
     PurchaseCase,
+    Review,
 )
 from dw_purchasing.domain.mail_reading import MAX_MAIL_LINES, ModelPrMail, read_pr_mail
 from dw_purchasing.domain.requests import PurchaseRequest
@@ -174,7 +175,11 @@ class PurchaseRequests:
             await work.audit.append(self._received(context, case))
         return _change(case)
 
-    async def read_mail(self, context: AccessContext, message_id: str) -> InboxItem:
+    async def read_mail(
+        self, context: AccessContext, message_id: str, *, for_review: bool = False
+    ) -> InboxItem:
+        """``for_review``: DW2's own lane opened the case at "AI làm, người
+        duyệt", so a person looks it over before it goes anywhere."""
         await self.gate.require(
             context, PurchasingScopes.REQUEST_INTAKE, resource_type="mail", resource_id=message_id
         )
@@ -191,6 +196,8 @@ class PurchaseRequests:
             if request is not None
             else None
         )
+        if case is not None and for_review:
+            case = case.model_copy(update={"review": Review(asked_at=case.received_at)})
         outcome = MessageOutcome(
             message_id=message_id,
             disposition=Disposition.OPENED if case is not None else Disposition.TO_PERSON,
@@ -209,6 +216,48 @@ class PurchaseRequests:
                 await work.audit.append(self._to_person(context, message_id, reason))
             await work.outcomes.add(outcome)
         return _item(message, outcome)
+
+    async def reviewed(
+        self, context: AccessContext, case_id: uuid.UUID, *, case_version: int
+    ) -> CaseChange:
+        """A person looked over a case DW2 opened on its own: from now on DW2
+        may send it on (`Review`)."""
+        await self.gate.require(
+            context,
+            PurchasingScopes.REQUEST_INTAKE,
+            resource_type=_RESOURCE,
+            resource_id=str(case_id),
+        )
+        async with self.uow(context) as work:
+            case = await work.cases.get(case_id)
+            if case is None:
+                raise NotFoundError(
+                    "không có yêu cầu mua hàng này", details={"case_id": str(case_id)}
+                )
+            if case.case_version != case_version:
+                raise ConflictError(
+                    "hồ sơ đã thay đổi: tải lại",
+                    details={"case_id": str(case_id), "rule": "stale_version"},
+                )
+            if case.review is None or not case.review.pending:
+                raise ConflictError(
+                    "hồ sơ này không chờ người xem",
+                    details={"case_id": str(case_id), "rule": "no_review_pending"},
+                )
+            now = self.clock.now()
+            done = case.model_copy(
+                update={
+                    "case_version": case.case_version + 1,
+                    "review": case.review.model_copy(
+                        update={"reviewed_by": context.principal_id, "reviewed_at": now}
+                    ),
+                }
+            )
+            await work.cases.save(done, expected_version=case.case_version)
+            await work.audit.append(
+                self._audit(context, "purchasing.request.reviewed", str(case_id), {})
+            )
+        return _change(done)
 
     async def _read(
         self, context: AccessContext, message: InboundMessage, rules: PurchasingRules

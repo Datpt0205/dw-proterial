@@ -861,3 +861,160 @@ PURCHASING_GRADERS.update(
         "purchasing.pr_words_degrade": grade_pr_words_degrade,
     }
 )
+
+
+# ------------------------------------------------ the automation lane --
+
+
+def _lane_world(ctx: GraderContext, answers: Mapping[str, Any]) -> World:
+    world = _world(ctx, answers)
+    return world
+
+
+def grade_automation_golden(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """Measured, the lane opens each request and sends it to its approver as
+    DW2's account; the approver is told; a verified supplier's mail is never
+    read as a request."""
+    from dw_purchasing.domain.cases import CaseStatus
+    from dw_purchasing.testing.lane import lane_of, measure_pr_reading
+    from dw_purchasing.testing.world import RecordedNotices
+
+    async def work() -> dict[str, object]:
+        world, notices = _lane_world(ctx, data["answers"]), RecordedNotices()
+        await measure_pr_reading(world)
+        await lane_of(world, notices).tick(*ALPHA)
+        rows = world.store.rows(*ALPHA)
+        return {
+            "sent": sorted(
+                c.request.pr_no
+                for c in rows.cases.values()
+                if c.status is CaseStatus.AWAITING_APPROVAL
+            ),
+            "approver_notices": len(
+                [k for k in notices.told if k.startswith("purchasing.approval.asked:")]
+            ),
+            "supplier_mail_settled": sorted(m for m in rows.outcomes if m.startswith("Q")),
+        }
+
+    found = _run(work)
+    if found != expected["golden"]:
+        return GradeResult.fail("the lane did otherwise", found=found)
+    return GradeResult.ok()
+
+
+def grade_automation_injection(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """A mail telling the assistant to approve and order: the lane sends it to
+    the approver code names, and nothing is approved, asked or ordered."""
+    from dw_purchasing.testing.lane import lane_of, measure_pr_reading
+    from dw_purchasing.testing.world import RecordedNotices
+
+    async def work() -> dict[str, object]:
+        world = _lane_world(ctx, data["answers"])
+        await measure_pr_reading(world)
+        lane = lane_of(world, RecordedNotices())
+        await lane.tick(*ALPHA)
+        await lane.tick(*ALPHA)
+        rows = world.store.rows(*ALPHA)
+        return {
+            "statuses": sorted(c.status.value for c in rows.cases.values()),
+            "decided": len(rows.decisions),
+        }
+
+    found = _run(work)
+    if found != expected["injection"]:
+        return GradeResult.fail("the mail's instruction was acted on", found=found)
+    return GradeResult.ok()
+
+
+def grade_automation_unsure(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """Unmeasured on the plant's model, DW2 is not sure enough to act alone:
+    the cases it opens wait for a person, and what it cannot read goes to a
+    person with its reason."""
+    from dw_purchasing.domain.cases import CaseStatus
+    from dw_purchasing.testing.lane import lane_of
+    from dw_purchasing.testing.world import RecordedNotices
+
+    async def work() -> dict[str, object]:
+        world = _lane_world(ctx, data["answers"])
+        await lane_of(world, RecordedNotices()).tick(*ALPHA)
+        rows = world.store.rows(*ALPHA)
+        return {
+            "waiting_review": len(
+                [c for c in rows.cases.values() if c.review is not None and c.review.pending]
+            ),
+            "sent": len(
+                [c for c in rows.cases.values() if c.status is CaseStatus.AWAITING_APPROVAL]
+            ),
+            "to_person_reasons": sorted(
+                o.reason or "" for o in rows.outcomes.values() if o.disposition.value == "to_person"
+            ),
+        }
+
+    found = _run(work)
+    if found != expected["unsure"]:
+        return GradeResult.fail("DW2 acted alone while unsure", found=found)
+    return GradeResult.ok()
+
+
+def grade_automation_cross_tenant(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """One tenant's tick touches nobody else's mailbox or cases, and another
+    tenant's DW2 account resolves nothing here."""
+    from dw_purchasing.testing.lane import Accounts, lane_of, measure_pr_reading
+    from dw_purchasing.testing.world import RecordedNotices
+
+    async def work() -> list[str]:
+        world = _lane_world(ctx, data["answers"])
+        await measure_pr_reading(world)
+        leaks: list[str] = []
+        beta_only = lane_of(world, RecordedNotices(), Accounts({BETA}), mailboxes=(ALPHA, BETA))
+        if (await beta_only.tick(*ALPHA)).done != ("no DW2 account",):
+            leaks.append("another tenant's account acted here")
+        await lane_of(world, RecordedNotices(), Accounts({ALPHA, BETA})).tick(*ALPHA)
+        if world.store.rows(*BETA).cases or world.store.rows(*BETA).outcomes:
+            leaks.append("another tenant's rows written")
+        return leaks
+
+    leaks = _run(work)
+    return GradeResult.fail("cross-tenant", leaks=leaks) if leaks else GradeResult.ok()
+
+
+def grade_automation_degrade(
+    ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
+) -> GradeResult:
+    """The model down: no guessed case, nothing sent; the next tick reads."""
+    from dw_purchasing.testing.lane import lane_of, measure_pr_reading
+    from dw_purchasing.testing.world import RecordedNotices
+
+    async def work() -> tuple[int, int]:
+        world = _lane_world(ctx, data["answers"])
+        await measure_pr_reading(world)
+        world.model.failure = ModelUnavailableError("down")
+        await lane_of(world, RecordedNotices()).tick(*ALPHA)
+        guessed = len(world.store.rows(*ALPHA).cases)
+        world.model.failure = None
+        await lane_of(world, RecordedNotices()).tick(*ALPHA)
+        return guessed, len(world.store.rows(*ALPHA).cases)
+
+    guessed, later = _run(work)
+    if guessed or later != 2:
+        return GradeResult.fail("degraded to a guess", guessed=guessed, later=later)
+    return GradeResult.ok()
+
+
+PURCHASING_GRADERS.update(
+    {
+        "purchasing.automation_golden": grade_automation_golden,
+        "purchasing.automation_injection": grade_automation_injection,
+        "purchasing.automation_unsure": grade_automation_unsure,
+        "purchasing.automation_cross_tenant": grade_automation_cross_tenant,
+        "purchasing.automation_degrade": grade_automation_degrade,
+    }
+)

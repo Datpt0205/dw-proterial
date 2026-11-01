@@ -34,6 +34,7 @@ from dw_purchasing.application.access import Gate
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.orders import PurchaseOrders
+from dw_purchasing.application.ports import NoNotices
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.domain.cases import CaseStatus
 from dw_purchasing.domain.sourcing import Choice
@@ -92,7 +93,7 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
     assert sent.approval is not None
     await _decide_as_platform(app_sessions, tenancy, sent.approval.approval_id)
     await request_settlement(
-        app_sessions, SqlAuditRepository, SqlApprovalRepository, clock, ids
+        app_sessions, SqlAuditRepository, SqlApprovalRepository, clock, ids, NoNotices()
     ).settle(sent.approval.approval_id, caller(tenancy.alpha, principal=HEAD))
 
     await sourcing.draft_rfq(me, case_id, case_version=3)
