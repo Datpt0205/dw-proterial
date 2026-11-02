@@ -21,9 +21,9 @@ from enum import StrEnum
 from typing import Final, Literal, NamedTuple, Self, assert_never, get_args
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dw_platform.domain.messages import MailAuthentication, is_domain
+from dw_platform.domain.messages import MailAuthentication
 from dw_sales.domain.catalog import (
     BravoOrder,
     ConvertEntry,
@@ -214,22 +214,16 @@ class OrderRules(BaseModel):
     model_assist: ModelAssist
     layout_onboarding: LayoutOnboarding
     findings: Mapping[FindingCode, Severity]
-    # Mail from these sender domains, or any subdomain of one, is not taken
-    # into DW1's mailbox at all (ticket 43): a PIC's flow exports every mail
-    # that reaches the Inbox, and the company's own is mostly not DW1's.
-    # Empty takes every mail. Mail from a Design mailbox (`sales_quote_rules`)
-    # is taken whatever this holds: a reply from Design is internal mail.
-    ignored_sender_domains: tuple[str, ...] = Field(default=(), max_length=100)
 
-    @field_validator("ignored_sender_domains")
+    @model_validator(mode="before")
     @classmethod
-    def _domains(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        for index, domain in enumerate(value):
-            if not is_domain(domain):
-                raise ValueError(f"ignored_sender_domains[{index}] is not a lowercase domain")
-        if len(value) != len(set(value)):
-            raise ValueError("a domain is listed twice in ignored_sender_domains")
-        return value
+    def _no_sender_left_out(cls, data: object) -> object:
+        """`ignored_sender_domains` (1.7.0, 1.8.0, and any tenant version
+        written then) is dropped on reading: no mail is left out any more
+        (Đạt, 2026-11-02), and a version that holds it must still read."""
+        if isinstance(data, Mapping) and "ignored_sender_domains" in data:
+            return {k: v for k, v in data.items() if k != "ignored_sender_domains"}
+        return data
 
     @model_validator(mode="after")
     def _every_finding_has_a_severity(self) -> Self:

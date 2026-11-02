@@ -388,17 +388,6 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   root and filter subfolders by scope holders; one folder setting instead
   of the two `*_MAIL_DROP_DIR`. What is committed (tables, RLS, retention,
   offboarding, DW2's lane) stays.
-- **DW1's `ignored_sender_domains`** (Đạt, 2026-11-02: "không chặn thư nội
-  bộ nữa, thả hết cho AI phân loại"). Its default was already empty, so
-  nothing was left out unless a tenant listed a domain. Removing it is
-  **started and deliberately left uncommitted** in the working tree while
-  the inbound design above is debated (Đạt: stop, do not delete): rules
-  `sales_order_rules@1.9.0` without the key (a version holding it still
-  reads, the key dropped on reading), the filter out of `sales_mail_drop`
-  and `SqlMailbox`, the field off the rules page and step O1, tests
-  rewritten. Not run: the whole Sales suite and the release manifest. Đạt
-  decides: finish the removal (proposed: it is a gate before the model, the
-  opposite of "thả hết"), or keep it as an admin option, empty.
 - **Internal mail in DW's store** (follows from the two above): every mail
   of a person whose Inbox is exported, HR or pay included, is stored in
   PostgreSQL and read by the plant's model (tenant-isolated, deleted by

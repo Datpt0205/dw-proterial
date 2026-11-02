@@ -184,12 +184,10 @@ API and the plan use the English terms. The spec is
   whole with its attachments' bytes, in PostgreSQL; what every screen and
   lane reads when `DW_SALES_MAILBOX=stored`. A message's id is its file's
   hash, so a copy of one file, or one mail exported from two PICs'
-  mailboxes, is stored once.
-- **Ignored sender domains** (Tên miền không đưa vào DW1): sender domains,
-  each with its subdomains, whose mail the lane does not store at all
-  (`sales_order_rules.ignored_sender_domains`, from 1.7.0). Usually the
-  company's own. Empty takes every mail. A Design mailbox's mail is taken
-  whatever it lists.
+  mailboxes, is stored once. Every mail is stored, whoever sent it, the
+  company's own included; DW1's model sorts what each one is (Đạt,
+  2026-11-02). "Tên miền không đưa vào DW1" (`ignored_sender_domains`,
+  1.7.0–1.8.0) is gone from 1.9.0; a version that holds it still reads.
 
 ## Roles and permission sets
 
