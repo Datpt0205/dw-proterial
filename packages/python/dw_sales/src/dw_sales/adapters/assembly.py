@@ -46,12 +46,12 @@ from dw_agent_runtime.registry import (
     parse_worker_file,
 )
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.adapters.drop_folder import LocalDropFolder
 from dw_platform.adapters.outbox_folder import FolderOutbox
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.application.malware import MalwareScanPort
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
-from dw_platform.adapters.drop_folder import LocalDropFolder
 from dw_sales.adapters.memory_rules import static_rule_book
 from dw_sales.adapters.mock import MockInbox, MockSalesCatalog
 from dw_sales.adapters.order_rules import load_tenant_order_rules
