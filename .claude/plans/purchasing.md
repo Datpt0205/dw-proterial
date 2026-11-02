@@ -337,12 +337,19 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
    file; the outbox (RFQs from the buyer's mailbox); the DW2 attest lane.
    Stored attachments are kept and read by nothing yet: the Excel PR form
    and scanned paper read them, scanned by ClamAV first as Sales' are.
-3. Function 5 — supplier confirmation and delivery tracking (the PO number
+3. The plant's flow for DW2 (Đạt, 2026-11-02: set up and integrated later,
+   prepared now): DW1's OneDrive + Power Automate path (`infra/onprem/README.md`
+   "Mail without access to Microsoft 365"), its own `DW2-mail` folder and
+   share at `/srv/dw/purchasing-mail-drop`, the flow copied without leaving
+   internal mail out. Which mailboxes it exports (the shared purchasing one
+   or each buyer's) is settled then. Code and compose are ready
+   (`DW_PURCHASING_MAILBOX=stored`); then a live run as ticket 43's.
+4. Function 5 — supplier confirmation and delivery tracking (the PO number
    Bravo assigns recorded back; confirmations read from mail).
-4. Function 6 — the morning brief and status Q&A over purchase cases.
-5. On-prem live evals of DW2's model steps on Qwen3.5-9B (no measurement
+5. Function 6 — the morning brief and status Q&A over purchase cases.
+6. On-prem live evals of DW2's model steps on Qwen3.5-9B (no measurement
    was made in this run, so no model step can be "AI tự làm").
-6. A sent request cannot be withdrawn (a question on the Proterial list).
+7. A sent request cannot be withdrawn (a question on the Proterial list).
 
 ## Not done, on purpose
 
@@ -379,9 +386,6 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 - **Who may download the PO file**: a permission set the tenant's admin
   grants (`purchasing_po_downloader`); the buyer holds it by role.
 - **Stored mail**: kept 365 days by default (`retention.mailbox_days`),
-  never past the mail outcomes'; Proterial's accountant sets it. Which
-  mailbox the flow exports (one shared purchasing mailbox, or each buyer's)
-  and who at the plant sets up the flow and the share
-  (`/srv/dw/purchasing-mail-drop`, read-only).
+  never past the mail outcomes'; Proterial's accountant sets it.
 - **Re-approval past the tier**: built (goes back at the tier its total
   names, tolerance 0 by default). Proterial to give the tolerance, if any.
