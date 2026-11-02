@@ -6,12 +6,14 @@ whole, its attachment kept; another tenant or workspace reads none of it, and
 a connection that never scoped itself reads nothing even by partition name;
 the application can neither rewrite nor remove it; a month made ahead is
 policed; the retention function deletes one workspace's mail before its
-cutoff and no one else's; offboarding exports a tenant's mail from every
+cutoff and no one else's, locking in the partition lane's order (migration
+394419a5ebbd); offboarding exports a tenant's mail from every
 workspace and its purge takes it away, leaving the other tenant's.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import uuid
 from datetime import UTC, date, datetime, timedelta
@@ -399,6 +401,48 @@ async def test_a_workspace_holding_mail_whose_files_are_forgotten_is_still_visit
             {"w": tenancy.alpha_other[1]},
         )
     assert tenancy.alpha_other in set(await SqlRetentionStore(app_sessions).scopes())
+
+
+async def test_retention_waiting_on_the_partition_lane_holds_nothing_the_lane_needs_next(
+    app_sessions: async_sessionmaker[AsyncSession],
+    migrator: AsyncEngine,
+    tenancy: Tenancy,
+) -> None:
+    """Measured 2026-11-02 on a worker's first tick: the partition lane locks
+    messages, attachments and files in one transaction, and retention, which
+    deleted attachments first, deadlocked with it. Retention waiting on the
+    messages the lane holds must not hold the attachments it takes next."""
+    store = SqlRetentionStore(app_sessions)
+    async with migrator.connect() as lane:
+        await lane.execute(
+            sa.text("LOCK TABLE purchasing.mailbox_messages IN ACCESS EXCLUSIVE MODE")
+        )
+        prune = asyncio.create_task(
+            store.prune(
+                tenancy.alpha,
+                cases_before=None,
+                outcomes_before=None,
+                mail_before=datetime.now(UTC),
+            )
+        )
+        waiting = 0
+        for _ in range(100):
+            waiting = await lane.scalar(
+                sa.text(
+                    "SELECT count(*) FROM pg_locks WHERE NOT granted"
+                    " AND relation = 'purchasing.mailbox_messages'::regclass"
+                )
+            )
+            if waiting:
+                break
+            await asyncio.sleep(0.05)
+        assert waiting, "retention never reached the messages"
+        await lane.execute(sa.text("SET LOCAL lock_timeout = '3s'"))
+        await lane.execute(
+            sa.text("LOCK TABLE purchasing.mailbox_attachments IN ACCESS EXCLUSIVE MODE")
+        )
+        await lane.rollback()
+    assert (await prune).mail == 0
 
 
 # ------------------------------------------------------------- offboarding --
