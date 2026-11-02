@@ -397,7 +397,13 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   reads, the key dropped on reading), the filter out of `sales_mail_drop`
   and `SqlMailbox`, the field off the rules page and step O1, tests
   rewritten. Not run: the whole Sales suite and the release manifest. Đạt
-  decides: finish the removal, or keep it as an admin option, empty.
+  decides: finish the removal (proposed: it is a gate before the model, the
+  opposite of "thả hết"), or keep it as an admin option, empty.
+- **Internal mail in DW's store** (follows from the two above): every mail
+  of a person whose Inbox is exported, HR or pay included, is stored in
+  PostgreSQL and read by the plant's model (tenant-isolated, deleted by
+  `mailbox_days`). Proterial to agree; if not, the flow skips a folder or
+  label ("Cá nhân") at the source, never a sender-domain gate.
 
 - **Who configures DW2**: built as `purchasing_configurer` (proposes) and
   the head (decides, and applies their own at once, as a Sales head). Whether
