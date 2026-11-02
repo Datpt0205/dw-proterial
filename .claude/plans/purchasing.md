@@ -340,8 +340,9 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 3. The plant's flow for DW2 (Đạt, 2026-11-02: set up and integrated later,
    prepared now): DW1's OneDrive + Power Automate path (`infra/onprem/README.md`
    "Mail without access to Microsoft 365"), its own `DW2-mail` folder and
-   share at `/srv/dw/purchasing-mail-drop`, the flow copied without leaving
-   internal mail out. Which mailboxes it exports (the shared purchasing one
+   share at `/srv/dw/purchasing-mail-drop`, the flow exporting every mail,
+   internal included (as DW1's does). May become one shared flow for DW1
+   and DW2 (Decisions, "Inbound mail"). Which mailboxes it exports (the shared purchasing one
    or each buyer's) is settled then. Code and compose are ready
    (`DW_PURCHASING_MAILBOX=stored`); then a live run as ticket 43's.
 4. Function 5 — supplier confirmation and delivery tracking (the PO number
@@ -368,6 +369,35 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   mock; anchors come with the mail drop's move (ADR 0013 decision 3).
 
 ## Decisions Đạt owes (Purchasing)
+
+- **Inbound mail for DW1 and DW2** (2026-11-02, debated, no code yet).
+  Đạt wants one flow to set up, and asks how a mail is told DW1's or DW2's.
+  Proposed: one flow template every person runs, exporting their Inbox to
+  `DW-mail/<their address>/` on the DW account's OneDrive (the Windows
+  Server syncs and shares it); the folder says whose mail it is, and each
+  DW reads the folders of the members holding its scope
+  (`sales.inbox.process` → DW1, `purchasing.request.intake` → DW2, both →
+  both), read from the platform's `holding`, so no list is typed twice;
+  inside each DW its model sorts every mail. Set aside: one folder that
+  each DW's model sorts as "mine or not" (every mail read twice by the 9B
+  model; a mail both decline is lost unseen, one both claim is two cases),
+  a platform router (a second decision place, against ADR 0014), and one
+  shared mailbox fed by forwarding (whose mail it was may not survive a
+  forward; unmeasured). Sending stays as built: each person's own flow
+  reads their outbox folder. Code it would change: both drop lanes read one
+  root and filter subfolders by scope holders; one folder setting instead
+  of the two `*_MAIL_DROP_DIR`. What is committed (tables, RLS, retention,
+  offboarding, DW2's lane) stays.
+- **DW1's `ignored_sender_domains`** (Đạt, 2026-11-02: "không chặn thư nội
+  bộ nữa, thả hết cho AI phân loại"). Its default was already empty, so
+  nothing was left out unless a tenant listed a domain. Removing it is
+  **started and deliberately left uncommitted** in the working tree while
+  the inbound design above is debated (Đạt: stop, do not delete): rules
+  `sales_order_rules@1.9.0` without the key (a version holding it still
+  reads, the key dropped on reading), the filter out of `sales_mail_drop`
+  and `SqlMailbox`, the field off the rules page and step O1, tests
+  rewritten. Not run: the whole Sales suite and the release manifest. Đạt
+  decides: finish the removal, or keep it as an admin option, empty.
 
 - **Who configures DW2**: built as `purchasing_configurer` (proposes) and
   the head (decides, and applies their own at once, as a Sales head). Whether
