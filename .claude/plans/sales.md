@@ -1085,9 +1085,17 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 
 ## Open
 
-- 2026-11-02, waiting on Đạt: one inbound flow for DW1 and DW2, and
-  whether `ignored_sender_domains` goes (its removal started, uncommitted);
-  both in `purchasing.md` "Decisions Đạt owes".
+- 2026-11-02, **no sender left out** (Đạt: "gỡ hẳn"): `ignored_sender_domains`
+  is gone from `sales_order_rules@1.9.0`, the `sales_mail_drop` lane, the
+  stored mailbox, step O1 and the rules page; every mail is stored and DW1's
+  model sorts it, internal mail included. A version holding the key still
+  reads (dropped on reading; mutated red). Item 7's premise ("internal mail
+  never reaches DW1") no longer holds: PC's mail reaches the mailbox now,
+  so DW1 could read PC's dates itself (not built; Sales still pastes them).
+
+- 2026-11-02, Đạt: one inbound flow for DW1 and DW2 (`purchasing.md`
+  "Decisions Đạt owes" until built); whether Proterial agrees to internal
+  mail being kept and read (same place).
 - 2026-10-28, brainstormed, waiting on Đạt (no code yet): roles cut to the ~4 Proterial uses with plain-words permissions, plus a few audited switches, never a free permission editor (A + B); "Bộ quyền bổ sung" renamed and explained, "Approval authority" hidden; e-signature step 1 (the approval stamped on the quote PDF with a verification code, no key held, no internet) before any remote digital signing; a questionnaire for WIV-03-032 drawn from the standard export-control programme, code only once Proterial's document is in hand; WIV-03-031 after the Bravo meeting.
 - 2026-10-28, licence check for Proterial's IP-indemnity clause (agent):
   no AGPL/SSPL/RSAL component ships (153 Python dists, 118 web prod

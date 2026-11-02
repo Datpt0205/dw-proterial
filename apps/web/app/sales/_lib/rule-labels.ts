@@ -165,11 +165,6 @@ export const RULE_FIELDS: Record<RuleKey, Record<string, FieldWords>> = {
       help: "Kết quả cũ hơn số ngày này vào ngày nhận PO coi như chưa rà.",
       unit: "ngày",
     },
-    ignored_sender_domains: {
-      label: "Tên miền không đưa vào DW1",
-      help: "Thư từ các tên miền này (kể cả tên miền con) không được đưa vào hộp thư DW1. Thường là tên miền của chính công ty, ví dụ proterial.com. Viết chữ thường. Để trống: DW1 nhận mọi thư. Thư từ hộp thư của Design luôn được nhận.",
-      item: "Tên miền",
-    },
     intake: {
       label: "Giới hạn tệp đính kèm",
       help: "Tệp vượt một giới hạn không được đọc; thư chuyển cho Sales là không đọc được.",

@@ -40,7 +40,6 @@ from dw_sales.application.mail_drop import (
     MAIL_DROP_LANE,
     MailDrop,
     MailFile,
-    MailIntake,
 )
 from dw_sales.application.ports import SalesScope
 
@@ -321,14 +320,6 @@ async def test_a_mail_stranded_in_the_default_partition_moves_with_its_attachmen
 # -------------------------------------------------------------- the lane --
 
 
-class _Intake:
-    def __init__(self, intake: MailIntake) -> None:
-        self.value = intake
-
-    async def intake(self, scope: SalesScope) -> MailIntake:
-        return self.value
-
-
 class _Notices:
     def __init__(self) -> None:
         self.told: list[str] = []
@@ -344,7 +335,6 @@ def _drop(
     folder: Path,
     mailbox: SqlMailbox,
     now: datetime,
-    intake: MailIntake | None = None,
     notices: _Notices | None = None,
 ) -> Callable[[], MailDrop]:
     told = notices or _Notices()
@@ -352,7 +342,6 @@ def _drop(
         LocalDropFolder(folder),
         ClientMailReader(InProcessReaderTransport()),
         mailbox,
-        _Intake(intake or MailIntake()),
         told,
         FixedClock(now),
         Uuid4Generator(),
@@ -409,12 +398,12 @@ async def test_a_file_the_reader_refuses_is_recorded_with_its_reason_and_told_on
     assert row.outcome == "refused" and row.reason and row.message_id is None
 
 
-async def test_each_pics_folder_is_read_and_ignored_domains_are_left_out_for_good(
-    mailbox: SqlMailbox, migrator: AsyncEngine, world: World, tmp_path: Path
+async def test_each_pics_folder_is_read_and_internal_mail_is_kept_too(
+    mailbox: SqlMailbox, world: World, tmp_path: Path
 ) -> None:
-    """Five PICs, a folder each: the lane reads them all. Mail from an ignored
-    domain is not kept, and is not parsed again after a restart; Design's,
-    from the same domain, is taken."""
+    """A folder per PIC: the lane reads them all, and keeps every mail, the
+    company's own included (Đạt, 2026-11-02: DW1's model sorts every mail).
+    Nothing is parsed again after a restart."""
     for pic in ("PIC-An", "PIC-Binh"):
         (tmp_path / pic).mkdir()
     (tmp_path / "PIC-An" / "1-po.eml").write_bytes(_eml(subject="PO từ khách"))
@@ -425,24 +414,12 @@ async def test_each_pics_folder_is_read_and_ignored_domains_are_left_out_for_goo
         _eml(subject="Re: YCBG-0042", sender="design@proterial.example")
     )
     _settled(tmp_path)
-    intake = MailIntake(
-        ignored_domains=("proterial.example",), always_from=frozenset({"design@proterial.example"})
-    )
-    new_drop = _drop(tmp_path, mailbox, datetime.now(UTC), intake)
+    new_drop = _drop(tmp_path, mailbox, datetime.now(UTC))
 
     first = await new_drop().tick(world.alpha_other)
     again = await new_drop().tick(world.alpha_other)
 
-    assert first.stored == ("1-po.eml", "3-design.eml")
-    assert first.left_out == ("2-noi-bo.eml",)
+    assert first.stored == ("1-po.eml", "2-noi-bo.eml", "3-design.eml")
     assert again == type(again)()
     subjects = {m.subject for m in await mailbox.list_messages(world.alpha_other)}
-    assert subjects == {"PO từ khách", "Re: YCBG-0042"}
-    async with migrator.connect() as conn:
-        kept = await conn.scalar(
-            sa.text(
-                "SELECT count(*) FROM sales.mailbox_messages"
-                " WHERE message ->> 'subject' = 'Họp giao ban'"
-            )
-        )
-    assert kept == 0
+    assert subjects == {"PO từ khách", "Họp giao ban", "Re: YCBG-0042"}

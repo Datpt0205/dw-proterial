@@ -13,8 +13,7 @@ else reads the stored mailbox, through `InboxPort`, like the mock.
 **One tick:**
 
 1. The names already handled are read once per process (`handled_sources`):
-   a restart does not read the folders' whole history again, and mail left
-   out on purpose is not parsed again either.
+   a restart does not read the folders' whole history again.
 2. Each `.eml` file not seen yet, in the folder or one level below it (a
    folder per PIC), oldest name first (the flow names a file by when it wrote
    it). A file modified less than `SETTLE` ago, or still empty, may be
@@ -25,12 +24,10 @@ else reads the stored mailbox, through `InboxPort`, like the mock.
    which file did not arrive (`MailDropNoticePort.refused`, Đạt 2026-10-29:
    "không thể làm hỏng luồng rồi im lặng luôn được"). Its content is never
    logged.
-4. A mail from a sender domain the tenant's order rules leave out
-   (`ignored_sender_domains`, `MailIntake`) is not stored: its file is
-   recorded as handled, nothing of the mail is kept. A reply from a Design
-   mailbox is taken whatever the list holds.
-5. Every other mail is stored with one audit event, in one transaction
-   (`MailStorePort.store`). The same mail in a second file is stored once,
+4. Every other mail is stored, whoever sent it, with one audit event, in one
+   transaction (`MailStorePort.store`): internal mail included (Đạt,
+   2026-11-02: DW1's model sorts every mail; `ignored_sender_domains` left
+   the order rules in 1.9.0). The same mail in a second file is stored once,
    audited once: a copy of the file has the same id (its hash), and one mail
    exported from two PICs' mailboxes (To and Cc) carries the same Message-ID
    from the same sender.
@@ -57,11 +54,9 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.drop_folder import DropFolderPort, DroppedFile
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
-from dw_platform.domain.messages import EmailAddress, InboundMessage
+from dw_platform.domain.messages import InboundMessage
 from dw_sales.application.access import SalesScopes
 from dw_sales.application.ports import NotificationSenderPort, SalesScope, ScopeHoldersPort
-from dw_sales.application.quotation import QuoteRules
-from dw_sales.domain.order_checks import OrderRules
 
 logger = logging.getLogger("dw_sales.mail_drop")
 
@@ -96,56 +91,11 @@ class MailFileReaderPort(Protocol):
     async def read_mail(self, data: bytes) -> MailFile | MailRefused: ...
 
 
-@dataclass(frozen=True)
-class MailIntake:
-    """Which senders' mail DW1 takes: every one but the ignored domains (a
-    subdomain included), and always a Design mailbox."""
-
-    ignored_domains: tuple[str, ...] = ()
-    always_from: frozenset[str] = frozenset()
-
-    def takes(self, sender: EmailAddress) -> bool:
-        if sender.address.lower() in self.always_from:
-            return True
-        domain = sender.domain
-        return not any(domain == d or domain.endswith("." + d) for d in self.ignored_domains)
-
-
-class MailIntakePort(Protocol):
-    async def intake(self, scope: SalesScope) -> MailIntake: ...
-
-
-class _IntakeRules(Protocol):
-    async def order_rules(self, scope: SalesScope) -> OrderRules: ...
-
-    async def quote_rules(self, scope: SalesScope) -> QuoteRules: ...
-
-
-@dataclass(frozen=True)
-class RulesMailIntake:
-    """`MailIntakePort` over the tenant's rules in force: the order rules'
-    ignored domains, the quote rules' Design mailboxes."""
-
-    rules: _IntakeRules
-
-    async def intake(self, scope: SalesScope) -> MailIntake:
-        design = (await self.rules.quote_rules(scope)).design_mailboxes
-        return MailIntake(
-            ignored_domains=(await self.rules.order_rules(scope)).ignored_sender_domains,
-            always_from=frozenset(address.lower() for address in design),
-        )
-
-
 class MailStorePort(Protocol):
     """The stored mailbox, as the lane writes it."""
 
     async def handled_sources(self, scope: SalesScope) -> frozenset[str]:
-        """The file names already handled: stored, or left out on purpose."""
-        ...
-
-    async def leave_out(self, scope: SalesScope, *, source: str) -> None:
-        """Record that ``source`` held mail the rules leave out, and nothing
-        else of it."""
+        """The file names already handled: stored, duplicate or refused."""
         ...
 
     async def refuse(self, scope: SalesScope, *, source: str, reason: str) -> None:
@@ -167,7 +117,6 @@ class DropTick:
 
     stored: tuple[str, ...] = ()
     already_stored: tuple[str, ...] = ()
-    left_out: tuple[str, ...] = ()
     refused: tuple[tuple[str, str], ...] = ()
     waiting: int = 0
 
@@ -244,7 +193,7 @@ def _lane_context(scope: SalesScope) -> AccessContext:
     )
 
 
-_Outcome = Literal["stored", "already_stored", "left_out"]
+_Outcome = Literal["stored", "already_stored"]
 _Taken = _Outcome | Literal["waiting"] | MailRefused
 
 
@@ -255,7 +204,6 @@ class MailDrop:
     folder: DropFolderPort
     reader: MailFileReaderPort
     store: MailStorePort
-    intake: MailIntakePort
     notices: MailDropNoticePort
     clock: UtcClock
     ids: IdGenerator
@@ -268,8 +216,7 @@ class MailDrop:
             self._seen = set(await self.store.handled_sources(scope))
         seen = self._seen
         now = self.clock.now()
-        intake = await self.intake.intake(scope)
-        done: dict[_Outcome, list[str]] = {"stored": [], "already_stored": [], "left_out": []}
+        done: dict[_Outcome, list[str]] = {"stored": [], "already_stored": []}
         refused: list[tuple[str, str]] = []
         waiting = 0
         try:
@@ -283,7 +230,7 @@ class MailDrop:
             taken = (
                 "waiting"
                 if dropped.size == 0 or now - dropped.modified_at < SETTLE
-                else await self._take(scope, dropped, intake)
+                else await self._take(scope, dropped)
             )
             if taken == "waiting":
                 waiting += 1
@@ -301,12 +248,11 @@ class MailDrop:
         return DropTick(
             stored=tuple(done["stored"]),
             already_stored=tuple(done["already_stored"]),
-            left_out=tuple(done["left_out"]),
             refused=tuple(refused),
             waiting=waiting,
         )
 
-    async def _take(self, scope: SalesScope, dropped: DroppedFile, intake: MailIntake) -> _Taken:
+    async def _take(self, scope: SalesScope, dropped: DroppedFile) -> _Taken:
         if dropped.size > self.max_bytes:
             return _over(self.max_bytes)
         data = await self.folder.read(dropped, self.max_bytes)
@@ -317,9 +263,6 @@ class MailDrop:
         read = await self.reader.read_mail(data)
         if isinstance(read, MailRefused):
             return read
-        if not intake.takes(read.message.sender):
-            await self.store.leave_out(scope, source=dropped.name)
-            return "left_out"
         event = lane_audit_event(
             lane=MAIL_DROP_LANE,
             event_id=self.ids.new_uuid(),

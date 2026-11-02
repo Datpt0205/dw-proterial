@@ -90,7 +90,7 @@ from dw_sales.application.followups import BriefWriterPort, FollowupLane
 from dw_sales.application.handoffs import HandoffReader
 from dw_sales.application.inbox_lane import InboxLane, ServiceAccessPort
 from dw_sales.application.layouts import LayoutChecks, LayoutPrefiller, LayoutSettlement
-from dw_sales.application.mail_drop import MailDrop, MailDropNotices, RulesMailIntake
+from dw_sales.application.mail_drop import MailDrop, MailDropNotices
 from dw_sales.application.message_intent import IntentReader
 from dw_sales.application.model_calls import TimedInterpretation
 from dw_sales.application.model_readiness import ModelReadiness
@@ -268,7 +268,6 @@ def build_dw1(
             LocalDropFolder(mail_drop),
             readers.mail,
             stored,
-            RulesMailIntake(book),
             MailDropNotices(holders, notifications),
             clock,
             ids,

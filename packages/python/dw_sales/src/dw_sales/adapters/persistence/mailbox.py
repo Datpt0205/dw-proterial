@@ -84,12 +84,6 @@ class SqlMailbox:
         async with tenant_session(self.session_factory, _bound(scope)) as session:
             return frozenset(await session.scalars(sa.select(_F.c.source_name)))
 
-    async def leave_out(self, scope: SalesScope, *, source: str) -> None:
-        async with tenant_session(self.session_factory, _bound(scope)) as session:
-            await session.execute(
-                sa.insert(_F).values(**scope_values(scope), source_name=source, outcome="left_out")
-            )
-
     async def refuse(self, scope: SalesScope, *, source: str, reason: str) -> None:
         async with tenant_session(self.session_factory, _bound(scope)) as session:
             await session.execute(

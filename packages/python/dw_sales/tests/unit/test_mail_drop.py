@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import yaml
 
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import FixedClock, Uuid4Generator
@@ -27,7 +28,6 @@ from dw_sales.application.mail_drop import (
     MailDrop,
     MailDropNotices,
     MailFile,
-    MailIntake,
     MailRefused,
 )
 from dw_sales.application.ports import SalesScope
@@ -88,16 +88,11 @@ class Store:
     def __init__(self, handled: frozenset[str] = frozenset()) -> None:
         self.handled = set(handled)
         self.stored: dict[str, MailFile] = {}
-        self.left_out: list[str] = []
         self.refused: dict[str, str] = {}
         self.events: list[AuditEvent] = []
 
     async def handled_sources(self, scope: SalesScope) -> frozenset[str]:
         return frozenset(self.handled)
-
-    async def leave_out(self, scope: SalesScope, *, source: str) -> None:
-        self.handled.add(source)
-        self.left_out.append(source)
 
     async def refuse(self, scope: SalesScope, *, source: str, reason: str) -> None:
         self.handled.add(source)
@@ -132,26 +127,16 @@ class Notices:
         self.told_unreachable.append(day)
 
 
-class Intake:
-    def __init__(self, intake: MailIntake) -> None:
-        self.value = intake
-
-    async def intake(self, scope: SalesScope) -> MailIntake:
-        return self.value
-
-
 def _lane(
     folder: Folder,
     reader: Reader,
     store: Store,
-    intake: MailIntake | None = None,
     notices: Notices | None = None,
 ) -> MailDrop:
     return MailDrop(
         folder,
         reader,
         store,
-        Intake(intake or MailIntake()),
         notices or Notices(),
         FixedClock(NOW),
         Uuid4Generator(),
@@ -262,64 +247,30 @@ def test_a_reader_that_does_not_answer_marks_nothing() -> None:
     assert _tick(_lane(folder, Reader(), store)).stored == ("1.eml",)
 
 
-def test_mail_from_an_ignored_domain_is_left_out_and_designs_is_taken() -> None:
+def test_internal_mail_is_stored_like_any_other() -> None:
+    """Đạt, 2026-11-02: no sender is left out; DW1's model sorts every mail."""
     folder = Folder(
         {
             "1.eml": b"from:hr@vn.proterial.example",
             "2.eml": b"from:design@proterial.example",
-            "3.eml": b"from:buyer@notproterial.example",
+            "3.eml": b"from:buyer@velatrix.example",
         }
     )
-    store = Store()
-    intake = MailIntake(
-        ignored_domains=("proterial.example",), always_from=frozenset({"design@proterial.example"})
+    tick = _tick(_lane(folder, Reader(), Store()))
+    assert tick.stored == ("1.eml", "2.eml", "3.eml")
+
+
+def test_a_version_naming_ignored_sender_domains_still_reads() -> None:
+    """1.7.0 and 1.8.0 carried the key, and a tenant's own version may: it is
+    no longer read, and a version holding it must not stop reading."""
+    document = yaml.safe_load(
+        (REPO / "configs/policies/sales_order_rules@1.8.0.yaml").read_text(encoding="utf-8")
     )
-
-    tick = _tick(_lane(folder, Reader(), store, intake))
-
-    assert tick.left_out == ("1.eml",)
-    assert tick.stored == ("2.eml", "3.eml")
-    assert "1.eml" in store.handled
-
-
-@pytest.mark.parametrize(
-    ("sender", "taken"),
-    [
-        ("a@proterial.example", False),
-        ("a@vn.proterial.example", False),
-        ("A@PROTERIAL.EXAMPLE", False),
-        ("a@proterial.example.evil", True),
-        ("a@xproterial.example", True),
-        ("Design@Proterial.example", True),
-    ],
-)
-def test_an_ignored_domain_covers_its_subdomains_and_nothing_else(sender: str, taken: bool) -> None:
-    intake = MailIntake(
-        ignored_domains=("proterial.example",), always_from=frozenset({"design@proterial.example"})
-    )
-    assert intake.takes(EmailAddress(address=sender)) is taken
-
-
-def test_an_empty_list_takes_every_mail() -> None:
-    assert MailIntake().takes(EmailAddress(address="anyone@proterial.example"))
-
-
-def _rules(**changes: object) -> OrderRules:
-    base = load_order_rules(REPO / "configs/policies/sales_order_rules@1.7.0.yaml")
-    return OrderRules.model_validate({**base.model_dump(by_alias=True), **changes})
-
-
-def test_the_platform_rules_ignore_no_domain() -> None:
-    assert _rules().ignored_sender_domains == ()
-
-
-@pytest.mark.parametrize(
-    "domains",
-    [("Proterial.example",), ("proterial.example", "proterial.example"), ("not a domain",)],
-)
-def test_ignored_domains_are_lowercase_domains_listed_once(domains: tuple[str, ...]) -> None:
-    with pytest.raises(ValueError, match="ignored_sender_domains"):
-        _rules(ignored_sender_domains=domains)
+    document["ignored_sender_domains"] = ["proterial.example"]
+    rules = OrderRules.model_validate(document)
+    assert "ignored_sender_domains" not in rules.model_dump()
+    current = load_order_rules(REPO / "configs/policies/sales_order_rules@1.9.0.yaml")
+    assert "ignored_sender_domains" not in current.model_dump()
 
 
 class Holders:
