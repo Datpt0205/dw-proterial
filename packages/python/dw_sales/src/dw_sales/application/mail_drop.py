@@ -48,13 +48,14 @@ until it is back, and a log line nobody reads is not telling anyone.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Final, Literal, Protocol
 
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
+from dw_platform.application.drop_folder import DropFolderPort, DroppedFile
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
 from dw_platform.domain.messages import EmailAddress, InboundMessage
 from dw_sales.application.access import SalesScopes
@@ -93,32 +94,6 @@ class MailFileReaderPort(Protocol):
     """Reads one `.eml` file. Raises when the reader cannot answer at all."""
 
     async def read_mail(self, data: bytes) -> MailFile | MailRefused: ...
-
-
-@dataclass(frozen=True)
-class DroppedFile:
-    """A file in the drop folder: its name, the subfolder it sits in ("" for
-    the folder itself), its size and when it last changed. The flow names a
-    file by the time and a fresh guid, so a name is the file's identity
-    across the PICs' folders."""
-
-    name: str
-    size: int
-    modified_at: datetime
-    folder: str = ""
-
-
-class DropFolderPort(Protocol):
-    """The folder the flows' files arrive in, read only."""
-
-    async def files(self) -> Sequence[DroppedFile]:
-        """Every regular file in the folder or one level below it."""
-        ...
-
-    async def read(self, dropped: DroppedFile, limit: int) -> bytes:
-        """At most ``limit`` + 1 bytes of the file: one more than the limit
-        says it is over."""
-        ...
 
 
 @dataclass(frozen=True)

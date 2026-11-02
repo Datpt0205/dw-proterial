@@ -1,8 +1,9 @@
-"""The drop folder DW1's mail arrives in (ticket 43): `DropFolderPort` over a
-directory this process mounts read-only.
+"""The drop folder a context's mail arrives in (Sales ticket 43, lifted by
+docs/adr/0013): `DropFolderPort` over a directory this process mounts
+read-only.
 
 The directory is the share a PC in the plant syncs from OneDrive, one
-subfolder per Sales PIC; compose mounts it into the worker alone. Only regular
+subfolder per mailbox; compose mounts it into the worker alone. Only regular
 files in it or one level below are listed: a link, a deeper folder or a name
 that is not a plain file name is not a mail a flow wrote.
 """
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from dw_sales.application.mail_drop import DroppedFile
+from dw_platform.application.drop_folder import DroppedFile
 
 
 @dataclass(frozen=True)
