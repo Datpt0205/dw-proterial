@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.adapters.persistence.repositories import SqlAuditRepository
 from dw_platform.domain.audit import AuditEvent, lane_audit_event
-from dw_sales.adapters.mail_folder import LocalDropFolder
+from dw_platform.adapters.drop_folder import LocalDropFolder
 from dw_sales.adapters.persistence.mailbox import SqlMailbox
 from dw_sales.adapters.reader_client import ClientMailReader
 from dw_sales.adapters.readers.mail import read_mail
