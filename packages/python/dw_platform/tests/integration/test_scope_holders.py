@@ -19,7 +19,7 @@ from pg_harness import DatabaseUrls
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
+from dw_platform.adapters.persistence.scope_holders import HolderMailboxes, SqlScopeHolders
 
 pytestmark = pytest.mark.integration
 
@@ -250,3 +250,29 @@ async def test_holding_and_holds_agree_for_every_member(
                     scope,
                     user,
                 )
+
+
+async def test_the_mailboxes_a_lane_reads_are_the_holders_addresses_and_no_one_elses(
+    holders: SqlScopeHolders, migrator: AsyncEngine, world: World
+) -> None:
+    """One drop folder for every DW: a lane reads the folders of those holding
+    its scope, by the address each signs in with, lowercase; a holder with no
+    address has no folder, and another workspace's or tenant's holder none
+    here."""
+    async with migrator.begin() as conn:
+        for user, email in (
+            (world.by_role, "An@Proterial.example"),
+            (world.by_set, "binh@proterial.example"),
+            (world.plain, "plain@proterial.example"),
+            (world.ws2_only, "ws2@proterial.example"),
+            (world.b_holder, "b@other.example"),
+        ):
+            await conn.execute(
+                sa.text("UPDATE platform.users SET email = :e WHERE id = :u"),
+                {"e": email, "u": user},
+            )
+    mailboxes = HolderMailboxes(holders, world.tenant_a, world.ws1, frozenset({SCOPE}))
+
+    assert await mailboxes.addresses() == {"an@proterial.example", "binh@proterial.example"}
+    nobody = HolderMailboxes(holders, world.tenant_a, world.ws1, frozenset({"z.none"}))
+    assert await nobody.addresses() == frozenset()

@@ -45,9 +45,11 @@ dw_sales ADR 0005 as DW2 applies it).
   the tenant's rule. Stamped on the case and on the platform approval
   (`purchasing.request`, strict) when it is sent.
 - **Stored mailbox (hộp thư đã lưu)**: the purchasing mailbox as DW2 holds
-  it, `DW_PURCHASING_MAILBOX=stored` (else the demo's mock). A flow exports
-  each mail as an `.eml` file into DW2's own drop folder; the worker's
-  `purchasing_mail_drop` lane reads each new file once in the reader sandbox
+  it, `DW_PURCHASING_MAILBOX=stored` (else the demo's mock). Each person's
+  flow exports each mail as an `.eml` file into their own folder of the one
+  drop folder every DW shares; the worker's `purchasing_mail_drop` lane reads
+  each new file once, in the folders of the members holding
+  `purchasing.request.intake` only, in the reader sandbox
   and stores the message and its attachments (`purchasing.mailbox_*`),
   audited as itself. A file it cannot read is told to whoever holds
   `purchasing.request.intake`, once; a folder it cannot list, once a day.

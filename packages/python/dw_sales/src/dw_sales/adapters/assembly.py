@@ -49,6 +49,8 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.adapters.drop_folder import LocalDropFolder
 from dw_platform.adapters.outbox_folder import FolderOutbox
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
+from dw_platform.adapters.persistence.scope_holders import HolderMailboxes, SqlScopeHolders
+from dw_platform.application.drop_folder import OwnedFolders
 from dw_platform.application.malware import MalwareScanPort
 from dw_sales.adapters.artifact_files import ArtifactFiles
 from dw_sales.adapters.catalog_templates import XlsxCatalogTemplates
@@ -81,7 +83,7 @@ from dw_sales.adapters.persistence.uow import (
 from dw_sales.adapters.policy_files import load_sales_policies, rule_book
 from dw_sales.adapters.reader_client import ReaderTransport, client_readers
 from dw_sales.adapters.runtime import RuntimeDw1Runs
-from dw_sales.application.access import SalesAuthorizationPort
+from dw_sales.application.access import SalesAuthorizationPort, SalesScopes
 from dw_sales.application.activity import ActivityService
 from dw_sales.application.brief_writing import BriefWriter
 from dw_sales.application.catalog_imports import CatalogParsing, CatalogSettlement
@@ -236,7 +238,8 @@ def build_dw1(
 
     The mailbox is ``mailbox``: the mock bound to ``scope``, or the mail
     stored from the drop folder (ticket 43), which ``mail_drop`` names for the
-    one process that reads it into the store."""
+    one process that reads it into the store: the folder every DW shares, of
+    which DW1 reads the subfolders of those holding `sales.inbox.process`."""
     # The lists Sales maintains by hand from each workspace's approved import,
     # the mock where none is approved yet (ticket 41); the ERP's records from
     # the mock until Bravo is connected.
@@ -265,7 +268,18 @@ def build_dw1(
         None
         if mail_drop is None
         else MailDrop(
-            LocalDropFolder(mail_drop),
+            # The one drop folder every DW shares: only the subfolders of the
+            # members who process this mailbox, the people told when a file
+            # is refused (`MailDropNotices`).
+            OwnedFolders(
+                LocalDropFolder(mail_drop),
+                HolderMailboxes(
+                    SqlScopeHolders(session_factory),
+                    scope.tenant_id.value,
+                    scope.workspace_id.value,
+                    frozenset({SalesScopes.INBOX_PROCESS.value}),
+                ),
+            ),
             readers.mail,
             stored,
             MailDropNotices(holders, notifications),

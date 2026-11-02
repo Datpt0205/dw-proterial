@@ -344,24 +344,21 @@ class WorkerSettings(BaseSettings):
     sales_mailbox: Literal["mock", "stored"] = Field(
         default="mock", validation_alias=AliasChoices("DW_SALES_MAILBOX")
     )
-    # The folder the `.eml` files arrive in, mounted read-only into this
-    # container alone. Named, with `DW_SALES_MAILBOX=stored`, it turns the
-    # `sales_mail_drop` lane on; unnamed, nothing reads a folder.
-    sales_mail_drop_dir: str | None = Field(
-        default=None, validation_alias=AliasChoices("DW_SALES_MAIL_DROP_DIR")
+    # The one folder every DW's mail arrives in (Đạt, 2026-11-02): every
+    # person's flow writes their Inbox's `.eml` files into a subfolder named
+    # by their own address, and each DW's lane reads the folders of the
+    # members holding its scope (`dw_platform.application.drop_folder`).
+    # Mounted read-only into this container alone. A lane reads it only for
+    # its context's stored mailbox (`DW_SALES_MAILBOX` / `DW_PURCHASING_MAILBOX`
+    # `=stored`); unnamed, nothing reads a folder.
+    mail_drop_dir: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_MAIL_DROP_DIR")
     )
     # --- Purchasing: which mailbox DW2 reads, as the API does ---
     # `mock` (the demo) or `stored`, the mail the `purchasing_mail_drop` lane
-    # stores from DW2's own drop folder (`test_worker_purchasing_settings.py`).
+    # stores from the drop folder (`test_worker_purchasing_settings.py`).
     purchasing_mailbox: Literal["mock", "stored"] = Field(
         default="mock", validation_alias=AliasChoices("DW_PURCHASING_MAILBOX")
-    )
-    # The folder the purchasing mailbox's `.eml` files arrive in, mounted
-    # read-only into this container alone. Named, with
-    # `DW_PURCHASING_MAILBOX=stored`, it turns the `purchasing_mail_drop` lane
-    # on; unnamed, nothing reads a folder.
-    purchasing_mail_drop_dir: str | None = Field(
-        default=None, validation_alias=AliasChoices("DW_PURCHASING_MAIL_DROP_DIR")
     )
     # "Gửi cho khách" (2026-10-29): the share holding each person's outbox
     # folder, written by this container alone. Unnamed, nothing is sent.

@@ -11,6 +11,7 @@ import logging
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -34,6 +35,7 @@ from dw_purchasing.application.mail_drop import (
 
 pytestmark = pytest.mark.unit
 
+REPO = Path(__file__).resolve().parents[5]
 NOW = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
 SCOPE = ContextScope(TenantId(uuid.uuid4()), WorkspaceId(uuid.uuid4()))
 SUBJECT = "Đề nghị mua 40 bộ găng tay chống cắt"
@@ -385,3 +387,35 @@ def test_whoever_receives_requests_is_told_once_per_file_and_once_a_day() -> Non
     assert context.scopes == frozenset() and context.roles == frozenset()
     assert (context.tenant_id, context.workspace_id) == (SCOPE.tenant_id.value, workspace)
     assert f"purchasing.mail_drop.unreachable:{workspace}:2026-11-03" in told.sent
+
+
+def test_dw2_reads_only_the_folders_of_those_who_receive_requests(tmp_path: Path) -> None:
+    """The one drop folder every DW shares: DW2's lane is cut to the
+    subfolders of the members holding `purchasing.request.intake` in its
+    own workspace, the people it tells when a file is refused."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from dw_platform.adapters.persistence.scope_holders import HolderMailboxes
+    from dw_platform.application.drop_folder import OwnedFolders
+    from dw_purchasing.adapters.assembly import mail_drop
+
+    sessions = async_sessionmaker(create_async_engine("postgresql+asyncpg://x:x@localhost/x"))
+    drop = mail_drop(
+        scope=SCOPE,
+        folder=tmp_path,
+        reader=Reader(),
+        configs=REPO / "configs",
+        session_factory=sessions,
+        audit=lambda session: None,  # type: ignore[arg-type,return-value]
+        notices=Told(),
+        clock=FixedClock(NOW),
+        ids=Uuid4Generator(),
+    )
+    assert isinstance(drop.folder, OwnedFolders)
+    owners = drop.folder.owners
+    assert isinstance(owners, HolderMailboxes)
+    assert owners.scopes == frozenset({"purchasing.request.intake"})
+    assert (owners.tenant_id, owners.workspace_id) == (
+        SCOPE.tenant_id.value,
+        SCOPE.workspace_id.value,
+    )

@@ -5,6 +5,11 @@ builds the access context, so "who may act" and "who is told to act" cannot
 disagree. A tenant that is not active has nobody to tell, as it has nobody
 to let in.
 
+`HolderMailboxes` answers a third from the first: whose mail a context's
+lane reads from the one drop folder every DW shares (the folders named by
+the addresses of those holding its scope), so whose mail is read and who is
+told about it are one answer.
+
 Both questions here — "who holds one of these scopes" (`holding`) and "does this
 person hold this scope" (`holds`) — read memberships through one query,
 `_members`, so the two answers cannot drift apart either. Neither takes an
@@ -125,3 +130,34 @@ class SqlScopeHolders:
             if len(members) != 1:
                 return frozenset()
             return await _scopes_of(session, members[0])
+
+    async def addresses_holding(
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, scopes: frozenset[str]
+    ) -> frozenset[str]:
+        """The sign-in addresses, lowercase, of the members `holding` names;
+        a member without one is left out. Same provenance rule as `holding`."""
+        members = await self.holding(tenant_id, workspace_id, scopes)
+        if not members:
+            return frozenset()
+        async with self.session_factory() as session, session.begin():
+            emails = await session.scalars(
+                sa.select(tables.users.c.email).where(
+                    tables.users.c.id.in_(members), tables.users.c.email.is_not(None)
+                )
+            )
+            return frozenset(email.lower() for email in emails)
+
+
+@dataclass(frozen=True)
+class HolderMailboxes:
+    """`FolderOwnersPort` for one context's lane in one workspace: the
+    addresses of the members holding any of ``scopes``, asked each tick, so
+    a scope granted or withdrawn changes whose mail is read at once."""
+
+    holders: SqlScopeHolders
+    tenant_id: uuid.UUID
+    workspace_id: uuid.UUID
+    scopes: frozenset[str]
+
+    async def addresses(self) -> frozenset[str]:
+        return await self.holders.addresses_holding(self.tenant_id, self.workspace_id, self.scopes)

@@ -329,6 +329,23 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
       `test_privileges` (every partition SELECT+INSERT), `test_rls_coverage`,
       offboarding. Mutations, each red: see the commit.
 
+- 2026-11-02, **one inbound flow for DW1 and DW2** (Đạt: "code theo luồng
+  như bạn mô tả"): one drop folder (`DW_MAIL_DROP_DIR`, worker only; the two
+  `*_MAIL_DROP_DIR` are gone; on-prem mounts `/srv/dw/mail-drop` read-only),
+  a subfolder per person named by their sign-in address, written by the one
+  flow everyone runs. Each lane reads the subfolders of the members holding
+  its scope (`OwnedFolders` over `HolderMailboxes`, i.e. the platform's
+  `holding` plus their addresses): DW1 `sales.inbox.process`, DW2
+  `purchasing.request.intake`, the same people each lane tells of a refused
+  file. A file in the root or in anyone else's folder is not listed, and a
+  read of one is refused. Each context still stores into its own tables.
+  Checks: unit (OwnedFolders 4; both lanes' wiring), integration
+  (`addresses_holding`: holders' addresses lowercase, nobody else's);
+  mutations red: unfiltered listing, root files, case, unchecked read,
+  every member, address case, each lane's scope, DW2 unfiltered. Assumed,
+  to check at the plant: the folder name is the address the person signs in
+  to DW with (`platform.users.email`), not an alias.
+
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
@@ -337,12 +354,11 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
    file; the outbox (RFQs from the buyer's mailbox); the DW2 attest lane.
    Stored attachments are kept and read by nothing yet: the Excel PR form
    and scanned paper read them, scanned by ClamAV first as Sales' are.
-3. The plant's flow for DW2 (Đạt, 2026-11-02: set up and integrated later,
-   prepared now): DW1's OneDrive + Power Automate path (`infra/onprem/README.md`
-   "Mail without access to Microsoft 365"), its own `DW2-mail` folder and
-   share at `/srv/dw/purchasing-mail-drop`, the flow exporting every mail,
-   internal included (as DW1's does). May become one shared flow for DW1
-   and DW2 (Decisions, "Inbound mail"). Which mailboxes it exports (the shared purchasing one
+3. The plant's flow (Đạt, 2026-11-02: set up and integrated later, prepared
+   now): the one flow for every person, `DW-mail/<address>` on the DW
+   account's OneDrive, the plant PC's share at `/srv/dw/mail-drop`
+   (`infra/onprem/README.md`; the two Word guides updated to it). Then a
+   live run as ticket 43's, with a buyer's folder and a PIC's. Which mailboxes it exports (the shared purchasing one
    or each buyer's) is settled then. Code and compose are ready
    (`DW_PURCHASING_MAILBOX=stored`); then a live run as ticket 43's.
 4. Function 5 — supplier confirmation and delivery tracking (the PO number
@@ -370,24 +386,6 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 
 ## Decisions Đạt owes (Purchasing)
 
-- **Inbound mail for DW1 and DW2** (2026-11-02, debated, no code yet).
-  Đạt wants one flow to set up, and asks how a mail is told DW1's or DW2's.
-  Proposed: one flow template every person runs, exporting their Inbox to
-  `DW-mail/<their address>/` on the DW account's OneDrive (the Windows
-  Server syncs and shares it); the folder says whose mail it is, and each
-  DW reads the folders of the members holding its scope
-  (`sales.inbox.process` → DW1, `purchasing.request.intake` → DW2, both →
-  both), read from the platform's `holding`, so no list is typed twice;
-  inside each DW its model sorts every mail. Set aside: one folder that
-  each DW's model sorts as "mine or not" (every mail read twice by the 9B
-  model; a mail both decline is lost unseen, one both claim is two cases),
-  a platform router (a second decision place, against ADR 0014), and one
-  shared mailbox fed by forwarding (whose mail it was may not survive a
-  forward; unmeasured). Sending stays as built: each person's own flow
-  reads their outbox folder. Code it would change: both drop lanes read one
-  root and filter subfolders by scope holders; one folder setting instead
-  of the two `*_MAIL_DROP_DIR`. What is committed (tables, RLS, retention,
-  offboarding, DW2's lane) stays.
 - **Internal mail in DW's store** (follows from the two above): every mail
   of a person whose Inbox is exported, HR or pay included, is stored in
   PostgreSQL and read by the plant's model (tenant-isolated, deleted by

@@ -27,6 +27,9 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.adapters.drop_folder import LocalDropFolder
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
+from dw_platform.adapters.persistence.scope_holders import HolderMailboxes, SqlScopeHolders
+from dw_platform.application.drop_folder import OwnedFolders
+from dw_platform.application.rule_versions import ContextScope
 from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
@@ -39,7 +42,7 @@ from dw_purchasing.adapters.persistence.store import (
     SqlPurchasingStore,
 )
 from dw_purchasing.adapters.policy_files import platform_rule_book
-from dw_purchasing.application.access import Gate, PurchasingAuthorizationPort
+from dw_purchasing.application.access import Gate, PurchasingAuthorizationPort, PurchasingScopes
 from dw_purchasing.application.approvals import (
     RequestApprovals,
     RequestDecisions,
@@ -188,6 +191,7 @@ def build_purchasing(
 
 def mail_drop(
     *,
+    scope: ContextScope,
     folder: Path,
     reader: MailFileReaderPort,
     configs: Path,
@@ -197,11 +201,20 @@ def mail_drop(
     clock: UtcClock,
     ids: IdGenerator,
 ) -> MailDrop:
-    """The worker's `purchasing_mail_drop` lane: ``folder`` read into the
-    stored mailbox through ``reader`` (the reader sandbox, as the composition
-    root adapts it), files past the tenant's mailbox term left unread."""
+    """The worker's `purchasing_mail_drop` lane in ``scope``: the one drop
+    ``folder`` every DW shares, only the subfolders of the members holding
+    `purchasing.request.intake` there (the people told when a file is
+    refused), read into the stored mailbox through ``reader`` (the reader
+    sandbox, as the composition root adapts it), files past the tenant's
+    mailbox term left unread."""
+    owners = HolderMailboxes(
+        SqlScopeHolders(session_factory),
+        scope.tenant_id.value,
+        scope.workspace_id.value,
+        frozenset({PurchasingScopes.REQUEST_INTAKE.value}),
+    )
     return MailDrop(
-        LocalDropFolder(folder),
+        OwnedFolders(LocalDropFolder(folder), owners),
         reader,
         SqlPurchasingMailbox(session_factory, audit),
         RulesMailTerm(rule_book(configs, session_factory)),
