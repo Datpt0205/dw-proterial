@@ -94,7 +94,7 @@ def bare_settings(**overrides: object) -> WorkerSettings:
         "sales_demo_workspace_id": None,
         "sales_inbox_lane": True,
         "purchasing_mailbox": "mock",
-        "purchasing_mail_drop_dir": None,
+        "mail_drop_dir": None,
     }
     absent.update(overrides)
     return WorkerSettings(**absent)  # type: ignore[arg-type]
@@ -230,16 +230,16 @@ def test_dw2s_mail_drop_needs_a_database_the_stored_mailbox_and_its_folder(
     tmp_path: Path,
 ) -> None:
     """DW2's own drop lane (ADR 0014): a database (the mail is stored in
-    Postgres, no object storage), `DW_PURCHASING_MAILBOX=stored` and the
-    folder; missing either, nothing reads a folder. Every 60 seconds. A
+    Postgres, no object storage), `DW_PURCHASING_MAILBOX=stored` and the one
+    drop folder every DW shares; missing either, nothing reads a folder. Every 60 seconds. A
     deployed host runs it too: the stored mailbox is no mock."""
     db = "postgresql+asyncpg://dw:dw@localhost/dw"
     lane = "purchasing_mail_drop"
     folder = str(tmp_path)
     for missing in (
         bare_settings(database_url=db, purchasing_mailbox="stored"),
-        bare_settings(database_url=db, purchasing_mail_drop_dir=folder),
-        bare_settings(purchasing_mailbox="stored", purchasing_mail_drop_dir=folder),
+        bare_settings(database_url=db, mail_drop_dir=folder),
+        bare_settings(purchasing_mailbox="stored", mail_drop_dir=folder),
     ):
         assert lane not in build_registry(missing).all()
 
@@ -253,7 +253,7 @@ def test_dw2s_mail_drop_needs_a_database_the_stored_mailbox_and_its_folder(
             bare_settings(
                 database_url=db,
                 purchasing_mailbox="stored",
-                purchasing_mail_drop_dir=folder,
+                mail_drop_dir=folder,
                 profile=profile,
                 **demo,
             )
@@ -266,9 +266,9 @@ def test_dw2s_drop_folder_that_is_not_a_directory_stops_the_worker(tmp_path: Pat
     settings = bare_settings(
         database_url="postgresql+asyncpg://dw:dw@localhost/dw",
         purchasing_mailbox="stored",
-        purchasing_mail_drop_dir=str(tmp_path / "absent"),
+        mail_drop_dir=str(tmp_path / "absent"),
     )
-    with pytest.raises(RuntimeError, match="DW_PURCHASING_MAIL_DROP_DIR"):
+    with pytest.raises(RuntimeError, match="DW_MAIL_DROP_DIR"):
         build_registry(settings)
 
 
@@ -362,3 +362,39 @@ def test_the_channel_delivery_lane_needs_a_bot_token_and_runs_on_its_own_cadence
         bare_settings(database_url=db, zalo_bot_token="t", channel_delivery_interval_seconds=5)
     )
     assert quick.interval_for("channel_delivery", 1.0) == 5.0
+
+
+def test_dw1s_drop_reads_only_the_folders_of_those_who_process_its_mailbox(
+    tmp_path: Path,
+) -> None:
+    """The one drop folder every DW shares: DW1's lane is cut to the
+    subfolders of the members holding `sales.inbox.process` in its
+    workspace, the people it tells when a file is refused."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from dw_kernel.ports import SystemClock, Uuid4Generator
+    from dw_observability.telemetry import NullTelemetry
+    from dw_platform.adapters.persistence.scope_holders import HolderMailboxes
+    from dw_platform.application.drop_folder import OwnedFolders
+    from dw_worker.main import build_sales
+
+    settings = bare_settings(
+        database_url="postgresql+asyncpg://dw:dw@localhost/dw",
+        s3_endpoint_url="http://localhost:9000",
+        sales_mailbox="stored",
+        mail_drop_dir=str(tmp_path),
+    )
+    sessions = async_sessionmaker(create_async_engine(settings.database_url or ""))
+    built = build_sales(
+        settings, sessions, clock=SystemClock(), ids=Uuid4Generator(), telemetry=NullTelemetry()
+    )
+    assert built is not None
+    mount, scope = built
+    assert mount.mail_drop is not None
+    folder = mount.mail_drop.folder
+    assert isinstance(folder, OwnedFolders) and isinstance(folder.owners, HolderMailboxes)
+    assert folder.owners.scopes == frozenset({"sales.inbox.process"})
+    assert (folder.owners.tenant_id, folder.owners.workspace_id) == (
+        scope.tenant_id.value,
+        scope.workspace_id.value,
+    )

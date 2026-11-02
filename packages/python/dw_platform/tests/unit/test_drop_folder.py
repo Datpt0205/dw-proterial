@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from dw_platform.adapters.drop_folder import LocalDropFolder
-from dw_platform.application.drop_folder import DroppedFile
+from dw_platform.application.drop_folder import DroppedFile, OwnedFolders
 
 pytestmark = pytest.mark.unit
 
@@ -62,3 +62,52 @@ async def test_a_name_that_climbs_out_is_never_read(tmp_path: Path, folder: str,
 
     with pytest.raises(ValueError, match="not a file in the drop folder"):
         await LocalDropFolder(drop).read(dropped, 100)
+
+
+class _Owners:
+    def __init__(self, *addresses: str) -> None:
+        self.held = frozenset(addresses)
+
+    async def addresses(self) -> frozenset[str]:
+        return self.held
+
+
+async def test_a_lane_sees_only_the_folders_of_those_holding_its_scope(tmp_path: Path) -> None:
+    """One drop folder for every DW, a subfolder per mailbox address: a lane
+    lists the files of the addresses its owners name, case aside, and
+    nothing in the root or in anyone else's folder."""
+    for name in ("an@proterial.example", "Binh@Proterial.example", "khoa@proterial.example"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / f"{name.lower()}.eml").write_bytes(b"x")
+    (tmp_path / "stray.eml").write_bytes(b"x")
+    folder = OwnedFolders(
+        LocalDropFolder(tmp_path), _Owners("an@proterial.example", "binh@proterial.example")
+    )
+
+    listed = {(f.folder, f.name) for f in await folder.files()}
+
+    assert listed == {
+        ("an@proterial.example", "an@proterial.example.eml"),
+        ("Binh@Proterial.example", "binh@proterial.example.eml"),
+    }
+
+
+async def test_a_lane_whose_scope_nobody_holds_sees_nothing(tmp_path: Path) -> None:
+    (tmp_path / "an@proterial.example").mkdir()
+    (tmp_path / "an@proterial.example" / "1.eml").write_bytes(b"x")
+    assert await OwnedFolders(LocalDropFolder(tmp_path), _Owners()).files() == []
+
+
+async def test_a_file_outside_the_owners_folders_is_never_read(tmp_path: Path) -> None:
+    """Listing is not the only door: a read of another person's file is refused."""
+    (tmp_path / "khoa@proterial.example").mkdir()
+    (tmp_path / "khoa@proterial.example" / "1.eml").write_bytes(b"secret")
+    folder = OwnedFolders(LocalDropFolder(tmp_path), _Owners("an@proterial.example"))
+    theirs = DroppedFile(
+        name="1.eml",
+        size=6,
+        modified_at=datetime(2026, 11, 2, tzinfo=UTC),
+        folder="khoa@proterial.example",
+    )
+    with pytest.raises(ValueError, match="not a folder this lane reads"):
+        await folder.read(theirs, 100)

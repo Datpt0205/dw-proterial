@@ -133,18 +133,15 @@ services:
       DW_WORKER_OUTBOUND_ALLOWED_HOSTS: '["model"]'
       QDRANT_COLLECTION: dw_knowledge_bge_m3
       ZALO_BOT_TOKEN: ""
-      # The drop folder (ticket 43): the plant's share of the PICs' `.eml`
-      # files, mounted read-only into this container alone. Read only with
-      # DW_SALES_MAILBOX=stored in .env; `infra/onprem/README.md` says how the
-      # share reaches this host.
-      DW_SALES_MAIL_DROP_DIR: /mail-drop
-      # DW2's own drop folder (the purchasing mailbox's `.eml` files), read
-      # only with DW_PURCHASING_MAILBOX=stored, and never the Sales one: each
-      # context keeps its own queue (ADR 0014).
-      DW_PURCHASING_MAIL_DROP_DIR: /purchasing-mail-drop
+      # The drop folder (ticket 43; one for every DW since 2026-11-02): the
+      # plant's share of every person's `.eml` files, a subfolder per mailbox
+      # address, mounted read-only into this container alone. DW1 reads the
+      # folders of those holding sales.inbox.process, DW2 those holding
+      # purchasing.request.intake, each only with its DW_*_MAILBOX=stored in
+      # .env; `infra/onprem/README.md` says how the share reaches this host.
+      DW_MAIL_DROP_DIR: /mail-drop
     volumes:
-      - ${DW_SALES_MAIL_DROP_HOST_DIR:-/srv/dw/mail-drop}:/mail-drop:ro
-      - ${DW_PURCHASING_MAIL_DROP_HOST_DIR:-/srv/dw/purchasing-mail-drop}:/purchasing-mail-drop:ro
+      - ${DW_MAIL_DROP_HOST_DIR:-/srv/dw/mail-drop}:/mail-drop:ro
     depends_on:
       model:
         condition: service_healthy

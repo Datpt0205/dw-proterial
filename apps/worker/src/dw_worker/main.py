@@ -506,15 +506,19 @@ def build_purchasing_mail_drop(
 ) -> Callable[[], Awaitable[None]] | None:
     """DW2's `purchasing_mail_drop` lane, or None: no workspace to store into
     (the demo's pair, as every DW2 lane here), or no stored mailbox and folder
-    named. Each `.eml` file is read in the reader sandbox through the client
-    that exists (`PurchasingMailReader`, ADR 0013 decision 2's interim). Runs
+    named. It reads the one folder every DW shares, only the subfolders of
+    the members holding `purchasing.request.intake`. Each `.eml` file is
+    read in the reader sandbox through the client that exists
+    (`PurchasingMailReader`, ADR 0013 decision 2's interim). Runs
     where deployed too: the stored mailbox is no mock, and DW2's API stays 503
     there until its master data is real."""
     demo = settings.sales_demo_scope()
     folder = _purchasing_mail_drop_dir(settings)
     if demo is None or folder is None:
         return None
+    scope = ContextScope(TenantId(demo[0]), WorkspaceId(demo[1]))
     drop = mail_drop(
+        scope=scope,
         folder=folder,
         reader=PurchasingMailReader(ClientMailReader(sales_reader(settings))),
         configs=REPO_ROOT / "configs",
@@ -524,7 +528,6 @@ def build_purchasing_mail_drop(
         clock=clock,
         ids=ids,
     )
-    scope = ContextScope(TenantId(demo[0]), WorkspaceId(demo[1]))
     return build_purchasing_mail_drop_consumer(drop, scope)
 
 
@@ -548,26 +551,27 @@ def _fake_flow(settings: WorkerSettings) -> FakeFlow | None:
     return FakeFlow(Path(settings.sales_outbox_dir))
 
 
-def _mail_drop_dir(settings: WorkerSettings) -> Path | None:
-    """The drop folder the `sales_mail_drop` lane reads, or None: only for
-    the stored mailbox, and refused at startup when it is not a directory."""
-    if settings.sales_mailbox != "stored" or settings.sales_mail_drop_dir is None:
+def _drop_root(settings: WorkerSettings) -> Path | None:
+    """The one drop folder every DW reads (`DW_MAIL_DROP_DIR`), or None;
+    refused at startup when named and not a directory."""
+    if settings.mail_drop_dir is None:
         return None
-    folder = Path(settings.sales_mail_drop_dir)
+    folder = Path(settings.mail_drop_dir)
     if not folder.is_dir():
-        raise RuntimeError(f"DW_SALES_MAIL_DROP_DIR is not a directory: {folder}")
+        raise RuntimeError(f"DW_MAIL_DROP_DIR is not a directory: {folder}")
     return folder
+
+
+def _mail_drop_dir(settings: WorkerSettings) -> Path | None:
+    """The drop folder for the `sales_mail_drop` lane: only for DW1's stored
+    mailbox."""
+    return _drop_root(settings) if settings.sales_mailbox == "stored" else None
 
 
 def _purchasing_mail_drop_dir(settings: WorkerSettings) -> Path | None:
-    """The folder the `purchasing_mail_drop` lane reads, or None: only for
-    DW2's stored mailbox, and refused at startup when it is not a directory."""
-    if settings.purchasing_mailbox != "stored" or settings.purchasing_mail_drop_dir is None:
-        return None
-    folder = Path(settings.purchasing_mail_drop_dir)
-    if not folder.is_dir():
-        raise RuntimeError(f"DW_PURCHASING_MAIL_DROP_DIR is not a directory: {folder}")
-    return folder
+    """The drop folder for the `purchasing_mail_drop` lane: only for DW2's
+    stored mailbox."""
+    return _drop_root(settings) if settings.purchasing_mailbox == "stored" else None
 
 
 def build_registry(settings: WorkerSettings) -> ConsumerRegistry:

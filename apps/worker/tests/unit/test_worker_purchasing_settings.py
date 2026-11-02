@@ -1,6 +1,7 @@
 """The worker and the API agree on which mailbox DW2 reads: one variable,
 `DW_PURCHASING_MAILBOX`, so the API never shows one mailbox while the
-worker's lanes work another. Only the worker names the drop folder."""
+worker's lanes work another. Only the worker names the drop folder, one for
+every DW (`DW_MAIL_DROP_DIR`)."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("DW_PURCHASING_MAILBOX", "DW_PURCHASING_MAIL_DROP_DIR"):
+    for name in ("DW_PURCHASING_MAILBOX", "DW_MAIL_DROP_DIR"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -35,7 +36,7 @@ def test_another_mailbox_is_refused_by_both(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_the_drop_folder_is_the_worker_s_alone(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert WorkerSettings().purchasing_mail_drop_dir is None
-    monkeypatch.setenv("DW_PURCHASING_MAIL_DROP_DIR", "/purchasing-mail-drop")
-    assert WorkerSettings().purchasing_mail_drop_dir == "/purchasing-mail-drop"
-    assert not hasattr(ApiSettings(), "purchasing_mail_drop_dir")
+    assert WorkerSettings().mail_drop_dir is None
+    monkeypatch.setenv("DW_MAIL_DROP_DIR", "/mail-drop")
+    assert WorkerSettings().mail_drop_dir == "/mail-drop"
+    assert not hasattr(ApiSettings(), "mail_drop_dir")

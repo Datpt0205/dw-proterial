@@ -173,13 +173,15 @@ API and the plan use the English terms. The spec is
   is the case the conversation is on, kept as the case's kind and id, so a
   follow-up such as "PO đó" means that case.
 
-- **Drop folder** (Thư mục thư): where real mail reaches DW1 without any
-  access to Microsoft 365: a DW1 account owns one OneDrive folder per Sales
-  PIC, shared with that PIC alone; each PIC runs a copy of one Power
+- **Drop folder** (Thư mục thư): where real mail reaches DW without any
+  access to Microsoft 365, one for DW1 and DW2 alike (2026-11-02): a DW
+  account owns one OneDrive folder per person, named by the address they
+  sign in with and shared with them alone; each runs a copy of one Power
   Automate flow that exports every mail reaching their Inbox as an `.eml`
   file into their folder; a PC in the plant syncs the folders and shares
-  them with DW1's host, read-only. The worker's `sales_mail_drop` lane
-  reads each new file once (ticket 43).
+  them with DW's host, read-only. The worker's `sales_mail_drop` lane reads
+  each new file once (ticket 43), in the folders of the members holding
+  `sales.inbox.process` only.
 - **Stored mailbox** (Hộp thư DW1): the mail the lane stored, each message
   whole with its attachments' bytes, in PostgreSQL; what every screen and
   lane reads when `DW_SALES_MAILBOX=stored`. A message's id is its file's

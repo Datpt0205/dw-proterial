@@ -4,6 +4,13 @@ same way; each context keeps the lane that reads it, ADR 0014).
 
 A flow exports every mail reaching a mailbox into the folder, and a PC in the
 plant syncs it to the host (`dw_platform.adapters.drop_folder`).
+
+**One folder for every DW** (Đạt, 2026-11-02): every person runs the same
+flow, into a subfolder named by their own mailbox address. Which DW reads a
+person's mail is not a list anyone types: a context's lane reads the folders
+of the members holding the scope it acts on (`OwnedFolders` over
+`FolderOwnersPort`), and its model sorts what each mail is. A file in the
+root, or in a folder nobody holding the scope owns, is read by no one.
 """
 
 from __future__ import annotations
@@ -38,3 +45,28 @@ class DropFolderPort(Protocol):
         """At most ``limit`` + 1 bytes of the file: one more than the limit
         says it is over."""
         ...
+
+
+class FolderOwnersPort(Protocol):
+    async def addresses(self) -> frozenset[str]:
+        """The mailbox addresses, lowercase, whose folders a lane reads."""
+        ...
+
+
+@dataclass(frozen=True)
+class OwnedFolders:
+    """`DropFolderPort` over ``inner``, cut to the subfolders ``owners``
+    names (the folder name compared lowercase). A read outside them is
+    refused, not only left unlisted."""
+
+    inner: DropFolderPort
+    owners: FolderOwnersPort
+
+    async def files(self) -> Sequence[DroppedFile]:
+        mine = await self.owners.addresses()
+        return [f for f in await self.inner.files() if f.folder and f.folder.lower() in mine]
+
+    async def read(self, dropped: DroppedFile, limit: int) -> bytes:
+        if not dropped.folder or dropped.folder.lower() not in await self.owners.addresses():
+            raise ValueError("not a folder this lane reads")
+        return await self.inner.read(dropped, limit)
