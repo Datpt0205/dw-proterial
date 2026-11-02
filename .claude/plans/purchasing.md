@@ -346,6 +346,22 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   to check at the plant: the folder name is the address the person signs in
   to DW with (`platform.users.email`), not an alias.
 
+- 2026-11-02, **the folder in a Teams/SharePoint site, run end to end on
+  FPT's tenant** (Đạt and a colleague): a private Team "DW - chuyen thu"
+  made by Đạt, no admin and no new licence; `DW-mail/<address>` in its
+  library, each folder shared (edit) with its person, the colleague not a
+  member of the Team; each person's flow writes there (Site Address
+  `…/sites/DW-chuyenthu`, Folder Path `/Shared Documents/DW/DW-mail/<address>`);
+  Đạt's PC synced `DW-mail` through "Add shortcut to OneDrive → My files".
+  The local worker read it: DW1 stored Đạt's 2 mails (he holds
+  `sales.inbox.process`) and not the colleague's; DW2 stored all 3 (both hold
+  `purchasing.request.intake`); a second run stored nothing again. Found
+  two flow pitfalls: a stale Outlook connection (re-added) and a stray
+  character before the Message Id token ("Id is malformed"). Found and fixed
+  a deadlock between `ensure_time_partitions` and `prune_mailbox_in` on the
+  worker's first tick (`394419a5ebbd`, see the commit). The guides still
+  describe the DW account's OneDrive: switching them is Đạt's go-ahead.
+
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
