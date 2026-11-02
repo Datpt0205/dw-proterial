@@ -371,8 +371,9 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
    Stored attachments are kept and read by nothing yet: the Excel PR form
    and scanned paper read them, scanned by ClamAV first as Sales' are.
 3. The plant's flow (Đạt, 2026-11-02: set up and integrated later, prepared
-   now): the one flow for every person, `DW-mail/<address>` on the DW
-   account's OneDrive, the plant PC's share at `/srv/dw/mail-drop`
+   now): the one flow for every person, `DW-mail/<address>` in a private
+   Team's SharePoint library (measured 2026-11-02), the plant PC's share at
+   `/srv/dw/mail-drop`
    (`infra/onprem/README.md`; the two Word guides updated to it). Then a
    live run as ticket 43's, with a buyer's folder and a PIC's. Which mailboxes it exports (the shared purchasing one
    or each buyer's) is settled then. Code and compose are ready
@@ -402,11 +403,9 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 
 ## Decisions Đạt owes (Purchasing)
 
-- **Internal mail in DW's store** (follows from the two above): every mail
-  of a person whose Inbox is exported, HR or pay included, is stored in
-  PostgreSQL and read by the plant's model (tenant-isolated, deleted by
-  `mailbox_days`). Proterial to agree; if not, the flow skips a folder or
-  label ("Cá nhân") at the source, never a sender-domain gate.
+- ~~**Internal mail in DW's store**~~ Decided by Đạt 2026-11-02: kept and read,
+  since the model runs on the plant's own host and nothing leaves it; not a
+  question for Proterial.
 
 - **Who configures DW2**: built as `purchasing_configurer` (proposes) and
   the head (decides, and applies their own at once, as a Sales head). Whether
