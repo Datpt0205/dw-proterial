@@ -142,6 +142,7 @@ const PATHS: [RegExp, (index: number) => string, Words][] = [
   [/^rfq\.reply_days$/, () => "Hỏi giá · Thời gian chờ trả lời", days],
   [/^retention\.case_years$/, () => "Lưu trữ · Hồ sơ mua hàng", years],
   [/^retention\.mail_outcome_days$/, () => "Lưu trữ · Kết quả xử lý thư", days],
+  [/^retention\.mailbox_days$/, () => "Lưu trữ · Thư đã lưu", days],
   [/^bravo_po\.mock$/, () => "File Bravo · Mẫu dựng sẵn của nền tảng", yesNo],
   [/^bravo_po\.sheet$/, () => "File Bravo · Tên trang tính", plain],
   [

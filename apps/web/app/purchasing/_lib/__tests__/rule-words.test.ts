@@ -54,6 +54,10 @@ describe("a rule change in words", () => {
     ]);
   });
 
+  it("names how long stored mail is kept, in days", () => {
+    expect(pathName("retention.mailbox_days")).toBe("Lưu trữ · Thư đã lưu");
+  });
+
   it("reads a list of codes in the glossary's words", () => {
     const after = structuredClone(RULES);
     after.approval.escalate = ["over_budget", "budget_unknown"];

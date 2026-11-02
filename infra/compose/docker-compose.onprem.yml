@@ -138,8 +138,13 @@ services:
       # DW_SALES_MAILBOX=stored in .env; `infra/onprem/README.md` says how the
       # share reaches this host.
       DW_SALES_MAIL_DROP_DIR: /mail-drop
+      # DW2's own drop folder (the purchasing mailbox's `.eml` files), read
+      # only with DW_PURCHASING_MAILBOX=stored, and never the Sales one: each
+      # context keeps its own queue (ADR 0014).
+      DW_PURCHASING_MAIL_DROP_DIR: /purchasing-mail-drop
     volumes:
       - ${DW_SALES_MAIL_DROP_HOST_DIR:-/srv/dw/mail-drop}:/mail-drop:ro
+      - ${DW_PURCHASING_MAIL_DROP_HOST_DIR:-/srv/dw/purchasing-mail-drop}:/purchasing-mail-drop:ro
     depends_on:
       model:
         condition: service_healthy

@@ -93,6 +93,8 @@ def bare_settings(**overrides: object) -> WorkerSettings:
         "sales_demo_tenant_id": None,
         "sales_demo_workspace_id": None,
         "sales_inbox_lane": True,
+        "purchasing_mailbox": "mock",
+        "purchasing_mail_drop_dir": None,
     }
     absent.update(overrides)
     return WorkerSettings(**absent)  # type: ignore[arg-type]
@@ -222,6 +224,52 @@ def test_dw1s_mailbox_lane_needs_a_database_object_storage_and_a_mailbox() -> No
     assert "sales_inbox" not in build_registry(switched_off).all()
     deployed = bare_settings(database_url=db, s3_endpoint_url=s3, profile="uat")
     assert "sales_inbox" not in build_registry(deployed).all()
+
+
+def test_dw2s_mail_drop_needs_a_database_the_stored_mailbox_and_its_folder(
+    tmp_path: Path,
+) -> None:
+    """DW2's own drop lane (ADR 0014): a database (the mail is stored in
+    Postgres, no object storage), `DW_PURCHASING_MAILBOX=stored` and the
+    folder; missing either, nothing reads a folder. Every 60 seconds. A
+    deployed host runs it too: the stored mailbox is no mock."""
+    db = "postgresql+asyncpg://dw:dw@localhost/dw"
+    lane = "purchasing_mail_drop"
+    folder = str(tmp_path)
+    for missing in (
+        bare_settings(database_url=db, purchasing_mailbox="stored"),
+        bare_settings(database_url=db, purchasing_mail_drop_dir=folder),
+        bare_settings(purchasing_mailbox="stored", purchasing_mail_drop_dir=folder),
+    ):
+        assert lane not in build_registry(missing).all()
+
+    # A deployed host stores mail for the workspace SALES_DEMO_* names.
+    demo = {
+        "sales_demo_tenant_id": "00000000-0000-0000-0000-0000000000a1",
+        "sales_demo_workspace_id": "00000000-0000-0000-0000-0000000000a2",
+    }
+    for profile in ("local", "uat"):
+        registry = build_registry(
+            bare_settings(
+                database_url=db,
+                purchasing_mailbox="stored",
+                purchasing_mail_drop_dir=folder,
+                profile=profile,
+                **demo,
+            )
+        )
+        assert lane in registry.all(), profile
+        assert registry.interval_for(lane, 1.0) == 60.0
+
+
+def test_dw2s_drop_folder_that_is_not_a_directory_stops_the_worker(tmp_path: Path) -> None:
+    settings = bare_settings(
+        database_url="postgresql+asyncpg://dw:dw@localhost/dw",
+        purchasing_mailbox="stored",
+        purchasing_mail_drop_dir=str(tmp_path / "absent"),
+    )
+    with pytest.raises(RuntimeError, match="DW_PURCHASING_MAIL_DROP_DIR"):
+        build_registry(settings)
 
 
 def test_dw1s_processing_queue_runs_whether_or_not_the_mailbox_lane_does() -> None:

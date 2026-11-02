@@ -282,17 +282,61 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   never a template. The question list for Proterial:
   `docs/proterial/Cau-hoi-Proterial-DW1-DW2.xlsx` (not in git: repo public).
 
+- 2026-11-02, **stored mailbox + mail drop (Phase 1 step 7), done**:
+    - Lift (`e5448863`): `DroppedFile`/`DropFolderPort` →
+      `dw_platform.application.drop_folder`, `LocalDropFolder` →
+      `dw_platform.adapters.drop_folder` (its first test of its own; the
+      path guard mutated red). Sales unchanged.
+    - Migration `32c1f04b76d6`: `purchasing.mailbox_messages`,
+      `mailbox_attachments`, `mailbox_files` (`stored|duplicate|refused`,
+      reason), monthly partitions + DEFAULT, RLS ENABLE/FORCE and the
+      tenant AND (workspace OR scope) policy on all six, SELECT+INSERT only
+      (UPDATE/DELETE REVOKEd by name: the schema's default privileges give
+      them), named by `platform.ensure_time_partitions`; offboarding finds
+      them in the catalog (export) and the tenant's purge cascades them;
+      `purchasing.prune_mailbox_in` (SECURITY DEFINER) and
+      `retention_scopes()` naming mail-only workspaces.
+    - `dw_purchasing.application.mail_drop`: lane `purchasing_mail_drop`
+      (60 s), audits as `system:purchasing_mail_drop`; waits on a file
+      written < 30 s ago or empty; refuses > 20 MB unread or a file the
+      reader refuses (recorded, told once to `purchasing.request.intake`
+      holders); a folder it cannot list told once a day; a file written
+      before the mailbox term is not read (its mail would be pruned, and
+      its name is forgotten with it); logs names and code's reasons only.
+    - Reader: DW2's own `MailFileReaderPort`; the worker adapts Sales'
+      `ClientMailReader` (`dw_worker.purchasing_reader`, ADR 0013
+      decision 2's interim). The API reads the store, never the folder, so
+      only the worker builds the reader and names the folder.
+    - `SqlPurchasingMailbox` is `InboxPort` with `DW_PURCHASING_MAILBOX=stored`
+      (API and worker, one variable, tested); `DW_PURCHASING_MAIL_DROP_DIR`
+      (worker only; compose on-prem mounts `/purchasing-mail-drop:ro`).
+      Missing either, no lane; a folder that is not a directory stops the
+      worker. The lane runs where deployed (no mock in it).
+    - Retention: `purchasing_rules@1.7.0` `retention.mailbox_days` (30–3650,
+      365); the term used is never past `mail_outcome_days` (a mail whose
+      outcome is gone reads as unread and would open a second case). Not a
+      refusal: a version written before 1.7.0 reads the platform's 365 by
+      `read_over`, and refusing it would leave the tenant without rules.
+    - **Deployed DW2 still 503**: the mock mailbox is refused there, and
+      the stored one is real but the master data is still the mock; the
+      second check goes with the master-data import (prompt 2).
+    - Checks: unit (drop lane 15, retention, settings, worker wiring and
+      reader adapter, API mount); integration 15 (stored once + audit
+      actor, copy/twin stored once, refused recorded, oldest first, other
+      tenant/workspace reads nothing, unscoped reads nothing by partition
+      name, foreign insert refused by policy, no UPDATE/DELETE, partitions
+      policed, retention per workspace, offboarding export + purge);
+      `test_privileges` (every partition SELECT+INSERT), `test_rls_coverage`,
+      offboarding. Mutations, each red: see the commit.
+
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
-2. The rest of Phase 1, each its own session: the stored mailbox and its
-   mail drop (`DW_PURCHASING_MAILBOX=stored`; DW2's own `purchasing.mailbox_*`
-   per ADR 0014, partitioned, registered with the partition lane and
-   offboarding, `.eml` read through the reader port at the composition
-   root); master-data import; the Bravo layout learned from Proterial's
+2. The rest of Phase 1, each its own session: master-data import (then a
+   deployed DW2 drops its 503); the Bravo layout learned from Proterial's
    file; the outbox (RFQs from the buyer's mailbox); the DW2 attest lane.
-   A deployed DW2 stays refused (503) until the mailbox and master data
-   are real.
+   Stored attachments are kept and read by nothing yet: the Excel PR form
+   and scanned paper read them, scanned by ClamAV first as Sales' are.
 3. Function 5 — supplier confirmation and delivery tracking (the PO number
    Bravo assigns recorded back; confirmations read from mail).
 4. Function 6 — the morning brief and status Q&A over purchase cases.
@@ -334,5 +378,10 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   file per PR or one per supplier. A tenant rule, so no deploy when it lands.
 - **Who may download the PO file**: a permission set the tenant's admin
   grants (`purchasing_po_downloader`); the buyer holds it by role.
+- **Stored mail**: kept 365 days by default (`retention.mailbox_days`),
+  never past the mail outcomes'; Proterial's accountant sets it. Which
+  mailbox the flow exports (one shared purchasing mailbox, or each buyer's)
+  and who at the plant sets up the flow and the share
+  (`/srv/dw/purchasing-mail-drop`, read-only).
 - **Re-approval past the tier**: built (goes back at the tier its total
   names, tolerance 0 by default). Proterial to give the tolerance, if any.

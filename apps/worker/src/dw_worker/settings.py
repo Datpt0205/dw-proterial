@@ -350,6 +350,19 @@ class WorkerSettings(BaseSettings):
     sales_mail_drop_dir: str | None = Field(
         default=None, validation_alias=AliasChoices("DW_SALES_MAIL_DROP_DIR")
     )
+    # --- Purchasing: which mailbox DW2 reads, as the API does ---
+    # `mock` (the demo) or `stored`, the mail the `purchasing_mail_drop` lane
+    # stores from DW2's own drop folder (`test_worker_purchasing_settings.py`).
+    purchasing_mailbox: Literal["mock", "stored"] = Field(
+        default="mock", validation_alias=AliasChoices("DW_PURCHASING_MAILBOX")
+    )
+    # The folder the purchasing mailbox's `.eml` files arrive in, mounted
+    # read-only into this container alone. Named, with
+    # `DW_PURCHASING_MAILBOX=stored`, it turns the `purchasing_mail_drop` lane
+    # on; unnamed, nothing reads a folder.
+    purchasing_mail_drop_dir: str | None = Field(
+        default=None, validation_alias=AliasChoices("DW_PURCHASING_MAIL_DROP_DIR")
+    )
     # "Gửi cho khách" (2026-10-29): the share holding each person's outbox
     # folder, written by this container alone. Unnamed, nothing is sent.
     sales_outbox_dir: str | None = Field(
