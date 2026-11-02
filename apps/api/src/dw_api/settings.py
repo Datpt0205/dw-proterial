@@ -147,6 +147,14 @@ class ApiSettings(BaseSettings):
     sales_mailbox: Literal["mock", "stored"] = Field(
         default="mock", validation_alias=AliasChoices("DW_SALES_MAILBOX")
     )
+    # --- Purchasing: which mailbox DW2 reads ---
+    # `mock`: the fictional mailbox bound to the scope above (the demo).
+    # `stored`: the real mail the worker's `purchasing_mail_drop` lane stores
+    # from DW2's own drop folder. The worker reads the same variable
+    # (`test_worker_purchasing_settings.py`); the API never reads the folder.
+    purchasing_mailbox: Literal["mock", "stored"] = Field(
+        default="mock", validation_alias=AliasChoices("DW_PURCHASING_MAILBOX")
+    )
     # "Gửi cho khách" (2026-10-29): offered where the worker has the outbox
     # share (`DW_SALES_OUTBOX_DIR` there); the API never touches the share.
     sales_outbox_enabled: bool = Field(

@@ -99,11 +99,13 @@ from dw_platform.application.approval_codes import ApprovalSubjectVersions, Deci
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.application.background_failures import OUTBOX_ALARMS_LANE, OutboxAlarms
 from dw_platform.application.channel_access import LinkedUserAccess
+from dw_platform.application.rule_versions import ContextScope
 from dw_platform.domain.outbox import OUTBOX_MAX_ATTEMPTS
 from dw_platform.retention_policy import load_retention_policy
 from dw_purchasing.adapters.assembly import (
     automation_lane,
     build_purchasing,
+    mail_drop,
     reapproval_settlement,
     request_settlement,
     rule_settlement,
@@ -113,6 +115,7 @@ from dw_purchasing.adapters.notices import PlatformNotices
 from dw_purchasing.adapters.persistence.retention import SqlRetentionStore
 from dw_purchasing.application.approvals import REQUEST_DECIDED
 from dw_purchasing.application.automation_lane import LANE as PURCHASING_AUTOMATION_LANE
+from dw_purchasing.application.mail_drop import MAIL_DROP_LANE as PURCHASING_MAIL_DROP_LANE
 from dw_purchasing.application.reapprovals import REAPPROVAL_DECIDED
 from dw_purchasing.application.retention import PurchasingRetention
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
@@ -126,7 +129,11 @@ from dw_sales.adapters.assembly import (
 )
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
-from dw_sales.adapters.reader_client import HttpReaderTransport, ReaderTransport
+from dw_sales.adapters.reader_client import (
+    ClientMailReader,
+    HttpReaderTransport,
+    ReaderTransport,
+)
 from dw_sales.adapters.readers.operations import InProcessReaderTransport
 from dw_sales.application.catalog_imports import CATALOG_DECIDED, CATALOG_IMPORTED
 from dw_sales.application.followups import SALES_FOLLOWUPS_LANE
@@ -164,6 +171,10 @@ from dw_worker.consumers.purchasing_automation import (
     INTERVAL_SECONDS as PURCHASING_AUTOMATION_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.purchasing_automation import build_purchasing_automation_consumer
+from dw_worker.consumers.purchasing_mail_drop import (
+    INTERVAL_SECONDS as PURCHASING_MAIL_DROP_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.purchasing_mail_drop import build_purchasing_mail_drop_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
@@ -193,6 +204,7 @@ from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
 from dw_worker.health import beat
+from dw_worker.purchasing_reader import PurchasingMailReader
 from dw_worker.settings import WorkerSettings
 
 if TYPE_CHECKING:
@@ -468,6 +480,8 @@ def build_purchasing_automation(
         ids=ids,
         deployed=settings.is_deployed,
         notices=notices,
+        # The mailbox the API reads too.
+        mailbox=settings.purchasing_mailbox,
     )
     lane = automation_lane(
         services=services,
@@ -481,6 +495,37 @@ def build_purchasing_automation(
         ids=ids,
     )
     return build_purchasing_automation_consumer(lane)
+
+
+def build_purchasing_mail_drop(
+    settings: WorkerSettings,
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> Callable[[], Awaitable[None]] | None:
+    """DW2's `purchasing_mail_drop` lane, or None: no workspace to store into
+    (the demo's pair, as every DW2 lane here), or no stored mailbox and folder
+    named. Each `.eml` file is read in the reader sandbox through the client
+    that exists (`PurchasingMailReader`, ADR 0013 decision 2's interim). Runs
+    where deployed too: the stored mailbox is no mock, and DW2's API stays 503
+    there until its master data is real."""
+    demo = settings.sales_demo_scope()
+    folder = _purchasing_mail_drop_dir(settings)
+    if demo is None or folder is None:
+        return None
+    drop = mail_drop(
+        folder=folder,
+        reader=PurchasingMailReader(ClientMailReader(sales_reader(settings))),
+        configs=REPO_ROOT / "configs",
+        session_factory=sessions,
+        audit=SqlAuditRepository,
+        notices=PlatformNotices(SqlScopeHolders(sessions), SqlNotificationRepository(sessions)),
+        clock=clock,
+        ids=ids,
+    )
+    scope = ContextScope(TenantId(demo[0]), WorkspaceId(demo[1]))
+    return build_purchasing_mail_drop_consumer(drop, scope)
 
 
 def _outbox_dir(settings: WorkerSettings) -> Path | None:
@@ -511,6 +556,17 @@ def _mail_drop_dir(settings: WorkerSettings) -> Path | None:
     folder = Path(settings.sales_mail_drop_dir)
     if not folder.is_dir():
         raise RuntimeError(f"DW_SALES_MAIL_DROP_DIR is not a directory: {folder}")
+    return folder
+
+
+def _purchasing_mail_drop_dir(settings: WorkerSettings) -> Path | None:
+    """The folder the `purchasing_mail_drop` lane reads, or None: only for
+    DW2's stored mailbox, and refused at startup when it is not a directory."""
+    if settings.purchasing_mailbox != "stored" or settings.purchasing_mail_drop_dir is None:
+        return None
+    folder = Path(settings.purchasing_mail_drop_dir)
+    if not folder.is_dir():
+        raise RuntimeError(f"DW_PURCHASING_MAIL_DROP_DIR is not a directory: {folder}")
     return folder
 
 
@@ -561,6 +617,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # Single-use decision codes: a day, then gone (the database's constant).
     approval_codes_retention: RetentionPrunePort | None = None
     purchasing_retention: RetentionPrunePort | None = None
+    purchasing_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
     purchasing_automation_consumer: Callable[[], Awaitable[None]] | None = None
     # The Zalo self-link poll: only with a database, a bot token, a link secret
     # and ZALO_UPDATES_MODE=poll.
@@ -757,6 +814,11 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             store=SqlRetentionStore(sessions),
             book=purchasing_rule_book(REPO_ROOT / "configs", sessions),
             clock=clock,
+        )
+        # DW2's own drop folder, read into its stored mailbox (Postgres), so a
+        # database is all it needs beside the folder and the reader.
+        purchasing_mail_drop_consumer = build_purchasing_mail_drop(
+            settings, sessions, clock=clock, ids=ids
         )
         # Rows are queued whether or not this host sends them, so they are
         # pruned whether or not it does.
@@ -1042,6 +1104,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             PURCHASING_AUTOMATION_LANE,
             purchasing_automation_consumer,
             interval_seconds=PURCHASING_AUTOMATION_INTERVAL_SECONDS,
+        )
+    if purchasing_mail_drop_consumer is not None:
+        registry.register(
+            PURCHASING_MAIL_DROP_LANE,
+            purchasing_mail_drop_consumer,
+            interval_seconds=PURCHASING_MAIL_DROP_INTERVAL_SECONDS,
         )
     if purchasing_retention is not None:
         registry.register(

@@ -5,8 +5,9 @@
 The term is the tenant's own number, changed like any rule and decided by a
 second person, so the accountant's answer is a setting. The lane visits each
 workspace that holds DW2 rows, resolves that tenant's rules there, and
-deletes a case received before its term (its mail outcomes with it) and a
-mail outcome settled before its own.
+deletes a case received before its term (its mail outcomes with it), a mail
+outcome settled before its own, and stored mail received before the
+mailbox's (`RetentionRules.mailbox_term_days`).
 
 Fails closed, the way that loses nothing: rules that set no term, or rules
 that no longer read, delete nothing in that workspace; the next workspace is
@@ -35,13 +36,15 @@ _LOG = logging.getLogger("dw_purchasing.retention")
 class Pruned:
     cases: int
     outcomes: int
+    mail: int
 
 
 class RetentionStorePort(Protocol):
     """The two reads across tenants the lane needs, ids and counts only."""
 
     async def scopes(self) -> Sequence[tuple[uuid.UUID, uuid.UUID]]:
-        """Every (tenant, workspace) holding a case or a mail outcome."""
+        """Every (tenant, workspace) holding a case, a mail outcome or
+        stored mail."""
         ...
 
     async def prune(
@@ -50,6 +53,7 @@ class RetentionStorePort(Protocol):
         *,
         cases_before: datetime,
         outcomes_before: datetime,
+        mail_before: datetime,
     ) -> Pruned: ...
 
 
@@ -83,8 +87,9 @@ class PurchasingRetention:
                 # A year is 365 days here: a day kept longer harms no one.
                 cases_before=now - timedelta(days=365 * term.case_years),
                 outcomes_before=now - timedelta(days=term.mail_outcome_days),
+                mail_before=now - timedelta(days=term.mailbox_term_days),
             )
-            if pruned.cases or pruned.outcomes:
+            if pruned.cases or pruned.outcomes or pruned.mail:
                 _LOG.info(
                     "deleted purchasing rows past their term",
                     extra={
@@ -92,6 +97,7 @@ class PurchasingRetention:
                         "workspace_id": str(workspace_id),
                         "cases": pruned.cases,
                         "outcomes": pruned.outcomes,
+                        "mail": pruned.mail,
                         "rules_ref": rules.ref,
                     },
                 )

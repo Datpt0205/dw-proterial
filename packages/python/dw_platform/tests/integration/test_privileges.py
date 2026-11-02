@@ -56,6 +56,10 @@ async def test_the_application_can_read_the_tables_it_serves(app_engine: AsyncEn
             "knowledge.documents",
             "memory.items",
             *_SALES_TABLES,
+            # Migration 32c1f04b76d6: DW2's own stored mailbox (ADR 0014).
+            "purchasing.mailbox_messages",
+            "purchasing.mailbox_attachments",
+            "purchasing.mailbox_files",
         ):
             # The count is irrelevant; being allowed to ask is the assertion.
             await conn.execute(sa.text(f"SELECT count(*) FROM {table}"))
@@ -182,6 +186,46 @@ async def test_the_application_writes_the_sales_tables_it_serves(db_urls: Databa
     assert {"case_events", "case_events_default"} <= event_tables
     for table in event_tables:
         assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
+
+
+async def test_dw2s_stored_mail_is_append_only_on_every_partition(
+    db_urls: DatabaseUrls,
+) -> None:
+    """Migration 32c1f04b76d6: the schema's default privileges give every verb,
+    so the migration REVOKEs UPDATE and DELETE by name, and the partition
+    function withholds them from each month it makes. Asked of the catalog,
+    after a month has been made."""
+    migrator = create_async_engine(db_urls.migrator, poolclass=NullPool)
+    try:
+        async with migrator.begin() as conn:
+            await conn.execute(sa.text("SELECT platform.ensure_time_partitions(1)"))
+        async with migrator.connect() as conn:
+            held = {
+                (row.tbl, row.verb)
+                for row in await conn.execute(
+                    sa.text(
+                        """
+                        SELECT c.relname AS tbl, v.verb
+                        FROM pg_class c
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE'])
+                            AS v(verb)
+                        WHERE n.nspname = 'purchasing' AND c.relkind IN ('r', 'p')
+                          AND starts_with(c.relname, 'mailbox_')
+                          AND has_table_privilege('dw_app', c.oid, v.verb)
+                        """
+                    )
+                )
+            }
+    finally:
+        await migrator.dispose()
+
+    for prefix in ("mailbox_messages", "mailbox_attachments", "mailbox_files"):
+        tables = {tbl for tbl, _ in held if tbl.startswith(prefix)}
+        # The parent, DEFAULT, and at least this month's.
+        assert len(tables) >= 3 and {prefix, f"{prefix}_default"} <= tables, prefix
+        for table in tables:
+            assert {verb for tbl, verb in held if tbl == table} == {"SELECT", "INSERT"}, table
 
 
 async def test_the_application_can_enter_every_tenant_schema(db_urls: DatabaseUrls) -> None:

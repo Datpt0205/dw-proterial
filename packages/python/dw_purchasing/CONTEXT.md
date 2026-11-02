@@ -44,6 +44,14 @@ dw_sales ADR 0005 as DW2 applies it).
   bands, who each is and which findings send a request to the last tier are
   the tenant's rule. Stamped on the case and on the platform approval
   (`purchasing.request`, strict) when it is sent.
+- **Stored mailbox (hộp thư đã lưu)**: the purchasing mailbox as DW2 holds
+  it, `DW_PURCHASING_MAILBOX=stored` (else the demo's mock). A flow exports
+  each mail as an `.eml` file into DW2's own drop folder; the worker's
+  `purchasing_mail_drop` lane reads each new file once in the reader sandbox
+  and stores the message and its attachments (`purchasing.mailbox_*`),
+  audited as itself. A file it cannot read is told to whoever holds
+  `purchasing.request.intake`, once; a folder it cannot list, once a day.
+  Everything else reads the store, never the folder.
 - **Mail outcome**: what DW2 did with one mail in the purchasing mailbox,
   settled once: `opened` (a case was opened) or `to_person` (a person reads
   it), with a reason code: `sender_not_internal`, `sender_unverified`,
@@ -54,7 +62,8 @@ dw_sales ADR 0005 as DW2 applies it).
   (`purchasing_rules@<version>`): what a PR form requires, the company's mail
   domains, the approval tiers, whom to ask for quotes, the Bravo layout, and
   how long rows are kept (`retention`: a case in years, 1–30, default 10; a
-  mail outcome in days, 30–3650, default 365). The platform's version ships
+  mail outcome in days, 30–3650, default 365; stored mail in days, 30–3650,
+  default 365 and never past its outcome, since 1.7.0). The platform's version ships
   in `configs/policies`; a tenant's own replaces it whole.
 - **Rule version (phiên bản quy tắc)**: a tenant's own version, held by the
   platform's rule-version engine (`platform.rule_versions`, ADR 0013/0014):

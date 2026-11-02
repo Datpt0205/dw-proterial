@@ -398,8 +398,9 @@ async def test_rows_past_their_tenants_term_are_deleted_one_workspace_at_a_time(
         tenancy.alpha,
         cases_before=None,
         outcomes_before=None,
+        mail_before=None,
     )
-    assert (kept.cases, kept.outcomes) == (0, 0)
+    assert (kept.cases, kept.outcomes, kept.mail) == (0, 0, 0)
     book = platform_rule_book(REPO / "configs/policies", SqlRuleVersionLookup(app_sessions))
     lane = PurchasingRetention(
         store=_OnlyAlpha(store, tenancy.alpha), book=book, clock=FixedClock(NOW)

@@ -3,14 +3,17 @@
 `build_purchasing` takes what only the app has (the session factory, the
 platform's audit repository and policy overrides, the authorization service,
 the model gateway) and returns the services the router mounts. The mailbox is
-the demo's mock, bound to the one demo (tenant, workspace); every other scope
-reads it empty.
+``mailbox``: the demo's mock, bound to the one demo (tenant, workspace), every
+other scope reading it empty; or the mail the worker's `purchasing_mail_drop`
+lane stores from the drop folder (`SqlPurchasingMailbox`), which only the
+worker builds (`mail_drop`).
 """
 
 from __future__ import annotations
 
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -21,6 +24,7 @@ from dw_agent_runtime.ports import ModelGateway
 from dw_agent_runtime.registry import parse_worker_file
 from dw_kernel.errors import ConfigError
 from dw_kernel.ports import IdGenerator, UtcClock
+from dw_platform.adapters.drop_folder import LocalDropFolder
 from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_purchasing.adapters.bravo_file import BravoFile
@@ -28,6 +32,7 @@ from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.people import DirectoryPeople
 from dw_purchasing.adapters.persistence.automation import SqlAutomationScopes
+from dw_purchasing.adapters.persistence.mailbox import SqlPurchasingMailbox
 from dw_purchasing.adapters.persistence.store import (
     ApprovalsFactory,
     AuditFactory,
@@ -43,8 +48,14 @@ from dw_purchasing.application.approvals import (
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.automation_lane import AutomationLane, ServiceAccessPort
 from dw_purchasing.application.intake import PurchaseRequests, Worker
+from dw_purchasing.application.mail_drop import (
+    MailDrop,
+    MailDropNotices,
+    MailFileReaderPort,
+    RulesMailTerm,
+)
 from dw_purchasing.application.orders import PurchaseOrders
-from dw_purchasing.application.ports import NoticesPort
+from dw_purchasing.application.ports import InboxPort, NoticesPort
 from dw_purchasing.application.reapprovals import (
     ReapprovalDecisions,
     Reapprovals,
@@ -60,6 +71,10 @@ from dw_purchasing.application.rules import (
 )
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import SupplierSourcing
+
+# Which mailbox DW2 reads: the fictional mock, or the mail stored from the
+# drop folder. One value both processes are given (`DW_PURCHASING_MAILBOX`).
+Mailbox = Literal["mock", "stored"]
 
 
 def interpretation_for(model: ModelGateway, configs: Path, profile: str) -> GatewayInterpretation:
@@ -87,9 +102,15 @@ def build_purchasing(
     ids: IdGenerator,
     deployed: bool,
     notices: NoticesPort,
+    mailbox: Mailbox = "mock",
 ) -> PurchasingServices:
     worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
     store = SqlPurchasingStore(session_factory, audit, approvals)
+    inbox: InboxPort = (
+        SqlPurchasingMailbox(session_factory, audit)
+        if mailbox == "stored"
+        else MockInbox.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1])
+    )
     book = rule_book(configs, session_factory)
     automation = automation_for(configs, session_factory)
     checks = AutomationChecks(automation, book)
@@ -97,7 +118,7 @@ def build_purchasing(
         uow=store,
         gate=Gate(authorization),
         rules=book,
-        inbox=MockInbox.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1]),
+        inbox=inbox,
         model=(
             None
             if model is None
@@ -162,6 +183,31 @@ def build_purchasing(
             ids=ids,
             reapprovals=Reapprovals(requests.model, requests.worker, clock, ids, notices),
         ),
+    )
+
+
+def mail_drop(
+    *,
+    folder: Path,
+    reader: MailFileReaderPort,
+    configs: Path,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    notices: NoticesPort,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> MailDrop:
+    """The worker's `purchasing_mail_drop` lane: ``folder`` read into the
+    stored mailbox through ``reader`` (the reader sandbox, as the composition
+    root adapts it), files past the tenant's mailbox term left unread."""
+    return MailDrop(
+        LocalDropFolder(folder),
+        reader,
+        SqlPurchasingMailbox(session_factory, audit),
+        RulesMailTerm(rule_book(configs, session_factory)),
+        MailDropNotices(notices),
+        clock,
+        ids,
     )
 
 

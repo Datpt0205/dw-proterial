@@ -349,6 +349,8 @@ services:
       # Which mailbox DW1 reads (ticket 43): `mock`, or `stored`, the mail the
       # worker stores from the drop folder. The worker reads the same value.
       DW_SALES_MAILBOX: ${DW_SALES_MAILBOX:-mock}
+      # And DW2's, from its own drop folder; the API reads the store only.
+      DW_PURCHASING_MAILBOX: ${DW_PURCHASING_MAILBOX:-mock}
     ports:
       - "127.0.0.1:${DW_API_HOST_PORT:-8000}:8000"
     networks: [dw-internal, dw-edge, dw-scan]
@@ -649,6 +651,7 @@ services:
       # The API's mailbox (ticket 43). The drop folder itself is mounted by
       # the on-premises overlay, where the plant's share is.
       DW_SALES_MAILBOX: ${DW_SALES_MAILBOX:-mock}
+      DW_PURCHASING_MAILBOX: ${DW_PURCHASING_MAILBOX:-mock}
     networks: [dw-internal, dw-edge, dw-scan]
     volumes:
       - reader-socket:/run/dw-reader:ro

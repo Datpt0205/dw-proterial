@@ -329,6 +329,56 @@ def test_the_composition_root_makes_purchasing_approvals_strict_and_guarded() ->
     assert isinstance(mount, PurchasingMount)
 
 
+def _mount(settings: ApiSettings) -> PurchasingMount:
+    from dw_agent_runtime.approval_flow import ApproveAndResumeService
+    from dw_api.bootstrap.wiring import build_purchasing_mount
+
+    flow = ApproveAndResumeService(
+        uow_factory=None,  # type: ignore[arg-type]
+        runner=None,  # type: ignore[arg-type]
+        run_store=None,  # type: ignore[arg-type]
+        clock=SystemClock(),
+        id_generator=Uuid4Generator(),
+    )
+    mount = build_purchasing_mount(
+        settings,
+        session_factory=None,  # type: ignore[arg-type]
+        clock=SystemClock(),
+        ids=Uuid4Generator(),
+        authorization=ScopeAuthorizationService(),
+        approval_flow=flow,
+        model=None,
+    )
+    assert isinstance(mount, PurchasingMount)
+    return mount
+
+
+_DEMO = {"sales_demo_tenant_id": str(ALPHA[0]), "sales_demo_workspace_id": str(ALPHA[1])}
+
+
+@pytest.mark.parametrize("profile", ["uat", "production"])
+@pytest.mark.parametrize("mailbox", ["mock", "stored"])
+def test_a_deployed_dw2_answers_503_with_either_mailbox(profile: str, mailbox: str) -> None:
+    """The mock mailbox is refused where deployed; the stored one is real,
+    but DW2's master data is still the mock, so DW2 stays unwired there."""
+    settings = ApiSettings(profile=profile, purchasing_mailbox=mailbox, **_DEMO)  # type: ignore[arg-type]
+    assert _mount(settings).services is None
+
+
+def test_the_stored_mailbox_is_what_every_service_reads_when_named() -> None:
+    from dw_purchasing.adapters.mock.inbox import MockInbox
+    from dw_purchasing.adapters.persistence.mailbox import SqlPurchasingMailbox
+
+    stored = _mount(
+        ApiSettings(profile="test", dev_secret=SECRET, purchasing_mailbox="stored", **_DEMO)  # type: ignore[arg-type]
+    ).services
+    mock = _mount(ApiSettings(profile="test", dev_secret=SECRET, **_DEMO)).services  # type: ignore[arg-type]
+    assert stored is not None and mock is not None
+    assert isinstance(stored.requests.inbox, SqlPurchasingMailbox)
+    assert stored.sourcing.inbox is stored.requests.inbox
+    assert isinstance(mock.requests.inbox, MockInbox)
+
+
 async def test_the_bravo_file_downloads_as_a_workbook_named_for_the_request() -> None:
     from datetime import UTC, datetime
 

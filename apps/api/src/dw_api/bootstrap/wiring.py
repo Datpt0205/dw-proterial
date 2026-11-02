@@ -597,10 +597,14 @@ def build_purchasing_mount(
     (`RequestDecisions`), whether or not the demo's data source is wired: an
     approval opened earlier must never be decided unchecked.
 
-    DW2's mailbox is a fictional mock bound to the demo's one (tenant,
-    workspace), the pair Sales' demo names too (`ApiSettings.sales_demo_scope`);
-    every other scope reads it empty. Without that pair nothing is wired and
-    the Purchasing routes answer that no data source is configured. A
+    DW2 is bound to the demo's one (tenant, workspace), the pair Sales' demo
+    names too (`ApiSettings.sales_demo_scope`). Its mailbox is
+    `DW_PURCHASING_MAILBOX`: the fictional mock, every other scope reading it
+    empty, or the mail the worker's `purchasing_mail_drop` lane stores (the API
+    reads the store, never the folder). Without that pair nothing is wired and
+    the Purchasing routes answer that no data source is configured; where
+    deployed, the mock mailbox is refused, and so, until it is real, is DW2's
+    mock master data, so a deployed DW2 answers 503 with either mailbox. A
     tenant's own rules are its versions in the platform's rule-version engine;
     a `purchasing.rules` approval is checked by `RuleDecisions`, the longest
     prefix registered.
@@ -637,11 +641,13 @@ def build_purchasing_mount(
     if demo is None:
         _LOG.warning("purchasing: no data source configured; /api/v1/purchasing answers 503")
         return PurchasingMount(services=None)
+    if settings.is_deployed and settings.purchasing_mailbox == "mock":
+        _LOG.warning("purchasing: the mock mailbox is refused when deployed; 503")
+        return PurchasingMount(services=None)
     if settings.is_deployed:
-        # DW2's mailbox and master data are the fictional mocks until the
-        # stored ones land: a deployed profile refuses a mock adapter, so the
-        # routes answer that no data source is configured.
-        _LOG.warning("purchasing: mock mailbox and master data refused when deployed; 503")
+        # DW2's master data is the fictional mock until its import lands: a
+        # deployed profile refuses a mock adapter. Remove this check with it.
+        _LOG.warning("purchasing: mock master data refused when deployed; 503")
         return PurchasingMount(services=None)
     return PurchasingMount(
         services=build_purchasing(
@@ -658,6 +664,7 @@ def build_purchasing_mount(
             notices=PlatformNotices(
                 SqlScopeHolders(session_factory), SqlNotificationRepository(session_factory)
             ),
+            mailbox=settings.purchasing_mailbox,
         )
     )
 

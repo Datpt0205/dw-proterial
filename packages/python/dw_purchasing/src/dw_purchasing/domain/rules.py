@@ -138,6 +138,20 @@ class RetentionRules(BaseModel):
     case_years: int = Field(ge=1, le=30)
     # What DW2 did with one mail, by when it was settled.
     mail_outcome_days: int = Field(ge=30, le=3650)
+    # A stored mail and its attachments, by when it was received (since
+    # 1.7.0; a version written before it reads the platform's, `read_over`).
+    mailbox_days: int | None = Field(default=None, ge=30, le=3650)
+
+    @property
+    def mailbox_term_days(self) -> int:
+        """How long stored mail is kept: its own term, never past its
+        outcome's. A mail whose outcome is gone reads as unread, and DW2 would
+        open a second case for it. Not a refusal: a version written before
+        1.7.0 with a shorter outcome term takes the platform's 365 days here,
+        and refusing it would leave the tenant with no rules that read."""
+        if self.mailbox_days is None:
+            return self.mail_outcome_days
+        return min(self.mailbox_days, self.mail_outcome_days)
 
 
 class PurchasingRules(BaseModel):
