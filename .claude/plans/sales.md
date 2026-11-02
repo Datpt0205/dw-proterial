@@ -1085,6 +1085,13 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 
 ## Open
 
+- 2026-11-02, Đạt: **no e-signature** on quotations (too involved); the
+  signed paper stays the official approval. **Roles**: the ~4 of the
+  2026-10-28 brainstorm were DW1's alone; for both DWs about 7 (Sales PIC,
+  Sales head, buyer, purchasing head, requester, approving director, IT
+  admin), exceptions as permission sets. Waiting on Đạt's go-ahead; no code.
+  Internal mail kept by DW: decided, kept (on-prem model).
+
 - 2026-11-02, **no sender left out** (Đạt: "gỡ hẳn"): `ignored_sender_domains`
   is gone from `sales_order_rules@1.9.0`, the `sales_mail_drop` lane, the
   stored mailbox, step O1 and the rules page; every mail is stored and DW1's

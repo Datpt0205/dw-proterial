@@ -57,7 +57,7 @@ own file and a row here.
   the IP-indemnity clause's wording (carve-outs, cap) with FPT legal;
   DW2 go-live week 4 (contract) vs week 6 (rollout plan); whether the
   rollout plan `.xlsx` stays out of git (repo public).
-- **Purchasing:** Proterial list; internal mail kept by DW (`purchasing.md`).
+- **Purchasing:** Proterial list (`docs/proterial/`). **Roles:** ~7 for both DWs (`sales.md` Open).
 
 ## How a feature is checked here
 
