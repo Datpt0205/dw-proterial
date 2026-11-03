@@ -148,6 +148,9 @@ def test_only_the_platform_lanes_are_wired() -> None:
     `purchasing_retention` deletes DW2's rows past the term each tenant's
     rules give them (`purchasing_rules.retention`), with the database alone
     because its cases exist with or without a mailbox.
+    `purchasing_master_import` reads the master-data workbooks DW2's page
+    uploads (2026-11-03): a database holds the queue, and the reader and the
+    scanner it reads through are the settings' own, as Sales' file lanes'.
 
     Naming the whole set is the point: a context's lane arriving in this process
     becomes a visible change rather than a silent one.
@@ -167,6 +170,7 @@ def test_only_the_platform_lanes_are_wired() -> None:
         "channel_deliveries_retention",
         "approval_codes_retention",
         "purchasing_retention",
+        "purchasing_master_import",
     }
 
 
