@@ -106,6 +106,7 @@ from dw_purchasing.adapters.assembly import (
     automation_lane,
     build_purchasing,
     mail_drop,
+    master_import_lane,
     reapproval_settlement,
     request_settlement,
     rule_settlement,
@@ -116,6 +117,7 @@ from dw_purchasing.adapters.persistence.retention import SqlRetentionStore
 from dw_purchasing.application.approvals import REQUEST_DECIDED
 from dw_purchasing.application.automation_lane import LANE as PURCHASING_AUTOMATION_LANE
 from dw_purchasing.application.mail_drop import MAIL_DROP_LANE as PURCHASING_MAIL_DROP_LANE
+from dw_purchasing.application.master_data import MASTER_IMPORT_LANE
 from dw_purchasing.application.reapprovals import REAPPROVAL_DECIDED
 from dw_purchasing.application.retention import PurchasingRetention
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
@@ -129,8 +131,11 @@ from dw_sales.adapters.assembly import (
 )
 from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
+from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import (
     ClientMailReader,
+    ClientSourceView,
+    ClientTableReader,
     HttpReaderTransport,
     ReaderTransport,
 )
@@ -175,6 +180,12 @@ from dw_worker.consumers.purchasing_mail_drop import (
     INTERVAL_SECONDS as PURCHASING_MAIL_DROP_INTERVAL_SECONDS,
 )
 from dw_worker.consumers.purchasing_mail_drop import build_purchasing_mail_drop_consumer
+from dw_worker.consumers.purchasing_master_import import (
+    INTERVAL_SECONDS as PURCHASING_MASTER_IMPORT_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.purchasing_master_import import (
+    build_purchasing_master_import_consumer,
+)
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
@@ -204,7 +215,7 @@ from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
 from dw_worker.health import beat
-from dw_worker.purchasing_reader import PurchasingMailReader
+from dw_worker.purchasing_reader import PurchasingMailReader, PurchasingWorkbookReader
 from dw_worker.settings import WorkerSettings
 
 if TYPE_CHECKING:
@@ -531,6 +542,45 @@ def build_purchasing_mail_drop(
     return build_purchasing_mail_drop_consumer(drop, scope)
 
 
+def build_purchasing_master_import(
+    settings: WorkerSettings,
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> Callable[[], Awaitable[None]] | None:
+    """DW2's `purchasing_master_import` lane, or None with no workspace to
+    serve (the demo's pair, as every DW2 lane here). Each uploaded workbook is
+    scanned (the scanner the settings name, as Sales' files are) and read in
+    the reader sandbox through the client that exists, bounded by the order
+    rules' intake caps (`PurchasingWorkbookReader`, ADR 0013 decision 2's
+    interim)."""
+    demo = settings.sales_demo_scope()
+    if demo is None:
+        return None
+    transport = sales_reader(settings)
+    caps = load_sales_policies(
+        REPO_ROOT / "configs" / "policies", REPO_ROOT / "configs" / "copy"
+    ).order_rules.intake
+    lane = master_import_lane(
+        reader=PurchasingWorkbookReader(
+            ClientSourceView(transport, caps), ClientTableReader(transport, caps)
+        ),
+        scanner=malware_scanner(
+            settings.sales_malware_scan,
+            host=settings.sales_clamd_host,
+            port=settings.sales_clamd_port,
+            deployed=settings.is_deployed,
+        ),
+        session_factory=sessions,
+        audit=SqlAuditRepository,
+        clock=clock,
+        ids=ids,
+    )
+    scope = ContextScope(TenantId(demo[0]), WorkspaceId(demo[1]))
+    return build_purchasing_master_import_consumer(lane, scope)
+
+
 def _outbox_dir(settings: WorkerSettings) -> Path | None:
     """The share of the people's outbox folders, or None; refused at startup
     when named and not a directory."""
@@ -622,6 +672,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     approval_codes_retention: RetentionPrunePort | None = None
     purchasing_retention: RetentionPrunePort | None = None
     purchasing_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
+    purchasing_master_import_consumer: Callable[[], Awaitable[None]] | None = None
     purchasing_automation_consumer: Callable[[], Awaitable[None]] | None = None
     # The Zalo self-link poll: only with a database, a bot token, a link secret
     # and ZALO_UPDATES_MODE=poll.
@@ -822,6 +873,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         # DW2's own drop folder, read into its stored mailbox (Postgres), so a
         # database is all it needs beside the folder and the reader.
         purchasing_mail_drop_consumer = build_purchasing_mail_drop(
+            settings, sessions, clock=clock, ids=ids
+        )
+        # DW2's master-data workbooks, read in the reader sandbox as uploaded.
+        purchasing_master_import_consumer = build_purchasing_master_import(
             settings, sessions, clock=clock, ids=ids
         )
         # Rows are queued whether or not this host sends them, so they are
@@ -1114,6 +1169,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             PURCHASING_MAIL_DROP_LANE,
             purchasing_mail_drop_consumer,
             interval_seconds=PURCHASING_MAIL_DROP_INTERVAL_SECONDS,
+        )
+    if purchasing_master_import_consumer is not None:
+        registry.register(
+            MASTER_IMPORT_LANE,
+            purchasing_master_import_consumer,
+            interval_seconds=PURCHASING_MASTER_IMPORT_INTERVAL_SECONDS,
         )
     if purchasing_retention is not None:
         registry.register(

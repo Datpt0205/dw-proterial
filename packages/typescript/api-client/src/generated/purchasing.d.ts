@@ -54,6 +54,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/master-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Master Data */
+        get: operations["master_data_api_v1_purchasing_master_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/master-data/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Master Upload */
+        post: operations["master_upload_api_v1_purchasing_master_data_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/master-data/imports/{import_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Master Import */
+        get: operations["master_import_api_v1_purchasing_master_data_imports__import_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/master-data/imports/{import_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Master Submit */
+        post: operations["master_submit_api_v1_purchasing_master_data_imports__import_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/master-data/template.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Master Template */
+        get: operations["master_template_api_v1_purchasing_master_data_template_xlsx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/requests": {
         parameters: {
             query?: never;
@@ -672,6 +757,120 @@ export interface components {
             supplier_code: string | null;
         };
         /**
+         * ListChange
+         * @description One list of a new version beside the one in force.
+         */
+        ListChange: {
+            /** Added */
+            added: number;
+            /** Changed */
+            changed: number;
+            /** In File */
+            in_file: boolean;
+            /** In Force */
+            in_force: number;
+            /**
+             * List
+             * @enum {string}
+             */
+            list: "items" | "suppliers" | "quotes" | "history" | "budgets";
+            /** Removed */
+            removed: number;
+            /** Rows */
+            rows: number;
+            /** Sheet */
+            sheet: string;
+        };
+        /** ListCount */
+        ListCount: {
+            /** List */
+            list: string;
+            /** Rows */
+            rows: number;
+            /** Sheet */
+            sheet: string;
+        };
+        /**
+         * MasterDataView
+         * @description The page: the lists in force and whose, the version waiting to be
+         *     decided if any, and the latest uploads.
+         */
+        MasterDataView: {
+            /** Can Upload */
+            can_upload: boolean;
+            /** Imports */
+            imports: components["schemas"]["MasterImportView"][];
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "platform" | "tenant";
+            /** Lists */
+            lists: components["schemas"]["ListCount"][];
+            /** Ref */
+            ref: string;
+            /** Waiting */
+            waiting: string | null;
+        };
+        /**
+         * MasterImportView
+         * @description An import as the page shows it: the file, how far it got, and, once
+         *     read, what it would change beside the lists in force now.
+         */
+        MasterImportView: {
+            /** Blocked */
+            blocked: string | null;
+            /** Changes */
+            changes: components["schemas"]["ListChange"][];
+            /** Dropped */
+            dropped: {
+                [key: string]: number;
+            };
+            /** Failure */
+            failure: string | null;
+            /** File Name */
+            file_name: string;
+            /**
+             * Import Id
+             * Format: uuid
+             */
+            import_id: string;
+            /** Read At */
+            read_at: string | null;
+            /** Rejected */
+            rejected: components["schemas"]["Rejected"][];
+            /** Rejected Total */
+            rejected_total: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "parsed" | "failed" | "submitted";
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /**
+             * Uploaded By
+             * Format: uuid
+             */
+            uploaded_by: string;
+            /** Version Ref */
+            version_ref: string | null;
+        };
+        /**
+         * MasterUploadBody
+         * @description A master-data workbook: its name and its bytes, base64. Decoded here
+         *     and never opened: the worker reads it in the reader sandbox.
+         */
+        MasterUploadBody: {
+            /** Content B64 */
+            content_b64: string;
+            /** File Name */
+            file_name: string;
+        };
+        /**
          * MyRequest
          * @description What a requester sends: no PR number and no requester name, which are
          *     code's and the directory's. ``department`` is read only where the
@@ -1016,7 +1215,7 @@ export interface components {
          * @description What a tenant may hold its own version of.
          * @enum {string}
          */
-        PurchasingRuleKey: "purchasing_rules" | "purchasing_automation";
+        PurchasingRuleKey: "purchasing_rules" | "purchasing_automation" | "purchasing_master_data";
         /**
          * PurchasingRuleVersionView
          * @description A version as the settings page lists it.
@@ -1093,6 +1292,18 @@ export interface components {
             /** Explanation */
             explanation?: string | null;
             selection: components["schemas"]["Selection"];
+        };
+        /**
+         * Rejected
+         * @description A row that was not applied, and why (never a value of the row).
+         */
+        Rejected: {
+            /** Reason */
+            reason: string;
+            /** Row */
+            row: number | null;
+            /** Sheet */
+            sheet: string;
         };
         /**
          * RequestDraft
@@ -1417,6 +1628,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    master_data_api_v1_purchasing_master_data_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterDataView"];
+                };
+            };
+        };
+    };
+    master_upload_api_v1_purchasing_master_data_imports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasterUploadBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterImportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    master_import_api_v1_purchasing_master_data_imports__import_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterImportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    master_submit_api_v1_purchasing_master_data_imports__import_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                import_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterImportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    master_template_api_v1_purchasing_master_data_template_xlsx_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

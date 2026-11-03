@@ -1,5 +1,6 @@
 import {
   ControlOutlined,
+  DatabaseOutlined,
   FolderOpenOutlined,
   InboxOutlined,
   PlusCircleOutlined,
@@ -14,7 +15,7 @@ import { SCOPE } from "../_lib/scopes";
  * `lib/nav/registry.ts` once. Each item is keyed to the scope its page reads
  * with: the cases and the mailbox to `purchasing.request.read`, a
  * requester's own pages to `purchasing.request.create` or `.read_own`, the
- * settings to `purchasing.rules.propose`. Navigation, never authorization:
+ * settings and the master data to `purchasing.rules.propose`. Navigation, never authorization:
  * every route checks its scope again.
  */
 export const purchasingNav: NavEntry[] = [
@@ -53,6 +54,13 @@ export const purchasingNav: NavEntry[] = [
         hint: "Mọi yêu cầu mua hàng theo trạng thái, mới nhất trước",
         icon: FolderOpenOutlined,
         anyScope: [SCOPE.read, SCOPE.readOwn],
+      },
+      {
+        href: "/purchasing/master-data",
+        label: "Dữ liệu chủ",
+        hint: "Vật tư, nhà cung cấp, báo giá, giá đã mua, ngân sách: cập nhật bằng một file Excel, người khác duyệt",
+        icon: DatabaseOutlined,
+        anyScope: [SCOPE.propose, SCOPE.rulesApprove],
       },
       {
         href: "/purchasing/settings",

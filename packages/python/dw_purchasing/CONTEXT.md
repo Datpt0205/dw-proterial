@@ -104,6 +104,15 @@ dw_sales ADR 0005 as DW2 applies it).
   order and date format the tenant's rule (`bravo_po`) gives, each column one
   of DW2's fields; stamped on the case with the orders, so the file drawn
   again is the file drawn then. Every string cell is text, never a formula.
+- **Master data (dữ liệu chủ)**: the company's items (vật tư), suppliers
+  (nhà cung cấp), quotations on file (báo giá), prices paid (giá đã mua) and
+  budgets (ngân sách): one version the tenant holds of
+  `purchasing_master_data`, empty as the platform ships it
+  (`domain.master_lists`, `docs/adr/0001-master-data-is-a-rule-version.md`).
+  Loaded from one workbook, one sheet per list; a sheet left out keeps its
+  list. An upload (`purchasing.master_imports`) is `queued` (Đang đọc),
+  `parsed` (Đã đọc, chờ gửi duyệt), `failed` (Không đọc được) or `submitted`
+  (Đã gửi duyệt); a refused row names its sheet, row and why, never a value.
 
 ## Roles and scopes
 

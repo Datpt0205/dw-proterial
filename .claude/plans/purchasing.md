@@ -362,12 +362,26 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   worker's first tick (`394419a5ebbd`, see the commit). The guides still
   describe the DW account's OneDrive: switching them is Đạt's go-ahead.
 
+- 2026-11-03, **master data loaded from one workbook** (Đạt: "cho upload
+  file, đừng input từng cái"): `/purchasing/master-data`. Who configures DW2
+  downloads the template (a guide and one sheet per list), fills it in Excel
+  and uploads it whole; the `purchasing_master_import` lane scans it and reads
+  it in the reader sandbox; the page shows what changes list by list and the
+  rows refused (sheet, row, why); "Gửi duyệt" proposes it as the tenant's
+  version of `purchasing_master_data` (the head's own applies at once). A
+  sheet left out keeps its list. Where deployed, checks read only the
+  tenant's lists (the 503 is gone). `dw_purchasing/docs/adr/0001`; migration
+  `cf783456f739`; the rule-version store now takes `keys`/`statuses` so no
+  settings page loads a master-data document. Checks: unit (domain 10,
+  service and lane 16, API 4, worker reader 3, web 3), integration 13
+  (RLS both ways, unscoped, constraints, grants, the version applied, the
+  settings list); 22 mutations, each red (two tests tightened until red).
+
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
-2. The rest of Phase 1, each its own session: master-data import (then a
-   deployed DW2 drops its 503); the Bravo layout learned from Proterial's
-   file; the outbox (RFQs from the buyer's mailbox); the DW2 attest lane.
+2. The rest of Phase 1, each its own session: the Bravo layout learned from
+   Proterial's file; the outbox (RFQs from the buyer's mailbox); the DW2 attest lane.
    Stored attachments are kept and read by nothing yet: the Excel PR form
    and scanned paper read them, scanned by ClamAV first as Sales' are.
 3. The plant's flow (Đạt, 2026-11-02: set up and integrated later, prepared

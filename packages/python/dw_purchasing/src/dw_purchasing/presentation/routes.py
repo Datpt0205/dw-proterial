@@ -20,6 +20,8 @@ names neither implementation (it may not import the app).
 # parameters with aliases built inside `build_router`, and FastAPI resolves a
 # string annotation against the module's globals, where they do not exist.
 
+import base64
+import binascii
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -36,6 +38,7 @@ from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.approvals import PurchaseCheckView
 from dw_purchasing.application.automation import SwitchesView
 from dw_purchasing.application.intake import CaseChange, InboxItem
+from dw_purchasing.application.master_data import MasterDataView, MasterImportView
 from dw_purchasing.application.requesters import DraftView, MyRequest
 from dw_purchasing.application.rule_drafting import WordsDraft
 from dw_purchasing.application.rules import PurchasingRulesView
@@ -46,6 +49,7 @@ from dw_purchasing.domain.requests import PurchaseRequest
 from dw_purchasing.domain.sourcing import Choice
 
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu Mua hàng"
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _PAGE = 50
 _APPROVERS = (
     PurchasingScopes.APPROVE_TIER1,
@@ -160,6 +164,25 @@ class RuleChange(BaseModel):
 _MessageId = Annotated[str, PathParam(pattern=r"^[!-~]{1,512}$")]
 _RuleKey = Annotated[str, PathParam(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 _SupplierCode = Annotated[str, PathParam(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$")]
+
+
+class MasterUploadBody(BaseModel):
+    """A master-data workbook: its name and its bytes, base64. Decoded here
+    and never opened: the worker reads it in the reader sandbox."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    file_name: Annotated[str, Field(min_length=1, max_length=200)]
+    # 10 MiB of bytes, as base64 (`MAX_FILE_BYTES`; the service refuses more).
+    content_b64: Annotated[str, Field(min_length=1, max_length=13_981_016)]
+
+    def data(self) -> bytes:
+        try:
+            return base64.b64decode(self.content_b64, validate=True)
+        except (binascii.Error, ValueError):
+            raise DomainError(
+                "nội dung tệp không hợp lệ", details={"rule": "file_encoding"}
+            ) from None
 
 
 def build_router(
@@ -417,5 +440,51 @@ def build_router(
             applied_directly=version.applied_directly,
         )
         return await idem.record(change)
+
+    @router.get("/master-data", response_model=MasterDataView, dependencies=rules_reader)
+    async def master_data(context: Ctx, svc: Svc) -> MasterDataView:
+        return await svc.master_data.overview(context)
+
+    @router.get("/master-data/template.xlsx", dependencies=propose)
+    async def master_template(context: Ctx, svc: Svc) -> Response:
+        return Response(
+            content=await svc.master_data.template_file(context),
+            media_type=_XLSX,
+            headers={
+                "Content-Disposition": 'attachment; filename="du-lieu-chu-dw2.xlsx"',
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.post(
+        "/master-data/imports",
+        response_model=MasterImportView,
+        status_code=202,
+        dependencies=propose,
+    )
+    async def master_upload(
+        body: MasterUploadBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> MasterImportView:
+        view = await svc.master_data.upload(context, body.file_name, body.data())
+        return await idem.record(view, status_code=202)
+
+    @router.get(
+        "/master-data/imports/{import_id}",
+        response_model=MasterImportView,
+        dependencies=rules_reader,
+    )
+    async def master_import(import_id: uuid.UUID, context: Ctx, svc: Svc) -> MasterImportView:
+        return await svc.master_data.get(context, import_id)
+
+    @router.post(
+        "/master-data/imports/{import_id}/submit",
+        response_model=MasterImportView,
+        dependencies=propose,
+    )
+    async def master_submit(
+        import_id: uuid.UUID, context: Ctx, svc: Svc, idem: Idem
+    ) -> MasterImportView:
+        return await idem.record(await svc.master_data.submit(context, import_id))
 
     return router

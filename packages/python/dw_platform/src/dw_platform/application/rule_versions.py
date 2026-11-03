@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import typing
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -57,6 +57,9 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 RuleStatus = Literal["proposed", "approved", "rejected", "superseded"]
 Layer = Literal["platform", "tenant"]
+# What a key's waiting proposal and its version in force are found by.
+WAITING: Final[tuple[RuleStatus, ...]] = ("proposed",)
+IN_FORCE: Final[tuple[RuleStatus, ...]] = ("approved",)
 # The rule a refusal reports when a key already has a proposal waiting on its
 # approval (`uq_rule_versions_one_proposed`).
 ONE_OPEN_PROPOSAL: Final = "one_open_proposal"
@@ -229,8 +232,15 @@ class RuleVersionLookupPort(Protocol):
 class RuleVersionStorePort(Protocol):
     """The tenant's versions inside a unit of work."""
 
-    async def list_all(self) -> Sequence[RuleVersion]:
-        """Every version of every key, newest proposed first."""
+    async def list_all(
+        self,
+        *,
+        keys: Collection[str] | None = None,
+        statuses: Collection[RuleStatus] | None = None,
+    ) -> Sequence[RuleVersion]:
+        """The versions of ``keys`` in ``statuses`` (every key, any status,
+        when None), newest proposed first. A key's documents can be large (a
+        company's master data), so a caller names what it reads."""
         ...
 
     async def get(self, version_id: uuid.UUID) -> RuleVersion | None: ...
@@ -490,9 +500,15 @@ class RuleVersionEngine:
     def validated(self, key: str, document: Mapping[str, Any]) -> Any:
         return validated(self.book.schema_of(key), key, document)
 
-    async def list_all(self, context: AccessContext) -> Sequence[RuleVersion]:
+    async def list_all(
+        self,
+        context: AccessContext,
+        *,
+        keys: Collection[str] | None = None,
+        statuses: Collection[RuleStatus] | None = None,
+    ) -> Sequence[RuleVersion]:
         async with self.work(context) as work:
-            return await work.rule_versions.list_all()
+            return await work.rule_versions.list_all(keys=keys, statuses=statuses)
 
     async def propose(
         self,
@@ -553,11 +569,7 @@ class RuleVersionEngine:
                 if refused.details.get("rule") != ONE_OPEN_PROPOSAL:
                     raise
                 waiting = next(
-                    (
-                        v
-                        for v in await work.rule_versions.list_all()
-                        if v.key == key and v.status == "proposed"
-                    ),
+                    iter(await work.rule_versions.list_all(keys=(key,), statuses=WAITING)),
                     None,
                 )
                 raise await self._one_open(context, key, waiting) from None
@@ -586,7 +598,9 @@ class RuleVersionEngine:
             applied_directly=True,
         )
         async with self.work(context) as work:
-            versions = await work.rule_versions.list_all()
+            versions = await work.rule_versions.list_all(
+                keys=(key,), statuses=(*WAITING, *IN_FORCE)
+            )
             waiting = next((v for v in versions if v.key == key and v.status == "proposed"), None)
             if waiting is not None:
                 raise await self._one_open(context, key, waiting)
@@ -854,10 +868,8 @@ class RuleVersionSettlement:
                 approve, refused, comment = False, unready.rule, unready.comment
             if approve:
                 current = next(
-                    (
-                        v
-                        for v in await work.rule_versions.list_all()
-                        if v.key == proposed.key and v.status == "approved"
+                    iter(
+                        await work.rule_versions.list_all(keys=(proposed.key,), statuses=IN_FORCE)
                     ),
                     None,
                 )

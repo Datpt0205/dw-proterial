@@ -31,7 +31,7 @@ from dw_agent_runtime.model.interpretation import (
     PromptRef,
     estimated_tokens,
 )
-from dw_kernel.errors import DomainError, InfrastructureError
+from dw_kernel.errors import DomainError, InfrastructureError, NotFoundError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import IdGenerator
 from dw_platform.application.access_context import AccessContext
@@ -48,6 +48,7 @@ from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import Worker
 from dw_purchasing.application.rules import (
     SCHEMAS,
+    SETTINGS_KEYS,
     PurchasingRuleBook,
     rule_key,
     unused_version,
@@ -90,6 +91,9 @@ class RuleWordsDesk:
             context, PurchasingScopes.RULES_PROPOSE, resource_type="purchasing_rule_version"
         )
         rule = rule_key(key)
+        if rule not in SETTINGS_KEYS:
+            # The master data is a workbook's to change, not a sentence's.
+            raise NotFoundError("no such rule key")
         words = request.strip()
         if not words:
             raise DomainError("hãy viết điều cần đổi", details={"rule": "request_empty"})

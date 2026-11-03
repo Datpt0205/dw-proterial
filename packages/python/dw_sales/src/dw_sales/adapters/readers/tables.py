@@ -1,7 +1,8 @@
 """A master-data file as rows of cells (ticket 41), in the reader sandbox.
 
 A workbook (an ``.xlsx``, or an ``.xls`` the sandbox converted first) is read
-from its sheet named "Dữ liệu", the template's, else its first visible sheet;
+from the sheet a caller names (DW2's master data reads one per list), else its
+sheet named "Dữ liệu", the template's, else its first visible sheet;
 a CSV is read as UTF-8 (Excel's "CSV UTF-8"), its delimiter a comma, a
 semicolon or a tab. Each cell comes back as its value (text, a number, a
 yes/no) and a date as ISO text; what the cells mean is the worker's to decide
@@ -57,7 +58,7 @@ def _rows(values: Iterable[Iterable[object]]) -> tuple[list[TableRow], bool]:
     return rows, False
 
 
-def _workbook(data: bytes, caps: IntakeCaps) -> ImportedTable:
+def _workbook(data: bytes, caps: IntakeCaps, named: str | None) -> ImportedTable:
     try:
         values, _ = open_for_viewing(data, caps)
     except ValueError:
@@ -65,7 +66,13 @@ def _workbook(data: bytes, caps: IntakeCaps) -> ImportedTable:
     visible = [sheet for sheet in values.worksheets if sheet.sheet_state == "visible"]
     if not visible:
         raise ValueError("bảng tính không có trang nào đang hiện")
-    sheet = next((s for s in visible if s.title == DATA_SHEET), visible[0])
+    if named is not None:
+        found = next((s for s in visible if s.title == named), None)
+        if found is None:
+            raise ValueError("bảng tính không có trang được yêu cầu")
+        sheet = found
+    else:
+        sheet = next((s for s in visible if s.title == DATA_SHEET), visible[0])
     rows, truncated = _rows(sheet.iter_rows(values_only=True))
     return ImportedTable(sheet=sheet.title[:200], rows=rows, truncated=truncated)
 
@@ -95,12 +102,12 @@ def _csv(data: bytes, caps: IntakeCaps) -> ImportedTable:
     return ImportedTable(sheet=_CSV_SHEET, rows=rows, truncated=truncated)
 
 
-def read_table(data: bytes, caps: IntakeCaps) -> ImportedTable:
+def read_table(data: bytes, caps: IntakeCaps, sheet: str | None = None) -> ImportedTable:
     """The file's rows (module docstring). ``data`` is an ``.xlsx`` already
     when the file was a legacy workbook (`operations._readable_bytes`)."""
     match sniff(data):
         case "xlsx":
-            return _workbook(data, caps)
+            return _workbook(data, caps, sheet)
         case None:
             return _csv(data, caps)
         case _:

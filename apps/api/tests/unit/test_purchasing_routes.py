@@ -123,6 +123,7 @@ def _mounted(world: World) -> PurchasingMount:
             switches=world.switches,
             requester=world.requester,
             words=world.words,
+            master_data=world.master_data,
         )
     )
 
@@ -288,7 +289,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 24
+    assert len(routes) == 29
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
@@ -357,12 +358,24 @@ _DEMO = {"sales_demo_tenant_id": str(ALPHA[0]), "sales_demo_workspace_id": str(A
 
 
 @pytest.mark.parametrize("profile", ["uat", "production"])
-@pytest.mark.parametrize("mailbox", ["mock", "stored"])
-def test_a_deployed_dw2_answers_503_with_either_mailbox(profile: str, mailbox: str) -> None:
-    """The mock mailbox is refused where deployed; the stored one is real,
-    but DW2's master data is still the mock, so DW2 stays unwired there."""
-    settings = ApiSettings(profile=profile, purchasing_mailbox=mailbox, **_DEMO)  # type: ignore[arg-type]
+def test_a_deployed_dw2_refuses_the_mock_mailbox(profile: str) -> None:
+    settings = ApiSettings(profile=profile, purchasing_mailbox="mock", **_DEMO)  # type: ignore[arg-type]
     assert _mount(settings).services is None
+
+
+@pytest.mark.parametrize("profile", ["uat", "production"])
+def test_a_deployed_dw2_reads_stored_mail_and_only_the_tenants_own_master_data(
+    profile: str,
+) -> None:
+    """Where deployed, every check reads the lists a tenant loaded (or the
+    platform's empty ones), never the demo's fictional lists."""
+    from dw_purchasing.adapters.master_data import RuleMasterData
+
+    settings = ApiSettings(profile=profile, purchasing_mailbox="stored", **_DEMO)  # type: ignore[arg-type]
+    services = _mount(settings).services
+    assert services is not None
+    for master in (services.approvals.master, services.orders.master, services.sourcing.master):
+        assert type(master) is RuleMasterData
 
 
 def test_the_stored_mailbox_is_what_every_service_reads_when_named() -> None:
@@ -377,6 +390,10 @@ def test_the_stored_mailbox_is_what_every_service_reads_when_named() -> None:
     assert isinstance(stored.requests.inbox, SqlPurchasingMailbox)
     assert stored.sourcing.inbox is stored.requests.inbox
     assert isinstance(mock.requests.inbox, MockInbox)
+    # Not deployed: the demo's lists stand in until a tenant loads its own.
+    from dw_purchasing.adapters.master_data import DemoMasterData
+
+    assert isinstance(stored.approvals.master, DemoMasterData)
 
 
 async def test_the_bravo_file_downloads_as_a_workbook_named_for_the_request() -> None:
@@ -483,3 +500,64 @@ async def test_an_approver_of_the_last_tier_reads_the_case_waiting_on_them_only(
     assert read.status_code == 200, read.text
     assert (await _call(container, "GET", f"/requests/{other.case_id}")).status_code == 404
     assert (await _call(container, "GET", "/requests")).status_code == 403
+
+
+# ------------------------------------------------------------- master data --
+
+_WORKBOOK = b"PK\x03\x04 bytes the API keeps and never opens"
+
+
+async def test_the_master_data_template_downloads_as_a_workbook() -> None:
+    container = _container(EVERY_SCOPE, _mounted(_world()))
+    response = await _call(container, "GET", "/master-data/template.xlsx")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/vnd.openxmlformats")
+    assert response.content.startswith(b"PK")
+
+
+async def test_a_workbook_is_uploaded_as_base64_and_answers_queued() -> None:
+    import base64
+
+    world = _world()
+    container = _container(EVERY_SCOPE, _mounted(world))
+    body = {"file_name": "lists.xlsx", "content_b64": base64.b64encode(_WORKBOOK).decode()}
+    response = await _call(container, "POST", "/master-data/imports", body)
+
+    assert response.status_code == 202, response.text
+    assert response.json()["status"] == "queued"
+    (record, content), *_ = world.master_imports.rows[ALPHA].values()
+    assert content == _WORKBOOK
+    page = await _call(container, "GET", "/master-data")
+    assert page.json()["imports"][0]["import_id"] == str(record.import_id)
+
+
+async def test_who_may_not_configure_dw2_uploads_nothing() -> None:
+    import base64
+
+    world = _world()
+    container = _container(
+        frozenset({"purchasing.request.read", "purchasing.rules.approve"}), _mounted(world)
+    )
+    body = {"file_name": "lists.xlsx", "content_b64": base64.b64encode(_WORKBOOK).decode()}
+    response = await _call(container, "POST", "/master-data/imports", body)
+
+    assert response.status_code == 403
+    assert all(not held for held in world.master_imports.rows.values())
+    # Who decides reads the page all the same.
+    assert (await _call(container, "GET", "/master-data")).status_code == 200
+
+
+async def test_another_tenants_import_answers_404() -> None:
+    import base64
+
+    world = _world()
+    container = _container(EVERY_SCOPE, _mounted(world))
+    body = {"file_name": "lists.xlsx", "content_b64": base64.b64encode(_WORKBOOK).decode()}
+    import_id = (await _call(container, "POST", "/master-data/imports", body)).json()["import_id"]
+    other = (uuid.UUID(int=0xB1), uuid.UUID(int=0xB2))
+
+    seen = await _call(container, "GET", f"/master-data/imports/{import_id}", tenant=other)
+    sent = await _call(
+        container, "POST", f"/master-data/imports/{import_id}/submit", tenant=other
+    )
+    assert (seen.status_code, sent.status_code) == (404, 404)

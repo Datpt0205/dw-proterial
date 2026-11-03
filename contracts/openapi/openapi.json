@@ -6853,6 +6853,85 @@
         "title": "LinkedCount",
         "type": "object"
       },
+      "ListChange": {
+        "description": "One list of a new version beside the one in force.",
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "changed": {
+            "title": "Changed",
+            "type": "integer"
+          },
+          "in_file": {
+            "title": "In File",
+            "type": "boolean"
+          },
+          "in_force": {
+            "title": "In Force",
+            "type": "integer"
+          },
+          "list": {
+            "enum": [
+              "items",
+              "suppliers",
+              "quotes",
+              "history",
+              "budgets"
+            ],
+            "title": "List",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list",
+          "sheet",
+          "in_file",
+          "rows",
+          "in_force",
+          "added",
+          "removed",
+          "changed"
+        ],
+        "title": "ListChange",
+        "type": "object"
+      },
+      "ListCount": {
+        "properties": {
+          "list": {
+            "title": "List",
+            "type": "string"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list",
+          "sheet",
+          "rows"
+        ],
+        "title": "ListCount",
+        "type": "object"
+      },
       "LiveShareView": {
         "description": "What the step handled in the workspace over the last ``window_days``\ndays, and how much of it DW1 carried (`StepTally`).",
         "properties": {
@@ -7122,6 +7201,62 @@
         "title": "MappingView",
         "type": "object"
       },
+      "MasterDataView": {
+        "description": "The page: the lists in force and whose, the version waiting to be\ndecided if any, and the latest uploads.",
+        "properties": {
+          "can_upload": {
+            "title": "Can Upload",
+            "type": "boolean"
+          },
+          "imports": {
+            "items": {
+              "$ref": "#/components/schemas/MasterImportView"
+            },
+            "title": "Imports",
+            "type": "array"
+          },
+          "layer": {
+            "enum": [
+              "platform",
+              "tenant"
+            ],
+            "title": "Layer",
+            "type": "string"
+          },
+          "lists": {
+            "items": {
+              "$ref": "#/components/schemas/ListCount"
+            },
+            "title": "Lists",
+            "type": "array"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting"
+          }
+        },
+        "required": [
+          "ref",
+          "layer",
+          "lists",
+          "waiting",
+          "imports",
+          "can_upload"
+        ],
+        "title": "MasterDataView",
+        "type": "object"
+      },
       "MasterDataView_BravoOrderView_": {
         "properties": {
           "as_of": {
@@ -7274,6 +7409,151 @@
           "items"
         ],
         "title": "MasterDataView[QuotationRowView]",
+        "type": "object"
+      },
+      "MasterImportView": {
+        "description": "An import as the page shows it: the file, how far it got, and, once\nread, what it would change beside the lists in force now.",
+        "properties": {
+          "blocked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ListChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "dropped": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Dropped",
+            "type": "object"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "import_id": {
+            "format": "uuid",
+            "title": "Import Id",
+            "type": "string"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "rejected": {
+            "items": {
+              "$ref": "#/components/schemas/Rejected"
+            },
+            "title": "Rejected",
+            "type": "array"
+          },
+          "rejected_total": {
+            "title": "Rejected Total",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "parsed",
+              "failed",
+              "submitted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          },
+          "uploaded_by": {
+            "format": "uuid",
+            "title": "Uploaded By",
+            "type": "string"
+          },
+          "version_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Ref"
+          }
+        },
+        "required": [
+          "import_id",
+          "file_name",
+          "status",
+          "uploaded_by",
+          "uploaded_at",
+          "read_at",
+          "rejected",
+          "rejected_total",
+          "failure",
+          "version_ref",
+          "changes",
+          "dropped",
+          "blocked"
+        ],
+        "title": "MasterImportView",
+        "type": "object"
+      },
+      "MasterUploadBody": {
+        "additionalProperties": false,
+        "description": "A master-data workbook: its name and its bytes, base64. Decoded here\nand never opened: the worker reads it in the reader sandbox.",
+        "properties": {
+          "content_b64": {
+            "maxLength": 13981016,
+            "minLength": 1,
+            "title": "Content B64",
+            "type": "string"
+          },
+          "file_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "content_b64"
+        ],
+        "title": "MasterUploadBody",
         "type": "object"
       },
       "MeResponse": {
@@ -11729,7 +12009,8 @@
         "description": "What a tenant may hold its own version of.",
         "enum": [
           "purchasing_rules",
-          "purchasing_automation"
+          "purchasing_automation",
+          "purchasing_master_data"
         ],
         "title": "PurchasingRuleKey",
         "type": "string"
@@ -13044,6 +13325,37 @@
           "reason"
         ],
         "title": "RejectSupportGrantBody",
+        "type": "object"
+      },
+      "Rejected": {
+        "description": "A row that was not applied, and why (never a value of the row).",
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet",
+          "row",
+          "reason"
+        ],
+        "title": "Rejected",
         "type": "object"
       },
       "RejectedRow": {
@@ -20625,6 +20937,211 @@
           }
         },
         "summary": "Read Mail",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/master-data": {
+      "get": {
+        "operationId": "master_data_api_v1_purchasing_master_data_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterDataView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Master Data",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/master-data/imports": {
+      "post": {
+        "operationId": "master_upload_api_v1_purchasing_master_data_imports_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MasterUploadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterImportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Master Upload",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/master-data/imports/{import_id}": {
+      "get": {
+        "operationId": "master_import_api_v1_purchasing_master_data_imports__import_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterImportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Master Import",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/master-data/imports/{import_id}/submit": {
+      "post": {
+        "operationId": "master_submit_api_v1_purchasing_master_data_imports__import_id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "import_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Import Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterImportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Master Submit",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/master-data/template.xlsx": {
+      "get": {
+        "operationId": "master_template_api_v1_purchasing_master_data_template_xlsx_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Master Template",
         "tags": [
           "purchasing"
         ]

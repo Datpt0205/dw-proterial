@@ -5,7 +5,7 @@ Sales' own suite (`test_rules.py`) runs the same engine through Sales."""
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -25,6 +25,7 @@ from dw_platform.application.rule_versions import (
     RuleDecisionGuard,
     RuleRegistry,
     RuleScope,
+    RuleStatus,
     RuleVersion,
     RuleVersionEngine,
     RuleVersionSettlement,
@@ -102,8 +103,18 @@ class Versions:
 class Store:
     own: dict[uuid.UUID, RuleVersion]
 
-    async def list_all(self) -> Sequence[RuleVersion]:
-        return sorted(self.own.values(), key=lambda v: v.proposed_at, reverse=True)
+    async def list_all(
+        self,
+        *,
+        keys: Collection[str] | None = None,
+        statuses: Collection[RuleStatus] | None = None,
+    ) -> Sequence[RuleVersion]:
+        versions = [
+            v
+            for v in self.own.values()
+            if (keys is None or v.key in keys) and (statuses is None or v.status in statuses)
+        ]
+        return sorted(versions, key=lambda v: v.proposed_at, reverse=True)
 
     async def get(self, version_id: uuid.UUID) -> RuleVersion | None:
         return self.own.get(version_id)

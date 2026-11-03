@@ -10,16 +10,22 @@ written twice.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Collection, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import UserId
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.authorization import ApprovalAudience
-from dw_platform.application.rule_versions import ONE_OPEN_PROPOSAL, RuleScope, RuleVersion
+from dw_platform.application.rule_versions import (
+    ONE_OPEN_PROPOSAL,
+    RuleScope,
+    RuleStatus,
+    RuleVersion,
+)
 from dw_platform.domain.approval import (
     ApprovalDecision,
     ApprovalRequest,
@@ -27,8 +33,10 @@ from dw_platform.domain.approval import (
     DecisionOutcome,
 )
 from dw_platform.domain.audit import AuditEvent
+from dw_purchasing.application.master_data import MasterImport
 from dw_purchasing.application.ports import MessageOutcome
 from dw_purchasing.domain.cases import PurchaseCase
+from dw_purchasing.domain.master_lists import ParsedWorkbook
 
 _Scope = tuple[uuid.UUID, uuid.UUID]
 
@@ -165,8 +173,18 @@ class _Versions:
 
     held: dict[uuid.UUID, RuleVersion]
 
-    async def list_all(self) -> Sequence[RuleVersion]:
-        return sorted(self.held.values(), key=lambda v: (v.proposed_at, v.version_id), reverse=True)
+    async def list_all(
+        self,
+        *,
+        keys: Collection[str] | None = None,
+        statuses: Collection[RuleStatus] | None = None,
+    ) -> Sequence[RuleVersion]:
+        versions = [
+            v
+            for v in self.held.values()
+            if (keys is None or v.key in keys) and (statuses is None or v.status in statuses)
+        ]
+        return sorted(versions, key=lambda v: (v.proposed_at, v.version_id), reverse=True)
 
     async def get(self, version_id: uuid.UUID) -> RuleVersion | None:
         return self.held.get(version_id)
@@ -290,3 +308,103 @@ class MemoryStore:
             comment=comment,
             decided_at=at,
         )
+
+
+@dataclass
+class MemoryMasterImports:
+    """Implements `MasterImportsPort` as `SqlMasterImports` behaves: one open
+    import per workspace, a file read only while queued, sent only once
+    parsed, its bytes gone once read."""
+
+    rows: dict[_Scope, dict[uuid.UUID, tuple[MasterImport, bytes | None]]] = field(
+        default_factory=dict
+    )
+    audit: list[AuditEvent] = field(default_factory=list)
+
+    def _of(self, tenant_id: uuid.UUID, workspace_id: uuid.UUID) -> dict[uuid.UUID, Any]:
+        return self.rows.setdefault((tenant_id, workspace_id), {})
+
+    def _seen(self, scope: RuleScope) -> dict[uuid.UUID, Any]:
+        return self.rows.get((scope.tenant_id.value, scope.workspace_id.value), {})
+
+    async def add(self, record: MasterImport, content: bytes, event: AuditEvent) -> None:
+        held = self._of(event.tenant_id.value, event.workspace_id.value)
+        for import_id, (other, _) in list(held.items()):
+            if other.status in ("queued", "parsed"):
+                del held[import_id]
+        held[record.import_id] = (record, content)
+        self.audit.append(event)
+
+    async def recent(self, scope: RuleScope, *, limit: int) -> Sequence[MasterImport]:
+        held = self._seen(scope).values()
+        return sorted((r for r, _ in held), key=lambda r: r.uploaded_at, reverse=True)[:limit]
+
+    async def get(self, scope: RuleScope, import_id: uuid.UUID) -> MasterImport | None:
+        found = self._seen(scope).get(import_id)
+        return None if found is None else found[0]
+
+    async def submitted(
+        self, record: MasterImport, *, ref: str, by: uuid.UUID, at: datetime, event: AuditEvent
+    ) -> bool:
+        held = self._of(event.tenant_id.value, event.workspace_id.value)
+        found = held.get(record.import_id)
+        if found is None or found[0].status != "parsed":
+            return False
+        held[record.import_id] = (
+            found[0].model_copy(
+                update={
+                    "status": "submitted",
+                    "version_ref": ref,
+                    "submitted_by": by,
+                    "submitted_at": at,
+                }
+            ),
+            None,
+        )
+        self.audit.append(event)
+        return True
+
+    async def queued(self, scope: RuleScope, *, limit: int) -> Sequence[tuple[MasterImport, bytes]]:
+        held = self._seen(scope).values()
+        waiting = sorted(
+            ((r, c) for r, c in held if r.status == "queued" and c is not None),
+            key=lambda pair: pair[0].uploaded_at,
+        )
+        return waiting[:limit]
+
+    async def read(
+        self,
+        scope: RuleScope,
+        import_id: uuid.UUID,
+        parsed: ParsedWorkbook,
+        *,
+        at: datetime,
+        event: AuditEvent,
+    ) -> None:
+        held = self._of(scope.tenant_id.value, scope.workspace_id.value)
+        found = held.get(import_id)
+        if found is None or found[0].status != "queued":
+            return
+        held[import_id] = (
+            found[0].model_copy(
+                update={
+                    "status": "failed" if parsed.failure else "parsed",
+                    "read_at": at,
+                    "lists": None if parsed.failure else parsed.lists,
+                    "rejected": parsed.rejected,
+                    "rejected_total": parsed.rejected_total,
+                    "failure": parsed.failure,
+                }
+            ),
+            None,
+        )
+        self.audit.append(event)
+
+    async def forget(self, scope: RuleScope, *, read_before: datetime) -> int:
+        held = self._of(scope.tenant_id.value, scope.workspace_id.value)
+        gone = [
+            i for i, (r, _) in held.items() if r.read_at is not None and r.read_at < read_before
+        ]
+        for import_id in gone:
+            del held[import_id]
+        return len(gone)

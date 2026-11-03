@@ -17,6 +17,8 @@ from dw_platform.application.rule_versions import RuleVersionLookupPort
 from dw_purchasing.application.rules import PurchasingRuleBook, released_book
 from dw_purchasing.domain.automation import POLICY_ID as AUTOMATION_ID
 from dw_purchasing.domain.automation import PurchasingAutomation
+from dw_purchasing.domain.master_lists import POLICY_ID as MASTER_DATA_ID
+from dw_purchasing.domain.master_lists import PurchasingMasterData
 from dw_purchasing.domain.rules import POLICY_ID, PurchasingRules
 
 
@@ -89,7 +91,44 @@ class SwitchFiles:
         return {r.ref: r for r in self.released}
 
 
+def load_master_data(path: Path) -> PurchasingMasterData:
+    raw = yaml.safe_load(path.read_bytes())
+    if not isinstance(raw, dict) or raw.get("policy_id") != MASTER_DATA_ID:
+        raise ValueError(f"{path.name} is not a {MASTER_DATA_ID} document")
+    raw.pop("schema_version", None)
+    lists = PurchasingMasterData.model_validate(raw)
+    if path.name != f"{lists.ref}.yaml":
+        raise ValueError(f"{path.name} holds {lists.ref}")
+    return lists
+
+
+@dataclass(frozen=True)
+class MasterDataFiles:
+    """The master data's platform layer: empty lists, the newest in force."""
+
+    released: tuple[PurchasingMasterData, ...]
+
+    @classmethod
+    def load(cls, policies_dir: Path) -> MasterDataFiles:
+        found = [load_master_data(p) for p in sorted(policies_dir.glob(f"{MASTER_DATA_ID}@*.yaml"))]
+        if not found:
+            raise ValueError(f"no {MASTER_DATA_ID} document in {policies_dir}")
+        return cls(tuple(sorted(found, key=lambda r: _semver(r.version))))
+
+    def current(self) -> PurchasingMasterData:
+        return self.released[-1]
+
+    @property
+    def by_ref(self) -> dict[str, PurchasingMasterData]:
+        return {r.ref: r for r in self.released}
+
+
 def platform_rule_book(policies_dir: Path, stored: RuleVersionLookupPort) -> PurchasingRuleBook:
     """DW2's rule book: every released platform version of each key, under
     the tenant's own versions in ``stored``."""
-    return released_book(PolicyFiles.load(policies_dir), SwitchFiles.load(policies_dir), stored)
+    return released_book(
+        PolicyFiles.load(policies_dir),
+        SwitchFiles.load(policies_dir),
+        MasterDataFiles.load(policies_dir),
+        stored,
+    )

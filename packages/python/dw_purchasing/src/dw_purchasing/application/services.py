@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.automation import SwitchesService
 from dw_purchasing.application.intake import PurchaseRequests
+from dw_purchasing.application.master_data import MasterDataService
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.requesters import RequesterDesk
 from dw_purchasing.application.rule_drafting import RuleWordsDesk
@@ -24,3 +25,4 @@ class PurchasingServices:
     switches: SwitchesService
     requester: RequesterDesk
     words: RuleWordsDesk
+    master_data: MasterDataService

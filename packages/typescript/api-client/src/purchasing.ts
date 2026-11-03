@@ -33,11 +33,14 @@ export type PurchasingRules = PurchasingSchemas["PurchasingRulesView"];
 export type PurchasingRuleVersion =
   PurchasingSchemas["PurchasingRuleVersionView"];
 export type PurchasingWordsDraft = PurchasingSchemas["WordsDraft"];
+export type PurchasingMasterData = PurchasingSchemas["MasterDataView"];
+export type PurchasingMasterImport = PurchasingSchemas["MasterImportView"];
+export type PurchasingListChange = PurchasingSchemas["ListChange"];
 
 type Answer<
   P extends keyof paths,
   M extends "get" | "post",
-  S extends 200 | 201,
+  S extends 200 | 201 | 202,
 > = paths[P][M] extends {
   responses: { [K in S]: { content: { "application/json": infer R } } };
 }
@@ -61,7 +64,7 @@ export class PurchasingApi {
     return this.client.request("GET", path, shaped<Answer<P, "get", 200>>());
   }
 
-  private post<P extends keyof paths, S extends 200 | 201 = 200>(
+  private post<P extends keyof paths, S extends 200 | 201 | 202 = 200>(
     path: string,
     body: unknown,
     idempotencyKey?: string,
@@ -291,6 +294,53 @@ export class PurchasingApi {
     return this.post<"/api/v1/purchasing/rules/{key}/versions">(
       `${BASE}/rules/${enc(key)}/versions`,
       { document },
+      idempotencyKey,
+    );
+  }
+
+  // ---- master data --------------------------------------------------------
+
+  /** The lists in force, whose they are, what waits, the latest uploads. */
+  masterData() {
+    return this.get<"/api/v1/purchasing/master-data">(`${BASE}/master-data`);
+  }
+
+  /** The workbook to fill in: a guide and one sheet per list. */
+  async masterTemplate(): Promise<{ blob: Blob; filename: string }> {
+    const response = await this.client.rawRequest(
+      "GET",
+      `${BASE}/master-data/template.xlsx`,
+    );
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const filename =
+      /filename="([^"]+)"/.exec(disposition)?.[1] ?? "du-lieu-chu-dw2.xlsx";
+    return { blob: await response.blob(), filename };
+  }
+
+  /** A filled workbook, as base64; the worker reads it, the API never opens it. */
+  uploadMasterData(
+    fileName: string,
+    contentB64: string,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/master-data/imports", 202>(
+      `${BASE}/master-data/imports`,
+      { file_name: fileName, content_b64: contentB64 },
+      idempotencyKey,
+    );
+  }
+
+  masterImport(importId: string) {
+    return this.get<"/api/v1/purchasing/master-data/imports/{import_id}">(
+      `${BASE}/master-data/imports/${enc(importId)}`,
+    );
+  }
+
+  /** "Gửi duyệt": the head's applies at once, anyone else's waits for the head. */
+  submitMasterData(importId: string, idempotencyKey: string) {
+    return this.post<"/api/v1/purchasing/master-data/imports/{import_id}/submit">(
+      `${BASE}/master-data/imports/${enc(importId)}/submit`,
+      undefined,
       idempotencyKey,
     );
   }

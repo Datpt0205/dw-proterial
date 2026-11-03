@@ -537,7 +537,7 @@ class SalesRulesService:
         await self.gate.require(context, SalesScopes.RULES_PROPOSE, resource_type=_RESOURCE)
         scope = sales_scope(context)
         keys = [key for key in OVERRIDABLE if self._readable(context, key)]
-        versions = [v for v in await self._engine.list_all(context) if v.key in keys]
+        versions = await self._engine.list_all(context, keys=keys)
         in_force: dict[RuleKey, str] = {}
         layers: dict[RuleKey, Layer] = {}
         for key in keys:
