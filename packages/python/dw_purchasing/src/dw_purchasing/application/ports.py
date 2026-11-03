@@ -167,6 +167,8 @@ class Person:
     display_name: str
     # Empty when the directory does not say.
     department: str
+    # The address the member signs in with; None when the directory has none.
+    email: str | None = None
 
 
 class PeoplePort(Protocol):

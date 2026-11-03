@@ -605,9 +605,11 @@ def build_purchasing_mount(
     the Purchasing routes answer that no data source is configured; where
     deployed, the mock mailbox is refused (503), and every check reads the
     master data the tenant loaded (`purchasing_master_data`, or the platform's
-    empty lists), never the demo's fictional ones. A tenant's own rules are its versions in the platform's rule-version engine;
-    a `purchasing.rules` approval is checked by `RuleDecisions`, the longest
-    prefix registered.
+    empty lists), never the demo's fictional ones. A buyer sends an RFQ from
+    their own mailbox where the outbox share is (`DW_OUTBOX_ENABLED`, DW1's
+    too). A tenant's own rules are its versions in the platform's rule-version
+    engine; a `purchasing.rules` approval is checked by `RuleDecisions`, the
+    longest prefix registered.
     """
     from dw_platform.adapters.persistence.notifications import SqlNotificationRepository
     from dw_platform.adapters.persistence.repositories import (
@@ -660,6 +662,7 @@ def build_purchasing_mount(
                 SqlScopeHolders(session_factory), SqlNotificationRepository(session_factory)
             ),
             mailbox=settings.purchasing_mailbox,
+            outbox=settings.sales_outbox_enabled,
         )
     )
 

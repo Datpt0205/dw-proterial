@@ -20,5 +20,5 @@ class DirectoryPeople:
     async def person(self, context: AccessContext, user_id: uuid.UUID) -> Person | None:
         for member in await self.directory.list_members(context):
             if member.user_id == user_id:
-                return Person(member.display_name, member.department or "")
+                return Person(member.display_name, member.department or "", member.email)
         return None

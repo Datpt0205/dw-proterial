@@ -344,6 +344,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/requests/{case_id}/rfq/mails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rfq Mails */
+        get: operations["rfq_mails_api_v1_purchasing_requests__case_id__rfq_mails_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}": {
         parameters: {
             query?: never;
@@ -355,6 +372,23 @@ export interface paths {
         put?: never;
         /** Write Rfq */
         post: operations["write_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Rfq */
+        post: operations["send_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__send_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1375,6 +1409,40 @@ export interface components {
              */
             written_by: "model" | "person" | "pending" | "template";
         };
+        /**
+         * RfqMailView
+         * @description A mail as the case page lists it: never its words, which the case has.
+         */
+        RfqMailView: {
+            /** Error */
+            error: ("not_connected" | "flow_failed" | "no_receipt") | null;
+            /**
+             * Mail Id
+             * Format: uuid
+             */
+            mail_id: string;
+            /** Mailbox */
+            mailbox: string;
+            /**
+             * Queued At
+             * Format: date-time
+             */
+            queued_at: string;
+            /**
+             * Queued By
+             * Format: uuid
+             */
+            queued_by: string;
+            /** Settled At */
+            settled_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "written" | "sent" | "failed" | "stalled";
+            /** Supplier Code */
+            supplier_code: string;
+        };
         /** RfqRound */
         RfqRound: {
             /**
@@ -2226,6 +2294,37 @@ export interface operations {
             };
         };
     };
+    rfq_mails_api_v1_purchasing_requests__case_id__rfq_mails_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RfqMailView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     write_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__post: {
         parameters: {
             query?: never;
@@ -2252,6 +2351,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__send_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                case_id: string;
+                supplier_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RfqMailView"];
                 };
             };
             /** @description Validation Error */

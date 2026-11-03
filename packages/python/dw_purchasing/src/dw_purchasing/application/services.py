@@ -10,6 +10,7 @@ from dw_purchasing.application.intake import PurchaseRequests
 from dw_purchasing.application.master_data import MasterDataService
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.requesters import RequesterDesk
+from dw_purchasing.application.rfq_mail import RfqMailService
 from dw_purchasing.application.rule_drafting import RuleWordsDesk
 from dw_purchasing.application.rules import PurchasingRulesService
 from dw_purchasing.application.sourcing import SupplierSourcing
@@ -26,3 +27,4 @@ class PurchasingServices:
     requester: RequesterDesk
     words: RuleWordsDesk
     master_data: MasterDataService
+    rfq_mails: RfqMailService

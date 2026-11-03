@@ -360,10 +360,11 @@ class WorkerSettings(BaseSettings):
     purchasing_mailbox: Literal["mock", "stored"] = Field(
         default="mock", validation_alias=AliasChoices("DW_PURCHASING_MAILBOX")
     )
-    # "Gửi cho khách" (2026-10-29): the share holding each person's outbox
-    # folder, written by this container alone. Unnamed, nothing is sent.
+    # The share holding each person's outbox folder, written by this
+    # container alone: DW1's "Gửi cho khách" and DW2's RFQs, one folder and
+    # one flow per person (2026-11-03). Unnamed, nothing is sent.
     sales_outbox_dir: str | None = Field(
-        default=None, validation_alias=AliasChoices("DW_SALES_OUTBOX_DIR")
+        default=None, validation_alias=AliasChoices("DW_OUTBOX_DIR", "DW_SALES_OUTBOX_DIR")
     )
     # Locally only: a stand-in answers every job as the people's flows will,
     # so the demo can press "Gửi cho khách". Refused in a deployed profile.

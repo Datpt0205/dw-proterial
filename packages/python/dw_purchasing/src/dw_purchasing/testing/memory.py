@@ -35,6 +35,7 @@ from dw_platform.domain.approval import (
 from dw_platform.domain.audit import AuditEvent
 from dw_purchasing.application.master_data import MasterImport
 from dw_purchasing.application.ports import MessageOutcome
+from dw_purchasing.application.rfq_mail import RfqMail
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.master_lists import ParsedWorkbook
 
@@ -408,3 +409,64 @@ class MemoryMasterImports:
         for import_id in gone:
             del held[import_id]
         return len(gone)
+
+
+@dataclass
+class MemoryRfqMails:
+    """Implements `RfqMailsPort` as `SqlRfqMails` behaves: one active mail per
+    supplier of a case, a mail written only while queued, settled once."""
+
+    rows: dict[_Scope, dict[uuid.UUID, RfqMail]] = field(default_factory=dict)
+    audit: list[AuditEvent] = field(default_factory=list)
+
+    def _seen(self, scope: RuleScope) -> dict[uuid.UUID, RfqMail]:
+        return self.rows.get((scope.tenant_id.value, scope.workspace_id.value), {})
+
+    async def add(self, mail: RfqMail, event: AuditEvent) -> None:
+        held = self.rows.setdefault((event.tenant_id.value, event.workspace_id.value), {})
+        if any(
+            m.case_id == mail.case_id
+            and m.supplier_code == mail.supplier_code
+            and m.status in ("queued", "written", "sent")
+            for m in held.values()
+        ):
+            raise ConflictError("already sent", details={"rule": "already_sent"})
+        held[mail.mail_id] = mail
+        self.audit.append(event)
+
+    async def of_case(self, scope: RuleScope, case_id: uuid.UUID) -> Sequence[RfqMail]:
+        mails = [m for m in self._seen(scope).values() if m.case_id == case_id]
+        return sorted(mails, key=lambda m: m.queued_at)
+
+    async def get(self, scope: RuleScope, mail_id: uuid.UUID) -> RfqMail | None:
+        return self._seen(scope).get(mail_id)
+
+    async def pending(self, scope: RuleScope) -> Sequence[RfqMail]:
+        mails = [m for m in self._seen(scope).values() if m.status in ("queued", "written")]
+        return sorted(mails, key=lambda m: m.queued_at)
+
+    async def written(self, scope: RuleScope, mail_id: uuid.UUID, *, at: datetime) -> bool:
+        held = self._seen(scope)
+        mail = held.get(mail_id)
+        if mail is None or mail.status != "queued":
+            return False
+        held[mail_id] = mail.model_copy(update={"status": "written", "written_at": at})
+        return True
+
+    async def settle(
+        self,
+        scope: RuleScope,
+        mail_id: uuid.UUID,
+        *,
+        status: str,
+        error: str | None,
+        at: datetime,
+        event: AuditEvent,
+    ) -> bool:
+        held = self._seen(scope)
+        mail = held.get(mail_id)
+        if mail is None or mail.status not in ("queued", "written"):
+            return False
+        held[mail_id] = mail.model_copy(update={"status": status, "error": error, "settled_at": at})
+        self.audit.append(event)
+        return True

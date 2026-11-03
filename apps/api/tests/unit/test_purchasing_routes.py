@@ -17,7 +17,7 @@ from typing import Any
 import httpx
 import pytest
 from asgi_lifespan import LifespanManager
-from test_support_endpoint import SECRET, FakeLookup, FakeRepo, NoScopes
+from test_support_endpoint import PRINCIPAL, SECRET, FakeLookup, FakeRepo, NoScopes
 
 from dw_api.bootstrap import ApiContainer
 from dw_api.health import CheckState, HealthService
@@ -124,6 +124,7 @@ def _mounted(world: World) -> PurchasingMount:
             requester=world.requester,
             words=world.words,
             master_data=world.master_data,
+            rfq_mails=world.rfq_mails,
         )
     )
 
@@ -289,7 +290,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 29
+    assert len(routes) == 31
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
@@ -557,7 +558,76 @@ async def test_another_tenants_import_answers_404() -> None:
     other = (uuid.UUID(int=0xB1), uuid.UUID(int=0xB2))
 
     seen = await _call(container, "GET", f"/master-data/imports/{import_id}", tenant=other)
-    sent = await _call(
-        container, "POST", f"/master-data/imports/{import_id}/submit", tenant=other
-    )
+    sent = await _call(container, "POST", f"/master-data/imports/{import_id}/submit", tenant=other)
     assert (seen.status_code, sent.status_code) == (404, 404)
+
+
+# ---------------------------------------------------------------- rfq mail --
+
+
+async def test_an_rfq_is_sent_from_the_callers_own_mailbox_and_listed_on_its_case() -> None:
+    from dw_purchasing.application.ports import Person
+
+    world = _world()
+    world.people.people[PRINCIPAL] = Person("Nguyễn Văn Mua", "Mua hàng", "Buyer@Alpha.Local")
+    container = _container(EVERY_SCOPE, _mounted(world))
+    case_id, supplier = await _rfq_drafted(world)
+
+    sent = await _call(container, "POST", f"/requests/{case_id}/rfq/{supplier}/send")
+    listed = await _call(container, "GET", f"/requests/{case_id}/rfq/mails")
+    other = (uuid.UUID(int=0xB1), uuid.UUID(int=0xB2))
+    theirs = await _call(
+        container, "POST", f"/requests/{case_id}/rfq/{supplier}/send", tenant=other
+    )
+
+    assert sent.status_code == 202, sent.text
+    assert sent.json()["mailbox"] == "buyer@alpha.local"
+    assert [m["supplier_code"] for m in listed.json()] == [supplier]
+    assert theirs.status_code == 404
+
+
+async def test_who_does_not_prepare_rfqs_sends_no_mail() -> None:
+    world = _world()
+    container = _container(frozenset({"purchasing.request.read"}), _mounted(world))
+    case_id, supplier = await _rfq_drafted(world)
+
+    response = await _call(container, "POST", f"/requests/{case_id}/rfq/{supplier}/send")
+
+    assert response.status_code == 403
+    assert world.rfq_mail_rows.rows == {}
+
+
+async def _rfq_drafted(world: World) -> tuple[uuid.UUID, str]:
+    from datetime import UTC, datetime
+
+    world.model.by_schema = {
+        "RfqWording": {"PR-2611-004": SOURCING_WORDS},
+    }
+    me = world_caller(principal=PRINCIPAL)
+    item = await world.service.read_mail(me, "P01")
+    assert item.case_id is not None
+    await world.approvals.submit(me, item.case_id, case_version=1)
+    case = await world.service.case(me, item.case_id)
+    assert case.approval is not None
+    world.store.decide(
+        case.approval.approval_id,
+        tenant_id=ALPHA[0],
+        workspace_id=ALPHA[1],
+        approved=True,
+        decided_by=uuid.UUID(int=0x4EAD),
+        at=datetime(2026, 11, 2, 9, tzinfo=UTC),
+        comment="ok",
+    )
+    await world.settlement.settle(
+        case.approval.approval_id, world_caller(principal=uuid.UUID(int=0x4EAD))
+    )
+    await world.sourcing.draft_rfq(me, item.case_id, case_version=3)
+    drafted = await world.service.case(me, item.case_id)
+    assert drafted.rfq is not None
+    written = next(d for d in drafted.rfq.drafts if d.written_by != "pending")
+    return item.case_id, written.supplier_code
+
+
+SOURCING_WORDS = json.loads(
+    (REPO / "evals/fixtures/cases/purchasing_sourcing.json").read_text(encoding="utf-8")
+)["rfq_words"]["good"]

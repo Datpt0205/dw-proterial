@@ -377,6 +377,20 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   (RLS both ways, unscoped, constraints, grants, the version applied, the
   settings list); 22 mutations, each red (two tests tightened until red).
 
+- 2026-11-03, **an RFQ sent from the buyer's own mailbox** ("Gửi từ hộp thư
+  của tôi" on each supplier's RFQ): `application.rfq_mail`, table
+  `purchasing.rfq_mails` (migration da6950544c81), worker lane
+  `purchasing_outbound` (30 s). The server refuses an RFQ with no words, a
+  recipient no longer the supplier's contact in the master data, a caller
+  with no sign-in address, a deployment with no outbox share
+  (`DW_OUTBOX_ENABLED`), and a second active mail per supplier. The job goes
+  into the same `DW-outbox/<address>` folder and flow DW1 uses: the flow's
+  job format is the platform's now (`flow_job`), and DW1's lane leaves the
+  receipts of jobs not its own. Failed, unconnected or stalled (30 min) mails
+  tell who pressed; a failed one may be sent again. Checks: unit 10 (service
+  and lane), API 2, integration 7 (found and fixed a CHECK a NULL error
+  passed), web 2; mutations, each red (one test added until red).
+
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.

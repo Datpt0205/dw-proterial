@@ -36,6 +36,7 @@ export type PurchasingWordsDraft = PurchasingSchemas["WordsDraft"];
 export type PurchasingMasterData = PurchasingSchemas["MasterDataView"];
 export type PurchasingMasterImport = PurchasingSchemas["MasterImportView"];
 export type PurchasingListChange = PurchasingSchemas["ListChange"];
+export type PurchaseRfqMail = PurchasingSchemas["RfqMailView"];
 
 type Answer<
   P extends keyof paths,
@@ -295,6 +296,26 @@ export class PurchasingApi {
       `${BASE}/rules/${enc(key)}/versions`,
       { document },
       idempotencyKey,
+    );
+  }
+
+  // ---- rfq mail -----------------------------------------------------------
+
+  /** "Gửi từ hộp thư của tôi": the RFQ goes out from the caller's own mailbox. */
+  sendRfq(caseId: string, supplierCode: string, idempotencyKey: string) {
+    return this.post<
+      "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}/send",
+      202
+    >(
+      `${BASE}/requests/${enc(caseId)}/rfq/${enc(supplierCode)}/send`,
+      undefined,
+      idempotencyKey,
+    );
+  }
+
+  rfqMails(caseId: string) {
+    return this.get<"/api/v1/purchasing/requests/{case_id}/rfq/mails">(
+      `${BASE}/requests/${enc(caseId)}/rfq/mails`,
     );
   }
 
