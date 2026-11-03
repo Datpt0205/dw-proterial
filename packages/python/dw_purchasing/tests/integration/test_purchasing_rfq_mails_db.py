@@ -10,7 +10,7 @@ by its term takes its mails with it.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -68,7 +68,7 @@ async def _case(
     return case.case_id
 
 
-def _mail(case_id: uuid.UUID, supplier: str = "NCC-A") -> RfqMail:
+def _mail(case_id: uuid.UUID, supplier: str = "NCC-A", *, later: int = 0) -> RfqMail:
     return RfqMail(
         mail_id=uuid.uuid4(),
         case_id=case_id,
@@ -79,7 +79,7 @@ def _mail(case_id: uuid.UUID, supplier: str = "NCC-A") -> RfqMail:
         body="Kính gửi An Phát, ...",
         status="queued",
         queued_by=uuid.uuid4(),
-        queued_at=NOW,
+        queued_at=NOW + timedelta(seconds=later),
     )
 
 
@@ -130,7 +130,8 @@ async def test_one_active_mail_per_supplier_and_a_failed_one_is_sent_again(
         event=_event(tenancy.alpha, first),
     )
 
-    retry = _mail(case_id)
+    # Pressed after the first failed: listed after it, whatever the ids.
+    retry = _mail(case_id, later=1)
     await mails.add(retry, _event(tenancy.alpha, retry))
 
     assert [m.status for m in await mails.of_case(scope, case_id)] == ["failed", "queued"]
