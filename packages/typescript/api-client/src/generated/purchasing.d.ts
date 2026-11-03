@@ -361,6 +361,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/purchasing/requests/{case_id}/rfq/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rfq Replies */
+        get: operations["rfq_replies_api_v1_purchasing_requests__case_id__rfq_replies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}": {
         parameters: {
             query?: never;
@@ -1340,6 +1357,25 @@ export interface components {
             sheet: string;
         };
         /**
+         * ReplyItem
+         * @description A mail that answers one of the case's RFQs, as the offer card lists it.
+         */
+        ReplyItem: {
+            /** Message Id */
+            message_id: string;
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            /** Sender */
+            sender: string;
+            /** Subject */
+            subject: string;
+            /** Supplier Code */
+            supplier_code: string;
+        };
+        /**
          * RequestDraft
          * @description What a requester's own words ask for, as code read it from the model's
          *     spans: the lines, and the request-wide values the words name. No PR
@@ -2312,6 +2348,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RfqMailView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rfq_replies_api_v1_purchasing_requests__case_id__rfq_replies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyItem"][];
                 };
             };
             /** @description Validation Error */

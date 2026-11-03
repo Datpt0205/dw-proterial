@@ -406,7 +406,27 @@ function OffersCard({
       [may, open],
     ),
   );
-  const replies = (mailbox.data ?? []).filter((m) => m.case_id === null);
+  // The mails code tied to this case (an asked supplier, the PR named) come
+  // first and are picked when there is one; any other unplaced mail stays
+  // pickable for a reply that dropped the subject.
+  const matched = useCachedResource(
+    `purchasing/rfq-replies/${c.case_id}:${may && open}`,
+    useCallback(
+      () =>
+        may && open
+          ? purchasingApi().rfqReplies(c.case_id)
+          : Promise.resolve([]),
+      [c.case_id, may, open],
+    ),
+  );
+  const tied = new Set((matched.data ?? []).map((r) => r.message_id));
+  const replies = (mailbox.data ?? [])
+    .filter((m) => m.case_id === null)
+    .sort(
+      (a, b) => Number(tied.has(b.message_id)) - Number(tied.has(a.message_id)),
+    );
+  const only = matched.data?.length === 1 ? matched.data[0]!.message_id : null;
+  const chosen = mail ?? only;
 
   async function record(fields: OfferFields) {
     const offer = {
@@ -438,19 +458,20 @@ function OffersCard({
   }
 
   async function readMail() {
-    if (!mail) return;
-    const id = `offer-mail:${c.case_id}:${mail}`;
+    if (!chosen) return;
+    const id = `offer-mail:${c.case_id}:${chosen}`;
     setPending("mail");
     try {
       await purchasingApi().readOfferMail(
         c.case_id,
-        mail,
+        chosen,
         c.case_version,
         keys.keyFor(id, null),
       );
       keys.settle(id);
       message.success("DW2 đã đọc báo giá trong thư");
       setMail(null);
+      matched.reload();
       onChanged();
     } catch (error) {
       message.error(errorMessage(error));
@@ -518,22 +539,22 @@ function OffersCard({
                 aria-label="Thư trả lời của nhà cung cấp"
                 className="min-w-64"
                 placeholder="Chọn thư trong hộp thư mua hàng"
-                value={mail}
+                value={chosen}
                 onChange={setMail}
                 loading={mailbox.loading}
                 disabled={why !== null}
                 notFoundContent="Không có thư nào chưa gắn với hồ sơ"
                 options={replies.map((m) => ({
                   value: m.message_id,
-                  label: `${m.sender} · ${m.subject}`,
+                  label: `${tied.has(m.message_id) ? "Trả lời hỏi giá này · " : ""}${m.sender} · ${m.subject}`,
                 }))}
               />
-              <Tooltip title={why ?? (mail ? null : "Chọn một thư trước.")}>
+              <Tooltip title={why ?? (chosen ? null : "Chọn một thư trước.")}>
                 <Button
                   icon={<MailOutlined aria-hidden />}
                   disabled={
                     why !== null ||
-                    !mail ||
+                    !chosen ||
                     (pending !== null && pending !== "mail")
                   }
                   loading={pending === "mail"}

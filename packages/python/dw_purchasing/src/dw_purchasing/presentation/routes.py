@@ -44,7 +44,7 @@ from dw_purchasing.application.rfq_mail import RfqMailView
 from dw_purchasing.application.rule_drafting import WordsDraft
 from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
-from dw_purchasing.application.sourcing import ComparisonView, OfferForm, SupplierName
+from dw_purchasing.application.sourcing import ComparisonView, OfferForm, ReplyItem, SupplierName
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.requests import PurchaseRequest
 from dw_purchasing.domain.sourcing import Choice
@@ -441,6 +441,10 @@ def build_router(
             applied_directly=version.applied_directly,
         )
         return await idem.record(change)
+
+    @router.get("/requests/{case_id}/rfq/replies", response_model=list[ReplyItem], dependencies=rfq)
+    async def rfq_replies(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[ReplyItem]:
+        return await svc.sourcing.replies(context, case_id)
 
     @router.post(
         "/requests/{case_id}/rfq/{supplier_code}/send",

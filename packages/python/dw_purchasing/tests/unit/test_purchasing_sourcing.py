@@ -488,3 +488,89 @@ async def test_a_named_supplier_is_one_the_company_knows_for_a_line_of_the_reque
     case = await world.service.case(caller(), case_id)
     assert case.rfq is not None
     assert {d.supplier_code: d.line_nos for d in case.rfq.drafts}["KIMURA"] == (1, 2)
+
+
+# ------------------------------------------------------------- the replies --
+
+
+async def test_the_replies_of_a_case_are_the_verified_mails_of_the_suppliers_it_asked() -> None:
+    world = _world()
+    case_id = await _drafted(world)
+
+    listed = await world.sourcing.replies(caller(), case_id)
+
+    # Q04 claims a supplier's domain and the mail system did not verify it;
+    # P03 is an asked supplier writing about another request.
+    assert [r.message_id for r in listed] == ["Q01", "Q02", "Q03"]
+    await world.sourcing.read_offer_mail(
+        caller(), case_id, "Q01", case_version=await _version(world, case_id)
+    )
+    assert [r.message_id for r in await world.sourcing.replies(caller(), case_id)] == [
+        "Q02",
+        "Q03",
+    ]
+    with pytest.raises(PermissionDeniedError):
+        await world.sourcing.replies(
+            caller(scopes=frozenset({PurchasingScopes.REQUEST_READ.value})), case_id
+        )
+
+
+async def test_a_reply_two_cases_could_answer_goes_to_the_one_its_text_names() -> None:
+    from dw_purchasing.application.sourcing import reply_case
+
+    world = _world()
+    case_id = await _drafted(world)
+    case = await world.service.case(caller(), case_id)
+    other = case.model_copy(
+        update={
+            "case_id": uuid.uuid4(),
+            "request": case.request.model_copy(update={"pr_no": "PR-2611-777"}),
+        }
+    )
+    master = await world.sourcing.master.for_context(caller())
+    assert case.rfq is not None
+    domain = sorted(master.supplier(case.rfq.drafts[0].supplier_code).domains)[0]  # type: ignore[union-attr]
+
+    assert reply_case([case], master, domain, "Re: báo giá PR-2611-004") is case
+    assert reply_case([case, other], master, domain, "Re: hỏi giá pr-2611-777") is other
+    # A mail naming no PR, or another one, is a buyer's to place.
+    assert reply_case([case], master, domain, "Báo giá chung") is None
+    assert reply_case([case], master, domain, "PR-2611-010 purchase request") is None
+    assert reply_case([case], master, "elsewhere.example", "PR-2611-004") is None
+
+
+async def test_a_mail_naming_two_asking_cases_goes_to_neither() -> None:
+    from dw_purchasing.application.sourcing import reply_case
+
+    world = _world()
+    case = await world.service.case(caller(), await _drafted(world))
+    other = case.model_copy(
+        update={
+            "case_id": uuid.uuid4(),
+            "request": case.request.model_copy(update={"pr_no": "PR-2611-777"}),
+        }
+    )
+    master = await world.sourcing.master.for_context(caller())
+    assert case.rfq is not None
+    domain = sorted(master.supplier(case.rfq.drafts[0].supplier_code).domains)[0]  # type: ignore[union-attr]
+
+    assert reply_case([case, other], master, domain, "PR-2611-004 và PR-2611-777") is None
+
+
+async def test_a_reply_another_case_answers_is_not_listed_on_this_one() -> None:
+    world = _world()
+    case_id = await _drafted(world)
+    rows = world.store.scopes[ALPHA].cases
+    mine = rows[case_id]
+    rows[case_id] = mine.model_copy(
+        update={"request": mine.request.model_copy(update={"pr_no": "PR-2611-999"})}
+    )
+    theirs = mine.model_copy(update={"case_id": uuid.uuid4()})
+    rows[theirs.case_id] = theirs
+
+    assert await world.sourcing.replies(caller(), case_id) == []
+    assert [r.message_id for r in await world.sourcing.replies(caller(), theirs.case_id)] == [
+        "Q01",
+        "Q02",
+        "Q03",
+    ]

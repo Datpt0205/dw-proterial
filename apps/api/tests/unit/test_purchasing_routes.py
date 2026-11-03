@@ -290,7 +290,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 31
+    assert len(routes) == 32
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]
