@@ -13459,6 +13459,41 @@
         "title": "RenderedView",
         "type": "object"
       },
+      "ReplyItem": {
+        "description": "A mail that answers one of the case's RFQs, as the offer card lists it.",
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "supplier_code": {
+            "title": "Supplier Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "sender",
+          "subject",
+          "received_at",
+          "supplier_code"
+        ],
+        "title": "ReplyItem",
+        "type": "object"
+      },
       "ReplyQuote": {
         "additionalProperties": false,
         "description": "A sentence of the reply that code found, once, in its newest part:\nthe text as the customer wrote it and where it is (offsets into the NFKC\nform of `MessagePart.text`).",
@@ -22043,6 +22078,53 @@
           }
         },
         "summary": "Rfq Mails",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/rfq/replies": {
+      "get": {
+        "operationId": "rfq_replies_api_v1_purchasing_requests__case_id__rfq_replies_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReplyItem"
+                  },
+                  "title": "Response Rfq Replies Api V1 Purchasing Requests  Case Id  Rfq Replies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rfq Replies",
         "tags": [
           "purchasing"
         ]

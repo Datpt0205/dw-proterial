@@ -27,7 +27,7 @@ import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Final
 
@@ -55,6 +55,7 @@ from dw_purchasing.application.reapprovals import Reapprovals, over_limit
 from dw_purchasing.application.rules import PurchasingRuleBook
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.checks import MasterData, Supplier
+from dw_purchasing.domain.mail_reading import fold
 from dw_purchasing.domain.offer_reading import MAX_OFFER_LINES, ModelOffer, read_offer_mail
 from dw_purchasing.domain.requests import Code, Currency, Price, PrLine
 from dw_purchasing.domain.sourcing import (
@@ -78,6 +79,8 @@ _RESOURCE: Final = "purchase_case"
 _PROMPT_TOKENS: Final = 1200
 _OFFER_TOKENS: Final = 120 * MAX_OFFER_LINES + 100
 _RFQ_TOKENS: Final = 900
+# How many cases still asking a reply is matched among: far above a plant's.
+_ASKING: Final = 500
 NO_RFQ_RULES: Final = "quy tắc mua hàng đang áp dụng chưa có quy tắc hỏi giá: chưa soạn RFQ được"
 
 
@@ -108,6 +111,18 @@ class OfferForm(BaseModel):
     currency: Currency
     lead_time_days: int = Field(ge=0, le=365)
     valid_until: date | None = None
+
+
+class ReplyItem(BaseModel):
+    """A mail that answers one of the case's RFQs, as the offer card lists it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    message_id: str
+    sender: str
+    subject: str
+    received_at: datetime
+    supplier_code: str
 
 
 class ComparisonView(BaseModel):
@@ -421,6 +436,42 @@ class SupplierSourcing:
             for s in sorted(master.suppliers, key=lambda s: s.code)
         ]
 
+    async def replies(self, context: AccessContext, case_id: uuid.UUID) -> list[ReplyItem]:
+        """The mails in the mailbox that answer this case's RFQs
+        (`reply_case`): from a supplier it asked, the sender verified by the
+        mail system, not yet read into it. What the offer card offers first."""
+        await self._require(context, case_id)
+        case = await self._get(context, case_id)
+        if case.status is not CaseStatus.RFQ_DRAFTED or case.rfq is None:
+            return []
+        async with self.uow(context) as work:
+            asking = await work.cases.waiting(
+                frozenset({CaseStatus.RFQ_DRAFTED.value}), limit=_ASKING
+            )
+        master = await self.master.for_context(context)
+        read = {o.source_ref for o in case.offers if o.source_ref}
+        found: list[ReplyItem] = []
+        for message in await self.inbox.list_messages(context):
+            if message.message_id in read or not message.authentication.verified:
+                continue
+            supplier = _replying(case.rfq, master, message.sender.domain)
+            if supplier is None:
+                continue
+            text = f"{message.subject}\n{newest_part(message).text}"
+            answered = reply_case(asking, master, message.sender.domain, text)
+            if answered is None or answered.case_id != case.case_id:
+                continue
+            found.append(
+                ReplyItem(
+                    message_id=message.message_id,
+                    sender=message.sender.address,
+                    subject=message.subject,
+                    received_at=message.received_at,
+                    supplier_code=supplier.code,
+                )
+            )
+        return found
+
     async def comparison(self, context: AccessContext, case_id: uuid.UUID) -> ComparisonView:
         await self.gate.require(
             context,
@@ -586,6 +637,26 @@ def _moved(case: PurchaseCase, status: CaseStatus, **changes: object) -> Purchas
 
 def _change(case: PurchaseCase) -> CaseChange:
     return CaseChange(case_id=case.case_id, case_version=case.case_version, status=case.status)
+
+
+def reply_case(
+    cases: Sequence[PurchaseCase], master: MasterData, domain: str, text: str
+) -> PurchaseCase | None:
+    """The case a supplier's mail answers, decided by code: the one case
+    still asking (`rfq_drafted`) that asked a supplier this domain is one of
+    and whose PR number the mail names (an RFQ's subject carries it, and a
+    reply keeps it). A supplier writes about other things too, a request of
+    its own or another order: anything else is None, and a buyer picks."""
+    folded = fold(text)
+    asking = [
+        c
+        for c in cases
+        if c.status is CaseStatus.RFQ_DRAFTED
+        and c.rfq is not None
+        and _replying(c.rfq, master, domain) is not None
+        and fold(c.request.pr_no) in folded
+    ]
+    return asking[0] if len(asking) == 1 else None
 
 
 def _replying(rfq: RfqRound, master: MasterData, domain: str) -> Supplier | None:

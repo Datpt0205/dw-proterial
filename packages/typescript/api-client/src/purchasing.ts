@@ -313,6 +313,13 @@ export class PurchasingApi {
     );
   }
 
+  /** The mailbox's mails code tied to this case's RFQs (sender asked, PR named). */
+  rfqReplies(caseId: string) {
+    return this.get<"/api/v1/purchasing/requests/{case_id}/rfq/replies">(
+      `${BASE}/requests/${enc(caseId)}/rfq/replies`,
+    );
+  }
+
   rfqMails(caseId: string) {
     return this.get<"/api/v1/purchasing/requests/{case_id}/rfq/mails">(
       `${BASE}/requests/${enc(caseId)}/rfq/mails`,

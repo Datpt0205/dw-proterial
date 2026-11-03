@@ -54,9 +54,11 @@ from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import MembershipAccess, context_from, service_subject
 from dw_platform.application.provisioning import ServiceAccount
 from dw_platform.domain.audit import lane_audit_event
+from dw_platform.domain.mail_parts import newest_part
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.ports import Disposition, NoticesPort, PurchasingUnitOfWork
 from dw_purchasing.application.services import PurchasingServices
+from dw_purchasing.application.sourcing import reply_case
 from dw_purchasing.domain.automation import AutomationLevel, AutomationStep
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.checks import MasterData
@@ -193,9 +195,27 @@ class AutomationLane:
             if supplier is not None:
                 # A known supplier's mail, its sender verified by the mail
                 # system: a quote, a confirmation or a question about an
-                # order, never read as a request, and left for the buyer to
-                # tie to its case (step 6 is not automated). An unverified one
-                # is read as any mail is, and goes to a person.
+                # order, never read as a request. Code ties it to the case it
+                # answers when one alone fits (`reply_case`), and the buyer is
+                # sent there; reading the quote stays the buyer's press. An
+                # unverified one is read as any mail is, and goes to a person.
+                assert message is not None
+                answered = reply_case(
+                    await self._waiting(context, CaseStatus.RFQ_DRAFTED),
+                    master,
+                    message.sender.domain,
+                    f"{message.subject}\n{newest_part(message).text}",
+                )
+                if answered is not None:
+                    await self._tell(
+                        context,
+                        PurchasingScopes.RFQ_PREPARE,
+                        f"purchasing.mail.supplier:{item.message_id}",
+                        f"{supplier} trả lời hỏi giá {answered.request.pr_no}",
+                        "Mở hồ sơ và bấm «DW2 đọc báo giá» để ghi báo giá trong thư.",
+                        _link(answered),
+                    )
+                    continue
                 await self._tell(
                     context,
                     PurchasingScopes.RFQ_PREPARE,

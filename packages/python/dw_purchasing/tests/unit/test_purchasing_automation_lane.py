@@ -205,3 +205,28 @@ async def test_a_refused_step_is_told_once_in_its_own_words() -> None:
     received = _cases(world, CaseStatus.RECEIVED)
     assert len(refused) == len(received) and all(k.endswith(":no_limits") for k in refused)
     assert _cases(world, CaseStatus.AWAITING_APPROVAL) == []
+
+
+async def test_a_suppliers_reply_to_a_case_asking_tells_the_buyer_which_case() -> None:
+    world, notices = _world(), RecordedNotices()
+    item = await world.service.read_mail(caller(), "P01")
+    assert item.case_id is not None
+    await world.approvals.submit(caller(), item.case_id, case_version=1)
+    case = await world.service.case(caller(), item.case_id)
+    assert case.approval is not None
+    world.store.decide(
+        case.approval.approval_id,
+        tenant_id=ALPHA[0],
+        workspace_id=ALPHA[1],
+        approved=True,
+        decided_by=HEAD,
+        at=datetime(2026, 11, 2, 9, tzinfo=UTC),
+        comment="ok",
+    )
+    await world.settlement.settle(case.approval.approval_id, caller(principal=HEAD))
+    await world.sourcing.draft_rfq(caller(), item.case_id, case_version=3)
+
+    await _lane(world, notices).tick(*ALPHA)
+
+    titles = [notices.told[k][3] for k in notices.told if k.startswith("purchasing.mail.supplier:")]
+    assert any("trả lời hỏi giá PR-2611-004" in t for t in titles)

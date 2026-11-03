@@ -391,6 +391,17 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   and lane), API 2, integration 7 (found and fixed a CHECK a NULL error
   passed), web 2; mutations, each red (one test added until red).
 
+- 2026-11-03, **a supplier's reply tied to its RFQ by code**
+  (`application.sourcing.reply_case`): the one case still asking that asked
+  the sender's supplier (sender verified by the mail system) and whose PR
+  number the mail names (the RFQ's subject carries it; a reply keeps it). The
+  automation lane's notice now names the PR and links its case; the case's
+  offer card lists the tied mails first ("Trả lời hỏi giá này") and picks the
+  one when alone (`GET /requests/{id}/rfq/replies`). A mail naming no PR,
+  another PR, or two is a buyer's to place, as before. Reading the quote
+  stays a buyer's press. Checks: unit 5 new; mutations, each red (two tests
+  added until red).
+
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
@@ -422,8 +433,8 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 - RFQ drafts are not sent: the outbox folder (`dw_platform`) can carry them
   from the buyer's mailbox, as DW1's mails go; wiring it is the next step
   after the pages.
-- A supplier's reply is not linked to its RFQ by thread headers yet: the
-  buyer picks the case and the mail.
+- A supplier's reply is tied to its RFQ by the PR number it names, not by
+  thread headers (the flow sends, so DW2 never holds the sent Message-ID).
 - The Excel PR form and scanned paper: the reader's registry is Sales' until
   it is split (ADR 0013 decision 2). Bravo as a source: no connection.
 - No offsets kept for a mail's spans (DW1 keeps anchors): the mailbox is the
