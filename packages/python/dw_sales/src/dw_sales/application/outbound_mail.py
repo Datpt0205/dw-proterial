@@ -31,8 +31,6 @@ who receives it. The lane audits as itself (ADR 0011).
 
 from __future__ import annotations
 
-import html
-import json
 import logging
 import uuid
 from collections.abc import Mapping, Sequence
@@ -50,7 +48,7 @@ from dw_kernel.ids import TenantId, UserId, WorkspaceId
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.identity import context_from
-from dw_platform.application.outbox_folder import OutboxFolderPort, Receipt
+from dw_platform.application.outbox_folder import OutboxFolderPort, Receipt, flow_job
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
 from dw_sales.application.access import Gate, SalesScopes, sales_scope
 from dw_sales.application.case_store import (
@@ -174,16 +172,16 @@ def job_document(mail: OutboundMail, data: bytes) -> tuple[bytes, list[tuple[str
             files.append((part.get_filename() or f"attachment-{index + 1}", payload))
     to = [a for _, a in getaddresses([str(v) for v in draft.get_all("To", [])]) if a]
     cc = [a for _, a in getaddresses([str(v) for v in draft.get_all("Cc", [])]) if a]
-    job = {
-        "job": str(mail.mail_id),
-        "from": mail.mailbox,
-        "to": ";".join(to),
-        "cc": ";".join(cc),
-        "subject": str(draft.get("Subject", "")),
-        "body_html": html.escape(text).replace("\n", "<br>"),
-        "attachments": [name for name, _ in files],
-    }
-    return json.dumps(job, ensure_ascii=False, indent=1).encode("utf-8"), files
+    job = flow_job(
+        job_id=str(mail.mail_id),
+        mailbox=mail.mailbox,
+        to=to,
+        cc=cc,
+        subject=str(draft.get("Subject", "")),
+        body_text=text,
+        attachments=[name for name, _ in files],
+    )
+    return job, files
 
 
 # ----------------------------------------------------------- the API side --
@@ -398,6 +396,10 @@ class OutboundLane:
     async def tick(self) -> OutboundTick:
         settled = 0
         for receipt in self.outbox.receipts():
+            # One folder and one flow serve every context: a receipt for a
+            # job not DW1's is left for the lane whose job it is.
+            if parse_job_name(receipt.name) is None:
+                continue
             settled += await self._receipt(receipt)
             self.outbox.forget(receipt)
         written = 0
