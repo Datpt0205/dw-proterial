@@ -13915,6 +13915,85 @@
         "title": "RfqDraft",
         "type": "object"
       },
+      "RfqMailView": {
+        "description": "A mail as the case page lists it: never its words, which the case has.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_connected",
+                  "flow_failed",
+                  "no_receipt"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "mail_id": {
+            "format": "uuid",
+            "title": "Mail Id",
+            "type": "string"
+          },
+          "mailbox": {
+            "title": "Mailbox",
+            "type": "string"
+          },
+          "queued_at": {
+            "format": "date-time",
+            "title": "Queued At",
+            "type": "string"
+          },
+          "queued_by": {
+            "format": "uuid",
+            "title": "Queued By",
+            "type": "string"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "written",
+              "sent",
+              "failed",
+              "stalled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "supplier_code": {
+            "title": "Supplier Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mail_id",
+          "supplier_code",
+          "mailbox",
+          "status",
+          "error",
+          "queued_by",
+          "queued_at",
+          "settled_at"
+        ],
+        "title": "RfqMailView",
+        "type": "object"
+      },
       "RfqRound": {
         "additionalProperties": false,
         "properties": {
@@ -21922,6 +22001,53 @@
         ]
       }
     },
+    "/api/v1/purchasing/requests/{case_id}/rfq/mails": {
+      "get": {
+        "operationId": "rfq_mails_api_v1_purchasing_requests__case_id__rfq_mails_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RfqMailView"
+                  },
+                  "title": "Response Rfq Mails Api V1 Purchasing Requests  Case Id  Rfq Mails Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rfq Mails",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
     "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}": {
       "post": {
         "operationId": "write_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__post",
@@ -21998,6 +22124,77 @@
           }
         },
         "summary": "Write Rfq",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/rfq/{supplier_code}/send": {
+      "post": {
+        "operationId": "send_rfq_api_v1_purchasing_requests__case_id__rfq__supplier_code__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "supplier_code",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+              "title": "Supplier Code",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RfqMailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Rfq",
         "tags": [
           "purchasing"
         ]

@@ -32,6 +32,7 @@ from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.adapters.persistence.scope_holders import HolderMailboxes, SqlScopeHolders
 from dw_platform.application.drop_folder import OwnedFolders
 from dw_platform.application.malware import MalwareScanPort
+from dw_platform.application.outbox_folder import OutboxFolderPort
 from dw_platform.application.rule_versions import ContextScope
 from dw_purchasing.adapters.bravo_file import BravoFile
 from dw_purchasing.adapters.master_data import DemoMasterData, RuleMasterData
@@ -42,6 +43,7 @@ from dw_purchasing.adapters.people import DirectoryPeople
 from dw_purchasing.adapters.persistence.automation import SqlAutomationScopes
 from dw_purchasing.adapters.persistence.mailbox import SqlPurchasingMailbox
 from dw_purchasing.adapters.persistence.master_imports import SqlMasterImports
+from dw_purchasing.adapters.persistence.rfq_mails import SqlRfqMails
 from dw_purchasing.adapters.persistence.store import (
     ApprovalsFactory,
     AuditFactory,
@@ -76,6 +78,7 @@ from dw_purchasing.application.reapprovals import (
     ReapprovalSettlement,
 )
 from dw_purchasing.application.requesters import RequesterDesk
+from dw_purchasing.application.rfq_mail import RfqMailLane, RfqMailNotices, RfqMailService
 from dw_purchasing.application.rule_drafting import RuleWordsDesk
 from dw_purchasing.application.rules import (
     PurchasingRuleBook,
@@ -117,7 +120,10 @@ def build_purchasing(
     deployed: bool,
     notices: NoticesPort,
     mailbox: Mailbox = "mock",
+    outbox: bool = False,
 ) -> PurchasingServices:
+    """``outbox``: this deployment has the share of each person's outbox
+    folder, so a buyer may send an RFQ from their own mailbox."""
     worker, _ = parse_worker_file(configs / "workers" / "purchasing.yaml")
     store = SqlPurchasingStore(session_factory, audit, approvals)
     inbox: InboxPort = (
@@ -213,6 +219,16 @@ def build_purchasing(
             clock=clock,
             ids=ids,
         ),
+        rfq_mails=RfqMailService(
+            uow=store,
+            gate=Gate(authorization),
+            mails=SqlRfqMails(session_factory, audit),
+            master=master,
+            people=DirectoryPeople(SqlWorkspaceDirectory(session_factory)),
+            clock=clock,
+            ids=ids,
+            enabled=outbox,
+        ),
     )
 
 
@@ -263,6 +279,21 @@ def master_import_lane(
     """The worker's `purchasing_master_import` lane: uploads scanned, read in
     the reader sandbox through ``reader`` (as the composition root adapts it)."""
     return MasterImportLane(SqlMasterImports(session_factory, audit), reader, scanner, clock, ids)
+
+
+def rfq_mail_lane(
+    *,
+    outbox: OutboxFolderPort,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    notices: NoticesPort,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> RfqMailLane:
+    """The worker's `purchasing_outbound` lane over the share of outbox folders."""
+    return RfqMailLane(
+        SqlRfqMails(session_factory, audit), outbox, RfqMailNotices(notices), clock, ids
+    )
 
 
 def rule_book(

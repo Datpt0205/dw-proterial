@@ -155,10 +155,12 @@ class ApiSettings(BaseSettings):
     purchasing_mailbox: Literal["mock", "stored"] = Field(
         default="mock", validation_alias=AliasChoices("DW_PURCHASING_MAILBOX")
     )
-    # "Gửi cho khách" (2026-10-29): offered where the worker has the outbox
-    # share (`DW_SALES_OUTBOX_DIR` there); the API never touches the share.
+    # Sending from a person's own mailbox: DW1's "Gửi cho khách" (2026-10-29)
+    # and DW2's RFQs (2026-11-03), offered where the worker has the one outbox
+    # share both use (`DW_OUTBOX_DIR` there); the API never touches the share.
     sales_outbox_enabled: bool = Field(
-        default=False, validation_alias=AliasChoices("DW_SALES_OUTBOX_ENABLED")
+        default=False,
+        validation_alias=AliasChoices("DW_OUTBOX_ENABLED", "DW_SALES_OUTBOX_ENABLED"),
     )
 
     # --- Sales: the malware scanner (ticket 25) ---

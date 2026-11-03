@@ -23,8 +23,9 @@ import type {
   PurchaseCase,
   PurchaseChoice,
   PurchaseComparison,
+  PurchaseRfqMail,
 } from "@dw/api-client";
-import { InfoTip } from "@dw/ui";
+import { InfoTip, StatusTag } from "@dw/ui";
 import { LoadError } from "../../../../components/load-error";
 import { formatDate, fromPickerDay } from "../../../../lib/dates";
 import { errorMessage } from "../../../../lib/error-message";
@@ -37,11 +38,12 @@ import { money } from "../../_lib/format";
 import { SCOPE } from "../../_lib/scopes";
 import type { Mark } from "../../_lib/labels";
 import { MarkTag } from "../../_components/tags";
+import { MAIL_ERROR, MAIL_STATUS, sendBlocked } from "../../_lib/rfq-mail";
 
 /**
  * Asking suppliers and choosing among them: the RFQs DW2 drafted (each with
- * who wrote it, the model or code's template; a buyer sends them, DW2 sends
- * nothing), the offers recorded (typed, or read from a supplier's verified
+ * who wrote it, the model or a person; a buyer presses "Gửi từ hộp thư của
+ * tôi" and the mail leaves from their own Outlook, never by itself), the offers recorded (typed, or read from a supplier's verified
  * reply), and code's comparison, where a person picks one offer per line.
  * The cheapest offer that meets the need-by date is pre-chosen and says so:
  * it is code's arithmetic, not a judgement, and the person still presses.
@@ -143,6 +145,12 @@ const DRAFT_MARK: Record<
 
 function RfqCard({ c, onChanged }: { c: PurchaseCase; onChanged: () => void }) {
   const rfq = c.rfq!;
+  const mails = useCachedResource(
+    `purchasing/rfq-mails/${c.case_id}`,
+    useCallback(() => purchasingApi().rfqMails(c.case_id), [c.case_id]),
+  );
+  const latest = (supplier: string): PurchaseRfqMail | undefined =>
+    (mails.data ?? []).filter((m) => m.supplier_code === supplier).at(-1);
   const pending = rfq.drafts.filter((d) => d.written_by === "pending").length;
   return (
     <Card
@@ -182,9 +190,18 @@ function RfqCard({ c, onChanged }: { c: PurchaseCase; onChanged: () => void }) {
                 ) : (
                   <Typography.Text>Chưa có thư</Typography.Text>
                 )}
+                <MailTag mail={latest(d.supplier_code)} />
               </Flex>
             ),
-            children: <DraftWords c={c} d={d} onChanged={onChanged} />,
+            children: (
+              <DraftWords
+                c={c}
+                d={d}
+                mail={latest(d.supplier_code)}
+                onChanged={onChanged}
+                onSent={mails.reload}
+              />
+            ),
           }))}
         />
       </Flex>
@@ -192,15 +209,29 @@ function RfqCard({ c, onChanged }: { c: PurchaseCase; onChanged: () => void }) {
   );
 }
 
+/** Where a draft's mail stands, once one was sent from a buyer's mailbox. */
+function MailTag({ mail }: { mail: PurchaseRfqMail | undefined }) {
+  if (!mail) return null;
+  return (
+    <StatusTag tone={MAIL_STATUS[mail.status].tone}>
+      {MAIL_STATUS[mail.status].label}
+    </StatusTag>
+  );
+}
+
 /** One draft: its words, and the buyer's own in place of them on a click. */
 function DraftWords({
   c,
   d,
+  mail,
   onChanged,
+  onSent,
 }: {
   c: PurchaseCase;
   d: Draft;
+  mail: PurchaseRfqMail | undefined;
   onChanged: () => void;
+  onSent: () => void;
 }) {
   const { hasScope } = useAuth();
   const { message } = App.useApp();
@@ -210,6 +241,33 @@ function DraftWords({
   const [body, setBody] = useState(d.body);
   const [pending, setPending] = useState(false);
   const may = hasScope(SCOPE.rfq) && c.status === "rfq_drafted";
+  const [sending, setSending] = useState(false);
+  const blocked = sendBlocked({
+    may,
+    pending: d.written_by === "pending",
+    mail,
+  });
+
+  async function send() {
+    const id = `rfq-send:${c.case_id}:${d.supplier_code}`;
+    setSending(true);
+    try {
+      await purchasingApi().sendRfq(
+        c.case_id,
+        d.supplier_code,
+        keys.keyFor(id, d.supplier_code),
+      );
+      keys.settle(id);
+      message.success(
+        `Đã chuyển thư cho ${d.supplier_code} sang hộp thư của bạn để gửi.`,
+      );
+      onSent();
+    } catch (error) {
+      message.error(errorMessage(error));
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function save() {
     const words = { subject, body };
@@ -279,13 +337,30 @@ function DraftWords({
           >
             {d.body}
           </Typography.Paragraph>
-          {may ? (
-            <Flex>
+          <Flex gap={8} wrap align="center">
+            {may ? (
               <Button size="small" onClick={() => setEditing(true)}>
                 Sửa thư
               </Button>
-            </Flex>
-          ) : null}
+            ) : null}
+            <Tooltip title={blocked}>
+              <Button
+                size="small"
+                type="primary"
+                icon={<MailOutlined aria-hidden />}
+                disabled={blocked !== null}
+                loading={sending}
+                onClick={() => void send()}
+              >
+                Gửi từ hộp thư của tôi
+              </Button>
+            </Tooltip>
+            {mail?.error ? (
+              <Typography.Text>
+                {MAIL_STATUS[mail.status].label}: {MAIL_ERROR[mail.error]}
+              </Typography.Text>
+            ) : null}
+          </Flex>
         </>
       )}
     </Flex>

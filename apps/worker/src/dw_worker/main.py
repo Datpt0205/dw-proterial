@@ -55,7 +55,7 @@ from dw_observability.otel import build_telemetry
 from dw_observability.telemetry import TelemetryPort
 from dw_platform.adapters.cache import ValkeyCache
 from dw_platform.adapters.clamd import malware_scanner
-from dw_platform.adapters.outbox_folder import FakeFlow
+from dw_platform.adapters.outbox_folder import FakeFlow, FolderOutbox
 from dw_platform.adapters.persistence.admin_console_repo import SqlAdminConsoleRepository
 from dw_platform.adapters.persistence.approval_codes import (
     SqlApprovalCodeRetention,
@@ -109,6 +109,7 @@ from dw_purchasing.adapters.assembly import (
     master_import_lane,
     reapproval_settlement,
     request_settlement,
+    rfq_mail_lane,
     rule_settlement,
 )
 from dw_purchasing.adapters.assembly import rule_book as purchasing_rule_book
@@ -120,6 +121,7 @@ from dw_purchasing.application.mail_drop import MAIL_DROP_LANE as PURCHASING_MAI
 from dw_purchasing.application.master_data import MASTER_IMPORT_LANE
 from dw_purchasing.application.reapprovals import REAPPROVAL_DECIDED
 from dw_purchasing.application.retention import PurchasingRetention
+from dw_purchasing.application.rfq_mail import OUTBOUND_LANE as PURCHASING_OUTBOUND_LANE
 from dw_purchasing.application.rules import RULES_DECIDED as PURCHASING_RULES_DECIDED
 from dw_sales.adapters.assembly import (
     Dw1Mount,
@@ -186,6 +188,10 @@ from dw_worker.consumers.purchasing_master_import import (
 from dw_worker.consumers.purchasing_master_import import (
     build_purchasing_master_import_consumer,
 )
+from dw_worker.consumers.purchasing_outbound import (
+    INTERVAL_SECONDS as PURCHASING_OUTBOUND_INTERVAL_SECONDS,
+)
+from dw_worker.consumers.purchasing_outbound import build_purchasing_outbound_consumer
 from dw_worker.consumers.reaper import INTERVAL_SECONDS as REAP_INTERVAL_SECONDS
 from dw_worker.consumers.reaper import ReapTarget, build_reaper_consumer
 from dw_worker.consumers.retention import INTERVAL_SECONDS as RETENTION_INTERVAL_SECONDS
@@ -581,6 +587,33 @@ def build_purchasing_master_import(
     return build_purchasing_master_import_consumer(lane, scope)
 
 
+def build_purchasing_outbound(
+    settings: WorkerSettings,
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> Callable[[], Awaitable[None]] | None:
+    """DW2's `purchasing_outbound` lane, or None: no workspace to serve (the
+    demo's pair, as every DW2 lane here) or no outbox share. The share is
+    DW1's too (one folder and one flow per person); each lane settles only
+    the receipts of its own jobs."""
+    demo = settings.sales_demo_scope()
+    folder = _outbox_dir(settings)
+    if demo is None or folder is None:
+        return None
+    lane = rfq_mail_lane(
+        outbox=FolderOutbox(folder),
+        session_factory=sessions,
+        audit=SqlAuditRepository,
+        notices=PlatformNotices(SqlScopeHolders(sessions), SqlNotificationRepository(sessions)),
+        clock=clock,
+        ids=ids,
+    )
+    scope = ContextScope(TenantId(demo[0]), WorkspaceId(demo[1]))
+    return build_purchasing_outbound_consumer(lane, scope)
+
+
 def _outbox_dir(settings: WorkerSettings) -> Path | None:
     """The share of the people's outbox folders, or None; refused at startup
     when named and not a directory."""
@@ -588,7 +621,7 @@ def _outbox_dir(settings: WorkerSettings) -> Path | None:
         return None
     folder = Path(settings.sales_outbox_dir)
     if not folder.is_dir():
-        raise RuntimeError(f"DW_SALES_OUTBOX_DIR is not a directory: {folder}")
+        raise RuntimeError(f"DW_OUTBOX_DIR is not a directory: {folder}")
     return folder
 
 
@@ -673,6 +706,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     purchasing_retention: RetentionPrunePort | None = None
     purchasing_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
     purchasing_master_import_consumer: Callable[[], Awaitable[None]] | None = None
+    purchasing_outbound_consumer: Callable[[], Awaitable[None]] | None = None
     purchasing_automation_consumer: Callable[[], Awaitable[None]] | None = None
     # The Zalo self-link poll: only with a database, a bot token, a link secret
     # and ZALO_UPDATES_MODE=poll.
@@ -877,6 +911,10 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         )
         # DW2's master-data workbooks, read in the reader sandbox as uploaded.
         purchasing_master_import_consumer = build_purchasing_master_import(
+            settings, sessions, clock=clock, ids=ids
+        )
+        # DW2's RFQs sent from the buyers' own mailboxes (the one outbox share).
+        purchasing_outbound_consumer = build_purchasing_outbound(
             settings, sessions, clock=clock, ids=ids
         )
         # Rows are queued whether or not this host sends them, so they are
@@ -1175,6 +1213,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             MASTER_IMPORT_LANE,
             purchasing_master_import_consumer,
             interval_seconds=PURCHASING_MASTER_IMPORT_INTERVAL_SECONDS,
+        )
+    if purchasing_outbound_consumer is not None:
+        registry.register(
+            PURCHASING_OUTBOUND_LANE,
+            purchasing_outbound_consumer,
+            interval_seconds=PURCHASING_OUTBOUND_INTERVAL_SECONDS,
         )
     if purchasing_retention is not None:
         registry.register(

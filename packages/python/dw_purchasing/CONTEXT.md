@@ -113,6 +113,13 @@ dw_sales ADR 0005 as DW2 applies it).
   list. An upload (`purchasing.master_imports`) is `queued` (Đang đọc),
   `parsed` (Đã đọc, chờ gửi duyệt), `failed` (Không đọc được) or `submitted`
   (Đã gửi duyệt); a refused row names its sheet, row and why, never a value.
+- **RFQ mail (thư hỏi giá gửi đi)**: one supplier's RFQ a buyer sent from
+  their own mailbox ("Gửi từ hộp thư của tôi"), through the one outbox
+  folder and flow per person DW1 uses too (`application.rfq_mail`):
+  `queued` (Đang chuyển sang hộp thư), `written` (Chờ luồng gửi), `sent`
+  (Đã gửi), `failed` (Không gửi được: no outbox folder, or the flow failed)
+  or `stalled` (Chưa có xác nhận gửi, 30 minutes without a receipt). One
+  active per supplier of a case; a failed or stalled one may be sent again.
 
 ## Roles and scopes
 

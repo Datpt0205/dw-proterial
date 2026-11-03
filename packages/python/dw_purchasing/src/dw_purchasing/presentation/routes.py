@@ -40,6 +40,7 @@ from dw_purchasing.application.automation import SwitchesView
 from dw_purchasing.application.intake import CaseChange, InboxItem
 from dw_purchasing.application.master_data import MasterDataView, MasterImportView
 from dw_purchasing.application.requesters import DraftView, MyRequest
+from dw_purchasing.application.rfq_mail import RfqMailView
 from dw_purchasing.application.rule_drafting import WordsDraft
 from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
@@ -440,6 +441,26 @@ def build_router(
             applied_directly=version.applied_directly,
         )
         return await idem.record(change)
+
+    @router.post(
+        "/requests/{case_id}/rfq/{supplier_code}/send",
+        response_model=RfqMailView,
+        status_code=202,
+        dependencies=rfq,
+    )
+    async def send_rfq(
+        case_id: uuid.UUID, supplier_code: _SupplierCode, context: Ctx, svc: Svc, idem: Idem
+    ) -> RfqMailView:
+        mail = await svc.rfq_mails.send(context, case_id, supplier_code)
+        return await idem.record(mail, status_code=202)
+
+    @router.get(
+        "/requests/{case_id}/rfq/mails",
+        response_model=list[RfqMailView],
+        dependencies=any_of(PurchasingScopes.REQUEST_READ, PurchasingScopes.RFQ_PREPARE),
+    )
+    async def rfq_mails(case_id: uuid.UUID, context: Ctx, svc: Svc) -> list[RfqMailView]:
+        return await svc.rfq_mails.of_case(context, case_id)
 
     @router.get("/master-data", response_model=MasterDataView, dependencies=rules_reader)
     async def master_data(context: Ctx, svc: Svc) -> MasterDataView:

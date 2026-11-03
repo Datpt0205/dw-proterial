@@ -44,6 +44,7 @@ from dw_purchasing.application.reapprovals import (
     ReapprovalSettlement,
 )
 from dw_purchasing.application.requesters import RequesterDesk
+from dw_purchasing.application.rfq_mail import RfqMailService
 from dw_purchasing.application.rule_drafting import RuleWordsDesk
 from dw_purchasing.application.rules import (
     PurchasingRulesService,
@@ -53,7 +54,7 @@ from dw_purchasing.application.rules import (
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.testing.measurements import FixedModel, MemoryMeasurements
-from dw_purchasing.testing.memory import MemoryMasterImports, MemoryStore
+from dw_purchasing.testing.memory import MemoryMasterImports, MemoryRfqMails, MemoryStore
 
 ALPHA: Final = (uuid.UUID(int=0xA1), uuid.UUID(int=0xA2))
 BETA: Final = (uuid.UUID(int=0xB1), uuid.UUID(int=0xB2))
@@ -227,6 +228,7 @@ def services_of(world: World) -> PurchasingServices:
         requester=world.requester,
         words=world.words,
         master_data=world.master_data,
+        rfq_mails=world.rfq_mails,
     )
 
 
@@ -254,6 +256,8 @@ class World:
     words: RuleWordsDesk
     master_data: MasterDataService
     master_imports: MemoryMasterImports
+    rfq_mails: RfqMailService
+    rfq_mail_rows: MemoryRfqMails
 
 
 def open_world(
@@ -303,6 +307,7 @@ def open_world(
         uow=store, gate=Gate(Authz()), book=book, clock=clock, ids=ids, checks=checks
     )
     master_imports = MemoryMasterImports()
+    rfq_mail_rows = MemoryRfqMails()
     return World(
         service,
         store,
@@ -357,4 +362,15 @@ def open_world(
             ids=ids,
         ),
         master_imports,
+        RfqMailService(
+            uow=store,
+            gate=Gate(Authz()),
+            mails=rfq_mail_rows,
+            master=master,
+            people=people,
+            clock=clock,
+            ids=ids,
+            enabled=True,
+        ),
+        rfq_mail_rows,
     )
