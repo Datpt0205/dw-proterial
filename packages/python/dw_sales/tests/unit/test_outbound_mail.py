@@ -187,6 +187,20 @@ async def test_a_receipt_for_another_mailbox_settles_nothing(tmp_path: Path) -> 
     assert held.status == "written"
 
 
+async def test_a_receipt_of_another_context_is_left_for_its_own_lane(tmp_path: Path) -> None:
+    """One outbox folder and one flow serve DW1 and DW2: a receipt whose job
+    is not DW1's stays where it is for the lane whose job it is."""
+    rig = await _rig(tmp_path)
+    theirs = tmp_path / "giang.do@alpha.local" / "receipts"
+    theirs.mkdir(parents=True)
+    receipt = theirs / f"dw2.{uuid.uuid4()}.{uuid.uuid4()}.{uuid.uuid4()}.json"
+    receipt.write_text('{"status": "sent"}')
+
+    await rig.lane.tick()
+
+    assert receipt.exists()
+
+
 async def test_a_recipient_outside_the_customers_contacts_is_refused(tmp_path: Path) -> None:
     rig = await _rig(tmp_path)
     record = rig.world.store.state(ALPHA).artifacts[rig.draft_id]
