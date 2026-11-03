@@ -23,6 +23,7 @@ from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import RuleVersion
 from dw_purchasing.adapters.bravo_file import BravoFile
+from dw_purchasing.adapters.master_template import XlsxMasterTemplate
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.policy_files import platform_rule_book
@@ -34,6 +35,7 @@ from dw_purchasing.application.approvals import (
 )
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.intake import PurchaseRequests, Worker
+from dw_purchasing.application.master_data import MasterDataService
 from dw_purchasing.application.orders import PurchaseOrders
 from dw_purchasing.application.ports import Person
 from dw_purchasing.application.reapprovals import (
@@ -51,7 +53,7 @@ from dw_purchasing.application.rules import (
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import SupplierSourcing
 from dw_purchasing.testing.measurements import FixedModel, MemoryMeasurements
-from dw_purchasing.testing.memory import MemoryStore
+from dw_purchasing.testing.memory import MemoryMasterImports, MemoryStore
 
 ALPHA: Final = (uuid.UUID(int=0xA1), uuid.UUID(int=0xA2))
 BETA: Final = (uuid.UUID(int=0xB1), uuid.UUID(int=0xB2))
@@ -224,6 +226,7 @@ def services_of(world: World) -> PurchasingServices:
         switches=world.switches,
         requester=world.requester,
         words=world.words,
+        master_data=world.master_data,
     )
 
 
@@ -249,6 +252,8 @@ class World:
     reapproval_decisions: ReapprovalDecisions
     reapproval_settlement: ReapprovalSettlement
     words: RuleWordsDesk
+    master_data: MasterDataService
+    master_imports: MemoryMasterImports
 
 
 def open_world(
@@ -294,6 +299,10 @@ def open_world(
             model if with_model else None, Worker("purchasing-dw2", "1.0.0"), clock, ids
         ),
     )
+    rules = PurchasingRulesService(
+        uow=store, gate=Gate(Authz()), book=book, clock=clock, ids=ids, checks=checks
+    )
+    master_imports = MemoryMasterImports()
     return World(
         service,
         store,
@@ -313,9 +322,7 @@ def open_world(
             clock=clock,
             ids=ids,
         ),
-        PurchasingRulesService(
-            uow=store, gate=Gate(Authz()), book=book, clock=clock, ids=ids, checks=checks
-        ),
+        rules,
         RuleDecisions(store, book, checks),
         RuleSettlement(store, book, clock, ids, checks),
         SwitchesService(Gate(Authz()), book, automation),
@@ -340,4 +347,14 @@ def open_world(
             Worker("purchasing-dw2", "1.0.0"),
             ids,
         ),
+        MasterDataService(
+            gate=Gate(Authz()),
+            imports=master_imports,
+            rules=rules,
+            book=book,
+            template=XlsxMasterTemplate(),
+            clock=clock,
+            ids=ids,
+        ),
+        master_imports,
     )

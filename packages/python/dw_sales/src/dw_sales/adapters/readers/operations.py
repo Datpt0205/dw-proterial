@@ -280,7 +280,7 @@ async def _sheet_grid(request: ReaderRequest, tools: ReaderTools) -> Any:
 
 async def _table_rows(request: ReaderRequest, tools: ReaderTools) -> Any:
     data = await asyncio.to_thread(_readable_bytes, request, tools)
-    return await asyncio.to_thread(read_table, data, _caps(request))
+    return await asyncio.to_thread(read_table, data, _caps(request), request.args.sheet)
 
 
 async def _mail(request: ReaderRequest, tools: ReaderTools) -> Any:

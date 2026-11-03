@@ -1,0 +1,16 @@
+schema_version: "1.0"
+policy_id: purchasing_master_data
+version: "1.0.0"
+
+# DW2 (Mua hàng)'s master data as the platform ships it: empty. A company
+# loads its own lists from a workbook on DW2's master-data page (items,
+# suppliers, quotations on file, prices paid, budgets); a second person
+# approves them, and they become the tenant's own version of this key.
+# Validated by `dw_purchasing.domain.master_lists.PurchasingMasterData`. With
+# no version of its own a company has no reference price and no budget, so
+# its requests go to the last approval tier.
+items: []
+suppliers: []
+quotes: []
+history: []
+budgets: []

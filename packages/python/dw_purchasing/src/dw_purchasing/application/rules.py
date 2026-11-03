@@ -37,6 +37,7 @@ from dw_kernel.errors import ConflictError, NotFoundError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import (
+    WAITING,
     ContextScope,
     Layer,
     NoMoreChecks,
@@ -55,6 +56,8 @@ from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.ports import PurchasingUnitOfWork
 from dw_purchasing.domain.automation import POLICY_ID as AUTOMATION_ID
 from dw_purchasing.domain.automation import PurchasingAutomation
+from dw_purchasing.domain.master_lists import POLICY_ID as MASTER_DATA_ID
+from dw_purchasing.domain.master_lists import PurchasingMasterData
 from dw_purchasing.domain.rules import POLICY_ID, PurchasingRules
 
 UNREADABLE: Final = "quy tắc mua hàng của công ty không đọc được: báo quản trị, chưa nhận yêu cầu"
@@ -77,12 +80,19 @@ class PurchasingRuleKey(StrEnum):
     RULES = POLICY_ID
     # How far DW2 goes on its own, per step (`domain.automation`).
     AUTOMATION = AUTOMATION_ID
+    # The company's lists (`domain.master_lists`), loaded from a workbook on
+    # the master-data page, never on the settings page.
+    MASTER_DATA = MASTER_DATA_ID
 
 
 SCHEMAS: Final[Mapping[PurchasingRuleKey, type[BaseModel]]] = {
     PurchasingRuleKey.RULES: PurchasingRules,
     PurchasingRuleKey.AUTOMATION: PurchasingAutomation,
+    PurchasingRuleKey.MASTER_DATA: PurchasingMasterData,
 }
+# The keys the settings page lists and changes; the master data has a page
+# of its own (a workbook, never a form or words).
+SETTINGS_KEYS: Final = (PurchasingRuleKey.RULES, PurchasingRuleKey.AUTOMATION)
 
 
 def _schemas() -> dict[Any, type[BaseModel]]:
@@ -116,6 +126,17 @@ class PurchasingRuleBook(RuleBook):
             raise ConflictError(UNREADABLE, details={"policy_id": AUTOMATION_ID}) from exc
         assert isinstance(resolved.policy, PurchasingAutomation)
         return resolved.policy
+
+    async def master_data(self, scope: RuleScope) -> tuple[PurchasingMasterData, Layer]:
+        """The company's lists in force, and whose they are: the platform
+        ships them empty. A stored version that no longer reads stops what
+        asks (409), never falls back to empty lists."""
+        try:
+            resolved = await self.current(scope, PurchasingRuleKey.MASTER_DATA)
+        except ValidationError as exc:
+            raise ConflictError(UNREADABLE, details={"policy_id": MASTER_DATA_ID}) from exc
+        assert isinstance(resolved.policy, PurchasingMasterData)
+        return resolved.policy, resolved.layer
 
 
 def rule_key(key: str) -> PurchasingRuleKey:
@@ -233,7 +254,7 @@ class PurchasingRulesService:
         )
         scope = ContextScope.of(context)
         keys = []
-        for key in PurchasingRuleKey:
+        for key in SETTINGS_KEYS:
             resolved = await self.book.current(scope, key)
             keys.append(
                 PurchasingKeyInForce(
@@ -244,10 +265,19 @@ class PurchasingRulesService:
                     platform_ref=self.book.platform[key].ref,
                 )
             )
-        versions = await self._engine.list_all(context)
-        return PurchasingRulesView(
-            keys=keys, versions=[_view(v) for v in versions if v.key in set(PurchasingRuleKey)]
+        versions = await self._engine.list_all(context, keys=SETTINGS_KEYS)
+        return PurchasingRulesView(keys=keys, versions=[_view(v) for v in versions])
+
+    async def waiting(self, context: AccessContext, key: PurchasingRuleKey) -> str | None:
+        """The ref of ``key``'s version waiting to be decided, if one is."""
+        await self.gate.require_any(
+            context,
+            PurchasingScopes.RULES_PROPOSE,
+            PurchasingScopes.RULES_APPROVE,
+            resource_type=_RESOURCE,
         )
+        waiting = await self._engine.list_all(context, keys=(key,), statuses=WAITING)
+        return f"{key.value}@{waiting[0].version}" if waiting else None
 
     async def schema(self, context: AccessContext, key: str) -> dict[str, Any]:
         await self.gate.require(context, PurchasingScopes.RULES_PROPOSE, resource_type=_RESOURCE)
@@ -314,14 +344,15 @@ class RuleSettlement:
         return _view(settled)
 
 
-def released_book(rules: Any, switches: Any, stored: Any) -> PurchasingRuleBook:
-    """The book over the platform's files (`PolicyFiles`, `SwitchFiles`) and
-    the tenant's stored versions."""
+def released_book(rules: Any, switches: Any, master: Any, stored: Any) -> PurchasingRuleBook:
+    """The book over the platform's files (`PolicyFiles`, `SwitchFiles`,
+    `MasterDataFiles`) and the tenant's stored versions."""
     return PurchasingRuleBook(
         platform={
             PurchasingRuleKey.RULES: rules.current(),
             PurchasingRuleKey.AUTOMATION: switches.current(),
+            PurchasingRuleKey.MASTER_DATA: master.current(),
         },
         stored=stored,
-        released={**rules.by_ref, **switches.by_ref},
+        released={**rules.by_ref, **switches.by_ref, **master.by_ref},
     )

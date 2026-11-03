@@ -117,6 +117,7 @@ const LANES: Record<string, string> = {
   sales_followups: "DW1 · nhắc việc",
   sales_rule_drafts: "DW1 · nháp quy tắc",
   purchasing_mail_drop: "DW2 · đọc thư mục thư",
+  purchasing_master_import: "DW2 · đọc file dữ liệu chủ",
 };
 const OTHER_ACTION = { label: "Hoạt động hệ thống", color: "default" };
 

@@ -603,9 +603,9 @@ def build_purchasing_mount(
     empty, or the mail the worker's `purchasing_mail_drop` lane stores (the API
     reads the store, never the folder). Without that pair nothing is wired and
     the Purchasing routes answer that no data source is configured; where
-    deployed, the mock mailbox is refused, and so, until it is real, is DW2's
-    mock master data, so a deployed DW2 answers 503 with either mailbox. A
-    tenant's own rules are its versions in the platform's rule-version engine;
+    deployed, the mock mailbox is refused (503), and every check reads the
+    master data the tenant loaded (`purchasing_master_data`, or the platform's
+    empty lists), never the demo's fictional ones. A tenant's own rules are its versions in the platform's rule-version engine;
     a `purchasing.rules` approval is checked by `RuleDecisions`, the longest
     prefix registered.
     """
@@ -643,11 +643,6 @@ def build_purchasing_mount(
         return PurchasingMount(services=None)
     if settings.is_deployed and settings.purchasing_mailbox == "mock":
         _LOG.warning("purchasing: the mock mailbox is refused when deployed; 503")
-        return PurchasingMount(services=None)
-    if settings.is_deployed:
-        # DW2's master data is the fictional mock until its import lands: a
-        # deployed profile refuses a mock adapter. Remove this check with it.
-        _LOG.warning("purchasing: mock master data refused when deployed; 503")
         return PurchasingMount(services=None)
     return PurchasingMount(
         services=build_purchasing(

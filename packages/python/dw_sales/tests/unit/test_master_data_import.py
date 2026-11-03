@@ -513,6 +513,28 @@ async def test_the_template_has_the_lists_vietnamese_headers() -> None:
 # ------------------------------------------------------------ the reader --
 
 
+async def test_the_reader_reads_the_sheet_named_and_refuses_one_the_workbook_lacks() -> None:
+    """DW2's master data names one sheet per list; Sales' import names none."""
+    world = _world()
+    book = Workbook()
+    first = book.active
+    assert first is not None
+    first.title = "Hướng dẫn"
+    first.append(["guide"])
+    book.create_sheet("Vật tư").append(["Mã vật tư", "Mô tả"])
+    out = io.BytesIO()
+    book.save(out)
+    reader = ClientTableReader(InProcessReaderTransport(), world.policies.order_rules.intake)
+
+    named = await reader.read(out.getvalue(), "a.xlsx", sheet="Vật tư")
+    unnamed = await reader.read(out.getvalue(), "a.xlsx")
+
+    assert (named.sheet, named.rows[0].cells) == ("Vật tư", ["Mã vật tư", "Mô tả"])
+    assert unnamed.sheet == "Hướng dẫn"
+    with pytest.raises(TableUnreadableError, match="không có trang"):
+        await reader.read(out.getvalue(), "a.xlsx", sheet="Ngân sách")
+
+
 async def test_the_reader_reads_a_semicolon_csv_in_utf8_and_refuses_another_encoding() -> None:
     caps = _world().policies.order_rules.intake
     reader = ClientTableReader(InProcessReaderTransport(), caps)

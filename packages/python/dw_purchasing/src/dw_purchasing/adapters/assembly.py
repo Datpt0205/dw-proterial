@@ -6,7 +6,9 @@ the model gateway) and returns the services the router mounts. The mailbox is
 ``mailbox``: the demo's mock, bound to the one demo (tenant, workspace), every
 other scope reading it empty; or the mail the worker's `purchasing_mail_drop`
 lane stores from the drop folder (`SqlPurchasingMailbox`), which only the
-worker builds (`mail_drop`).
+worker builds (`mail_drop`). The master data is the tenant's own lists,
+loaded from a workbook (`purchasing_master_data`); where not deployed, the
+demo's fictional lists stand in until a tenant has loaded its own.
 """
 
 from __future__ import annotations
@@ -29,13 +31,17 @@ from dw_platform.adapters.persistence.directory import SqlWorkspaceDirectory
 from dw_platform.adapters.persistence.rule_versions import SqlRuleVersionLookup
 from dw_platform.adapters.persistence.scope_holders import HolderMailboxes, SqlScopeHolders
 from dw_platform.application.drop_folder import OwnedFolders
+from dw_platform.application.malware import MalwareScanPort
 from dw_platform.application.rule_versions import ContextScope
 from dw_purchasing.adapters.bravo_file import BravoFile
+from dw_purchasing.adapters.master_data import DemoMasterData, RuleMasterData
+from dw_purchasing.adapters.master_template import XlsxMasterTemplate
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.people import DirectoryPeople
 from dw_purchasing.adapters.persistence.automation import SqlAutomationScopes
 from dw_purchasing.adapters.persistence.mailbox import SqlPurchasingMailbox
+from dw_purchasing.adapters.persistence.master_imports import SqlMasterImports
 from dw_purchasing.adapters.persistence.store import (
     ApprovalsFactory,
     AuditFactory,
@@ -57,8 +63,13 @@ from dw_purchasing.application.mail_drop import (
     MailFileReaderPort,
     RulesMailTerm,
 )
+from dw_purchasing.application.master_data import (
+    MasterDataService,
+    MasterImportLane,
+    WorkbookReaderPort,
+)
 from dw_purchasing.application.orders import PurchaseOrders
-from dw_purchasing.application.ports import InboxPort, NoticesPort
+from dw_purchasing.application.ports import InboxPort, MasterDataPort, NoticesPort
 from dw_purchasing.application.reapprovals import (
     ReapprovalDecisions,
     Reapprovals,
@@ -131,7 +142,16 @@ def build_purchasing(
         clock=clock,
         ids=ids,
     )
-    master = MockMasterData.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1])
+    master: MasterDataPort = (
+        RuleMasterData(book)
+        if deployed
+        else DemoMasterData(
+            book, MockMasterData.load(tenant_id=demo_scope[0], workspace_id=demo_scope[1])
+        )
+    )
+    rules = PurchasingRulesService(
+        uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids, checks=checks
+    )
     return PurchasingServices(
         requests=requests,
         approvals=RequestApprovals(
@@ -153,9 +173,7 @@ def build_purchasing(
             ids=ids,
             deployed=deployed,
         ),
-        rules=PurchasingRulesService(
-            uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids, checks=checks
-        ),
+        rules=rules,
         switches=SwitchesService(Gate(authorization), book, automation),
         words=RuleWordsDesk(
             gate=Gate(authorization),
@@ -185,6 +203,15 @@ def build_purchasing(
             clock=clock,
             ids=ids,
             reapprovals=Reapprovals(requests.model, requests.worker, clock, ids, notices),
+        ),
+        master_data=MasterDataService(
+            gate=Gate(authorization),
+            imports=SqlMasterImports(session_factory, audit),
+            rules=rules,
+            book=book,
+            template=XlsxMasterTemplate(),
+            clock=clock,
+            ids=ids,
         ),
     )
 
@@ -222,6 +249,20 @@ def mail_drop(
         clock,
         ids,
     )
+
+
+def master_import_lane(
+    *,
+    reader: WorkbookReaderPort,
+    scanner: MalwareScanPort,
+    session_factory: async_sessionmaker[AsyncSession],
+    audit: AuditFactory,
+    clock: UtcClock,
+    ids: IdGenerator,
+) -> MasterImportLane:
+    """The worker's `purchasing_master_import` lane: uploads scanned, read in
+    the reader sandbox through ``reader`` (as the composition root adapts it)."""
+    return MasterImportLane(SqlMasterImports(session_factory, audit), reader, scanner, clock, ids)
 
 
 def rule_book(

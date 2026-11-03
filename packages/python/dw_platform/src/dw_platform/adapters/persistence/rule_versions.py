@@ -15,7 +15,7 @@ integrity error becomes a `ConflictError` naming the constraint, raised
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Collection, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Final
@@ -28,7 +28,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from dw_kernel.errors import ConflictError
 from dw_platform.adapters.persistence import tables
 from dw_platform.adapters.persistence.tenant_session import TenantScope, tenant_session
-from dw_platform.application.rule_versions import ONE_OPEN_PROPOSAL, RuleScope, RuleVersion
+from dw_platform.application.rule_versions import (
+    ONE_OPEN_PROPOSAL,
+    RuleScope,
+    RuleStatus,
+    RuleVersion,
+)
 
 _V = tables.rule_versions
 # A key's second proposal while one waits; the engine names the waiting
@@ -89,10 +94,18 @@ class SqlRuleVersionStore:
     session: AsyncSession
     scope: RuleScope
 
-    async def list_all(self) -> Sequence[RuleVersion]:
-        rows = await self.session.execute(
-            sa.select(_V).order_by(_V.c.proposed_at.desc(), _V.c.id.desc())
-        )
+    async def list_all(
+        self,
+        *,
+        keys: Collection[str] | None = None,
+        statuses: Collection[RuleStatus] | None = None,
+    ) -> Sequence[RuleVersion]:
+        query = sa.select(_V).order_by(_V.c.proposed_at.desc(), _V.c.id.desc())
+        if keys is not None:
+            query = query.where(_V.c.key.in_(list(keys)))
+        if statuses is not None:
+            query = query.where(_V.c.status.in_(list(statuses)))
+        rows = await self.session.execute(query)
         return [_version(row) for row in rows.mappings()]
 
     async def get(self, version_id: uuid.UUID) -> RuleVersion | None:

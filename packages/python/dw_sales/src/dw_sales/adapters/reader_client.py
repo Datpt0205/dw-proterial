@@ -396,9 +396,13 @@ class ClientTableReader:
     transport: ReaderTransport
     caps: IntakeCaps
 
-    async def read(self, data: bytes, file_name: str) -> ImportedTable:
+    async def read(self, data: bytes, file_name: str, sheet: str | None = None) -> ImportedTable:
+        """``sheet`` named: that sheet's rows, refused when the workbook has
+        no visible sheet by that name; unnamed: as the module says."""
         operation = ReaderOp.TABLE_ROWS
-        reply = await _ask(self.transport, operation, data=data, args=ReaderArgs(caps=self.caps))
+        reply = await _ask(
+            self.transport, operation, data=data, args=ReaderArgs(caps=self.caps, sheet=sheet)
+        )
         if _failed(operation, reply):
             failure = reply.failure or "crashed"
             refused = reply.detail if failure == "refused" and reply.detail else None

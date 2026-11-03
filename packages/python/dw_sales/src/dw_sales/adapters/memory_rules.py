@@ -5,11 +5,11 @@ a process has no database (`demo_order_rules`)."""
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
 from dw_kernel.errors import ConflictError
-from dw_platform.application.rule_versions import RuleScope
+from dw_platform.application.rule_versions import RuleScope, RuleStatus
 from dw_sales.application.ports import SalesScope
 from dw_sales.application.rules import (
     ONE_OPEN_PROPOSAL,
@@ -75,10 +75,18 @@ class TenantRuleVersions:
     def __init__(self, held: dict[uuid.UUID, RuleVersion]) -> None:
         self._held = held
 
-    async def list_all(self) -> Sequence[RuleVersion]:
-        return sorted(
-            self._held.values(), key=lambda v: (v.proposed_at, v.version_id), reverse=True
-        )
+    async def list_all(
+        self,
+        *,
+        keys: Collection[str] | None = None,
+        statuses: Collection[RuleStatus] | None = None,
+    ) -> Sequence[RuleVersion]:
+        versions = [
+            v
+            for v in self._held.values()
+            if (keys is None or v.key in keys) and (statuses is None or v.status in statuses)
+        ]
+        return sorted(versions, key=lambda v: (v.proposed_at, v.version_id), reverse=True)
 
     async def get(self, version_id: uuid.UUID) -> RuleVersion | None:
         return self._held.get(version_id)

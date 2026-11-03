@@ -14,6 +14,7 @@ import { FINDING, LEVEL, STEP } from "./labels";
 export const RULE_NAME: Record<PurchasingRuleKey, string> = {
   purchasing_rules: "Quy tắc mua hàng",
   purchasing_automation: "Công tắc tự động",
+  purchasing_master_data: "Dữ liệu chủ",
 };
 
 const REQUIRED: Record<string, string> = {
