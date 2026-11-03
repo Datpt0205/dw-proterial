@@ -54,6 +54,20 @@ dw_sales ADR 0005 as DW2 applies it).
   audited as itself. A file it cannot read is told to whoever holds
   `purchasing.request.intake`, once; a folder it cannot list, once a day.
   Everything else reads the store, never the folder.
+- **Attachment reading (tệp đính kèm đã đọc)**: what the mail drop lane read
+  of each attachment as it stored the mail, kept beside it
+  (`domain.attachments`): scanned by ClamAV first (an infected file is
+  never read and its bytes not kept), then, a document (an Excel PR form, a
+  PDF, a legacy `.xls`/`.doc` converted first), its text taken in the reader
+  sandbox, a page with no text layer read by OCR and marked so; an image is
+  not read as a form. Nothing after the lane parses the file. DW2 reads a
+  mail with the one document beside it; a mail with an infected file, more
+  than one document or one too long to show whole goes to a person.
+- **Read from (đọc từ)**: on a case read from mail with a document attached,
+  the file its lines came from (or the mail's own words) and whether any
+  value was read only on a scanned page. A request read from a scan waits
+  for a person to compare it with the paper (`Review`) whatever the switch,
+  because OCR misreads a digit without saying so.
 - **Mail outcome**: what DW2 did with one mail in the purchasing mailbox,
   settled once: `opened` (a case was opened) or `to_person` (a person reads
   it), with a reason code: `sender_not_internal`, `sender_unverified`,
@@ -239,7 +253,10 @@ có trong thư), `line_unreadable` (DW2 không đọc trọn được một dòn
 đọc được ngày cần hàng), `value_malformed` (một giá trị trong thư không đúng
 dạng), `no_lines` (thư không có dòng hàng nào), `too_many_lines` (thư có
 nhiều dòng hàng hơn quy tắc cho phép), `currency_not_allowed` (loại tiền
-quy tắc không cho phép).
+quy tắc không cho phép), `attachment_infected` (tệp đính kèm có mã độc),
+`several_documents` (thư có nhiều tệp tài liệu), `document_too_long` (tệp
+đính kèm quá dài để đọc trọn), `attachment_unreadable` (DW2 không đọc được
+tệp đính kèm).
 
 Marks: `machine_read` (Máy đọc), `machine_written` (Máy viết), `template`
 (Mẫu cố định), `person` (Người nhập).

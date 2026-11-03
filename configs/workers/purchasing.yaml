@@ -9,7 +9,7 @@ domain: purchasing
 # No graph: DW2's steps are one-call reads and writes through the runtime's
 # model door (dw_agent_runtime.model.interpretation) and run-less approvals.
 graph_version: "1.0.0"
-# purchasing.pr_mail_reading@1.0.0 (DW02 function 1).
+# purchasing.pr_mail_reading@1.1.0 (DW02 function 1).
 prompt_bundle_version: "1.0.0"
 # No toolset: DW2 offers a model no tool. A turn that reads a mail gets no
 # outbound tool (ADR 0007), and its model door has no way to offer one.

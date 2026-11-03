@@ -25,18 +25,26 @@ else reads the stored mailbox through `InboxPort`, like the mock.
    once per file (`MailDropNoticePort.refused`). Told before it is marked: a
    notice that fails leaves the file to the next tick, never marked and
    untold.
-5. Every other mail is stored with one audit event, in one transaction
-   (`MailStorePort.store`). A copy of a file has the same id (its hash), and
-   one mail exported twice carries the same Message-ID from the same
-   sender: either is stored once, audited once.
+5. Every other mail has each attachment read once (`AttachmentReader`):
+   scanned for malware first (`MalwareScanPort`), an infected file never
+   read and its bytes not kept; then a document's text taken in the reader
+   sandbox (`DocumentTextPort`: an Excel form's visible cells, a PDF's text,
+   a scanned page by OCR), at most `MAX_DOCUMENTS` per mail. An image is not
+   read as a form. What was read, or why not, is kept beside the attachment
+   (`domain.attachments`), so nothing after this lane parses the file.
+6. The mail is stored with its readings and one audit event, in one
+   transaction (`MailStorePort.store`). A copy of a file has the same id
+   (its hash), and one mail exported twice carries the same Message-ID from
+   the same sender: either is stored once, audited once.
 
 **It audits as itself**: `lane_audit_event` from `system_actor(MAIL_DROP_LANE)`
 (ADR 0011), action `purchasing.mail.stored`, naming the file it came from.
 **No word of a mail is logged**: a log line names a file and a reason code
 wrote, never a subject, a sender or a body.
 
-A reader that does not answer (`InfrastructureError`) ends the tick: no file
-is marked, and the next tick tries again. A folder that cannot be listed ends
+A reader or a scanner that does not answer (`InfrastructureError`) ends the
+tick: no file is marked, and the next tick tries again. A mail is never
+stored with an attachment unscanned or unread. A folder that cannot be listed ends
 the tick too, and the same people are told, at most once a day while it lasts.
 """
 
@@ -48,15 +56,18 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Final, Literal, Protocol
 
+from dw_kernel.errors import InfrastructureError
 from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.drop_folder import DropFolderPort, DroppedFile
+from dw_platform.application.malware import MalwareScanPort
 from dw_platform.application.rule_versions import ContextScope
 from dw_platform.domain.audit import AuditEvent, lane_audit_event, system_actor
-from dw_platform.domain.messages import InboundMessage
+from dw_platform.domain.messages import AttachmentContent, InboundMessage
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.ports import NoticesPort
 from dw_purchasing.application.rules import PurchasingRuleBook, PurchasingRuleKey
+from dw_purchasing.domain.attachments import AttachmentReading
 from dw_purchasing.domain.rules import PurchasingRules
 
 logger = logging.getLogger("dw_purchasing.mail_drop")
@@ -67,6 +78,9 @@ MAIL_STORED: Final = "purchasing.mail.stored"
 SETTLE: Final = timedelta(seconds=30)
 # The largest file read: its base64 must fit the reader sandbox's request.
 MAX_MAIL_BYTES: Final = 20 * 1024 * 1024
+# The most attachments of one mail read as documents: each is a process in the
+# reader sandbox, and a request is one form.
+MAX_DOCUMENTS: Final = 5
 _SUFFIX: Final = ".eml"
 
 
@@ -93,6 +107,47 @@ class MailFileReaderPort(Protocol):
     async def read_mail(self, data: bytes) -> MailFile | MailRefused: ...
 
 
+class DocumentTextPort(Protocol):
+    """Reads one scanned attachment's text in the reader sandbox (module
+    docstring, step 5): its pages, or `not_a_document` / `unreadable`.
+    Raises `InfrastructureError` when the reader cannot answer at all."""
+
+    async def read_text(self, content: AttachmentContent) -> AttachmentReading: ...
+
+
+@dataclass(frozen=True)
+class AttachmentReader:
+    """Every attachment of one mail, scanned, then read when it is a
+    document (module docstring, step 5)."""
+
+    scanner: MalwareScanPort
+    documents: DocumentTextPort
+
+    async def read(self, mail: MailFile) -> dict[str, AttachmentReading]:
+        readings: dict[str, AttachmentReading] = {}
+        asked = 0
+        for attachment in mail.message.attachments:
+            data = mail.contents[attachment.attachment_id]
+            verdict = await self.scanner.scan(data)
+            if verdict.outcome == "unavailable":
+                raise InfrastructureError(
+                    "the malware scanner gave no answer", details={"lane": MAIL_DROP_LANE}
+                )
+            if verdict.outcome == "infected":
+                reading = AttachmentReading.refused("infected")
+            elif attachment.media_type.startswith("image/"):
+                reading = AttachmentReading.refused("not_a_document")
+            elif asked >= MAX_DOCUMENTS:
+                reading = AttachmentReading.refused("too_many")
+            else:
+                asked += 1
+                reading = await self.documents.read_text(
+                    AttachmentContent(attachment=attachment, data=data)
+                )
+            readings[attachment.attachment_id] = reading
+        return readings
+
+
 class MailStorePort(Protocol):
     """DW2's stored mailbox, as the lane writes it."""
 
@@ -105,11 +160,18 @@ class MailStorePort(Protocol):
         ...
 
     async def store(
-        self, scope: ContextScope, mail: MailFile, *, source: str, event: AuditEvent
+        self,
+        scope: ContextScope,
+        mail: MailFile,
+        *,
+        readings: Mapping[str, AttachmentReading],
+        source: str,
+        event: AuditEvent,
     ) -> bool:
-        """The message, its attachments and ``event`` in one transaction.
-        False, and only the file recorded, when the message is already
-        stored: by its id, or by its Message-ID from the same sender."""
+        """The message, its attachments each with its reading (the bytes of
+        an infected one not kept) and ``event`` in one transaction. False,
+        and only the file recorded, when the message is already stored: by
+        its id, or by its Message-ID from the same sender."""
         ...
 
 
@@ -217,6 +279,7 @@ class MailDrop:
     store: MailStorePort
     term: MailTermPort
     notices: MailDropNoticePort
+    attachments: AttachmentReader
     clock: UtcClock
     ids: IdGenerator
     max_bytes: int = MAX_MAIL_BYTES
@@ -283,6 +346,7 @@ class MailDrop:
         read = await self.reader.read_mail(data)
         if isinstance(read, MailRefused):
             return read
+        readings = await self.attachments.read(read)
         event = lane_audit_event(
             lane=MAIL_DROP_LANE,
             event_id=self.ids.new_uuid(),
@@ -292,9 +356,14 @@ class MailDrop:
             resource_type="purchasing.message",
             resource_id=read.message.message_id,
             occurred_at=self.clock.now(),
-            details={"source": dropped.name, "attachments": len(read.message.attachments)},
+            details={
+                "source": dropped.name,
+                "attachments": len(read.message.attachments),
+                "documents": sum(r.read for r in readings.values()),
+                "infected": sum(r.not_read == "infected" for r in readings.values()),
+            },
         )
-        if await self.store.store(scope, read, source=dropped.name, event=event):
+        if await self.store.store(scope, read, readings=readings, source=dropped.name, event=event):
             return "stored"
         return "already_stored"
 

@@ -2,7 +2,9 @@
 wherever isolation is the question.
 
 A dropped mail is stored once, with its audit event as the lane, read back
-whole, its attachment kept; another tenant or workspace reads none of it, and
+whole, its attachment kept with what was read of it (migration 2ba8d9cc436c:
+an infected file's bytes never kept, a reading of no known shape refused);
+another tenant or workspace reads none of it, and
 a connection that never scoped itself reads nothing even by partition name;
 the application can neither rewrite nor remove it; a month made ahead is
 policed; the retention function deletes one workspace's mail before its
@@ -34,12 +36,14 @@ from dw_platform.domain.messages import Attachment, EmailAddress, InboundMessage
 from dw_purchasing.adapters.persistence.mailbox import SqlPurchasingMailbox
 from dw_purchasing.adapters.persistence.retention import SqlRetentionStore
 from dw_purchasing.application.mail_drop import MAIL_DROP_LANE, MAIL_STORED, MailFile
+from dw_purchasing.domain.attachments import AttachmentPage, AttachmentReading
 from dw_purchasing.testing.world import caller
 
 pytestmark = pytest.mark.integration
 
 _XLSX = b"PK\x03\x04 fictional purchase request form"
 _TABLES = ("mailbox_messages", "mailbox_attachments", "mailbox_files")
+_FORM = AttachmentReading(pages=(AttachmentPage(text="Số PR | PR-2611-031"),))
 
 
 def _scope(pair: tuple[uuid.UUID, uuid.UUID]) -> ContextScope:
@@ -93,10 +97,16 @@ def mailbox(app_sessions: async_sessionmaker[AsyncSession]) -> SqlPurchasingMail
 
 
 async def _store(
-    mailbox: SqlPurchasingMailbox, pair: tuple[uuid.UUID, uuid.UUID], mail: MailFile, source: str
+    mailbox: SqlPurchasingMailbox,
+    pair: tuple[uuid.UUID, uuid.UUID],
+    mail: MailFile,
+    source: str,
+    reading: AttachmentReading = _FORM,
 ) -> bool:
     scope = _scope(pair)
-    return await mailbox.store(scope, mail, source=source, event=_event(scope, mail, source))
+    return await mailbox.store(
+        scope, mail, readings={"a1": reading}, source=source, event=_event(scope, mail, source)
+    )
 
 
 async def _bind(session: AsyncSession, pair: tuple[uuid.UUID, uuid.UUID]) -> None:
@@ -116,10 +126,13 @@ async def test_a_mail_is_stored_once_with_its_attachment_and_read_back_whole(
     scope = _scope(tenancy.alpha)
     event = _event(scope, mail, "20261102-1.eml")
 
-    assert await mailbox.store(scope, mail, source="20261102-1.eml", event=event)
+    assert await mailbox.store(
+        scope, mail, readings={"a1": _FORM}, source="20261102-1.eml", event=event
+    )
 
     me = caller(tenancy.alpha)
     assert await mailbox.get_message(me, mail.message.message_id) == mail.message
+    assert await mailbox.attachment_readings(me, mail.message.message_id) == {"a1": _FORM}
     assert mail.message in await mailbox.list_messages(me)
     assert "20261102-1.eml" in await mailbox.handled_sources(scope)
     async with migrator.connect() as conn:
@@ -136,6 +149,57 @@ async def test_a_mail_is_stored_once_with_its_attachment_and_read_back_whole(
         )
     assert content == _XLSX
     assert actor == f"system:{MAIL_DROP_LANE}"
+
+
+async def test_an_infected_file_is_kept_as_its_reading_without_its_bytes(
+    mailbox: SqlPurchasingMailbox, migrator: AsyncEngine, tenancy: Tenancy
+) -> None:
+    mail = _mail()
+    infected = AttachmentReading.refused("infected")
+    assert await _store(mailbox, tenancy.alpha, mail, "virus.eml", infected)
+    readings = await mailbox.attachment_readings(caller(tenancy.alpha), mail.message.message_id)
+    assert readings == {"a1": infected}
+    async with migrator.connect() as conn:
+        size = await conn.scalar(
+            sa.text(
+                "SELECT octet_length(content) FROM purchasing.mailbox_attachments"
+                " WHERE message_id = :m"
+            ),
+            {"m": mail.message.message_id},
+        )
+    assert size == 0
+
+
+@pytest.mark.parametrize(
+    ("reading", "check"),
+    [
+        # An infected file's bytes, kept.
+        ("""'{"pages": [], "not_read": "infected"}'""", "ck_mailbox_attachments_infected_not_kept"),
+        # A reason nobody names.
+        ("""'{"pages": [], "not_read": "skipped"}'""", "ck_mailbox_attachments_reading"),
+        # Text and a reason; neither.
+        (
+            """'{"pages": [{"text": "x"}], "not_read": "unreadable"}'""",
+            "ck_mailbox_attachments_reading",
+        ),
+        ("""'{"pages": [], "not_read": null}'""", "ck_mailbox_attachments_reading"),
+        ("""'{"not_read": "unreadable"}'""", "ck_mailbox_attachments_reading"),
+    ],
+)
+async def test_a_reading_of_no_known_shape_is_refused_by_its_check(
+    app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy, reading: str, check: str
+) -> None:
+    async with app_sessions() as session, session.begin():
+        await _bind(session, tenancy.alpha)
+        with pytest.raises(DBAPIError, match=check):
+            await session.execute(
+                sa.text(
+                    "INSERT INTO purchasing.mailbox_attachments"
+                    " (tenant_id, workspace_id, message_id, received_at, attachment_id, content,"
+                    f" reading) VALUES (:t, :w, 'eml-x', now(), 'a1', '\\x00', {reading})"
+                ),
+                {"t": tenancy.alpha[0], "w": tenancy.alpha[1]},
+            )
 
 
 async def test_a_copy_or_one_mail_exported_twice_is_stored_once_and_audited_once(
@@ -223,6 +287,7 @@ async def test_another_tenant_or_workspace_reads_none_of_it(
         them = caller(pair)
         assert all(m.message_id != message_id for m in await mailbox.list_messages(them))
         assert await mailbox.get_message(them, message_id) is None
+        assert await mailbox.attachment_readings(them, message_id) == {}
         assert "iso.eml" not in await mailbox.handled_sources(_scope(pair))
 
 

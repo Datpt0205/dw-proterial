@@ -24,7 +24,8 @@ _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 class PrSource(StrEnum):
     """Where the request came from (DW02: email, Bravo, form, scanned paper;
-    this slice reads the first and the third)."""
+    a mail's own words, its Excel form or its scanned paper are all `mail`,
+    `ReadFrom` saying which)."""
 
     FORM = "form"
     MAIL = "mail"
@@ -71,8 +72,29 @@ class ApprovalAsked(BaseModel):
     submitted_at: AwareDatetime
 
 
+class ReadFrom(BaseModel):
+    """Where in a mail DW2 read the request, when a document was attached:
+    the file (its id in the stored mailbox, and its name) when the lines
+    were in it (None: the mail's own words), and whether any value was read
+    only on a scanned page, which a person compares with the paper before
+    DW2 sends it on (`review`)."""
+
+    model_config = _FROZEN
+
+    attachment_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._-]{1,128}$")
+    attachment: str | None = Field(default=None, min_length=1, max_length=255)
+    scanned: bool = False
+
+    @model_validator(mode="after")
+    def _a_file_by_id_and_name(self) -> Self:
+        if (self.attachment_id is None) != (self.attachment is None):
+            raise ValueError("a file read from is named by its id and its name, or neither")
+        return self
+
+
 class Review(BaseModel):
-    """A case DW2 opened on its own that a person is to look over first."""
+    """A case DW2 opened on its own, or read from a scan, that a person is to
+    look over first."""
 
     model_config = _FROZEN
 
@@ -136,9 +158,11 @@ class PurchaseCase(BaseModel):
     # who wrote the request in DW2 themselves. Only they, of the requesters,
     # see the case, and they never approve it.
     requested_by: uuid.UUID | None = None
+    # Read from a mail with a document attached: which, and whether by OCR.
+    read_from: ReadFrom | None = None
     # Opened by DW2 from a mail it read while the step is "AI làm, người
-    # duyệt": a person looks it over before DW2 sends it anywhere. Who did
-    # and when, once they have.
+    # duyệt", or read from a scan: a person looks it over before DW2 sends
+    # it anywhere. Who did and when, once they have.
     review: Review | None = None
     rules_ref: str = Field(pattern=r"^purchasing_rules@\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$")
     # What code found when the case was sent for approval (DW02 function 2).
@@ -158,6 +182,10 @@ class PurchaseCase(BaseModel):
     def _a_mail_names_its_message(self) -> Self:
         if (self.source is PrSource.MAIL) != (self.source_ref is not None):
             raise ValueError("a request read from mail names its message, and only it does")
+        if self.read_from is not None and self.source is not PrSource.MAIL:
+            raise ValueError("only a request read from mail was read from its attachment")
+        if self.read_from is not None and self.read_from.scanned and self.review is None:
+            raise ValueError("a request read from a scan waits for a person to look it over")
         return self
 
     @model_validator(mode="after")

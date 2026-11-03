@@ -90,6 +90,61 @@
     }
   },
   {
+    "message_id": "P07",
+    "sender": {
+      "address": "thu.tran@seller.example",
+      "display_name": "Trần Thị Thu"
+    },
+    "subject": "PR-2611-013 theo mẫu đính kèm",
+    "received_at": "2026-11-02T14:10:00+07:00",
+    "body_text": "Chào phòng Mua hàng,\n\nKho vật tư gửi phiếu yêu cầu mua hàng theo mẫu đính kèm.\n\nThu",
+    "attachments": [
+      {
+        "attachment_id": "pr-form-013",
+        "name": "PR-2611-013.xlsx",
+        "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 18432,
+        "sha256": "5c0e56b4fa6ec55c25bcf48edabec236c24c6da66680201537751a6c752ca1bd"
+      }
+    ],
+    "authentication": {
+      "spf": "pass",
+      "dkim": "pass",
+      "dmarc": "pass"
+    }
+  },
+  {
+    "message_id": "P08",
+    "sender": {
+      "address": "hung.vo@seller.example",
+      "display_name": "Võ Văn Hùng"
+    },
+    "subject": "Phiếu đề nghị mua hàng (bản scan)",
+    "received_at": "2026-11-02T15:30:00+07:00",
+    "body_text": "Anh chị phòng Mua hàng xem giúp phiếu scan đính kèm.\n\nHùng - Bảo trì",
+    "attachments": [
+      {
+        "attachment_id": "scan-014",
+        "name": "scan_0211.pdf",
+        "media_type": "application/pdf",
+        "size": 18432,
+        "sha256": "858f2da865a1b5796111820517496176b7b833aedb838cb06ce04a3ace343ea0"
+      },
+      {
+        "attachment_id": "logo",
+        "name": "logo.png",
+        "media_type": "image/png",
+        "size": 18432,
+        "sha256": "ab211233b6576dbb0f8b5826447eeac61e2a833a99ac5d788fbc1a174c3c6ce5"
+      }
+    ],
+    "authentication": {
+      "spf": "pass",
+      "dkim": "pass",
+      "dmarc": "pass"
+    }
+  },
+  {
     "message_id": "Q01",
     "sender": {
       "address": "sales@kimura-tools.example",

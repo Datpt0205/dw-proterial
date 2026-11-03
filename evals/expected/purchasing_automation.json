@@ -1,16 +1,24 @@
 {
   "golden": {
-    "sent": ["PR-2611-004", "PR-2611-009"],
-    "approver_notices": 2,
+    "sent": ["PR-2611-004", "PR-2611-009", "PR-2611-013"],
+    "approver_notices": 3,
     "supplier_mail_settled": ["Q04"]
   },
   "injection": {
-    "statuses": ["awaiting_approval", "awaiting_approval"],
+    "statuses": ["awaiting_approval", "awaiting_approval", "awaiting_approval", "received"],
     "decided": 0
   },
   "unsure": {
-    "waiting_review": 2,
+    "waiting_review": 4,
     "sent": 0,
-    "to_person_reasons": ["missing:budget_code", "no_pr_number", "sender_not_internal", "sender_unverified"]
+    "to_person_reasons": [
+      "missing:budget_code",
+      "no_pr_number",
+      "sender_not_internal",
+      "sender_unverified"
+    ]
+  },
+  "degrade": {
+    "opened": 4
   }
 }

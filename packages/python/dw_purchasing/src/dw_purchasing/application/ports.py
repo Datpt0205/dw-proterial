@@ -9,7 +9,7 @@ with the platform's policy overrides.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -22,6 +22,7 @@ from dw_platform.application.rule_versions import RuleVersionStorePort
 from dw_platform.domain.approval import ApprovalDecision, ApprovalRequest
 from dw_platform.domain.audit import AuditEvent
 from dw_platform.domain.messages import InboundMessage
+from dw_purchasing.domain.attachments import AttachmentReading
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.checks import MasterData
 from dw_purchasing.domain.orders import Cell
@@ -145,6 +146,13 @@ class InboxPort(Protocol):
     async def get_message(
         self, context: AccessContext, message_id: str
     ) -> InboundMessage | None: ...
+
+    async def attachment_readings(
+        self, context: AccessContext, message_id: str
+    ) -> Mapping[str, AttachmentReading]:
+        """What was read of each attachment of the message as it was stored,
+        by attachment id (`domain.attachments`); one never read is absent."""
+        ...
 
 
 class MasterDataPort(Protocol):

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import dataclasses
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -44,6 +45,7 @@ from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.formats import sniff
 from dw_sales.adapters.reader_wire import (
     RESULTS,
+    DocumentText,
     PdfPage,
     ReaderOp,
     ReaderReply,
@@ -62,7 +64,7 @@ from dw_sales.adapters.readers.mail import read_mail
 from dw_sales.adapters.readers.ocr import PageOcrPort, TesseractOcr
 from dw_sales.adapters.readers.pdf import PdfPoReader
 from dw_sales.adapters.readers.tables import read_table
-from dw_sales.adapters.readers.text_parts import AttachmentTexts
+from dw_sales.adapters.readers.text_parts import AttachmentTexts, scanned_parts
 from dw_sales.adapters.rfq_excel import ExcelDesignReplyReader, ExcelQuoteForms, ExcelRfqReader
 from dw_sales.adapters.source_view import FileSourceView
 from dw_sales.application.quote_ports import QuoteFileUnreadableError
@@ -257,6 +259,31 @@ async def _text_parts(request: ReaderRequest, tools: ReaderTools) -> Any:
     return list(await AttachmentTexts().text_parts(request.content(), _caps(request)))
 
 
+async def _document_text(request: ReaderRequest, tools: ReaderTools) -> Any:
+    """A document's text (`DocumentText`): a legacy file converted first, a
+    PDF's pages with no text layer read by OCR where the tools have it. A
+    conversion that fails gives no text, never a failed read."""
+    caps = _caps(request)
+    kind = sniff(request.content().data)
+    if kind not in ("pdf", "xlsx", "xls", "doc"):
+        return DocumentText(kind="other", parts=[])
+    try:
+        readable = await asyncio.to_thread(_readable, request, tools)
+    except ConversionError:
+        return DocumentText(kind=kind, parts=[])
+    parts = list(await AttachmentTexts().text_parts(readable.content, caps))
+    scanned: list[Any] = []
+    if tools.ocr is not None and sniff(readable.content.data) == "pdf":
+        have = {part.page for part in parts if part.page is not None}
+        scanned = await asyncio.to_thread(scanned_parts, readable.content, caps, tools.ocr, have)
+    ordered = sorted([*parts, *scanned], key=lambda part: part.page or 0)
+    return DocumentText(
+        kind=kind,
+        parts=[dataclasses.replace(part, sha256=readable.original_sha256) for part in ordered],
+        ocr_pages=[part.page for part in scanned],
+    )
+
+
 async def _pdf_page(request: ReaderRequest, tools: ReaderTools) -> Any:
     data = await asyncio.to_thread(_readable_bytes, request, tools)
     page = request.args.required(request.args.page, "page")
@@ -309,6 +336,7 @@ OPERATIONS: Final[Mapping[ReaderOp, _Operation]] = MappingProxyType(
         ReaderOp.SOURCE_SHEET_GRID: _sheet_grid,
         ReaderOp.TABLE_ROWS: _table_rows,
         ReaderOp.MAIL_READ: _mail,
+        ReaderOp.TEXT_DOCUMENT: _document_text,
     }
 )
 

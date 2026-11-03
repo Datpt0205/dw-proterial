@@ -402,13 +402,42 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   stays a buyer's press. Checks: unit 5 new; mutations, each red (two tests
   added until red).
 
+- 2026-11-03, **a PR read from its Excel form or its scanned paper**
+  (DW02 function 1, the two sources left): the `purchasing_mail_drop` lane
+  now reads every attachment as it stores the mail: ClamAV first (scanner
+  down: the tick ends, nothing stored unscanned; infected: never read, bytes
+  not kept), an image not read as a form, at most 5 documents per mail, then
+  the reader sandbox's new `text.document` op (Sales' reader, ADR 0013
+  decision 2's interim): visible cells, a PDF's text layer, a page with no
+  text layer by OCR (Tesseract, flagged), `.xls`/`.doc` converted first. The
+  text is kept beside the attachment (`mailbox_attachments.reading`,
+  migration `2ba8d9cc436c`, CHECKs on its shape and on an infected file's
+  bytes); nothing after the lane parses a file. `pr_mail_reading@1.1.0`
+  shows the model the mail and the one document; code takes every line from
+  one place (mail or file), and a value only a scan holds marks the case
+  `read_from.scanned`: it waits for a person (`Review`) whatever the switch,
+  in the domain too. To a person, unread: an infected file, several
+  documents, one too long to show whole; no PR beside an unreadable document
+  is `attachment_unreadable`. The case page says which file and "Bản scan".
+  Demo mails P07 (Excel) and P08 (scan). Checks: unit (domain 5, intake 12,
+  lane 6, worker adapter 8, reader op 9), integration (reading stored and
+  read back, infected bytes absent, CHECK shapes, other tenant/workspace
+  reads none), eval `purchasing_pr_intake@1.1.0` 7/7 (an attachment case and
+  an attachment prompt-injection case), automation expectations moved for
+  the two mails; ~40 mutations, each red (two first green, closed with
+  tests). Run live: the rebuilt reader OCRed the fixture scan (2 pages,
+  5–7 s, table rows as `|` cells like a sheet's, diacritics partly lost:
+  "DON" for "ĐƠN"). Fixed on the way: `test_purchasing_rfq_mails_db` tied on
+  `queued_at` and failed by uuid order about half the runs.
+
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
 2. The rest of Phase 1, each its own session: the Bravo layout learned from
-   Proterial's file; the outbox (RFQs from the buyer's mailbox); the DW2 attest lane.
-   Stored attachments are kept and read by nothing yet: the Excel PR form
-   and scanned paper read them, scanned by ClamAV first as Sales' are.
+   Proterial's file; the DW2 attest lane. The case page of a scan-read
+   request walked in a browser once a model runs locally (no model here, so
+   "DW2 đọc" answers 503); a live eval of `pr_mail_reading@1.1.0` on real
+   OCR text.
 3. The plant's flow (Đạt, 2026-11-02: set up and integrated later, prepared
    now): the one flow for every person, `DW-mail/<address>` in a private
    Team's SharePoint library (measured 2026-11-02), the plant PC's share at
@@ -435,8 +464,13 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   after the pages.
 - A supplier's reply is tied to its RFQ by the PR number it names, not by
   thread headers (the flow sends, so DW2 never holds the sent Message-ID).
-- The Excel PR form and scanned paper: the reader's registry is Sales' until
+- The Excel PR form and scanned paper are read through Sales' reader until
   it is split (ADR 0013 decision 2). Bravo as a source: no connection.
+- A phone photo of a paper request (JPEG/PNG) is not read: only a PDF scan
+  is OCRed. A scanner's own text layer (a "searchable PDF") is read as text,
+  not flagged as OCR, so such a case is not held for review by that rule.
+- A mail with two documents is a person's, even when one is a drawing.
+- A mail stored before 2026-11-03 has no reading: it is read from its words.
 - No offsets kept for a mail's spans (DW1 keeps anchors): the mailbox is the
   mock; anchors come with the mail drop's move (ADR 0013 decision 3).
 
@@ -466,3 +500,11 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   never past the mail outcomes'; Proterial's accountant sets it.
 - **Re-approval past the tier**: built (goes back at the tier its total
   names, tolerance 0 by default). Proterial to give the tolerance, if any.
+- **Paper requests** (2026-11-03): built as a PDF scan mailed to the buyer
+  (or the plant's copier mailing it), read by OCR and always held for a
+  person. Proterial to say how paper reaches Purchasing (copier to mail?
+  which sender: the copier's address must be the company's and pass
+  SPF/DKIM, else every scan goes to a person), whether phone photos must be
+  read, and a sample of their PR form (Excel and paper) to measure OCR on.
+  The requester of a forwarded scan is the forwarder (the verified sender),
+  not the name printed on the paper.

@@ -135,6 +135,7 @@ from dw_sales.adapters.persistence.activity import SqlStepOutcomeRetention
 from dw_sales.adapters.persistence.assistant import SqlAssistantRetention
 from dw_sales.adapters.policy_files import load_sales_policies
 from dw_sales.adapters.reader_client import (
+    ClientDocumentText,
     ClientMailReader,
     ClientSourceView,
     ClientTableReader,
@@ -221,7 +222,11 @@ from dw_worker.consumers.zalo_poll import build_zalo_poll_consumer
 from dw_worker.consumers.zalo_webhook import INTERVAL_SECONDS as ZALO_WEBHOOK_INTERVAL_SECONDS
 from dw_worker.consumers.zalo_webhook import build_zalo_webhook_consumer
 from dw_worker.health import beat
-from dw_worker.purchasing_reader import PurchasingMailReader, PurchasingWorkbookReader
+from dw_worker.purchasing_reader import (
+    PurchasingDocumentReader,
+    PurchasingMailReader,
+    PurchasingWorkbookReader,
+)
 from dw_worker.settings import WorkerSettings
 
 if TYPE_CHECKING:
@@ -526,18 +531,32 @@ def build_purchasing_mail_drop(
     named. It reads the one folder every DW shares, only the subfolders of
     the members holding `purchasing.request.intake`. Each `.eml` file is
     read in the reader sandbox through the client that exists
-    (`PurchasingMailReader`, ADR 0013 decision 2's interim). Runs
-    where deployed too: the stored mailbox is no mock, and DW2's API stays 503
-    there until its master data is real."""
+    (`PurchasingMailReader`, ADR 0013 decision 2's interim), and each of its
+    attachments scanned (the scanner the settings name, as Sales' files are)
+    and, a document, its text read there too, bounded by the order rules'
+    intake caps (`PurchasingDocumentReader`). Runs where deployed too: the
+    stored mailbox is no mock, and DW2's API stays 503 there until its master
+    data is real."""
     demo = settings.sales_demo_scope()
     folder = _purchasing_mail_drop_dir(settings)
     if demo is None or folder is None:
         return None
     scope = ContextScope(TenantId(demo[0]), WorkspaceId(demo[1]))
+    transport = sales_reader(settings)
+    caps = load_sales_policies(
+        REPO_ROOT / "configs" / "policies", REPO_ROOT / "configs" / "copy"
+    ).order_rules.intake
     drop = mail_drop(
         scope=scope,
         folder=folder,
-        reader=PurchasingMailReader(ClientMailReader(sales_reader(settings))),
+        reader=PurchasingMailReader(ClientMailReader(transport)),
+        scanner=malware_scanner(
+            settings.sales_malware_scan,
+            host=settings.sales_clamd_host,
+            port=settings.sales_clamd_port,
+            deployed=settings.is_deployed,
+        ),
+        documents=PurchasingDocumentReader(ClientDocumentText(transport, caps)),
         configs=REPO_ROOT / "configs",
         session_factory=sessions,
         audit=SqlAuditRepository,

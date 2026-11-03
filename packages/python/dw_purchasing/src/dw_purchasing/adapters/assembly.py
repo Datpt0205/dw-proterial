@@ -60,6 +60,8 @@ from dw_purchasing.application.automation import Automation, AutomationChecks, S
 from dw_purchasing.application.automation_lane import AutomationLane, ServiceAccessPort
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.mail_drop import (
+    AttachmentReader,
+    DocumentTextPort,
     MailDrop,
     MailDropNotices,
     MailFileReaderPort,
@@ -237,6 +239,8 @@ def mail_drop(
     scope: ContextScope,
     folder: Path,
     reader: MailFileReaderPort,
+    scanner: MalwareScanPort,
+    documents: DocumentTextPort,
     configs: Path,
     session_factory: async_sessionmaker[AsyncSession],
     audit: AuditFactory,
@@ -249,7 +253,9 @@ def mail_drop(
     `purchasing.request.intake` there (the people told when a file is
     refused), read into the stored mailbox through ``reader`` (the reader
     sandbox, as the composition root adapts it), files past the tenant's
-    mailbox term left unread."""
+    mailbox term left unread. Each attachment is scanned by ``scanner`` and,
+    a document, read by ``documents`` (the reader sandbox again) before its
+    mail is stored."""
     owners = HolderMailboxes(
         SqlScopeHolders(session_factory),
         scope.tenant_id.value,
@@ -262,6 +268,7 @@ def mail_drop(
         SqlPurchasingMailbox(session_factory, audit),
         RulesMailTerm(rule_book(configs, session_factory)),
         MailDropNotices(notices),
+        AttachmentReader(scanner, documents),
         clock,
         ids,
     )

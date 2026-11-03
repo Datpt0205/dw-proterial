@@ -1,5 +1,5 @@
-"""DW2's `MailFileReaderPort` and `WorkbookReaderPort` over the reader
-sandbox's client that exists.
+"""DW2's `MailFileReaderPort`, `WorkbookReaderPort` and `DocumentTextPort`
+over the reader sandbox's client that exists.
 
 ADR 0013 decision 2 makes the reader's mail operation the platform's; until
 that split, the client is Sales' (`dw_sales.adapters.reader_client`), and
@@ -15,9 +15,17 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from dw_kernel.errors import DomainError, InfrastructureError
+from dw_platform.domain.messages import AttachmentContent
 from dw_purchasing.application.mail_drop import MailFile, MailRefused
 from dw_purchasing.application.master_data import WorkbookUnreadableError
+from dw_purchasing.domain.attachments import (
+    MAX_PAGE_CHARS,
+    MAX_PAGES,
+    AttachmentPage,
+    AttachmentReading,
+)
 from dw_purchasing.domain.master_lists import CellValue, SheetRows, fold
+from dw_sales.adapters.reader_wire import DocumentText
 from dw_sales.application import mail_drop as sales
 from dw_sales.domain.master_data import ImportedTable
 
@@ -80,3 +88,44 @@ class PurchasingWorkbookReader:
                 raise
             raise WorkbookUnreadableError(str(refused)) from None
         return read
+
+
+class _SalesDocumentText(Protocol):
+    async def read(self, content: AttachmentContent) -> DocumentText | None: ...
+
+
+@dataclass(frozen=True)
+class PurchasingDocumentReader:
+    """Implements DW2's `DocumentTextPort` over the same client: each page or
+    sheet with its text, and whether OCR read it. A file that is no document
+    is `not_a_document`; one with no text, over the caps, given up on, or
+    whose text DW2 would have to cut (a page past `MAX_PAGE_CHARS`, more
+    than `MAX_PAGES`) is `unreadable`, never kept in part. An answer of
+    another reader version is `unreadable` too: asking again gets the same.
+    A reader that does not answer raises as it did."""
+
+    reader: _SalesDocumentText
+
+    async def read_text(self, content: AttachmentContent) -> AttachmentReading:
+        try:
+            read = await self.reader.read(content)
+        except InfrastructureError:
+            raise
+        except DomainError:
+            return AttachmentReading.refused("unreadable")
+        if read is not None and read.kind == "other":
+            return AttachmentReading.refused("not_a_document")
+        if (
+            read is None
+            or not read.parts
+            or len(read.parts) > MAX_PAGES
+            or any(len(part.text) > MAX_PAGE_CHARS for part in read.parts)
+        ):
+            return AttachmentReading.refused("unreadable")
+        ocr = set(read.ocr_pages)
+        return AttachmentReading(
+            pages=tuple(
+                AttachmentPage(text=part.text, ocr=part.page is not None and part.page in ocr)
+                for part in read.parts
+            )
+        )

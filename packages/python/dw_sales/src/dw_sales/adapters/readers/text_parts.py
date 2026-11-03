@@ -16,6 +16,11 @@ over the caps gives no text at all, and the request goes to a person.
 A sheet's text is its rows, top to bottom, each its visible cells left to
 right joined by `` | ``; every cell's place in that text is kept, so a value
 the model points at is anchored at its cell.
+
+**A scanned page, only where a caller asks** (`scanned_parts`, DW2's paper
+requests): each PDF page with no text layer read by OCR, its lines top to
+bottom, each line's cells joined by `` | `` as a sheet's row is. DW1's
+model steps still get no text from a scan.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ from pypdf import PdfReader
 from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.readers.documents import sniff
 from dw_sales.adapters.readers.excel import open_for_viewing, text_unseen
+from dw_sales.adapters.readers.ocr import OcrError, PageOcrPort
 from dw_sales.domain.order_checks import IntakeCaps
 from dw_sales.domain.rfq_reading import TextPart, normalised
 
@@ -82,6 +88,51 @@ def _pdf_parts(content: AttachmentContent, caps: IntakeCaps) -> list[TextPart]:
         return parts
     except Exception:  # any parser failure on a sender's file: no text
         return []
+
+
+def scanned_parts(
+    content: AttachmentContent, caps: IntakeCaps, ocr: PageOcrPort, read: set[int]
+) -> list[TextPart]:
+    """Each page of a PDF not in ``read`` (the pages with a text layer), read
+    by ``ocr`` (module docstring). An encrypted file, one over the caps or
+    one pypdf cannot open gives none; a page the engine cannot read is left
+    out."""
+    attachment = content.attachment
+    if attachment.size > caps.max_attachment_bytes:
+        return []
+    try:
+        pdf = PdfReader(io.BytesIO(content.data))
+        if pdf.is_encrypted or len(pdf.pages) > caps.max_pages:
+            return []
+        sizes = [
+            (number, float(page.mediabox.width), float(page.mediabox.height))
+            for number, page in enumerate(pdf.pages, start=1)
+        ]
+    except Exception:  # any parser failure on a sender's file: no text
+        return []
+    parts = []
+    for number, width, height in sizes:
+        if number in read:
+            continue
+        try:
+            page = ocr.page(content.data, number, (width, height))
+        except OcrError:
+            continue
+        rows = (
+            _CELL_JOIN.join(cell.text.replace("|", "/") for cell in line) for line in page.lines
+        )
+        text = _clean("\n".join(rows))
+        if text:
+            parts.append(
+                TextPart(
+                    part_id=f"{attachment.attachment_id}#p{number}",
+                    text=text,
+                    attachment_id=attachment.attachment_id,
+                    sha256=attachment.sha256,
+                    page=number,
+                )
+            )
+    return parts
 
 
 def _sheet_parts(content: AttachmentContent, caps: IntakeCaps) -> list[TextPart]:

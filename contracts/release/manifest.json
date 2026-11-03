@@ -108,11 +108,11 @@
       "dataset_id": "purchasing_automation",
       "files": [
         {
-          "checksum": "503036d9192a8ec544b7349b2cd591094ded66cd4d4bb27e0b5cdd71e001182b",
+          "checksum": "a4a9adc970c4006d7721293354b05e04f353b792b4a7b5474a6036e96492d40f",
           "path": "evals/expected/purchasing_automation.json"
         },
         {
-          "checksum": "85ec914fec9c50220b407fbdf5e2dcec0cf7596987462bb4fe3c41da2a72192b",
+          "checksum": "d46bf0aafa9a2452296bf364d9700595a8ece39b5c8259b2a6eebac44d7ae80e",
           "path": "evals/fixtures/cases/purchasing_pr_intake.json"
         }
       ],
@@ -138,30 +138,30 @@
       "dataset_id": "purchasing_pr_approval",
       "files": [
         {
-          "checksum": "5c1fc10df8776bc588f914355a8c81fb6af73a7679ab4c94ed2d2eafe24c7e16",
+          "checksum": "fab472ec4fadd0a2eea901e39c6d2fc90079fe7dc0f0309b4fb76f503e67848a",
           "path": "evals/expected/purchasing_pr_intake.json"
         },
         {
-          "checksum": "85ec914fec9c50220b407fbdf5e2dcec0cf7596987462bb4fe3c41da2a72192b",
+          "checksum": "d46bf0aafa9a2452296bf364d9700595a8ece39b5c8259b2a6eebac44d7ae80e",
           "path": "evals/fixtures/cases/purchasing_pr_intake.json"
         }
       ],
       "version": "1.0.0"
     },
     {
-      "checksum": "3b3e4016d96e127ac15646749a7e72169e939dfb71cb949515b443b09d5ee19a",
+      "checksum": "05ecc6ec90b5f8c934c6c98b6ae78ddeea55191fac0190d4a729710a8d99fff0",
       "dataset_id": "purchasing_pr_intake",
       "files": [
         {
-          "checksum": "5c1fc10df8776bc588f914355a8c81fb6af73a7679ab4c94ed2d2eafe24c7e16",
+          "checksum": "fab472ec4fadd0a2eea901e39c6d2fc90079fe7dc0f0309b4fb76f503e67848a",
           "path": "evals/expected/purchasing_pr_intake.json"
         },
         {
-          "checksum": "85ec914fec9c50220b407fbdf5e2dcec0cf7596987462bb4fe3c41da2a72192b",
+          "checksum": "d46bf0aafa9a2452296bf364d9700595a8ece39b5c8259b2a6eebac44d7ae80e",
           "path": "evals/fixtures/cases/purchasing_pr_intake.json"
         }
       ],
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "checksum": "f2a298b15aab6675a5a4a689ab92991b7fe04cb769153d2834ceeea63af48c7b",
@@ -751,7 +751,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "521e73621e12e1514b490771a475b356c12b5fa0",
+  "git_sha": "d12cc5710f2c1c3e0d51714e820dcf9f1774d8b7",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -989,6 +989,11 @@
       "checksum": "66a481c35d4488e9a499dd44e3a94a48be2db0a499a5c9b5bbbba1957cacdc07",
       "prompt_id": "purchasing.pr_mail_reading",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "f4c783700809b4d0799695e98b1b5b77bbe571223dca70150f8fba134249f595",
+      "prompt_id": "purchasing.pr_mail_reading",
+      "version": "1.1.0"
     },
     {
       "checksum": "5dc5749eff297fd6086ad43f3f089b9a47a094b3d4bb716cdd3a4c96234a9c66",

@@ -6,13 +6,25 @@
   case is opened, stamped with the rules it was received under.
 - **A mail** (`read_mail`): a person presses "DW2 đọc" on one message. The
   sender must be the company's (a domain the rules list) and verified by the
-  mail system, or a person reads it. Then the model reads the newest part into
-  spans (`sales` ADR 0005 as DW2 applies it, `domain.mail_reading`), code
-  keeps what it can find and parse, and the request is held to the same form
-  rules. A request opens a case; anything else goes to a person with a reason
-  code. Either way the mail is settled once: pressing again reads nothing.
-  No model, or no usable answer: nothing is recorded and the caller is told to
-  try again (503), never a guessed request.
+  mail system, or a person reads it. Then the model reads the newest part,
+  and the text of the one document attached when there is one (an Excel PR
+  form, a PDF, a scanned paper request read by OCR, as the mail drop kept it:
+  `domain.attachments`), into spans (`sales` ADR 0005 as DW2 applies it,
+  `domain.mail_reading`); code keeps what it can find and parse, and the
+  request is held to the same form rules. A request opens a case; anything
+  else goes to a person with a reason code. Either way the mail is settled
+  once: pressing again reads nothing. No model, or no usable answer: nothing
+  is recorded and the caller is told to try again (503), never a guessed
+  request.
+- **What a person reads instead of DW2**: a mail with an infected file
+  (``attachment_infected``), with more than one document
+  (``several_documents``: which is the request is not the model's to say),
+  or a document too long to show whole (``document_too_long``: a cut form
+  drops lines nobody knows are missing); none of them is shown to a model.
+  No request in a mail whose document DW2 could not read is
+  ``attachment_unreadable``, not "no PR number".
+- **A request read from a scan** waits for a person to compare it with the
+  paper (`Review`), whoever opened it: OCR misreads a digit without saying so.
 
 The model reads; code decides whether there is a request, who asked (the
 verified sender) and under which rules. Nothing a mail says is an instruction.
@@ -34,6 +46,7 @@ from dw_agent_runtime.model.interpretation import (
     ModelUnavailableError,
     PromptRef,
     cut_to_tokens,
+    estimated_tokens,
 )
 from dw_kernel.errors import ConflictError, DomainError, InfrastructureError, NotFoundError
 from dw_kernel.ids import TenantId, UserId, WorkspaceId
@@ -54,19 +67,28 @@ from dw_purchasing.domain.cases import (
     CaseStatus,
     PrSource,
     PurchaseCase,
+    ReadFrom,
     Review,
 )
-from dw_purchasing.domain.mail_reading import MAX_MAIL_LINES, ModelPrMail, read_pr_mail
+from dw_purchasing.domain.mail_reading import (
+    MAX_MAIL_LINES,
+    ModelPrMail,
+    ShownFile,
+    read_pr_mail,
+)
 from dw_purchasing.domain.requests import PurchaseRequest
 from dw_purchasing.domain.rules import PurchasingRules
 
 # The prompt DW2 reads a request in a mail with; its file is
-# `configs/prompts/purchasing/pr_mail_reading@1.0.0.yaml`, held to it by test.
-PR_MAIL_READING: Final = PromptRef("purchasing.pr_mail_reading", "1.0.0")
+# `configs/prompts/purchasing/pr_mail_reading@1.1.0.yaml`, held to it by test.
+PR_MAIL_READING: Final = PromptRef("purchasing.pr_mail_reading", "1.1.0")
 # About 60 tokens a line read, generously, and the header.
 _OUTPUT_TOKENS: Final = 80 * MAX_MAIL_LINES + 200
 # What the prompt's own words take, left out of the room for the mail.
 _PROMPT_TOKENS: Final = 1200
+# What a mail's own words keep when a file is shown beside them: its subject
+# and first lines, where a sender names the request.
+_MAIL_TOKENS: Final = 200
 NOT_READ_NOW: Final = "DW2 chưa đọc được thư lúc này: thử lại sau"
 _RESOURCE: Final = "purchase_case"
 _READ_SCOPES: Final = (PurchasingScopes.REQUEST_READ, PurchasingScopes.REQUEST_READ_OWN)
@@ -216,14 +238,21 @@ class PurchaseRequests:
             if (settled := await work.outcomes.get(message_id)) is not None:
                 return _item(message, settled)
         rules = await self.rules.resolve(context)
-        request, reason = await self._read(context, message, rules)
+        request, reason, read_from = await self._read(context, message, rules)
+        scanned = read_from is not None and read_from.scanned
         case = (
-            self._open(context, request, rules, source=PrSource.MAIL, source_ref=message_id)
+            self._open(
+                context,
+                request,
+                rules,
+                source=PrSource.MAIL,
+                source_ref=message_id,
+                read_from=read_from,
+                review=for_review or scanned,
+            )
             if request is not None
             else None
         )
-        if case is not None and for_review:
-            case = case.model_copy(update={"review": Review(asked_at=case.received_at)})
         outcome = MessageOutcome(
             message_id=message_id,
             disposition=Disposition.OPENED if case is not None else Disposition.TO_PERSON,
@@ -287,16 +316,33 @@ class PurchaseRequests:
 
     async def _read(
         self, context: AccessContext, message: InboundMessage, rules: PurchasingRules
-    ) -> tuple[PurchaseRequest | None, str | None]:
-        """The request a mail holds, or why there is none."""
+    ) -> tuple[PurchaseRequest | None, str | None, ReadFrom | None]:
+        """The request a mail holds and where it was read, or why there is none."""
         if message.sender.domain not in rules.internal_domains:
-            return None, "sender_not_internal"
+            return None, "sender_not_internal", None
         if not message.authentication.verified:
-            return None, "sender_unverified"
+            return None, "sender_unverified", None
+        readings = await self.inbox.attachment_readings(context, message.message_id)
+        if any(reading.not_read == "infected" for reading in readings.values()):
+            return None, "attachment_infected", None
+        documents = [
+            (attachment, reading)
+            for attachment in message.attachments
+            if (reading := readings.get(attachment.attachment_id)) is not None and reading.read
+        ]
+        if len(documents) > 1:
+            return None, "several_documents", None
         if self.model is None:
             raise InfrastructureError(NOT_READ_NOW, details={"reason_code": "no_model"})
         part = newest_part(message)
         room = self.model.max_input_tokens - _PROMPT_TOKENS - _OUTPUT_TOKENS
+        file: ShownFile | None = None
+        if documents:
+            text = documents[0][1].text
+            if estimated_tokens(text) > room - _MAIL_TOKENS:
+                return None, "document_too_long", None
+            room -= estimated_tokens(text)
+            file = ShownFile(text, scanned=documents[0][1].scanned)
         shown = cut_to_tokens(part.text, room)
         run = caller_run(
             context,
@@ -309,7 +355,7 @@ class PurchaseRequests:
         try:
             answer = await self.model.interpret(
                 PR_MAIL_READING,
-                {"mail": shown},
+                {"mail": shown, "attachment": file.text if file is not None else ""},
                 ModelPrMail,
                 run=run,
                 max_output_tokens=_OUTPUT_TOKENS,
@@ -319,15 +365,28 @@ class PurchaseRequests:
         verdict = read_pr_mail(
             shown,
             answer,
+            attachment=file,
             requester=message.sender.display_name or message.sender.address,
             received_on=message.received_at.date(),
             default_currency=rules.pr_form.default_currency,
         )
         if verdict.request is None:
-            return None, verdict.not_read
+            unread = any(reading.not_read == "unreadable" for reading in readings.values())
+            if verdict.not_read == "no_pr_number" and unread:
+                return None, "attachment_unreadable", None
+            return None, verdict.not_read, None
         if refusals := rules.refusals(verdict.request):
-            return None, refusals[0]
-        return verdict.request, None
+            return None, refusals[0], None
+        read_from = (
+            None
+            if file is None
+            else ReadFrom(
+                attachment_id=documents[0][0].attachment_id if verdict.from_file else None,
+                attachment=documents[0][0].name if verdict.from_file else None,
+                scanned=verdict.scanned,
+            )
+        )
+        return verdict.request, None, read_from
 
     def _open(
         self,
@@ -337,7 +396,10 @@ class PurchaseRequests:
         *,
         source: PrSource,
         source_ref: str | None,
+        read_from: ReadFrom | None = None,
+        review: bool = False,
     ) -> PurchaseCase:
+        now = self.clock.now()
         return PurchaseCase(
             case_id=self.ids.new_uuid(),
             case_version=1,
@@ -345,9 +407,11 @@ class PurchaseRequests:
             source=source,
             source_ref=source_ref,
             request=request,
-            received_at=self.clock.now(),
+            received_at=now,
             received_by=context.principal_id,
             rules_ref=rules.ref,
+            read_from=read_from,
+            review=Review(asked_at=now) if review else None,
         )
 
     def _audit(
@@ -366,17 +430,16 @@ class PurchaseRequests:
         )
 
     def _received(self, context: AccessContext, case: PurchaseCase) -> AuditEvent:
-        # Ids, the source and the rules only: no line, no amount.
-        return self._audit(
-            context,
-            "purchasing.request.received",
-            str(case.case_id),
-            {
-                "source": case.source.value,
-                "rules_ref": case.rules_ref,
-                "lines": len(case.request.lines),
-            },
-        )
+        # Ids, the source and the rules only: no line, no amount, no file name.
+        details: dict[str, object] = {
+            "source": case.source.value,
+            "rules_ref": case.rules_ref,
+            "lines": len(case.request.lines),
+        }
+        if (read := case.read_from) is not None:
+            details["read_from"] = "attachment" if read.attachment else "mail"
+            details["scanned"] = read.scanned
+        return self._audit(context, "purchasing.request.received", str(case.case_id), details)
 
     def _to_person(self, context: AccessContext, message_id: str, reason: str | None) -> AuditEvent:
         return self._audit(
