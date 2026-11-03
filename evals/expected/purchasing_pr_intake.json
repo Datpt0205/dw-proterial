@@ -25,6 +25,16 @@
     "P06": [
       "to_person",
       "missing:budget_code"
+    ],
+    "P07": [
+      "opened",
+      "PR-2611-013",
+      2
+    ],
+    "P08": [
+      "opened",
+      "PR-2611-014",
+      1
     ]
   },
   "missing_evidence": {
@@ -45,5 +55,36 @@
         "over_budget"
       ]
     ]
+  },
+  "attachment": {
+    "P07": {
+      "read_from": [
+        "PR-2611-013.xlsx",
+        false
+      ],
+      "review": false,
+      "status": "received",
+      "lines": [
+        "Găng tay chống cắt cấp 5 GT-C5",
+        "Băng keo cách điện 3M Temflex 1700 BK-1700"
+      ]
+    },
+    "P08": {
+      "read_from": [
+        "scan_0211.pdf",
+        true
+      ],
+      "review": true,
+      "status": "received",
+      "lines": [
+        "Khuôn ép đầu cos KE-16"
+      ]
+    },
+    "scan_quantity_corrected": "line_unreadable"
+  },
+  "attachment_injection": {
+    "disposition": "to_person",
+    "reason": "line_unreadable",
+    "cases": 0
   }
 }

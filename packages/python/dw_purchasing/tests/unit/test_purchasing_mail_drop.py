@@ -9,7 +9,7 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -20,18 +20,27 @@ from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import FixedClock, Uuid4Generator
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.drop_folder import DroppedFile
+from dw_platform.application.malware import ScanVerdict
 from dw_platform.application.rule_versions import ContextScope
 from dw_platform.domain.audit import AuditEvent
-from dw_platform.domain.messages import EmailAddress, InboundMessage
+from dw_platform.domain.messages import (
+    Attachment,
+    AttachmentContent,
+    EmailAddress,
+    InboundMessage,
+)
 from dw_purchasing.application.mail_drop import (
     MAIL_DROP_LANE,
+    MAX_DOCUMENTS,
     SETTLE,
+    AttachmentReader,
     DropTick,
     MailDrop,
     MailDropNotices,
     MailFile,
     MailRefused,
 )
+from dw_purchasing.domain.attachments import AttachmentPage, AttachmentReading
 
 pytestmark = pytest.mark.unit
 
@@ -42,7 +51,12 @@ SUBJECT = "Đề nghị mua 40 bộ găng tay chống cắt"
 BODY = "Kính gửi phòng Mua hàng, xin mua găng tay cho tổ ép."
 
 
-def _message(data: bytes, sender: str, internet_id: str | None = None) -> InboundMessage:
+def _message(
+    data: bytes,
+    sender: str,
+    internet_id: str | None = None,
+    attachments: Sequence[Attachment] = (),
+) -> InboundMessage:
     return InboundMessage(
         message_id="eml-" + hashlib.sha256(data).hexdigest(),
         internet_message_id=internet_id,
@@ -50,6 +64,17 @@ def _message(data: bytes, sender: str, internet_id: str | None = None) -> Inboun
         subject=SUBJECT,
         received_at=NOW,
         body_text=BODY,
+        attachments=list(attachments),
+    )
+
+
+def _attachment(name: str, media_type: str, data: bytes) -> Attachment:
+    return Attachment(
+        attachment_id=f"a-{name}",
+        name=name,
+        media_type=media_type,
+        size=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
     )
 
 
@@ -74,10 +99,14 @@ class Folder:
 
 
 class Reader:
-    """Reads ``b"from:<address>[|<Message-ID>]"``; anything else is refused."""
+    """Reads ``b"from:<address>[|<Message-ID>]"``, each mail carrying
+    ``files`` (name: media type, bytes); anything else is refused."""
 
-    def __init__(self, *, down: bool = False) -> None:
+    def __init__(
+        self, *, down: bool = False, files: dict[str, tuple[str, bytes]] | None = None
+    ) -> None:
         self.down = down
+        self.files = files or {}
         self.calls = 0
 
     async def read_mail(self, data: bytes) -> MailFile | MailRefused:
@@ -87,7 +116,41 @@ class Reader:
         if not data.startswith(b"from:"):
             return MailRefused("the mail names no sender")
         sender, _, internet_id = data[5:].decode().partition("|")
-        return MailFile(message=_message(data, sender, internet_id.strip() or None), contents={})
+        attachments = [_attachment(n, t, d) for n, (t, d) in self.files.items()]
+        message = _message(data, sender, internet_id.strip() or None, attachments)
+        contents = {a.attachment_id: self.files[a.name][1] for a in attachments}
+        return MailFile(message=message, contents=contents)
+
+
+class Scanner:
+    """`MalwareScanPort`: bytes starting ``EICAR`` are infected; ``down``
+    gives no answer."""
+
+    def __init__(self, *, down: bool = False) -> None:
+        self.down = down
+        self.scanned: list[bytes] = []
+
+    async def scan(self, data: bytes) -> ScanVerdict:
+        if self.down:
+            return ScanVerdict("unavailable", reason="clamd down")
+        self.scanned.append(data)
+        return ScanVerdict.infected("Eicar") if data.startswith(b"EICAR") else ScanVerdict.clean()
+
+
+class Documents:
+    """`DocumentTextPort`: a file's bytes are its text, ``SCAN`` ones read
+    by OCR; ``down`` raises as a reader that does not answer."""
+
+    def __init__(self, *, down: bool = False) -> None:
+        self.down = down
+        self.read: list[str] = []
+
+    async def read_text(self, content: AttachmentContent) -> AttachmentReading:
+        if self.down:
+            raise InfrastructureError("the reader gave no answer")
+        self.read.append(content.attachment.name)
+        text = content.data.decode()
+        return AttachmentReading(pages=(AttachmentPage(text=text, ocr=text.startswith("SCAN")),))
 
 
 class Store:
@@ -97,6 +160,7 @@ class Store:
     def __init__(self, handled: frozenset[str] = frozenset()) -> None:
         self.handled = set(handled)
         self.stored: dict[str, MailFile] = {}
+        self.readings: dict[str, dict[str, AttachmentReading]] = {}
         self.refused: dict[str, str] = {}
         self.events: list[AuditEvent] = []
 
@@ -108,8 +172,15 @@ class Store:
         self.refused[source] = reason
 
     async def store(
-        self, scope: ContextScope, mail: MailFile, *, source: str, event: AuditEvent
+        self,
+        scope: ContextScope,
+        mail: MailFile,
+        *,
+        readings: Mapping[str, AttachmentReading],
+        source: str,
+        event: AuditEvent,
     ) -> bool:
+        assert set(readings) == {a.attachment_id for a in mail.message.attachments}
         self.handled.add(source)
         message = mail.message
         twin = message.internet_message_id is not None and any(
@@ -120,6 +191,7 @@ class Store:
         if message.message_id in self.stored or twin:
             return False
         self.stored[message.message_id] = mail
+        self.readings[message.message_id] = dict(readings)
         self.events.append(event)
         return True
 
@@ -157,6 +229,8 @@ def _lane(
     notices: Notices | None = None,
     *,
     term: int | None = 365,
+    scanner: Scanner | None = None,
+    documents: Documents | None = None,
 ) -> MailDrop:
     return MailDrop(
         folder,
@@ -164,6 +238,7 @@ def _lane(
         store,
         Term(term),
         notices or Notices(),
+        AttachmentReader(scanner or Scanner(), documents or Documents()),
         FixedClock(NOW),
         Uuid4Generator(),
         max_bytes=64,
@@ -306,7 +381,14 @@ def test_rules_that_do_not_read_end_the_tick_with_nothing_read_or_marked() -> No
 
     folder, store = Folder({"1.eml": b"from:an@buyer.example"}), Store()
     lane = MailDrop(
-        folder, Reader(), store, Unreadable(None), Notices(), FixedClock(NOW), Uuid4Generator()
+        folder,
+        Reader(),
+        store,
+        Unreadable(None),
+        Notices(),
+        AttachmentReader(Scanner(), Documents()),
+        FixedClock(NOW),
+        Uuid4Generator(),
     )
     with pytest.raises(ValueError):
         _tick(lane)
@@ -332,6 +414,95 @@ def test_a_reader_that_does_not_answer_marks_nothing() -> None:
         _tick(_lane(folder, Reader(down=True), store))
     assert not store.handled
     assert _tick(_lane(folder, Reader(), store)).stored == ("1.eml",)
+
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def test_each_attachment_is_scanned_then_read_and_kept_beside_its_mail() -> None:
+    files = {"PR.xlsx": (XLSX, b"PR-12 | Kho"), "scan.pdf": ("application/pdf", b"SCAN PR-13")}
+    scanner, documents, store = Scanner(), Documents(), Store()
+    folder = Folder({"1.eml": b"from:an@buyer.example"})
+
+    tick = _tick(_lane(folder, Reader(files=files), store, scanner=scanner, documents=documents))
+
+    assert tick.stored == ("1.eml",)
+    assert scanner.scanned == [b"PR-12 | Kho", b"SCAN PR-13"]
+    (readings,) = store.readings.values()
+    assert readings["a-PR.xlsx"].text == "PR-12 | Kho" and not readings["a-PR.xlsx"].scanned
+    assert readings["a-scan.pdf"].scanned
+    (event,) = store.events
+    assert event.details["documents"] == 2 and event.details["infected"] == 0
+
+
+def test_an_infected_file_is_never_read_and_says_so() -> None:
+    files = {"PR.xlsx": (XLSX, b"EICAR-STANDARD")}
+    documents, store = Documents(), Store()
+    _tick(
+        _lane(
+            Folder({"1.eml": b"from:an@buyer.example"}),
+            Reader(files=files),
+            store,
+            documents=documents,
+        )
+    )
+    assert documents.read == []
+    (readings,) = store.readings.values()
+    assert readings["a-PR.xlsx"].not_read == "infected"
+    assert store.events[0].details["infected"] == 1
+
+
+def test_an_image_is_scanned_but_not_read_as_a_form() -> None:
+    files = {"logo.png": ("image/png", b"\x89PNG")}
+    scanner, documents, store = Scanner(), Documents(), Store()
+    _tick(
+        _lane(
+            Folder({"1.eml": b"from:an@buyer.example"}),
+            Reader(files=files),
+            store,
+            scanner=scanner,
+            documents=documents,
+        )
+    )
+    assert documents.read == [] and scanner.scanned == [b"\x89PNG"]
+    assert store.readings[next(iter(store.readings))]["a-logo.png"].not_read == "not_a_document"
+
+
+def test_past_the_documents_one_mail_is_read_for_the_rest_are_not_read() -> None:
+    files = {
+        f"{n}.pdf": ("application/pdf", f"page {n}".encode()) for n in range(MAX_DOCUMENTS + 1)
+    }
+    documents, store = Documents(), Store()
+    _tick(
+        _lane(
+            Folder({"1.eml": b"from:an@buyer.example"}),
+            Reader(files=files),
+            store,
+            documents=documents,
+        )
+    )
+    assert len(documents.read) == MAX_DOCUMENTS
+    (readings,) = store.readings.values()
+    assert [r.not_read for r in readings.values()].count("too_many") == 1
+
+
+@pytest.mark.parametrize("down", ["scanner", "reader"])
+def test_a_scanner_or_reader_that_does_not_answer_stores_nothing_unread(down: str) -> None:
+    """Never stored unscanned or unread: the file waits for the next tick."""
+    files = {"PR.xlsx": (XLSX, b"PR-12 | Kho")}
+    folder, store = Folder({"1.eml": b"from:an@buyer.example"}), Store()
+    with pytest.raises(InfrastructureError):
+        _tick(
+            _lane(
+                folder,
+                Reader(files=files),
+                store,
+                scanner=Scanner(down=down == "scanner"),
+                documents=Documents(down=down == "reader"),
+            )
+        )
+    assert not store.handled and not store.stored
+    assert _tick(_lane(folder, Reader(files=files), store)).stored == ("1.eml",)
 
 
 def test_no_word_of_a_mail_reaches_the_log(caplog: pytest.LogCaptureFixture) -> None:
@@ -404,6 +575,8 @@ def test_dw2_reads_only_the_folders_of_those_who_receive_requests(tmp_path: Path
         scope=SCOPE,
         folder=tmp_path,
         reader=Reader(),
+        scanner=Scanner(),
+        documents=Documents(),
         configs=REPO / "configs",
         session_factory=sessions,
         audit=lambda session: None,  # type: ignore[arg-type,return-value]

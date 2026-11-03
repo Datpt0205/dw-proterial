@@ -1,7 +1,7 @@
-"""DW2 reads an `.eml` file through the reader sandbox's client that exists
-(Sales'), adapted at the composition root (ADR 0013 decision 2, the interim):
-the answer is DW2's own type, a refusal keeps its reason, and a reader that
-does not answer still raises."""
+"""DW2 reads an `.eml` file, a workbook and an attachment's text through the
+reader sandbox's client that exists (Sales'), adapted at the composition root
+(ADR 0013 decision 2, the interim): the answer is DW2's own type, a refusal
+keeps its reason, and a reader that does not answer still raises."""
 
 from __future__ import annotations
 
@@ -10,11 +10,23 @@ from datetime import UTC, datetime
 
 import pytest
 
-from dw_kernel.errors import InfrastructureError
-from dw_platform.domain.messages import EmailAddress, InboundMessage
+from dw_kernel.errors import DomainError, InfrastructureError
+from dw_platform.domain.messages import (
+    Attachment,
+    AttachmentContent,
+    EmailAddress,
+    InboundMessage,
+)
 from dw_purchasing.application.mail_drop import MailFile, MailRefused
+from dw_purchasing.domain.attachments import MAX_PAGE_CHARS, MAX_PAGES, AttachmentReading
+from dw_sales.adapters.reader_wire import DocumentText
 from dw_sales.application import mail_drop as sales
-from dw_worker.purchasing_reader import PurchasingMailReader, PurchasingWorkbookReader
+from dw_sales.domain.rfq_reading import TextPart
+from dw_worker.purchasing_reader import (
+    PurchasingDocumentReader,
+    PurchasingMailReader,
+    PurchasingWorkbookReader,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -130,3 +142,74 @@ async def test_a_sheet_longer_than_the_reader_reads_is_refused_never_cut_short()
 
     with pytest.raises(WorkbookUnreadableError, match="quá nhiều dòng"):
         await PurchasingWorkbookReader(Names(), Tables()).sheets(b"x", ["Vật tư"])
+
+
+# ---------------------------------------------------------------- document --
+
+
+def _attached(data: bytes = b"%PDF-1.7 scan") -> AttachmentContent:
+    return AttachmentContent(
+        attachment=Attachment(
+            attachment_id="a1",
+            name="scan.pdf",
+            media_type="application/pdf",
+            size=len(data),
+            sha256=hashlib.sha256(data).hexdigest(),
+        ),
+        data=data,
+    )
+
+
+def _part(text: str, page: int | None) -> TextPart:
+    return TextPart(
+        part_id=f"a1#p{page}", text=text, attachment_id="a1", sha256="0" * 64, page=page
+    )
+
+
+class SalesDocuments:
+    def __init__(self, answer: DocumentText | Exception | None) -> None:
+        self.answer = answer
+
+    async def read(self, content: AttachmentContent) -> DocumentText | None:
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+async def _text(answer: DocumentText | Exception | None) -> AttachmentReading:
+    return await PurchasingDocumentReader(SalesDocuments(answer)).read_text(_attached())
+
+
+async def test_a_document_s_pages_keep_which_were_read_by_ocr() -> None:
+    read = await _text(
+        DocumentText(kind="pdf", parts=[_part("PR-1", 1), _part("Dòng 1", 2)], ocr_pages=[2])
+    )
+    assert [(p.text, p.ocr) for p in read.pages] == [("PR-1", False), ("Dòng 1", True)]
+    assert read.scanned
+
+
+@pytest.mark.parametrize(
+    ("answer", "reason"),
+    [
+        (DocumentText(kind="other", parts=[]), "not_a_document"),
+        (DocumentText(kind="pdf", parts=[]), "unreadable"),
+        (None, "unreadable"),
+        (DocumentText(kind="pdf", parts=[_part("x" * (MAX_PAGE_CHARS + 1), 1)]), "unreadable"),
+        (
+            DocumentText(kind="pdf", parts=[_part("x", n) for n in range(1, MAX_PAGES + 2)]),
+            "unreadable",
+        ),
+        (DomainError("the reader's answer does not fit this version"), "unreadable"),
+    ],
+)
+async def test_a_document_dw2_cannot_keep_whole_is_not_read_with_why(
+    answer: DocumentText | Exception | None, reason: str
+) -> None:
+    """Never a page cut short or a page left out: a form read in part leaves
+    out lines nobody knows are missing."""
+    assert (await _text(answer)).not_read == reason
+
+
+async def test_a_reader_that_does_not_answer_the_document_still_raises() -> None:
+    with pytest.raises(InfrastructureError):
+        await _text(InfrastructureError("the reader gave no answer"))

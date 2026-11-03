@@ -11,6 +11,7 @@ import {
   Flex,
   Skeleton,
   Table,
+  Tag,
   Tooltip,
   Typography,
 } from "antd";
@@ -198,7 +199,9 @@ function NextStep({
   let body: React.ReactNode = null;
   let say = "";
   if (c.status === "received" && reviewPending) {
-    say = "DW2 đọc yêu cầu này từ thư: xem lại các dòng hàng.";
+    say = c.read_from?.scanned
+      ? "DW2 đọc yêu cầu này từ bản scan: so từng dòng với bản giấy."
+      : "DW2 đọc yêu cầu này từ thư: xem lại các dòng hàng.";
     body = button(
       "review",
       "Đã xem, cho DW2 gửi duyệt",
@@ -348,14 +351,22 @@ function RequestLines({ c }: { c: PurchaseCase }) {
   // Only a mail's lines are the model's reading as they stand: a requester
   // pressed "Gửi" on what they saw, a form was typed.
   const read = c.source === "mail";
+  const file = c.read_from?.attachment;
+  const scanned = c.read_from?.scanned === true;
   return (
     <Flex vertical gap={8}>
       {read ? (
         <Flex gap={8} align="center" wrap>
           <MarkTag
             mark="machine_read"
-            tip="DW2 đọc các dòng này từ thư; mỗi giá trị có trong thư gốc."
+            tip={
+              scanned
+                ? "DW2 đọc các dòng này từ bản scan bằng máy đọc chữ (OCR), có thể đọc sai một chữ số. Mỗi giá trị có trong bản scan."
+                : "DW2 đọc các dòng này từ thư; mỗi giá trị có trong thư gốc."
+            }
           />
+          {scanned ? <Tag>Bản scan</Tag> : null}
+          {file ? <Typography.Text>Từ tệp {file}.</Typography.Text> : null}
           <Typography.Text>
             {c.review?.reviewed_at
               ? "Đã có người xem lại."

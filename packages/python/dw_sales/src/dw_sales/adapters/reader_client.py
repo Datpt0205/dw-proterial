@@ -53,6 +53,7 @@ from dw_kernel.errors import DomainError, InfrastructureError
 from dw_platform.domain.messages import AttachmentContent
 from dw_sales.adapters.formats import refusal, sniff
 from dw_sales.adapters.reader_wire import (
+    DocumentText,
     MailRead,
     PdfPage,
     ReaderArgs,
@@ -336,6 +337,29 @@ class ClientTexts:
             return ()
         parts: list[TextPart] = _value(operation, reply)
         return tuple(parts)
+
+
+@dataclass(frozen=True)
+class ClientDocumentText:
+    """A document's text for a model to read, over the reader
+    (``text.document``: DW2's PR forms and scanned requests, through the
+    worker's adapter). None for a file over the caps or one the reader gave
+    up on; a reader that does not answer raises, as every client here."""
+
+    transport: ReaderTransport
+    caps: IntakeCaps
+
+    async def read(self, content: AttachmentContent) -> DocumentText | None:
+        if content.attachment.size > self.caps.max_attachment_bytes:
+            return None
+        operation = ReaderOp.TEXT_DOCUMENT
+        reply = await _ask(
+            self.transport, operation, content=content, args=ReaderArgs(caps=self.caps)
+        )
+        if _failed(operation, reply):
+            return None
+        document: DocumentText = _value(operation, reply)
+        return document
 
 
 @dataclass(frozen=True)

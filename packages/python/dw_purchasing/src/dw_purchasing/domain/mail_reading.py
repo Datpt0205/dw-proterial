@@ -7,7 +7,10 @@ shown, parses every value from its span, and decides whether the mail is a
 request at all.
 
 **What the model is shown**: the message's newest part (subject first, quoted
-history cut by structure, `dw_platform.domain.mail_parts.newest_part`).
+history cut by structure, `dw_platform.domain.mail_parts.newest_part`), and
+the text of the one document attached to it when there is one (`ShownFile`:
+an Excel form's visible cells, a PDF's text, a scanned page read by OCR, as
+the mail drop kept it, `domain.attachments`).
 
 **What the model gives** (`ModelPrMail`): spans only. The PR number, the
 department, the budget code, the currency and a need-by date for the whole
@@ -29,6 +32,12 @@ date. Never a parsed value, a requester, a supplier or a decision.
    (``span_not_found``): a value the mail does not hold is an invented one.
 5. The requester is the verified sender (the caller's), never the model's.
    A currency nobody wrote is the tenant's default, a rule.
+6. With a file shown, a value may be in the mail or the file, but every line
+   comes from one of them, each found once there: a request is not stitched
+   from two places. Where both hold every line (a mail that copies its form),
+   the mail's text is read. A reading that takes any value only a scanned
+   page holds is `scanned`: OCR misreads a digit without saying so, so a
+   person compares it with the paper before DW2 sends it on.
 """
 
 from __future__ import annotations
@@ -85,10 +94,23 @@ class ModelPrMail(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class PrMailVerdict:
-    """The request, or why there is none (a code: it names no word of the mail)."""
+    """The request, or why there is none (a code: it names no word of the
+    mail). ``from_file``: its lines were read from the attached file;
+    ``scanned``: a value it holds was read only on a scanned page."""
 
     request: PurchaseRequest | None
     not_read: str | None
+    from_file: bool = False
+    scanned: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ShownFile:
+    """The text of the file shown beside the mail, exactly as shown, and
+    whether any of it was read by OCR."""
+
+    text: str
+    scanned: bool
 
 
 def fold(text: str) -> str:
@@ -185,30 +207,58 @@ class _UnreadError(Exception):
 
 
 class _Mail:
-    def __init__(self, text: str) -> None:
-        self.folded = fold(text)
+    """What the model was shown: the mail's text first, then the file's.
+    ``scanned`` records whether a value was taken only from a scanned text."""
+
+    def __init__(self, text: str, file: ShownFile | None = None) -> None:
+        shown = [(text, False)] + ([(file.text, file.scanned)] if file is not None else [])
+        self.sources = [(fold(t), scanned) for t, scanned in shown]
+        self.scanned = False
 
     def holds(self, span: str | None, *, within: str | None = None) -> bool:
-        haystack = within if within is not None else self.folded
-        return span is None or bool(occurrences(haystack, fold(span)))
+        if span is None:
+            return True
+        needle = fold(span)
+        if within is not None:
+            return bool(occurrences(within, needle))
+        found = [scanned for haystack, scanned in self.sources if occurrences(haystack, needle)]
+        if found and all(found):
+            self.scanned = True
+        return bool(found)
 
     def require(self, span: str | None, reason: str, *, within: str | None = None) -> str:
         if span is None or not self.holds(span, within=within):
             raise _UnreadError(reason)
         return " ".join(span.split())
 
+    def lines_source(self, folded_lines: list[str]) -> int:
+        """The first text holding every line exactly once, a text with no
+        OCR before one with (rule 6); refused when none does."""
+        holding = [
+            index
+            for index, (haystack, _) in enumerate(self.sources)
+            if all(len(occurrences(haystack, line)) == 1 for line in folded_lines)
+        ]
+        if not holding:
+            raise _UnreadError("line_unreadable")
+        index = min(holding, key=lambda i: self.sources[i][1])
+        self.scanned = self.scanned or self.sources[index][1]
+        return index
+
 
 def read_pr_mail(
     text: str,
     answer: ModelPrMail,
     *,
+    attachment: ShownFile | None = None,
     requester: str,
     received_on: date,
     default_currency: str,
 ) -> PrMailVerdict:
-    """What code accepts of one answer (module docstring). ``text`` is what
-    the model was shown; ``requester`` the verified sender's name."""
-    mail = _Mail(text)
+    """What code accepts of one answer (module docstring). ``text`` and
+    ``attachment`` are what the model was shown; ``requester`` the verified
+    sender's name."""
+    mail = _Mail(text, attachment)
     try:
         if answer.pr_no_span is None:
             raise _UnreadError("no_pr_number")
@@ -229,7 +279,7 @@ def read_pr_mail(
             need_by = parse_date(answer.need_by_span, received_on=received_on)
             if need_by is None:
                 raise _UnreadError("need_by_unreadable")
-        lines = _lines(mail, answer, received_on)
+        lines, source = _lines(mail, answer, received_on)
         request = PurchaseRequest(
             pr_no=pr_no,
             department=department[:80],
@@ -247,19 +297,19 @@ def read_pr_mail(
         # A value found in the mail that is no value of its kind (a budget
         # code with a space, a line past the limit).
         return PrMailVerdict(None, "value_malformed")
-    return PrMailVerdict(request, None)
+    return PrMailVerdict(request, None, from_file=source > 0, scanned=mail.scanned)
 
 
-def _lines(mail: _Mail, answer: ModelPrMail, received_on: date) -> tuple[PrLine, ...]:
+def _lines(mail: _Mail, answer: ModelPrMail, received_on: date) -> tuple[tuple[PrLine, ...], int]:
+    """The lines, and which text shown they were read from (0: the mail)."""
     if not answer.lines or len(answer.lines) > MAX_LINES:
         raise _UnreadError("no_lines")
-    seen: set[str] = set()
+    folded_lines = [fold(line.line_span) for line in answer.lines]
+    if len(set(folded_lines)) != len(folded_lines):
+        raise _UnreadError("line_unreadable")
+    source = mail.lines_source(folded_lines)
     lines: list[PrLine] = []
-    for number, line in enumerate(answer.lines, start=1):
-        folded = fold(line.line_span)
-        if folded in seen or len(occurrences(mail.folded, folded)) != 1:
-            raise _UnreadError("line_unreadable")
-        seen.add(folded)
+    for number, (line, folded) in enumerate(zip(answer.lines, folded_lines, strict=True), start=1):
         description = mail.require(line.description_span, "line_unreadable", within=folded)
         quantity_span = mail.require(line.quantity_span, "line_unreadable", within=folded)
         unit = mail.require(line.unit_span, "line_unreadable", within=folded).rstrip(".")
@@ -284,7 +334,7 @@ def _lines(mail: _Mail, answer: ModelPrMail, received_on: date) -> tuple[PrLine,
                 need_by=need_by,
             )
         )
-    return tuple(lines)
+    return tuple(lines), source
 
 
 class RequestDraft(BaseModel):
@@ -330,7 +380,7 @@ def read_pr_words(
             if need_by is None:
                 raise _UnreadError("need_by_unreadable")
         draft = RequestDraft(
-            lines=_lines(words, answer, received_on),
+            lines=_lines(words, answer, received_on)[0],
             currency=currency,
             need_by=need_by,
             budget_code=(

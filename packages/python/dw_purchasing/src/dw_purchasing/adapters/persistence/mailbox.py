@@ -8,15 +8,15 @@ workspace's mail from another, and nothing here names a tenant beyond
 binding the scope.
 
 A message is stored whole, as its model dumps it, and read back through the
-same model: no field is named here twice. Its attachments' bytes are kept
-beside it for the steps that will read them (the Excel PR form, a scanned
-request); nothing reads them yet, and a file the lane has handled is not read
-again, so what is not kept now is lost.
+same model: no field is named here twice. Each attachment's bytes are kept
+beside it with what the lane read of it (`AttachmentReading`, migration
+2ba8d9cc436c), the text every reader of the mail takes; an infected file's
+bytes are not kept (a CHECK says so too).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -31,6 +31,7 @@ from dw_platform.domain.audit import AuditEvent
 from dw_platform.domain.messages import InboundMessage
 from dw_purchasing.adapters.persistence.store import AuditFactory, metadata
 from dw_purchasing.application.mail_drop import MailFile
+from dw_purchasing.domain.attachments import AttachmentReading
 
 _TS = sa.TIMESTAMP(timezone=True)
 
@@ -58,6 +59,8 @@ mailbox_attachments = sa.Table(
     sa.Column("attachment_id", sa.Text, primary_key=True),
     sa.Column("content", sa.LargeBinary, nullable=False),
     sa.Column("stored_at", _TS, nullable=False, server_default=sa.func.now()),
+    # NULL: stored before attachments were read (2ba8d9cc436c).
+    sa.Column("reading", JSONB),
 )
 
 # Every file the drop lane handled and what became of it, so a restart does
@@ -108,6 +111,19 @@ class SqlPurchasingMailbox:
             document = await s.scalar(sa.select(_M.c.message).where(_M.c.message_id == message_id))
         return None if document is None else InboundMessage.model_validate(document)
 
+    async def attachment_readings(
+        self, context: AccessContext, message_id: str
+    ) -> Mapping[str, AttachmentReading]:
+        async with tenant_session(self.session_factory, _bound(ContextScope.of(context))) as s:
+            rows = await s.execute(
+                sa.select(_A.c.attachment_id, _A.c.reading).where(
+                    _A.c.message_id == message_id, _A.c.reading.is_not(None)
+                )
+            )
+            return {
+                row.attachment_id: AttachmentReading.model_validate(row.reading) for row in rows
+            }
+
     # -------------------------------------------------------- MailStorePort --
 
     async def handled_sources(self, scope: ContextScope) -> frozenset[str]:
@@ -123,7 +139,13 @@ class SqlPurchasingMailbox:
             )
 
     async def store(
-        self, scope: ContextScope, mail: MailFile, *, source: str, event: AuditEvent
+        self,
+        scope: ContextScope,
+        mail: MailFile,
+        *,
+        readings: Mapping[str, AttachmentReading],
+        source: str,
+        event: AuditEvent,
     ) -> bool:
         message = mail.message
         async with tenant_session(self.session_factory, _bound(scope)) as session:
@@ -182,7 +204,11 @@ class SqlPurchasingMailbox:
                             "message_id": message.message_id,
                             "received_at": message.received_at,
                             "attachment_id": attachment.attachment_id,
-                            "content": mail.contents[attachment.attachment_id],
+                            "content": b""
+                            if (reading := readings[attachment.attachment_id]).not_read
+                            == "infected"
+                            else mail.contents[attachment.attachment_id],
+                            "reading": reading.model_dump(mode="json"),
                         }
                         for attachment in message.attachments
                     ],

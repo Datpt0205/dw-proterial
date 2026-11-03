@@ -69,6 +69,9 @@ class ReaderOp(StrEnum):
     TABLE_ROWS = "table.rows"
     # An `.eml` file as the mailbox holds it (ticket 43).
     MAIL_READ = "mail.read"
+    # A document's text for a model to read, a scanned page by OCR: DW2's
+    # PR forms (ADR 0013 decision 2's interim: the reader is still Sales').
+    TEXT_DOCUMENT = "text.document"
 
 
 class ReaderArgs(BaseModel):
@@ -185,6 +188,18 @@ class MailRead(BaseModel):
     contents: dict[str, str]
 
 
+class DocumentText(BaseModel):
+    """A document's text (``text.document``): each page or sheet that has
+    any, the pages OCR read, and what the file is by its bytes (``other``:
+    no document a reader opens, an image or an archive)."""
+
+    model_config = _WIRE
+
+    kind: Literal["pdf", "xlsx", "xls", "doc", "other"]
+    parts: list[TextPart]
+    ocr_pages: list[int] = Field(default_factory=list)
+
+
 # What each operation returns: the one table both sides validate against.
 RESULTS: Final[Mapping[ReaderOp, TypeAdapter[Any]]] = MappingProxyType(
     {
@@ -203,5 +218,6 @@ RESULTS: Final[Mapping[ReaderOp, TypeAdapter[Any]]] = MappingProxyType(
         ReaderOp.SOURCE_SHEET_GRID: TypeAdapter(SheetGrid | None),
         ReaderOp.TABLE_ROWS: TypeAdapter(ImportedTable),
         ReaderOp.MAIL_READ: TypeAdapter(MailRead),
+        ReaderOp.TEXT_DOCUMENT: TypeAdapter(DocumentText),
     }
 )

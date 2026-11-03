@@ -184,8 +184,9 @@ class Directory:
 
 @dataclass
 class ScriptedModel:
-    """`InterpretationPort` answering by the first key found in the mail;
-    ``failure`` raised instead when set. Every call is kept."""
+    """`InterpretationPort` answering by the first key found in any input
+    (the mail, or the file beside it); ``failure`` raised instead when set.
+    Every call is kept."""
 
     answers: Mapping[str, Mapping[str, Any]]
     failure: Exception | None = None
@@ -209,7 +210,7 @@ class ScriptedModel:
         self.calls.append((prompt, inputs, run))
         if self.failure is not None:
             raise self.failure
-        text = next(iter(inputs.values()))
+        text = "\n".join(inputs.values())
         for key, answer in self.by_schema.get(schema.__name__, self.answers).items():
             if key in text:
                 return schema.model_validate(answer)

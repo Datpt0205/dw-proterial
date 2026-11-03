@@ -1109,7 +1109,8 @@ export interface components {
         /**
          * PrSource
          * @description Where the request came from (DW02: email, Bravo, form, scanned paper;
-         *     this slice reads the first and the third).
+         *     a mail's own words, its Excel form or its scanned paper are all `mail`,
+         *     `ReadFrom` saying which).
          * @enum {string}
          */
         PrSource: "form" | "mail" | "requester";
@@ -1138,6 +1139,7 @@ export interface components {
              */
             offers: components["schemas"]["Offer"][];
             po?: components["schemas"]["PoRound"] | null;
+            read_from?: components["schemas"]["ReadFrom"] | null;
             reapproval?: components["schemas"]["Reapproval"] | null;
             /**
              * Received At
@@ -1328,6 +1330,22 @@ export interface components {
             versions: components["schemas"]["PurchasingRuleVersionView"][];
         };
         /**
+         * ReadFrom
+         * @description Where in a mail DW2 read the request, when a document was attached:
+         *     the file's name when the lines were in it (None: the mail's own words),
+         *     and whether any value was read only on a scanned page, which a person
+         *     compares with the paper before DW2 sends it on (`review`).
+         */
+        ReadFrom: {
+            /** Attachment */
+            attachment?: string | null;
+            /**
+             * Scanned
+             * @default false
+             */
+            scanned: boolean;
+        };
+        /**
          * Reapproval
          * @description A choice of suppliers whose total passed what the approver's tier
          *     decides (plus the tenant's tolerance), sent to the tier that total names:
@@ -1394,7 +1412,8 @@ export interface components {
         };
         /**
          * Review
-         * @description A case DW2 opened on its own that a person is to look over first.
+         * @description A case DW2 opened on its own, or read from a scan, that a person is to
+         *     look over first.
          */
         Review: {
             /**

@@ -98,6 +98,10 @@ export const MAIL_REASON: Record<string, string> = {
   no_lines: "thư không có dòng hàng nào",
   too_many_lines: "thư có nhiều dòng hàng hơn quy tắc cho phép",
   currency_not_allowed: "loại tiền quy tắc không cho phép",
+  attachment_infected: "tệp đính kèm có mã độc",
+  several_documents: "thư có nhiều tệp tài liệu",
+  document_too_long: "tệp đính kèm quá dài để đọc trọn",
+  attachment_unreadable: "DW2 không đọc được tệp đính kèm",
 };
 
 /** Where a value or a text came from: a machine's never reads as a person's. */

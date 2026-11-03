@@ -10933,7 +10933,7 @@
         "type": "object"
       },
       "PrSource": {
-        "description": "Where the request came from (DW02: email, Bravo, form, scanned paper;\nthis slice reads the first and the third).",
+        "description": "Where the request came from (DW02: email, Bravo, form, scanned paper;\na mail's own words, its Excel form or its scanned paper are all `mail`,\n`ReadFrom` saying which).",
         "enum": [
           "form",
           "mail",
@@ -11643,6 +11643,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PoRound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "read_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadFrom"
               },
               {
                 "type": "null"
@@ -13199,6 +13209,32 @@
         "title": "QuoteSummaryView",
         "type": "object"
       },
+      "ReadFrom": {
+        "additionalProperties": false,
+        "description": "Where in a mail DW2 read the request, when a document was attached:\nthe file's name when the lines were in it (None: the mail's own words),\nand whether any value was read only on a scanned page, which a person\ncompares with the paper before DW2 sends it on (`review`).",
+        "properties": {
+          "attachment": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment"
+          },
+          "scanned": {
+            "default": false,
+            "title": "Scanned",
+            "type": "boolean"
+          }
+        },
+        "title": "ReadFrom",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "properties": {
           "checks": {
@@ -13830,7 +13866,7 @@
       },
       "Review": {
         "additionalProperties": false,
-        "description": "A case DW2 opened on its own that a person is to look over first.",
+        "description": "A case DW2 opened on its own, or read from a scan, that a person is to\nlook over first.",
         "properties": {
           "asked_at": {
             "format": "date-time",

@@ -14,6 +14,8 @@ from dw_purchasing.adapters.policy_files import PolicyFiles, load_rules
 from dw_purchasing.application.intake import PR_MAIL_READING
 from dw_purchasing.domain.mail_reading import (
     ModelPrMail,
+    PrMailVerdict,
+    ShownFile,
     fold,
     parse_currency,
     parse_date,
@@ -111,6 +113,69 @@ def test_the_same_line_twice_refuses_the_request() -> None:
     assert _read("PR-12 Kho\nDây AWG24, 12 cuộn", _answer(lines=[line, line])) == "line_unreadable"
 
 
+FORM = "Số PR | PR-12\nBộ phận | Kho\nDây AWG24 | 12 | cuộn"
+FORM_LINE = {
+    "line_span": "Dây AWG24 | 12 | cuộn",
+    "item_code_span": None,
+    "description_span": "Dây AWG24",
+    "quantity_span": "12",
+    "unit_span": "cuộn",
+    "need_by_span": None,
+}
+
+
+def _read_with(
+    text: str, answer: ModelPrMail, file: str, *, scanned: bool = False
+) -> PrMailVerdict:
+    return read_pr_mail(
+        text,
+        answer,
+        attachment=ShownFile(file, scanned=scanned),
+        requester="Lan",
+        received_on=ARRIVED,
+        default_currency="VND",
+    )
+
+
+def test_a_request_in_the_attached_form_is_read_from_its_cells() -> None:
+    verdict = _read_with("PR đính kèm", _answer(lines=[FORM_LINE]), FORM)
+    assert verdict.request is not None and verdict.from_file and not verdict.scanned
+    assert [(line.description, line.quantity) for line in verdict.request.lines] == [
+        ("Dây AWG24", Decimal(12))
+    ]
+
+
+def test_a_value_in_neither_the_mail_nor_the_file_is_refused() -> None:
+    invented = _answer(lines=[FORM_LINE], budget_code_span="CC-01")
+    assert _read_with("PR đính kèm", invented, FORM).not_read == "span_not_found"
+
+
+def test_every_line_comes_from_one_place() -> None:
+    # One line in the mail, the other in the file: two halves of nobody's request.
+    second = {**FORM_LINE, "line_span": "Dây AWG26, 3 cuộn", "description_span": "Dây AWG26"}
+    second["quantity_span"] = "3"
+    answer = _answer(lines=[FORM_LINE, second])
+    assert _read_with("PR-12 Kho\nDây AWG26, 3 cuộn", answer, FORM).not_read == "line_unreadable"
+
+
+def test_a_mail_copying_its_file_reads_the_mail_s_text() -> None:
+    copy = "PR-12 Kho\nDây AWG24 | 12 | cuộn"
+    verdict = _read_with(copy, _answer(lines=[FORM_LINE]), FORM, scanned=True)
+    assert verdict.request is not None and not verdict.from_file and not verdict.scanned
+
+
+def test_a_value_only_a_scan_holds_marks_the_reading_scanned() -> None:
+    verdict = _read_with("PR đính kèm", _answer(lines=[FORM_LINE]), FORM, scanned=True)
+    assert verdict.request is not None and verdict.from_file and verdict.scanned
+    # The number and department in the mail, the lines only on the scan.
+    verdict = _read_with("PR-12 Kho", _answer(lines=[FORM_LINE]), FORM, scanned=True)
+    assert verdict.request is not None and verdict.from_file and verdict.scanned
+    # The lines in the mail, the number only on the scan: still the scan's word.
+    text = "Kho\nDây AWG24 | 12 | cuộn"
+    verdict = _read_with(text, _answer(lines=[FORM_LINE]), FORM, scanned=True)
+    assert verdict.request is not None and not verdict.from_file and verdict.scanned
+
+
 def test_comparison_folds_case_width_and_spaces() -> None:
     wide = "".join(chr(0xFEE0 + ord(c)) for c in "PR-12")  # full-width, as an IME types it
     assert fold(f"{wide}  Kho") == fold("pr-12 kho")
@@ -123,7 +188,7 @@ def test_the_prompt_file_is_the_one_the_step_names() -> None:
         PR_MAIL_READING.prompt_id,
         PR_MAIL_READING.version,
     )
-    assert raw["variables"] == ["mail"]
+    assert raw["variables"] == ["mail", "attachment"]
 
 
 def test_the_worker_config_names_the_worker_dw2_records_its_calls_under() -> None:

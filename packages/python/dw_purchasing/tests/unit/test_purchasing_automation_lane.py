@@ -79,10 +79,17 @@ async def test_measured_reading_opens_and_sends_each_request_and_tells_its_appro
     tick = await _lane(world, notices).tick(*ALPHA)
 
     sent = _cases(world, CaseStatus.AWAITING_APPROVAL)
-    assert {c.request.pr_no for c in sent} == {"PR-2611-004", "PR-2611-009"}
+    # PR-2611-013 was read from its Excel form.
+    assert {c.request.pr_no for c in sent} == {"PR-2611-004", "PR-2611-009", "PR-2611-013"}
     assert all(c.received_by == DW2 and c.review is None for c in sent)
     asked = [k for k in notices.told if k.startswith("purchasing.approval.asked:")]
-    assert len(asked) == 2
+    assert len(asked) == 3
+    # A request read from a scan waits for a person even at "AI tự làm".
+    (scanned,) = _cases(world, CaseStatus.RECEIVED)
+    assert scanned.request.pr_no == "PR-2611-014"
+    assert scanned.review is not None and scanned.review.pending
+    review = notices.told[f"purchasing.case.review:{scanned.case_id}"]
+    assert "bản scan" in review[3]
     # The approver is told; who made the request (here DW2's account, which
     # received and sent it) is never asked to approve it.
     assert all(DW2 in notices.told[k][2] for k in asked)
@@ -96,7 +103,7 @@ async def test_measured_reading_opens_and_sends_each_request_and_tells_its_appro
     outcomes = world.store.rows(*ALPHA).outcomes
     assert {m for m in outcomes if m.startswith("Q")} == {"Q04"}
     actions = [e.action for e in world.store.rows(*ALPHA).audit if e.actor_id.value != DW2]
-    assert actions.count("purchasing.automation.submitted") == 2
+    assert actions.count("purchasing.automation.submitted") == 3
     assert any("submitted" in d for d in tick.done)
 
 
@@ -105,9 +112,9 @@ async def test_unmeasured_reading_waits_for_a_person_before_it_is_sent() -> None
     await _lane(world, notices).tick(*ALPHA)
 
     received = _cases(world, CaseStatus.RECEIVED)
-    assert len(received) == 2 and all(c.review is not None and c.review.pending for c in received)
+    assert len(received) == 4 and all(c.review is not None and c.review.pending for c in received)
     assert _cases(world, CaseStatus.AWAITING_APPROVAL) == []
-    assert len([k for k in notices.told if k.startswith("purchasing.case.review:")]) == 2
+    assert len([k for k in notices.told if k.startswith("purchasing.case.review:")]) == 4
     one = received[0]
     await world.service.reviewed(caller(), one.case_id, case_version=one.case_version)
     await _lane(world, notices).tick(*ALPHA)
@@ -119,7 +126,7 @@ async def test_at_person_the_lane_reads_nothing_and_tells_the_buyers() -> None:
     _switches(world, pr_drafting=AutomationLevel.PERSON)
     await _lane(world, notices).tick(*ALPHA)
     assert world.store.rows(*ALPHA).cases == {} and world.model.calls == []
-    assert len([k for k in notices.told if k.startswith("purchasing.mail.arrived:")]) == 6
+    assert len([k for k in notices.told if k.startswith("purchasing.mail.arrived:")]) == 8
     assert len([k for k in notices.told if k.startswith("purchasing.mail.supplier:")]) == 4
     _switches(world, mail_sorting=AutomationLevel.PERSON)
     quiet = RecordedNotices()
@@ -136,7 +143,7 @@ async def test_the_model_down_guesses_nothing_and_the_next_tick_tries_again() ->
     assert rows.cases == {} and len(rows.outcomes) <= 2
     world.model.failure = None
     await _lane(world, notices).tick(*ALPHA)
-    assert len(_cases(world, CaseStatus.RECEIVED)) == 2
+    assert len(_cases(world, CaseStatus.RECEIVED)) == 4
 
 
 async def test_without_dw2s_account_or_for_another_tenant_the_lane_does_nothing() -> None:
@@ -157,7 +164,8 @@ async def test_submission_at_ai_review_tells_the_buyers_and_sends_nothing() -> N
     await _lane(world, notices).tick(*ALPHA)
     assert _cases(world, CaseStatus.AWAITING_APPROVAL) == []
     ready = [k for k in notices.told if k.startswith("purchasing.case.ready_to_submit:")]
-    assert len(ready) == 2
+    # Not the scanned request: it waits for a person to compare it first.
+    assert len(ready) == 3
 
 
 async def test_an_approved_request_gets_its_rfqs_drafted_and_nothing_is_sent() -> None:
@@ -202,7 +210,8 @@ async def test_a_refused_step_is_told_once_in_its_own_words() -> None:
     await lane.tick(*ALPHA)
     await lane.tick(*ALPHA)
     refused = [k for k in notices.told if k.startswith("purchasing.case.submission_refused:")]
-    received = _cases(world, CaseStatus.RECEIVED)
+    # Every case nobody still has to look over (the scanned one waits).
+    received = [c for c in _cases(world, CaseStatus.RECEIVED) if c.review is None]
     assert len(refused) == len(received) and all(k.endswith(":no_limits") for k in refused)
     assert _cases(world, CaseStatus.AWAITING_APPROVAL) == []
 
