@@ -1350,7 +1350,9 @@
           "pr_drafting",
           "submission",
           "rfq",
-          "po_drafting"
+          "po_drafting",
+          "quote_reading",
+          "confirmation_reading"
         ],
         "title": "AutomationStep",
         "type": "string"
@@ -4381,7 +4383,8 @@
         "description": "What DW2 did with one mail.",
         "enum": [
           "opened",
-          "to_person"
+          "to_person",
+          "supplier"
         ],
         "title": "Disposition",
         "type": "string"
@@ -12617,7 +12620,9 @@
       "PurchasingModelStep": {
         "description": "The model calls a step's `ai_auto` waits on, each measured on its own\n(`dw_purchasing.application.automation.BARS`).",
         "enum": [
-          "purchasing_pr_mail_reading"
+          "purchasing_pr_mail_reading",
+          "purchasing_supplier_quote_reading",
+          "purchasing_order_confirmation_reading"
         ],
         "title": "PurchasingModelStep",
         "type": "string"

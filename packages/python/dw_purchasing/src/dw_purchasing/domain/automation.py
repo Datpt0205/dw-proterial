@@ -23,6 +23,10 @@ a rule (`STEPS`):
 
 A step with no model step (sending a checked request to its approver,
 drafting the orders) is code's alone, so `ai_auto` needs no measurement.
+
+A version written before a step existed does not name it: the step reads as
+`person` there, what DW2 did before it had the step, never more than the
+tenant chose. The platform's own file names every step.
 """
 
 from __future__ import annotations
@@ -69,6 +73,12 @@ class AutomationStep(StrEnum):
     # The orders of a request whose suppliers are chosen drafted, with the
     # Bravo file (importing it is a buyer's).
     PO_DRAFTING = "po_drafting"
+    # A supplier's reply to an RFQ read into the offers it holds (choosing
+    # among them is a buyer's).
+    QUOTE_READING = "quote_reading"
+    # A supplier's confirmation of an order read and held to the order; one
+    # that differs in nothing accepted (one that differs is a buyer's).
+    CONFIRMATION_READING = "confirmation_reading"
 
 
 class PurchasingModelStep(StrEnum):
@@ -76,6 +86,8 @@ class PurchasingModelStep(StrEnum):
     (`dw_purchasing.application.automation.BARS`)."""
 
     PR_MAIL_READING = "purchasing_pr_mail_reading"
+    SUPPLIER_QUOTE_READING = "purchasing_supplier_quote_reading"
+    ORDER_CONFIRMATION_READING = "purchasing_order_confirmation_reading"
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +113,15 @@ STEPS: Final[Mapping[AutomationStep, StepSpec]] = MappingProxyType(
         AutomationStep.RFQ: StepSpec(AutomationLevel.AI_REVIEW, ()),
         # Drafts only: Bravo records nothing until a buyer imports the file.
         AutomationStep.PO_DRAFTING: StepSpec(AutomationLevel.AI_AUTO, ()),
+        # Offers recorded from the supplier's own words, each figure in the
+        # mail; the comparison is code's and the choice a buyer's.
+        AutomationStep.QUOTE_READING: StepSpec(
+            AutomationLevel.AI_AUTO, (PurchasingModelStep.SUPPLIER_QUOTE_READING,)
+        ),
+        # Accepted unasked only when it differs from the order in nothing.
+        AutomationStep.CONFIRMATION_READING: StepSpec(
+            AutomationLevel.AI_AUTO, (PurchasingModelStep.ORDER_CONFIRMATION_READING,)
+        ),
     }
 )
 
@@ -124,11 +145,21 @@ class PurchasingAutomation(BaseModel):
     version: _Version = Field(alias="policy_version")
     steps: Mapping[AutomationStep, AutomationLevel]
 
+    @model_validator(mode="before")
+    @classmethod
+    def _unnamed_steps_to_a_person(cls, data: object) -> object:
+        if isinstance(data, Mapping) and isinstance(data.get("steps"), Mapping):
+            named = {str(step) for step in data["steps"]}
+            unnamed = {
+                s.value: AutomationLevel.PERSON.value
+                for s in AutomationStep
+                if s.value not in named
+            }
+            return {**data, "steps": {**unnamed, **data["steps"]}}
+        return data
+
     @model_validator(mode="after")
     def _every_step_within_its_ceiling(self) -> Self:
-        missing = set(AutomationStep) - set(self.steps)
-        if missing:
-            raise ValueError(f"every step has a level: {sorted(missing)}")
         above = [s for s, level in self.steps.items() if at_most(level, STEPS[s].ceiling) != level]
         if above:
             raise ValueError(f"above what the product allows: {sorted(above)}")

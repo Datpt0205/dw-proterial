@@ -40,6 +40,7 @@ from dw_purchasing.application.access import Gate, PurchasingScopes
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.ports import Disposition, MessageOutcome
 from dw_purchasing.application.rules import PurchasingRulesService
+from dw_purchasing.domain.automation import PurchasingModelStep
 from dw_purchasing.domain.cases import (
     CaseStatus,
     PrSource,
@@ -179,6 +180,23 @@ async def test_an_outcome_is_never_rewritten_nor_one_of_the_wrong_shape_written(
             await work.outcomes.add(
                 MessageOutcome("P06", Disposition.OPENED, None, None, uuid.UUID(int=1), NOW)
             )
+    # A supplier's mail is settled at the case it was handled at, without a
+    # reason (ad62389cc25d).
+    case = _case()
+    async with store(caller(tenancy.alpha)) as work:
+        await work.cases.add(case)
+    settled = MessageOutcome("Q01", Disposition.SUPPLIER, None, case.case_id, case.received_by, NOW)
+    async with store(caller(tenancy.alpha)) as work:
+        await work.outcomes.add(settled)
+    async with store(caller(tenancy.alpha)) as work:
+        assert await work.outcomes.get("Q01") == settled
+    for wrong in (
+        MessageOutcome("Q02", Disposition.SUPPLIER, None, None, uuid.UUID(int=1), NOW),
+        MessageOutcome("Q03", Disposition.SUPPLIER, "x", case.case_id, uuid.UUID(int=1), NOW),
+    ):
+        with pytest.raises(DBAPIError, match="ck_mail_outcomes_shape"):
+            async with store(caller(tenancy.alpha)) as work:
+                await work.outcomes.add(wrong)
 
 
 async def _execute(work: object, statement: str) -> None:
@@ -204,6 +222,22 @@ async def test_the_catalogs_checks_hold_the_domains_values(migrator: AsyncEngine
         "ck_cases_source": {s.value for s in PrSource},
         "ck_mail_outcomes_disposition": {d.value for d in Disposition},
     }
+
+
+async def test_every_dw2_model_step_can_be_measured(migrator: AsyncEngine) -> None:
+    """The platform's measurements table, shared with Sales, admits each DW2
+    reading a switch waits on: a step it refused could never be attested,
+    and its `ai_auto` would never take effect."""
+    async with migrator.connect() as conn:
+        definition = await conn.scalar(
+            sa.text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                " WHERE conname = 'ck_model_step_measurements_step'"
+                " AND connamespace = 'platform'::regnamespace"
+            )
+        )
+    admitted = set(re.findall(r"'([a-z_]+)'::text", str(definition)))
+    assert {s.value for s in PurchasingModelStep} <= admitted
 
 
 async def test_the_application_holds_the_verbs_each_table_needs(migrator: AsyncEngine) -> None:

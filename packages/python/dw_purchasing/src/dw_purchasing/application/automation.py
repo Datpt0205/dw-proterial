@@ -40,7 +40,9 @@ from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import ContextScope, RuleScope, Unready
 from dw_purchasing.application.access import Gate, PurchasingScopes
+from dw_purchasing.application.follow_up import ORDER_CONFIRMATION_READING
 from dw_purchasing.application.intake import PR_MAIL_READING
+from dw_purchasing.application.sourcing import SUPPLIER_QUOTE_READING
 from dw_purchasing.domain.automation import (
     STEPS,
     AutomationLevel,
@@ -69,6 +71,25 @@ BARS: Final[Mapping[PurchasingModelStep, StepBar]] = MappingProxyType(
             PR_MAIL_READING,
             "purchasing_pr_intake",
             "purchasing.pr_mail_golden",
+        ),
+        # The golden replies read exactly: each supplier's offers, line,
+        # price and lead time, as the mail states them (2026-11-04).
+        PurchasingModelStep.SUPPLIER_QUOTE_READING: StepBar(
+            0.9,
+            "golden.right",
+            SUPPLIER_QUOTE_READING,
+            "purchasing_sourcing",
+            "purchasing.sourcing_golden",
+        ),
+        # The golden confirmations held to their orders with exactly the
+        # expected differences: a misread that finds none would be accepted
+        # unasked, so the bar is the same share (2026-11-04).
+        PurchasingModelStep.ORDER_CONFIRMATION_READING: StepBar(
+            0.9,
+            "golden.right",
+            ORDER_CONFIRMATION_READING,
+            "purchasing_follow_up",
+            "purchasing.confirmation_golden",
         ),
     }
 )

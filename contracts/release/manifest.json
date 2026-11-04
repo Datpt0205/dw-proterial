@@ -362,7 +362,7 @@
           "path": "evals/fixtures/cases/sales_pricer_approver_pic.json"
         },
         {
-          "checksum": "0a377bc5f1f716ee535d9b0e866f5090a774a2f3b55ffc2ad9958f1ac651363b",
+          "checksum": "d597fe47fb6c15cdbeb14e3f900075f87ec3cef662c5fa7d24268b4893d02075",
           "path": "packages/python/dw_sales/src/dw_sales/adapters/mock/README.md"
         },
         {
@@ -781,7 +781,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "d26819436d40a6fa7f12e42d41a9d6baa45a595a",
+  "git_sha": "26ecdcd7fe0a83b1aa5ed5c6c0df8c4d6cfbf1b7",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -832,6 +832,11 @@
       "checksum": "3082330fb7d55fcecc6815d86311c98601e313678b5f03a4ea684af9dd881054",
       "policy_id": "purchasing_automation",
       "version": "1.0.0"
+    },
+    {
+      "checksum": "9365a844f36e68de809c82904d62b76cd5c7c19a320d097869240898207037dc",
+      "policy_id": "purchasing_automation",
+      "version": "1.1.0"
     },
     {
       "checksum": "8a14f0de3346b6ccf0639fa8c32393b3c7edb2417b90a329449063270a4590f3",

@@ -35,6 +35,9 @@ class Disposition(StrEnum):
     OPENED = "opened"
     # Not a request DW2 could receive: a person reads it.
     TO_PERSON = "to_person"
+    # A known supplier's verified mail about one case (a quote, an order's
+    # confirmation), handled there by DW2's lane: read, or its buyer told.
+    SUPPLIER = "supplier"
 
 
 @dataclass(frozen=True, slots=True)

@@ -69,7 +69,9 @@ dw_sales ADR 0005 as DW2 applies it).
   for a person to compare it with the paper (`Review`) whatever the switch,
   because OCR misreads a digit without saying so.
 - **Mail outcome**: what DW2 did with one mail in the purchasing mailbox,
-  settled once: `opened` (a case was opened) or `to_person` (a person reads
+  settled once: `opened` (a case was opened), `supplier` (a known supplier's
+  verified mail handled at the one case it is about: its quote or order
+  confirmation read there, or its buyer told) or `to_person` (a person reads
   it), with a reason code: `sender_not_internal`, `sender_unverified`,
   `no_pr_number`, `no_department`, `span_not_found`, `line_unreadable`,
   `currency_unreadable`, `need_by_unreadable`, `value_malformed`, `no_lines`,
@@ -206,11 +208,11 @@ The twelve steps, the default proposed, and where each stands:
 | 3 | Cross-check (code), each finding explained (model) | code | not yet: explanations not built |
 | 4 | Send to the approver its amount names; requester ≠ approver | AI tự làm | `submission` |
 | 5 | Pick suppliers (code), word the RFQ (model); a buyer sends | AI làm, người duyệt | `rfq` |
-| 6 | Read a supplier's quote (body, PDF, Excel) | AI tự làm once measured | not yet: replies are linked by hand |
+| 6 | Read a supplier's quote (the mail's body) | AI tự làm once measured | `quote_reading` |
 | 7 | Compare (code), propose with reasons (model); a buyer accepts | AI làm, người duyệt | not yet: proposal not built |
 | 8 | Draft the orders and the Bravo file; a buyer imports it | AI tự làm | `po_drafting` |
 | 9 | The PO number Bravo gave, read back | AI tự làm | function 5, not built |
-| 10 | A supplier's confirmation read and compared with the PO | AI tự làm when it matches | function 5, not built |
+| 10 | A supplier's confirmation read and compared with the PO | AI tự làm when it matches | `confirmation_reading` |
 | 11 | Delivery tracked (code); a reminder worded (model), a buyer sends | AI làm, người duyệt | function 5, not built |
 | 12 | Each person's morning brief, questions about a case | AI tự làm | Q&A built (Hỏi đáp DW2, 11-04); the brief not built |
 
@@ -220,7 +222,10 @@ A step gets its switch the day code reads it, never before.
   under DW2's service account at the level in effect; at "AI làm, người
   duyệt" a case DW2 opened from a mail carries a **review** ("Máy đọc, chờ
   người xem") a buyer clears with one press before DW2 sends it on. A known
-  supplier's verified mail is never read as a request. Every person is told
+  supplier's verified mail is never read as a request: code ties it to the
+  one order it names or the one case it answers, and there a quote is read
+  into its offers and a confirmation that differs from the order in nothing
+  is accepted (one that differs goes to a buyer). Every person is told
   in the app what is theirs to do, once per case and step; a step that
   refuses is told once in its own words. The lane audits as itself.
 
@@ -232,12 +237,15 @@ status and role lines above, so a word changed on one side turns a test red.
 
 Steps: `mail_sorting` (Phân loại thư đến), `pr_drafting` (Mở yêu cầu từ thư),
 `submission` (Gửi người duyệt), `rfq` (Soạn thư hỏi giá), `po_drafting` (Soạn
-PO và file Bravo).
+PO và file Bravo), `quote_reading` (Đọc báo giá của nhà cung cấp),
+`confirmation_reading` (Đọc thư xác nhận đơn).
 
 Levels: `ai_auto` (AI tự làm), `ai_review` (AI làm, người duyệt), `person`
 (Người làm).
 
-Model steps: `purchasing_pr_mail_reading` (Đọc yêu cầu từ thư).
+Model steps: `purchasing_pr_mail_reading` (Đọc yêu cầu từ thư),
+`purchasing_supplier_quote_reading` (Đọc báo giá),
+`purchasing_order_confirmation_reading` (Đọc thư xác nhận đơn).
 
 Why a level: `set` (theo quy tắc của công ty), `not_measured` (chưa đo trên
 model của nhà máy), `unreadable` (số đo không đọc được).
@@ -254,7 +262,8 @@ trước), `estimate` (giá ước tính của người yêu cầu).
 
 Sources: `form` (Biểu mẫu), `mail` (Thư), `requester` (Người yêu cầu tự viết).
 
-Mail outcomes: `opened` (Đã mở hồ sơ), `to_person` (Cần người xem).
+Mail outcomes: `opened` (Đã mở hồ sơ), `to_person` (Cần người xem),
+`supplier` (Thư nhà cung cấp).
 
 Mail reasons: `sender_not_internal` (người gửi không thuộc công ty),
 `sender_unverified` (hệ thống thư không xác thực được người gửi),
