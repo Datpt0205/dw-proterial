@@ -507,4 +507,5 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   SPF/DKIM, else every scan goes to a person), whether phone photos must be
   read, and a sample of their PR form (Excel and paper) to measure OCR on.
   The requester of a forwarded scan is the forwarder (the verified sender),
-  not the name printed on the paper.
+  not the name printed on the paper. Asked as questions 28–31 (and 20) of
+  `docs/proterial/Cau-hoi-Proterial-DW1-DW2.xlsx` (2026-11-04).
