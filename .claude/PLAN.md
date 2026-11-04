@@ -13,10 +13,10 @@ git: every slice's commit message, and the pre-split narrative at
 | ---------------------------------- | ----------------------------------- | -------------------------- |
 | Ops hardening, on premises         | `.claude/plans/ops-hardening.md`    | Done; on-prem ran locally  |
 | Agent runtime and memory (Mốc 0–6) | `.claude/plans/platform-runtime.md` | Done but for named gaps    |
-| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd + React Flow map; CSP |
+| Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X   |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed  |
-| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–4, Excel/scan PRs    |
+| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–5a, 6 Q&A, measured  |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -35,8 +35,9 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** DW2 (`purchasing.md`): fns 5–6, live evals (PR files read 11-03),
-  attest lane; DW1 PC dates from mail. Master data done (11-03). Proterial questions: `docs/proterial/`. #13 at deploy.
+- **Next:** bump `next` ≥ 15.5.28 (CRITICAL RCE, `web-ui.md` Open); DW2
+  5b lane + brief, a browser walk of 11-04's pages; HITL review owed to Đạt.
+  Proterial questions: `docs/proterial/`. #13 at deploy.
 
 ## Decisions Đạt owes
 
