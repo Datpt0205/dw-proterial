@@ -18,7 +18,7 @@ from dw_purchasing.domain.checks import CrossCheck
 from dw_purchasing.domain.orders import PoRound
 from dw_purchasing.domain.requests import Currency, Price, PurchaseRequest
 from dw_purchasing.domain.sourcing import Offer, RfqRound, Selection
-from dw_purchasing.domain.tracking import OrderTracking
+from dw_purchasing.domain.tracking import OrderTracking, received
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
@@ -51,6 +51,8 @@ class CaseStatus(StrEnum):
     SUPPLIER_SELECTED = "supplier_selected"
     # One draft order per chosen supplier, and the Bravo file drawn from them.
     PO_DRAFTED = "po_drafted"
+    # Every line of every order received in full: nothing is owed or late.
+    DELIVERED = "delivered"
 
 
 class ApprovalAsked(BaseModel):
@@ -199,18 +201,22 @@ class PurchaseCase(BaseModel):
             CaseStatus.AWAITING_REAPPROVAL,
             CaseStatus.SUPPLIER_SELECTED,
             CaseStatus.PO_DRAFTED,
+            CaseStatus.DELIVERED,
         )
+        ordered = self.status in (CaseStatus.PO_DRAFTED, CaseStatus.DELIVERED)
         waiting = self.status is CaseStatus.AWAITING_REAPPROVAL
         if waiting != (self.reapproval is not None and self.reapproval.decision is None):
             raise ValueError("a choice waits on its approval exactly while the case says so")
-        chosen = self.status in (CaseStatus.SUPPLIER_SELECTED, CaseStatus.PO_DRAFTED)
+        chosen = self.status is CaseStatus.SUPPLIER_SELECTED or ordered
         decided = self.status in (CaseStatus.APPROVED, CaseStatus.REJECTED) or sourcing
         if sourcing != (self.rfq is not None):
             raise ValueError("a case being sourced holds its RFQ round, and only it does")
         if chosen != (self.selection is not None):
             raise ValueError("a case with suppliers chosen holds the choice, and only it does")
-        if (self.status is CaseStatus.PO_DRAFTED) != (self.po is not None):
+        if ordered != (self.po is not None):
             raise ValueError("a case with orders drafted holds them, and only it does")
+        if self.status is CaseStatus.DELIVERED and not self.delivered_in_full:
+            raise ValueError("a delivered case received every line of every order in full")
         drafted = {o.po_ref for o in self.po.orders} if self.po is not None else set()
         followed = [t.po_ref for t in self.tracking]
         if len(followed) != len(set(followed)) or not set(followed) <= drafted:
@@ -229,6 +235,19 @@ class PurchaseCase(BaseModel):
         ):
             raise ValueError("the status is the decision's")
         return self
+
+    @property
+    def delivered_in_full(self) -> bool:
+        """Every line of every order received in full."""
+        if self.po is None:
+            return False
+        followed = {t.po_ref: t for t in self.tracking}
+        return all(
+            (tracking := followed.get(order.po_ref)) is not None
+            and received(tracking, line.line_no) >= line.quantity
+            for order in self.po.orders
+            for line in order.lines
+        )
 
     @property
     def makers(self) -> frozenset[uuid.UUID]:

@@ -20,6 +20,7 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from dw_purchasing.domain.brief import BriefRules
 from dw_purchasing.domain.checks import CrossCheck, PurchaseFindingCode
 from dw_purchasing.domain.orders import BravoPoLayout
 from dw_purchasing.domain.requests import (
@@ -185,6 +186,8 @@ class PurchasingRules(BaseModel):
     bravo_po: BravoPoLayout | None = None
     # How long rows are kept. Absent before 1.6.0: nothing is deleted for age.
     retention: RetentionRules | None = None
+    # When the morning brief is sent (1.8.0). None: no brief.
+    brief: BriefRules | None = None
 
     @field_validator("internal_domains")
     @classmethod

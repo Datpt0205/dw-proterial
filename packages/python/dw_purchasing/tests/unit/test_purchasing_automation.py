@@ -75,10 +75,34 @@ def test_a_step_above_its_ceiling_is_no_version() -> None:
         PurchasingAutomation.model_validate(_switches("9.0.0", rfq="ai_auto"))
 
 
-def test_a_version_older_than_a_step_leaves_that_step_to_a_person() -> None:
-    """A tenant's own version written before 5b names no supplier-mail step:
-    those read as `person`, what DW2 did with such mail before (told a buyer),
-    never as more than the tenant ever chose."""
+async def test_a_tenant_version_older_than_a_step_takes_the_platform_s_level() -> None:
+    """In force, a tenant's version written before 5b is read over the
+    platform's (`read_over`): the supplier-mail steps take the platform's
+    level, and still wait on the tenant's own measurement."""
+    world = _world()
+    world.tenant_policies.documents[(ALPHA[0], "purchasing_automation")] = {
+        "version": "1.0.5",
+        "steps": {
+            "mail_sorting": "ai_auto",
+            "pr_drafting": "ai_auto",
+            "submission": "ai_auto",
+            "rfq": "ai_review",
+            "po_drafting": "person",
+        },
+    }
+    view = await world.switches.view(caller())
+    levels = {s.step: (s.chosen, s.level) for s in view.steps}
+    assert levels[AutomationStep.PO_DRAFTING] == (AutomationLevel.PERSON, AutomationLevel.PERSON)
+    assert levels[AutomationStep.CONFIRMATION_READING] == (
+        AutomationLevel.AI_AUTO,
+        AutomationLevel.AI_REVIEW,
+    )
+
+
+def test_a_version_older_than_a_step_read_on_its_own_leaves_it_to_a_person() -> None:
+    """Read on its own (a released platform file), a version written before
+    5b names no supplier-mail step: there it is `person`, what that version
+    had DW2 do."""
     older = {
         "policy_version": "1.0.0",
         "steps": {

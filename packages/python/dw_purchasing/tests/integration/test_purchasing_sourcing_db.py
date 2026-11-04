@@ -189,6 +189,47 @@ async def test_suppliers_are_asked_their_replies_read_and_one_chosen_per_line(
     assert followed.confirmation is not None and followed.confirmation.accepted_by is not None
     assert await follow.late(caller(tenancy.beta), today=NOW.date().replace(year=2027)) == []
 
+    async def due() -> list[tuple[uuid.UUID, uuid.UUID]]:
+        async with app_sessions() as session:
+            rows = await session.execute(
+                sa.text("SELECT tenant_id, workspace_id FROM purchasing.automation_scopes_due()")
+            )
+            return [(row.tenant_id, row.workspace_id) for row in rows]
+
+    # Orders still followed: the lane visits the workspace to tell late lines.
+    assert tenancy.alpha in await due()
+    # Everything else arrives: the case is delivered, on the database too,
+    # and nothing of it is left for the lane.
+    drafted = await intake.case(me, case_id)
+    assert drafted.po is not None
+    for order in drafted.po.orders:
+        for line in order.lines:
+            if (order.po_ref, line.line_no) == ("PR-2611-004-03", 1):
+                continue
+            await follow.record_receipt(
+                me,
+                case_id,
+                order.po_ref,
+                line_no=line.line_no,
+                quantity=line.quantity,
+                received_on=NOW.date(),
+                case_version=await version(),
+            )
+    assert (await intake.case(me, case_id)).status is CaseStatus.DELIVERED
+    assert tenancy.alpha not in await due()
+    async with store(me) as work:
+        session = work.cases._session
+        for patch, check in (
+            ("body = body - 'po'", "ck_cases_po"),
+            ("body = body - 'selection'", "ck_cases_sourced"),
+        ):
+            with pytest.raises(sa.exc.DBAPIError, match=check):
+                async with session.begin_nested():
+                    await session.execute(
+                        sa.text(f"UPDATE purchasing.cases SET {patch} WHERE id = :i"),
+                        {"i": case_id},
+                    )
+
     # The catalog refuses tracking that is no list, and tracking on a case
     # with no orders.
     other = (await intake.read_mail(me, "P02")).case_id

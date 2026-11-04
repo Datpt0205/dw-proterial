@@ -369,6 +369,29 @@ async def test_at_person_a_confirmation_is_told_with_its_case_and_nothing_read()
     assert told[5] == f"/purchasing/requests/{case_id}"
 
 
+async def test_each_late_line_is_told_to_the_buyers_once_per_date_it_is_due() -> None:
+    world, notices = _world(), RecordedNotices()
+    case_id = await orders_drafted(world)
+    lane = _lane(world, notices)
+    await lane.tick(*ALPHA)
+    assert not [k for k in notices.told if k.startswith("purchasing.order.late:")]
+
+    # Needed by 20/11; it is 21/11 at the plant.
+    world.clock.advance_to(datetime(2026, 11, 21, 2, 0, tzinfo=UTC))
+    await lane.tick(*ALPHA)
+    await lane.tick(*ALPHA)
+
+    late = sorted(k for k in notices.told if k.startswith("purchasing.order.late:"))
+    assert late == [
+        f"purchasing.order.late:{case_id}:{BAOHO}:2:2026-11-20",
+        f"purchasing.order.late:{case_id}:{KIMURA}:1:2026-11-20",
+    ]
+    told = notices.told[late[0]]
+    assert told[0] == frozenset({"purchasing.po.prepare"})
+    assert "trễ hạn" in told[3] and "20/11/2026" in told[4]
+    assert told[5] == f"/purchasing/requests/{case_id}"
+
+
 async def test_the_model_down_leaves_a_confirmation_unsettled_for_the_next_tick() -> None:
     world, notices = _world(), RecordedNotices()
     await measure(world, PurchasingModelStep.ORDER_CONFIRMATION_READING)

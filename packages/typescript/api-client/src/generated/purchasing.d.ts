@@ -909,7 +909,7 @@ export interface components {
          * @description Where a purchase case stands (CONTEXT.md, "Purchase case").
          * @enum {string}
          */
-        CaseStatus: "received" | "awaiting_approval" | "approved" | "rejected" | "rfq_drafted" | "awaiting_reapproval" | "supplier_selected" | "po_drafted";
+        CaseStatus: "received" | "awaiting_approval" | "approved" | "rejected" | "rfq_drafted" | "awaiting_reapproval" | "supplier_selected" | "po_drafted" | "delivered";
         /**
          * CaseVersionBody
          * @description The version of the case the caller saw: a stale one is refused (409).

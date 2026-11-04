@@ -85,9 +85,12 @@ export function OrderFollowUp({
   const tracking: Tracking | undefined = c.tracking?.find(
     (t) => t.po_ref === order.po_ref,
   );
-  const why = hasScope(SCOPE.po)
-    ? null
-    : "Vai của bạn không gồm việc theo dõi đơn đặt hàng.";
+  const why =
+    c.status === "delivered"
+      ? "Đã nhận đủ hàng: không còn gì để theo dõi."
+      : hasScope(SCOPE.po)
+        ? null
+        : "Vai của bạn không gồm việc theo dõi đơn đặt hàng.";
 
   async function act(
     id: string,

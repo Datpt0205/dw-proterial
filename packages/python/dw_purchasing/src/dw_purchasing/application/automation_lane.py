@@ -41,6 +41,14 @@ once its model reading is measured):
    A mail about nothing waiting is told once and left unsettled: the case
    it answers may come later. It costs no read, so it never holds back a
    request behind it (`PER_TICK` counts reads).
+6. **Late lines** (`OrderFollowUp.late`): each line of a drafted order past
+   its date with less arrived than ordered is told to the buyers once per
+   date it is due (a later confirmed date is told again when it passes).
+   Code's, with no switch: it tells, it decides nothing.
+7. **The morning brief** (`domain.brief`): once per working day, from the
+   rules' time at the plant, each person the counts of what waits on them.
+   Once per person and day by its source key. No switch, for the same
+   reason.
 
 A step that refuses (no limits in the rules, a stand-in Bravo layout, a
 supplier gone) is told to the buyers once with the refusal's own words,
@@ -70,7 +78,7 @@ from dw_platform.domain.audit import lane_audit_event
 from dw_platform.domain.mail_parts import newest_part
 from dw_platform.domain.messages import InboundMessage
 from dw_purchasing.application.access import PurchasingScopes
-from dw_purchasing.application.follow_up import FOLLOWED_CASES, named_order
+from dw_purchasing.application.follow_up import FOLLOWED_CASES, LateLine, named_order
 from dw_purchasing.application.ports import (
     Disposition,
     MessageOutcome,
@@ -80,6 +88,7 @@ from dw_purchasing.application.ports import (
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import reply_case
 from dw_purchasing.domain.automation import AutomationLevel, AutomationStep
+from dw_purchasing.domain.brief import brief_day, briefs
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.checks import MasterData
 from dw_purchasing.domain.orders import PoDraft
@@ -109,6 +118,10 @@ PER_TICK: Final = 20
 # A step's outcome when the model is down: nothing settled, the next tick
 # tries again.
 _DOWN: Final = "model unavailable"
+# What a brief counts: every case still waiting on someone.
+_OPEN: Final = frozenset(
+    s.value for s in CaseStatus if s not in (CaseStatus.REJECTED, CaseStatus.DELIVERED)
+)
 
 # Why a mail goes to a person, as the buyers read it: CONTEXT.md's "Mail
 # reasons" line, word for word (test_purchasing_screen_words.py).
@@ -212,6 +225,9 @@ class AutomationLane:
         done += await self._submissions(context)
         done += await self._rfqs(context)
         done += await self._orders(context)
+        late = await self.services.follow_up.late(context)
+        done += await self._late(context, late)
+        done += await self._brief(context, late=len(late))
         return Tick(tuple(done))
 
     # ---------------------------------------------------------- the steps --
@@ -615,6 +631,39 @@ class AutomationLane:
             )
             done.append(f"po {case.case_id}")
         return done
+
+    async def _late(self, context: AccessContext, late: Sequence[LateLine]) -> list[str]:
+        for line in late:
+            await self._tell(
+                context,
+                PurchasingScopes.PO_PREPARE,
+                f"purchasing.order.late:{line.case_id}:{line.po_ref}:{line.line_no}:{line.due_on}",
+                f"Hàng trễ hạn: đơn {line.po_ref} dòng {line.line_no} ({line.pr_no})",
+                f"Hạn {line.due_on:%d/%m/%Y}, còn thiếu {line.owed.normalize():f}."
+                " Nhắc nhà cung cấp, hoặc ghi nhận hàng đã về.",
+                f"/purchasing/requests/{line.case_id}",
+            )
+        return [f"late {len(late)}"] if late else []
+
+    async def _brief(self, context: AccessContext, *, late: int) -> list[str]:
+        rules = (await self.services.requests.rules.resolve(context)).brief
+        day = brief_day(rules, self.clock.now()) if rules is not None else None
+        if day is None:
+            return []
+        async with self.uow(context) as work:
+            cases = await work.cases.waiting(_OPEN, limit=FOLLOWED_CASES)
+        found = briefs(cases, late=late)
+        for brief in found:
+            await self.notices.tell(
+                context,
+                scopes=brief.scopes,
+                excluding=(context.principal_id,),
+                source_key=f"purchasing.brief:{day.isoformat()}:{brief.audience}",
+                title=f"Bản tin sáng DW2 · {day:%d/%m}",
+                body="Chờ bạn: " + " · ".join(brief.parts) + ".",
+                link="/purchasing",
+            )
+        return [f"brief {day.isoformat()}: {len(found)}"] if found else []
 
     # ------------------------------------------------------------- helpers --
 

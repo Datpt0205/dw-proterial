@@ -37,6 +37,7 @@ const STATUS_LOOK: Record<PurchaseCaseStatus, Look> = {
   awaiting_reapproval: ["warn", <ClockCircleOutlined key="i" aria-hidden />],
   supplier_selected: ["pri", <CheckCircleOutlined key="i" aria-hidden />],
   po_drafted: ["ok", <FileTextOutlined key="i" aria-hidden />],
+  delivered: ["ok", <CheckCircleOutlined key="i" aria-hidden />],
 };
 
 export function CaseStatusTag({ status }: { status: PurchaseCaseStatus }) {

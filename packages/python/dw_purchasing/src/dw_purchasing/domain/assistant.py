@@ -121,6 +121,7 @@ CASE_STATE: Final[dict[str, str]] = {
     "awaiting_reapproval": "Chờ duyệt lại",
     "supplier_selected": "Đã chọn nhà cung cấp",
     "po_drafted": "Đã soạn PO",
+    "delivered": "Đã nhận đủ hàng",
 }
 
 CATALOG: Final = (

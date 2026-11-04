@@ -24,9 +24,13 @@ a rule (`STEPS`):
 A step with no model step (sending a checked request to its approver,
 drafting the orders) is code's alone, so `ai_auto` needs no measurement.
 
-A version written before a step existed does not name it: the step reads as
-`person` there, what DW2 did before it had the step, never more than the
-tenant chose. The platform's own file names every step.
+A version written before a step existed does not name it. Read on its own
+(a released platform file, a document as written), the step is `person`
+there: what that version had DW2 do. A tenant's own version in force is
+read over the platform's current one first (`rule_versions.read_over`, as
+every field a version predates), so there the step takes the platform's
+level, and still waits on the tenant's own measurement. The platform's
+newest file names every step.
 """
 
 from __future__ import annotations

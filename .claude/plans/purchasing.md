@@ -504,7 +504,10 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   `purchasing_sourcing`, `purchasing_order_confirmation_reading` on
   `purchasing_follow_up`, bars 0.9 on `golden.right`), in
   `purchasing_automation@1.1.0` at `ai_auto`; a tenant version written
-  before them reads both as `person` (what DW2 did before). The lane ties a
+  before them, in force, is read over the platform's (`read_over`) and
+  takes its level, still waiting on the tenant's measurement; read on its
+  own (a released file) the two are `person` (corrected 11-04: the 5b
+  commit said a tenant version reads them as `person`). The lane ties a
   verified supplier's mail by code to the one order it names
   (`named_order`, the oldest 500 drafted cases) or the one case asking
   (`reply_case`): at "AI tự làm" a quote is read into its offers (the
@@ -523,6 +526,29 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   deployed, on the stored mailbox (the mock refused, as the API refuses
   it); before, every DW2 switch did nothing on UAT and production.
   Mutations: see the commit.
+- 2026-11-04, **5b's rest and the morning brief** (Đạt: "ok làm đi"):
+  - `delivered` (Đã nhận đủ hàng): the receipt that completes every line of
+    every order moves the case there, code's, audited
+    `purchasing.case.delivered`; the case refuses more receipts and is never
+    late. The domain refuses a delivered case with anything owed.
+  - Late lines told: the lane tells the buyers each line past its date
+    (confirmed, else need-by) once per (order, line, date). `late` now
+    counts in the plant's day (it counted UTC's, a day behind from 00:00
+    to 07:00). `automation_scopes_due()` also returns a workspace with
+    orders still followed. Migration `e13dd31820b5`.
+  - The brief (`domain.brief`): each working day from `brief.at` at the
+    plant (`purchasing_rules@1.8.0`: 07:30, Monday to Saturday, as DW1's;
+    Proterial's to set), counts only: the buyers their states and late
+    lines, whoever reviews what DW2 read their queue, each approver the
+    requests stamped with their own scope. Once per person and day by its
+    source key; nothing sent to someone with nothing waiting. No switch
+    for either: they tell, they decide nothing.
+  - Corrected on the way: the 5b commit said a tenant's older automation
+    version reads the new steps as `person`; in force it is read over the
+    platform's (`read_over`) and takes its level. Tests now cover both
+    paths. Mutations, each red: closing, "in full", the domain's refusal,
+    the plant's day, the lane's late step, the web's disabled receipt;
+    the brief's time, days, zone, an approver's own tier, late lines.
 
 ## Next
 
@@ -539,12 +565,10 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
    live run as ticket 43's, with a buyer's folder and a PIC's. Which mailboxes it exports (the shared purchasing one
    or each buyer's) is settled then. Code and compose are ready
    (`DW_PURCHASING_MAILBOX=stored`); then a live run as ticket 43's.
-4. Function 5b's rest (the reading and accepting are built, 11-04): a late
-   line told to the buyer once per due date; a reminder worded for the
-   buyer to send; a closed state once every line arrived (until then the
-   lane and `late` look at the oldest 500 drafted cases).
-5. Function 6's morning brief (the Q&A is built, 11-04): DW1's
-   `followups` lane shape, counts only, once per working day.
+4. A reminder to a late supplier, worded by the model for a buyer to send
+   (step 11's other half); only the buyer's notice is built.
+5. Whether the brief and Hỏi đáp are used: count questions and their
+   `out_of_scope` share after a few weeks live, and drop what nobody uses.
 6. Bars and live measurements for DW2's other model steps (a sentence to a
    PR, an RFQ's wording): the PR mail, the quote and the confirmation
    readings have theirs (11-04).
@@ -553,9 +577,9 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 ## Not done, on purpose
 
 - Bravo's number is typed: nothing reads it back (Bravo has no connection).
-  `late` reads the 500 oldest `po_drafted` cases and logs when it hits that
-  bound: a case stays `po_drafted` after every line arrived until 5b's
-  closed state.
+  `late` and the brief read the 500 oldest open cases and log at that
+  bound; a case leaves `po_drafted` once everything arrived. Both run each
+  lane tick (60 s); the notices' keys keep them once per day or date.
 
 - A purchase approval is decided on the web only: no subject version is
   registered for the Zalo decision command.
