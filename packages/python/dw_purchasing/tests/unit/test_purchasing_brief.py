@@ -15,7 +15,7 @@ import yaml
 
 from dw_purchasing.domain.brief import BriefRules, brief_day
 from dw_purchasing.testing.flows import orders_drafted
-from dw_purchasing.testing.lane import lane_of
+from dw_purchasing.testing.lane import APPROVER, BUYER, Holders, lane_of
 from dw_purchasing.testing.world import ALPHA, RecordedNotices, World, caller, open_world
 
 pytestmark = pytest.mark.unit
@@ -79,7 +79,13 @@ async def _waiting_on_everyone(world: World) -> tuple[uuid.UUID, str]:
 async def test_each_person_is_told_once_a_day_what_waits_on_them_in_counts() -> None:
     world, notices = _world(), RecordedNotices()
     _, scope = await _waiting_on_everyone(world)
-    lane = lane_of(world, notices)
+    # Another tier's approver, who has nothing waiting.
+    other_tier = "purchasing.approve.tier1" if scope != "purchasing.approve.tier1" else "x"
+    lane = lane_of(
+        world,
+        notices,
+        holders=Holders({scope: APPROVER, other_tier: uuid.UUID(int=0x77)}),
+    )
     # Saturday 21/11, 09:00 at the plant; P01's lines were needed by 20/11.
     world.clock.advance_to(datetime(2026, 11, 21, 2, 0, tzinfo=UTC))
 
@@ -87,13 +93,20 @@ async def test_each_person_is_told_once_a_day_what_waits_on_them_in_counts() -> 
     await lane.tick(*ALPHA)
 
     briefs = {k: v for k, v in notices.told.items() if k.startswith("purchasing.brief:")}
-    buyer = briefs["purchasing.brief:2026-11-21:buyer"]
-    assert buyer[0] == frozenset({"purchasing.rfq.prepare", "purchasing.po.prepare"})
+    # One brief per person, whatever roles they hold: the buyer, who also
+    # looks over what DW2 read, has one with both; the approver their tier.
+    assert sorted(briefs) == sorted(
+        f"purchasing.brief:2026-11-21:{person}" for person in (BUYER, APPROVER)
+    )
+    buyer = briefs[f"purchasing.brief:2026-11-21:{BUYER}"]
+    assert buyer[0] == frozenset() and buyer[1] == (BUYER,)
     assert "1 đơn đang theo dõi" in buyer[4] and "2 dòng hàng trễ hạn" in buyer[4]
+    assert "chờ xem lại" in buyer[4] and "chờ bạn duyệt" not in buyer[4]
     assert buyer[5] == "/purchasing"
-    approver = briefs[f"purchasing.brief:2026-11-21:approve:{scope}"]
-    assert approver[0] == frozenset({scope})
-    assert "1 yêu cầu chờ bạn duyệt" in approver[4]
+    approver = briefs[f"purchasing.brief:2026-11-21:{APPROVER}"]
+    assert approver[1] == (APPROVER,)
+    assert approver[4] == "Chờ bạn: 1 yêu cầu chờ bạn duyệt."
+    assert scope.startswith("purchasing.approve.")
     # Counts only: no number in it but a count.
     for told in briefs.values():
         assert all(len(n) <= 3 for n in re.findall(r"\d+", told[4]))
@@ -125,4 +138,4 @@ async def test_the_tenant_s_own_time_is_the_one_read() -> None:
     assert not [k for k in notices.told if k.startswith("purchasing.brief:")]
     world.clock.advance_to(datetime(2026, 11, 21, 3, 0, tzinfo=UTC))
     await lane.tick(*ALPHA)
-    assert "purchasing.brief:2026-11-21:buyer" in notices.told
+    assert f"purchasing.brief:2026-11-21:{BUYER}" in notices.told

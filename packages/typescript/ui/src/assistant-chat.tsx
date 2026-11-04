@@ -125,7 +125,7 @@ export function AssistantChat({
       <Flex vertical gap={12}>
         {loading ? (
           <Skeleton active paragraph={{ rows: 4 }} />
-        ) : turns.length === 0 ? (
+        ) : turns.length === 0 && !pending ? (
           <Flex vertical gap={12}>
             <Welcome title={`Hỏi đáp ${worker}`} description={catalog} />
             <Prompts
@@ -198,8 +198,18 @@ export function AssistantChat({
               </li>
             ))}
             {pending ? (
+              // The question just asked, and that the worker is on it: a
+              // first answer can take a minute while the model loads.
               <li>
-                <Bubble placement="start" loading content="" />
+                <Flex vertical gap={8}>
+                  {question.trim() ? (
+                    <Bubble placement="end" content={question.trim()} />
+                  ) : null}
+                  <Typography.Text role="status">
+                    {worker} đang trả lời…
+                  </Typography.Text>
+                  <Bubble placement="start" loading content="" />
+                </Flex>
               </li>
             ) : null}
           </ol>

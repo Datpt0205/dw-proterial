@@ -549,6 +549,21 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
     paths. Mutations, each red: closing, "in full", the domain's refusal,
     the plant's day, the lane's late step, the web's disabled receipt;
     the brief's time, days, zone, an approver's own tier, late lines.
+- 2026-11-04, **walked on a browser** (local stack, Qwen on Ollama, as the
+  buyer `khoa.lam`): home, a case with orders, recording the last receipt
+  (the case turns "Đã nhận đủ hàng", the form locks), Hỏi đáp DW2 (status,
+  my work, late lines, answered from live data), the notices. Fixed from
+  what it showed: the brief came as one notice per role, so a buyer who
+  also reviews got two; it is one per person now (the lane asks the
+  platform who holds each scope, `HoldersPort`, DW2's own account left
+  out). A supplier's mail tied to nothing yet was told as a quote to read;
+  it now says nothing ties it yet and that recording Bravo's number lets
+  DW2 recognise a confirmation. The case history never showed Bravo's
+  number, the confirmation or receipts (since 5a); it does, and "Đã nhận đủ
+  hàng". The chat frame showed nothing while a first answer was coming (a
+  cold model takes about a minute): it shows the question and "DW2 đang trả
+  lời…" (`@dw/ui`, DW1's too). Not walked: DW1's "Xác nhận cả dòng" (the
+  demo reads no request by model); its web tests cover it.
 
 ## Next
 
