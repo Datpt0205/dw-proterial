@@ -1085,6 +1085,20 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
 
 ## Open
 
+- 2026-11-04, **less to press on what DW1 read** (Đạt, from the HITL review,
+  `plans/hitl-review.md`): a request's line read by the model is confirmed
+  with one press, "Xác nhận cả dòng như đã đọc" (`QuoteCase.confirm_as_read`,
+  `as_read` on the finding's answer), once this person opened every place
+  the line's values were read at this version; each value is still recorded
+  on its own; one line per press (ADR 0005 addendum, `ui-quality.md` §7).
+  A new PO layout's values are confirmed on its first PO only, not three
+  (`layout_onboarding.uncertain_first_pos: 1` in `sales_order_rules@1.10.0`
+  and the demo's own `1.5.4`; the tests' 1.5.2 keeps three). Mutations red
+  (served per value, the last value's page, as-read naming a value, another
+  line, the web's reason). **Not done:** the same one press for a PO's
+  flagged values (O3): each correction re-runs the case's checks, a larger
+  change; owed if Đạt wants it.
+
 - 2026-11-02, Đạt: **no e-signature** on quotations (too involved); the
   signed paper stays the official approval. **Roles**: the ~4 of the
   2026-10-28 brainstorm were DW1's alone; for both DWs about 7 (Sales PIC,

@@ -279,6 +279,13 @@ class RfqDocument(BaseModel):
         document = RfqDocument.model_validate({**dict(self), "items": items})
         return document, _text(current.value)
 
+    def read_text(self, line_no: int | None, field: str) -> str:
+        """One flagged value as text, as it is held now: what "as read" keeps."""
+        holder: Any = self if line_no is None else self.item(line_no)
+        held: Sourced[Any] | None = getattr(holder, field)
+        assert held is not None  # a flagged field holds a value (validator)
+        return _text(held.value)
+
     def line_numbers(self) -> frozenset[int]:
         return frozenset(item.line_no for item in self.items)
 
@@ -2049,6 +2056,27 @@ class QuoteCase(BaseModel):
         findings = tuple(answered if f is found else f for f in self.findings)
         request = QuoteRequest.model_validate({**dict(self.request), "document": document})
         return self._changed(request=request, findings=findings)
+
+    def confirm_as_read(
+        self, line_no: int | None, *, by: uuid.UUID, at: AwareDatetime
+    ) -> QuoteCase:
+        """Sales confirms every value of one finding still waiting, each as it
+        was read (Đạt, 2026-11-04: one press for a line that read right, not
+        a retyping of each). One finding, never several: each value is still
+        recorded on its own, with what was read and what was kept."""
+        key = (QuoteFindingCode.VALUE_UNCERTAIN, line_no)
+        found = next((f for f in self.findings if f.key == key and f.is_open), None)
+        if found is None:
+            raise ConflictError(
+                "no such open finding",
+                details={"case_id": str(self.case_id), "line_no": line_no},
+            )
+        done = {c.field for c in found.confirmed}
+        case = self
+        for field in [f for f in found.flagged if f not in done]:
+            read = self.request.document.read_text(line_no, field)
+            case = case.confirm_value(line_no, field, read, by=by, at=at)
+        return case
 
     def confirm_customer(
         self, customer_code: str, *, by: uuid.UUID, at: AwareDatetime

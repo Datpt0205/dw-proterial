@@ -400,6 +400,34 @@ async def test_a_typed_value_that_is_not_one_of_the_field_is_refused(
         case.confirm_value(line_no, field, value, by=PERSON, at=AT)
 
 
+async def test_a_line_is_confirmed_as_read_with_one_press_and_only_that_line() -> None:
+    """Đạt, 2026-11-04: a line whose values read right is confirmed with one
+    press instead of retyping each; what is confirmed is exactly what was
+    read, value by value on the record, and the other lines stay open."""
+    case = await _open("M37", M37)
+    before = case.request.document.item(1)
+    # One value corrected by hand first: it keeps what was typed.
+    case = case.confirm_value(1, "quantity", "1250", by=PERSON, at=AT)
+
+    case = case.confirm_as_read(1, by=PERSON, at=AT)
+
+    (finding,) = [f for f in case.findings if f.key == (QuoteFindingCode.VALUE_UNCERTAIN, 1)]
+    assert not finding.is_open and finding.disposition.kind == "corrected_by_sales"
+    confirmed = {c.field: (c.read, c.value) for c in finding.confirmed}
+    assert confirmed["quantity"] == ("1200", "1250")
+    after = case.request.document.item(1)
+    for field in ("description", "uom", "needed_by"):
+        read = str(getattr(before, field).value)
+        assert confirmed[field][0] == confirmed[field][1]
+        assert str(getattr(after, field).value) == read
+    others = [
+        f for f in case.findings if f.code is QuoteFindingCode.VALUE_UNCERTAIN and f.line_no != 1
+    ]
+    assert others and all(f.is_open for f in others)
+    with pytest.raises(ConflictError):
+        case.confirm_as_read(1, by=PERSON, at=AT)
+
+
 async def test_a_case_with_a_value_to_confirm_cannot_leave_received() -> None:
     case = await _open("M37", M37)
 
@@ -583,6 +611,81 @@ async def test_a_value_read_from_the_mail_is_confirmed_once_its_text_was_served(
         f for f in world.quote(case_id).findings if f.key == (QuoteFindingCode.VALUE_UNCERTAIN, 1)
     ).confirmed
     assert [(c.field, c.value) for c in confirmed] == [("quantity", "1250"), ("uom", "m")]
+
+
+async def test_a_line_confirmed_as_read_needs_every_place_it_was_read_served() -> None:
+    """The one press holds what each value's own press holds: this person
+    opened, at this version, every place a value of the line was read."""
+    world, case_id = _world_with(await _open("M37", M37))
+
+    async def as_read() -> None:
+        await world.services.quote_commands.answer_finding(
+            AN.context(),
+            case_id,
+            "value_uncertain:1",
+            case_version=world.quote(case_id).case_version,
+            as_read=True,
+        )
+
+    with pytest.raises(ConflictError) as refused:
+        await as_read()
+    assert refused.value.details["rule"] == "source_not_served"
+    await world.services.sources.quote_message_text(DIEU.context(), case_id)
+    with pytest.raises(ConflictError, match="chưa mở nguồn"):
+        await as_read()
+
+    await world.services.sources.quote_message_text(AN.context(), case_id)
+    await as_read()
+    case = world.quote(case_id)
+    (finding,) = [f for f in case.findings if f.key == (QuoteFindingCode.VALUE_UNCERTAIN, 1)]
+    assert not finding.is_open
+    # A value and "as read" at once is no request.
+    with pytest.raises(DomainError):
+        await world.services.quote_commands.answer_finding(
+            AN.context(),
+            case_id,
+            "value_uncertain:2",
+            case_version=case.case_version,
+            field="quantity",
+            value="1",
+            as_read=True,
+        )
+
+
+async def test_a_line_confirmed_as_read_needs_the_page_of_each_of_its_values() -> None:
+    """A line whose values were read from two pages: serving the first is not
+    serving the second, for the one press as for each value's own."""
+    m38 = await _open("M38", M38)
+    (finding,) = [f for f in m38.findings if f.key == (QuoteFindingCode.VALUE_UNCERTAIN, 1)]
+    # The last of them: a check of the first alone would miss it.
+    other = finding.flagged[-1]
+    assert other != finding.flagged[0]
+    item = m38.request.document.item(1)
+    held = getattr(item, other)
+    moved = held.model_copy(update={"source": held.source.model_copy(update={"page": 2})})
+    items = tuple(
+        i.model_copy(update={other: moved}) if i.line_no == 1 else i
+        for i in m38.request.document.items
+    )
+    document = m38.request.document.model_copy(update={"items": items})
+    case = m38.model_copy(update={"request": m38.request.model_copy(update={"document": document})})
+    world, case_id = _world_with(case)
+    attachment = item.quantity.source.attachment_id
+    assert attachment is not None
+    await world.services.sources.quote_source(AN.context(), case_id, attachment, page=1, sheet=None)
+
+    async def as_read() -> None:
+        await world.services.quote_commands.answer_finding(
+            AN.context(),
+            case_id,
+            "value_uncertain:1",
+            case_version=world.quote(case_id).case_version,
+            as_read=True,
+        )
+
+    with pytest.raises(ConflictError) as refused:
+        await as_read()
+    assert refused.value.details["missing"] == [f"{attachment}:page 2"]
 
 
 async def test_a_value_read_from_a_file_needs_its_page_served() -> None:

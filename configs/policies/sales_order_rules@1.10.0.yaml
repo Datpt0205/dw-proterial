@@ -1,26 +1,16 @@
 schema_version: "1.0"
 policy_id: sales_order_rules
-policy_version: "1.5.3"
-
-# THE DEMO TENANT'S OWN VERSION of sales_order_rules, as `make demo-reset`
-# installs it (`dw_sales.testing.seed_rules.DEMO_POLICIES`): 1.5.2 with every
-# model_assist switch off, nothing else changed. The mock demo runs with no
-# model server, and a version that turns a model step on is refused until the
-# step's live eval met its bar on this deployment's model (dw_sales ADR 0005,
-# addendum of 2026-10-23); this demo records no measurement, so its rules
-# (the NOC/ESF hold, the price tolerance, ...) are in force with the model
-# steps off, as they would be without a model anyway. A developer with a
-# local model attests the steps and proposes a version that turns them on,
-# through the same propose and approve route.
-#
-# 1.5.2 (`../sales_order_rules@1.5.2.yaml`) stays the sample set's version
-# with the steps on, for the tests and evals that run them over a recorded
-# model and seeded measurements. `test_order_rules.py` holds the two equal
-# but for the version and the switches.
+policy_version: "1.10.0"
 
 # How DW1 checks a customer PO before Sales reviews it (WIV-03-012 steps 1, 2,
 # 4 and 6). Code reads this file and computes every number in a finding from
 # it, the master data and the PO's own cells; no model reads it.
+#
+# Platform layer: every value here is a fictional default. The fine print the
+# Sales requirements leave to the company to confirm (the copper/LME rule, the
+# short lead-time criterion, cross-check, export control) is still owed; a
+# tenant's own answers arrive as its own version of this policy, never as an
+# edit to this file.
 #
 # A finding is stamped with this file's id and version when it is raised, and
 # a case stamps cross_check_required and export_control_mode when it is
@@ -44,6 +34,13 @@ policy_version: "1.5.3"
 # 1.6.0 (contract acceptance row 3): missing_noc_esf is an error, shown as
 # blocking: the order is held at confirmation until the export-control PIC
 # accepts it, never confirmed automatically. Nothing else changed.
+# 1.7.0 (ticket 43): ignored_sender_domains. Nothing else changed.
+# 1.8.0 (AI item 4, dw_sales ADR 0005): model_assist gains po_body_extraction,
+# a PO written in the mail body read by a model, off. Nothing else changed.
+# 1.9.0 (Đạt, 2026-11-02): ignored_sender_domains is gone. No mail is left
+# out by its sender any more, internal mail included: DW1's model sorts every
+# mail. A version that still holds the key reads, the key ignored. Nothing
+# else changed.
 
 # A PO unit price passes when it is within this fraction of the quoted unit
 # price, in the quotation's currency. "0": it must equal the quotation. A
@@ -152,15 +149,20 @@ model_assist:
   reply_intent: false
   request_handoff: false
   layout_proposal: false
+  # A local model reads a PO the customer wrote in the mail itself, with no
+  # file attached (AI item 4); every value it read is flagged for Sales to
+  # confirm against the mail, as a new layout's are.
   po_body_extraction: false
 
 # A PO layout a person approved (ticket 30) is trusted only after people have
 # confirmed what it read: the first this-many POs read through a new or
 # changed layout keep every value `value_uncertain`, for Sales to confirm
 # field by field, so an approved but wrong mapping cannot repeat silently.
-# Interim default, Proterial's to set.
+# Interim default, Proterial's to set. 1 since 1.10.0 (Đạt, 2026-11-04: less
+# for a person to do): the first PO a layout reads is confirmed value by
+# value, each later one read through it as any approved layout's.
 layout_onboarding:
-  uncertain_first_pos: 3
+  uncertain_first_pos: 1
 
 # error is blocking: what is wrong with the order as printed, accepted only
 # where the findings table allows it and with a reason. warning is shown and
@@ -206,3 +208,4 @@ findings:
   # Sales asks the customer for the date or goes ahead with it to follow
   # (DW1 then suggests the first day the lead time allows).
   requested_date_missing: error
+

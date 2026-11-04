@@ -88,12 +88,13 @@ def test_a_policy_without_the_model_assist_switch_is_refused(tmp_path: Path) -> 
 
 
 def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() -> None:
-    """`make demo-reset` installs 1.5.3 (`seed_rules.DEMO_POLICIES`): the mock
+    """`make demo-reset` installs 1.5.4 (`seed_rules.DEMO_POLICIES`): the mock
     demo has no model server and records no measurement, so a step turned on
     would be refused by its bar and the tenant left on the platform's rules
     (dw_sales ADR 0005, addendum of 2026-10-23). It is 1.5.2, the version the
-    tests run the model steps under, in every other field: a rule changed in
-    one and not the other fails here."""
+    tests run the model steps under, in every other field but one: the demo
+    confirms only a new layout's first PO (Đạt, 2026-11-04), where the tests
+    keep three. A rule changed in one and not the other fails here."""
     from dw_sales.domain.order_checks import ModelStep, OrderRules
     from dw_sales.testing.seed_rules import DEMO_POLICIES, MODEL_STEP_POLICIES
 
@@ -101,7 +102,7 @@ def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() 
     steps_on = load_tenant_order_rules(MODEL_STEP_POLICIES)
     assert demo is not None and steps_on is not None
     assert (demo.version, steps_on.version) == (
-        "sales_order_rules@1.5.3",
+        "sales_order_rules@1.5.4",
         "sales_order_rules@1.5.2",
     )
     assert not any(demo.model_assist.on(step) for step in ModelStep)
@@ -112,6 +113,22 @@ def test_the_demo_resets_version_is_the_sample_sets_with_every_model_step_off() 
         dumped.pop("policy_version")
         assist = dumped.pop("model_assist")
         dumped["unread_retry_hours"] = assist["unread_retry_hours"]
+        dumped.pop("layout_onboarding")
         return dumped
 
     assert rest(demo) == rest(steps_on)
+    assert demo.layout_onboarding.uncertain_first_pos == 1
+    assert steps_on.layout_onboarding.uncertain_first_pos == 3
+
+
+def test_the_platform_confirms_only_a_new_layouts_first_po() -> None:
+    """Đạt, 2026-11-04: one PO of a new or changed layout confirmed value by
+    value, then it reads as any approved layout's (Proterial's to set)."""
+    from dw_sales.adapters.policy_files import load_sales_policies
+
+    repo = Path(__file__).resolve().parents[5]
+    rules = load_sales_policies(repo / "configs/policies", repo / "configs/copy").order_rules
+    assert (rules.version, rules.layout_onboarding.uncertain_first_pos) == (
+        "sales_order_rules@1.10.0",
+        1,
+    )

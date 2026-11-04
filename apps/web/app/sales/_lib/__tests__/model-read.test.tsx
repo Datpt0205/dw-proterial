@@ -137,7 +137,8 @@ describe("a value a model read, confirmed one by one (ticket 29)", () => {
     );
     expect(screen.getByText(/Đã xác nhận: Cáp 2C AWG24 BLK/)).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Xác nhận" })).toHaveLength(3);
-    // No bulk action: one button per value, nothing that confirms them all.
+    // No action across the case: one button per value, and one for this
+    // line's values still waiting, never one for them all.
     expect(screen.queryByRole("button", { name: /tất cả/i })).toBeNull();
 
     const uom = screen.getByRole("textbox", { name: "Đơn vị tính xác nhận" });
@@ -155,9 +156,81 @@ describe("a value a model read, confirmed one by one (ticket 29)", () => {
     expect([caseId, key, body]).toEqual([
       m37().case_id,
       "value_uncertain:1",
-      { case_version: 2, field: "uom", value: "m" },
+      { case_version: 2, field: "uom", value: "m", as_read: false },
     ]);
     await waitFor(() => expect(onDone).toHaveBeenCalled());
+  }, 20_000);
+
+  it("confirms the line's values still waiting as read with one press, naming none", async () => {
+    const onDone = vi.fn();
+    render(
+      <UiProvider>
+        <ModelReadFinding
+          quote={m37()}
+          finding={uncertain()}
+          viewer={{ principalId: AN, hasScope: () => true } as never}
+          onDone={onDone}
+          name={() => "An"}
+        />
+      </UiProvider>,
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Xác nhận cả dòng như đã đọc (dòng 1)",
+      }),
+    );
+    await waitFor(() => expect(api.answerFinding).toHaveBeenCalledTimes(1), {
+      timeout: 5000,
+    });
+    const [, key, body] = api.answerFinding.mock.calls[0] as unknown as [
+      string,
+      string,
+      unknown,
+    ];
+    expect([key, body]).toEqual([
+      "value_uncertain:1",
+      { case_version: 2, as_read: true },
+    ]);
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+  }, 20_000);
+
+  it("waits for every source of the line before confirming it as read, and offers no press for one value", () => {
+    const { unmount } = render(
+      <UiProvider>
+        <ModelReadFinding
+          quote={m37()}
+          finding={{ ...uncertain(), source_not_served: ["quantity"] }}
+          viewer={{ principalId: AN, hasScope: () => true } as never}
+          onDone={vi.fn()}
+          onSource={vi.fn()}
+          name={() => "An"}
+        />
+      </UiProvider>,
+    );
+    const line = screen.getByRole("button", {
+      name: "Xác nhận cả dòng như đã đọc (dòng 1)",
+    });
+    expect(line.hasAttribute("disabled")).toBe(true);
+    unmount();
+    const one = uncertain();
+    render(
+      <UiProvider>
+        <ModelReadFinding
+          quote={m37()}
+          finding={{
+            ...one,
+            confirmed: ["description", "needed_by", "quantity"].map((field) => ({
+              ...one.confirmed[0]!,
+              field,
+            })),
+          }}
+          viewer={{ principalId: AN, hasScope: () => true } as never}
+          onDone={vi.fn()}
+          name={() => "An"}
+        />
+      </UiProvider>,
+    );
+    expect(screen.queryByRole("button", { name: /như đã đọc/ })).toBeNull();
   }, 20_000);
 
   it("keeps 'Xác nhận' disabled, with the reason in words, for a value whose source is not opened (audit gap 2)", () => {

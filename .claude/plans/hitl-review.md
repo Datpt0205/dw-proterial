@@ -29,6 +29,19 @@ decide is below. Nothing here is built yet: each line is Đạt's choice.
 5. The platform DW2 rules (`internal_domains: [seller.example]`,
    `bravo_po.mock: true`) refuse real work until Proterial's own are in.
 
+## Done on 2026-11-04 (Đạt: "tự khớp nếu bước không quan trọng, bước
+quan trọng người xác nhận; khảo sát lại khi làm thật ở nhà máy")
+
+- Item 1 above: DW2's lane runs where deployed, on the stored mailbox.
+- Items 2 and 3: DW2 reads quotes and confirmations on its own (5b,
+  `purchasing.md`); a confirmation that differs from the order still goes
+  to a buyer. Both readings measured on Qwen for the demo tenant.
+- Candidate 4: one press per line for a request DW1 read (quotes only; the
+  PO side not done), and a new layout's first PO only (`sales.md` Open).
+- Still Đạt's: candidate 2 (DW1's four measured steps on in the tenant's
+  rules), candidate 5 (re-measure `message_intent`), item 5 (Proterial's
+  own DW2 rules). Re-surveyed at the plant before go-live.
+
 ## Top candidates to relax (each Đạt's call)
 
 1. DW2's lane on where deployed (item 1): removes a press at steps 1–8;

@@ -67,7 +67,7 @@ def sales_api_db() -> DatabaseUrls:
         # The sample set's version turns DW1's model steps on, which is
         # refused without a passing live measurement of each (dw_sales ADR
         # 0005, addendum of 2026-10-23): stand-ins, written as the attesting
-        # lane writes them. (`make demo-reset` installs 1.5.3, every step off.)
+        # lane writes them. (`make demo-reset` installs 1.5.4, every step off.)
         await seed_test_measurements(urls.app)
         # The demo tenant's own order rules, proposed and approved through
         # the service as the app role (ticket 19), as `make demo-reset` does.

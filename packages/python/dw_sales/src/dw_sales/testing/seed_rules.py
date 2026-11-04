@@ -13,7 +13,7 @@ Which version is the caller's to name, because a version that turns a model
 step on is refused unless the step's live eval met its bar for the model
 DW1's profile routes it to (dw_sales ADR 0005, addendum of 2026-10-23):
 
-- `DEMO_POLICIES`, `sales_order_rules@1.5.3`, every model step off: what
+- `DEMO_POLICIES`, `sales_order_rules@1.5.4`, every model step off: what
   `make demo-reset` installs. The mock demo runs with no model server (none is
   composed without `DW_ONPREM_MODEL_BASE_URL`) and records no measurement, a
   measurement being what a live run says, not what a seed asserts; so the
