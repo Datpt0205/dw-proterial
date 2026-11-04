@@ -520,6 +520,7 @@ def build_purchasing_automation(
         access=SqlMembershipLookup(sessions),
         mailboxes=(demo,),
         notices=notices,
+        holders=SqlScopeHolders(sessions),
         clock=clock,
         ids=ids,
     )

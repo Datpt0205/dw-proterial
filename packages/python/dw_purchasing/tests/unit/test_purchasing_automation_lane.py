@@ -279,6 +279,9 @@ async def test_a_measured_quote_reading_records_each_reply_and_tells_the_buyer_t
     # Before any case asks, a supplier's mail is told once and left unsettled.
     await lane.tick(*ALPHA)
     assert "purchasing.mail.supplier:Q01" in notices.told
+    # Tied to nothing yet, it is not called a quote: what would tie it is said.
+    loose = notices.told["purchasing.mail.supplier:C01"][4]
+    assert "báo giá" not in loose and "số PO Bravo" in loose
     assert "Q01" not in world.store.rows(*ALPHA).outcomes
     case_id = await _rfq_drafted(world)
 

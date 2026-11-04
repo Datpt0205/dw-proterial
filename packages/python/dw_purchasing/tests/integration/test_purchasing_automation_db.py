@@ -22,6 +22,7 @@ from dw_platform.adapters.persistence.repositories import (
     SqlApprovalRepository,
     SqlAuditRepository,
 )
+from dw_platform.adapters.persistence.scope_holders import SqlScopeHolders
 from dw_platform.application.authorization import ScopeAuthorizationService
 from dw_platform.domain.audit import system_actor
 from dw_purchasing.adapters.assembly import automation_lane, build_purchasing
@@ -72,6 +73,7 @@ def _lane(sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy) -> objec
         access=SqlMembershipLookup(sessions),
         mailboxes=(tenancy.alpha,),
         notices=NoNotices(),
+        holders=SqlScopeHolders(sessions),
         clock=FixedClock(NOW),
         ids=Uuid4Generator(),
     )

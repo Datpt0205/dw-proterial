@@ -19,6 +19,35 @@ from dw_purchasing.domain.automation import PurchasingModelStep
 from dw_purchasing.testing.world import ALPHA, RecordedNotices, World, services_of
 
 DW2: uuid.UUID = uuid.UUID(int=0xD2)
+# The people the brief finds, by what they hold: a buyer who also looks
+# over what DW2 read, and an approver of every tier.
+BUYER: uuid.UUID = uuid.UUID(int=0xB1)
+APPROVER: uuid.UUID = uuid.UUID(int=0xA9)
+
+
+@dataclasses.dataclass
+class Holders:
+    """`HoldersPort`: the buyer holds the buyer's and the reviewer's scopes;
+    each approve scope is ``approvers``' (every one the approver's, unless
+    named); DW2's account holds what its ceiling names, as the platform's
+    lookup would find it."""
+
+    approvers: dict[str, uuid.UUID] = dataclasses.field(default_factory=dict)
+
+    async def holding(
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, scopes: frozenset[str]
+    ) -> list[uuid.UUID]:
+        found = set()
+        if scopes & {
+            "purchasing.rfq.prepare",
+            "purchasing.po.prepare",
+            "purchasing.request.intake",
+        }:
+            found |= {BUYER, DW2}
+        for scope in scopes:
+            if scope.startswith("purchasing.approve."):
+                found.add(self.approvers.get(scope, APPROVER))
+        return sorted(found, key=str)
 
 
 @dataclasses.dataclass
@@ -65,6 +94,7 @@ def lane_of(
     notices: RecordedNotices,
     accounts: Accounts | None = None,
     mailboxes: tuple[tuple[uuid.UUID, uuid.UUID], ...] = (ALPHA,),
+    holders: Holders | None = None,
 ) -> AutomationLane:
     """The lane over ``world``, every notice into one inbox, as the
     composition root wires it."""
@@ -77,6 +107,7 @@ def lane_of(
         services=services_of(world),
         uow=world.store,
         notices=notices,
+        holders=holders if holders is not None else Holders(),
         clock=world.clock,
         ids=Uuid4Generator(),
     )

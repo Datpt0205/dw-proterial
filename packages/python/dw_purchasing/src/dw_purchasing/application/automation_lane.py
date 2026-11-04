@@ -46,9 +46,10 @@ once its model reading is measured):
    date it is due (a later confirmed date is told again when it passes).
    Code's, with no switch: it tells, it decides nothing.
 7. **The morning brief** (`domain.brief`): once per working day, from the
-   rules' time at the plant, each person the counts of what waits on them.
-   Once per person and day by its source key. No switch, for the same
-   reason.
+   rules' time at the plant, each person one brief with the counts of what
+   waits on them, whatever roles they hold (`HoldersPort`, the platform's
+   own answer to who holds a scope). Once per person and day by its source
+   key. No switch, for the same reason.
 
 A step that refuses (no limits in the rules, a stand-in Bravo layout, a
 supplier gone) is told to the buyers once with the refusal's own words,
@@ -171,6 +172,15 @@ class ServiceAccessPort(Protocol):
     ) -> MembershipAccess | None: ...
 
 
+class HoldersPort(Protocol):
+    """Who in a workspace holds any of some scopes, as the platform resolves
+    it (`SqlScopeHolders.holding`): the brief is one per person."""
+
+    async def holding(
+        self, tenant_id: uuid.UUID, workspace_id: uuid.UUID, scopes: frozenset[str]
+    ) -> list[uuid.UUID]: ...
+
+
 class AutomationScopesPort(Protocol):
     """Every workspace with a case waiting on a step DW2 may take, ids only,
     across tenants (`purchasing.automation_scopes_due`)."""
@@ -203,6 +213,7 @@ class AutomationLane:
     services: PurchasingServices
     uow: PurchasingUnitOfWork
     notices: NoticesPort
+    holders: HoldersPort
     clock: UtcClock
     ids: IdGenerator
 
@@ -274,7 +285,8 @@ class AutomationLane:
                     PurchasingScopes.RFQ_PREPARE,
                     f"purchasing.mail.supplier:{item.message_id}",
                     f"Thư của nhà cung cấp {supplier}: {item.subject}",
-                    "Mở hồ sơ đang hỏi giá của nhà cung cấp này để DW2 đọc báo giá trong thư.",
+                    "Thư chưa gắn được với hồ sơ hay đơn nào. Nếu là xác nhận đơn,"
+                    " ghi số PO Bravo của đơn để DW2 nhận ra.",
                     "/purchasing/mail",
                 )
                 continue
@@ -652,18 +664,24 @@ class AutomationLane:
             return []
         async with self.uow(context) as work:
             cases = await work.cases.waiting(_OPEN, limit=FOLLOWED_CASES)
-        found = briefs(cases, late=late)
-        for brief in found:
+        parts: dict[uuid.UUID, list[str]] = {}
+        for brief in briefs(cases, late=late):
+            for person in await self.holders.holding(
+                context.tenant_id, context.workspace_id, brief.scopes
+            ):
+                if person != context.principal_id:
+                    parts.setdefault(person, []).extend(brief.parts)
+        for person, said in sorted(parts.items(), key=lambda p: str(p[0])):
             await self.notices.tell(
                 context,
-                scopes=brief.scopes,
-                excluding=(context.principal_id,),
-                source_key=f"purchasing.brief:{day.isoformat()}:{brief.audience}",
+                scopes=frozenset(),
+                people=(person,),
+                source_key=f"purchasing.brief:{day.isoformat()}:{person}",
                 title=f"Bản tin sáng DW2 · {day:%d/%m}",
-                body="Chờ bạn: " + " · ".join(brief.parts) + ".",
+                body="Chờ bạn: " + " · ".join(said) + ".",
                 link="/purchasing",
             )
-        return [f"brief {day.isoformat()}: {len(found)}"] if found else []
+        return [f"brief {day.isoformat()}: {len(parts)}"] if parts else []
 
     # ------------------------------------------------------------- helpers --
 

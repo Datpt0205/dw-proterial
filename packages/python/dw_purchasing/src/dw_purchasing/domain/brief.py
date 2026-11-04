@@ -12,8 +12,10 @@ person is told the counts of what waits on them, and only them:
 - each approver: the requests sent to the scope stamped on them
   (`ApprovalAsked.required_scope`), so a tier is told its own.
 
-Counts only: never an amount, a supplier or a requester (a notification is
-a side door, ui-quality §6). A person with nothing waiting is told nothing.
+Each audience's parts are put together per person, so someone holding
+several of these roles gets one brief. Counts only: never an amount, a
+supplier or a requester (a notification is a side door, ui-quality §6). A
+person with nothing waiting is told nothing.
 The time and the days are the tenant's rules (`PurchasingRules.brief`); a
 version written before them reads the platform's (`read_over`).
 """

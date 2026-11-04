@@ -59,7 +59,11 @@ from dw_purchasing.application.approvals import (
 )
 from dw_purchasing.application.assistant import AssistantService
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
-from dw_purchasing.application.automation_lane import AutomationLane, ServiceAccessPort
+from dw_purchasing.application.automation_lane import (
+    AutomationLane,
+    HoldersPort,
+    ServiceAccessPort,
+)
 from dw_purchasing.application.follow_up import OrderFollowUp
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.mail_drop import (
@@ -446,6 +450,7 @@ def automation_lane(
     access: ServiceAccessPort,
     mailboxes: tuple[tuple[uuid.UUID, uuid.UUID], ...],
     notices: NoticesPort,
+    holders: HoldersPort,
     clock: UtcClock,
     ids: IdGenerator,
 ) -> AutomationLane:
@@ -457,6 +462,7 @@ def automation_lane(
         services=services,
         uow=SqlPurchasingStore(session_factory, audit, approvals),
         notices=notices,
+        holders=holders,
         clock=clock,
         ids=ids,
     )
