@@ -106,6 +106,27 @@ async def test_a_case_and_an_outcome_round_trip_in_their_own_workspace_only(
             assert await work.cases.page(limit=10, before=None) == []
 
 
+async def test_every_field_of_a_case_survives_the_round_trip(
+    app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
+) -> None:
+    """The body holds every field the columns do not: a field added to the
+    case and not to the body would come back as its default (failure-modes
+    #2), as `read_from` once did."""
+    from dw_purchasing.domain.cases import ReadFrom, Review
+
+    store = _store(app_sessions)
+    case = _case(source=PrSource.MAIL, ref="P08").model_copy(
+        update={
+            "read_from": ReadFrom(attachment_id="scan-014", attachment="scan.pdf", scanned=True),
+            "review": Review(asked_at=NOW),
+        }
+    )
+    async with store(caller(tenancy.alpha)) as work:
+        await work.cases.add(case)
+    async with store(caller(tenancy.alpha)) as work:
+        assert await work.cases.get(case.case_id) == case
+
+
 async def test_a_session_that_never_scoped_itself_reads_nothing(
     app_sessions: async_sessionmaker[AsyncSession], tenancy: Tenancy
 ) -> None:

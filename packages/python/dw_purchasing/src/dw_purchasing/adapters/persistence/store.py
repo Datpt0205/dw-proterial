@@ -79,20 +79,12 @@ mail_outcomes = sa.Table(
 
 AuditFactory = Callable[[AsyncSession], AuditRepositoryPort]
 ApprovalsFactory = Callable[[AsyncSession], ApprovalsPort]
-_BODY_KEYS = (
-    "request",
-    "source_ref",
-    "check",
-    "approval",
-    "decision",
-    "rfq",
-    "offers",
-    "selection",
-    "po",
-    "requested_by",
-    "review",
-    "reapproval",
+# What the case's own columns hold; every other field is the body's, read
+# from the model so a field added to the case is never left out of it.
+_COLUMNS = frozenset(
+    {"case_id", "case_version", "status", "source", "rules_ref", "received_by", "received_at"}
 )
+_BODY_KEYS = frozenset(PurchaseCase.model_fields) - _COLUMNS
 
 
 def _body(case: PurchaseCase) -> dict[str, Any]:
