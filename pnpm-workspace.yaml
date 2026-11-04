@@ -28,6 +28,12 @@ overrides:
   # GHSA-68fv-2mgg-jv7q / CVE-2026-93749, reached through postcss and
   # @tailwindcss/node; also what trivy finds in the dw-web image.
   "source-map-js@>=1.0.0 <1.2.2": "^1.2.2"
+  # GHSA-587h-7wmj-h5pm (launch-editor on Windows), dev-only through vitest
+  # and @vitejs/plugin-react.
+  "vite@>=8.2.0 <8.2.4": ">=8.2.4 <8.3"
+  # Four undici advisories (DoS, cache poisoning, TLS validation), dev-only
+  # through jsdom.
+  "undici@>=8.0.0 <8.12.2": ">=8.12.2 <8.13"
 
 # An ignore is a decision, not a fix: each entry names why it is safe and what
 # ends it. It is keyed by GHSA, so a NEW advisory on the same package still fails.

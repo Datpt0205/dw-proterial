@@ -172,6 +172,14 @@ the theme, the shell and the shared composites, not primitive wrappers.
   run) and a visual check at 992/1280/1440/1600 px.
 - `pnpm audit` (2026-10-15): 2 moderate next.js advisories, fixed in next
   15.5.27, below the high gate; bumping next is a separate item.
+- `pnpm audit` (2026-11-04): 1 CRITICAL (next <=15.5.27, unauthenticated RCE
+  in the image optimizer with SVG, GHSA-2464-fhr4-w9xw) and 7 HIGH (next DoS,
+  zod <4.6.6 memory, vite launch-editor on Windows, four undici). Fixed: next
+  15.5.28 (21 days old; 15.5.29, one day old, left), zod 3.25.76 -> 4.6.7 in
+  `@dw/contracts` and `@dw/api-client` (no 3.x fix exists; typecheck clean,
+  v4's stricter `uuid()` meets every id the server mints: v4, v5, v7),
+  capped overrides for vite 8.2.4 and undici 8.12.3 (dev only). After: 0
+  high or critical (3 moderate, 1 low). Web suite and `next build` compiled.
 - 2026-10-23, React Flow for the DW1 process map (Đạt's decision, the first
   exception to antd-only; CLAUDE.md "Web UI"). `@xyflow/react` **12.12.0**,
   MIT: the latest stable on 2026-10-23, published 2026-09-24 (29 days;
