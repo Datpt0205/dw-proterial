@@ -119,6 +119,21 @@
       "version": "1.0.0"
     },
     {
+      "checksum": "5aefe528664007f21f847185b6aac209e56a0e613e0fe5b1b8c20781f6198f67",
+      "dataset_id": "purchasing_follow_up",
+      "files": [
+        {
+          "checksum": "c456194f9e70d452ebdc2656de010f7fe6bb8fcfcef1a795af2cbabaad022484",
+          "path": "evals/expected/purchasing_follow_up.json"
+        },
+        {
+          "checksum": "ee689e9210eda2a0284b0d4e4493b5c68d8d1dcc27723c76c1c86f9b16419b4b",
+          "path": "evals/fixtures/cases/purchasing_follow_up.json"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    {
       "checksum": "4890e9c8b405b4b7e25bf92680b21760cbb1a425553d7923eb5d627338f4f5dd",
       "dataset_id": "purchasing_po",
       "files": [
@@ -751,7 +766,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "2308fde89b7ed37e380441015c5b4be10661c6d8",
+  "git_sha": "a38aa80542c416b43d44a33ced6da43f9551887b",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -979,6 +994,11 @@
       "checksum": "b5dee5fc2c33cf58c88dad2853961f1aae2372dafb70080158098a45fb57a042",
       "prompt_id": "platform.untrusted_demo",
       "version": "1.1.0"
+    },
+    {
+      "checksum": "ddf4008f564b0adb298b8eade4fd2e9b30ad5b020ba38b4bcd2fa20fb84c64b3",
+      "prompt_id": "purchasing.order_confirmation_reading",
+      "version": "1.0.0"
     },
     {
       "checksum": "5b9918adcb37a880d483bade8111b89315bbc098a96f607fd5b5be30199d59c8",

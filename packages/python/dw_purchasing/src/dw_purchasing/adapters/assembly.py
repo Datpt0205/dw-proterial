@@ -58,6 +58,7 @@ from dw_purchasing.application.approvals import (
 )
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.automation_lane import AutomationLane, ServiceAccessPort
+from dw_purchasing.application.follow_up import OrderFollowUp
 from dw_purchasing.application.intake import PurchaseRequests, Worker
 from dw_purchasing.application.mail_drop import (
     AttachmentReader,
@@ -230,6 +231,16 @@ def build_purchasing(
             clock=clock,
             ids=ids,
             enabled=outbox,
+        ),
+        follow_up=OrderFollowUp(
+            uow=store,
+            gate=Gate(authorization),
+            master=master,
+            inbox=requests.inbox,
+            model=requests.model,
+            worker=requests.worker,
+            clock=clock,
+            ids=ids,
         ),
     )
 

@@ -134,6 +134,18 @@ dw_sales ADR 0005 as DW2 applies it).
   (Đã gửi), `failed` (Không gửi được: no outbox folder, or the flow failed)
   or `stalled` (Chưa có xác nhận gửi, 30 minutes without a receipt). One
   active per supplier of a case; a failed or stalled one may be sent again.
+- **Order follow-up (theo dõi đơn)**: DW02 function 5, per drafted order by
+  its `po_ref` (`domain.tracking`, `application.follow_up`): **Bravo's
+  number** (số PO Bravo), typed by the buyer once the file is imported; the
+  **supplier's confirmation** (xác nhận của nhà cung cấp), read from a
+  verified mail of the order's own supplier that names the order (by Bravo's
+  number or the `po_ref`, matched by code), held line by line to the order:
+  each **difference** (chỗ khác đơn) is `quantity` (số lượng), `unit_price`
+  (đơn giá), `delivery_on` (ngày giao, later than needed), `missing` (thiếu
+  dòng) or `not_ordered` (dòng ngoài đơn); it is accepted (Đã chấp nhận) by a
+  buyer. A **receipt** (ghi nhận hàng) is what arrived of a line, never more
+  than is owed. A line is **late** (trễ hạn) past the date the supplier
+  confirmed, else its need-by date, with less arrived than ordered.
 
 ## Roles and scopes
 

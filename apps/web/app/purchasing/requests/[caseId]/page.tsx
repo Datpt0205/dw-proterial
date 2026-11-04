@@ -41,6 +41,7 @@ import { CaseHistory } from "../../_components/case-history";
 import { DecideApproval } from "../../_components/decide-approval";
 import { purchasingCrumbs, ScopeGate } from "../../_components/frame";
 import { CaseStatusTag, MarkTag } from "../../_components/tags";
+import { OrderFollowUp, useConfirmationMails } from "./follow-up";
 import { NamedSuppliers, Sourcing } from "./sourcing";
 
 type Check = PurchasingSchemas["CrossCheck"];
@@ -92,7 +93,7 @@ function CaseView() {
       {c.rfq || c.status === "approved" ? (
         <Sourcing c={c} onChanged={found.reload} />
       ) : null}
-      {c.po ? <OrdersCard c={c} /> : null}
+      {c.po ? <OrdersCard c={c} onChanged={found.reload} /> : null}
       <Card size="small" title="DW2 và mọi người đã làm gì">
         <CaseHistory c={c} actor={actor} />
       </Card>
@@ -560,8 +561,15 @@ function CheckCard({ c }: { c: PurchaseCase }) {
 
 // -------------------------------------------------------------- orders --
 
-function OrdersCard({ c }: { c: PurchaseCase }) {
+function OrdersCard({
+  c,
+  onChanged,
+}: {
+  c: PurchaseCase;
+  onChanged: () => void;
+}) {
   const po = c.po!;
+  const mails = useConfirmationMails(c);
   return (
     <Card
       size="small"
@@ -614,6 +622,15 @@ function OrdersCard({ c }: { c: PurchaseCase }) {
                   render: (_, l) => money(l.amount, order.currency),
                 },
               ]}
+            />
+            <OrderFollowUp
+              c={c}
+              order={order}
+              mails={mails.data ?? []}
+              onChanged={() => {
+                mails.reload();
+                onChanged();
+              }}
             />
           </Flex>
         ))}

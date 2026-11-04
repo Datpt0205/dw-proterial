@@ -97,7 +97,8 @@ async def test_measured_reading_opens_and_sends_each_request_and_tells_its_appro
     # a known supplier's mail is never read as a request.
     to_person = [k for k in notices.told if k.startswith("purchasing.mail.to_person:")]
     supplier = [k for k in notices.told if k.startswith("purchasing.mail.supplier:")]
-    assert len(to_person) == 4 and len(supplier) == 4
+    # Supplier mail: P03 and the quotes Q01-Q03, the confirmations C01-C02.
+    assert len(to_person) == 4 and len(supplier) == 6
     # Q04 claims a supplier's domain but the mail system did not verify it.
     assert "purchasing.mail.to_person:Q04" in to_person
     outcomes = world.store.rows(*ALPHA).outcomes
@@ -127,7 +128,8 @@ async def test_at_person_the_lane_reads_nothing_and_tells_the_buyers() -> None:
     await _lane(world, notices).tick(*ALPHA)
     assert world.store.rows(*ALPHA).cases == {} and world.model.calls == []
     assert len([k for k in notices.told if k.startswith("purchasing.mail.arrived:")]) == 8
-    assert len([k for k in notices.told if k.startswith("purchasing.mail.supplier:")]) == 4
+    # P03, the quotes Q01-Q03 and the confirmations C01-C02.
+    assert len([k for k in notices.told if k.startswith("purchasing.mail.supplier:")]) == 6
     _switches(world, mail_sorting=AutomationLevel.PERSON)
     quiet = RecordedNotices()
     await _lane(world, quiet).tick(*ALPHA)

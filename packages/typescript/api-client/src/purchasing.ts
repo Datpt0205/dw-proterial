@@ -33,6 +33,8 @@ export type PurchasingRules = PurchasingSchemas["PurchasingRulesView"];
 export type PurchasingRuleVersion =
   PurchasingSchemas["PurchasingRuleVersionView"];
 export type PurchasingWordsDraft = PurchasingSchemas["WordsDraft"];
+export type PurchaseConfirmationMail = PurchasingSchemas["ConfirmationMail"];
+export type PurchaseLateLine = PurchasingSchemas["LateLine"];
 export type PurchasingMasterData = PurchasingSchemas["MasterDataView"];
 export type PurchasingMasterImport = PurchasingSchemas["MasterImportView"];
 export type PurchasingListChange = PurchasingSchemas["ListChange"];
@@ -231,6 +233,74 @@ export class PurchasingApi {
     const filename =
       /filename="([^"]+)"/.exec(disposition)?.[1] ?? "bravo.xlsx";
     return { blob: await response.blob(), filename };
+  }
+
+  // ---- each drafted order followed (DW02 function 5) ----------------------
+
+  recordBravoNo(
+    caseId: string,
+    poRef: string,
+    bravoNo: string,
+    caseVersion: number,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/requests/{case_id}/po/{po_ref}/bravo-number">(
+      `${BASE}/requests/${enc(caseId)}/po/${enc(poRef)}/bravo-number`,
+      { case_version: caseVersion, bravo_no: bravoNo },
+      idempotencyKey,
+    );
+  }
+
+  /** The mails that confirm one of the case's orders, decided by code. */
+  confirmationMails(caseId: string) {
+    return this.get<"/api/v1/purchasing/requests/{case_id}/po/confirmations">(
+      `${BASE}/requests/${enc(caseId)}/po/confirmations`,
+    );
+  }
+
+  readConfirmation(
+    caseId: string,
+    messageId: string,
+    caseVersion: number,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/requests/{case_id}/po/confirmations/from-mail/{message_id}">(
+      `${BASE}/requests/${enc(caseId)}/po/confirmations/from-mail/${enc(messageId)}`,
+      { case_version: caseVersion },
+      idempotencyKey,
+    );
+  }
+
+  acceptConfirmation(
+    caseId: string,
+    poRef: string,
+    caseVersion: number,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/requests/{case_id}/po/{po_ref}/confirmation/accept">(
+      `${BASE}/requests/${enc(caseId)}/po/${enc(poRef)}/confirmation/accept`,
+      { case_version: caseVersion },
+      idempotencyKey,
+    );
+  }
+
+  recordReceipt(
+    caseId: string,
+    poRef: string,
+    receipt: { line_no: number; quantity: string; received_on: string },
+    caseVersion: number,
+    idempotencyKey: string,
+  ) {
+    return this.post<"/api/v1/purchasing/requests/{case_id}/po/{po_ref}/receipts">(
+      `${BASE}/requests/${enc(caseId)}/po/${enc(poRef)}/receipts`,
+      { case_version: caseVersion, ...receipt },
+      idempotencyKey,
+    );
+  }
+
+  /** Every line past its date with less arrived than ordered. */
+  lateLines() {
+    return this.get<"/api/v1/purchasing/orders/late">(`${BASE}/orders/late`);
   }
 
   // ---- a requester's own --------------------------------------------------

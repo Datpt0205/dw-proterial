@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from dw_purchasing.application.approvals import RequestApprovals
 from dw_purchasing.application.automation import SwitchesService
+from dw_purchasing.application.follow_up import OrderFollowUp
 from dw_purchasing.application.intake import PurchaseRequests
 from dw_purchasing.application.master_data import MasterDataService
 from dw_purchasing.application.orders import PurchaseOrders
@@ -28,3 +29,4 @@ class PurchasingServices:
     words: RuleWordsDesk
     master_data: MasterDataService
     rfq_mails: RfqMailService
+    follow_up: OrderFollowUp

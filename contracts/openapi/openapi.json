@@ -1351,6 +1351,27 @@
         "title": "BravoEntryBody",
         "type": "object"
       },
+      "BravoNoBody": {
+        "additionalProperties": false,
+        "properties": {
+          "bravo_no": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Bravo No",
+            "type": "string"
+          },
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "case_version",
+          "bravo_no"
+        ],
+        "title": "BravoNoBody",
+        "type": "object"
+      },
       "BravoOrderLineView": {
         "properties": {
           "delivery_date": {
@@ -2611,6 +2632,162 @@
           "delivery_dates"
         ],
         "title": "ConfirmBody",
+        "type": "object"
+      },
+      "Confirmation": {
+        "additionalProperties": false,
+        "description": "A supplier's confirmation of one order, read from one mail.",
+        "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "accepted_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By"
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/Difference"
+            },
+            "title": "Differences",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ConfirmedLine"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
+          "read_at": {
+            "format": "date-time",
+            "title": "Read At",
+            "type": "string"
+          },
+          "read_by": {
+            "format": "uuid",
+            "title": "Read By",
+            "type": "string"
+          },
+          "source_ref": {
+            "pattern": "^[!-~]{1,512}$",
+            "title": "Source Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_ref",
+          "lines",
+          "differences",
+          "read_by",
+          "read_at"
+        ],
+        "title": "Confirmation",
+        "type": "object"
+      },
+      "ConfirmationMail": {
+        "description": "A verified mail from the supplier of one of a case's orders that names\nthe order, not read yet: what a buyer presses \"DW2 đọc\" on.",
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "po_ref": {
+            "title": "Po Ref",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "po_ref",
+          "sender",
+          "subject",
+          "received_at"
+        ],
+        "title": "ConfirmationMail",
+        "type": "object"
+      },
+      "ConfirmedLine": {
+        "additionalProperties": false,
+        "description": "One line as the supplier confirmed it; None where the mail says\nnothing of that value.",
+        "properties": {
+          "delivery_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery On"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,21}0*$)\\d{0,16}\\.\\d{0,4}0*$)",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price"
+          }
+        },
+        "required": [
+          "line_no"
+        ],
+        "title": "ConfirmedLine",
         "type": "object"
       },
       "ConvertEntryView": {
@@ -3923,6 +4100,58 @@
           "cells"
         ],
         "title": "DiffRow",
+        "type": "object"
+      },
+      "Difference": {
+        "additionalProperties": false,
+        "description": "Where a confirmation and its order part, as text a buyer reads.",
+        "properties": {
+          "confirmed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed"
+          },
+          "field": {
+            "enum": [
+              "quantity",
+              "unit_price",
+              "delivery_on",
+              "missing",
+              "not_ordered"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "ordered": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordered"
+          }
+        },
+        "required": [
+          "line_no",
+          "field",
+          "ordered",
+          "confirmed"
+        ],
+        "title": "Difference",
         "type": "object"
       },
       "Disposition": {
@@ -5962,6 +6191,53 @@
           "anchor"
         ],
         "title": "LabelledAnchor",
+        "type": "object"
+      },
+      "LateLine": {
+        "description": "One line past its date with less arrived than ordered.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "owed": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Owed",
+            "type": "string"
+          },
+          "po_ref": {
+            "title": "Po Ref",
+            "type": "string"
+          },
+          "pr_no": {
+            "title": "Pr No",
+            "type": "string"
+          },
+          "supplier_code": {
+            "title": "Supplier Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "pr_no",
+          "po_ref",
+          "supplier_code",
+          "line_no",
+          "due_on",
+          "owed"
+        ],
+        "title": "LateLine",
         "type": "object"
       },
       "LatencyView": {
@@ -9749,6 +10025,76 @@
         "title": "OrderSummaryView",
         "type": "object"
       },
+      "OrderTracking": {
+        "additionalProperties": false,
+        "description": "What happened to one drafted order, by its `po_ref`.",
+        "properties": {
+          "bravo_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bravo At"
+          },
+          "bravo_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bravo By"
+          },
+          "bravo_no": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bravo No"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Confirmation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "po_ref": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$",
+            "title": "Po Ref",
+            "type": "string"
+          },
+          "receipts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Receipt"
+            },
+            "title": "Receipts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "po_ref"
+        ],
+        "title": "OrderTracking",
+        "type": "object"
+      },
       "OrderedLineView": {
         "properties": {
           "currency": {
@@ -11746,6 +12092,14 @@
           },
           "status": {
             "$ref": "#/components/schemas/CaseStatus"
+          },
+          "tracking": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OrderTracking"
+            },
+            "title": "Tracking",
+            "type": "array"
           }
         },
         "required": [
@@ -13211,7 +13565,7 @@
       },
       "ReadFrom": {
         "additionalProperties": false,
-        "description": "Where in a mail DW2 read the request, when a document was attached:\nthe file's name when the lines were in it (None: the mail's own words),\nand whether any value was read only on a scanned page, which a person\ncompares with the paper before DW2 sends it on (`review`).",
+        "description": "Where in a mail DW2 read the request, when a document was attached:\nthe file (its id in the stored mailbox, and its name) when the lines\nwere in it (None: the mail's own words), and whether any value was read\nonly on a scanned page, which a person compares with the paper before\nDW2 sends it on (`review`).",
         "properties": {
           "attachment": {
             "anyOf": [
@@ -13225,6 +13579,18 @@
               }
             ],
             "title": "Attachment"
+          },
+          "attachment_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9._-]{1,128}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Id"
           },
           "scanned": {
             "default": false,
@@ -13329,6 +13695,87 @@
           "filter"
         ],
         "title": "ReasonCount",
+        "type": "object"
+      },
+      "Receipt": {
+        "additionalProperties": false,
+        "description": "Goods of one line that arrived, as a buyer recorded them.",
+        "properties": {
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "format": "uuid",
+            "title": "Recorded By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_no",
+          "quantity",
+          "received_on",
+          "recorded_by",
+          "recorded_at"
+        ],
+        "title": "Receipt",
+        "type": "object"
+      },
+      "ReceiptBody": {
+        "additionalProperties": false,
+        "properties": {
+          "case_version": {
+            "minimum": 1.0,
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,14}|(?=[\\d.]{1,19}0*$)\\d{0,14}\\.\\d{0,4}0*$)",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_version",
+          "line_no",
+          "quantity",
+          "received_on"
+        ],
+        "title": "ReceiptBody",
         "type": "object"
       },
       "RegionFlag": {
@@ -21297,6 +21744,31 @@
         ]
       }
     },
+    "/api/v1/purchasing/orders/late": {
+      "get": {
+        "operationId": "late_lines_api_v1_purchasing_orders_late_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LateLine"
+                  },
+                  "title": "Response Late Lines Api V1 Purchasing Orders Late Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Late Lines",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
     "/api/v1/purchasing/requests": {
       "get": {
         "operationId": "list_requests_api_v1_purchasing_requests_get",
@@ -21925,6 +22397,377 @@
           }
         },
         "summary": "Bravo File",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/po/confirmations": {
+      "get": {
+        "operationId": "confirmation_mails_api_v1_purchasing_requests__case_id__po_confirmations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConfirmationMail"
+                  },
+                  "title": "Response Confirmation Mails Api V1 Purchasing Requests  Case Id  Po Confirmations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirmation Mails",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/po/confirmations/from-mail/{message_id}": {
+      "post": {
+        "operationId": "read_confirmation_api_v1_purchasing_requests__case_id__po_confirmations_from_mail__message_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[!-~]{1,512}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseVersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Confirmation",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/po/{po_ref}/bravo-number": {
+      "post": {
+        "operationId": "record_bravo_no_api_v1_purchasing_requests__case_id__po__po_ref__bravo_number_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "po_ref",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$",
+              "title": "Po Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BravoNoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Bravo No",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/po/{po_ref}/confirmation/accept": {
+      "post": {
+        "operationId": "accept_confirmation_api_v1_purchasing_requests__case_id__po__po_ref__confirmation_accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "po_ref",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$",
+              "title": "Po Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseVersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Confirmation",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/requests/{case_id}/po/{po_ref}/receipts": {
+      "post": {
+        "operationId": "record_receipt_api_v1_purchasing_requests__case_id__po__po_ref__receipts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "po_ref",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$",
+              "title": "Po Ref",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseChange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Receipt",
         "tags": [
           "purchasing"
         ]

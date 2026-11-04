@@ -25,7 +25,7 @@ import binascii
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Protocol
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -37,6 +37,7 @@ from dw_platform.application.access_context import AccessContext
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.approvals import PurchaseCheckView
 from dw_purchasing.application.automation import SwitchesView
+from dw_purchasing.application.follow_up import ConfirmationMail, LateLine
 from dw_purchasing.application.intake import CaseChange, InboxItem
 from dw_purchasing.application.master_data import MasterDataView, MasterImportView
 from dw_purchasing.application.requesters import DraftView, MyRequest
@@ -46,7 +47,7 @@ from dw_purchasing.application.rules import PurchasingRulesView
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import ComparisonView, OfferForm, ReplyItem, SupplierName
 from dw_purchasing.domain.cases import PurchaseCase
-from dw_purchasing.domain.requests import PurchaseRequest
+from dw_purchasing.domain.requests import Code, PurchaseRequest, Quantity
 from dw_purchasing.domain.sourcing import Choice
 
 NOT_CONFIGURED = "chưa cấu hình nguồn dữ liệu Mua hàng"
@@ -123,6 +124,22 @@ class SelectionBody(BaseModel):
     choices: list[Choice] = Field(min_length=1, max_length=100)
 
 
+class BravoNoBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_version: int = Field(ge=1)
+    bravo_no: Code
+
+
+class ReceiptBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    case_version: int = Field(ge=1)
+    line_no: int = Field(ge=1)
+    quantity: Quantity
+    received_on: date
+
+
 class RulesBody(BaseModel):
     """A whole version of a key: what the settings page drafted and the person
     read as a difference in words before sending."""
@@ -165,6 +182,7 @@ class RuleChange(BaseModel):
 _MessageId = Annotated[str, PathParam(pattern=r"^[!-~]{1,512}$")]
 _RuleKey = Annotated[str, PathParam(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 _SupplierCode = Annotated[str, PathParam(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,47}$")]
+_PoRef = Annotated[str, PathParam(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$")]
 
 
 class MasterUploadBody(BaseModel):
@@ -388,6 +406,84 @@ def build_router(
     ) -> CaseChange:
         change = await svc.orders.draft(context, case_id, case_version=body.case_version)
         return await idem.record(change)
+
+    @router.post(
+        "/requests/{case_id}/po/{po_ref}/bravo-number", response_model=CaseChange, dependencies=po
+    )
+    async def record_bravo_no(
+        case_id: uuid.UUID, po_ref: _PoRef, body: BravoNoBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.follow_up.record_bravo_no(
+            context, case_id, po_ref, body.bravo_no, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.get(
+        "/requests/{case_id}/po/confirmations",
+        response_model=list[ConfirmationMail],
+        dependencies=po,
+    )
+    async def confirmation_mails(
+        case_id: uuid.UUID, context: Ctx, svc: Svc
+    ) -> list[ConfirmationMail]:
+        return await svc.follow_up.confirmation_mails(context, case_id)
+
+    @router.post(
+        "/requests/{case_id}/po/confirmations/from-mail/{message_id}",
+        response_model=CaseChange,
+        dependencies=po,
+    )
+    async def read_confirmation(
+        case_id: uuid.UUID,
+        message_id: _MessageId,
+        body: CaseVersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChange:
+        change = await svc.follow_up.read_confirmation(
+            context, case_id, message_id, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/requests/{case_id}/po/{po_ref}/confirmation/accept",
+        response_model=CaseChange,
+        dependencies=po,
+    )
+    async def accept_confirmation(
+        case_id: uuid.UUID,
+        po_ref: _PoRef,
+        body: CaseVersionBody,
+        context: Ctx,
+        svc: Svc,
+        idem: Idem,
+    ) -> CaseChange:
+        change = await svc.follow_up.accept_confirmation(
+            context, case_id, po_ref, case_version=body.case_version
+        )
+        return await idem.record(change)
+
+    @router.post(
+        "/requests/{case_id}/po/{po_ref}/receipts", response_model=CaseChange, dependencies=po
+    )
+    async def record_receipt(
+        case_id: uuid.UUID, po_ref: _PoRef, body: ReceiptBody, context: Ctx, svc: Svc, idem: Idem
+    ) -> CaseChange:
+        change = await svc.follow_up.record_receipt(
+            context,
+            case_id,
+            po_ref,
+            line_no=body.line_no,
+            quantity=body.quantity,
+            received_on=body.received_on,
+            case_version=body.case_version,
+        )
+        return await idem.record(change)
+
+    @router.get("/orders/late", response_model=list[LateLine], dependencies=po)
+    async def late_lines(context: Ctx, svc: Svc) -> list[LateLine]:
+        return await svc.follow_up.late(context)
 
     @router.get("/requests/{case_id}/po/bravo.xlsx", dependencies=download)
     async def bravo_file(case_id: uuid.UUID, context: Ctx, svc: Svc) -> Response:
