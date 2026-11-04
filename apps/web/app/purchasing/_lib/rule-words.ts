@@ -162,7 +162,7 @@ const PATHS: [RegExp, (index: number) => string, Words][] = [
     named(BRAVO_FIELD),
   ],
   [
-    /^steps\.(mail_sorting|pr_drafting|submission|rfq|po_drafting)$/,
+    /^steps\.(mail_sorting|pr_drafting|submission|rfq|po_drafting|quote_reading|confirmation_reading)$/,
     () => "",
     named(LEVEL),
   ],

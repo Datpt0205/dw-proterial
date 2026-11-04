@@ -73,8 +73,43 @@ def test_a_step_above_its_ceiling_is_no_version() -> None:
     assert STEPS[AutomationStep.RFQ].ceiling is AutomationLevel.AI_REVIEW
     with pytest.raises(ValidationError, match="above what the product allows"):
         PurchasingAutomation.model_validate(_switches("9.0.0", rfq="ai_auto"))
-    with pytest.raises(ValidationError, match="every step has a level"):
-        PurchasingAutomation.model_validate({"policy_version": "9.0.0", "steps": {}})
+
+
+def test_a_version_older_than_a_step_leaves_that_step_to_a_person() -> None:
+    """A tenant's own version written before 5b names no supplier-mail step:
+    those read as `person`, what DW2 did with such mail before (told a buyer),
+    never as more than the tenant ever chose."""
+    older = {
+        "policy_version": "1.0.0",
+        "steps": {
+            "mail_sorting": "ai_auto",
+            "pr_drafting": "ai_auto",
+            "submission": "ai_auto",
+            "rfq": "ai_review",
+            "po_drafting": "ai_auto",
+        },
+    }
+    switches = PurchasingAutomation.model_validate(older)
+    assert switches.steps[AutomationStep.QUOTE_READING] is AutomationLevel.PERSON
+    assert switches.steps[AutomationStep.CONFIRMATION_READING] is AutomationLevel.PERSON
+    assert switches.steps[AutomationStep.PR_DRAFTING] is AutomationLevel.AI_AUTO
+
+
+def test_the_platform_names_every_step_and_reads_supplier_mail_on_its_own() -> None:
+    """The platform's file names each step itself, never by the default; the
+    two supplier-mail steps wait on their own model readings."""
+    import yaml
+
+    (path,) = sorted((REPO / "configs" / "policies").glob("purchasing_automation@*.yaml"))[-1:]
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert set(raw["steps"]) == {step.value for step in AutomationStep}
+    assert raw["steps"]["quote_reading"] == raw["steps"]["confirmation_reading"] == "ai_auto"
+    assert STEPS[AutomationStep.QUOTE_READING].model_steps == (
+        PurchasingModelStep.SUPPLIER_QUOTE_READING,
+    )
+    assert STEPS[AutomationStep.CONFIRMATION_READING].model_steps == (
+        PurchasingModelStep.ORDER_CONFIRMATION_READING,
+    )
 
 
 async def test_the_platforms_switches_run_unmeasured_readings_at_ai_review() -> None:
@@ -149,7 +184,7 @@ async def test_a_switch_pressed_on_the_page_is_numbered_by_the_platform() -> Non
         "purchasing_automation",
         {**unnumbered, "steps": {**unnumbered["steps"], "rfq": "person"}},
     )
-    assert (first.version, second.version) == ("1.0.1", "1.0.2")
+    assert (first.version, second.version) == ("1.1.1", "1.1.2")
     assert first.status == second.status == "approved"
 
 

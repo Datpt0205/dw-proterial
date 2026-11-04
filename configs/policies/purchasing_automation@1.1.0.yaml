@@ -1,0 +1,42 @@
+schema_version: "1.0"
+policy_id: purchasing_automation
+version: "1.1.0"
+
+# How far DW2 (Mua hàng) goes on its own, step by step: Đạt's defaults of
+# 2026-11-01; 1.1.0 (2026-11-04) adds the two supplier-mail steps, on their
+# own (Đạt: "tự khớp đơn nếu bước không quan trọng"). Validated by `dw_purchasing.domain.automation.PurchasingAutomation`;
+# a tenant changes them as its own version, proposed and decided like its
+# rules, never by editing this file.
+#
+#   ai_auto    AI tự làm: DW2 does the step, a person is told when it could not.
+#   ai_review  AI làm, người duyệt: DW2 prepares it, a person finishes it with
+#              one press.
+#   person     Người làm: DW2 does not touch the step.
+#
+# A step that spends money, approves, mails outside the company or records in
+# Bravo stops at ai_review whatever is written here (`STEPS`, in code). A step
+# whose model reading has no passing live measurement on the plant's model
+# runs at ai_review until it has one.
+steps:
+  # A new mail sorted by its sender: a request from the company, or for a
+  # person to read.
+  mail_sorting: ai_auto
+  # A request's case opened from the mail the model read. Runs as ai_review
+  # until `purchasing_pr_mail_reading` is measured on the plant's model.
+  pr_drafting: ai_auto
+  # A checked request sent to the approver its amount names.
+  submission: ai_auto
+  # The RFQs of an approved request drafted; a buyer sends them.
+  rfq: ai_review
+  # The orders and the Bravo file drafted once the suppliers are chosen; a
+  # buyer imports the file.
+  po_drafting: ai_auto
+  # A supplier's reply to an RFQ read into its offers; a buyer compares and
+  # chooses. Runs as ai_review until `purchasing_supplier_quote_reading` is
+  # measured on the plant's model.
+  quote_reading: ai_auto
+  # A supplier's confirmation of an order read and held to the order, and
+  # accepted when it differs in nothing; one that differs goes to a buyer.
+  # Runs as ai_review until `purchasing_order_confirmation_reading` is
+  # measured on the plant's model.
+  confirmation_reading: ai_auto

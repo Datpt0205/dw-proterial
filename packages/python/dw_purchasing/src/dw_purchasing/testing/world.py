@@ -158,11 +158,13 @@ class TenantPolicies:
 @dataclass
 class RecordedNotices:
     """Implements `NoticesPort`: every notice kept as (key, recipients' scopes,
-    people, excluded, title), once per key, as the platform's inbox holds it."""
+    people, excluded, title, body, link), once per key, as the platform's
+    inbox holds it."""
 
-    told: dict[str, tuple[frozenset[str], tuple[uuid.UUID, ...], tuple[uuid.UUID, ...], str]] = (
-        field(default_factory=dict)
-    )
+    told: dict[
+        str,
+        tuple[frozenset[str], tuple[uuid.UUID, ...], tuple[uuid.UUID, ...], str, str, str | None],
+    ] = field(default_factory=dict)
 
     async def tell(
         self,
@@ -176,7 +178,9 @@ class RecordedNotices:
         body: str,
         link: str | None,
     ) -> None:
-        self.told.setdefault(source_key, (scopes, tuple(people), tuple(excluding), title))
+        self.told.setdefault(
+            source_key, (scopes, tuple(people), tuple(excluding), title, body, link)
+        )
 
 
 @dataclass

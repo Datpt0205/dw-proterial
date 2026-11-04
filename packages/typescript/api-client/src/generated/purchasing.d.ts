@@ -842,7 +842,7 @@ export interface components {
          *     get theirs the day they are built, never before (failure-modes #1).
          * @enum {string}
          */
-        AutomationStep: "mail_sorting" | "pr_drafting" | "submission" | "rfq" | "po_drafting";
+        AutomationStep: "mail_sorting" | "pr_drafting" | "submission" | "rfq" | "po_drafting" | "quote_reading" | "confirmation_reading";
         /** BravoColumn */
         BravoColumn: {
             /**
@@ -1094,7 +1094,7 @@ export interface components {
          * @description What DW2 did with one mail.
          * @enum {string}
          */
-        Disposition: "opened" | "to_person";
+        Disposition: "opened" | "to_person" | "supplier";
         /**
          * DraftView
          * @description What the requester's page shows after DW2 read their words: the
@@ -1659,7 +1659,7 @@ export interface components {
          *     (`dw_purchasing.application.automation.BARS`).
          * @enum {string}
          */
-        PurchasingModelStep: "purchasing_pr_mail_reading";
+        PurchasingModelStep: "purchasing_pr_mail_reading" | "purchasing_supplier_quote_reading" | "purchasing_order_confirmation_reading";
         /**
          * PurchasingRuleKey
          * @description What a tenant may hold its own version of.

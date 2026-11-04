@@ -17,9 +17,11 @@ from dw_purchasing.application.automation_lane import (
     LANE_CEILING,
     dw2_subject,
 )
-from dw_purchasing.domain.automation import AutomationLevel, AutomationStep
+from dw_purchasing.application.ports import Disposition
+from dw_purchasing.domain.automation import AutomationLevel, AutomationStep, PurchasingModelStep
 from dw_purchasing.domain.cases import CaseStatus
-from dw_purchasing.testing.lane import DW2, Accounts, lane_of, measure_pr_reading
+from dw_purchasing.testing.flows import orders_drafted
+from dw_purchasing.testing.lane import DW2, Accounts, lane_of, measure, measure_pr_reading
 from dw_purchasing.testing.world import (
     ALPHA,
     BETA,
@@ -35,6 +37,10 @@ REPO = Path(__file__).resolve().parents[5]
 FIXTURES = REPO / "evals/fixtures/cases"
 INTAKE = json.loads((FIXTURES / "purchasing_pr_intake.json").read_text(encoding="utf-8"))
 SOURCING = json.loads((FIXTURES / "purchasing_sourcing.json").read_text(encoding="utf-8"))
+FOLLOW_UP = json.loads((FIXTURES / "purchasing_follow_up.json").read_text(encoding="utf-8"))
+# P01's orders: Kimura's (C01 confirms it as ordered), Bảo Hộ's (C02: fewer
+# gloves, later).
+KIMURA, BAOHO = "PR-2611-004-03", "PR-2611-004-02"
 HEAD = uuid.UUID(int=0x4EAD)
 
 
@@ -43,6 +49,7 @@ def _world() -> World:
     world.model.by_schema = {
         "ModelOffer": SOURCING["answers"],
         "RfqWording": {"PR-2611-004": SOURCING["rfq_words"]["good"]},
+        "ModelConfirmation": FOLLOW_UP["answers"],
     }
     return world
 
@@ -239,5 +246,145 @@ async def test_a_suppliers_reply_to_a_case_asking_tells_the_buyer_which_case() -
 
     await _lane(world, notices).tick(*ALPHA)
 
-    titles = [notices.told[k][3] for k in notices.told if k.startswith("purchasing.mail.supplier:")]
-    assert any("trả lời hỏi giá PR-2611-004" in t for t in titles)
+    told = notices.told["purchasing.mail.quote:Q01"]
+    assert "trả lời hỏi giá PR-2611-004" in told[3]
+    # Not measured: the buyer presses "DW2 đọc báo giá"; nothing is read.
+    assert world.store.rows(*ALPHA).cases[item.case_id].offers == ()
+
+
+async def _rfq_drafted(world: World) -> uuid.UUID:
+    item = await world.service.read_mail(caller(), "P01")
+    assert item.case_id is not None
+    await world.approvals.submit(caller(), item.case_id, case_version=1)
+    case = await world.service.case(caller(), item.case_id)
+    assert case.approval is not None
+    world.store.decide(
+        case.approval.approval_id,
+        tenant_id=ALPHA[0],
+        workspace_id=ALPHA[1],
+        approved=True,
+        decided_by=HEAD,
+        at=datetime(2026, 11, 2, 9, tzinfo=UTC),
+        comment="ok",
+    )
+    await world.settlement.settle(case.approval.approval_id, caller(principal=HEAD))
+    await world.sourcing.draft_rfq(caller(), item.case_id, case_version=3)
+    return item.case_id
+
+
+async def test_a_measured_quote_reading_records_each_reply_and_tells_the_buyer_to_choose() -> None:
+    world, notices = _world(), RecordedNotices()
+    await measure(world, PurchasingModelStep.SUPPLIER_QUOTE_READING)
+    lane = _lane(world, notices)
+    # Before any case asks, a supplier's mail is told once and left unsettled.
+    await lane.tick(*ALPHA)
+    assert "purchasing.mail.supplier:Q01" in notices.told
+    assert "Q01" not in world.store.rows(*ALPHA).outcomes
+    case_id = await _rfq_drafted(world)
+
+    await lane.tick(*ALPHA)
+
+    case = world.store.rows(*ALPHA).cases[case_id]
+    assert {o.source_ref for o in case.offers} == {"Q01", "Q02", "Q03"}
+    assert all(o.recorded_by == DW2 for o in case.offers)
+    # Choosing stays the buyer's.
+    assert case.status is CaseStatus.RFQ_DRAFTED and case.selection is None
+    told = notices.told["purchasing.mail.quote:Q01"]
+    assert "DW2 đã ghi báo giá" in told[3] and "chọn" in told[4]
+    outcomes = world.store.rows(*ALPHA).outcomes
+    assert {m: (o.disposition, o.case_id) for m, o in outcomes.items() if m in {"Q01", "Q02"}} == {
+        "Q01": (Disposition.SUPPLIER, case_id),
+        "Q02": (Disposition.SUPPLIER, case_id),
+    }
+    audited = [e.action for e in world.store.rows(*ALPHA).audit]
+    assert audited.count("purchasing.automation.quote_read") == 3
+    # Settled: the next tick reads nothing again.
+    calls = len(world.model.calls)
+    await lane.tick(*ALPHA)
+    assert len(world.model.calls) == calls
+
+
+async def _numbered(world: World, case_id: uuid.UUID) -> None:
+    for po_ref, number in ((KIMURA, "PO-26110007"), (BAOHO, "PO-26110008")):
+        version = (await world.service.case(caller(), case_id)).case_version
+        await world.follow_up.record_bravo_no(
+            caller(), case_id, po_ref, number, case_version=version
+        )
+
+
+def _tracked(world: World, case_id: uuid.UUID, po_ref: str) -> Any:
+    case = world.store.rows(*ALPHA).cases[case_id]
+    return next((t for t in case.tracking if t.po_ref == po_ref), None)
+
+
+async def test_a_confirmation_as_ordered_is_accepted_and_one_that_differs_goes_to_the_buyer() -> (
+    None
+):
+    world, notices = _world(), RecordedNotices()
+    await measure(world, PurchasingModelStep.ORDER_CONFIRMATION_READING)
+    case_id = await orders_drafted(world)
+    await _numbered(world, case_id)
+
+    await _lane(world, notices).tick(*ALPHA)
+
+    same = _tracked(world, case_id, KIMURA).confirmation
+    assert same.source_ref == "C01" and same.accepted_by == DW2 and same.differences == ()
+    differs = _tracked(world, case_id, BAOHO).confirmation
+    assert differs.source_ref == "C02" and differs.accepted_by is None and differs.differences
+    # Told only what is the buyer's: the one that differs.
+    assert "purchasing.mail.confirmation:C01" not in notices.told
+    told = notices.told["purchasing.mail.confirmation:C02"]
+    assert "khác đơn" in told[3] and told[5] == f"/purchasing/requests/{case_id}"
+    outcomes = world.store.rows(*ALPHA).outcomes
+    assert (outcomes["C01"].disposition, outcomes["C01"].case_id) == (Disposition.SUPPLIER, case_id)
+    audited = [e.action for e in world.store.rows(*ALPHA).audit]
+    assert audited.count("purchasing.automation.confirmation_accepted") == 1
+
+
+async def test_an_unmeasured_confirmation_reading_is_read_and_left_for_the_buyer_to_accept() -> (
+    None
+):
+    world, notices = _world(), RecordedNotices()
+    case_id = await orders_drafted(world)
+    await _numbered(world, case_id)
+
+    await _lane(world, notices).tick(*ALPHA)
+
+    same = _tracked(world, case_id, KIMURA).confirmation
+    assert same.source_ref == "C01" and same.accepted_by is None
+    assert "khớp đơn" in notices.told["purchasing.mail.confirmation:C01"][3]
+    assert "khác đơn" in notices.told["purchasing.mail.confirmation:C02"][3]
+
+
+async def test_at_person_a_confirmation_is_told_with_its_case_and_nothing_read() -> None:
+    world, notices = _world(), RecordedNotices()
+    _switches(world, confirmation_reading=AutomationLevel.PERSON)
+    case_id = await orders_drafted(world)
+    await _numbered(world, case_id)
+
+    await _lane(world, notices).tick(*ALPHA)
+
+    assert _tracked(world, case_id, KIMURA).confirmation is None
+    told = notices.told["purchasing.mail.confirmation:C01"]
+    assert told[5] == f"/purchasing/requests/{case_id}"
+
+
+async def test_the_model_down_leaves_a_confirmation_unsettled_for_the_next_tick() -> None:
+    world, notices = _world(), RecordedNotices()
+    await measure(world, PurchasingModelStep.ORDER_CONFIRMATION_READING)
+    case_id = await orders_drafted(world)
+    # The requests ahead of it read first, so the down tick reaches C01 (it
+    # names Bravo's number, not typed yet: nothing to tie it to until then).
+    await _lane(world, notices).tick(*ALPHA)
+    assert "C01" not in world.store.rows(*ALPHA).outcomes
+    await _numbered(world, case_id)
+    world.model.failure = ModelUnavailableError("down")
+
+    tick = await _lane(world, notices).tick(*ALPHA)
+
+    assert "mail: model unavailable" in tick.done
+    assert "C01" not in world.store.rows(*ALPHA).outcomes
+    assert _tracked(world, case_id, KIMURA).confirmation is None
+    world.model.failure = None
+    await _lane(world, notices).tick(*ALPHA)
+    assert _tracked(world, case_id, KIMURA).confirmation.accepted_by == DW2

@@ -125,7 +125,7 @@ function Inbox() {
                   ) : (
                     <Flex vertical gap={2}>
                       <StatusTag
-                        tone={m.disposition === "opened" ? "ok" : "warn"}
+                        tone={m.disposition === "to_person" ? "warn" : "ok"}
                       >
                         {MAIL_OUTCOME[m.disposition]}
                       </StatusTag>

@@ -29,6 +29,8 @@ export const STEP: Record<PurchaseAutomationStep, string> = {
   submission: "Gửi người duyệt",
   rfq: "Soạn thư hỏi giá",
   po_drafting: "Soạn PO và file Bravo",
+  quote_reading: "Đọc báo giá của nhà cung cấp",
+  confirmation_reading: "Đọc thư xác nhận đơn",
 };
 
 export const LEVEL: Record<PurchaseAutomationLevel, string> = {
@@ -42,6 +44,8 @@ export const MODEL_STEP: Record<
   string
 > = {
   purchasing_pr_mail_reading: "Đọc yêu cầu từ thư",
+  purchasing_supplier_quote_reading: "Đọc báo giá",
+  purchasing_order_confirmation_reading: "Đọc thư xác nhận đơn",
 };
 
 export const LEVEL_WHY: Record<
@@ -82,6 +86,7 @@ export const SOURCE: Record<PurchasingSchemas["PrSource"], string> = {
 export const MAIL_OUTCOME: Record<PurchasingSchemas["Disposition"], string> = {
   opened: "Đã mở hồ sơ",
   to_person: "Cần người xem",
+  supplier: "Thư nhà cung cấp",
 };
 
 /** Why a mail went to a person. A form rule's `missing:<field>` is worded by {@link mailReason}. */

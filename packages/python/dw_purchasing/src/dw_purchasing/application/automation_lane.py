@@ -28,6 +28,19 @@ once its model reading is measured):
 4. **Suppliers chosen** (`po_drafting`): at "AI tự làm" the orders and the
    Bravo file are drafted and the buyers told to import it; at "AI làm,
    người duyệt" they are told to draft it.
+5. **A known supplier's mail** (verified sender), tied by code to the one
+   order it names (`named_order`) or the one case it answers (`reply_case`):
+   - an order's confirmation (`confirmation_reading`): read and held to the
+     order; at "AI tự làm" one that differs in nothing is accepted, and one
+     that differs goes to the buyers (what to do about it is theirs); at "AI
+     làm, người duyệt" a match is left for a buyer's press;
+   - a quote (`quote_reading`): at "AI tự làm" read into the offers it
+     holds, the buyers told to compare and choose; below, told to press
+     "DW2 đọc báo giá".
+   Handled there, the mail is settled (`Disposition.SUPPLIER`, its case).
+   A mail about nothing waiting is told once and left unsettled: the case
+   it answers may come later. It costs no read, so it never holds back a
+   request behind it (`PER_TICK` counts reads).
 
 A step that refuses (no limits in the rules, a stand-in Bravo layout, a
 supplier gone) is told to the buyers once with the refusal's own words,
@@ -55,13 +68,21 @@ from dw_platform.application.identity import MembershipAccess, context_from, ser
 from dw_platform.application.provisioning import ServiceAccount
 from dw_platform.domain.audit import lane_audit_event
 from dw_platform.domain.mail_parts import newest_part
+from dw_platform.domain.messages import InboundMessage
 from dw_purchasing.application.access import PurchasingScopes
-from dw_purchasing.application.ports import Disposition, NoticesPort, PurchasingUnitOfWork
+from dw_purchasing.application.follow_up import FOLLOWED_CASES, named_order
+from dw_purchasing.application.ports import (
+    Disposition,
+    MessageOutcome,
+    NoticesPort,
+    PurchasingUnitOfWork,
+)
 from dw_purchasing.application.services import PurchasingServices
 from dw_purchasing.application.sourcing import reply_case
 from dw_purchasing.domain.automation import AutomationLevel, AutomationStep
 from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.domain.checks import MasterData
+from dw_purchasing.domain.orders import PoDraft
 
 _LOG = logging.getLogger("dw_purchasing.automation")
 
@@ -82,8 +103,12 @@ LANE_CEILING: Final = frozenset(
     }
 )
 # The most of each kind one tick takes, so a backlog is worked through over
-# ticks rather than in one long transaction-free burst.
+# ticks rather than in one long transaction-free burst. For mail it counts
+# the mails read, not those only told about.
 PER_TICK: Final = 20
+# A step's outcome when the model is down: nothing settled, the next tick
+# tries again.
+_DOWN: Final = "model unavailable"
 
 # Why a mail goes to a person, as the buyers read it: CONTEXT.md's "Mail
 # reasons" line, word for word (test_purchasing_screen_words.py).
@@ -141,6 +166,15 @@ class AutomationScopesPort(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class _Waiting:
+    """What a supplier's mail may be about, read once per tick: the drafted
+    orders (oldest `FOLLOWED_CASES`) and the cases still asking."""
+
+    ordered: Sequence[PurchaseCase]
+    asking: Sequence[PurchaseCase]
+
+
+@dataclass(frozen=True, slots=True)
 class Tick:
     """What one tick did, for the log: ids and codes only."""
 
@@ -192,33 +226,32 @@ class AutomationLane:
         unread = [m for m in await self.services.requests.mailbox(context) if m.disposition is None]
         master = await self.services.approvals.master.for_context(context)
         done: list[str] = []
-        for item in unread[:PER_TICK]:
+        reads = 0
+        waiting: _Waiting | None = None
+        for item in unread:
+            if reads >= PER_TICK:
+                break
             message = await self.services.requests.inbox.get_message(context, item.message_id)
             verified = message is not None and message.authentication.verified
             supplier = _supplier_of(master, item.sender) if verified else None
             if supplier is not None:
                 # A known supplier's mail, its sender verified by the mail
                 # system: a quote, a confirmation or a question about an
-                # order, never read as a request. Code ties it to the case it
-                # answers when one alone fits (`reply_case`), and the buyer is
-                # sent there; reading the quote stays the buyer's press. An
-                # unverified one is read as any mail is, and goes to a person.
+                # order, never read as a request. An unverified one is read
+                # as any mail is, and goes to a person.
                 assert message is not None
-                answered = reply_case(
-                    await self._waiting(context, CaseStatus.RFQ_DRAFTED),
-                    master,
-                    message.sender.domain,
-                    f"{message.subject}\n{newest_part(message).text}",
-                )
-                if answered is not None:
-                    await self._tell(
-                        context,
-                        PurchasingScopes.RFQ_PREPARE,
-                        f"purchasing.mail.supplier:{item.message_id}",
-                        f"{supplier} trả lời hỏi giá {answered.request.pr_no}",
-                        "Mở hồ sơ và bấm «DW2 đọc báo giá» để ghi báo giá trong thư.",
-                        _link(answered),
+                if waiting is None:
+                    waiting = _Waiting(
+                        await self._waiting(context, CaseStatus.PO_DRAFTED, FOLLOWED_CASES),
+                        await self._waiting(context, CaseStatus.RFQ_DRAFTED),
                     )
+                handled = await self._supplier_mail(context, master, supplier, message, waiting)
+                if handled == _DOWN:
+                    done.append("mail: model unavailable")
+                    break
+                if handled is not None:
+                    reads += 1
+                    done.append(handled)
                     continue
                 await self._tell(
                     context,
@@ -240,6 +273,7 @@ class AutomationLane:
                 )
                 continue
             review = drafting is AutomationLevel.AI_REVIEW
+            reads += 1
             try:
                 read = await self.services.requests.read_mail(
                     context, item.message_id, for_review=review
@@ -291,6 +325,208 @@ class AutomationLane:
                     _link(case),
                 )
         return done
+
+    async def _supplier_mail(
+        self,
+        context: AccessContext,
+        master: MasterData,
+        supplier: str,
+        message: InboundMessage,
+        waiting: _Waiting,
+    ) -> str | None:
+        """The order or the case a supplier's mail is about, decided by code,
+        and the step its switch allows there; None for neither."""
+        text = f"{message.subject}\n{newest_part(message).text}"
+        domain = message.sender.domain
+        orders = [
+            (case, order)
+            for case in waiting.ordered
+            if (order := named_order(case, master, domain, text)) is not None
+        ]
+        if len(orders) == 1:
+            case, order = orders[0]
+            return await self._confirmation(context, supplier, message.message_id, case, order)
+        answered = reply_case(waiting.asking, master, domain, text)
+        if answered is not None:
+            return await self._quote(context, supplier, message.message_id, answered)
+        return None
+
+    async def _confirmation(
+        self,
+        context: AccessContext,
+        supplier: str,
+        message_id: str,
+        case: PurchaseCase,
+        order: PoDraft,
+    ) -> str:
+        level = await self._level(context, AutomationStep.CONFIRMATION_READING)
+        key = f"purchasing.mail.confirmation:{message_id}"
+        named = f"đơn {order.po_ref} ({case.request.pr_no})"
+        if level is AutomationLevel.PERSON:
+            await self._tell(
+                context,
+                PurchasingScopes.PO_PREPARE,
+                key,
+                f"{supplier} xác nhận {named}",
+                "Mở hồ sơ và bấm «DW2 đọc» ở thư xác nhận.",
+                _link(case),
+            )
+            await self._settle(context, message_id, case)
+            return f"confirmation {message_id}: told"
+        try:
+            await self.services.follow_up.read_confirmation(
+                context,
+                case.case_id,
+                message_id,
+                case_version=await self._version(context, case.case_id),
+            )
+        except InfrastructureError:
+            return _DOWN
+        except (ConflictError, DomainError, NotFoundError) as refused:
+            return await self._not_read(context, key, message_id, case, refused, named)
+        read = await self._fresh(context, case.case_id)
+        tracking = next(t for t in read.tracking if t.po_ref == order.po_ref)
+        assert tracking.confirmation is not None
+        differences = len(tracking.confirmation.differences)
+        await self._audit(
+            context,
+            "purchasing.automation.confirmation_read",
+            str(case.case_id),
+            {"message_id": message_id, "po_ref": order.po_ref, "differences": differences},
+        )
+        accepted = False
+        if not differences and level is AutomationLevel.AI_AUTO:
+            try:
+                await self.services.follow_up.accept_confirmation(
+                    context,
+                    case.case_id,
+                    order.po_ref,
+                    case_version=read.case_version,
+                    only_if_same=True,
+                )
+                accepted = True
+            except ConflictError:
+                # A buyer acted meanwhile: theirs to finish.
+                pass
+        if accepted:
+            await self._audit(
+                context,
+                "purchasing.automation.confirmation_accepted",
+                str(case.case_id),
+                {"message_id": message_id, "po_ref": order.po_ref},
+            )
+        elif differences:
+            await self._tell(
+                context,
+                PurchasingScopes.PO_PREPARE,
+                key,
+                f"Xác nhận của {supplier} khác đơn ở {differences} chỗ: {named}",
+                "Xem chỗ khác rồi chấp nhận, hoặc trao đổi lại với nhà cung cấp.",
+                _link(case),
+            )
+        else:
+            await self._tell(
+                context,
+                PurchasingScopes.PO_PREPARE,
+                key,
+                f"Xác nhận của {supplier} khớp đơn: {named}",
+                "Bấm «Chấp nhận» trong hồ sơ để ghi nhận.",
+                _link(case),
+            )
+        await self._settle(context, message_id, case)
+        return f"confirmation {message_id}: {'accepted' if accepted else differences}"
+
+    async def _quote(
+        self, context: AccessContext, supplier: str, message_id: str, case: PurchaseCase
+    ) -> str:
+        level = await self._level(context, AutomationStep.QUOTE_READING)
+        key = f"purchasing.mail.quote:{message_id}"
+        named = case.request.pr_no
+        if level is not AutomationLevel.AI_AUTO:
+            await self._tell(
+                context,
+                PurchasingScopes.RFQ_PREPARE,
+                key,
+                f"{supplier} trả lời hỏi giá {named}",
+                "Mở hồ sơ và bấm «DW2 đọc báo giá» để ghi báo giá trong thư.",
+                _link(case),
+            )
+            await self._settle(context, message_id, case)
+            return f"quote {message_id}: told"
+        try:
+            await self.services.sourcing.read_offer_mail(
+                context,
+                case.case_id,
+                message_id,
+                case_version=await self._version(context, case.case_id),
+            )
+        except InfrastructureError:
+            return _DOWN
+        except (ConflictError, DomainError, NotFoundError) as refused:
+            return await self._not_read(context, key, message_id, case, refused, named)
+        await self._audit(
+            context,
+            "purchasing.automation.quote_read",
+            str(case.case_id),
+            {"message_id": message_id},
+        )
+        await self._tell(
+            context,
+            PurchasingScopes.RFQ_PREPARE,
+            key,
+            f"DW2 đã ghi báo giá của {supplier} cho {named}",
+            "Xem bảng so sánh rồi chọn nhà cung cấp khi đủ báo giá.",
+            _link(case),
+        )
+        await self._settle(context, message_id, case)
+        return f"quote {message_id}: read"
+
+    async def _not_read(
+        self,
+        context: AccessContext,
+        key: str,
+        message_id: str,
+        case: PurchaseCase,
+        refused: Exception,
+        named: str,
+    ) -> str:
+        """A supplier's mail the case refused to read: read already (by a
+        buyer) settles quietly; a case moved on meanwhile waits for the next
+        tick; anything else is told once, in the refusal's own words."""
+        rule = str(getattr(refused, "details", {}).get("rule", type(refused).__name__))
+        if rule == "stale_version":
+            return f"{message_id}: case moved, next tick"
+        if rule != "read":
+            await self._tell(
+                context,
+                PurchasingScopes.PO_PREPARE
+                if key.startswith("purchasing.mail.confirmation:")
+                else PurchasingScopes.RFQ_PREPARE,
+                key,
+                f"DW2 chưa đọc được thư của nhà cung cấp cho {named}",
+                str(getattr(refused, "message", "")) or "Người mua đọc thư này.",
+                _link(case),
+            )
+        await self._settle(context, message_id, case)
+        return f"{message_id}: {rule}"
+
+    async def _settle(self, context: AccessContext, message_id: str, case: PurchaseCase) -> None:
+        """The supplier's mail handled at its case: off the unread list."""
+        try:
+            async with self.uow(context) as work:
+                await work.outcomes.add(
+                    MessageOutcome(
+                        message_id=message_id,
+                        disposition=Disposition.SUPPLIER,
+                        reason=None,
+                        case_id=case.case_id,
+                        settled_by=context.principal_id,
+                        settled_at=self.clock.now(),
+                    )
+                )
+        except ConflictError:
+            # Settled meanwhile (a buyer read it as a request): nothing to add.
+            pass
 
     async def _submissions(self, context: AccessContext) -> list[str]:
         level = await self._level(context, AutomationStep.SUBMISSION)
@@ -382,9 +618,22 @@ class AutomationLane:
 
     # ------------------------------------------------------------- helpers --
 
-    async def _waiting(self, context: AccessContext, status: CaseStatus) -> Sequence[PurchaseCase]:
+    async def _waiting(
+        self, context: AccessContext, status: CaseStatus, limit: int = PER_TICK
+    ) -> Sequence[PurchaseCase]:
         async with self.uow(context) as work:
-            return await work.cases.waiting(frozenset({status.value}), limit=PER_TICK)
+            return await work.cases.waiting(frozenset({status.value}), limit=limit)
+
+    async def _fresh(self, context: AccessContext, case_id: uuid.UUID) -> PurchaseCase:
+        async with self.uow(context) as work:
+            case = await work.cases.get(case_id)
+        if case is None:
+            raise NotFoundError("không có yêu cầu mua hàng này", details={"case_id": str(case_id)})
+        return case
+
+    async def _version(self, context: AccessContext, case_id: uuid.UUID) -> int:
+        """The case as it is now: an earlier read this tick moved it on."""
+        return (await self._fresh(context, case_id)).case_version
 
     async def _refused(
         self, context: AccessContext, case: PurchaseCase, step: str, refused: Exception

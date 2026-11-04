@@ -497,6 +497,32 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   broke DW1's TypeScript; renamed, and a contract test now fails on any
   `<module>__<Name>` schema. The morning brief (step 12's other half) is
   not built.
+- 2026-11-04, **function 5b — DW2 reads supplier mail on its own** (Đạt:
+  "tự khớp đơn nếu bước không quan trọng, bước quan trọng người xác nhận"):
+  two switch steps, `quote_reading` and `confirmation_reading`, each waiting
+  on its own model reading (`purchasing_supplier_quote_reading` on
+  `purchasing_sourcing`, `purchasing_order_confirmation_reading` on
+  `purchasing_follow_up`, bars 0.9 on `golden.right`), in
+  `purchasing_automation@1.1.0` at `ai_auto`; a tenant version written
+  before them reads both as `person` (what DW2 did before). The lane ties a
+  verified supplier's mail by code to the one order it names
+  (`named_order`, the oldest 500 drafted cases) or the one case asking
+  (`reply_case`): at "AI tự làm" a quote is read into its offers (the
+  buyer told to compare and choose) and a confirmation that differs in
+  nothing is accepted (`only_if_same`); one that differs goes to the buyer
+  at every level. Handled there, the mail is settled `supplier` with its
+  case (migration `ad62389cc25d`: the disposition, its shape, the two
+  steps in the measurements CHECK); a mail about nothing waiting is told
+  once and left unread, and no longer takes a slot of the 20 reads a tick.
+  **Live on Qwen3.5-9B, demo tenant: both 1.0, passed and recorded**, so
+  both run on their own there. The live grader had run the scripted
+  "invented price" case on the real model, which reads well, so it failed
+  for the wrong reason: scripted cases now keep their script live. The
+  confirmation's prompt-injection case also runs the lane at "AI tự làm"
+  (never accepted, the buyer told). Also: DW2's lane now runs where
+  deployed, on the stored mailbox (the mock refused, as the API refuses
+  it); before, every DW2 switch did nothing on UAT and production.
+  Mutations: see the commit.
 
 ## Next
 
@@ -513,17 +539,15 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
    live run as ticket 43's, with a buyer's folder and a PIC's. Which mailboxes it exports (the shared purchasing one
    or each buyer's) is settled then. Code and compose are ready
    (`DW_PURCHASING_MAILBOX=stored`); then a live run as ticket 43's.
-4. Function 5b: the lane reads a listed confirmation on its own and accepts
-   one that differs in nothing (a new switch step `confirmation_reading`, a
-   bar for `purchasing_order_confirmation_reading`, an automation policy
-   1.1.0 and what an older tenant version without the step reads as); a
-   late line told to the buyer once per due date; a reminder worded for the
-   buyer to send; a closed state once every line arrived.
+4. Function 5b's rest (the reading and accepting are built, 11-04): a late
+   line told to the buyer once per due date; a reminder worded for the
+   buyer to send; a closed state once every line arrived (until then the
+   lane and `late` look at the oldest 500 drafted cases).
 5. Function 6's morning brief (the Q&A is built, 11-04): DW1's
    `followups` lane shape, counts only, once per working day.
-6. Bars and live measurements for DW2's other model steps (a supplier's
-   quote, a sentence to a PR, an RFQ's wording): only the PR mail reading
-   has a bar and a measurement (11-04).
+6. Bars and live measurements for DW2's other model steps (a sentence to a
+   PR, an RFQ's wording): the PR mail, the quote and the confirmation
+   readings have theirs (11-04).
 7. A sent request cannot be withdrawn (a question on the Proterial list).
 
 ## Not done, on purpose
