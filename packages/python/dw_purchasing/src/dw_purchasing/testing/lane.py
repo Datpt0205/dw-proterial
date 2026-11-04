@@ -9,12 +9,11 @@ import dataclasses
 import uuid
 from collections.abc import Sequence
 
-from dw_agent_runtime.model.readiness import Attestation
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_kernel.ports import Uuid4Generator
 from dw_platform.application.identity import MembershipAccess
 from dw_platform.application.rule_versions import ContextScope
-from dw_purchasing.application.automation import ATTEST_LANE, BARS
+from dw_purchasing.application.automation import ModelAttestation
 from dw_purchasing.application.automation_lane import AutomationLane, dw2_subject
 from dw_purchasing.domain.automation import PurchasingModelStep
 from dw_purchasing.testing.world import ALPHA, RecordedNotices, World, services_of
@@ -87,15 +86,7 @@ async def measure_pr_reading(
     world: World, scope: tuple[uuid.UUID, uuid.UUID] = ALPHA, value: float = 0.95
 ) -> None:
     """A live measurement of the PR mail reading for ``scope``'s tenant."""
-    await Attestation(
-        world.measurements,
-        world.clock,
-        Uuid4Generator(),
-        BARS,
-        lane=ATTEST_LANE,
-        action="purchasing.model_step.measured",
-        resource_type="purchasing_model_step_measurement",
-    ).attest(
+    await ModelAttestation(world.measurements, world.clock, Uuid4Generator()).attest(
         ContextScope(TenantId(scope[0]), WorkspaceId(scope[1])),
         PurchasingModelStep.PR_MAIL_READING,
         model="qwen3.5:9b",

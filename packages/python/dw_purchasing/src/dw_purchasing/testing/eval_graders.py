@@ -19,9 +19,12 @@ from decimal import Decimal
 from typing import Any
 
 from dw_agent_runtime.model.interpretation import ModelUnavailableError
+from dw_agent_runtime.model.readiness import bar_verdict as runtime_bar_verdict
 from dw_evals.graders import Grader, GraderContext, GradeResult
 from dw_kernel.errors import ConflictError, InfrastructureError, NotFoundError
+from dw_purchasing.application.automation import BARS
 from dw_purchasing.application.ports import Disposition
+from dw_purchasing.domain.automation import PurchasingModelStep
 from dw_purchasing.domain.cases import PurchaseCase
 from dw_purchasing.domain.requests import PrLine, PurchaseRequest
 from dw_purchasing.testing.world import ALPHA, BETA, World, caller, open_world
@@ -38,29 +41,67 @@ def _world(ctx: GraderContext, answers: Mapping[str, Any]) -> World:
     return world
 
 
+# Settled before any model is asked: no reading of these measures the model.
+_SENDER_REASONS = frozenset({"sender_not_internal", "sender_unverified"})
+
+
 def grade_pr_mail_golden(
     ctx: GraderContext, data: dict[str, Any], expected: dict[str, Any]
 ) -> GradeResult:
-    """Each mock mail settled as expected: requests opened with their number
-    and line count, every other mail to a person with its reason."""
+    """Each mock mail settled as expected: requests opened with their number,
+    line count and every line's code, quantity, unit and date
+    (``golden_lines``), every other mail to a person with its reason.
 
-    async def work() -> dict[str, list[object]]:
+    ``golden.right`` is the share of the mails that reach the model settled
+    exactly so: the PR mail reading's bar (`automation.BARS`). The replay must
+    settle all of them; a live run reports the share for `--attest`."""
+
+    async def work() -> tuple[dict[str, list[object]], dict[str, list[list[object]]]]:
         world = _world(ctx, data["answers"])
         found: dict[str, list[object]] = {}
+        lines: dict[str, list[list[object]]] = {}
         for message_id in expected["outcomes"]:
             item = await world.service.read_mail(caller(), message_id)
             if item.case_id is not None:
                 case = await world.service.case(caller(), item.case_id)
                 found[message_id] = ["opened", case.request.pr_no, len(case.request.lines)]
+                lines[message_id] = [
+                    [
+                        line.item_code,
+                        str(line.quantity),
+                        line.unit,
+                        line.need_by.isoformat() if line.need_by else None,
+                    ]
+                    for line in case.request.lines
+                ]
             else:
                 found[message_id] = ["to_person", item.reason]
-        return found
+        return found, lines
 
-    found = _run(work)
-    wrong = {k: v for k, v in found.items() if v != expected["outcomes"][k]}
-    if wrong:
-        return GradeResult.fail("outcomes differ", wrong=wrong)
-    return GradeResult.ok(mails=len(found))
+    found, lines = _run(work)
+    golden = expected["golden_lines"]
+    wrong = {
+        k: v
+        for k, v in found.items()
+        if v != expected["outcomes"][k] or lines.get(k) != golden.get(k)
+    }
+    read = [k for k, v in expected["outcomes"].items() if v[-1] not in _SENDER_REASONS]
+    details: dict[str, Any] = {
+        "live": ctx.live_model is not None,
+        "mails": len(found),
+        "golden": {"right": round(sum(k not in wrong for k in read) / len(read), 4)},
+        "wrong": sorted(wrong),
+    }
+    details["bar"] = runtime_bar_verdict(
+        PurchasingModelStep.PR_MAIL_READING,
+        BARS[PurchasingModelStep.PR_MAIL_READING],
+        details,
+    )
+    if ctx.live_model is None and wrong:
+        # The replay is deterministic: a mail settled otherwise means the
+        # code changed, not the model.
+        return GradeResult.fail("outcomes differ", **details, found=found, lines=lines)
+    return GradeResult.ok(**details)
 
 
 def grade_pr_mail_injection(

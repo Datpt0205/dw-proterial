@@ -24,6 +24,10 @@ from pydantic import BaseModel, ConfigDict
 
 from dw_agent_runtime.model.readiness import (
     MODEL_BAR_UNMET,
+    Attestation,
+    MeasuredScope,
+    MeasurementLogPort,
+    ModelMeasurement,
     ModelMeasurementsPort,
     ReadinessCheck,
     StepBar,
@@ -32,6 +36,7 @@ from dw_agent_runtime.model.readiness import (
     refusal,
 )
 from dw_kernel.errors import ConflictError
+from dw_kernel.ports import IdGenerator, UtcClock
 from dw_platform.application.access_context import AccessContext
 from dw_platform.application.rule_versions import ContextScope, RuleScope, Unready
 from dw_purchasing.application.access import Gate, PurchasingScopes
@@ -55,15 +60,54 @@ ATTEST_LANE: Final = "purchasing_model_attest"
 # so the bar is the share read right before anyone is asked.
 BARS: Final[Mapping[PurchasingModelStep, StepBar]] = MappingProxyType(
     {
+        # The golden mails that reach the model settled exactly: opened with
+        # their number and every line's code, quantity, unit and date, or
+        # sent to a person for the expected reason.
         PurchasingModelStep.PR_MAIL_READING: StepBar(
             0.9,
-            "golden.right_field",
+            "golden.right",
             PR_MAIL_READING,
             "purchasing_pr_intake",
-            "purchasing.pr_intake_golden",
+            "purchasing.pr_mail_golden",
         ),
     }
 )
+
+
+def step_measured_by(dataset_id: str) -> PurchasingModelStep | None:
+    """The step a dataset measures, or None for a dataset that measures none."""
+    return next((step for step, owner in BARS.items() if owner.dataset == dataset_id), None)
+
+
+@dataclass(frozen=True)
+class ModelAttestation:
+    """Records a live eval's measurement of a DW2 step for one tenant: the
+    lane `purchasing_model_attest`, which `scripts/run_evals.py --attest`
+    runs, audited as itself."""
+
+    log: MeasurementLogPort
+    clock: UtcClock
+    ids: IdGenerator
+
+    async def attest(
+        self,
+        scope: MeasuredScope,
+        step: PurchasingModelStep,
+        *,
+        model: str,
+        value: float,
+        held: bool,
+        dataset: str,
+    ) -> ModelMeasurement:
+        return await Attestation(
+            self.log,
+            self.clock,
+            self.ids,
+            BARS,
+            lane=ATTEST_LANE,
+            action="purchasing.model_step.measured",
+            resource_type="purchasing_model_step_measurement",
+        ).attest(scope, step, model=model, value=value, held=held, dataset=dataset)
 
 
 @dataclass(frozen=True)
