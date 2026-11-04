@@ -1,24 +1,26 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import type { KeyboardEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  App,
   Button,
   Card,
   Empty,
   Flex,
-  Input,
   List,
   Skeleton,
-  Space,
   Tag,
   Typography,
 } from "antd";
 import type { SalesSchemas } from "@dw/api-client";
-import { PageHeader, useOnline, OFFLINE_REASON } from "@dw/ui";
+import {
+  AssistantChat,
+  PageHeader,
+  useOnline,
+  OFFLINE_REASON,
+  type ChatTurn,
+} from "@dw/ui";
 import { LoadError } from "../../../components/load-error";
 import { formatDateTime } from "../../../lib/dates";
 import { useIdempotencyKeys } from "../../../lib/idempotency";
@@ -34,6 +36,13 @@ type CaseRef = SalesSchemas["CaseRefView"];
 
 /** The longest question the API takes (`QUESTION_CHARS`). */
 const QUESTION_MAX = 500;
+
+/** Questions to start from; a follow-up ("PO đó…") reads as the PO just asked. */
+const EXAMPLES = [
+  "PO NRV-PO-26-0457 tới đâu rồi?",
+  "Tôi còn việc gì?",
+  "Có việc nào quá hạn không?",
+];
 
 /** What DW1 answers: the agreed list (ADR 0007), said before anyone asks. */
 const CATALOG =
@@ -149,6 +158,49 @@ function Assistant() {
   );
 }
 
+/** How DW1 read a question, in the words the page shows as its first step. */
+const READ_AS: Record<Turn["kind"], string> = {
+  order_status: "Hiểu là hỏi trạng thái một PO",
+  quote_status: "Hiểu là hỏi trạng thái một yêu cầu báo giá",
+  my_work: "Hiểu là hỏi việc đang chờ bạn",
+  overdue: "Hiểu là hỏi việc quá hạn",
+  out_of_scope: "Câu này ngoài những gì DW1 trả lời",
+};
+
+/** What DW1 did, from what the server returned: never more than it says. */
+function chatTurn(turn: Turn): ChatTurn {
+  const steps = [{ key: "read", title: READ_AS[turn.kind] }];
+  if (turn.kind !== "out_of_scope")
+    steps.push({
+      key: "look",
+      title: turn.cites.length
+        ? `Tra ${turn.cites.length} hồ sơ trong phạm vi bạn được xem`
+        : "Tra trong phạm vi bạn được xem: không thấy hồ sơ khớp",
+    });
+  steps.push({
+    key: "word",
+    title:
+      turn.answered_by === "model"
+        ? "Máy viết câu trả lời từ dữ liệu đã tra, code kiểm không có số nào ngoài dữ liệu"
+        : "DW1 trả lời bằng câu soạn sẵn từ dữ liệu",
+  });
+  return {
+    key: String(turn.seq),
+    question: turn.question,
+    answer: turn.answer,
+    byModel: turn.answered_by === "model",
+    steps,
+    cites: turn.cites.map((ref) => ({
+      key: ref.case_id,
+      label: (
+        <Link href={caseHref(ref)}>
+          <Tag>{ref.label}</Tag>
+        </Link>
+      ),
+    })),
+  };
+}
+
 function Conversation({
   sessionId,
   onOpened,
@@ -156,7 +208,6 @@ function Conversation({
   sessionId: string | null;
   onOpened: (id: string) => void;
 }) {
-  const { message } = App.useApp();
   const online = useOnline();
   const keys = useIdempotencyKeys();
   const loaded = useResource(
@@ -170,13 +221,7 @@ function Conversation({
   const [error, setError] = useState<unknown>(null);
   const turns = [...(loaded.data?.turns ?? []), ...asked];
 
-  const ask = async () => {
-    const text = question.trim();
-    if (!text || busy) return;
-    if (!online) {
-      setError(new Error(OFFLINE_REASON));
-      return;
-    }
+  const ask = async (text: string) => {
     const payload = { question: text, sessionId };
     setBusy(true);
     setError(null);
@@ -192,22 +237,8 @@ function Conversation({
       onOpened(answer.session_id);
     } catch (e) {
       setError(e);
-      void message.error("DW1 chưa trả lời được câu này.");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter sends, Shift+Enter breaks the line; never mid-composition
-    // (Telex, Gboard), or a half-typed word is sent.
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
-      event.preventDefault();
-      void ask();
     }
   };
 
@@ -216,83 +247,23 @@ function Conversation({
       size="small"
       title={sessionId ? (loaded.data?.title ?? "Phiên hỏi đáp") : "Phiên mới"}
     >
-      <Flex vertical gap={12}>
-        {loaded.error ? (
-          <LoadError error={loaded.error} onRetry={loaded.reload} compact />
-        ) : sessionId && loaded.loading ? (
-          <Skeleton active paragraph={{ rows: 4 }} />
-        ) : turns.length === 0 ? (
-          <Typography.Text>
-            Ví dụ: “PO NRV-PO-26-0457 tới đâu rồi?”, “Tôi còn việc gì?”, “Có
-            việc nào quá hạn không?”. Hỏi tiếp “PO đó đã xác nhận chưa?” thì DW1
-            hiểu là PO vừa hỏi.
-          </Typography.Text>
-        ) : (
-          <ol
-            className="m-0 flex list-none flex-col gap-3 p-0"
-            aria-label="Các lượt hỏi đáp"
-            aria-live="polite"
-          >
-            {turns.map((turn) => (
-              <TurnItem key={turn.seq} turn={turn} />
-            ))}
-          </ol>
-        )}
-        <Flex vertical gap={6}>
-          <Input.TextArea
-            aria-label="Câu hỏi cho DW1"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={onKeyDown}
-            maxLength={QUESTION_MAX}
-            showCount
-            autoSize={{ minRows: 2, maxRows: 6 }}
-            placeholder="Ví dụ: PO NRV-PO-26-0457 tới đâu rồi?"
-            disabled={busy}
-          />
-          <Space wrap>
-            <Button
-              type="primary"
-              loading={busy}
-              disabled={!question.trim()}
-              onClick={() => void ask()}
-            >
-              Hỏi DW1
-            </Button>
-            <Typography.Text>
-              Enter để gửi, Shift+Enter để xuống dòng.
-            </Typography.Text>
-          </Space>
-          <ActionError error={error} />
-        </Flex>
-      </Flex>
+      {loaded.error ? (
+        <LoadError error={loaded.error} onRetry={loaded.reload} compact />
+      ) : (
+        <AssistantChat
+          worker="DW1"
+          examples={EXAMPLES}
+          turns={turns.map(chatTurn)}
+          loading={sessionId !== null && loaded.loading}
+          pending={busy}
+          question={question}
+          onQuestion={setQuestion}
+          onAsk={(text) => void ask(text)}
+          maxLength={QUESTION_MAX}
+          blocked={online ? null : OFFLINE_REASON}
+          error={error ? <ActionError error={error} /> : null}
+        />
+      )}
     </Card>
-  );
-}
-
-function TurnItem({ turn }: { turn: Turn }) {
-  return (
-    <li>
-      <Flex vertical gap={4}>
-        <Typography.Text strong>Bạn: {turn.question}</Typography.Text>
-        <Space wrap size={4}>
-          <Typography.Text strong>DW1:</Typography.Text>
-          {turn.answered_by === "model" ? <Tag>Máy viết</Tag> : null}
-        </Space>
-        <Typography.Paragraph className="mb-0! whitespace-pre-wrap">
-          {turn.answer}
-        </Typography.Paragraph>
-        {turn.cites.length ? (
-          <Space wrap size={4}>
-            <Typography.Text>Căn cứ:</Typography.Text>
-            {turn.cites.map((ref) => (
-              <Link key={ref.case_id} href={caseHref(ref)}>
-                <Tag>{ref.label}</Tag>
-              </Link>
-            ))}
-          </Space>
-        ) : null}
-      </Flex>
-    </li>
   );
 }

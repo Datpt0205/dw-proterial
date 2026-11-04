@@ -15,6 +15,10 @@ import { describe, expect, it } from "vitest";
  * too: the runtime dependencies of both manifests are an allowlist
  * (`RUNTIME_DEPENDENCIES`), so a new UI library fails here before any page
  * imports it.
+ *
+ * A second, Đạt's of 2026-11-04: Ant Design X (`@ant-design/x`, antd's own
+ * chat components) draws the one chat frame, `@dw/ui`'s `AssistantChat`,
+ * and only that file imports it.
  */
 
 const WEB = resolve(__dirname, "../..");
@@ -31,6 +35,7 @@ const FORBIDDEN_MODULE =
  */
 const CONFINED: Record<string, string[]> = {
   "@xyflow/react": ["app/sales/_components/process-flow.tsx"],
+  "@ant-design/x": ["../../packages/typescript/ui/src/assistant-chat.tsx"],
 };
 
 /**
@@ -44,6 +49,7 @@ const RUNTIME_DEPENDENCIES = new Set([
   "@ant-design/cssinjs",
   "@ant-design/icons",
   "@ant-design/nextjs-registry",
+  "@ant-design/x",
   "@dw/api-client",
   "@dw/contracts",
   "@dw/ui",

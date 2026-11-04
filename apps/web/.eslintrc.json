@@ -37,6 +37,10 @@
             "message": "antd is the one component system (CLAUDE.md, Web UI)."
           },
           {
+            "group": ["@ant-design/x", "@ant-design/x/*"],
+            "message": "Ant Design X draws the one chat frame (CLAUDE.md \"Web UI\", 2026-11-04): use AssistantChat from @dw/ui."
+          },
+          {
             "group": ["@xyflow/*", "reactflow", "react-flow-renderer"],
             "message": "React Flow draws the DW1 process map only (CLAUDE.md \"Web UI\", 2026-10-23): import it in app/sales/_components/process-flow.tsx."
           }

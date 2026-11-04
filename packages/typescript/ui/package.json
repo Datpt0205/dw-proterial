@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",
+    "@ant-design/x": "2.9.0",
     "@dw/contracts": "workspace:*",
     "antd": "6.6.5"
   },
