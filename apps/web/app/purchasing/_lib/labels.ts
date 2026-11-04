@@ -21,6 +21,7 @@ export const CASE_STATUS: Record<PurchaseCaseStatus, string> = {
   awaiting_reapproval: "Chờ duyệt lại",
   supplier_selected: "Đã chọn nhà cung cấp",
   po_drafted: "Đã soạn PO",
+  delivered: "Đã nhận đủ hàng",
 };
 
 export const STEP: Record<PurchaseAutomationStep, string> = {

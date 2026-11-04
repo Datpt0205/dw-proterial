@@ -2123,7 +2123,8 @@
           "rfq_drafted",
           "awaiting_reapproval",
           "supplier_selected",
-          "po_drafted"
+          "po_drafted",
+          "delivered"
         ],
         "title": "CaseStatus",
         "type": "string"

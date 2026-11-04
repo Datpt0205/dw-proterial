@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -19,6 +19,7 @@ from dw_kernel.errors import (
 )
 from dw_purchasing.application.access import PurchasingScopes
 from dw_purchasing.application.follow_up import ORDER_CONFIRMATION_READING
+from dw_purchasing.domain.cases import CaseStatus, PurchaseCase
 from dw_purchasing.testing.flows import orders_drafted, sourcing_world
 from dw_purchasing.testing.world import ALPHA, BETA, EVERY_SCOPE, World, caller
 
@@ -231,6 +232,83 @@ async def test_late_lists_each_line_past_its_date_with_what_is_owed() -> None:
         (BAOHO, 2, date(2026, 11, 22), Decimal(10)),
     ]
     assert await world.follow_up.late(caller(), today=date(2026, 11, 20)) == []
+
+
+async def _receive_all(world: World, case_id: uuid.UUID, *, leave: int = 0) -> None:
+    """Every line of every order received in full, ``leave`` short on the last."""
+    case = await world.service.case(caller(), case_id)
+    assert case.po is not None
+    lines = [(o.po_ref, line) for o in case.po.orders for line in o.lines]
+    for i, (po_ref, line) in enumerate(lines):
+        short = leave if i == len(lines) - 1 else 0
+        await world.follow_up.record_receipt(
+            caller(),
+            case_id,
+            po_ref,
+            line_no=line.line_no,
+            quantity=line.quantity - short,
+            received_on=date(2026, 11, 22),
+            case_version=await _version(world, case_id),
+        )
+
+
+async def test_the_last_receipt_of_everything_ordered_closes_the_case() -> None:
+    """Đã nhận đủ hàng: code moves the case on the receipt that completes
+    every line of every order; nothing is owed, so nothing more is received
+    and nothing is late."""
+    world, case_id = await _drafted()
+    await _receive_all(world, case_id, leave=1)
+    assert (await world.service.case(caller(), case_id)).status is CaseStatus.PO_DRAFTED
+
+    case = await world.service.case(caller(), case_id)
+    assert case.po is not None
+    last = case.po.orders[-1]
+    await world.follow_up.record_receipt(
+        caller(),
+        case_id,
+        last.po_ref,
+        line_no=last.lines[-1].line_no,
+        quantity=Decimal(1),
+        received_on=date(2026, 11, 23),
+        case_version=case.case_version,
+    )
+
+    done = await world.service.case(caller(), case_id)
+    assert done.status is CaseStatus.DELIVERED
+    (event,) = [
+        e for e in world.store.rows(*ALPHA).audit if e.action == "purchasing.case.delivered"
+    ]
+    assert event.resource_id == str(case_id)
+    with pytest.raises(ConflictError):
+        await world.follow_up.record_receipt(
+            caller(),
+            case_id,
+            last.po_ref,
+            line_no=last.lines[-1].line_no,
+            quantity=Decimal(1),
+            received_on=date(2026, 11, 23),
+            case_version=done.case_version,
+        )
+    assert await world.follow_up.late(caller(), today=date(2027, 1, 1)) == []
+
+
+async def test_a_case_is_never_delivered_with_anything_still_owed() -> None:
+    world, case_id = await _drafted()
+    await _receive_all(world, case_id, leave=1)
+    case = await world.service.case(caller(), case_id)
+    with pytest.raises(ValueError, match="every line"):
+        PurchaseCase.model_validate({**case.model_dump(), "status": CaseStatus.DELIVERED.value})
+
+
+async def test_late_is_counted_from_the_plant_s_day_not_utc_s() -> None:
+    """18:00 UTC on 20/11 is already 21/11 at the plant: a line needed by
+    20/11 is late there."""
+    world, _ = await _drafted()
+    world.clock.advance_to(datetime(2026, 11, 20, 18, 0, tzinfo=UTC))
+    late = await world.follow_up.late(caller())
+    assert (KIMURA, 1) in {(x.po_ref, x.line_no) for x in late}
+    world.clock.advance_to(datetime(2026, 11, 20, 16, 0, tzinfo=UTC))
+    assert await world.follow_up.late(caller()) == []
 
 
 async def test_following_an_order_is_the_buyer_s_and_the_tenant_s_own() -> None:

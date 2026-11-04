@@ -16,7 +16,7 @@ git: every slice's commit message, and the pre-split narrative at
 | Web UI shell (Ant Design v6)       | `.claude/plans/web-ui.md`           | antd, React Flow, AntD X   |
 | Sales — Proterial DW1              | `.claude/plans/sales.md`            | 13–42 built                |
 | Chat channels (Zalo)               | `.claude/plans/channels.md`         | Upstreamed; live run owed  |
-| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–5b, 6 Q&A, measured  |
+| Purchasing — Proterial DW2         | `.claude/plans/purchasing.md`       | fns 1–6 built, measured    |
 
 After working in an area, update its file. Update this index only when an
 area's state, the next step or a decision owed changes. A new area gets its
@@ -35,8 +35,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** DW2 5b's rest (late notices, closed state) + brief; browser
-  walk. HITL kept, resurveyed at the plant (`.claude/plans/hitl-review.md`).
+- **Next:** browser walk of 11-04's pages; usage of the brief and Hỏi đáp
+  after go-live. HITL kept, resurveyed at the plant (`.claude/plans/hitl-review.md`).
 
 ## Decisions Đạt owes
 

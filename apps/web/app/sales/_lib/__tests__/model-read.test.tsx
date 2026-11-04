@@ -219,10 +219,12 @@ describe("a value a model read, confirmed one by one (ticket 29)", () => {
           quote={m37()}
           finding={{
             ...one,
-            confirmed: ["description", "needed_by", "quantity"].map((field) => ({
-              ...one.confirmed[0]!,
-              field,
-            })),
+            confirmed: ["description", "needed_by", "quantity"].map(
+              (field) => ({
+                ...one.confirmed[0]!,
+                field,
+              }),
+            ),
           }}
           viewer={{ principalId: AN, hasScope: () => true } as never}
           onDone={vi.fn()}

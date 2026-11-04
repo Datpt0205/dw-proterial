@@ -69,6 +69,17 @@ const named =
   (table: Record<string, string>): Words =>
   (value) =>
     table[String(value)] ?? String(value);
+/** The brief's days, as `domain.brief.Weekday` names them. */
+const WEEKDAY: Record<string, string> = {
+  mon: "thứ Hai",
+  tue: "thứ Ba",
+  wed: "thứ Tư",
+  thu: "thứ Năm",
+  fri: "thứ Sáu",
+  sat: "thứ Bảy",
+  sun: "Chủ nhật",
+};
+
 const plain: Words = (value) => String(value);
 const percent: Words = (value) => `${String(value).replace(".", ",")}%`;
 const days: Words = (value) => `${String(value)} ngày`;
@@ -144,6 +155,8 @@ const PATHS: [RegExp, (index: number) => string, Words][] = [
   [/^retention\.case_years$/, () => "Lưu trữ · Hồ sơ mua hàng", years],
   [/^retention\.mail_outcome_days$/, () => "Lưu trữ · Kết quả xử lý thư", days],
   [/^retention\.mailbox_days$/, () => "Lưu trữ · Thư đã lưu", days],
+  [/^brief\.at$/, () => "Bản tin sáng · Giờ gửi", plain],
+  [/^brief\.days$/, () => "Bản tin sáng · Ngày gửi", list(WEEKDAY)],
   [/^bravo_po\.mock$/, () => "File Bravo · Mẫu dựng sẵn của nền tảng", yesNo],
   [/^bravo_po\.sheet$/, () => "File Bravo · Tên trang tính", plain],
   [

@@ -11,9 +11,11 @@
   (`accept_confirmation`), or the automation lane does when it differs in
   nothing and the step runs on its own.
 - **What arrived** (`record_receipt`), recorded by the buyer, never more
-  than is still owed.
-- **What is late** (`late`): every line past its date with less arrived
-  than ordered, for the lane's notices and a person's brief.
+  than is still owed. The receipt that completes every line of every order
+  moves the case to `delivered` (Đã nhận đủ hàng): code's, nothing to press.
+- **What is late** (`late`): every line past its date, counted in the
+  plant's day, with less arrived than ordered, for the lane's notices and a
+  person's brief.
 
 All of it is the buyer's (`purchasing.po.prepare`), as drafting the order is.
 """
@@ -26,6 +28,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Final
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict
 
@@ -71,6 +74,8 @@ _OUTPUT_TOKENS: Final = 120 * MAX_CONFIRMED_LINES + 100
 # The drafted cases `late` looks through, oldest first: a bound, so a tick or
 # a page never reads every case a tenant ever ordered.
 FOLLOWED_CASES: Final = 500
+# The day a date is late on: the plant's, never UTC's (7 hours behind).
+_PLANT: Final = ZoneInfo("Asia/Ho_Chi_Minh")
 _LOG = logging.getLogger("dw_purchasing.follow_up")
 
 
@@ -349,20 +354,21 @@ class OrderFollowUp:
             tracking.model_copy(update={"receipts": (*tracking.receipts, receipt)}),
             "purchasing.po.received",
             {"po_ref": po_ref, "line_no": line_no},
+            close=True,
         )
 
     async def late(self, context: AccessContext, *, today: date | None = None) -> list[LateLine]:
         """Every line of every drafted order past its date (today, unless
         given), less arrived than ordered, oldest first."""
         await self.gate.require(context, PurchasingScopes.PO_PREPARE, resource_type=_RESOURCE)
-        today = today if today is not None else self.clock.now().date()
+        today = today if today is not None else self.clock.now().astimezone(_PLANT).date()
         async with self.uow(context) as work:
             cases = await work.cases.waiting(
                 frozenset({CaseStatus.PO_DRAFTED.value}), limit=FOLLOWED_CASES
             )
         if len(cases) == FOLLOWED_CASES:
-            # A case stays `po_drafted` once all arrived (no closed state yet):
-            # past the bound, newer cases are not looked at. Said, not hidden.
+            # Past the bound (500 orders not all arrived), newer cases are not
+            # looked at. Said, not hidden.
             _LOG.warning(
                 "late lines read from the %d oldest drafted cases only (tenant %s)",
                 FOLLOWED_CASES,
@@ -419,7 +425,11 @@ class OrderFollowUp:
         tracking: OrderTracking,
         action: str,
         details: dict[str, object],
+        *,
+        close: bool = False,
     ) -> CaseChange:
+        """``close``: a receipt, which moves the case to `delivered` once
+        every line of every order arrived in full."""
         kept = [t for t in case.tracking if t.po_ref != tracking.po_ref]
         after = PurchaseCase.model_validate(
             {
@@ -428,8 +438,27 @@ class OrderFollowUp:
                 "tracking": sorted([*kept, tracking], key=lambda t: t.po_ref),
             }
         )
+        delivered = close and after.delivered_in_full
+        if delivered:
+            after = PurchaseCase.model_validate(
+                {**after.model_dump(), "status": CaseStatus.DELIVERED}
+            )
         async with self.uow(context) as work:
             await work.cases.save(after, expected_version=case.case_version)
+            if delivered:
+                await work.audit.append(
+                    AuditEvent(
+                        id=self.ids.new_uuid(),
+                        tenant_id=TenantId(context.tenant_id),
+                        workspace_id=WorkspaceId(context.workspace_id),
+                        actor_id=UserId(context.principal_id),
+                        action="purchasing.case.delivered",
+                        resource_type=_RESOURCE,
+                        resource_id=str(after.case_id),
+                        occurred_at=self.clock.now(),
+                        details={"case_version": after.case_version},
+                    )
+                )
             # Ids, refs and counts: no quantity, price or date.
             await work.audit.append(
                 AuditEvent(

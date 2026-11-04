@@ -58,6 +58,17 @@ describe("a rule change in words", () => {
     expect(pathName("retention.mailbox_days")).toBe("Lưu trữ · Thư đã lưu");
   });
 
+  it("says the brief's time and days in words", () => {
+    const words = changesInWords(
+      { brief: { at: "07:30", days: ["mon", "sat"] } },
+      { brief: { at: "08:00", days: ["mon"] } },
+    );
+    expect(words.map((c) => [c.name, c.before, c.after])).toEqual([
+      ["Bản tin sáng · Giờ gửi", "07:30", "08:00"],
+      ["Bản tin sáng · Ngày gửi", "thứ Hai, thứ Bảy", "thứ Hai"],
+    ]);
+  });
+
   it("reads a list of codes in the glossary's words", () => {
     const after = structuredClone(RULES);
     after.approval.escalate = ["over_budget", "budget_unknown"];

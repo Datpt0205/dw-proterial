@@ -32,7 +32,9 @@ dw_sales ADR 0005 as DW2 applies it).
   than the approver's tier decides, and the choice waits on the tier its
   total names;
   `supplier_selected` (Đã chọn nhà cung cấp) — a person chose one per line;
-  `po_drafted` (Đã soạn PO) — one draft order per chosen supplier.
+  `po_drafted` (Đã soạn PO) — one draft order per chosen supplier;
+  `delivered` (Đã nhận đủ hàng) — every line of every order received in
+  full, moved there by the receipt that completes them.
 - **Cross-check (đối chiếu)**: each line's reference price (a supplier
   quotation still valid, else the last price paid, else the requester's
   estimate), the request's amount (unknown when a line has no price), and
@@ -213,8 +215,8 @@ The twelve steps, the default proposed, and where each stands:
 | 8 | Draft the orders and the Bravo file; a buyer imports it | AI tự làm | `po_drafting` |
 | 9 | The PO number Bravo gave, read back | AI tự làm | function 5, not built |
 | 10 | A supplier's confirmation read and compared with the PO | AI tự làm when it matches | `confirmation_reading` |
-| 11 | Delivery tracked (code); a reminder worded (model), a buyer sends | AI làm, người duyệt | function 5, not built |
-| 12 | Each person's morning brief, questions about a case | AI tự làm | Q&A built (Hỏi đáp DW2, 11-04); the brief not built |
+| 11 | Delivery tracked (code); a reminder worded (model), a buyer sends | AI làm, người duyệt | late lines told (code, no switch); the reminder's wording not built |
+| 12 | Each person's morning brief, questions about a case | AI tự làm | Q&A built (Hỏi đáp DW2); the brief built (counts, code's; 11-04) |
 
 A step gets its switch the day code reads it, never before.
 

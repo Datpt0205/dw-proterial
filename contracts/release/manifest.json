@@ -781,7 +781,7 @@
       "version": "1.0.0"
     }
   ],
-  "git_sha": "9c85f1b6135bb0311d08ec74e941e0cfede6bf98",
+  "git_sha": "821a6b9007832714717e3871b624e685f6aadb80",
   "knowledge_index_version": "2026-07-25.structure-1",
   "memory_policy_version": "2.0.0",
   "model_profiles": [
@@ -882,6 +882,11 @@
       "checksum": "667e360f5695f7d28491255e6d57a723cb33d7a6c6f023d88e39290a1caa4b7c",
       "policy_id": "purchasing_rules",
       "version": "1.7.0"
+    },
+    {
+      "checksum": "d916131b3ce48b99ca69fe2d10347debac00aa4967e80287dd8cb748c3a39e88",
+      "policy_id": "purchasing_rules",
+      "version": "1.8.0"
     },
     {
       "checksum": "1d89a6e3cd012d5f2e5c62dbc8ea8ab905e602bf3eea44c8eb76d88ec6f2ab8e",

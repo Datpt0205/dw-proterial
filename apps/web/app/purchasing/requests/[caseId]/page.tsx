@@ -115,6 +115,7 @@ const OWN_WORDS: Record<PurchaseCase["status"], string> = {
   supplier_selected:
     "Đã chọn nhà cung cấp. Phòng Mua hàng đang soạn đơn đặt hàng.",
   po_drafted: "Đơn đặt hàng đã soạn; phòng Mua hàng nhập vào Bravo.",
+  delivered: "Đã nhận đủ hàng.",
 };
 
 /** The one thing the case waits on, and the button that does it. */
@@ -280,6 +281,8 @@ function NextStep({
   } else if (c.status === "po_drafted") {
     say = "Tải file Bravo và nhập vào Bravo.";
     body = <BravoDownload c={c} />;
+  } else if (c.status === "delivered") {
+    say = "Đã nhận đủ hàng của mọi đơn.";
   } else if (c.status === "rejected") {
     say = `Yêu cầu đã bị từ chối${c.decision?.comment ? `: ${c.decision.comment}` : "."}`;
   }
