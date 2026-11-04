@@ -35,8 +35,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** HITL picks left to Đạt (`.claude/plans/hitl-review.md`); DW2
-  5b's rest (late notices, closed state) + brief; browser walk. #13 at deploy.
+- **Next:** DW2 5b's rest (late notices, closed state) + brief; browser
+  walk. HITL kept, resurveyed at the plant (`.claude/plans/hitl-review.md`).
 
 ## Decisions Đạt owes
 

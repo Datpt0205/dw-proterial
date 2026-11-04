@@ -1095,9 +1095,8 @@ mailbox access, AI/data approval, WIV-03-012/023 texts. Sent by Đạt
   (`layout_onboarding.uncertain_first_pos: 1` in `sales_order_rules@1.10.0`
   and the demo's own `1.5.4`; the tests' 1.5.2 keeps three). Mutations red
   (served per value, the last value's page, as-read naming a value, another
-  line, the web's reason). **Not done:** the same one press for a PO's
-  flagged values (O3): each correction re-runs the case's checks, a larger
-  change; owed if Đạt wants it.
+  line, the web's reason). **Dropped (Đạt, 11-04):** the same one press for
+  a PO's flagged values (O3); HITL stays until the plant survey.
 
 - 2026-11-02, Đạt: **no e-signature** on quotations (too involved); the
   signed paper stays the official approval. **Roles**: the ~4 of the
