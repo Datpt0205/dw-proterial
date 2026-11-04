@@ -38,9 +38,13 @@ quan trọng người xác nhận; khảo sát lại khi làm thật ở nhà m�
   to a buyer. Both readings measured on Qwen for the demo tenant.
 - Candidate 4: one press per line for a request DW1 read (quotes only; the
   PO side not done), and a new layout's first PO only (`sales.md` Open).
-- Still Đạt's: candidate 2 (DW1's four measured steps on in the tenant's
-  rules), candidate 5 (re-measure `message_intent`), item 5 (Proterial's
-  own DW2 rules). Re-surveyed at the plant before go-live.
+- Decided by Đạt (2026-11-04, "không nên bypass mà vẫn cần HITL"): no
+  further relaxing before the plant. Candidate 2 (DW1's four measured
+  steps), candidate 5 (`message_intent`) and item 5 (Proterial's own DW2
+  rules) stay as they are; the one press for a PO's flagged values (O3) is
+  dropped: with one onboarding PO per layout it is rare, and real flows
+  are not one straight line. Every point is surveyed again at the plant,
+  on real mail, before go-live.
 
 ## Top candidates to relax (each Đạt's call)
 
