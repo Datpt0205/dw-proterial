@@ -24,6 +24,8 @@ vi.mock("../../../../lib/session", () => ({
 const api = vi.hoisted(() => ({
   confirm: vi.fn(),
   artifacts: vi.fn(),
+  // The PC block lists the mails naming the order (2026-11-04): none here.
+  pcMails: vi.fn(async () => []),
 }));
 vi.mock("../api", () => ({ salesApi: () => api }));
 
