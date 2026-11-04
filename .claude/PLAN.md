@@ -35,9 +35,8 @@ own file and a row here.
   process in `sales/dw1-scope.md`; deny-list secret set.
 - 10-19..30: rules, master data, follow-ups, mail drop, DW1 learns PO forms,
   Q&A and reminders (contract gaps closed). `sales.md` State.
-- **Next:** bump `next` ≥ 15.5.28 (CRITICAL RCE, `web-ui.md` Open); DW2
-  5b lane + brief, a browser walk of 11-04's pages; HITL review owed to Đạt.
-  Proterial questions: `docs/proterial/`. #13 at deploy.
+- **Next:** `next` ≥ 15.5.28 (CRITICAL, `web-ui.md`); DW2 5b lane + brief;
+  browser walk of 11-04's pages. Questions: `docs/proterial/`. #13 at deploy.
 
 ## Decisions Đạt owes
 
