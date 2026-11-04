@@ -40,6 +40,7 @@ from dw_purchasing.adapters.master_template import XlsxMasterTemplate
 from dw_purchasing.adapters.mock.inbox import MockInbox
 from dw_purchasing.adapters.mock.master_data import MockMasterData
 from dw_purchasing.adapters.people import DirectoryPeople
+from dw_purchasing.adapters.persistence.assistant import SqlAssistantStore
 from dw_purchasing.adapters.persistence.automation import SqlAutomationScopes
 from dw_purchasing.adapters.persistence.mailbox import SqlPurchasingMailbox
 from dw_purchasing.adapters.persistence.master_imports import SqlMasterImports
@@ -56,6 +57,7 @@ from dw_purchasing.application.approvals import (
     RequestDecisions,
     RequestSettlement,
 )
+from dw_purchasing.application.assistant import AssistantService
 from dw_purchasing.application.automation import Automation, AutomationChecks, SwitchesService
 from dw_purchasing.application.automation_lane import AutomationLane, ServiceAccessPort
 from dw_purchasing.application.follow_up import OrderFollowUp
@@ -161,6 +163,16 @@ def build_purchasing(
     rules = PurchasingRulesService(
         uow=store, gate=Gate(authorization), book=book, clock=clock, ids=ids, checks=checks
     )
+    follow_up = OrderFollowUp(
+        uow=store,
+        gate=Gate(authorization),
+        master=master,
+        inbox=requests.inbox,
+        model=requests.model,
+        worker=requests.worker,
+        clock=clock,
+        ids=ids,
+    )
     return PurchasingServices(
         requests=requests,
         approvals=RequestApprovals(
@@ -232,11 +244,12 @@ def build_purchasing(
             ids=ids,
             enabled=outbox,
         ),
-        follow_up=OrderFollowUp(
-            uow=store,
+        follow_up=follow_up,
+        assistant=AssistantService(
+            store=SqlAssistantStore(session_factory),
             gate=Gate(authorization),
-            master=master,
-            inbox=requests.inbox,
+            requests=requests,
+            follow_up=follow_up,
             model=requests.model,
             worker=requests.worker,
             clock=clock,

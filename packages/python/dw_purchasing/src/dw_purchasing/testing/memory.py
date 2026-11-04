@@ -470,3 +470,37 @@ class MemoryRfqMails:
         held[mail_id] = mail.model_copy(update={"status": status, "error": error, "settled_at": at})
         self.audit.append(event)
         return True
+
+
+@dataclass
+class MemoryAssistantStore:
+    """Implements `AssistantStorePort` as RLS does: each tenant, workspace and
+    person sees their own sessions only."""
+
+    sessions_by_scope: dict[tuple[uuid.UUID, uuid.UUID, uuid.UUID], dict[uuid.UUID, Any]] = field(
+        default_factory=dict
+    )
+    turns_by_session: dict[uuid.UUID, list[Any]] = field(default_factory=dict)
+
+    def _mine(self, context: AccessContext) -> dict[uuid.UUID, Any]:
+        key = (context.tenant_id, context.workspace_id, context.principal_id)
+        return self.sessions_by_scope.setdefault(key, {})
+
+    async def sessions(self, context: AccessContext, *, limit: int) -> Sequence[Any]:
+        mine = sorted(self._mine(context).values(), key=lambda s: s.last_turn_at, reverse=True)
+        return mine[:limit]
+
+    async def session(self, context: AccessContext, session_id: uuid.UUID) -> Any:
+        return self._mine(context).get(session_id)
+
+    async def turns(self, context: AccessContext, session_id: uuid.UUID) -> Sequence[Any]:
+        if session_id not in self._mine(context):
+            return []
+        return list(self.turns_by_session.get(session_id, []))
+
+    async def append(self, context: AccessContext, session: Any, turn: Any) -> None:
+        mine = self._mine(context)
+        if session.user_id != context.principal_id:
+            raise ConflictError("a turn is written to the asker's own session")
+        mine[session.session_id] = session
+        self.turns_by_session.setdefault(session.session_id, []).append(turn)

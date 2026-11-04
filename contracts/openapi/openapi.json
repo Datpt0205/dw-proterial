@@ -993,6 +993,229 @@
         "title": "AssigneeView",
         "type": "object"
       },
+      "AssistantAnswerView": {
+        "properties": {
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "turn": {
+            "$ref": "#/components/schemas/AssistantTurnView"
+          }
+        },
+        "required": [
+          "session_id",
+          "turn"
+        ],
+        "title": "AssistantAnswerView",
+        "type": "object"
+      },
+      "AssistantAskBody": {
+        "additionalProperties": false,
+        "description": "A question, and the session it continues (None opens one).",
+        "properties": {
+          "question": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AssistantAskBody",
+        "type": "object"
+      },
+      "AssistantCaseRef": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case_id",
+          "label"
+        ],
+        "title": "AssistantCaseRef",
+        "type": "object"
+      },
+      "AssistantQuestionKind": {
+        "description": "What DW2 answers, and everything else.",
+        "enum": [
+          "request_status",
+          "my_work",
+          "late_orders",
+          "out_of_scope"
+        ],
+        "title": "AssistantQuestionKind",
+        "type": "string"
+      },
+      "AssistantSessionDetailView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "last_turn_at": {
+            "format": "date-time",
+            "title": "Last Turn At",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantTurnView"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "title",
+          "created_at",
+          "last_turn_at",
+          "turns"
+        ],
+        "title": "AssistantSessionDetailView",
+        "type": "object"
+      },
+      "AssistantSessionView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "last_turn_at": {
+            "format": "date-time",
+            "title": "Last Turn At",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "title",
+          "created_at",
+          "last_turn_at"
+        ],
+        "title": "AssistantSessionView",
+        "type": "object"
+      },
+      "AssistantStepView": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "AssistantStepView",
+        "type": "object"
+      },
+      "AssistantTurnView": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "answered_by": {
+            "enum": [
+              "model",
+              "code"
+            ],
+            "title": "Answered By",
+            "type": "string"
+          },
+          "asked_at": {
+            "format": "date-time",
+            "title": "Asked At",
+            "type": "string"
+          },
+          "cites": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantCaseRef"
+            },
+            "title": "Cites",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AssistantQuestionKind"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantStepView"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "seq",
+          "asked_at",
+          "question",
+          "kind",
+          "answer",
+          "cites",
+          "answered_by",
+          "steps"
+        ],
+        "title": "AssistantTurnView",
+        "type": "object"
+      },
       "AttachmentView": {
         "properties": {
           "attachment_id": {
@@ -21459,6 +21682,135 @@
         "summary": "List Users",
         "tags": [
           "platform"
+        ]
+      }
+    },
+    "/api/v1/purchasing/assistant/ask": {
+      "post": {
+        "operationId": "assistant_ask_api_v1_purchasing_assistant_ask_post",
+        "parameters": [
+          {
+            "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. Retrying with the same key returns the first response instead of acting twice; reusing it for a different request is a 409.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantAskBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantAnswerView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assistant Ask",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/assistant/sessions": {
+      "get": {
+        "operationId": "assistant_sessions_api_v1_purchasing_assistant_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssistantSessionView"
+                  },
+                  "title": "Response Assistant Sessions Api V1 Purchasing Assistant Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Assistant Sessions",
+        "tags": [
+          "purchasing"
+        ]
+      }
+    },
+    "/api/v1/purchasing/assistant/sessions/{session_id}": {
+      "get": {
+        "operationId": "assistant_session_api_v1_purchasing_assistant_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantSessionDetailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assistant Session",
+        "tags": [
+          "purchasing"
         ]
       }
     },

@@ -126,6 +126,7 @@ def _mounted(world: World) -> PurchasingMount:
             master_data=world.master_data,
             rfq_mails=world.rfq_mails,
             follow_up=world.follow_up,
+            assistant=world.assistant,
         )
     )
 
@@ -291,7 +292,7 @@ def test_every_route_checks_its_scope_before_its_body_or_idempotency_key() -> No
 
     router = build_router(None, access_context=lambda: None, idempotency=lambda: None)
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 38
+    assert len(routes) == 41
     assert all(route.dependencies for route in routes), [
         route.path for route in routes if not route.dependencies
     ]

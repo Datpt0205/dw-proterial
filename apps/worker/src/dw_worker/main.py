@@ -114,6 +114,9 @@ from dw_purchasing.adapters.assembly import (
 )
 from dw_purchasing.adapters.assembly import rule_book as purchasing_rule_book
 from dw_purchasing.adapters.notices import PlatformNotices
+from dw_purchasing.adapters.persistence.assistant import (
+    SqlAssistantRetention as PurchasingAssistantRetention,
+)
 from dw_purchasing.adapters.persistence.retention import SqlRetentionStore
 from dw_purchasing.application.approvals import REQUEST_DECIDED
 from dw_purchasing.application.automation_lane import LANE as PURCHASING_AUTOMATION_LANE
@@ -723,6 +726,7 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
     # Single-use decision codes: a day, then gone (the database's constant).
     approval_codes_retention: RetentionPrunePort | None = None
     purchasing_retention: RetentionPrunePort | None = None
+    purchasing_assistant_retention: RetentionPrunePort | None = None
     purchasing_mail_drop_consumer: Callable[[], Awaitable[None]] | None = None
     purchasing_master_import_consumer: Callable[[], Awaitable[None]] | None = None
     purchasing_outbound_consumer: Callable[[], Awaitable[None]] | None = None
@@ -923,6 +927,8 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
             book=purchasing_rule_book(REPO_ROOT / "configs", sessions),
             clock=clock,
         )
+        # DW2's Hỏi đáp sessions past their thirty days (DW02 function 6).
+        purchasing_assistant_retention = PurchasingAssistantRetention(session_factory=sessions)
         # DW2's own drop folder, read into its stored mailbox (Postgres), so a
         # database is all it needs beside the folder and the reader.
         purchasing_mail_drop_consumer = build_purchasing_mail_drop(
@@ -1243,6 +1249,12 @@ def build_registry(settings: WorkerSettings) -> ConsumerRegistry:
         registry.register(
             "purchasing_retention",
             build_retention_consumer(purchasing_retention),
+            interval_seconds=RETENTION_INTERVAL_SECONDS,
+        )
+    if purchasing_assistant_retention is not None:
+        registry.register(
+            "purchasing_assistant_retention",
+            build_retention_consumer(purchasing_assistant_retention),
             interval_seconds=RETENTION_INTERVAL_SECONDS,
         )
     if checkpoint_retention is not None:
