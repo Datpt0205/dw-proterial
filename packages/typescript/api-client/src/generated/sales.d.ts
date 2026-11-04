@@ -1744,6 +1744,11 @@ export interface components {
         };
         /** AnswerBody */
         AnswerBody: {
+            /**
+             * As Read
+             * @default false
+             */
+            as_read: boolean;
             /** Case Version */
             case_version: number;
             /** Customer Code */

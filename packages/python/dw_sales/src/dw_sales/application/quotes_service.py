@@ -110,6 +110,17 @@ class PricedLine:
     copper_basis: CopperBasis
 
 
+def _waiting_fields(case: QuoteCase, line_no: int | None) -> list[str]:
+    """The values of a `value_uncertain` still to confirm; none for a finding
+    that is not open (the case refuses it)."""
+    key = (QuoteFindingCode.VALUE_UNCERTAIN, line_no)
+    found = next((f for f in case.findings if f.key == key and f.is_open), None)
+    if found is None:
+        return []
+    done = {c.field for c in found.confirmed}
+    return [field for field in found.flagged if field not in done]
+
+
 def parse_finding_key(key: str) -> tuple[QuoteFindingCode, int | None]:
     """``code:line`` or ``code:-``, as `views.quote_finding_key` writes it."""
     code, _, line = key.partition(":")
@@ -224,22 +235,35 @@ class QuoteCommands:
         note: str | None = None,
         field: str | None = None,
         value: str | None = None,
+        as_read: bool = False,
     ) -> CaseChangeView:
         """Sales types what the request lacked (`rfq_incomplete`), confirms
         the customer of a forwarded one (`customer_unknown`), or confirms one
         value a model read, typing it as it should be (`value_uncertain`,
         ticket 29) once the caller was served where it was read, at this
-        version (`require_value_served`, as an order's prepare)."""
+        version (`require_value_served`, as an order's prepare). ``as_read``
+        confirms every value of the finding still waiting as it was read,
+        with one press, once every place they were read was served."""
         code, line_no = parse_finding_key(finding_key)
         uncertain = code is QuoteFindingCode.VALUE_UNCERTAIN
-        if uncertain and (field is None or value is None):
+        if as_read and (not uncertain or field is not None or value is not None):
+            raise DomainError(
+                "as read confirms a finding's values, naming none", details={"field": "as_read"}
+            )
+        if uncertain and not as_read and (field is None or value is None):
             raise DomainError("the field and its value are named", details={"field": "field"})
 
         async def opened(work: SalesUnitOfWork, case: QuoteCase) -> None:
-            assert field is not None
-            await require_value_served(work, context.principal_id, case, line_no, field)
+            if not as_read:
+                assert field is not None
+                await require_value_served(work, context.principal_id, case, line_no, field)
+                return
+            for waiting in _waiting_fields(case, line_no):
+                await require_value_served(work, context.principal_id, case, line_no, waiting)
 
         def step(case: QuoteCase, actor: QuoteActor, at: datetime) -> QuoteCase:
+            if uncertain and as_read:
+                return case.confirm_as_read(line_no, by=actor.user_id, at=at).drafted_when_ready()
             if uncertain:
                 assert field is not None and value is not None
                 confirmed = case.confirm_value(line_no, field, value, by=actor.user_id, at=at)

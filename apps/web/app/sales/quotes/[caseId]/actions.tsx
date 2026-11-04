@@ -548,6 +548,7 @@ function IntakeFinding({
                 customer_code:
                   values.customer_code?.trim().toUpperCase() || null,
                 note: values.note?.trim() || null,
+                as_read: false,
               };
               const result = await run(
                 `answer/${finding.key}`,

@@ -6,7 +6,7 @@ A proposal opens a `sales.rules` platform approval; the head decides it on
 what the worker does). The demo tenant's version (`sales_order_rules@1.5.2`,
 in the sample set, every model step on over stand-in measurements) went the
 same way when the suite's database was seeded (`seed_demo_rules`), as
-`make demo-reset` does with 1.5.3 (every step off). Each test here that
+`make demo-reset` does with 1.5.4 (every step off). Each test here that
 approves another version puts the seeded one back in force after.
 """
 

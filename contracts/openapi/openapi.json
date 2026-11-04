@@ -393,6 +393,11 @@
       "AnswerBody": {
         "additionalProperties": false,
         "properties": {
+          "as_read": {
+            "default": false,
+            "title": "As Read",
+            "type": "boolean"
+          },
           "case_version": {
             "minimum": 1.0,
             "title": "Case Version",

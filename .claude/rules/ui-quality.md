@@ -235,7 +235,10 @@ so a person can tell the difference.
   for this person, because the server refuses otherwise (the same ADR).
 - **Verification, correction and approval are never bulk actions:** no
   select-all, no "xác minh tất cả". A queue goes one item at a time, says how
-  many remain, and moves focus to the next item after each decision.
+  many remain, and moves focus to the next item after each decision. One
+  item may hold several values read from one place: a line of a request is
+  confirmed as read with one press once its sources were opened (Đạt,
+  2026-11-04; dw_sales ADR 0005's addendum), never several lines at once.
 - **AI-written text keeps its provenance tag** after it is read and approved;
   what clears is "chưa đọc". Numbers the code inserted are visibly locked.
 - **Colour is never the only carrier:** every verdict, severity and status has

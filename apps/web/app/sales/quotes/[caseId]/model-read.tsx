@@ -73,7 +73,8 @@ function shown(field: string, value: string | null): string {
 /**
  * A `value_uncertain` a model reading raised (ticket 29): every value the
  * model read, beside the place it was read from, for Sales to confirm one by
- * one, typing it as it should be. The YCBG waits until each is confirmed.
+ * one, typing it as it should be, or all of the line's still waiting as read
+ * with one press (Đạt, 2026-11-04). The YCBG waits until each is confirmed.
  */
 export function ModelReadFinding({
   quote,
@@ -98,6 +99,8 @@ export function ModelReadFinding({
         ? null
         : "Bạn không có quyền xác nhận giá trị của yêu cầu báo giá.";
   const unserved = new Set(finding.source_not_served);
+  const waiting = finding.flagged.filter((field) => !confirmed.has(field));
+  const where = finding.line_no ? `dòng ${finding.line_no}` : "thông tin chung";
   return (
     <div
       className="space-y-2"
@@ -154,7 +157,69 @@ export function ModelReadFinding({
           </div>
         );
       })}
+      {waiting.length > 1 ? (
+        <ConfirmAsRead
+          quote={quote}
+          finding={finding}
+          where={where}
+          reason={
+            reason ??
+            (waiting.some((field) => unserved.has(field))
+              ? SOURCE_FIRST_REASON
+              : null)
+          }
+          onDone={onDone}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** Every value of the finding still waiting, confirmed as read, one press. */
+function ConfirmAsRead({
+  quote,
+  finding,
+  where,
+  reason,
+  onDone,
+}: {
+  quote: Quote;
+  finding: Finding;
+  where: string;
+  reason: string | null;
+  onDone: () => void;
+}) {
+  const { run, pending } = useAction();
+  const [error, setError] = useState<unknown>(null);
+  const key = `confirm/${finding.key}/as-read`;
+  const text = finding.line_no
+    ? "Xác nhận cả dòng như đã đọc"
+    : "Xác nhận cả phần như đã đọc";
+  return (
+    <>
+      <GuardedButton
+        reason={reason}
+        loading={pending === key}
+        aria-label={`${text} (${where})`}
+        onClick={async () => {
+          const body = { case_version: quote.case_version, as_read: true };
+          const result = await run(
+            key,
+            body,
+            (idem) =>
+              salesApi().answerFinding(quote.case_id, finding.key, body, idem),
+            `Đã xác nhận ${where}`,
+          );
+          if (result.ok) {
+            setError(null);
+            onDone();
+          } else setError(result.error);
+        }}
+      >
+        {text}
+      </GuardedButton>
+      <ActionError error={error} />
+    </>
   );
 }
 
@@ -197,6 +262,7 @@ function ConfirmValue({
             case_version: quote.case_version,
             field,
             value,
+            as_read: false,
           };
           const result = await run(
             key,

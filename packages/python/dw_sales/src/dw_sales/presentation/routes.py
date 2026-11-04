@@ -330,6 +330,8 @@ class AnswerBody(VersionBody):
     # `value_uncertain` (ticket 29): one value a model read, as Sales types it.
     field: Annotated[str, Field(pattern=r"^[a-z_]{1,32}$")] | None = None
     value: Annotated[str, Field(min_length=1, max_length=500)] | None = None
+    # `value_uncertain`: every value of the finding still waiting, as read.
+    as_read: bool = False
 
 
 class YcbgBody(VersionBody):
@@ -1179,6 +1181,7 @@ def build_router(
             note=body.note,
             field=body.field,
             value=body.value,
+            as_read=body.as_read,
         )
         return await idem.record(change)
 

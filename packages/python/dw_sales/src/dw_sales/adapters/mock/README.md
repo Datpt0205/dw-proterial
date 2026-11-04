@@ -142,7 +142,7 @@ and their descriptions are written the way the customer's store writes them
 (Vietnamese words, `TC`/`BRD`/`GRY`), which DW1's own vocabulary does not
 read: each line is `code_unmapped`. Where the tenant's rules turn on
 `model_assist.description_attributes` (the sample set's 1.5.2 in
-`data/policies/` does, for the tests and evals; the 1.5.3 `make demo-reset`
+`data/policies/` does, for the tests and evals; the 1.5.4 `make demo-reset`
 installs from `data/policies/no_model/` turns every step off until one is
 measured) and a model server is configured, a local model reads
 them instead (ticket 28, dw_sales ADR 0005): line 1 then fits `HW-1002`,

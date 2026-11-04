@@ -11,7 +11,7 @@ policy_version: "1.5.2"
 # 4), for the unit tests and evals
 # that run a model over a recorded answer, and the API's integration suite
 # over stand-in measurements (dw_sales ADR 0005). `make demo-reset` installs
-# 1.5.3 instead (`no_model/`): this version with every step off, since a
+# 1.5.4 instead (`no_model/`): this version with every step off, since a
 # step turned on is refused until its live eval met its bar, and the mock
 # demo has neither a model nor a measurement. Every other tenant reads the
 # platform's 1.6.0, where all six are off.

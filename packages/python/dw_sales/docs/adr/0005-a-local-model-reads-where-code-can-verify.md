@@ -131,6 +131,15 @@ rather than in a new ADR, because no rule above moved.
   length or the send date can pass every check. So every value a model read
   is `model_read` and raises `value_uncertain`, which Sales confirms value by
   value before the YCBG; nothing a model read is used unconfirmed.
+  **Addendum, 2026-11-04 (Đạt: less for a person to do):** a line whose
+  values read right is confirmed with one press, "Xác nhận cả dòng như đã
+  đọc" (`QuoteCase.confirm_as_read`), instead of retyping each. It holds
+  what each value's own press holds: this person opened every place the
+  line's values were read, at this version (`require_value_served` per
+  value), and each value is still recorded on its own with what was read
+  and what was kept. One finding per press, never the case's: the person
+  still looks at each line beside its source. A value read wrong is still
+  typed by itself.
 - **A kind is not a route.** A message's intent (ticket 31) is a closed-set
   kind; code maps it to the route through one table, a readable document
   decides first, and a number the model names is used only when code finds it
@@ -229,7 +238,7 @@ live eval had passed. Đạt approved the design below on 2026-10-23.
   a number the platform shipped since, so the key is never held. Turning a
   step off is never refused, and neither is keeping one on (that turns nothing
   on; the gate still keeps it with a person until it is measured).
-- **The demo tenant.** `make demo-reset` installs `sales_order_rules@1.5.3`:
+- **The demo tenant.** `make demo-reset` installs `sales_order_rules@1.5.4`:
   the sample set's 1.5.2 with all six steps off, every other rule the same
   (held so by `test_order_rules.py`). The mock data path needs no model (none
   is composed without `DW_ONPREM_MODEL_BASE_URL`), and a measurement is what
