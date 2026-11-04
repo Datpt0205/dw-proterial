@@ -14,12 +14,11 @@ import pytest
 from pydantic import ValidationError
 
 from dw_agent_runtime.approval_flow import ProposedDecision
-from dw_agent_runtime.model.readiness import Attestation
 from dw_kernel.errors import ConflictError
 from dw_kernel.ids import TenantId, WorkspaceId
 from dw_platform.application.rule_versions import ContextScope
 from dw_purchasing.application.access import PurchasingScopes
-from dw_purchasing.application.automation import ATTEST_LANE, BARS
+from dw_purchasing.application.automation import BARS, ModelAttestation
 from dw_purchasing.domain.automation import (
     STEPS,
     AutomationLevel,
@@ -54,15 +53,7 @@ def _switches(version: str, **levels: str) -> dict[str, Any]:
 
 
 async def _measure(world: World, scope: tuple[uuid.UUID, uuid.UUID], value: float) -> None:
-    attest = Attestation(
-        world.measurements,
-        world.clock,
-        _Ids(),
-        BARS,
-        lane=ATTEST_LANE,
-        action="purchasing.model_step.measured",
-        resource_type="purchasing_model_step_measurement",
-    )
+    attest = ModelAttestation(world.measurements, world.clock, _Ids())
     await attest.attest(
         ContextScope(TenantId(scope[0]), WorkspaceId(scope[1])),
         PurchasingModelStep.PR_MAIL_READING,
@@ -229,3 +220,68 @@ def test_the_assembly_checks_every_door_a_version_goes_through() -> None:
     )
     for door in (services.rules, guard, settlement):
         assert isinstance(door.checks, AutomationChecks), door
+
+
+@pytest.mark.parametrize("step", list(PurchasingModelStep))
+def test_each_bar_is_read_from_its_dataset_s_golden_grade(step: PurchasingModelStep) -> None:
+    """What `run_evals.py --attest` reads: the bar's grader grades a case of
+    its dataset, and that grade reports the bar's metric. A bar naming a
+    grader nobody registered measured nothing (failure-modes #1)."""
+    from dw_agent_runtime.model.readiness import metric_at
+    from dw_evals.graders import GraderContext
+    from dw_purchasing.application.automation import step_measured_by
+    from dw_purchasing.testing.eval_graders import PURCHASING_GRADERS
+
+    owner = BARS[step]
+    (path,) = (REPO / "evals" / "datasets").glob(f"{owner.dataset}@*.json")
+    dataset = json.loads(path.read_text(encoding="utf-8"))
+    (case,) = [c for c in dataset["cases"] if c["grader"] == owner.grader]
+    assert step_measured_by(owner.dataset) is step
+    grade = PURCHASING_GRADERS[owner.grader](
+        GraderContext(repo_root=REPO),
+        json.loads((REPO / case["input_ref"]).read_text(encoding="utf-8")),
+        json.loads((REPO / case["expected_ref"]).read_text(encoding="utf-8")),
+    )
+    assert grade.passed, grade.details
+    assert metric_at(grade.details, owner.metric) == 1.0
+    assert grade.details["bar"] == {
+        "step": step.value,
+        "metric": owner.metric,
+        "value": 1.0,
+        "bar": owner.bar,
+        "passed": True,
+    }
+
+
+def test_a_quantity_misread_lowers_the_golden_share() -> None:
+    """A mail opened with the right number and line count but one quantity
+    read wrong is not read right; mails settled by their sender never reach
+    the model and do not count."""
+    import copy
+
+    from dw_evals.graders import GraderContext
+    from dw_purchasing.testing.eval_graders import grade_pr_mail_golden
+
+    answers = copy.deepcopy(ANSWERS)
+    # "5" of "cấp 5": a token of the line, so the mail still opens.
+    answers["PR-2611-004"]["lines"][1]["quantity_span"] = "5"
+    expected = json.loads(
+        (REPO / "evals/expected/purchasing_pr_intake.json").read_text(encoding="utf-8")
+    )
+    grade = grade_pr_mail_golden(GraderContext(repo_root=REPO), {"answers": answers}, expected)
+    assert not grade.passed
+    assert grade.details["wrong"] == ["P01"]
+    # P01, P02, P05, P06, P07 and P08 reach the model; five read right.
+    assert grade.details["golden"] == {"right": round(5 / 6, 4)}
+    assert not grade.details["bar"]["passed"]
+
+
+def test_a_measurement_is_recorded_as_dw2_s_own_lane() -> None:
+    """A DW2 row and its audit event read `system:purchasing_model_attest`,
+    never Sales' lane (ADR 0011)."""
+    import asyncio
+
+    world = _world()
+    asyncio.run(_measure(world, ALPHA, 0.95))
+    (row,) = [m for rows in world.measurements.rows.values() for m in rows]
+    assert row.recorded_by == "system:purchasing_model_attest"

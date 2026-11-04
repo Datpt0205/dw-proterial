@@ -429,15 +429,35 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
   5–7 s, table rows as `|` cells like a sheet's, diacritics partly lost:
   "DON" for "ĐƠN"). Fixed on the way: `test_purchasing_rfq_mails_db` tied on
   `queued_at` and failed by uuid order about half the runs.
+- 2026-11-04, **the DW2 attest lane, and the first DW2 step measured**:
+  `BARS` named a grader nobody registered (`purchasing.pr_intake_golden`)
+  and a metric no grader reported, so `--attest` could measure nothing
+  (failure-modes #1). Now the golden grade (`purchasing.pr_mail_golden`)
+  reports `golden.right`: the share of the golden mails that reach the model
+  settled exactly, each opened request checked line by line (code,
+  quantity, unit, date: `expected.golden_lines`), mails settled by their
+  sender not counted; the replay must settle all. `run_evals.py --attest`
+  finds a dataset's step in either context (`measured_step`) and records
+  it as that context's lane (`purchasing.automation.ModelAttestation`,
+  `system:purchasing_model_attest`). Dataset `purchasing_pr_intake@1.2.0`.
+  **Run live on Qwen3.5-9B (`qwen3.5-9b-dw`), demo tenant: 1.0 (6/6 mails,
+  Excel and OCR'd scan included), bar 0.9, passed and recorded**; both
+  prompt-injection cases held on the live model. So "Mở hồ sơ từ thư" may
+  now be set to "AI tự làm" for the demo tenant (it reads the measurement;
+  a scan still waits for a person). On a host, run from the host with
+  `DW_ONPREM_MODEL_BASE_URL` at `localhost` (`.env` names the containers'
+  `host.docker.internal`). Mutations, each red: bar's grader, bar's metric,
+  lines compared, sender mails excluded, replay strict, DW2 dispatch, DW2's
+  lane. Found on the way and fixed first (`e95b996b`): the SQL store wrote
+  the case body from a hand list that lacked `read_from`.
 
 ## Next
 
 1. Đạt reviews Phases 1–3 (this report), the pages on a browser.
 2. The rest of Phase 1, each its own session: the Bravo layout learned from
-   Proterial's file; the DW2 attest lane. The case page of a scan-read
-   request walked in a browser once a model runs locally (no model here, so
-   "DW2 đọc" answers 503); a live eval of `pr_mail_reading@1.1.0` on real
-   OCR text.
+   Proterial's file. The case page of a scan-read request walked in a
+   browser with the local model. Measured on mock mail only (11-04): re-run
+   `--attest` on Proterial's real PRs once they arrive.
 3. The plant's flow (Đạt, 2026-11-02: set up and integrated later, prepared
    now): the one flow for every person, `DW-mail/<address>` in a private
    Team's SharePoint library (measured 2026-11-02), the plant PC's share at
@@ -449,8 +469,9 @@ in `CONTEXT.md` ("Automation"). Order, each lift one commit, Sales unchanged:
 4. Function 5 — supplier confirmation and delivery tracking (the PO number
    Bravo assigns recorded back; confirmations read from mail).
 5. Function 6 — the morning brief and status Q&A over purchase cases.
-6. On-prem live evals of DW2's model steps on Qwen3.5-9B (no measurement
-   was made in this run, so no model step can be "AI tự làm").
+6. Bars and live measurements for DW2's other model steps (a supplier's
+   quote, a sentence to a PR, an RFQ's wording): only the PR mail reading
+   has a bar and a measurement (11-04).
 7. A sent request cannot be withdrawn (a question on the Proterial list).
 
 ## Not done, on purpose

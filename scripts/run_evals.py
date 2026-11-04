@@ -228,6 +228,9 @@ def record_answers(model: object) -> int:
 
     count = 0
     for prompt_id, answers in getattr(model, "recorded", {}).items():
+        if prompt_id not in RECORDED_BY_PROMPT:
+            # DW2's smoke replays answers keyed by the mail, written by hand.
+            raise SystemExit(f"--record: {prompt_id} has no recorded-answers file")
         path = RECORDED_BY_PROMPT[prompt_id]
         held = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         held["_comment"] = (
@@ -255,13 +258,35 @@ def record_answers(model: object) -> int:
     return count + len(answers)
 
 
+def measured_step(dataset_id: str) -> tuple[Any, Any, Any] | None:
+    """The model step ``dataset_id`` measures, with its context's bars and the
+    lane that records a measurement of it; None for a dataset measuring none.
+    Each context that measures a step is listed here, at the composition root."""
+    from dw_purchasing.application import automation as purchasing
+    from dw_sales.application import model_readiness as sales
+
+    contexts: list[tuple[Any, Any, Any]] = [
+        (sales.step_measured_by, sales.BARS, sales.ModelAttestation),
+        (purchasing.step_measured_by, purchasing.BARS, purchasing.ModelAttestation),
+    ]
+    found = [
+        (step, bars, lane)
+        for measured_by, bars, lane in contexts
+        if (step := measured_by(dataset_id)) is not None
+    ]
+    if len(found) > 1:
+        raise SystemExit(f"{dataset_id} is measured by two contexts")
+    return found[0] if found else None
+
+
 def attest(report: Any, profile: str, tenant: uuid.UUID, workspace: uuid.UUID) -> str:
     """Records the live run's measurement of its dataset's step for one
-    tenant: the golden case's verdict on the bar (`model_readiness.BARS`),
+    tenant: the golden case's verdict on the bar (the context's `BARS`),
     passing only where every case of the run passed too, on the model
     ``profile`` routed the run to (the platform layer the eval gateway
-    loads). Written as the lane `sales_model_attest`, as dw_app under the
-    tenant's RLS, with its audit event; refused for a role that bypasses RLS."""
+    loads). Written as the context's attest lane (`sales_model_attest`,
+    `purchasing_model_attest`), as dw_app under the tenant's RLS, with its
+    audit event; refused for a role that bypasses RLS."""
     import asyncio
     import os
 
@@ -269,24 +294,27 @@ def attest(report: Any, profile: str, tenant: uuid.UUID, workspace: uuid.UUID) -
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool
 
+    from dw_agent_runtime.adapters.model_interpretation import ProfileStepModel
+    from dw_agent_runtime.adapters.model_measurements import SqlMeasurementLog
+    from dw_agent_runtime.model.profiles import ModelProfileRegistry
     from dw_kernel.ids import TenantId, WorkspaceId
     from dw_kernel.ports import SystemClock, Uuid7Generator
     from dw_platform.adapters.persistence.repositories import SqlAuditRepository
-    from dw_sales.adapters.assembly import step_model
-    from dw_agent_runtime.adapters.model_measurements import SqlMeasurementLog
-    from dw_sales.application.model_readiness import BARS, ModelAttestation, step_measured_by
-    from dw_sales.application.ports import SalesScope
+    from dw_platform.application.rule_versions import ContextScope
 
-    step = step_measured_by(report.dataset_id)
-    if step is None:
+    found = measured_step(report.dataset_id)
+    if found is None:
         raise SystemExit(f"--attest: {report.dataset_id} measures no model step")
-    golden = next(r for r in report.results if r.grader == BARS[step].grader)
+    step, bars, lane = found
+    golden = next(r for r in report.results if r.grader == bars[step].grader)
     verdict = golden.details["bar"]
     database_url = os.environ.get("DW_WORKER_DATABASE_URL")
     if not database_url:
         raise SystemExit("--attest: DW_WORKER_DATABASE_URL is not set (source .env)")
     # What the run was routed to: the platform layer, as `live_model_for` loads it.
-    model = step_model(REPO_ROOT / "configs", profile).model_for(tenant)
+    profiles = ModelProfileRegistry()
+    profiles.load_directory(REPO_ROOT / "configs" / "models")
+    model = ProfileStepModel(profiles, profile).model_for(tenant)
 
     async def record() -> object:
         engine = create_async_engine(database_url, poolclass=NullPool)
@@ -298,13 +326,13 @@ def attest(report: Any, profile: str, tenant: uuid.UUID, workspace: uuid.UUID) -
                 )
             if bypasses is not False:
                 raise SystemExit("--attest: refusing a database role that bypasses RLS")
-            attestation = ModelAttestation(
+            attestation = lane(
                 SqlMeasurementLog(sessions, audit=SqlAuditRepository),
                 SystemClock(),
                 Uuid7Generator(),
             )
             return await attestation.attest(
-                SalesScope(TenantId(tenant), WorkspaceId(workspace)),
+                ContextScope(TenantId(tenant), WorkspaceId(workspace)),
                 step,
                 model=model,
                 value=float(verdict["value"]),

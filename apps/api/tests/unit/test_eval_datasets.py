@@ -128,3 +128,26 @@ def test_the_live_lane_exits_non_zero_when_every_call_is_unavailable(
     (report,) = written
     golden = next(r for r in report.results if r.grader == "sales.intent_golden")
     assert not golden.passed
+
+
+@pytest.mark.parametrize(
+    ("dataset", "step", "lane"),
+    [
+        ("sales_intent", "message_intent", "sales_model_attest"),
+        ("purchasing_pr_intake", "purchasing_pr_mail_reading", "purchasing_model_attest"),
+        ("platform", None, None),
+    ],
+)
+def test_attest_records_a_dataset_s_step_as_the_context_s_own_lane(
+    dataset: str, step: str | None, lane: str | None
+) -> None:
+    """`--attest` finds the step a dataset measures in the context that owns
+    it, so a DW2 measurement is DW2's lane and read by DW2's switches."""
+    found = _load_script().measured_step(dataset)
+    if step is None:
+        assert found is None
+        return
+    assert found is not None
+    measured, bars, attestation = found
+    assert measured == step and bars[measured].dataset == dataset
+    assert lane == importlib.import_module(attestation.__module__).ATTEST_LANE
